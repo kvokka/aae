@@ -19,6 +19,6 @@ tokio = { version = "1.54.1", features = ["rt", "sync", "time", "process", "io-u
 uuid = { version = "1.29.2", features = ["v4", "v5"] }
 
 [dev-dependencies]
-aae-testkit = { path = "../aae-testkit" }
+aae-testkit = { version = "0.1.0", path = "../aae-testkit" }
 tempfile = "3.27.0"
 tokio = { version = "1.54.1", features = ["rt", "macros", "time"] }
