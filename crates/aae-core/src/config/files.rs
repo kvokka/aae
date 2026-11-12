@@ -95,6 +95,9 @@ pub(super) struct OrchestratorFile {
     pub harness: BTreeMap<String, Harness>,
     #[serde(default)]
     pub plugin: Vec<PluginDecl>,
+    /// `[builtin.<name>]`: `enabled` and the parameters of a bundled plugin.
+    #[serde(default)]
+    pub builtin: BTreeMap<String, Map<String, Value>>,
     #[serde(default)]
     pub settings: Settings,
     #[serde(default)]

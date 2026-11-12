@@ -27,7 +27,7 @@ fn policy_timed(hooks: &[(&str, &str, &str)]) -> World {
     let mut toml = "name = \"policy\"\nversion = \"0.1.0\"\n".to_owned();
     let mut files = vec![(
         "config.toml".to_owned(),
-        "projects = [\"shop\"]\n[harness.scripted]\n[[plugin]]\npath = \"policy\"\n".to_owned(),
+        "projects = [\"shop\"]\nbuiltin = { default-policy = { enabled = false } }\n[harness.scripted]\n[[plugin]]\npath = \"policy\"\n".to_owned(),
     )];
     for (n, (on, script, timeout)) in hooks.iter().enumerate() {
         toml += &format!("[[hook]]\non = \"{on}\"\ncommand = [\"sh\", \"{n}.sh\"]\ntimeout = \"{timeout}\"\n");
@@ -37,6 +37,7 @@ fn policy_timed(hooks: &[(&str, &str, &str)]) -> World {
     let files: Vec<(&str, &str)> = files.iter().map(|(p, t)| (p.as_str(), t.as_str())).collect();
     let hooks = ExecHooks {
         socket: Some("/run/aae.sock".into()),
+        bundled: None,
     };
     world_with(&files, Arc::new(hooks))
 }
@@ -275,4 +276,30 @@ async fn one_veto_among_accepts_blocks_on_finishing() {
     assert_eq!(w.declare(&run).await, "accepted");
     let failed = w.until(Some(&run), "run.failed", 0).await;
     assert_eq!((&failed["class"], &failed["reason"]), (&json!("check"), &json!("no")));
+}
+
+#[tokio::test]
+async fn the_bundled_default_policy_resumes_a_crash_and_reminds_once() {
+    let config = ("config.toml", "projects = [\"shop\"]\n[harness.scripted]\n");
+    let hooks = ExecHooks {
+        socket: None,
+        bundled: Some(aae_plugins::run),
+    };
+    let w = world_with(&[config], Arc::new(hooks));
+    w.driver.script(vec![Step::Exit {
+        code: Some(1),
+        signal: None,
+    }]);
+    w.driver.script(hollow_turn());
+    w.driver.script(hollow_turn());
+    let run = w.create().await;
+    let failed = w.until(Some(&run), "run.failed", 0).await;
+    assert_eq!(
+        (&failed["class"], &failed["reason"], &failed["run"]["attempt"]),
+        (&json!("hollow_done"), &json!("no outcome after a reminder"), &json!(2))
+    );
+    let crashed = w.until(Some(&run), "run.attempt_failed", 0).await;
+    assert_eq!(crashed["keys"][0], "orchestrator");
+    let (_, prompts) = w.driver.sent(&run, 2);
+    assert!(prompts.last().is_some_and(|p| p.contains("finisher")), "{prompts:?}");
 }

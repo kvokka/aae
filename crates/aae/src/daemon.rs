@@ -61,6 +61,9 @@ pub(crate) async fn run(paths: Paths) -> Result<(), String> {
         let lines: Vec<String> = errors.iter().map(ToString::to_string).collect();
         format!("the config has errors:\n{}", lines.join("\n"))
     })?;
+    for bundled in &config.bundled {
+        aae_plugins::check(bundled.name, &bundled.params).map_err(|e| format!("the config has errors:\n{e}"))?;
+    }
     private_dir(&paths.state)?;
     // Held until the daemon exits: one writer per state directory (spec §5.1), whatever socket it serves.
     let _lock = lock(&paths.state)?;
@@ -114,6 +117,7 @@ pub(crate) async fn run(paths: Paths) -> Result<(), String> {
         trackers,
         Arc::new(ExecHooks {
             socket: Some(paths.socket.clone()),
+            bundled: Some(aae_plugins::run),
         }),
         journal,
     );

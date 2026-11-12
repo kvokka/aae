@@ -1,8 +1,8 @@
 //! Criterion 3: a formula of one exec step passes; exit 75 (`EX_TEMPFAIL`) fails the attempt and the next attempt
 //! passes, while any other non-zero exit fails the formula.
 //!
-//! Retrying a failed attempt is a plugin decision; until the bundled `default-policy` exists, a plugin of one hook
-//! that always asks for a new session stands in for it.
+//! The retry is the decision of the bundled `default-policy`, on by default: exit 75 is an `unknown` failure it
+//! retries, here after 1 s instead of 30 s to keep the scenario short.
 
 use super::exec_formula;
 use crate::{
@@ -17,12 +17,7 @@ pub(crate) async fn run(env: Arc<Env>) -> String {
     let d = Daemon::start(&env, |root| {
         write(
             root.join("config/aae/config.toml"),
-            "projects = [\"shop\"]\n[[plugin]]\npath = \"retry\"\n",
-        );
-        write(
-            root.join("config/aae/retry/plugin.toml"),
-            "name = \"retry\"\nversion = \"0.1.0\"\n[[hook]]\non = \"run.attempt_failed\"\n\
-             command = [\"sh\", \"-c\", \"echo '{\\\"decision\\\":\\\"new_session\\\"}'\"]\ntimeout = \"10s\"\n",
+            "projects = [\"shop\"]\n[builtin.default-policy]\nunknown_after_s = 1\n",
         );
         let once = root.join("once");
         let flaky = format!(

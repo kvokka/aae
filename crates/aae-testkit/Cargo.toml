@@ -19,5 +19,6 @@ tokio = { version = "1.54.1", features = ["rt", "time", "sync", "net"] }
 tokio-stream = "0.1.19"
 
 [dev-dependencies]
+aae-plugins = { version = "0.1.0", path = "../aae-plugins" }
 tempfile = "3.27.0"
 tokio = { version = "1.54.1", features = ["rt", "macros", "time", "test-util", "io-util", "net"] }

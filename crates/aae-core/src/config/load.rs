@@ -51,6 +51,7 @@ impl Loader {
             super::check::project(&mut self, project);
         }
         super::check::orchestrator_overrides(&mut self, file, overrides.keys(), &projects);
+        let bundled = super::check::bundled(&mut self, file, raw.builtin);
         let config = Config {
             max_runs: raw.max_runs.map_or(DEFAULT_MAX_RUNS, NonZeroU32::get),
             bead_failures: raw.bead_failures.map_or(DEFAULT_BEAD_FAILURES, NonZeroU32::get),
@@ -58,6 +59,7 @@ impl Loader {
             settings,
             overrides,
             plugins,
+            bundled,
             projects,
         };
         if self.errors.is_empty() {

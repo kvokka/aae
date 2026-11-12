@@ -58,6 +58,13 @@ impl RunHandler {
                 }));
             }
         }
+        // The bundled plugins come last: a declared plugin decides before the default policy.
+        for bundled in self.config.bundled.iter().filter(|b| b.on.contains(&kind)) {
+            hooks.push(json!({
+                "plugin": bundled.name, "bundled": bundled.name, "params": bundled.params,
+                "timeout_ms": HOOK_TIMEOUT_MS,
+            }));
+        }
         hooks
     }
 
@@ -103,15 +110,20 @@ pub trait HookRunner: Send + Sync + 'static {
     fn run<'a>(&'a self, core: &'a CoreHandle<Msg>, payload: &'a Value) -> BoxFuture<'a, ()>;
 }
 
-/// The hooks as commands of their plugins; `socket` is the API socket a hook gets in `AAE_SOCKET`.
+/// A bundled plugin's hook: `(plugin, event, params)` to its decision, `None` for none, or why it failed.
+pub type BundledHook = fn(&str, &Value, &Value) -> Result<Option<Value>, String>;
+
+/// The hooks as commands of their plugins; `socket` is the API socket a hook gets in `AAE_SOCKET`; `bundled` runs
+/// the hooks of the bundled plugins in process (the daemon passes `aae_plugins::run`).
 #[derive(Default)]
 pub struct ExecHooks {
     pub socket: Option<PathBuf>,
+    pub bundled: Option<BundledHook>,
 }
 
 impl HookRunner for ExecHooks {
     fn run<'a>(&'a self, core: &'a CoreHandle<Msg>, payload: &'a Value) -> BoxFuture<'a, ()> {
-        Box::pin(run(core, payload, self.socket.as_deref()))
+        Box::pin(run(core, payload, self))
     }
 }
 
@@ -130,7 +142,7 @@ struct Failed {
 }
 
 /// Runs the hooks of one event and, for a deciding event, sends the decision (contracts 3.3).
-async fn run(core: &CoreHandle<Msg>, payload: &Value, socket: Option<&Path>) {
+async fn run(core: &CoreHandle<Msg>, payload: &Value, hooks: &ExecHooks) {
     let mut event = payload["event"].clone();
     let kind = event["type"].as_str().unwrap_or_default().to_owned();
     let deciding = DECIDING.contains(&kind.as_str());
@@ -139,7 +151,11 @@ async fn run(core: &CoreHandle<Msg>, payload: &Value, socket: Option<&Path>) {
     for hook in payload["hooks"].as_array().into_iter().flatten() {
         let plugin = hook["plugin"].as_str().unwrap_or_default();
         // Hooks on observed events may only exit 0 or fail (contracts 3.2).
-        let said = invoke(hook, &event, socket).await.and_then(|said| match said {
+        let said = match hook["bundled"].as_str() {
+            Some(name) => bundled(hooks.bundled, name, hook, &event).await,
+            None => invoke(hook, &event, hooks.socket.as_deref()).await,
+        };
+        let said = said.and_then(|said| match said {
             Said::Blocked(stderr) if !deciding => Err(Failed {
                 error: "exit",
                 exit_code: Some(2),
@@ -246,6 +262,26 @@ impl Prepared {
         data["env_keys"] = json!(keys);
         self.append.extend(append);
         data["prompt_append"] = json!(Some(self.append.join("\n\n")).filter(|a| !a.is_empty()));
+    }
+}
+
+/// Runs a bundled plugin's hook off the async threads (it may call git) within the hook timeout.
+async fn bundled(run: Option<BundledHook>, name: &str, hook: &Value, event: &Value) -> Result<Said, Failed> {
+    let failed = |error, stderr: String| Failed {
+        error,
+        exit_code: None,
+        stderr,
+    };
+    let run = run.ok_or_else(|| failed("spawn", format!("this daemon does not run the bundled `{name}`")))?;
+    let (name, event, params) = (name.to_owned(), event.clone(), hook["params"].clone());
+    let timeout = Duration::from_millis(hook["timeout_ms"].as_u64().unwrap_or(30_000));
+    let task = tokio::task::spawn_blocking(move || run(&name, &event, &params));
+    match tokio::time::timeout(timeout, task).await {
+        Ok(Ok(Ok(Some(decision)))) => Ok(Said::Decided(decision)),
+        Ok(Ok(Ok(None))) => Ok(Said::Nothing),
+        Ok(Ok(Err(text))) => Err(failed("exit", text)),
+        Ok(Err(panic)) => Err(failed("exit", panic.to_string())),
+        Err(_) => Err(failed("timeout", String::new())),
     }
 }
 

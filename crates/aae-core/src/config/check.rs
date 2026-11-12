@@ -1,8 +1,10 @@
 //! References between files: names resolved to their packs (spec §8.2), trigger inputs against their formula,
-//! rigs and overrides against what the project has.
+//! rigs and overrides against what the project has; the tables of the bundled plugins.
 
-use super::{Name, Pack, Project, Step, load::Loader};
+use super::{BUNDLED, Bundled, Name, Pack, Project, Step, load::Loader};
 use crate::template::Inputs;
+use serde_json::{Map, Value};
+use std::{collections::BTreeMap, path::Path};
 
 pub(super) fn project(loader: &mut Loader, project: &mut Project) {
     let index = project.packs.clone();
@@ -147,4 +149,35 @@ pub(super) fn resolve(
             ))
         }
     }
+}
+
+/// The bundled plugins `[builtin.<name>]` leaves on, in the order of `BUNDLED`.
+pub(super) fn bundled(
+    loader: &mut Loader,
+    file: &Path,
+    mut tables: BTreeMap<String, Map<String, Value>>,
+) -> Vec<Bundled> {
+    let mut on = Vec::new();
+    for (name, events, by_default) in BUNDLED {
+        let mut params = tables.remove(name).unwrap_or_default();
+        let enabled = match params.remove("enabled") {
+            None => by_default || !params.is_empty(),
+            Some(Value::Bool(enabled)) => enabled,
+            Some(_) => {
+                loader.fail(file, format!("[builtin.{name}]: `enabled` is a boolean"));
+                false
+            }
+        };
+        if enabled {
+            on.push(Bundled {
+                name,
+                on: events,
+                params: Value::Object(params),
+            });
+        }
+    }
+    for name in tables.keys() {
+        loader.fail(file, format!("`{name}` is not a bundled plugin"));
+    }
+    on
 }

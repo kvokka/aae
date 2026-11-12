@@ -19,7 +19,10 @@ use std::{
 use tokio::task::JoinHandle;
 
 pub(crate) const FILES: &[(&str, &str)] = &[
-    ("config.toml", "projects = [\"shop\"]\n[harness.scripted]\n"),
+    (
+        "config.toml",
+        "projects = [\"shop\"]\nbuiltin = { default-policy = { enabled = false } }\n[harness.scripted]\n",
+    ),
     ("shop/aae.toml", "[rigs.web]\npath = \"web\"\n"),
     ("shop/web/.keep", ""),
     ("shop/agents/dev/agent.toml", "harness = \"scripted\"\n"),
@@ -34,7 +37,7 @@ pub(crate) const FILES: &[(&str, &str)] = &[
 pub(crate) const POLICY: &[(&str, &str)] = &[
     (
         "config.toml",
-        "projects = [\"shop\"]\n[harness.scripted]\n[[plugin]]\npath = \"policy\"\n",
+        "projects = [\"shop\"]\nbuiltin = { default-policy = { enabled = false } }\n[harness.scripted]\n[[plugin]]\npath = \"policy\"\n",
     ),
     (
         "policy/plugin.toml",

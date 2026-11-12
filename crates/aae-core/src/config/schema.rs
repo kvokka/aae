@@ -155,6 +155,7 @@ fn payload(event_type: &str) -> Option<&'static [(&'static str, Shape)]> {
             ("failure", FAILURE),
             ("attempts", Leaf),
             ("gates", Leaf),
+            ("keys", Leaf),
             ("agent_failures_1h", Leaf),
             ("deadline", Leaf),
         ],

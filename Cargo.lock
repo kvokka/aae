@@ -11,6 +11,7 @@ dependencies = [
  "aae-codex",
  "aae-core",
  "aae-front",
+ "aae-plugins",
  "aae-testkit",
  "clap",
  "serde_json",
@@ -103,10 +104,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "aae-plugins"
+version = "0.1.0"
+dependencies = [
+ "aae-core",
+ "serde",
+ "serde_json",
+ "tempfile",
+]
+
+[[package]]
 name = "aae-testkit"
 version = "0.1.0"
 dependencies = [
  "aae-core",
+ "aae-plugins",
  "axum",
  "serde_json",
  "tempfile",

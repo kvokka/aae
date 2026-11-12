@@ -114,12 +114,13 @@ Deciding events (§5.4; decisions: see 3). Each carries `deadline`, the time aft
 |---|---|
 | `run.preparing` | `{run, workdir, env_keys: [name], prompt_append, deadline}`; `env_keys` lists names only, never values |
 | `run.requires_action` | `{run, request: {id, kind: "permission"\|"question", tool, input, text}, deadline}` |
-| `run.attempt_failed` | `{run, failure: Failure, attempts: Attempts, gates: [Gate], agent_failures_1h: [{run, kind, at}], deadline}` |
+| `run.attempt_failed` | `{run, failure: Failure, attempts: Attempts, gates: [Gate], keys: [string], agent_failures_1h: [{run, kind, at}], deadline}` |
 | `run.turn_ended_without_outcome` | `{run, stop_reason, remarks, attempts: Attempts, deadline}` |
 | `run.finishing` | `{run, outcome: Outcome, remarks, deadline}` |
 
 `remarks` is the number of remarks already returned in this attempt. `gates` lists every closed gate whose key
-applies to the run. Credentials and environment values never enter an event: the journal is not a secret store.
+applies to the run; `keys` lists the gate keys of the run (7), so a policy can name the account, model, agent or rig
+gate in its decision. Credentials and environment values never enter an event: the journal is not a secret store.
 
 ## 2. Filter and template language
 
@@ -211,7 +212,7 @@ Hooks on observed events may only exit 0 or fail; their failures are reported an
 ### 3.3 Several plugins on one event
 
 Plugins are ordered by connection order (orchestrator level first, then project level, each in declaration
-order).
+order); the bundled plugins come after all of them (docs/design/config.md, `[builtin.<name>]`).
 
 - `run.preparing`: hooks run one after another; each receives the event with the earlier modifications applied
   (`workdir`, `env_keys`, `prompt_append`). `env` entries merge by name, `null` removes; `prompt_append` texts are
@@ -630,7 +631,11 @@ The adapters cannot tell either from the real thing; nothing in the product exis
 ## 10. `default-policy` as decisions
 
 The built-in policy expressed in the decisions of 3.2, so that the schema provably carries every reaction of
-§11.5. Thresholds are its config parameters; "consecutive" counts are computed from `attempts` of the event.
+§11.5. Thresholds are its config parameters (docs/design/config.md); "consecutive" counts are computed from
+`attempts` of the event, times from its `ts`, and the gate keys come from its `keys`. A `park` on a key the run does
+not have (an exec run has no agent key, a run whose harness reported no account has no account key) becomes a
+`resume` after the same wait, except a `park` with no `until` (`auth_required`, `billing`), which becomes `fail`; a
+`fail` names no gate then. Implemented in `crates/aae-plugins`.
 
 | Event / kind | Decision |
 |---|---|

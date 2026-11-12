@@ -27,7 +27,32 @@ pub struct Config {
     /// Layer 7, by agent reference; they may name an agent of any project.
     pub overrides: BTreeMap<String, Settings>,
     pub plugins: Vec<Plugin>,
+    /// The enabled bundled plugins with their parameters, run after every declared plugin.
+    pub bundled: Vec<Bundled>,
     pub projects: Vec<Project>,
+}
+
+/// The plugins bundled with aae (spec §11.5): name, the events they hook, and whether they are on with no
+/// `[builtin.<name>]` table. `worktree` acts only where it is turned on.
+pub const BUNDLED: [(&str, &[&str], bool); 2] = [
+    (
+        "default-policy",
+        &["run.attempt_failed", "run.turn_ended_without_outcome"],
+        true,
+    ),
+    (
+        "worktree",
+        &["run.preparing", "run.passed", "run.failed", "run.cancelled"],
+        false,
+    ),
+];
+
+/// An enabled bundled plugin; `params` is its `[builtin.<name>]` table without `enabled`.
+#[derive(Clone, Debug)]
+pub struct Bundled {
+    pub name: &'static str,
+    pub on: &'static [&'static str],
+    pub params: serde_json::Value,
 }
 
 #[derive(Clone, Debug)]

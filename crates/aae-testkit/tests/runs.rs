@@ -209,7 +209,7 @@ async fn the_orchestrator_and_the_agent_limit_started_runs() {
     );
     let orchestrator = (
         "config.toml",
-        "projects = [\"shop\"]\nmax_runs = 1\n[harness.scripted]\n",
+        "projects = [\"shop\"]\nbuiltin = { default-policy = { enabled = false } }\nmax_runs = 1\n[harness.scripted]\n",
     );
     let agent = ("shop/agents/dev/agent.toml", "harness = \"scripted\"\nmax_runs = 1\n");
     for limit in [orchestrator, agent] {

@@ -60,7 +60,7 @@ fn gate_event(tx: &mut Tx<'_>, kind: &str, data: Value) -> Result<(), Error> {
 
 impl RunHandler {
     /// The gate keys of a run (contracts 7). The account and model keys are known once an attempt reported them.
-    fn keys(tx: &Tx<'_>, row: &Row) -> Result<Vec<String>, Error> {
+    pub(super) fn keys(tx: &Tx<'_>, row: &Row) -> Result<Vec<String>, Error> {
         let mut keys = vec![
             "orchestrator".to_owned(),
             format!("project:{}", row.project),

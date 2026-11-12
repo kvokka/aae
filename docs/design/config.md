@@ -55,6 +55,12 @@ binary = "/opt/claude/bin/claude"   # optional explicit path; otherwise resolved
 [[plugin]]                          # an installed plugin; its orchestrator side is enabled
 path = "~/aae-plugins/aae-plugin-mail"
 
+[builtin.default-policy]            # a bundled plugin (see below); on with no table
+backoff_cap_s = 300
+
+[builtin.worktree]                  # off with no table; a table with parameters turns it on
+agents = ["implementer"]
+
 [settings]                          # layer 2
 [overrides.implementer]             # layer 7, for an agent of any project
 ```
@@ -180,3 +186,19 @@ timeout = "10s"                     # optional
 
 Plugin names are unique across the orchestrator and the project; an attachment in `plugins` must name a declared
 plugin.
+
+## Bundled plugins: `[builtin.<name>]`
+
+The plugins bundled with aae (spec §11.5) run in process as hooks of the contract of contracts 3, after every
+declared plugin, so a declared plugin decides first. `enabled` (boolean) turns one on or off; every other key is a
+parameter, checked when the daemon starts. A table with parameters and no `enabled` turns the plugin on.
+
+- `default-policy` (on unless `enabled = false`) decides on `run.attempt_failed` and
+  `run.turn_ended_without_outcome` as in contracts 10. Parameters, all integers: `quota_margin_s` (60),
+  `quota_wait_s` (1800), `model_pause_s` (600), `backoff_base_s` (10), `backoff_cap_s` (300), `backoff_park_from`
+  (3), `rapid_s` (30), `crash_loop` (5), `crash_pause_s` (300), `resume_failures` (3), `unknown_after_s` (30),
+  `unknown_retries` (3).
+- `worktree` (off) gives each run of the agents in `agents` and the formulas in `formulas` (bare or qualified names;
+  both empty: every run) a git worktree of its rig on the branch `aae/<run>`, in `<git common dir>/aae/worktrees/<run>`,
+  as its workdir. When the run ends the worktree is removed unless it has uncommitted changes or a HEAD no ref
+  reaches (then `plugin.hook_failed` says why); the branch is deleted only when it is merged.

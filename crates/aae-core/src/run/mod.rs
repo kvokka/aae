@@ -40,7 +40,7 @@ pub const MAX_ATTEMPTS: u32 = 20;
 pub use crate::process::Exit;
 pub use finish::MAX_REMARKS;
 pub use gates::{GateSpec, valid_key};
-pub use hooks::{ExecHooks, HookRunner};
+pub use hooks::{BundledHook, ExecHooks, HookRunner};
 pub use msg::{Create, Decision, Msg, Outcome, Verdict};
 pub use read::{Reader, RunFilter};
 
