@@ -185,3 +185,17 @@ async fn an_event_before_the_session_is_known_reaches_the_only_attempt() {
     let events = w.events(&run, Duration::from_secs(1)).await;
     assert!(failed(&events), "{events:?}");
 }
+
+#[tokio::test(start_paused = true)]
+async fn an_instance_found_dead_by_its_health_fails_every_attempt_on_it() {
+    let w = world_driven(FILES, ScriptedDriver::new(2));
+    w.driver.script(vec![]);
+    w.driver.script(vec![Step::Vanish]);
+    let (one, two) = two_running(&w, "same").await;
+    for run in [&one, &two] {
+        let events = w.events(run, Duration::from_secs(31)).await;
+        let failed = common::last(&events, "run.attempt_failed");
+        assert_eq!(failed["failure"]["kind"], "harness_crash", "{run}");
+    }
+    assert_eq!(w.count("instance.failed"), 1);
+}

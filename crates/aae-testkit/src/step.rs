@@ -15,4 +15,6 @@ pub enum Step {
         code: Option<i32>,
         signal: Option<i32>,
     },
+    /// The process dies without a word: no `exited`, only its health turns `Dead`.
+    Vanish,
 }

@@ -62,6 +62,8 @@ pub(crate) async fn run(paths: Paths) -> Result<(), String> {
     let journal = Journal::new(&journal_dir);
     let written = journal.subscribe();
     let listener = bind(&paths.socket).await?;
+    // Descendants of instances that left their group are re-parented here and reaped (invariant 7).
+    aae_core::orphans::adopt_orphans().map_err(|e| format!("cannot become the child subreaper: {e}"))?;
     let (core, task) = run::start(
         conn,
         Clock::system(),

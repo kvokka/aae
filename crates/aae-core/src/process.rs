@@ -89,11 +89,12 @@ pub(crate) async fn run(spec: Spec<'_>) -> Output {
         .stderr(Stdio::piped())
         .process_group(0)
         .kill_on_drop(true);
-    let mut child = match command.spawn() {
+    let mut child = match crate::orphans::spawn(&mut command) {
         Ok(child) => child,
         Err(e) => return spawn_failed(e.to_string()),
     };
-    let group = child.id().and_then(|id| i32::try_from(id).ok()).and_then(Pid::from_raw);
+    let pid = child.id();
+    let group = pid.and_then(|id| i32::try_from(id).ok()).and_then(Pid::from_raw);
     let signal = |sig| {
         if let Some(group) = group {
             let _ = kill_process_group(group, sig);
@@ -140,6 +141,7 @@ pub(crate) async fn run(spec: Spec<'_>) -> Output {
             Exit::TimedOut
         }
     };
+    crate::orphans::waited(pid);
     if timeout(DRAIN, &mut io).await.is_err() {
         signal(Signal::KILL);
         // A descendant that left the group keeps the pipes: its output is cut where it is.

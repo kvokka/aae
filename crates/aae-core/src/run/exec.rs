@@ -4,8 +4,8 @@ use super::{Drivers, Msg, answer_from};
 use crate::{
     BoxFuture,
     driver::{
-        Driver, EventSink, Failure, FailureKind, InstanceHandle, ProcessPart, PromptKey, SessionPart, SessionRef,
-        Source, Transcript,
+        Driver, DriverEvent, EventSink, Failure, FailureKind, Health, InstanceHandle, Normalized, ProcessPart,
+        PromptKey, SessionPart, SessionRef, Source, Transcript,
     },
     writer::{CoreHandle, Executor},
 };
@@ -22,6 +22,8 @@ use uuid::Uuid;
 const STOP_GRACE: Duration = Duration::from_secs(10);
 /// How long a launch waits for the processes it replaces to be gone (invariant 6).
 const DEATH_WAIT: Duration = Duration::from_secs(30);
+/// How often a started instance's health is checked.
+const HEALTH_EVERY: Duration = Duration::from_secs(30);
 
 /// The starts of registry instances in this daemon: every launch on an instance shares its one start.
 pub(super) type Starts = Arc<Mutex<HashMap<String, Arc<OnceCell<Result<InstanceHandle, Failure>>>>>>;
@@ -72,6 +74,7 @@ impl Executor for RunExecutor {
                         driver.stop_instance(&handle, STOP_GRACE).await;
                     }
                     let id = payload["instance"].as_str().unwrap_or_default().to_owned();
+                    crate::orphans::sweep(&id);
                     self.starts.lock().unwrap_or_else(PoisonError::into_inner).remove(&id);
                     // A stopped writer drops the message; recovery (WP-20) finds the record on restart.
                     let _ = core.send(None, Msg::InstanceStopped { id }).await;
@@ -185,6 +188,9 @@ impl RunExecutor {
                     // The record goes with `instance_failed`; a later instance gets a new id.
                     self.starts.lock().unwrap_or_else(PoisonError::into_inner).remove(&id);
                 }
+                if let (Ok(handle), Some(driver)) = (&started, self.drivers.get(driver.harness())) {
+                    self.watch(driver.clone(), handle.clone());
+                }
                 let msg = match &started {
                     Ok(handle) => Msg::InstanceReady {
                         id: id.clone(),
@@ -202,5 +208,31 @@ impl RunExecutor {
             })
             .await;
         started.clone()
+    }
+    /// Checks the health of `handle` while its start is kept; a dead instance reports its exit, as a harness whose
+    /// process ended would (contracts 8).
+    fn watch(&self, driver: Arc<dyn Driver>, handle: InstanceHandle) {
+        let (starts, sink) = (self.starts.clone(), self.sink.clone());
+        tokio::spawn(async move {
+            loop {
+                tokio::time::sleep(HEALTH_EVERY).await;
+                if !(starts.lock().unwrap_or_else(PoisonError::into_inner)).contains_key(&handle.id) {
+                    return;
+                }
+                if matches!(driver.health(&handle).await, Health::Dead) {
+                    let event = Normalized::Exited {
+                        code: None,
+                        signal: None,
+                    };
+                    let _ = sink.send(DriverEvent {
+                        instance: handle.id.clone(),
+                        session: None,
+                        seq: 0,
+                        event,
+                    });
+                    return;
+                }
+            }
+        });
     }
 }

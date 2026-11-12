@@ -578,8 +578,12 @@ of a run whose gate the operator closed parks it instead (invariant 18).
 - Confirmed death (invariant 6): a launch first waits until the instances still `stopping` that served its run (or
   the run it continues) are gone by pid + start time (`/proc/<pid>/stat`), up to 30 s; past that the attempt
   fails with `unknown`.
-- The process environment of every instance and service holds `AAE_INSTANCE=<id>`: the sweep of invariant 7
-  finds descendants by it; the daemon is a child subreaper ([experiments](experiments.md#descendants-after-kill--9-invariant-7)).
+- The process environment of every instance and service holds `AAE_INSTANCE=<id>`: once the instance is stopped
+  or has exited, every process still carrying it is killed (the sweep of invariant 7). The daemon is a child
+  subreaper ([experiments](experiments.md#descendants-after-kill--9-invariant-7)): every 5 s it reaps the adopted
+  orphans that exited, never a child it spawned itself (those are reaped by their own `wait`).
+- Health: every 30 s the daemon asks the driver for the health of each instance it started; `Dead` counts as an
+  `exited` event of the instance (above).
 - Services (§11.4) use the same record: scope key `orchestrator`, `project:<p>` or `session:<id>`, a consumer
   count instead of sessions, a health command, restart with the effect backoff.
 

@@ -52,6 +52,12 @@ impl ScriptedDriver {
                         driver.exit(&instance, code, signal);
                         return;
                     }
+                    Step::Vanish => {
+                        if let Some(i) = driver.lock().instances.get_mut(&instance) {
+                            i.alive = false;
+                        }
+                        return;
+                    }
                 }
             }
         }));
