@@ -122,11 +122,12 @@ impl RunHandler {
                 tx.set_deadline(&row.deadline("state"), tx.now_ms().saturating_add(timeout))?;
                 silence(tx, &row, SILENCE_MS)
             }
-            _ if row.state != "running" => Ok(()),
+            // A failure or an exit ends the attempt in every live state (contracts 6.2, invariant 5).
             Normalized::Failure(failure) => self.attempt_failed(tx, row, failure),
             Normalized::Exited { .. } => {
                 self.attempt_failed(tx, row, Failure::new(FailureKind::HarnessCrash, Source::Adapter))
             }
+            _ if row.state != "running" => Ok(()),
             Normalized::Activity { tool_running: true } => silence(tx, &row, TOOL_SILENCE_MS),
             Normalized::TurnEnded { .. } => {
                 tx.sql().execute(

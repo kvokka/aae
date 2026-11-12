@@ -24,6 +24,8 @@ use tokio::{sync::broadcast, task::JoinHandle};
 pub enum Step {
     Wait(Duration),
     Emit(Normalized),
+    /// As the first step: the prompt is not acknowledged, the scenario plays before `prompt.acked`.
+    NoAck,
     /// The process dies: `exited` is sent and every later call on the instance fails with `harness_crash`.
     Exit {
         code: Option<i32>,
@@ -108,6 +110,7 @@ impl ScriptedDriver {
         let mut state = self.lock();
         Self::live_session(&mut state, instance, session)?;
         let steps = state.scenarios.pop_front().unwrap_or_default();
+        let first = first.filter(|_| !matches!(steps.first(), Some(Step::NoAck)));
         let target = Self::live_session(&mut state, instance, session)?;
         if let Some(previous) = target.playing.take() {
             previous.abort();
@@ -120,6 +123,7 @@ impl ScriptedDriver {
             }
             for step in steps {
                 match step {
+                    Step::NoAck => {}
                     Step::Wait(d) => tokio::time::sleep(d).await,
                     Step::Emit(event) => driver.emit(&instance, Some(&session), event),
                     Step::Exit { code, signal } => {
