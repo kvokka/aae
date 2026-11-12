@@ -1,8 +1,8 @@
 //! The run states and transitions of docs/design/contracts.md 6.1–6.2 that do not come from a harness: creation,
-//! the queue, preparation, decisions, attempts and the terminal states.
+//! the queue, preparation, attempts and the terminal states.
 
 use super::{
-    Create, Decision, MAX_ATTEMPTS, RunHandler, rejected,
+    Create, RunHandler, rejected,
     row::{Row, attempts},
 };
 use crate::{
@@ -18,9 +18,6 @@ use std::path::PathBuf;
 pub(super) const QUEUE_TIMEOUT_MS: i64 = 7 * 24 * 3_600_000;
 pub(super) const START_TIMEOUT_MS: i64 = 120_000;
 pub(super) const STEP_TIMEOUT_MS: i64 = 45 * 60_000;
-/// The default hook timeout and the slack of a deciding event's deadline (contracts 3.1, 3.3).
-const HOOK_TIMEOUT_MS: i64 = 30_000;
-const DECIDE_SLACK_MS: i64 = 5_000;
 /// The prompt of a resumed attempt (contracts 6.4).
 const RECONCILE: &str =
     "Your previous turn was interrupted. Check the current state of the work and continue toward the goal.";
@@ -166,79 +163,6 @@ impl RunHandler {
         Ok((text, timeout_ms, config))
     }
 
-    /// Emits a deciding event; with no hook on its type the "no plugin decision" outcome applies at once, else at
-    /// the deadline of contracts 3.3 unless a decision comes first.
-    pub(super) fn deciding(&mut self, tx: &mut Tx<'_>, row: Row, kind: &str, mut data: Value) -> Result<(), Error> {
-        let project = self.config.projects.iter().find(|p| p.name == row.project);
-        let hooks = self
-            .config
-            .plugins
-            .iter()
-            .chain(project.into_iter().flat_map(|p| &p.plugins));
-        let timeouts: Vec<i64> = hooks
-            .flat_map(|p| &p.hooks)
-            .filter(|h| h.on == kind)
-            .map(|h| {
-                h.timeout
-                    .map_or(HOOK_TIMEOUT_MS, |t| i64::try_from(t.as_millis()).unwrap_or(i64::MAX))
-            })
-            .collect();
-        let at = tx.now_ms() + timeouts.iter().sum::<i64>() + DECIDE_SLACK_MS * i64::from(!timeouts.is_empty());
-        data["deadline"] = json!(rfc3339_ms(at));
-        let seq = row.emit(tx, kind, data)?;
-        if timeouts.is_empty() {
-            return self.apply(tx, row, None);
-        }
-        tx.sql()
-            .execute("UPDATE runs SET waiting = ?2 WHERE id = ?1", params![row.id, seq])?;
-        tx.set_deadline(&row.deadline("decide"), at)
-    }
-
-    pub(super) fn decide(&mut self, tx: &mut Tx<'_>, run: &str, seq: i64, decision: Decision) -> Result<(), Error> {
-        let row = Row::load(tx, run)?;
-        let waiting: Option<i64> = tx
-            .sql()
-            .query_row("SELECT waiting FROM runs WHERE id = ?1", [run], |r| r.get(0))?;
-        if waiting != Some(seq) {
-            return Err(rejected(format!("`{run}` does not wait for a decision on event {seq}")));
-        }
-        self.apply(tx, row, Some(decision))
-    }
-
-    /// Applies a decision, `None` being "no plugin decision", to the deciding event the run's state waits on.
-    pub(super) fn apply(&mut self, tx: &mut Tx<'_>, row: Row, decision: Option<Decision>) -> Result<(), Error> {
-        tx.sql()
-            .execute("UPDATE runs SET waiting = NULL WHERE id = ?1", [&row.id])?;
-        tx.clear_deadline(&row.deadline("decide"))?;
-        match (row.state.as_str(), decision) {
-            ("preparing", None | Some(Decision::Proceed)) => self.start_attempt(tx, row, "new_session"),
-            ("preparing", Some(Decision::Deny { reason })) => self.terminal(tx, row, "failed", Some("check"), &reason),
-            ("interrupted", None) => self.terminal(tx, row, "failed", Some("infrastructure"), "no_decision"),
-            ("interrupted", Some(Decision::Fail { reason })) => {
-                self.terminal(tx, row, "failed", Some("infrastructure"), &reason)
-            }
-            ("interrupted", Some(Decision::Resume { after })) => self.retry(tx, row, "resume", after),
-            ("interrupted", Some(Decision::NewSession { after })) => self.retry(tx, row, "new_session", after),
-            ("running", None) => self.terminal(tx, row, "failed", Some("hollow_done"), "no_decision"),
-            ("running", Some(Decision::Fail { reason })) => {
-                self.terminal(tx, row, "failed", Some("hollow_done"), &reason)
-            }
-            (state, Some(d)) => Err(rejected(format!("{d:?} does not apply to a run in `{state}`"))),
-            (state, None) => Err(rejected(format!("a run in `{state}` waits for no decision"))),
-        }
-    }
-
-    /// Schedules the next attempt of an `interrupted` run after `after`, within the attempts ceiling.
-    fn retry(&mut self, tx: &mut Tx<'_>, row: Row, kind: &str, after: std::time::Duration) -> Result<(), Error> {
-        if row.attempt >= MAX_ATTEMPTS {
-            return self.terminal(tx, row, "failed", Some("infrastructure"), "attempts_ceiling");
-        }
-        tx.sql()
-            .execute("UPDATE runs SET next = ?2 WHERE id = ?1", params![row.id, kind])?;
-        let after = i64::try_from(after.as_millis()).unwrap_or(i64::MAX);
-        tx.set_deadline(&row.deadline("state"), tx.now_ms().saturating_add(after))
-    }
-
     /// A new attempt (contracts 6.2): a new or resumed session on an instance of its own, then the prompt.
     pub(super) fn start_attempt(&mut self, tx: &mut Tx<'_>, mut row: Row, kind: &str) -> Result<(), Error> {
         let config = row
@@ -280,7 +204,14 @@ impl RunHandler {
         )?;
         tx.sql().execute(
             "INSERT INTO attempts (run, n, kind, harness, started_ms) VALUES (?1, ?2, ?3, ?4, ?5)",
-            params![row.id, row.attempt, kind, config.harness, tx.now_ms()],
+            // The kind that happens: a resume with no session to resume is a new session.
+            params![
+                row.id,
+                row.attempt,
+                if resume.is_some() { "resume" } else { "new_session" },
+                config.harness,
+                tx.now_ms()
+            ],
         )?;
         row.set_state(tx, "starting", None)?;
         let split = match driver.split(&config, &plan) {

@@ -1,6 +1,7 @@
 //! Runs (spec §9.3, docs/design/contracts.md 6): the run state machine inside the single writer, the effects that
 //! drive a harness through its [`Driver`], and the driver events fed back to the writer as messages.
 
+mod decide;
 mod events;
 mod exec;
 mod machine;
@@ -83,11 +84,21 @@ pub struct Create {
 /// The decisions of contracts 3.2 the run machine applies.
 #[derive(Clone, Debug, PartialEq)]
 pub enum Decision {
+    /// Every hook on the event finished without a decision: the "no plugin decision" outcome, at once (3.3).
+    Abstain,
     Proceed,
-    Deny { reason: String },
-    Resume { after: Duration },
-    NewSession { after: Duration },
-    Fail { reason: String },
+    Deny {
+        reason: String,
+    },
+    Resume {
+        after: Duration,
+    },
+    NewSession {
+        after: Duration,
+    },
+    Fail {
+        reason: String,
+    },
 }
 
 /// Starts the writer with the run machine on `conn` (opened by `store::open`), one driver per harness.

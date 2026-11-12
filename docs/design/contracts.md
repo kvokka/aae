@@ -218,12 +218,17 @@ order).
   `fail` changes nothing: the run fails with class `agent`.
 - `run.requires_action`, `run.attempt_failed`, `run.turn_ended_without_outcome`: the first decision in plugin order
   wins; later hooks are not started once a decision exists.
-- No decision by `deadline` (all hooks done or timed out): the "no plugin decision" column of §5.4 — start as is;
-  wait for a human answer through the API until `human_timeout` (default 1 h), then answer `deny`; `failed{class:
-  infrastructure}`; `failed{class: hollow_done}`; accept.
+- Every hook done and no decision: the hook runner sends an explicit "no decision" message, and the "no plugin
+  decision" column of §5.4 applies at once — start as is; wait for a human answer through the API until
+  `human_timeout` (default 1 h), then answer `deny`; `failed{class: infrastructure}`; `failed{class: hollow_done}`;
+  accept. A hook that timed out is a hook failure (3.2), not "no decision": on `run.preparing` and
+  `run.finishing` it blocks.
+- The `deadline` reached with no message from the runner: the hooks count as failed. On the veto events
+  (`run.preparing`, `run.finishing`) that blocks — `failed{check}` with reason `hook_deadline`; on the other
+  deciding events a hook failure is "no decision from this plugin", so the "no plugin decision" column applies.
 
 `deadline` of a deciding event = commit time + the sum of the timeouts of its hooks + 5 s (one hook can never
-hold a run longer than its own timeout). `run.requires_action` keeps waiting for a human after that deadline,
+hold a run longer than its own timeout; the runner reports before it unless it is lost). `run.requires_action` keeps waiting for a human after that deadline,
 until `human_timeout`.
 
 ### 3.4 Decisions and restarts
@@ -437,11 +442,11 @@ then calls `changes` from its stored cursor (and on start and after recovery wit
 | State | Meaning | Deadline (default) | On deadline |
 |---|---|---|---|
 | `queued` | not started: waits for a concurrency slot, a free workdir or an open gate; the reason is visible (`run.queued`) | `queue_timeout` 7 d | `failed{infrastructure, queue_timeout}` |
-| `preparing` | ownership recorded, `run.preparing` hooks running, workdir and environment being fixed, snapshot of the effective config written | hook deadline (see 3.3) | the hooks count as failed → deny → `failed{check}` |
+| `preparing` | ownership recorded, `run.preparing` hooks running, workdir and environment being fixed, snapshot of the effective config written | hook deadline (see 3.3) | the hooks count as failed → deny → `failed{check, hook_deadline}` |
 | `starting` | an attempt: instance acquired, session started or resumed, first prompt sent, waiting for `prompt.acked` | `start_timeout` 120 s | attempt failure `stall` |
 | `running` | the agent works (or the `exec` command runs) | step `timeout` of the formula (default 45 m) per attempt → `runaway_turn`; silence budgets: first event after ack 5 min, model thinking 5 min, tool running 10 min, background work after the turn 30 min → `stall` | attempt failure |
-| `requires_action` | waits for an answer to a permission request or question; not silence | `human_timeout` 1 h | answer `deny`, back to `running` |
-| `finishing` | outcome declared and the session idle without background; `run.finishing` hooks running | hook deadline | the hooks count as failed → veto → `failed{check}` |
+| `requires_action` | waits for an answer to a permission request or question; not silence; the step `timeout` of `running` pauses here and resumes with the time it had left | `human_timeout` 1 h | answer `deny`, back to `running` |
+| `finishing` | outcome declared and the session idle without background; `run.finishing` hooks running | hook deadline | the hooks count as failed → veto → `failed{check, hook_deadline}` |
 | `interrupted` | the current attempt ended with a failure (or by a daemon restart); `run.attempt_failed` is deciding | hook deadline, then the decision's `after` | no decision → `failed{infrastructure}` |
 | `parked` | a started run waits for a gate; no harness process | the gate's `until`; for a gate without `until`, `park_timeout` 7 d | `failed{infrastructure, park_timeout}` |
 | `passed`, `failed{class}`, `cancelled` | terminal | — | — |

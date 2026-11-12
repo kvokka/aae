@@ -150,6 +150,28 @@ async fn without_a_decision_the_policy_deadline_fails_the_run() {
 }
 
 #[tokio::test(start_paused = true)]
+async fn a_veto_event_blocks_at_its_deadline_and_proceeds_on_abstain() {
+    let plugin = POLICY[1].1.replace("run.attempt_failed", "run.preparing");
+    let w = world(&[POLICY[0], ("policy/plugin.toml", &plugin)]);
+    let run = w.create().await;
+    let events = w.events(&run, Duration::from_secs(16)).await;
+    let failed = last(&events, "run.failed");
+    assert_eq!(
+        (&failed["class"], &failed["reason"]),
+        (&json!("check"), &json!("hook_deadline"))
+    );
+    let run = w.create().await;
+    let seq = w.seq_of(&run, "run.preparing", 0).await;
+    let abstain = Msg::Decide {
+        run: run.clone(),
+        seq,
+        decision: Decision::Abstain,
+    };
+    w.core.send(None, abstain).await.unwrap();
+    assert_eq!(w.states(&run).await, ["preparing", "starting", "running"]);
+}
+
+#[tokio::test(start_paused = true)]
 async fn one_workdir_holds_one_live_run_and_cancel_frees_it() {
     let w = world(&[]);
     let first = w.create().await;

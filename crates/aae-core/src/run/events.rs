@@ -273,7 +273,7 @@ impl RunHandler {
                 };
                 self.answer(tx, run, &request.unwrap_or_default(), &deny)
             }
-            ("decide", _) => self.apply(tx, row, None),
+            ("decide", _) => self.decide_deadline(tx, row),
             _ => Ok(()),
         }
     }
