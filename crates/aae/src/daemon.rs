@@ -1,7 +1,10 @@
 //! `aae daemon`: the core and the API on a unix socket, in the foreground (spec §13), until SIGTERM or SIGINT.
 
+use aae_claude::Claude;
 use aae_core::{
-    Clock, Journal, config, open,
+    Clock, Journal, config,
+    driver::Driver,
+    open,
     run::{self, ExecHooks, Reader},
 };
 use aae_front::{
@@ -64,11 +67,21 @@ pub(crate) async fn run(paths: Paths) -> Result<(), String> {
     let listener = bind(&paths.socket).await?;
     // Descendants of instances that left their group are re-parented here and reaped (invariant 7).
     aae_core::orphans::adopt_orphans().map_err(|e| format!("cannot become the child subreaper: {e}"))?;
+    let mut drivers: Vec<Arc<dyn Driver>> = Vec::new();
+    if let Some(claude) = config.harnesses.get("claude") {
+        // shortcut: without `binary` the `claude` on PATH runs, not the mise-pinned one (§6.5); `aae doctor` (WP-35).
+        let binary = claude.binary.clone().unwrap_or_else(|| "claude".into());
+        drivers.push(Arc::new(Claude::new(
+            binary,
+            paths.state.clone(),
+            Some(paths.socket.clone()),
+        )));
+    }
     let (core, task) = run::start(
         conn,
         Clock::system(),
         Arc::new(config),
-        Vec::new(),
+        drivers,
         Arc::new(ExecHooks {
             socket: Some(paths.socket.clone()),
         }),

@@ -57,6 +57,15 @@ pub fn adopt_orphans() -> io::Result<()> {
 }
 
 /// `(pid, state, ppid)` of every process in `/proc`.
+/// The kernel start time of the live process `pid` (field 22 of `/proc/<pid>/stat`); `None` for a zombie or a
+/// process that is gone. pid + start time identify a process (spec §5.2).
+pub fn start_time(pid: i32) -> Option<u64> {
+    let stat = std::fs::read_to_string(format!("/proc/{pid}/stat")).ok()?;
+    let mut fields = stat.rsplit_once(')')?.1.split_whitespace();
+    (fields.next()? != "Z").then_some(())?;
+    fields.nth(18)?.parse().ok()
+}
+
 fn processes() -> impl Iterator<Item = (i32, String, i32)> {
     let entries = std::fs::read_dir("/proc").into_iter().flatten().flatten();
     entries.filter_map(|e| {
