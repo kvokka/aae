@@ -458,8 +458,9 @@ session of the project gets `BEADS_DIR` (layer: project) and `BD_ACTOR=aae:<run 
   backoff, `tracker.sync_failed` on every failure); `Invalid { text }` (permanent).
 - `release` and `close` are conditional on `assignee == owner`; br 0.7.6 has neither a conditional close nor a
   release, so the adapter reads, compares and writes. The window between read and write is open only to humans
-  (the daemon is the only claimer, invariant 3); a lost race shows up in the next `changes` batch and is reported
-  as `resync.diverged`.
+  (the daemon is the only claimer, invariant 3). An owner found changed before the write is `OwnerMismatch`,
+  reported as `resync.diverged`; a human write that lands inside the window shows up only as a `bead.updated` of
+  the next `changes` batch, until the resync of the tracker compares owners (WP-20b).
 - The state of the orchestrator is the truth of ownership; the assignee in br mirrors it (§10.3).
 
 ## 6. Run

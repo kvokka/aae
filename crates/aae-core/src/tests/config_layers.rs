@@ -49,7 +49,9 @@ fn a_stronger_layer_wins_and_every_value_keeps_its_layer() {
         (e.env["LANG"].value.as_str(), &e.env["LANG"].from),
         ("en", &Layer::Project)
     );
-    assert_eq!(e.env.len(), 2, "the session environment holds only what the layers say");
+    // `BEADS_DIR` comes even without a tracker in the project, so br never searches for one (spec §10.2).
+    assert_eq!(e.env["BEADS_DIR"].from, Layer::Project);
+    assert_eq!(e.env.len(), 3, "the session environment holds only what the layers say");
     // The rig override of `BASE` applies only to runs on that rig.
     let on_rig = effective(&config, Some("backend"));
     assert_eq!(on_rig.model.as_ref().unwrap().value, "opus");
