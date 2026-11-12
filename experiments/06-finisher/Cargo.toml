@@ -1,0 +1,10 @@
+[package]
+name = "finisher"
+version = "0.1.0"
+edition.workspace = true
+publish.workspace = true
+
+[dependencies]
+claude-protocol = { path = "../01-claude-protocol" }
+codex-appserver = { path = "../03-codex-appserver" }
+serde_json = "1.0.154"

@@ -9,6 +9,7 @@ pub mod generated {
 use serde_json::{Value, json};
 use std::io::{BufRead, BufReader, Read, Write};
 use std::net::TcpListener;
+use std::os::unix::fs::PermissionsExt;
 use std::os::unix::net::UnixStream;
 use std::process::{Child, ChildStdin, Command, Stdio};
 use std::sync::mpsc::{Receiver, RecvTimeoutError, Sender, channel};
@@ -194,7 +195,7 @@ pub struct Seen {
     pub body: String,
 }
 
-/// Fake Responses API: replies to every `POST …/responses` with the text `OK`, after `SLOW<n>` seconds if the
+/// Fake Responses API: replies to every `POST …/responses` with the text `OK` (or a command, see `RUN:`), after `SLOW<n>` seconds if the
 /// last user text contains that word. Returns the base URL and the requests it got.
 pub fn fake_provider() -> (String, Arc<Mutex<Vec<Seen>>>) {
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
@@ -251,11 +252,19 @@ fn serve(n: usize, conn: std::net::TcpStream, log: &Mutex<Vec<Seen>>) {
     {
         std::thread::sleep(Duration::from_secs(s));
     }
+    // `RUN:<cmd>` in the last user message: answer with an `exec_command` call, then `OK` once its output is back.
+    let user_at = body.rfind("\"role\":\"user\"").unwrap_or(0);
+    let run = (body.rfind("function_call_output").is_none_or(|o| o < user_at))
+        .then(|| body[user_at..].split("RUN:").nth(1)?.split('"').next())
+        .flatten();
     let id = format!("resp_{n}");
     let events = [
         json!({"type": "response.created", "response": {"id": id}}),
-        json!({"type": "response.output_item.done", "item": {"type": "message", "role": "assistant",
-               "id": format!("msg_{n}"), "content": [{"type": "output_text", "text": "OK"}]}}),
+        json!({"type": "response.output_item.done", "item": run.map_or_else(
+            || json!({"type": "message", "role": "assistant", "id": format!("msg_{n}"),
+                      "content": [{"type": "output_text", "text": "OK"}]}),
+            |cmd| json!({"type": "function_call", "name": "exec_command", "call_id": format!("call_{n}"),
+                         "arguments": json!({"cmd": cmd}).to_string()}))}),
         json!({"type": "response.completed", "response": {"id": id, "usage": {"input_tokens": 1,
                "output_tokens": 1, "total_tokens": 2}}}),
     ];
@@ -278,4 +287,58 @@ pub fn rss_kb(pid: u32) -> u64 {
         .find_map(|l| l.strip_prefix("VmRSS:"))
         .and_then(|v| v.split_whitespace().next()?.parse().ok())
         .unwrap_or(0)
+}
+
+pub struct Env {
+    pub root: String,
+    pub vars: Vec<(&'static str, String)>,
+    pub seen: Arc<Mutex<Vec<Seen>>>,
+}
+
+/// A fresh root with an isolated `HOME`, a `CODEX_HOME` pointing at the fake provider and two work directories.
+pub fn setup(name: &str) -> Env {
+    let root = format!("{}/aae-exp2-{name}", std::env::temp_dir().display());
+    let _ = std::fs::remove_dir_all(&root);
+    for d in ["home", "codex-home", "ws-a", "ws-b", "sock"] {
+        std::fs::create_dir_all(format!("{root}/{d}")).unwrap();
+    }
+    std::fs::set_permissions(format!("{root}/sock"), std::fs::Permissions::from_mode(0o700)).unwrap();
+    let (base, seen) = fake_provider();
+    let config = format!(
+        "model = \"fake-default\"\nmodel_provider = \"fake\"\napproval_policy = \"never\"\n\
+         sandbox_mode = \"danger-full-access\"\n[analytics]\nenabled = false\n[feedback]\nenabled = false\n\
+         [model_providers.fake]\nname = \"fake\"\nbase_url = \"{base}\"\nwire_api = \"responses\"\n"
+    );
+    std::fs::write(format!("{root}/codex-home/config.toml"), config).unwrap();
+    let vars = vec![
+        ("PATH", std::env::var("PATH").unwrap()),
+        ("HOME", format!("{root}/home")),
+        ("CODEX_HOME", format!("{root}/codex-home")),
+        ("SHELL", "/bin/sh".into()),
+    ];
+    Env { root, vars, seen }
+}
+
+pub fn thread_id(r: &Value) -> String {
+    let resp: generated::protocol::ThreadStartResponse =
+        serde_json::from_value(r["result"].clone()).expect("ThreadStartResponse");
+    resp.thread.id
+}
+
+pub fn turn(c: &mut Client, thread: &str, text: &str, key: &str) -> u64 {
+    c.start(
+        "turn/start",
+        json!({"threadId": thread, "clientUserMessageId": key,
+               "input": [{"type": "text", "text": text, "text_elements": []}]}),
+    )
+}
+
+/// Waits for `turn/completed` of a thread and returns its status.
+pub fn completed(c: &mut Client, thread: &str, secs: u64) -> Option<generated::protocol::TurnStatus> {
+    let m = c.wait(Duration::from_secs(secs), |m| {
+        m["method"] == "turn/completed" && m["params"]["threadId"] == thread
+    })?;
+    let n: generated::protocol::TurnCompletedNotification =
+        serde_json::from_value(m["params"].clone()).expect("TurnCompletedNotification");
+    Some(n.turn.status)
 }

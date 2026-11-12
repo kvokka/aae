@@ -1,41 +1,9 @@
 //! Scenarios of experiment 2: `threads stdio|unix`, `reconnect`. Summary on stdout, message logs in `logs/`.
 
 use codex_appserver::generated::protocol as p;
-use codex_appserver::{Client, Seen, fake_provider, rss_kb, spawn};
+use codex_appserver::{Client, Env, completed, rss_kb, setup, spawn, thread_id, turn};
 use serde_json::{Value, json};
-use std::os::unix::fs::PermissionsExt;
-use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
-
-struct Env {
-    root: String,
-    vars: Vec<(&'static str, String)>,
-    seen: Arc<Mutex<Vec<Seen>>>,
-}
-
-/// A fresh root with an isolated `HOME`, a `CODEX_HOME` pointing at the fake provider and two work directories.
-fn setup(name: &str) -> Env {
-    let root = format!("{}/aae-exp2-{name}", std::env::temp_dir().display());
-    let _ = std::fs::remove_dir_all(&root);
-    for d in ["home", "codex-home", "ws-a", "ws-b", "sock"] {
-        std::fs::create_dir_all(format!("{root}/{d}")).unwrap();
-    }
-    std::fs::set_permissions(format!("{root}/sock"), std::fs::Permissions::from_mode(0o700)).unwrap();
-    let (base, seen) = fake_provider();
-    let config = format!(
-        "model = \"fake-default\"\nmodel_provider = \"fake\"\napproval_policy = \"never\"\n\
-         sandbox_mode = \"danger-full-access\"\n[analytics]\nenabled = false\n[feedback]\nenabled = false\n\
-         [model_providers.fake]\nname = \"fake\"\nbase_url = \"{base}\"\nwire_api = \"responses\"\n"
-    );
-    std::fs::write(format!("{root}/codex-home/config.toml"), config).unwrap();
-    let vars = vec![
-        ("PATH", std::env::var("PATH").unwrap()),
-        ("HOME", format!("{root}/home")),
-        ("CODEX_HOME", format!("{root}/codex-home")),
-        ("SHELL", "/bin/sh".into()),
-    ];
-    Env { root, vars, seen }
-}
 
 fn hook(cmd: String) -> Value {
     json!([{"matcher": "", "hooks": [{"type": "command", "command": cmd, "timeout": 10}]}])
@@ -54,29 +22,6 @@ fn thread_params(env: &Env, tag: &str) -> Value {
            "developerInstructions": format!("MARK-{tag}"),
            "config": {"bypass_hook_trust": true, "shell_environment_policy": {"set": {"AAE_TAG": tag}},
                       "hooks": {"UserPromptSubmit": hook(dump("ups")), "Stop": hook(dump("stop"))}}})
-}
-
-fn thread_id(r: &Value) -> String {
-    let resp: p::ThreadStartResponse = serde_json::from_value(r["result"].clone()).expect("ThreadStartResponse");
-    resp.thread.id
-}
-
-fn turn(c: &mut Client, thread: &str, text: &str, key: &str) -> u64 {
-    c.start(
-        "turn/start",
-        json!({"threadId": thread, "clientUserMessageId": key,
-               "input": [{"type": "text", "text": text, "text_elements": []}]}),
-    )
-}
-
-/// Waits for `turn/completed` of a thread and returns its status.
-fn completed(c: &mut Client, thread: &str, secs: u64) -> Option<p::TurnStatus> {
-    let m = c.wait(Duration::from_secs(secs), |m| {
-        m["method"] == "turn/completed" && m["params"]["threadId"] == thread
-    })?;
-    let n: p::TurnCompletedNotification =
-        serde_json::from_value(m["params"].clone()).expect("TurnCompletedNotification");
-    Some(n.turn.status)
 }
 
 fn save(env: &Env, c: &Client, file: &str) {

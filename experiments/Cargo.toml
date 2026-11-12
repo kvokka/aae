@@ -1,7 +1,7 @@
 # Throwaway experiments of spec §16, outside the product workspace and its budgets (≤ 1 500 lines in total).
 [workspace]
 resolver = "3"
-members = ["01-claude-protocol", "02-claude-process", "03-codex-appserver", "05-br-events"]
+members = ["01-claude-protocol", "02-claude-process", "03-codex-appserver", "05-br-events", "06-finisher"]
 
 [workspace.package]
 edition = "2024"
