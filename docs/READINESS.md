@@ -5,7 +5,7 @@ path works by hand; 6 model-free tests green, including failure paths; 8 the com
 owner's host; 10 real owner runs without intervention (criterion 20). Updated at the end of every work session.
 
 Assessed 2026-11-13 on top of `c5dab93` (WP-29: the codex adapter and its run path through the daemon).
-<!-- MEASURE id=readiness date=2026-11-13 ver=1a2436f env=linux-arm64-orbstack src=docs/READINESS.md note="self-assessment by the implementing agent; re-assess at the end of every session" -->
+<!-- MEASURE id=readiness date=2026-11-13 ver=28bae2c env=linux-arm64-orbstack src=docs/READINESS.md note="self-assessment by the implementing agent; re-assess at the end of every session" -->
 
 | Component | Score | Missing for the next point |
 |---|---|---|
@@ -25,6 +25,6 @@ Assessed 2026-11-13 on top of `c5dab93` (WP-29: the codex adapter and its run pa
 | Shared MCP | 0 | contract (WP-34) |
 | HTTP API | 4 | `crates/aae-front`: unix socket, JSON errors, `Idempotency-Key`, runs (start, list, state, cancel, answer, finish), gates, events as SSE from a `seq` with the explicit gap, daemon facts; OpenAPI generated and checked against `docs/api/openapi.json`; integration tests on the real daemon; used by hand through the CLI; missing: the rest of §12 (projects, agents, formulas, plugins, explain, reload, drain, restart, live run view, TCP with a token — WP-22b), instances, services (WP-18)
 | CLI | 4 | `crates/aae-front/src/cli`: one command per API operation (a test checks the table against the OpenAPI document), `--json` everywhere, `aae finish` from the session environment with the 60 s retry under one idempotency key and exit 75 (tested with `AAE_FINISH_RETRY`), `--key` on every mutating command, `aae daemon`; integration tests on the real daemon; missing: the commands of WP-22b and later operations, `doctor` (WP-35) |
-| MCP frontend | 0 | contract (WP-25) |
+| MCP frontend | 4 | `aae-front/src/api/mcp.rs` on `/mcp` of the API socket (`docs/api/mcp.md`): five tools (`list_formulas`, `start_run`, `run_state`, `list_runs`, `cancel_run`) over the API handlers, API errors as `isError` results, the stateless 2026-07-28 epoch (`server/discover`) and the `initialize` epoch with no session id, `GET` 405; integration tests on the real daemon (`crates/aae/tests/mcp.rs`); missing for 6: a TCP listener so a harness can reach it by URL (WP-22b) and a live claude/codex session calling it |
 | Acceptance spec | 0 | runner skeleton (WP-24); how fakes reach the daemon is fixed (`contracts.md` 9) |
 | Delivery and `doctor` | 1 | workspace, CI, budget checks and cross-builds exist; `doctor` contract (WP-35) |
