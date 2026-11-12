@@ -169,11 +169,11 @@ turn goes to the fake provider, `HOME` and `CODEX_HOME` are fresh directories, t
 | Idempotency key | `clientUserMessageId` is **not** deduplicated: the same value sent again on an idle thread started a new turn and a new provider request, and the history (`thread/read{includeTurns:true}`) then held two `userMessage` items with that `clientId`. So the key is the `clientUserMessageId` (derived from the attempt key) and the check is the adapter's: after a restart it reads the thread history for its `clientId` before sending; a turn with an answer after it means "delivered", an `interrupted` one means "send a continuation with a new key" — the same rule as for claude above. |
 
 <!-- MEASURE id=codex-appserver-rss date=2026-11-12 ver=codex-0.167.2 env=linux-arm64-orbstack src=experiments/03-codex-appserver/logs/run.txt note="VmRSS of app-server, fake provider, one short turn per thread, stdio and unix runs; SHELL=/bin/sh and an empty HOME, so no rc files" -->
-<!-- MEASURE id=codex-appserver-initialize date=2026-11-12 ver=codex-0.167.2 env=linux-arm64-orbstack src=experiments/03-codex-appserver/logs/run.txt note="from before spawn to the initialize response, 150–177 ms over 7 runs of both transports, empty CODEX_HOME" -->
+<!-- MEASURE id=codex-appserver-initialize date=2026-11-12 ver=codex-0.167.2 env=linux-arm64-orbstack src=experiments/03-codex-appserver/logs/run.txt note="from before spawn to the initialize response, 150–227 ms over 8 runs of both transports, empty CODEX_HOME" -->
 <!-- MEASURE id=codex-stdio-eof-exit date=2026-11-12 ver=codex-0.167.2 env=linux-arm64-orbstack src=experiments/03-codex-appserver/logs/run.txt note="n=1, stdin closed 1 s into a turn whose provider answer was delayed by 6 s" -->
 
 Memory on 0.167.2: 89–91 MB empty, 147–150 MB with two threads after one turn each, 155–158 MB with four — the
-same as on 0.166.0 (spec §7.3). `initialize` answered 150–177 ms after spawn on both transports (77 ms on 0.166.0 per the context notes, other setup).
+same as on 0.166.0 (spec §7.3). `initialize` answered 150–227 ms after spawn on both transports (77 ms on 0.166.0 per the context notes, other setup).
 
 **Types.** `codex app-server generate-json-schema --out DIR` writes the bundle;
 `cargo run -p codex-appserver --bin gen -- DIR/codex_app_server_protocol.v2.schemas.json` takes the hand-picked roots
@@ -197,3 +197,23 @@ Consequences for the codex adapter (WP-29) and the instance registry (WP-18):
   the command line or `session_id`, never through `shell_environment_policy`.
 - A daemon restart ends the process and all its turns; recovery is `thread/resume` in a new process plus the
   history check of the idempotency key.
+
+## Finisher from a session (experiment 6, partly)
+
+Code: `experiments/06-finisher` (`src/bin/finish.rs` stands in for the finisher CLI: it connects to the unix socket
+named in `AAE_SOCKET` and reports `AAE_ATTEMPT_TOKEN`, `AAE_PROC_TOKEN` and its arguments; `src/main.rs` plays the
+daemon side). codex runs on the fake provider of experiment 2, which answers `RUN:<cmd>` with an `exec_command`
+call; claude runs on haiku with `--permission-mode bypassPermissions`. Output: `experiments/06-finisher/logs/`.
+
+<!-- MEASURE id=finisher-exp6 date=2026-11-12 ver=claude-2.1.322,codex-0.167.2 env=linux-arm64-orbstack src=experiments/06-finisher/logs/run.txt note="n=1 per round; codex without a live model, claude haiku with a subscription login; codex sandbox not exercised (see below)" -->
+
+| Question | Answer |
+|---|---|
+| Token in the environment, claude | The Bash tool sees the environment of the `claude` process: the finisher reached the socket with the token of that process. After `--resume` in a new process with another token, the finisher reported the new one — the token belongs to the process, not to the session. |
+| Token in the environment, codex | A per-thread `config.shell_environment_policy.set` value reaches the command, and so does a process variable (both have `TOKEN` in the name — the default excludes did not drop them). |
+| codex after resume in a new process | **The per-thread config is not restored**: `thread/resume` with only `threadId` ran the command without the per-thread token (the process variable was there). `thread/resume` with the same `config` restored it, with the new value. So the adapter passes the full thread config on every resume (closes the open point of the context notes, §3.5). |
+| codex sandbox | **Not checked.** The sandbox needs unprivileged user namespaces (bubblewrap); the owner's host container forbids them (`unshare -U` → "Operation not permitted"), so every codex command here ran in `danger-full-access`. Whether a `workspace-write` command can connect to the daemon socket and write the tracker database outside the work directory stays open. |
+
+Consequences: the attempt token goes into the process environment for claude (a process per session anyway) and
+into `shell_environment_policy.set` of the thread for codex, re-sent with every `thread/resume`. Hooks do not see
+the per-thread value (experiment 2), so a hook that must call the finisher gets the token on its command line.
