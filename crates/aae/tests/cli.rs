@@ -31,7 +31,8 @@ impl Daemon {
 #[tokio::test]
 async fn runs_and_gates_by_hand_from_the_cli() {
     let d = Daemon::start(|_| {}).await;
-    d.json(&["gate", "close", "project:shop", "--reason", "pause"]);
+    d.json(&["gate", "close", "project:shop", "--reason", "pause", "--key", "g1"]);
+    d.json(&["gate", "close", "project:shop", "--reason", "pause", "--key", "g1"]);
     assert_eq!(d.json(&["gate", "list"])[0]["key"], "project:shop");
     let out = d.cli(
         &["run", "start", "shop", "web", "check", "--key", "k1", "--input", "n=2"],
@@ -68,4 +69,18 @@ async fn without_a_daemon_a_client_command_fails_and_names_the_daemon() {
     let out = d.cli(&["status"], &[("AAE_SOCKET", "/nonexistent/aae.sock")]);
     assert_eq!(out.status.code(), Some(1));
     assert!(String::from_utf8_lossy(&out.stderr).contains("aae daemon"));
+}
+
+#[tokio::test]
+async fn the_finisher_gives_up_on_an_unreachable_daemon_with_tempfail() {
+    let d = Daemon::start(|_| {}).await;
+    let env = [
+        ("AAE_SOCKET", "/nonexistent/aae.sock"),
+        ("AAE_RUN", "r1"),
+        ("AAE_ATTEMPT_TOKEN", "t"),
+        ("AAE_FINISH_RETRY", "1"),
+    ];
+    let out = d.cli(&["finish", "pass", "--summary", "done"], &env);
+    assert_eq!(out.status.code(), Some(75));
+    assert!(String::from_utf8_lossy(&out.stderr).contains("unreachable for 1 s"));
 }

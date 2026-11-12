@@ -106,6 +106,9 @@ pub enum RunCommand {
         id: String,
         #[arg(long)]
         reason: Option<String>,
+        /// The idempotency key: a repeat with the same key changes nothing.
+        #[arg(long = "key")]
+        idempotency: Option<String>,
     },
     /// Answer the open request of a run: `allow`, `deny <message>` or `answer <text>`.
     Answer {
@@ -113,6 +116,9 @@ pub enum RunCommand {
         request: String,
         decision: Decision,
         text: Option<String>,
+        /// The idempotency key: a repeat with the same key changes nothing.
+        #[arg(long = "key")]
+        idempotency: Option<String>,
     },
 }
 
@@ -123,15 +129,23 @@ pub enum GateCommand {
     /// Close a gate as the operator: only the operator opens it again.
     Close {
         /// `orchestrator`, `project:<p>`, `rig:<p>/<r>`, `agent:<a>`, `account:<h>/<id>`, ...
-        key: String,
+        gate: String,
         /// UTC, `YYYY-MM-DDTHH:MM:SSZ`; absent: until opened by hand.
         #[arg(long)]
         until: Option<String>,
         #[arg(long, default_value = "")]
         reason: String,
+        /// The idempotency key: a repeat with the same key changes nothing.
+        #[arg(long = "key")]
+        idempotency: Option<String>,
     },
     /// Open a gate.
-    Open { key: String },
+    Open {
+        gate: String,
+        /// The idempotency key: a repeat with the same key changes nothing.
+        #[arg(long = "key")]
+        idempotency: Option<String>,
+    },
 }
 
 #[derive(Clone, Copy, ValueEnum)]
@@ -244,11 +258,15 @@ async fn execute(client: &Client, cli: Cli) -> Result<ExitCode, ClientError> {
             }
         }
         Command::Run(RunCommand::Show { id }) => print(&client.request("GET", &run_path(&id, ""), None, None).await?),
-        Command::Run(RunCommand::Cancel { id, reason }) => {
+        Command::Run(RunCommand::Cancel {
+            id,
+            reason,
+            idempotency,
+        }) => {
             let body = json!({ "reason": reason.unwrap_or_default() });
             print(
                 &client
-                    .request("POST", &run_path(&id, "/cancel"), Some(&body), None)
+                    .request("POST", &run_path(&id, "/cancel"), Some(&body), idempotency.as_deref())
                     .await?,
             );
         }
@@ -257,6 +275,7 @@ async fn execute(client: &Client, cli: Cli) -> Result<ExitCode, ClientError> {
             request,
             decision,
             text,
+            idempotency,
         }) => {
             let answer = match decision {
                 Decision::Allow => json!({ "decision": "allow" }),
@@ -266,7 +285,7 @@ async fn execute(client: &Client, cli: Cli) -> Result<ExitCode, ClientError> {
             let body = json!({ "request": request, "answer": answer });
             print(
                 &client
-                    .request("POST", &run_path(&id, "/answer"), Some(&body), None)
+                    .request("POST", &run_path(&id, "/answer"), Some(&body), idempotency.as_deref())
                     .await?,
             );
         }
@@ -286,14 +305,24 @@ async fn execute(client: &Client, cli: Cli) -> Result<ExitCode, ClientError> {
                 println!("{}", line.join("  "));
             }
         }
-        Command::Gate(GateCommand::Close { key, until, reason }) => {
-            let body = json!({ "key": key, "until": until, "reason": reason });
-            print(&client.request("POST", "/v1/gates", Some(&body), None).await?);
-        }
-        Command::Gate(GateCommand::Open { key }) => {
+        Command::Gate(GateCommand::Close {
+            gate,
+            until,
+            reason,
+            idempotency,
+        }) => {
+            let body = json!({ "key": gate, "until": until, "reason": reason });
             print(
                 &client
-                    .request("POST", "/v1/gates/open", Some(&json!({ "key": key })), None)
+                    .request("POST", "/v1/gates", Some(&body), idempotency.as_deref())
+                    .await?,
+            );
+        }
+        Command::Gate(GateCommand::Open { gate, idempotency }) => {
+            let body = json!({ "key": gate });
+            print(
+                &client
+                    .request("POST", "/v1/gates/open", Some(&body), idempotency.as_deref())
                     .await?,
             );
         }

@@ -510,7 +510,7 @@ of a run whose gate the operator closed parks it instead (invariant 18).
   token. Answers: accepted; `stale_attempt` (an older or ended attempt — nothing changes); `run_terminal`;
   `invalid` (unknown token or run, `summary` over 4 KiB, `data` over 64 KiB, a call while the run is
   `finishing`: the declared outcome is under check, or a call while the run waits for the decision on
-  `run.turn_ended_without_outcome`: the turn is over, and an outcome now would decide nothing). With the daemon unreachable the command retries with backoff for 60 s, then exits with code 75.
+  `run.turn_ended_without_outcome`: the turn is over, and an outcome now would decide nothing). With the daemon unreachable the command retries with backoff for 60 s (`AAE_FINISH_RETRY` seconds overrides it), then exits with code 75; every try carries the same idempotency key, a hash of the request, so a retry after a lost reply gets the first answer.
 - The table of §9.4 maps onto 6.2: a call during a turn stores the outcome (`running` stays); a repeated call
   replaces it; the end of the turn with background work keeps `running` until idle without background (deadline:
   background silence budget).

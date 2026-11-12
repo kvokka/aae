@@ -3,9 +3,14 @@
 use super::{Verdict, fail, run_path};
 use crate::client::{Client, ClientError};
 use serde_json::{Value, json};
-use std::{process::ExitCode, time::Duration};
+use std::{
+    hash::{DefaultHasher, Hash, Hasher},
+    process::ExitCode,
+    time::Duration,
+};
 
-/// The finisher gives up on an unreachable daemon after this long and exits with `EX_TEMPFAIL` (contracts 6.3).
+/// The finisher gives up on an unreachable daemon after this long and exits with `EX_TEMPFAIL` (contracts 6.3);
+/// `AAE_FINISH_RETRY` (seconds) overrides it.
 const FINISH_RETRY: Duration = Duration::from_secs(60);
 const EX_TEMPFAIL: u8 = 75;
 
@@ -38,10 +43,19 @@ pub(super) async fn finish(
     };
     let body = json!({ "token": token, "outcome": { "result": result, "summary": summary, "data": data } });
     let path = run_path(&run, "/finish");
-    let give_up = tokio::time::Instant::now() + FINISH_RETRY;
+    // A retry whose first try was committed but not answered gets the first reply. The key is a hash, so the
+    // state never sees the token.
+    let mut hasher = DefaultHasher::new();
+    body.to_string().hash(&mut hasher);
+    let key = format!("finish:{run}:{:016x}", hasher.finish());
+    let retry = std::env::var("AAE_FINISH_RETRY")
+        .ok()
+        .and_then(|s| s.parse().ok())
+        .map_or(FINISH_RETRY, Duration::from_secs);
+    let give_up = tokio::time::Instant::now() + retry;
     let mut pause = Duration::from_millis(250);
     loop {
-        match client.request("POST", &path, Some(&body), None).await {
+        match client.request("POST", &path, Some(&body), Some(&key)).await {
             Ok(reply) => {
                 let answer = reply["answer"].as_str().unwrap_or_default();
                 println!("{answer}");
@@ -52,10 +66,7 @@ pub(super) async fn finish(
                 });
             }
             Err(ClientError::Io(e)) if tokio::time::Instant::now() + pause > give_up => {
-                eprintln!(
-                    "aae: the daemon stayed unreachable for {} s: {e}",
-                    FINISH_RETRY.as_secs()
-                );
+                eprintln!("aae: the daemon stayed unreachable for {} s: {e}", retry.as_secs());
                 return Ok(ExitCode::from(EX_TEMPFAIL));
             }
             Err(ClientError::Io(_)) => {
