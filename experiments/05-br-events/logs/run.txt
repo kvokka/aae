@@ -1,0 +1,11 @@
+jsonl signal kinds: ["issues.jsonl Modify(Name(Both))", "issues.jsonl Modify(Name(To))"]
+sequential creates: signals per command {2: 20}; signal after command start, ms: min 22.7 median 40.6 max 62.4; before command exit: 40/40
+events rows for 20 creates: 20
+9 read commands: jsonl signals 0; other fs events [".br-db-openers-b1c273fc430b12f6bbd75eb9.lock Access(Close(Write))×18", ".br-db-openers-b1c273fc430b12f6bbd75eb9.lock Access(Open(Any))×18", "beads.db Access(Close(Write))×18", "beads.db Access(Open(Any))×60", "beads.db-fsqlite-ns-gate Access(Open(Any))×18", "beads.db-fsqlite-ns-use Access(Open(Any))×18", "beads.db-shm Access(Close(Write))×19", "beads.db-shm Access(Open(Any))×64", "beads.db-shm Modify(Data(Any))×7", "beads.db-wal Access(Close(Write))×37", "beads.db-wal Access(Open(Any))×64", "config.yaml Access(Open(Any))×17", "issues.jsonl Access(Open(Any))×3", "metadata.json Access(Open(Any))×9"]
+16 concurrent claims in 837.1 ms: jsonl signals 32; events rows 32 {"assignee_changed": 16, "status_changed": 16}; rows whose actor matches the claimer: 32
+  --actor A: event label_added actor="A" agent_name="" harness/model="/"
+  BD_ACTOR=B: event label_added actor="B" agent_name="" harness/model="/"
+  BR_ACTOR=B2: event label_added actor="unknown" agent_name="" harness/model="/"
+  BR_AGENT_NAME=C BR_HARNESS=claude BR_MODEL=haiku: event label_added actor="unknown" agent_name="" harness/model="/"
+watcher CPU of this process over steps 1–4: 110 ms
+events read incl. open/close: 0.73 ms (all rows); br list --all --json snapshot: 8.7 ms at 20 beads

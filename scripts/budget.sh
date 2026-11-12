@@ -46,8 +46,8 @@ printf 'budget: %-9s %6d / 30000 (hard stop 35000)\n' total "$total"
 ((total <= 30000)) || err "release budget exceeded"
 ((total <= 35000)) || err "HARD STOP exceeded: no new features until a deletion pass"
 
-# Spec §16: the throwaway experiments stay within 1 500 code lines in total.
-mapfile -t exp < <(git ls-files -co --exclude-standard -- 'experiments/*.rs' || true)
+# Spec §16: the throwaway experiments stay within 1 500 code lines in total (generated code excluded, as above).
+mapfile -t exp < <(git ls-files -co --exclude-standard -- 'experiments/*.rs' | grep -v '/generated/' || true)
 if ((${#exp[@]})); then
   n=$(tokei -o json "${exp[@]}" | jq '.Total.code')
   printf 'budget: %-9s %6d / 1500\n' experiments "$n"
