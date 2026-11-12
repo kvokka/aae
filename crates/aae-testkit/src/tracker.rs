@@ -3,7 +3,7 @@
 
 use aae_core::{
     BoxFuture,
-    tracker::{Bead, Tracker, TrackerError},
+    tracker::{Bead, Change, Tracker, TrackerError},
 };
 use std::sync::{Arc, Mutex, PoisonError};
 
@@ -15,6 +15,7 @@ pub struct MemoryTracker {
 #[derive(Default)]
 struct State {
     beads: Vec<Bead>,
+    log: Vec<Change>,
     down: bool,
 }
 
@@ -40,6 +41,7 @@ impl MemoryTracker {
             updated_at: "2026-11-13T00:00:00Z".to_owned(),
             closed_at: None,
         });
+        state.record(&id, "created", "human", &[]);
         id
     }
 
@@ -64,8 +66,13 @@ impl MemoryTracker {
         self.state.lock().unwrap_or_else(PoisonError::into_inner)
     }
 
-    /// Runs `f` on the bead `id` unless the tracker is down.
-    fn with<T>(&self, id: &str, f: impl FnOnce(&mut Bead) -> Result<T, TrackerError>) -> Result<T, TrackerError> {
+    /// Runs `f` on the bead `id` unless the tracker is down; a success is logged as `kind` by `actor`.
+    fn with<T>(
+        &self,
+        id: &str,
+        (kind, actor): (&str, &str),
+        f: impl FnOnce(&mut Bead) -> Result<T, TrackerError>,
+    ) -> Result<T, TrackerError> {
         let mut state = self.lock();
         if state.down {
             return Err(TrackerError::Unavailable {
@@ -73,7 +80,30 @@ impl MemoryTracker {
             });
         }
         let bead = state.beads.iter_mut().find(|b| b.id == id);
-        f(bead.ok_or(TrackerError::NotFound)?)
+        let out = f(bead.ok_or(TrackerError::NotFound)?)?;
+        let changed: &[&str] = if kind == "updated" {
+            &["status", "assignee"]
+        } else {
+            &[]
+        };
+        state.record(id, kind, actor, changed);
+        Ok(out)
+    }
+}
+
+impl State {
+    fn record(&mut self, id: &str, kind: &str, actor: &str, changed: &[&str]) {
+        let Some(bead) = self.beads.iter().find(|b| b.id == id).cloned() else {
+            return;
+        };
+        let seq = i64::try_from(self.log.len()).unwrap_or(i64::MAX) + 1;
+        self.log.push(Change {
+            seq,
+            kind: kind.to_owned(),
+            actor: actor.to_owned(),
+            changed: changed.iter().map(|c| (*c).to_owned()).collect(),
+            bead,
+        });
     }
 }
 
@@ -91,7 +121,7 @@ fn held(bead: &Bead, owner: &str) -> Result<(), TrackerError> {
 impl Tracker for MemoryTracker {
     fn claim<'a>(&'a self, owner: &'a str, id: &'a str) -> BoxFuture<'a, Result<Bead, TrackerError>> {
         Box::pin(async move {
-            self.with(id, |b| match &b.assignee {
+            self.with(id, ("updated", owner), |b| match &b.assignee {
                 Some(holder) if holder != owner => Err(TrackerError::Claimed { holder: holder.clone() }),
                 _ if b.status == "closed" => Err(TrackerError::Invalid {
                     text: "closed".to_owned(),
@@ -107,7 +137,7 @@ impl Tracker for MemoryTracker {
 
     fn release<'a>(&'a self, owner: &'a str, id: &'a str) -> BoxFuture<'a, Result<(), TrackerError>> {
         Box::pin(async move {
-            self.with(id, |b| {
+            self.with(id, ("updated", owner), |b| {
                 held(b, owner)?;
                 b.assignee = None;
                 b.status = "open".to_owned();
@@ -118,7 +148,7 @@ impl Tracker for MemoryTracker {
 
     fn close<'a>(&'a self, owner: &'a str, id: &'a str, _reason: &'a str) -> BoxFuture<'a, Result<(), TrackerError>> {
         Box::pin(async move {
-            self.with(id, |b| {
+            self.with(id, ("closed", owner), |b| {
                 held(b, owner)?;
                 b.status = "closed".to_owned();
                 b.closed_at = Some(b.updated_at.clone());
@@ -140,6 +170,18 @@ impl Tracker for MemoryTracker {
                 .iter()
                 .filter(|b| b.status == "open" && b.assignee.is_none());
             Ok(open.cloned().collect())
+        })
+    }
+
+    fn changes(&self, after: i64) -> BoxFuture<'_, Result<Vec<Change>, TrackerError>> {
+        Box::pin(async move {
+            let state = self.lock();
+            if state.down {
+                return Err(TrackerError::Unavailable {
+                    text: "down".to_owned(),
+                });
+            }
+            Ok(state.log.iter().filter(|c| c.seq > after).cloned().collect())
         })
     }
 }

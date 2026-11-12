@@ -1,6 +1,7 @@
 //! Runs (spec §9.3, docs/design/contracts.md 6): the run state machine inside the single writer, the effects that
 //! drive a harness through its [`Driver`], and the driver events fed back to the writer as messages.
 
+mod bead_events;
 mod beads;
 mod decide;
 mod events;
@@ -10,6 +11,7 @@ mod finish;
 mod gates;
 mod hooks;
 mod machine;
+mod msg;
 mod queue;
 mod read;
 mod recover;
@@ -20,18 +22,16 @@ mod triggers;
 use crate::{
     clock::Clock,
     config::Config,
-    driver::{Answer, Driver, DriverEvent, Failure, InstanceHandle, Normalized, SessionRef},
+    driver::{Answer, Driver, Failure, Normalized},
     journal::Journal,
-    tracker::{Bead, Tracker, TrackerError},
+    tracker::Tracker,
     writer::{self, CoreHandle, Error, Handler, Tx},
 };
 use rusqlite::Connection;
-use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use std::{
     collections::BTreeMap,
     sync::{Arc, OnceLock, PoisonError},
-    time::Duration,
 };
 use tokio::{sync::mpsc, task::JoinHandle};
 
@@ -41,190 +41,10 @@ pub use crate::process::Exit;
 pub use finish::MAX_REMARKS;
 pub use gates::{GateSpec, valid_key};
 pub use hooks::{ExecHooks, HookRunner};
+pub use msg::{Create, Decision, Msg, Outcome, Verdict};
 pub use read::{Reader, RunFilter};
 
 type Drivers = Arc<BTreeMap<String, Arc<dyn Driver>>>;
-
-/// A message to the run machine.
-pub enum Msg {
-    /// Queues a run; the reply is `{"run": "<id>"}`.
-    Create(Create),
-    Cancel {
-        run: String,
-        reason: String,
-    },
-    /// Fires `trigger` (`<pack>.<name>`, or the name of a project trigger) on a rig by hand, as its schedule would;
-    /// the reply is `{"run": "<id>"}` or `{"skipped": <reason>, "detail": <text>}`.
-    Fire {
-        project: String,
-        rig: String,
-        trigger: String,
-    },
-    /// The operator closes a gate (spec §5.7): automation never removes this closure (invariant 18).
-    CloseGate(GateSpec),
-    /// The operator opens a gate: every closure of `key` goes.
-    OpenGate {
-        key: String,
-    },
-    /// A decision on the deciding event `seq` the run waits for (contracts 3.2).
-    Decide {
-        run: String,
-        seq: i64,
-        decision: Decision,
-    },
-    /// A human answer to the open request of a run in `requires_action`.
-    Answer {
-        run: String,
-        request: String,
-        answer: Answer,
-    },
-    /// The registry's instance `id` runs.
-    InstanceReady {
-        id: String,
-        harness: String,
-        handle: InstanceHandle,
-    },
-    /// The registry's instance `id` could not start.
-    InstanceFailed {
-        id: String,
-        failure: Failure,
-    },
-    /// The stop of the registry's instance `id` is done; `reason` is the one of the stop (contracts 1.3).
-    InstanceStopped {
-        id: String,
-        reason: String,
-    },
-    /// The instance of an attempt runs.
-    Instance {
-        run: String,
-        attempt: u32,
-        handle: InstanceHandle,
-    },
-    /// The executor started or resumed the session of an attempt.
-    Session {
-        run: String,
-        attempt: u32,
-        session: SessionRef,
-    },
-    /// A driver call of an attempt failed.
-    AttemptFailed {
-        run: String,
-        attempt: u32,
-        failure: Failure,
-    },
-    Driver(DriverEvent),
-    /// The command of an exec step ended; `stdout` and `stderr` are their last 4 KiB.
-    ExecDone {
-        run: String,
-        attempt: u32,
-        exit: Exit,
-        stdout: String,
-        stderr: String,
-    },
-    /// A hook on `event` failed: the core reports it as `plugin.hook_failed` with `data` (contracts 1.3).
-    HookFailed {
-        event: Value,
-        data: Value,
-    },
-    /// The result of the tracker call of the effect `payload`.
-    Tracked {
-        payload: Value,
-        result: Result<Option<Bead>, TrackerError>,
-    },
-    /// The ready set of the tracker of `project`.
-    Ready {
-        project: String,
-        beads: Vec<Bead>,
-    },
-    /// The tracker of the project changed: its ready set is read again.
-    TrackerChanged(String),
-    /// The finisher of an attempt; the reply is `{"answer": "accepted"|"stale_attempt"|"run_terminal"|"invalid"}`
-    /// (contracts 6.3).
-    Finish {
-        run: String,
-        token: String,
-        outcome: Outcome,
-    },
-}
-
-/// The outcome an agent declares (contracts 1.3 `Outcome`).
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-pub struct Outcome {
-    pub result: Verdict,
-    pub summary: String,
-    pub data: Option<Value>,
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum Verdict {
-    Pass,
-    Fail,
-}
-
-/// A run to create: by hand (`correlation` and `parent_run` absent, depth 0) or by a trigger.
-pub struct Create {
-    pub project: String,
-    pub rig: String,
-    /// A formula reference as a project writes it: `name` or `<pack>.<name>`.
-    pub formula: String,
-    pub inputs: serde_json::Map<String, Value>,
-    pub correlation: Option<String>,
-    pub depth: u32,
-    pub parent_run: Option<String>,
-    /// A terminal run whose last session this run continues (spec §9.3); never implicit.
-    pub continue_from: Option<String>,
-}
-
-/// The decisions of contracts 3.2 the run machine applies.
-#[derive(Clone, Debug, PartialEq)]
-pub enum Decision {
-    /// Every hook on the event finished without a decision: the "no plugin decision" outcome, at once (3.3).
-    Abstain,
-    /// On `run.preparing`: the session starts in `workdir`, with `env` changed (`None` removes a variable) and
-    /// `prompt_append` after the prompt.
-    Proceed {
-        workdir: Option<std::path::PathBuf>,
-        env: BTreeMap<String, Option<crate::config::Sourced<String>>>,
-        prompt_append: Option<String>,
-    },
-    Deny {
-        reason: String,
-    },
-    /// On `run.attempt_failed` (as `NewSession` and `Fail`): `gate`, if any, is closed in the same transaction.
-    Resume {
-        after: Duration,
-        gate: Option<GateSpec>,
-    },
-    NewSession {
-        after: Duration,
-        gate: Option<GateSpec>,
-    },
-    /// On `run.attempt_failed`: close `gate` and wait in `parked` until the run's keys are open, then start the
-    /// attempt `then` (`resume` or `new_session`).
-    Park {
-        gate: GateSpec,
-        then: String,
-    },
-    Fail {
-        reason: String,
-        gate: Option<GateSpec>,
-    },
-    /// On `run.turn_ended_without_outcome`: `message` goes as the next prompt of the attempt.
-    Continue {
-        message: String,
-    },
-    /// On `run.requires_action`: the answer to the open request.
-    Answer(Answer),
-    Accept,
-    Veto {
-        reason: String,
-    },
-    /// On `run.finishing`: `message` goes as the next prompt of the attempt; the declared outcome is cleared.
-    Remark {
-        message: String,
-    },
-}
 
 /// Starts the writer with the run machine on `conn` (opened by `store::open`), one driver per harness and the
 /// trackers of the projects that have one, by project name.
@@ -317,7 +137,11 @@ impl Handler for RunHandler {
             } => self.exec_done(tx, &run, attempt, exit, &stdout, &stderr),
             Msg::HookFailed { event, data } => Self::hook_failed(tx, &event, data),
             Msg::Tracked { payload, result } => self.tracked(tx, &payload, result),
-            Msg::Ready { project, beads } => Self::ready(tx, &project, &beads),
+            Msg::Ready {
+                project,
+                beads,
+                changes,
+            } => Self::ready(tx, &project, &beads, &changes),
             Msg::TrackerChanged(project) => self.sync_trackers(tx, Some(&project), "changed"),
         }?;
         Ok(Value::Null)

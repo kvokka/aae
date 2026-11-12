@@ -183,19 +183,6 @@ impl RunHandler {
         }
     }
 
-    /// The last ready set of a project's tracker.
-    pub(super) fn ready(tx: &Tx<'_>, project: &str, beads: &[Bead]) -> Result<(), Error> {
-        tx.sql()
-            .execute("DELETE FROM ready_beads WHERE project = ?1", [project])?;
-        for (pos, bead) in (0_i64..).zip(beads) {
-            tx.sql().execute(
-                "INSERT INTO ready_beads (project, pos, id, body) VALUES (?1, ?2, ?3, ?4)",
-                params![project, pos, bead.id, json!(bead).to_string()],
-            )?;
-        }
-        Ok(())
-    }
-
     /// The run ended: its hold on the bead goes; a claimed bead is closed (`passed`) or released conditionally, and
     /// its failure counter moves (§10.3): `bead_failures` failed runs close the bead's gate for the core.
     pub(super) fn let_go_bead(&mut self, tx: &mut Tx<'_>, row: &Row, state: &str, reason: &str) -> Result<(), Error> {
@@ -213,7 +200,7 @@ impl RunHandler {
             "reason": format!("{state}: {reason}") });
         let key = tracker_key(&row.project);
         tx.effect(&key, &format!("{call}:{}", row.id), &payload)?;
-        tx.effect(&key, &format!("sync:{call}:{}", row.id), &sync(&row.project))?;
+        tx.effect(&key, &format!("sync:{call}:{}", row.id), &sync(tx, &row.project)?)?;
         let failures = match state {
             "passed" => {
                 tx.sql().execute(
@@ -261,7 +248,7 @@ impl RunHandler {
             tx.effect(
                 &tracker_key(project),
                 &format!("sync:{why}:{}", tx.now_ms()),
-                &sync(project),
+                &sync(tx, project)?,
             )?;
         }
         Ok(())
@@ -272,8 +259,15 @@ fn tracker_key(project: &str) -> String {
     format!("tracker:{project}")
 }
 
-fn sync(project: &str) -> Value {
-    json!({ "op": "tracker", "call": "sync", "project": project })
+/// Reads the tracker's writes after the project's cursor, then its ready set.
+fn sync(tx: &Tx<'_>, project: &str) -> Result<Value, Error> {
+    let after: Option<i64> = tx
+        .sql()
+        .query_row("SELECT seq FROM tracker_cursors WHERE project = ?1", [project], |r| {
+            r.get(0)
+        })
+        .optional()?;
+    Ok(json!({ "op": "tracker", "call": "sync", "project": project, "after": after.unwrap_or_default() }))
 }
 
 /// Runs one tracker call of an effect and reports it; `false` retries it (the tracker was unavailable).
@@ -287,15 +281,30 @@ pub(super) async fn execute(trackers: &Trackers, core: &CoreHandle<Msg>, payload
         "claim" => tracker.claim(&owner, bead).await.map(Some),
         "close" => tracker.close(&owner, bead, text("reason")).await.map(|()| None),
         "release" => tracker.release(&owner, bead).await.map(|()| None),
-        _ => match tracker.ready().await {
-            Ok(beads) => {
-                let project = text("project").to_owned();
-                // A stopped writer drops the message; the next start reads the ready set again.
-                let _ = core.send(None, Msg::Ready { project, beads }).await;
-                return true;
+        _ => {
+            let after = payload["after"].as_i64().unwrap_or_default();
+            match tracker.changes(after).await {
+                Ok(changes) => match tracker.ready().await {
+                    Ok(beads) => {
+                        let project = text("project").to_owned();
+                        // A stopped writer drops the message; the next start reads from the cursor again.
+                        let _ = core
+                            .send(
+                                None,
+                                Msg::Ready {
+                                    project,
+                                    beads,
+                                    changes,
+                                },
+                            )
+                            .await;
+                        return true;
+                    }
+                    Err(e) => Err(e),
+                },
+                Err(e) => Err(e),
             }
-            Err(e) => Err(e),
-        },
+        }
     };
     let retry = matches!(result, Err(TrackerError::Unavailable { .. }));
     let _ = core

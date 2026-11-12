@@ -329,7 +329,7 @@ fn the_process_gets_the_native_block_and_the_thread_the_rest() {
     );
     assert_eq!(
         s["config"]["shell_environment_policy"]["set"],
-        json!({ "AAE_RUN": "r", "AAE_ATTEMPT_TOKEN": "tok" })
+        json!({ "AAE_RUN": "r", "AAE_ATTEMPT_TOKEN": "tok", "BD_ACTOR": "aae:r:1" })
     );
     assert_eq!(s["config"]["hooks"]["Stop"][0]["hooks"][0]["command"], "true");
     assert_eq!(s["config"]["bypass_hook_trust"], true);

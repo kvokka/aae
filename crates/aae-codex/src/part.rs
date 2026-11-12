@@ -63,17 +63,25 @@ pub(crate) fn process(config: &EffectiveConfig, state: &Path) -> Result<Value, F
 
 /// The `thread/start` (and `thread/resume`) parameters of a session.
 pub(crate) fn session(config: &EffectiveConfig, plan: &SessionPlan) -> Result<Value, Failure> {
-    let (workdir, run, token) = match plan {
+    let (workdir, run, attempt, token) = match plan {
         SessionPlan::New {
-            workdir, run, token, ..
+            workdir,
+            run,
+            attempt,
+            token,
         }
         | SessionPlan::Resume {
-            workdir, run, token, ..
-        } => (workdir, run, token),
+            workdir,
+            run,
+            attempt,
+            token,
+            ..
+        } => (workdir, run, attempt, token),
     };
     let value = |s: &Option<aae_core::config::Sourced<String>>| s.as_ref().map(|s| s.value.clone());
     let mut thread_config = json!({
-        "shell_environment_policy": { "set": { "AAE_RUN": run, "AAE_ATTEMPT_TOKEN": token } },
+        "shell_environment_policy": { "set": { "AAE_RUN": run, "AAE_ATTEMPT_TOKEN": token,
+            "BD_ACTOR": format!("aae:{run}:{attempt}") } },
     });
     if let Some(effort) = value(&config.effort) {
         thread_config["model_reasoning_effort"] = json!(effort);

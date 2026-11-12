@@ -253,6 +253,11 @@ pub(crate) fn env(p: &Value, id: &str, socket: Option<&Path>, host: &Path) -> Ve
         ("CLAUDE_CODE_EMIT_SESSION_STATE_EVENTS".to_owned(), "1".to_owned()),
         ("AAE_RUN".to_owned(), text(&p["run"])),
         ("AAE_ATTEMPT_TOKEN".to_owned(), text(&p["token"])),
+        // The tracker actor of the attempt (contracts 5.1): br attributes the session's writes to the run.
+        (
+            "BD_ACTOR".to_owned(),
+            format!("aae:{}:{}", text(&p["run"]), p["attempt"]),
+        ),
         (aae_core::orphans::INSTANCE_ENV.to_owned(), id.to_owned()),
     ]);
     env.extend(

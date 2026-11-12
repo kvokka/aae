@@ -421,7 +421,7 @@ trait Tracker: Send + Sync {
     fn list(&self, filter: &BeadFilter) -> BoxFuture<Result<Vec<Bead>, TrackerError>>;
     fn add_dependency(&self, actor: &str, id: &str, depends_on: &str) -> BoxFuture<Result<(), TrackerError>>;
     fn comment(&self, actor: &str, id: &str, text: &str) -> BoxFuture<Result<(), TrackerError>>;
-    fn changes(&self, cursor: Option<&Cursor>) -> BoxFuture<Result<(Vec<Change>, Cursor), TrackerError>>;
+    fn changes(&self, after: i64) -> BoxFuture<Result<Vec<Change>, TrackerError>>;           // after a seq
     fn health(&self) -> BoxFuture<Health>;
 }
 ```
@@ -431,7 +431,15 @@ because a run id is never reused and a run owns at most one bead once. A claim a
 made for and is dropped unless the run still owns the bead in that generation and still waits for it in `preparing`.
 
 `changes` is pull-only; the adapter also owns a watcher that sends a "changed" message to the core, and the core
-then calls `changes` from its stored cursor (and on start and after recovery without waiting for a signal).
+then calls `changes` from its stored cursor (and on start and after recovery without waiting for a signal). One
+effect on the queue `tracker:<project>` reads `changes(cursor)` and then `ready(None)`; the core turns the writes
+past the cursor into events, moves the cursor (table `tracker_cursors`, never back) and diffs the ready set. The
+first read of a project's tracker takes its whole history as the starting cursor and raises no `bead.created|
+updated|closed` for it; every bead ready at that read is new to the set and raises `bead.ready`. A write whose actor
+is `aae:<run id>[:<attempt n>]` carries that run and its correlation; `bead.ready` carries those of the last such
+write in the same read (the write that freed the bead is usually that one); the rig of a bead event is the bead's
+`rig:` label, absent without one. The daemon gives a project a tracker when `<project>/.beads` exists, and every
+session of the project gets `BEADS_DIR` (layer: project) and `BD_ACTOR=aae:<run id>:<attempt n>`.
 
 ### 5.2 Types and errors
 
@@ -440,7 +448,8 @@ then calls `changes` from its stored cursor (and on start and after recovery wit
   §10.2). The rig of a bead is its `rig:<name>` label.
 - `NewBead`: `{title, description, priority, labels, epic}`; `BeadPatch`: the same fields, all optional.
 - `BeadFilter`: `{status, labels (all must match), epic, assignee}`, all optional.
-- `Change`: `{bead_id, kind: "created"|"updated"|"closed", actor, fields}`; the core maps it to `bead.created`,
+- `Change`: `{seq, kind: "created"|"updated"|"closed", actor, changed: [field], bead: Bead}`; `seq` orders the
+  writes and is the cursor of `changes(after)`, `bead` is the bead when the change is read; the core maps it to `bead.created`,
   `bead.updated`, `bead.closed`, and derives `bead.ready` by diffing `ready(None)` with the last ready set it keeps
   in the state (a bead is "ready" the first time it enters the set, §9.5).
 - `TrackerError`: `NotFound`; `Claimed { holder }` (claim of a bead someone else holds — told by the state of the

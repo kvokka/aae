@@ -196,6 +196,13 @@ fn an_isolated_session_without_a_credential_gets_the_host_login() {
     p["env"]["ANTHROPIC_API_KEY"] = json!("k");
     assert_eq!(token(&p), None, "its own credential wins");
     assert_ne!(part::account(&p), isolated);
+    p["run"] = json!("run_7");
+    p["attempt"] = json!(2);
+    let env = part::env(&p, "i1", None, host.path());
+    assert!(
+        env.contains(&("BD_ACTOR".to_owned(), "aae:run_7:2".to_owned())),
+        "the attempt's tracker actor"
+    );
 }
 
 /// A process that dies on its own in a turn: its stderr is in the failure and the driver forgets it.

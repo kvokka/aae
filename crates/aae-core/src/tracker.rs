@@ -23,6 +23,19 @@ pub struct Bead {
     pub closed_at: Option<String>,
 }
 
+/// One write to the tracker (contracts 5.2): `seq` orders the writes and is the cursor of `changes`; `actor` is who
+/// made it (`aae:<run id>[:<attempt n>]` for aae and its sessions); `changed` names the fields of an `updated`.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Change {
+    pub seq: i64,
+    /// `created`, `updated` or `closed`.
+    pub kind: String,
+    pub actor: String,
+    pub changed: Vec<String>,
+    /// The bead as it is when the change is read.
+    pub bead: Bead,
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub enum TrackerError {
     NotFound,
@@ -66,4 +79,6 @@ pub trait Tracker: Send + Sync {
     fn close<'a>(&'a self, owner: &'a str, id: &'a str, reason: &'a str) -> BoxFuture<'a, Result<(), TrackerError>>;
     /// Every ready bead, in the tracker's order (`ready(None)` of contracts 5.1: the core picks within an epic itself).
     fn ready(&self) -> BoxFuture<'_, Result<Vec<Bead>, TrackerError>>;
+    /// The writes after `after` (a `seq`, 0 for all), oldest first.
+    fn changes(&self, after: i64) -> BoxFuture<'_, Result<Vec<Change>, TrackerError>>;
 }

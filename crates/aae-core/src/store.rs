@@ -152,6 +152,9 @@ ALTER TABLE runs ADD COLUMN bead TEXT;
 ALTER TABLE runs ADD COLUMN bead_data TEXT;
 ";
 
+/// The last tracker write each project's tracker events were read to (`Change::seq`).
+const SCHEMA_V9: &str = "CREATE TABLE tracker_cursors (project TEXT PRIMARY KEY, seq INTEGER NOT NULL);";
+
 /// Opens the state database in WAL mode and brings its schema to the current version.
 pub fn open(path: &Path) -> rusqlite::Result<Connection> {
     let conn = Connection::open(path)?;
@@ -168,6 +171,7 @@ pub fn open(path: &Path) -> rusqlite::Result<Connection> {
         (6, SCHEMA_V6),
         (7, SCHEMA_V7),
         (8, SCHEMA_V8),
+        (9, SCHEMA_V9),
     ]
     .into_iter()
     .filter(|(to, _)| *to > version)
