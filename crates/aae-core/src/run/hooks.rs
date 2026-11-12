@@ -57,7 +57,8 @@ impl RunHandler {
         hooks
     }
 
-    /// Queues the hooks of every emitted event; the effect key serializes the hooks of one run in `seq` order.
+    /// Queues the hooks of every emitted event. The effect key serializes the hooks of one run in `seq` order,
+    /// with the deciding events on their own key: a slow observer never eats the deadline of a decision.
     pub(super) fn dispatch(&mut self, tx: &mut Tx<'_>, events: &[Value]) -> Result<(), Error> {
         for event in events {
             let (Some(kind), Some(seq)) = (event["type"].as_str(), event["seq"].as_i64()) else {
@@ -65,7 +66,12 @@ impl RunHandler {
             };
             let hooks = self.hooks(event["project"].as_str(), kind);
             if !hooks.is_empty() {
-                let key = format!("hooks:{}", event["run"].as_str().unwrap_or("-"));
+                let run = event["run"].as_str().unwrap_or("-");
+                let key = if DECIDING.contains(&kind) {
+                    format!("hooks:{run}")
+                } else {
+                    format!("hooks:{run}:obs")
+                };
                 let payload = json!({ "op": "hooks", "event": event, "hooks": hooks });
                 tx.effect(&key, &seq.to_string(), &payload)?;
             }

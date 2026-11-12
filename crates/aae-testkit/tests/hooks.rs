@@ -15,15 +15,22 @@ use std::{
     time::{Duration, Instant},
 };
 
-/// A world whose plugin `policy` has the hooks `(event, script)`, each run as `sh <script>` in the plugin directory.
+/// A world whose plugin `policy` has the hooks `(event, script)` with a timeout of 1 s.
 fn policy(hooks: &[(&str, &str)]) -> World {
+    let hooks: Vec<_> = hooks.iter().map(|&(on, script)| (on, script, "1s")).collect();
+    policy_timed(&hooks)
+}
+
+/// A world whose plugin `policy` has the hooks `(event, script, timeout)`, each run as `sh <script>` in the plugin
+/// directory.
+fn policy_timed(hooks: &[(&str, &str, &str)]) -> World {
     let mut toml = "name = \"policy\"\nversion = \"0.1.0\"\n".to_owned();
     let mut files = vec![(
         "config.toml".to_owned(),
         "projects = [\"shop\"]\n[harness.scripted]\n[[plugin]]\npath = \"policy\"\n".to_owned(),
     )];
-    for (n, (on, script)) in hooks.iter().enumerate() {
-        toml += &format!("[[hook]]\non = \"{on}\"\ncommand = [\"sh\", \"{n}.sh\"]\ntimeout = \"1s\"\n");
+    for (n, (on, script, timeout)) in hooks.iter().enumerate() {
+        toml += &format!("[[hook]]\non = \"{on}\"\ncommand = [\"sh\", \"{n}.sh\"]\ntimeout = \"{timeout}\"\n");
         files.push((format!("policy/{n}.sh"), (*script).to_owned()));
     }
     files.push(("policy/plugin.toml".to_owned(), toml));
@@ -95,6 +102,18 @@ echo '{"decision":"proceed","prompt_append":"two"}'"#;
         (&failed["class"], &failed["run"]["workdir"]),
         (&json!("hollow_done"), &json!("/tmp"))
     );
+}
+
+#[tokio::test]
+async fn a_slow_observer_does_not_hold_a_deciding_hook() {
+    // Deadline of `run.preparing`: 1 s + 5 s; the observer on the events before it alone takes 7 s.
+    let w = policy_timed(&[
+        ("run.state_changed", "sleep 7", "8s"),
+        ("run.preparing", r#"echo '{"decision":"proceed"}'"#, "1s"),
+    ]);
+    w.driver.script(hollow_turn());
+    let run = w.create().await;
+    assert_eq!(w.until(Some(&run), "run.failed", 0).await["class"], "hollow_done");
 }
 
 #[tokio::test]

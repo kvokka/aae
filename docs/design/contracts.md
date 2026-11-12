@@ -189,7 +189,8 @@ timeout = "30s"
   a decision not allowed for the event — a hook failure, reported as `plugin.hook_failed`.
 - Timeout: default 30 s, ceiling 300 s per invocation.
 - Hooks run after commit, outside the core loop; the result enters the core as a message. Hooks of different
-  events run concurrently; hooks of one run are serialized in `seq` order (effect queue key `(plugin, run)`).
+  events run concurrently; the hooks of one run are serialized in `seq` order on two queues: deciding events on
+  one, observed events on the other (see 3.5), so an observer never delays a decision.
 - Delivery is at least once: a hook cut by a daemon crash runs again after restart (see 3.4). Hooks must be
   idempotent; `seq` identifies the event.
 
@@ -250,7 +251,9 @@ runs the hooks of every deciding event still pending; the run waits in its state
   created (or the `trigger.skipped`) is committed — the idempotency key is `(trigger, seq)`; the hook dispatcher
   after all hooks of the event finished and, for a deciding event, after the decision is committed.
 - The hook dispatcher is the same guarantee in another shape: the transaction that commits an event also queues
-  the hooks on it as one effect (key `hooks:<run>`, so the hooks of one run run in `seq` order). The effect is
+  the hooks on it as one effect. The key is `hooks:<run>` for a deciding event (a run waits on at most one) and
+  `hooks:<run>:obs` for an observed one; each key runs its hooks in `seq` order, and a slow observed hook never
+  holds a deciding one past its deadline (3.3). The effect is
   deleted only after every hook finished and the decision message was handled; a crash runs it again.
 - There is no time-based expiry: a row lives until all durable consumers acknowledge it, so a crash neither
   loses nor doubles a trigger or a hook decision. Every consumer is bounded in time (hook timeouts, journal write
@@ -471,7 +474,7 @@ to the next prompt) the step `timeout` pauses like in `requires_action`. Trigger
 | — | create (API, CLI, MCP, trigger) with an idempotency key | `queued` | — |
 | — | create with `continue_from: <run>` (a terminal run with a session; never implicit, §9.3) | `queued` | the first attempt resumes that run's last session with the formula prompt; a later `resume` uses the run's own session, or that one while it has none; a harness other than the agent's → `failed{infrastructure}` |
 | `queued` | slot free, workdir free, no gate of the run closed | `preparing` | bead claim (the ownership record and generation are written in this transaction, invariant 3); `run.preparing` hooks |
-| `preparing` | decision `proceed` (or no hooks) | `starting` | attempt 1: instance acquire, `start_session`, `send_prompt` (prompt step) or spawn (exec step) |
+| `preparing` | decision `proceed` (or no hooks) | `starting` | attempt 1: instance acquire, `start_session`, `send_prompt` |
 | `preparing` | `deny`, template error, claim error `Claimed` | `failed{check}`, `failed{infrastructure}`, `failed{infrastructure, bead_claimed}` | — |
 | `starting` | `prompt.acked` of the first prompt | `running` | — |
 | `running` | `permission.requested` | `requires_action` | `run.requires_action` hooks |
@@ -479,7 +482,7 @@ to the next prompt) the step `timeout` pauses like in `requires_action`. Trigger
 | `running` | turn ended, idle without background, outcome declared | `finishing` | `run.finishing` hooks |
 | `running` | turn ended, idle without background, no outcome | `running` | `run.turn_ended_without_outcome` hooks; `continue` → next prompt in the same attempt; `fail` or no decision → `failed{hollow_done}` (with the hook reason for `fail`) |
 | `preparing` (exec) | decision `proceed` (or no hooks) | `running` (no session to start: the command is spawned at once) | the command runs in the workdir with `PATH`, `HOME`, `LANG` of the daemon and the `env` of `run.preparing` |
-| `running` (exec) | exit 0 / other code or a signal | `finishing` with outcome `pass` / `fail`, `summary` `exit <code>`, `data` `{exit_code, stdout, stderr}` (last 4 KiB each) | `run.finishing` hooks |
+| `running` (exec) | exit 0 / other code or a signal | `finishing` with outcome `pass` / `fail`, `summary` `exit <code>` or `signal <n>`, `data` `{exit_code, stdout, stderr}` (last 4 KiB each) | `run.finishing` hooks |
 | `running` (exec) | exit 75 / timeout / spawn error | `interrupted` with failure `unknown` (`text` `exit 75 (EX_TEMPFAIL)`, scope `run`) / `runaway_turn` / `workspace_failure` | `run.attempt_failed` hooks; every attempt runs the command again |
 | `starting`, `running`, `requires_action` | `failure`, `exited`, deadline, exec exit 75 | `interrupted` | stop the session (cancel, then stop the instance if it is the session's own, then sweep descendants); `run.attempt_failed` hooks |
 | `finishing` | accept / veto / remark | `passed` or `failed{agent}` / `failed{check}` / `running` | bead close or conditional release; on remark the message goes as the next prompt of the same attempt, the declared outcome is cleared, the token stays valid. A remark for an exec step is not allowed (hook failure) |
