@@ -105,6 +105,13 @@ impl RunHandler {
         if !valid_key(&gate.key) {
             return Err(rejected(format!("`{}` is not a gate key", gate.key)));
         }
+        // A closure that has already ended closes nothing: the operator hears why, a decision just goes on.
+        if gate.until_ms.is_some_and(|until| until <= tx.now_ms()) {
+            return match by {
+                "operator" => Err(rejected(format!("gate `{}`: `until` has passed", gate.key))),
+                _ => Ok(()),
+            };
+        }
         tx.sql().execute(
             "INSERT OR REPLACE INTO gates (key, closed_by, until_ms, reason, closed_ms) VALUES (?1, ?2, ?3, ?4, ?5)",
             params![gate.key, by, gate.until_ms, gate.reason, tx.now_ms()],

@@ -176,8 +176,7 @@ impl RunHandler {
                 "no randomness for the attempt token",
             );
         };
-        row.attempt += 1;
-        let (run, attempt, workdir) = (row.id.clone(), row.attempt, PathBuf::from(&row.workdir));
+        let (run, attempt, workdir) = (row.id.clone(), row.attempt + 1, PathBuf::from(&row.workdir));
         let token_sha256 = super::token_sha256(&token);
         let plan = match resume.clone() {
             Some(session) => SessionPlan::Resume {
@@ -194,6 +193,18 @@ impl RunHandler {
                 token,
             },
         };
+        let split = driver.split(&config, &plan);
+        // The account comes from the config before the start (spec §5.7): a closed account gate parks with no launch.
+        if let Ok(split) = &split {
+            let account = driver
+                .account(&split.process)
+                .map(|a| format!("account:{}/{a}", config.harness));
+            Self::learn_keys(tx, &row, account, None)?;
+            if let Some(gate) = Self::closed_gate(tx, &row)? {
+                return self.park(tx, row, gate, kind);
+            }
+        }
+        row.attempt = attempt;
         tx.sql().execute(
             "UPDATE runs SET attempt = ?2, next = NULL WHERE id = ?1",
             params![row.id, row.attempt],
@@ -211,14 +222,10 @@ impl RunHandler {
             ],
         )?;
         row.set_state(tx, "starting", None)?;
-        let split = match driver.split(&config, &plan) {
+        let split = match split {
             Ok(split) => split,
             Err(failure) => return self.attempt_failed(tx, row, failure),
         };
-        let account = driver
-            .account(&split.process)
-            .map(|a| format!("account:{}/{a}", config.harness));
-        Self::learn_keys(tx, &row, account, None)?;
         let prompt = match resume {
             Some(_) if row.attempt > 1 => RECONCILE.to_owned(),
             _ => row.prompt.clone().unwrap_or_default(),

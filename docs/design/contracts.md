@@ -541,13 +541,15 @@ of a run whose gate the operator closed parks it instead (invariant 18).
   operator closure is removed only by the operator, so automation never reopens an operator pause (criterion 19).
 - A closure with `until` ends by the managed clock (`gate.opened{by: "timer"}`); without `until` only by hand
   (API, CLI).
-- The account key is known once an attempt reported it (`Driver::account` at the start of the attempt, or
-  `account` of a failure), the model key once a failure reported `provider_model`; a run that never started is
-  admitted on its other keys, and its first attempt parks on a closed account or model gate only through the
-  policy (`gates` of `run.attempt_failed`). A `park` on a key the run does not have closes the gate and starts
+- The account key comes from `Driver::account` on the process part of the config, read before every attempt
+  launches (or from `account` of a failure); a closed account gate parks the run with no launch, so a second run
+  of the same account does not start (criterion 10). The model key is known once a failure reported
+  `provider_model`; until then a run is admitted on its other keys and parks on a closed model gate only through
+  the policy (`gates` of `run.attempt_failed`). A `park` on a key the run does not have closes the gate and starts
   the attempt at once.
 - `until` is UTC in the form events carry: `YYYY-MM-DDTHH:MM:SS[.fff]Z`; another form is an invalid decision. A
-  closure whose `until` has passed counts as open even before its timer fires.
+  closure whose `until` has passed counts as open even before its timer fires; one that has passed already when
+  asked for closes nothing (the operator's is rejected, a decision's is ignored).
 - The operator closes with `{key, until, reason}` (a closure of `(key, operator)` is replaced) and opens a key:
   that removes every closure of it, the policy's and the core's too. `gate.closed` and `gate.opened` carry no run.
 - No half-open probe in the core: when a gate opens, the waiting runs are admitted in creation order within the

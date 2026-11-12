@@ -145,3 +145,29 @@ async fn a_retry_under_an_operator_pause_parks_and_times_out() {
         (&"infrastructure".into(), &"park_timeout".into())
     );
 }
+
+#[tokio::test(start_paused = true)]
+async fn a_closed_account_gate_keeps_a_new_run_from_launching() {
+    let agent = "harness = \"scripted\"\n[native.scripted]\naccount = \"a\"\n";
+    let w = world(&[("shop/agents/dev/agent.toml", agent)]);
+    w.driver.script(hollow_turn());
+    w.operator(Msg::CloseGate(gate("account:scripted/a", None))).await;
+    let run = w.create().await;
+    let events = w.events(&run, Duration::from_secs(3600)).await;
+    assert_eq!(last(&events, "run.parked")["gate"]["key"], "account:scripted/a");
+    assert_eq!(w.states(&run).await, ["preparing", "parked"], "no attempt was launched");
+    w.operator(Msg::OpenGate {
+        key: "account:scripted/a".into(),
+    })
+    .await;
+    let states = w.states(&run).await;
+    assert_eq!(states, ["preparing", "parked", "starting", "running", "failed"]);
+}
+
+#[tokio::test(start_paused = true)]
+async fn an_operator_closure_that_has_already_ended_is_rejected() {
+    let w = world(&[]);
+    let reply = w.core.send(None, Msg::CloseGate(gate(RIG, Some(0)))).await;
+    assert!(reply.is_err(), "{reply:?}");
+    assert!(w.all("gate.closed").is_empty());
+}

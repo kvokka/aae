@@ -205,8 +205,8 @@ impl Driver for ScriptedDriver {
         self.capabilities
     }
 
-    fn account(&self, _process: &ProcessPart) -> Option<String> {
-        None
+    fn account(&self, process: &ProcessPart) -> Option<String> {
+        process.0["native"]["account"].as_str().map(str::to_owned)
     }
 
     /// The native block needs a process of its own; the model and the working directory ride with the session.
