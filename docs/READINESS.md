@@ -23,8 +23,8 @@ Assessed 2026-11-13 on top of `e30dc17` (the last code commit assessed).
 | `default-policy` | 2 | code (WP-33); contract: `contracts.md` 10 |
 | `worktree` | 0 | contract (WP-33); its hook decision shape is fixed (`contracts.md` 3.2) |
 | Shared MCP | 0 | contract (WP-34) |
-| HTTP API | 3 | `crates/aae-front`: unix socket, JSON errors, `Idempotency-Key`, runs (start, list, state, cancel, answer, finish), gates, events as SSE from a `seq` with the explicit gap, daemon facts; OpenAPI generated and checked against `docs/api/openapi.json`; integration tests on the real daemon; missing: the rest of §12 (projects, agents, formulas, plugins, explain, reload, drain, restart, live run view, TCP with a token — WP-22b), triggers, instances, services (WP-17, WP-18)
-| CLI | 0 | contract (WP-23); only `aae --version` exists |
+| HTTP API | 4 | `crates/aae-front`: unix socket, JSON errors, `Idempotency-Key`, runs (start, list, state, cancel, answer, finish), gates, events as SSE from a `seq` with the explicit gap, daemon facts; OpenAPI generated and checked against `docs/api/openapi.json`; integration tests on the real daemon; used by hand through the CLI; missing: the rest of §12 (projects, agents, formulas, plugins, explain, reload, drain, restart, live run view, TCP with a token — WP-22b), triggers, instances, services (WP-17, WP-18)
+| CLI | 4 | `crates/aae-front/src/cli`: one command per API operation (a test checks the table against the OpenAPI document), `--json` everywhere, `aae finish` from the session environment with the 60 s retry and exit 75, `aae daemon`; integration tests on the real daemon; missing: the commands of WP-22b and later operations, `doctor` (WP-35), the retry path is not tested (60 s) |
 | MCP frontend | 0 | contract (WP-25) |
 | Acceptance spec | 0 | runner skeleton (WP-24); how fakes reach the daemon is fixed (`contracts.md` 9) |
 | Delivery and `doctor` | 1 | workspace, CI, budget checks and cross-builds exist; `doctor` contract (WP-35) |
