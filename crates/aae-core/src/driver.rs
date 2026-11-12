@@ -129,6 +129,8 @@ pub enum Health {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Capabilities {
     pub sessions_per_instance: usize,
+    /// How long an instance with no sessions lives on before it is stopped (contracts 8).
+    pub instance_idle: Duration,
     /// The harness retries 429 by itself; copied into `Failure::retried_by_harness` for rate limits.
     pub retries_429: bool,
     /// A quota failure of this process part can carry `retry_at`.
@@ -319,8 +321,10 @@ pub trait Driver: Send + Sync {
     /// A config the harness cannot express is a `config_error` failure of the attempt.
     fn split(&self, config: &EffectiveConfig, plan: &SessionPlan) -> Result<Split, Failure>;
 
+    /// `id` is the registry's: the handle carries it, and the process environment holds it as `AAE_INSTANCE`.
     fn start_instance<'a>(
         &'a self,
+        id: &'a str,
         process: &'a ProcessPart,
         sink: EventSink,
     ) -> BoxFuture<'a, Result<InstanceHandle, Failure>>;

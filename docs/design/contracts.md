@@ -282,7 +282,7 @@ trait Driver: Send + Sync {
     fn split(&self, config: &EffectiveConfig, plan: &SessionPlan) -> Result<Split, Failure>;   // kind config_error
 
     // instance
-    fn start_instance(&self, process: &ProcessPart, sink: EventSink) -> BoxFuture<Result<InstanceHandle, Failure>>;
+    fn start_instance(&self, id: &str, process: &ProcessPart, sink: EventSink) -> BoxFuture<Result<InstanceHandle, Failure>>; // id from the registry (8)
     fn health(&self, instance: &InstanceHandle) -> BoxFuture<Health>;
     fn stop_instance(&self, instance: &InstanceHandle, grace: Duration) -> BoxFuture<()>;
 
@@ -366,10 +366,11 @@ Success traps (§7.2) are the adapter's: claude `subtype:"success"` with `is_err
 
 ### 4.5 Capabilities
 
-`Capabilities { sessions_per_instance, retries_429, reset_time, versions }`:
+`Capabilities { sessions_per_instance, instance_idle, retries_429, reset_time, versions }`:
 
 - `sessions_per_instance`: claude 1 (a process per session, §7.3); codex the config value `max_sessions`
   (default 8).
+- `instance_idle`: how long an instance without sessions lives on (8): claude 0, codex 60 s.
 - `retries_429`: claude true, codex false (§7.2); copied into `Failure.retried_by_harness` for rate limits.
 - `reset_time`: whether a quota failure can carry `retry_at` for this process part (claude: subscription login
   only; codex: yes, from the rate-limit update).
@@ -564,8 +565,17 @@ of a run whose gate the operator closed parks it instead (invariant 18).
 - Record: `{id, kind: "instance"|"service", harness or service name, fingerprint or scope key, pid, start_time, pgid,
   state: "starting"|"ready"|"stopping", sessions, idle_since}`. Start and stop are written as intent before the
   effect (invariant 9).
-- Acquire: reuse a `ready` instance of the fingerprint with `sessions < sessions_per_instance`, else start a new
-  one; release: `sessions − 1`; stop after `instance_idle` (default 60 s; 0 for claude) without sessions.
+- Acquire, in the transaction that starts the attempt: take a `starting` or `ready` instance of the fingerprint
+  with `sessions < sessions_per_instance` (a `starting` one is shared: every launch on it waits for its one start),
+  else write a new `starting` record and emit `instance.starting`; the registry gives the id, the adapter puts it
+  in `InstanceHandle.id`. Release, when the attempt ends: `sessions − 1`; with no session left the instance stops
+  after `instance_idle` (`<id>:idle` deadline; 0 — at once; a new session in that time takes it again). Stop:
+  state `stopping`, then the effect; when it is done the record goes and `instance.stopped` is emitted. An
+  `exited` event of an instance not `stopping` is a crash: `instance.failed`, the record goes, and the event fails
+  every live attempt on the instance (an event with a session goes to that session's attempt only).
+- Confirmed death (invariant 6): a launch first waits until the instances still `stopping` that served its run (or
+  the run it continues) are gone by pid + start time (`/proc/<pid>/stat`), up to 30 s; past that the attempt
+  fails with `unknown`.
 - The process environment of every instance and service holds `AAE_INSTANCE=<id>`: the sweep of invariant 7
   finds descendants by it; the daemon is a child subreaper ([experiments](experiments.md#descendants-after-kill--9-invariant-7)).
 - Services (§11.4) use the same record: scope key `orchestrator`, `project:<p>` or `session:<id>`, a consumer

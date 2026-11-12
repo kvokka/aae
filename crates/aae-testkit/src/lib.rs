@@ -19,19 +19,8 @@ use std::{
 };
 use tokio::{sync::broadcast, task::JoinHandle};
 
-/// One step of a scenario.
-#[derive(Clone, Debug)]
-pub enum Step {
-    Wait(Duration),
-    Emit(Normalized),
-    /// As the first step: the prompt is not acknowledged, the scenario plays before `prompt.acked`.
-    NoAck,
-    /// The process dies: `exited` is sent and every later call on the instance fails with `harness_crash`.
-    Exit {
-        code: Option<i32>,
-        signal: Option<i32>,
-    },
-}
+mod step;
+pub use step::Step;
 
 /// Plays one queued scenario per `send_prompt` (after acknowledging the prompt) and per `respond` (the
 /// continuation after a permission request). With no scenario left the prompt is acknowledged and the turn never
@@ -73,15 +62,22 @@ struct Session {
 const NO_PID: i32 = i32::MAX;
 
 impl ScriptedDriver {
+    /// `instance_idle` is zero, as for a process per session; [`Self::idle`] sets it.
     pub fn new(sessions_per_instance: usize) -> Self {
         Self {
             capabilities: Capabilities {
                 sessions_per_instance,
+                instance_idle: Duration::ZERO,
                 retries_429: false,
                 reset_time: true,
             },
             state: Arc::default(),
         }
+    }
+
+    pub fn idle(mut self, instance_idle: Duration) -> Self {
+        self.capabilities.instance_idle = instance_idle;
+        self
     }
 
     /// Queues the scenario played by the next `send_prompt` or `respond`.
@@ -234,12 +230,12 @@ impl Driver for ScriptedDriver {
 
     fn start_instance<'a>(
         &'a self,
+        id: &'a str,
         _process: &'a ProcessPart,
         sink: EventSink,
     ) -> BoxFuture<'a, Result<InstanceHandle, Failure>> {
         let mut state = self.lock();
-        state.started += 1;
-        let id = format!("scripted-{}", state.started);
+        let id = id.to_owned();
         state.instances.insert(
             id.clone(),
             Instance {

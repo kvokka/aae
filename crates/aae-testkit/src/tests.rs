@@ -15,7 +15,7 @@ async fn setup() -> Setup {
     let driver = ScriptedDriver::new(1);
     let (sink, mut events) = mpsc::unbounded_channel();
     let process = ProcessPart(Value::Null);
-    let instance = driver.start_instance(&process, sink).await.unwrap();
+    let instance = driver.start_instance("i-1", &process, sink).await.unwrap();
     let session = driver
         .start_session(&instance, &SessionPart(Value::Null))
         .await
@@ -208,7 +208,11 @@ async fn the_process_dies_mid_turn_and_later_calls_fail() {
 
     // The transcript outlives the process: the session resumes on a new instance.
     let (sink, mut events) = mpsc::unbounded_channel();
-    let instance = s.driver.start_instance(&ProcessPart(Value::Null), sink).await.unwrap();
+    let instance = s
+        .driver
+        .start_instance("i-1", &ProcessPart(Value::Null), sink)
+        .await
+        .unwrap();
     s.driver
         .resume_session(&instance, &s.session, &SessionPart(Value::Null))
         .await

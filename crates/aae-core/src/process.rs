@@ -178,6 +178,33 @@ async fn pump(from: Option<impl AsyncRead + Unpin>, keep: usize, into: Shared) {
     }
 }
 
+/// The process `pid` that started at `start_time` (field 22 of `/proc/<pid>/stat`) still runs; a zombie does not.
+// shortcut: Linux only (`/proc`); elsewhere every process reads as gone — macOS is out of the first release (§1.1).
+fn alive(pid: i32, start_time: u64) -> bool {
+    let Ok(stat) = std::fs::read_to_string(format!("/proc/{pid}/stat")) else {
+        return false;
+    };
+    let mut fields = stat
+        .rsplit_once(')')
+        .map(|(_, f)| f)
+        .unwrap_or_default()
+        .split_whitespace();
+    let state = fields.next();
+    state != Some("Z") && fields.nth(18).and_then(|t| t.parse().ok()) == Some(start_time)
+}
+
+/// Waits until the process `pid` started at `start_time` is gone (spec §5.2); `false` if it outlives `limit`.
+pub(crate) async fn wait_dead(pid: i32, start_time: u64, limit: Duration) -> bool {
+    let deadline = tokio::time::Instant::now() + limit;
+    while alive(pid, start_time) {
+        if tokio::time::Instant::now() >= deadline {
+            return false;
+        }
+        tokio::time::sleep(Duration::from_millis(50)).await;
+    }
+    true
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -247,5 +274,27 @@ mod tests {
         })
         .await;
         assert!(matches!(out.exit, Exit::SpawnFailed(_)));
+    }
+
+    #[tokio::test]
+    async fn a_process_is_alive_by_pid_and_start_time_until_it_is_reaped() {
+        let mut child = std::process::Command::new("sleep").arg("30").spawn().unwrap();
+        let pid = i32::try_from(child.id()).unwrap();
+        let stat = std::fs::read_to_string(format!("/proc/{pid}/stat")).unwrap();
+        let start: u64 = stat
+            .rsplit_once(')')
+            .unwrap()
+            .1
+            .split_whitespace()
+            .nth(19)
+            .unwrap()
+            .parse()
+            .unwrap();
+        assert!(alive(pid, start));
+        assert!(!alive(pid, start + 1), "another start time is another process");
+        assert!(!wait_dead(pid, start, Duration::from_millis(200)).await);
+        child.kill().unwrap();
+        assert!(wait_dead(pid, start, Duration::from_secs(5)).await, "a zombie is dead");
+        child.wait().unwrap();
     }
 }

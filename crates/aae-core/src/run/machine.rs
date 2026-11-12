@@ -7,7 +7,7 @@ use super::{
 };
 use crate::{
     config::{Sourced, Step},
-    driver::{Failure, PromptKey, SessionPlan, SessionRef},
+    driver::{Failure, FailureKind, PromptKey, SessionPlan, SessionRef, Source},
     journal::rfc3339_ms,
     writer::{Error, Tx},
 };
@@ -153,10 +153,10 @@ impl RunHandler {
         let own = last_session(tx, &row.id)?;
         // A run that continues the session of another run (spec §9.3) starts there, and resumes there while it has
         // no session of its own.
-        let from: Option<String> =
+        let continued: Option<String> =
             tx.sql()
                 .query_row("SELECT continue_from FROM runs WHERE id = ?1", [&row.id], |r| r.get(0))?;
-        let from = from.map(|f| last_session(tx, &f)).transpose()?.flatten();
+        let from = continued.as_ref().map(|f| last_session(tx, f)).transpose()?.flatten();
         if let Some((_, harness)) = from.as_ref().filter(|(_, h)| *h != config.harness) {
             let reason = format!("the continued session is of harness `{harness}`");
             return self.terminal(tx, row, "failed", Some("infrastructure"), &reason);
@@ -226,13 +226,22 @@ impl RunHandler {
             Ok(split) => split,
             Err(failure) => return self.attempt_failed(tx, row, failure),
         };
+        let caps = driver.capabilities(&split.process);
+        let Some((instance, handle)) = Self::acquire(tx, &config.harness, &split, &caps)? else {
+            return self.attempt_failed(tx, row, Failure::new(FailureKind::Unknown, Source::Core));
+        };
+        tx.sql().execute(
+            "UPDATE attempts SET instance = ?3 WHERE run = ?1 AND n = ?2",
+            params![row.id, row.attempt, instance],
+        )?;
+        let after = Self::stopping_for(tx, &row.id, continued.as_deref())?;
         let prompt = match resume {
             Some(_) if row.attempt > 1 => RECONCILE.to_owned(),
             _ => row.prompt.clone().unwrap_or_default(),
         };
         let payload = json!({
             "op": "launch", "run": row.id, "attempt": row.attempt, "harness": config.harness,
-            "process": split.process.0, "session": split.session.0, "resume": resume.map(|s| s.0),
+            "instance": instance, "handle": handle, "after": after, "process": split.process.0, "session": split.session.0, "resume": resume.map(|s| s.0),
             "prompt": prompt, "key": PromptKey::new(&row.id, row.attempt, 1).0.to_string(),
         });
         tx.effect(&row.id, &format!("launch:{}", row.attempt), &payload)?;
@@ -282,15 +291,16 @@ impl RunHandler {
         for what in ["state", "silence", "human"] {
             tx.clear_deadline(&row.deadline(what))?;
         }
-        let live: Option<(String, Option<String>, Option<String>)> = tx
+        type Live = (String, Option<String>, Option<String>, Option<String>);
+        let live: Option<Live> = tx
             .sql()
             .query_row(
-                "SELECT harness, handle, session FROM attempts WHERE run = ?1 AND n = ?2 AND ended_ms IS NULL",
+                "SELECT harness, handle, session, instance FROM attempts WHERE run = ?1 AND n = ?2 AND ended_ms IS NULL",
                 params![row.id, row.attempt],
-                |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
+                |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?)),
             )
             .optional()?;
-        let Some((harness, handle, session)) = live else {
+        let Some((harness, handle, session, instance)) = live else {
             return Ok(());
         };
         if row.exec() {
@@ -310,7 +320,10 @@ impl RunHandler {
             let payload = json!({ "op": "stop", "harness": harness, "handle": handle, "session": session });
             tx.effect(&row.id, &format!("stop:{}", row.attempt), &payload)?;
         }
-        Ok(())
+        match instance {
+            Some(id) => Self::release(tx, &id),
+            None => Ok(()),
+        }
     }
 
     /// `passed`, `failed{class}` or `cancelled`; frees the workdir for the queue.

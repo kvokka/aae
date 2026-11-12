@@ -14,7 +14,7 @@ use crate::{
     writer::{Error, Tx},
 };
 use rusqlite::{OptionalExtension, params};
-use serde_json::json;
+use serde_json::{Value, json};
 
 /// Silence budgets of `running` (contracts 6.1).
 pub(super) const SILENCE_MS: i64 = 5 * 60_000;
@@ -42,29 +42,13 @@ impl RunHandler {
         Ok((row.attempt == attempt && attempt_live(&row.state)).then_some(row))
     }
 
-    pub(super) fn instance(
-        &mut self,
-        tx: &mut Tx<'_>,
-        run: &str,
-        attempt: u32,
-        handle: &InstanceHandle,
-    ) -> Result<(), Error> {
-        let handle_json = json!(handle).to_string();
-        if Self::current(tx, run, attempt)?.is_some() {
-            tx.sql().execute(
-                "UPDATE attempts SET instance = ?3, handle = ?4 WHERE run = ?1 AND n = ?2",
-                params![run, attempt, handle.id, handle_json],
-            )?;
-            return Ok(());
-        }
-        // The attempt ended while its instance was starting: nothing may keep running for it.
-        let harness: String = tx.sql().query_row(
-            "SELECT harness FROM attempts WHERE run = ?1 AND n = ?2",
-            params![run, attempt],
-            |r| r.get(0),
+    pub(super) fn instance(tx: &mut Tx<'_>, run: &str, attempt: u32, handle: &InstanceHandle) -> Result<(), Error> {
+        // Kept for an ended attempt too: its session, if one still starts, is closed through it.
+        tx.sql().execute(
+            "UPDATE attempts SET handle = ?3 WHERE run = ?1 AND n = ?2",
+            params![run, attempt, json!(handle).to_string()],
         )?;
-        let payload = json!({ "op": "stop", "harness": harness, "handle": handle, "session": null });
-        tx.effect(run, &format!("stop:{attempt}:late"), &payload)
+        Ok(())
     }
 
     pub(super) fn session(
@@ -75,7 +59,15 @@ impl RunHandler {
         session: &SessionRef,
     ) -> Result<(), Error> {
         if Self::current(tx, run, attempt)?.is_none() {
-            return Ok(());
+            // The attempt ended while its session was starting: the session is closed, its instance stays shared.
+            let (harness, handle): (String, Option<String>) = tx.sql().query_row(
+                "SELECT harness, handle FROM attempts WHERE run = ?1 AND n = ?2",
+                params![run, attempt],
+                |r| Ok((r.get(0)?, r.get(1)?)),
+            )?;
+            let handle: Value = handle.and_then(|h| serde_json::from_str(&h).ok()).unwrap_or_default();
+            let payload = json!({ "op": "stop", "harness": harness, "handle": handle, "session": session.0 });
+            return tx.effect(run, &format!("stop:{attempt}:late"), &payload);
         }
         tx.sql().execute(
             "UPDATE attempts SET session = ?3 WHERE run = ?1 AND n = ?2",
@@ -97,22 +89,41 @@ impl RunHandler {
         }
     }
 
-    /// Events of an instance the current attempt of no run owns are dropped: they are late.
+    /// An event goes to the live attempts of its instance: of its session, or all of them for an instance-wide
+    /// failure or exit. Events no live attempt owns are late and dropped.
     pub(super) fn driver_event(&mut self, tx: &mut Tx<'_>, event: DriverEvent) -> Result<(), Error> {
-        let owner: Option<(String, u32)> = tx
-            .sql()
-            .query_row(
-                "SELECT run, n FROM attempts WHERE instance = ?1 AND ended_ms IS NULL",
-                [&event.instance],
-                |r| Ok((r.get(0)?, r.get(1)?)),
-            )
-            .optional()?;
-        let Some((run, attempt)) = owner else { return Ok(()) };
-        let Some(mut row) = Self::current(tx, &run, attempt)? else {
+        if matches!(event.event, Normalized::Exited { .. }) {
+            Self::instance_exited(tx, &event.instance)?;
+        }
+        let live: Vec<(String, u32, Option<String>)> = {
+            let mut stmt = tx
+                .sql()
+                .prepare("SELECT run, n, session FROM attempts WHERE instance = ?1 AND ended_ms IS NULL")?;
+            let rows = stmt.query_map([&event.instance], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)))?;
+            rows.collect::<Result<_, _>>()?
+        };
+        let session = event.session.as_ref().map(|s| s.0.to_string());
+        let wide = session.is_none() && matches!(event.event, Normalized::Failure(_) | Normalized::Exited { .. });
+        let mut owners: Vec<_> = live
+            .iter()
+            .filter(|(_, _, s)| wide || (session.is_some() && *s == session))
+            .collect();
+        // A session-per-process harness may report before its session is known.
+        if owners.is_empty() && live.len() == 1 {
+            owners = live.iter().collect();
+        }
+        for (run, attempt, _) in owners {
+            self.attempt_event(tx, run, *attempt, event.event.clone())?;
+        }
+        Ok(())
+    }
+
+    fn attempt_event(&mut self, tx: &mut Tx<'_>, run: &str, attempt: u32, event: Normalized) -> Result<(), Error> {
+        let Some(mut row) = Self::current(tx, run, attempt)? else {
             return Ok(());
         };
         let silence = |tx: &mut Tx<'_>, row: &Row, ms: i64| tx.set_deadline(&row.deadline("silence"), tx.now_ms() + ms);
-        match event.event {
+        match event {
             Normalized::PromptAcked { key } if row.state == "starting" => {
                 if key != PromptKey::new(&row.id, attempt, 1) {
                     return Ok(());

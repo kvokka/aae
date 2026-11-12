@@ -57,7 +57,17 @@ pub(crate) fn world(extra: &[(&str, &str)]) -> World {
     world_with(extra, Arc::new(Lost))
 }
 
+/// The world with a lost hook runner on `driver`.
+pub(crate) fn world_driven(extra: &[(&str, &str)], driver: ScriptedDriver) -> World {
+    world_on(extra, Arc::new(Lost), driver)
+}
+
 pub(crate) fn world_with(extra: &[(&str, &str)], hooks: Arc<dyn HookRunner>) -> World {
+    world_on(extra, hooks, ScriptedDriver::new(1))
+}
+
+/// The world on `driver`.
+pub(crate) fn world_on(extra: &[(&str, &str)], hooks: Arc<dyn HookRunner>, driver: ScriptedDriver) -> World {
     let dir = tempfile::tempdir().unwrap();
     for (path, text) in FILES
         .iter()
@@ -69,7 +79,6 @@ pub(crate) fn world_with(extra: &[(&str, &str)], hooks: Arc<dyn HookRunner>) -> 
         fs::write(path, text).unwrap();
     }
     let config = config::load(&dir.path().join("config.toml")).unwrap();
-    let driver = ScriptedDriver::new(1);
     let journal = dir.path().join("journal");
     let (core, _task) = run::start(
         open(&dir.path().join("state.db")).unwrap(),

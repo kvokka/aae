@@ -11,6 +11,7 @@ mod hooks;
 mod machine;
 mod queue;
 mod read;
+mod registry;
 mod row;
 
 use crate::{
@@ -66,7 +67,22 @@ pub enum Msg {
         request: String,
         answer: Answer,
     },
-    /// The executor started the instance of an attempt.
+    /// The registry's instance `id` runs.
+    InstanceReady {
+        id: String,
+        harness: String,
+        handle: InstanceHandle,
+    },
+    /// The registry's instance `id` could not start.
+    InstanceFailed {
+        id: String,
+        failure: Failure,
+    },
+    /// The stop of the registry's instance `id` is done.
+    InstanceStopped {
+        id: String,
+    },
+    /// The instance of an attempt runs.
     Instance {
         run: String,
         attempt: u32,
@@ -204,6 +220,7 @@ pub fn start(
         sink,
         hooks,
         running: exec_step::Running::default(),
+        starts: exec::Starts::default(),
     };
     let (handle, task) = writer::start(conn, clock, RunHandler { config, drivers }, executor, journal);
     let _ = core.set(handle.clone());
@@ -235,7 +252,10 @@ impl Handler for RunHandler {
             Msg::OpenGate { key } => self.open_gate(tx, &key, None),
             Msg::Decide { run, seq, decision } => self.decide(tx, &run, seq, decision),
             Msg::Answer { run, request, answer } => self.answer(tx, &run, &request, &answer),
-            Msg::Instance { run, attempt, handle } => self.instance(tx, &run, attempt, &handle),
+            Msg::Instance { run, attempt, handle } => Self::instance(tx, &run, attempt, &handle),
+            Msg::InstanceReady { id, harness, handle } => Self::instance_ready(tx, &id, &harness, &handle),
+            Msg::InstanceFailed { id, failure } => Self::instance_failed(tx, &id, &failure),
+            Msg::InstanceStopped { id } => Self::instance_stopped(tx, &id),
             Msg::Session { run, attempt, session } => self.session(tx, &run, attempt, &session),
             Msg::AttemptFailed { run, attempt, failure } => self.launch_failed(tx, &run, attempt, failure),
             Msg::Driver(event) => self.driver_event(tx, event),
@@ -254,6 +274,7 @@ impl Handler for RunHandler {
     fn deadline(&mut self, tx: &mut Tx<'_>, id: &str) -> Result<(), Error> {
         match id.rsplit_once(':').unwrap_or((id, "")) {
             (gate, "gate") => self.gate_timer(tx, gate),
+            (instance, "idle") => Self::instance_idle(tx, instance),
             (run, what) => self.on_deadline(tx, run, what),
         }
     }

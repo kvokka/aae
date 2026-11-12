@@ -104,6 +104,25 @@ ALTER TABLE idempotency ADD COLUMN at_ms INTEGER NOT NULL DEFAULT 0;
 CREATE INDEX idempotency_at ON idempotency (at_ms);
 ";
 
+/// The instance registry (docs/design/contracts.md 8): a row is written before its process starts or stops
+/// (invariant 9); `handle` is the `InstanceHandle` once the process runs.
+const SCHEMA_V6: &str = "
+CREATE TABLE instances (
+    id TEXT PRIMARY KEY,
+    kind TEXT NOT NULL,
+    harness TEXT NOT NULL,
+    fingerprint TEXT NOT NULL,
+    process TEXT NOT NULL,
+    handle TEXT,
+    state TEXT NOT NULL,
+    sessions INTEGER NOT NULL,
+    capacity INTEGER NOT NULL,
+    idle_ms INTEGER NOT NULL,
+    idle_since_ms INTEGER
+);
+CREATE INDEX instances_fingerprint ON instances (fingerprint, state);
+";
+
 /// Opens the state database in WAL mode and brings its schema to the current version.
 pub fn open(path: &Path) -> rusqlite::Result<Connection> {
     let conn = Connection::open(path)?;
@@ -117,6 +136,7 @@ pub fn open(path: &Path) -> rusqlite::Result<Connection> {
         (3, SCHEMA_V3),
         (4, SCHEMA_V4),
         (5, SCHEMA_V5),
+        (6, SCHEMA_V6),
     ]
     .into_iter()
     .filter(|(to, _)| *to > version)
