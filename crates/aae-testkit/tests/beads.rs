@@ -37,6 +37,15 @@ impl World {
     }
 
     /// The tracker says it changed; the core reads its ready set again.
+    async fn run_on(&self, bead: Value) -> String {
+        let reply = self.fix(bead).await.unwrap();
+        reply["run"].as_str().unwrap().to_owned()
+    }
+
+    fn assignee(&self, bead: &str) -> Option<String> {
+        self.tracker.bead(bead).unwrap().assignee
+    }
+
     async fn changed(&self) {
         let msg = Msg::TrackerChanged("shop".into());
         self.core.send(None, msg).await.unwrap();
@@ -51,11 +60,11 @@ impl World {
             .collect()
     }
 
-    async fn pass(&self, run: &str) {
+    async fn finish(&self, run: &str, result: Verdict, summary: &str) {
         let token = self.driver.token(run, 1).unwrap();
         let outcome = Outcome {
-            result: Verdict::Pass,
-            summary: "fixed".into(),
+            result,
+            summary: summary.into(),
             data: None,
         };
         let msg = Msg::Finish {
@@ -116,7 +125,7 @@ async fn a_run_claims_its_bead_shows_it_to_the_agent_and_closes_it_when_it_passe
     let held = w.tracker.bead(&bead).unwrap();
     assert_eq!(held.assignee.as_deref(), Some(format!("aae:{run}").as_str()));
     assert_eq!(w.driver.sent(&run, 1).1, [format!("Fix Task {bead}.")]);
-    w.pass(&run).await;
+    w.finish(&run, Verdict::Pass, "fixed").await;
     tokio::time::sleep(Duration::from_secs(20)).await;
     let events = w.events(&run, Duration::ZERO).await;
     assert_eq!(last(&events, "run.passed")["run"]["bead"], json!(bead));
@@ -232,4 +241,81 @@ async fn a_trigger_on_the_next_ready_bead_takes_each_bead_once_then_skips_with_n
     );
     let third = w.core.send(None, fire()).await.unwrap();
     assert_eq!(third["skipped"], "nothing_ready");
+}
+
+#[tokio::test(start_paused = true)]
+async fn the_next_ready_bead_in_an_epic_skips_beads_of_other_epics() {
+    let w = world(FIX);
+    w.tracker.add(&[], Some("e-other"));
+    w.tracker.add(&[], None);
+    let mine = w.tracker.add(&[], Some("e-1"));
+    w.changed().await;
+    let in_epic = || json!({ "next_ready": true, "epic": "e-1" });
+    let run = w.run_on(in_epic()).await;
+    let events = w.events(&run, Duration::ZERO).await;
+    assert_eq!(last(&events, "run.queued")["run"]["bead"], json!(mine));
+    assert_eq!(w.fix(in_epic()).await.unwrap(), json!({ "nothing_ready": true }));
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_cancelled_run_releases_its_bead_without_counting_a_failure() {
+    let w = world(FIX);
+    let bead = w.tracker.add(&[], None);
+    w.driver.script(slow_turn());
+    let run = w.run_on(json!(bead)).await;
+    tokio::time::sleep(Duration::from_secs(1)).await;
+    assert_eq!(w.assignee(&bead), Some(format!("aae:{run}")));
+    let cancel = Msg::Cancel {
+        run: run.clone(),
+        reason: "operator".into(),
+    };
+    w.core.send(None, cancel).await.unwrap();
+    tokio::time::sleep(Duration::from_secs(20)).await;
+    assert_eq!(w.states(&run).await.last().unwrap(), "cancelled");
+    let released = w.tracker.bead(&bead).unwrap();
+    assert_eq!((released.assignee, released.status.as_str()), (None, "open"));
+}
+
+#[tokio::test(start_paused = true)]
+async fn an_agent_failure_whose_summary_starts_with_bead_still_releases_the_bead() {
+    let w = world(FIX);
+    let bead = w.tracker.add(&[], None);
+    w.driver.script(slow_turn());
+    let run = w.run_on(json!(bead)).await;
+    tokio::time::sleep(Duration::from_secs(1)).await;
+    w.finish(&run, Verdict::Fail, "bead_claimed").await;
+    tokio::time::sleep(Duration::from_secs(20)).await;
+    assert_eq!(w.states(&run).await.last().unwrap(), "failed");
+    assert_eq!(w.assignee(&bead), None, "the claim of a failed run goes back");
+}
+
+#[tokio::test(start_paused = true)]
+async fn claims_that_answer_after_their_runs_failed_neither_count_nor_reach_the_next_run() {
+    let w = world(FIX);
+    let bead = w.tracker.add(&[], None);
+    w.tracker.set_down(true);
+    for _ in 0..3 {
+        let run = w.run_on(json!(bead)).await;
+        tokio::time::sleep(Duration::from_secs(121)).await;
+        let events = w.events(&run, Duration::ZERO).await;
+        assert_eq!(last(&events, "run.failed")["reason"], "tracker_unavailable");
+    }
+    assert!(
+        w.all("gate.closed").is_empty(),
+        "a claim never held is not a failure on the bead"
+    );
+    w.tracker.set_down(false);
+    // The queue drains at its next retry (at most the 5 min cap): each late claim, then its release.
+    tokio::time::sleep(Duration::from_secs(301)).await;
+    assert_eq!(w.assignee(&bead), None);
+    w.driver.script(slow_turn());
+    let run = w.run_on(json!(bead)).await;
+    tokio::time::sleep(Duration::from_secs(1)).await;
+    assert!(w.states(&run).await.contains(&"running".to_owned()));
+    assert_eq!(
+        w.assignee(&bead),
+        Some(format!("aae:{run}")),
+        "the stale claims were released before"
+    );
+    assert_eq!(w.driver.sent(&run, 1).1, [format!("Fix Task {bead}.")]);
 }

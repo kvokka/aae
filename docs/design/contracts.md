@@ -426,6 +426,10 @@ trait Tracker: Send + Sync {
 }
 ```
 
+`release` and `close` carry no generation (invariant 4): the condition `assignee == aae:<run id>` is the same check,
+because a run id is never reused and a run owns at most one bead once. A claim answer carries the generation it was
+made for and is dropped unless the run still owns the bead in that generation and still waits for it in `preparing`.
+
 `changes` is pull-only; the adapter also owns a watcher that sends a "changed" message to the core, and the core
 then calls `changes` from its stored cursor (and on start and after recovery without waiting for a signal).
 

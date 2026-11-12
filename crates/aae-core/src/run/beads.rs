@@ -142,10 +142,15 @@ impl RunHandler {
                     TrackerError::NotFound => "bead_not_found".to_owned(),
                     other => format!("bead_invalid: {other}"),
                 };
-                match row.state.as_str() {
-                    "preparing" => self.terminal(tx, row, "failed", Some("infrastructure"), &reason),
-                    _ => Ok(()),
+                if row.state != "preparing" {
+                    return Ok(());
                 }
+                // The refused bead was never ours: dropping the ownership here tells `let_go_bead` to leave it.
+                tx.sql().execute(
+                    "UPDATE beads SET owner = NULL WHERE project = ?1 AND id = ?2",
+                    params![project, bead],
+                )?;
+                self.terminal(tx, row, "failed", Some("infrastructure"), &reason)
             }
             (_, Err(e @ (TrackerError::Unavailable { .. } | TrackerError::Invalid { .. }))) => {
                 // The effect in flight heads its queue; it records this failure after the message, and only an
@@ -195,12 +200,12 @@ impl RunHandler {
     /// its failure counter moves (§10.3): `bead_failures` failed runs close the bead's gate for the core.
     pub(super) fn let_go_bead(&mut self, tx: &mut Tx<'_>, row: &Row, state: &str, reason: &str) -> Result<(), Error> {
         let Some(bead) = &row.bead else { return Ok(()) };
-        tx.sql().execute(
+        let owned = tx.sql().execute(
             "UPDATE beads SET owner = NULL WHERE project = ?1 AND id = ?2 AND owner = ?3",
             params![row.project, bead, row.id],
-        )?;
-        // The claim was asked for once the run prepared; a bead the claim refused (`bead_*`) was never ours.
-        if row.started_ms.is_none() || reason.starts_with("bead_") {
+        )? > 0;
+        // The claim was asked for once the run prepared; a refused claim has already dropped the ownership.
+        if row.started_ms.is_none() || !owned {
             return Ok(());
         }
         let call = if state == "passed" { "close" } else { "release" };
@@ -217,7 +222,8 @@ impl RunHandler {
                 )?;
                 0
             }
-            "failed" => 1,
+            // Only a run that held the claim counts; a claim that never answered says nothing of the bead.
+            "failed" if row.bead_data.is_some() => 1,
             _ => return Ok(()),
         };
         let total: u32 = tx.sql().query_row(
