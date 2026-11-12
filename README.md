@@ -16,5 +16,5 @@ The acceptance criteria of the first release are executable scenarios in `crates
 `aae daemon` in a temporary directory tree. `mise run acceptance-ci` runs the scenarios without a model, as CI does on
 every commit (about 11 minutes: one of them watches an idle daemon for 10). `mise run acceptance` runs all of them,
 including those that call a real model: they use the cheapest model, cost money and need your harness login. Pass
-criterion numbers to run only those: `cargo build -p aae && cargo run -p aae-acceptance -- --ci 3 19`. The report, with the date and the
-versions of `aae` and the harnesses, goes to `target/acceptance/report.md`.
+criterion numbers to run only those: `cargo build -p aae && cargo run -p aae-acceptance -- --ci 3 19`. The report,
+with the date and the versions of `aae` and the harnesses, goes to `target/acceptance/report.md`.

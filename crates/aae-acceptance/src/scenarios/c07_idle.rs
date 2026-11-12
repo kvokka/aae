@@ -1,6 +1,7 @@
 //! Criterion 7: the daemon idle with one registered project holds RSS at or under 50 MB and uses at most 1 % of
 //! one core on average over 10 minutes. Linux only, as acceptance runs on the owner's Linux host (spec §15).
 
+use super::MARK;
 use crate::{Env, daemon::Daemon};
 use std::{fs, process::Command, sync::Arc, time::Duration};
 
@@ -8,8 +9,6 @@ const WINDOW: Duration = Duration::from_secs(600);
 const SAMPLE: Duration = Duration::from_secs(10);
 const RSS_MAX_KB: u64 = 50 * 1000;
 const CPU_MAX: f64 = 0.01;
-/// Kept apart from the marker text, so the marker check of CI does not take the template for a marker.
-const MARK: &str = "MEASURE";
 
 /// VmRSS of `pid` in kB.
 fn rss_kb(pid: u32) -> u64 {

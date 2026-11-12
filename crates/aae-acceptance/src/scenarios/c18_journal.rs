@@ -90,6 +90,13 @@ pub(crate) async fn run(env: Arc<Env>) -> String {
         assert_eq!(envelope["seq"], seq, "the stream continues in order: {envelope}");
         assert_ne!(envelope["type"], "seed");
     }
+    // Across the file boundary: the rotated file of seeds 41–50, then the daemon's own events.
+    let mut across = d.client.events(Some(41)).await.unwrap();
+    for seq in 41..=51 {
+        let envelope = next(&mut across).await;
+        assert_eq!(envelope["seq"], seq, "the stream crosses files in order: {envelope}");
+        assert_eq!(envelope["type"] == "seed", seq <= 50, "{envelope}");
+    }
     let mut again = d.client.events(Some(53)).await.unwrap();
     assert_eq!(next(&mut again).await["seq"], 53, "a reader continues from a held seq");
     format!("rotated after {runs} runs")

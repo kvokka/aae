@@ -10,6 +10,9 @@ mod c19_gates;
 use crate::{Launch, Scenario, daemon::write};
 use std::{path::Path, process::Command};
 
+/// Kept apart from the marker text, so the marker check of CI does not take the template for a marker.
+pub(crate) const MARK: &str = "MEASURE";
+
 pub(crate) const ALL: &[Scenario] = &[
     Scenario {
         criterion: "2",

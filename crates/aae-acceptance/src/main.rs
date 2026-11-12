@@ -145,6 +145,8 @@ async fn main() -> ExitCode {
         .collect();
     let mut report = format!(
         "# aae acceptance spec\n\n- date: {}\n- aae: {}\n- claude: {}\n- codex: {}\n- br: {}\n- host: {}\n- run: {}\n\n\
+         <!-- {} id=acceptance-times date={} ver={} env={} src=aae-acceptance note=\"wall time of each scenario, \
+         scenarios run concurrently\" -->\n\
          | criterion | scenario | result | time | notes |\n|---|---|---|---|---|\n",
         env.date,
         env.version,
@@ -153,6 +155,10 @@ async fn main() -> ExitCode {
         version_of("br"),
         env.host,
         if args.ci { "CI subset" } else { "all" },
+        scenarios::MARK,
+        env.date,
+        env.version.replace(' ', "-"),
+        env.host.replace(' ', "-"),
     );
     let mut failed = 0;
     for (scenario, task) in chosen.iter().zip(tasks) {

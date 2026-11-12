@@ -45,7 +45,6 @@ pub(crate) async fn run(env: Arc<Env>) -> String {
     }
 
     d.restart().await;
-    tokio::time::sleep(Duration::from_secs(2)).await;
     let gates = d.get("/v1/gates").await;
     let closed: Vec<_> = gates.as_array().unwrap().iter().map(|g| &g["key"]).collect();
     assert_eq!(closed.len(), 4, "every gate survives the restart: {gates}");
@@ -57,10 +56,10 @@ pub(crate) async fn run(env: Arc<Env>) -> String {
         d.until_state(run, "queued", WITHIN).await;
     }
 
-    // Each opening lets through only the runs no other closed gate holds.
+    // Each opening lets through only the runs no other closed gate holds. The reply comes after the transaction
+    // that opened the gate and dispatched what it could has committed, so a run still `queued` then is held.
     let open = |key: &str| d.post("/v1/gates/open", json!({ "key": key }));
     open(&keys[0]).await.unwrap();
-    tokio::time::sleep(Duration::from_millis(500)).await;
     for run in [&exec, &agent, &on_bead] {
         d.until_state(run, "queued", WITHIN).await;
     }
