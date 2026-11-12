@@ -1,9 +1,21 @@
 {
   "max_cycles": 30,
-  "status": "ready",
-  "cycle": 0,
+  "status": "running",
+  "cycle": 1,
   "phase": null,
   "attempt": 0,
-  "base": null,
-  "history": []
+  "base": "46c71c26cc9caa2aeeb61d09101e1b429cf28c51",
+  "history": [
+    {
+      "cycle": 1,
+      "base": "46c71c26cc9caa2aeeb61d09101e1b429cf28c51",
+      "head": "81d1306f198c6fe1e179c54d016648957a3f630a",
+      "coder_status": "done",
+      "score": 1.0,
+      "verdict": "continue",
+      "ended": "2026-11-12T23:05:51+0700"
+    }
+  ],
+  "started": "2026-11-12T22:54:43+0700",
+  "coder_status": "done"
 }
