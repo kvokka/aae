@@ -91,7 +91,10 @@ async fn decisions_start_new_attempts_until_the_ceiling() {
     let decide = Msg::Decide {
         run: run.clone(),
         seq: 1,
-        decision: Decision::Fail { reason: "x".into() },
+        decision: Decision::Fail {
+            reason: "x".into(),
+            gate: None,
+        },
     };
     assert!(
         matches!(w.core.send(None, decide).await, Err(Error::Rejected(_))),
@@ -101,6 +104,7 @@ async fn decisions_start_new_attempts_until_the_ceiling() {
         let seq = w.seq_of(&run, "run.attempt_failed", n as usize).await;
         let decision = Decision::NewSession {
             after: Duration::from_secs(30),
+            gate: None,
         };
         w.core
             .send(

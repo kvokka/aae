@@ -38,16 +38,6 @@ impl World {
         };
         self.core.send(None, msg).await.unwrap()["answer"].clone()
     }
-
-    async fn decide(&self, run: &str, kind: &str, nth: usize, decision: Decision) {
-        let seq = self.seq_of(run, kind, nth).await;
-        let msg = Msg::Decide {
-            run: run.into(),
-            seq,
-            decision,
-        };
-        self.core.send(None, msg).await.unwrap();
-    }
 }
 
 #[tokio::test(start_paused = true)]
@@ -90,8 +80,13 @@ async fn a_token_of_an_earlier_attempt_is_stale() {
     }]);
     let run = w.create().await;
     let after = Duration::ZERO;
-    w.decide(&run, "run.attempt_failed", 0, Decision::NewSession { after })
-        .await;
+    w.decide(
+        &run,
+        "run.attempt_failed",
+        0,
+        Decision::NewSession { after, gate: None },
+    )
+    .await;
     tokio::time::sleep(Duration::from_secs(1)).await;
     let (first, second) = (w.driver.token(&run, 1).unwrap(), w.driver.token(&run, 2).unwrap());
     assert_ne!(first, second);

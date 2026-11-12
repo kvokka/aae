@@ -456,7 +456,7 @@ then calls `changes` from its stored cursor (and on start and after recovery wit
 | `requires_action` | waits for an answer to a permission request or question; not silence; the step `timeout` of `running` pauses here and resumes with the time it had left | `human_timeout` 1 h | answer `deny`, back to `running` |
 | `finishing` | outcome declared and the session idle without background; `run.finishing` hooks running | hook deadline | the hooks count as failed → veto → `failed{check, hook_deadline}` (a declared `fail` stays `failed{agent}`) |
 | `interrupted` | the current attempt ended with a failure (or by a daemon restart); `run.attempt_failed` is deciding | hook deadline, then the decision's `after` | no decision → `failed{infrastructure}` |
-| `parked` | a started run waits for a gate; no harness process | the gate's `until`; for a gate without `until`, `park_timeout` 7 d | `failed{infrastructure, park_timeout}` |
+| `parked` | a started run waits for a gate; no harness process | `park_timeout` 7 d from parking, or the gate's `until` if later (a gate with `until` opens by its timer first) | `failed{infrastructure, park_timeout}` |
 | `passed`, `failed{class}`, `cancelled` | terminal | — | — |
 
 `interrupted` in §9.3 names the daemon restart only; here it is every attempt failure waiting for its decision,
@@ -489,7 +489,8 @@ to the next prompt) the step `timeout` pauses like in `requires_action`. Trigger
 | `interrupted` | `resume` / `new_session` | `starting` after `after` | new attempt: `generation + 1`, new token; `resume` first checks the transcript (invariant 17), `Missing` → attempt failure `transcript_divergence` |
 | `interrupted` | `park` | `parked` | gate closed in the same transaction |
 | `interrupted` | `fail`, no decision, attempts ceiling | `failed{infrastructure}` | gate closed if the decision carries one |
-| `parked` | gate opened | `starting` (`then` of the park decision) | new attempt |
+| `parked` | every key of the run open, a concurrency slot free (in creation order with the queue) | `starting` (`then` of the park decision); `run.resumed` | new attempt |
+| `preparing`, `interrupted` | an attempt would start while a key of the run is closed (by anyone, invariant 18) | `parked` (`then`: `new_session` from `preparing`, the decided kind from `interrupted`) | — |
 | any non-terminal | operator cancel | `cancelled` | stop the session, conditional release of the bead |
 
 Every terminal transition releases the run's hold on its workdir and, with a bead, increments or resets the
@@ -540,6 +541,15 @@ of a run whose gate the operator closed parks it instead (invariant 18).
   operator closure is removed only by the operator, so automation never reopens an operator pause (criterion 19).
 - A closure with `until` ends by the managed clock (`gate.opened{by: "timer"}`); without `until` only by hand
   (API, CLI).
+- The account key is known once an attempt reported it (`Driver::account` at the start of the attempt, or
+  `account` of a failure), the model key once a failure reported `provider_model`; a run that never started is
+  admitted on its other keys, and its first attempt parks on a closed account or model gate only through the
+  policy (`gates` of `run.attempt_failed`). A `park` on a key the run does not have closes the gate and starts
+  the attempt at once.
+- `until` is UTC in the form events carry: `YYYY-MM-DDTHH:MM:SS[.fff]Z`; another form is an invalid decision. A
+  closure whose `until` has passed counts as open even before its timer fires.
+- The operator closes with `{key, until, reason}` (a closure of `(key, operator)` is replaced) and opens a key:
+  that removes every closure of it, the policy's and the core's too. `gate.closed` and `gate.opened` carry no run.
 - No half-open probe in the core: when a gate opens, the waiting runs are admitted in creation order within the
   concurrency limits. A failure of an attempt that started before the gate closed on its key is visible to the
   policy (`gates` in `run.attempt_failed`), which parks the run without escalating again — the "absorb" of the

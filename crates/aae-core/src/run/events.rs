@@ -278,6 +278,7 @@ impl RunHandler {
         let stall = |kind| Failure::new(kind, Source::Core);
         match (what, row.state.as_str()) {
             ("state", "queued") => self.terminal(tx, row, "failed", Some("infrastructure"), "queue_timeout"),
+            ("state", "parked") => self.terminal(tx, row, "failed", Some("infrastructure"), "park_timeout"),
             ("state", "starting") | ("silence", "running") => self.attempt_failed(tx, row, stall(FailureKind::Stall)),
             ("state", "running") => self.attempt_failed(tx, row, stall(FailureKind::RunawayTurn)),
             ("state", "interrupted") => {

@@ -99,11 +99,15 @@ impl RunHandler {
         Ok(busy)
     }
 
-    /// Why a queued run cannot start yet, `None` when it can: its workdir is busy, or the orchestrator or its agent
-    /// has as many started runs as allowed (spec §9.3; a parked run has no process and holds no slot).
-    fn blocker(&self, tx: &Tx<'_>, row: &Row) -> Result<Option<&'static str>, Error> {
+    /// Why a queued or parked run cannot start yet, `None` when it can: a gate of the run is closed (with the
+    /// closure), its workdir is busy, or the orchestrator or its agent has as many started runs as allowed (spec
+    /// §9.3; a parked run has no process and holds no slot).
+    fn blocker(&self, tx: &Tx<'_>, row: &Row) -> Result<Option<(&'static str, Value)>, Error> {
+        if let Some(gate) = Self::closed_gate(tx, row)? {
+            return Ok(Some(("gate", gate)));
+        }
         if Self::workdir_busy(tx, row)? {
-            return Ok(Some("workdir"));
+            return Ok(Some(("workdir", Value::Null)));
         }
         let started = "state NOT IN ('queued', 'parked', 'passed', 'failed', 'cancelled')";
         let all: u32 = tx
@@ -123,11 +127,12 @@ impl RunHandler {
                 .max_runs
         });
         let full = all >= self.config.max_runs || limit.is_some_and(|l| agent >= l);
-        Ok(full.then_some("concurrency"))
+        Ok(full.then_some(("concurrency", Value::Null)))
     }
 
     /// Emits `run.queued` on creation (`first`) and whenever the reason the run waits for changes.
-    fn queued(tx: &mut Tx<'_>, row: &Row, waiting: Option<&str>, first: bool) -> Result<(), Error> {
+    fn queued(tx: &mut Tx<'_>, row: &Row, waiting: Option<(&str, Value)>, first: bool) -> Result<(), Error> {
+        let (waiting, gate) = waiting.map_or((None, Value::Null), |(w, g)| (Some(w), g));
         let changed = tx.sql().execute(
             "UPDATE runs SET waiting_for = ?2 WHERE id = ?1 AND waiting_for IS NOT ?2",
             params![row.id, waiting],
@@ -138,28 +143,27 @@ impl RunHandler {
         row.emit(
             tx,
             "run.queued",
-            json!({ "run": row.view(), "waiting_for": waiting, "gate": null }),
+            json!({ "run": row.view(), "waiting_for": waiting, "gate": gate }),
         )
         .map(drop)
     }
 
-    /// Starts every queued run that may start, oldest first.
+    /// Starts every queued run and resumes every parked run that may go, oldest first (contracts 7).
     pub(super) fn schedule(&mut self, tx: &mut Tx<'_>) -> Result<(), Error> {
-        let queued: Vec<String> = {
+        let waiting: Vec<String> = {
             let mut stmt = tx
                 .sql()
-                .prepare("SELECT id FROM runs WHERE state = 'queued' ORDER BY n")?;
+                .prepare("SELECT id FROM runs WHERE state IN ('queued', 'parked') ORDER BY n")?;
             stmt.query_map([], |r| r.get(0))?.collect::<Result<_, _>>()?
         };
-        for id in queued {
+        for id in waiting {
             let row = Row::load(tx, &id)?;
-            // A run started meanwhile by a nested schedule (a terminal state during preparation) is not queued.
-            if row.state != "queued" {
-                continue;
-            }
-            match self.blocker(tx, &row)? {
-                None => self.prepare(tx, row)?,
-                waiting => Self::queued(tx, &row, waiting, false)?,
+            // A nested schedule (a terminal state during preparation, a park) may have moved the run meanwhile.
+            match (row.state.as_str(), self.blocker(tx, &row)?) {
+                ("queued", None) => self.prepare(tx, row)?,
+                ("queued", waiting) => Self::queued(tx, &row, waiting, false)?,
+                ("parked", None) => self.unpark(tx, row)?,
+                _ => {}
             }
         }
         Ok(())

@@ -6,6 +6,7 @@ mod events;
 mod exec;
 mod exec_step;
 mod finish;
+mod gates;
 mod hooks;
 mod machine;
 mod queue;
@@ -32,6 +33,7 @@ use tokio::{sync::mpsc, task::JoinHandle};
 pub const MAX_ATTEMPTS: u32 = 20;
 pub use crate::process::Exit;
 pub use finish::MAX_REMARKS;
+pub use gates::{GateSpec, valid_key};
 pub use hooks::{ExecHooks, HookRunner};
 
 type Drivers = Arc<BTreeMap<String, Arc<dyn Driver>>>;
@@ -43,6 +45,12 @@ pub enum Msg {
     Cancel {
         run: String,
         reason: String,
+    },
+    /// The operator closes a gate (spec §5.7): automation never removes this closure (invariant 18).
+    CloseGate(GateSpec),
+    /// The operator opens a gate: every closure of `key` goes.
+    OpenGate {
+        key: String,
     },
     /// A decision on the deciding event `seq` the run waits for (contracts 3.2).
     Decide {
@@ -141,14 +149,24 @@ pub enum Decision {
     Deny {
         reason: String,
     },
+    /// On `run.attempt_failed` (as `NewSession` and `Fail`): `gate`, if any, is closed in the same transaction.
     Resume {
         after: Duration,
+        gate: Option<GateSpec>,
     },
     NewSession {
         after: Duration,
+        gate: Option<GateSpec>,
+    },
+    /// On `run.attempt_failed`: close `gate` and wait in `parked` until the run's keys are open, then start the
+    /// attempt `then` (`resume` or `new_session`).
+    Park {
+        gate: GateSpec,
+        then: String,
     },
     Fail {
         reason: String,
+        gate: Option<GateSpec>,
     },
     /// On `run.turn_ended_without_outcome`: `message` goes as the next prompt of the attempt.
     Continue {
@@ -211,6 +229,8 @@ impl Handler for RunHandler {
             Msg::Create(create) => return self.create(tx, create),
             Msg::Finish { run, token, outcome } => return self.finish(tx, &run, &token, &outcome),
             Msg::Cancel { run, reason } => self.cancel(tx, &run, &reason),
+            Msg::CloseGate(gate) => self.close_gate(tx, &gate, "operator"),
+            Msg::OpenGate { key } => self.open_gate(tx, &key, None),
             Msg::Decide { run, seq, decision } => self.decide(tx, &run, seq, decision),
             Msg::Answer { run, request, answer } => self.answer(tx, &run, &request, &answer),
             Msg::Instance { run, attempt, handle } => self.instance(tx, &run, attempt, &handle),
@@ -230,8 +250,10 @@ impl Handler for RunHandler {
     }
 
     fn deadline(&mut self, tx: &mut Tx<'_>, id: &str) -> Result<(), Error> {
-        let (run, what) = id.rsplit_once(':').unwrap_or((id, ""));
-        self.on_deadline(tx, run, what)
+        match id.rsplit_once(':').unwrap_or((id, "")) {
+            (gate, "gate") => self.gate_timer(tx, gate),
+            (run, what) => self.on_deadline(tx, run, what),
+        }
     }
 
     fn emitted(&mut self, tx: &mut Tx<'_>, events: &[Value]) -> Result<(), Error> {

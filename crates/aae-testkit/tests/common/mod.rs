@@ -6,7 +6,7 @@ use aae_core::{
     BoxFuture, Clock, CoreHandle, Journal, config,
     driver::{Normalized, SessionState, StopReason},
     open,
-    run::{self, Create, HookRunner, Msg},
+    run::{self, Create, Decision, HookRunner, Msg},
 };
 use aae_testkit::{ScriptedDriver, Step};
 use serde_json::Value;
@@ -121,6 +121,17 @@ impl World {
         let events = self.events(run, Duration::from_millis(200)).await;
         let changes = events.into_iter().filter(|(t, _)| t == "run.state_changed");
         changes.map(|(_, d)| d["to"].as_str().unwrap().to_owned()).collect()
+    }
+
+    /// Decides the `nth` deciding event `kind` of `run`.
+    pub(crate) async fn decide(&self, run: &str, kind: &str, nth: usize, decision: Decision) {
+        let seq = self.seq_of(run, kind, nth).await;
+        let msg = Msg::Decide {
+            run: run.into(),
+            seq,
+            decision,
+        };
+        self.core.send(None, msg).await.unwrap();
     }
 
     pub(crate) async fn seq_of(&self, run: &str, kind: &str, nth: usize) -> i64 {

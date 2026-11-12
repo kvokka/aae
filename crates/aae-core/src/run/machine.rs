@@ -123,6 +123,10 @@ impl RunHandler {
 
     /// A new attempt (contracts 6.2): a new or resumed session on an instance of its own, then the prompt.
     pub(super) fn start_attempt(&mut self, tx: &mut Tx<'_>, mut row: Row, kind: &str) -> Result<(), Error> {
+        // Every automatic start reads the gates, the operator's among them (invariant 18): a closed one parks.
+        if let Some(gate) = Self::closed_gate(tx, &row)? {
+            return self.park(tx, row, gate, kind);
+        }
         if row.exec() {
             return self.start_exec(tx, row);
         }
@@ -211,6 +215,10 @@ impl RunHandler {
             Ok(split) => split,
             Err(failure) => return self.attempt_failed(tx, row, failure),
         };
+        let account = driver
+            .account(&split.process)
+            .map(|a| format!("account:{}/{a}", config.harness));
+        Self::learn_keys(tx, &row, account, None)?;
         let prompt = match resume {
             Some(_) if row.attempt > 1 => RECONCILE.to_owned(),
             _ => row.prompt.clone().unwrap_or_default(),
@@ -226,6 +234,21 @@ impl RunHandler {
 
     /// Ends the current attempt with `failure` and asks for a decision on it (`interrupted`).
     pub(super) fn attempt_failed(&mut self, tx: &mut Tx<'_>, mut row: Row, failure: Failure) -> Result<(), Error> {
+        let harness: Option<String> = tx
+            .sql()
+            .query_row(
+                "SELECT harness FROM attempts WHERE run = ?1 AND n = ?2",
+                params![row.id, row.attempt],
+                |r| r.get(0),
+            )
+            .optional()?;
+        let account = (failure.account.as_ref().zip(harness)).map(|(a, h)| format!("account:{h}/{a}"));
+        Self::learn_keys(
+            tx,
+            &row,
+            account,
+            failure.provider_model.as_ref().map(|m| format!("model:{m}")),
+        )?;
         let failure = super::failure_json(&failure);
         self.end_attempt(tx, &row, Some(&failure))?;
         row.set_state(tx, "interrupted", failure["kind"].as_str())?;
@@ -242,7 +265,7 @@ impl RunHandler {
             })?;
             rows.collect::<Result<_, _>>()?
         };
-        let data = json!({ "run": row.view(), "failure": failure, "attempts": attempts, "gates": [],
+        let data = json!({ "run": row.view(), "failure": failure, "attempts": attempts, "gates": Self::gates_of(tx, &row)?,
             "agent_failures_1h": agent_failures });
         self.deciding(tx, row, "run.attempt_failed", data)
     }

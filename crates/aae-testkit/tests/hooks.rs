@@ -215,3 +215,28 @@ async fn a_hook_answers_a_permission_request() {
         "{states:?}"
     );
 }
+
+#[tokio::test]
+async fn a_hook_parks_a_run_on_a_gate_it_closes() {
+    let park = r#"echo '{"decision":"park","gate":{"key":"rig:shop/web","until":"2100-01-01T00:00:00Z","reason":"quota"},"then":"resume"}'"#;
+    let w = policy(&[("run.attempt_failed", park)]);
+    w.driver.script(vec![Step::Exit {
+        code: Some(1),
+        signal: None,
+    }]);
+    let run = w.create().await;
+    let parked = w.until(Some(&run), "run.parked", 0).await;
+    assert_eq!(
+        (
+            &parked["gate"]["key"],
+            &parked["gate"]["closed_by"],
+            &parked["gate"]["until"]
+        ),
+        (
+            &json!("rig:shop/web"),
+            &json!("policy"),
+            &json!("2100-01-01T00:00:00.000Z")
+        )
+    );
+    assert_eq!(w.until(None, "gate.closed", 0).await["gate"]["reason"], "quota");
+}

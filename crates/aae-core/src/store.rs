@@ -84,6 +84,21 @@ ALTER TABLE runs ADD COLUMN waiting_for TEXT;
 ALTER TABLE runs ADD COLUMN continue_from TEXT;
 ";
 
+/// Issue gates (docs/design/contracts.md 7): one closure per `(key, closed_by)`; the account and model gate keys a
+/// run's attempts reported.
+const SCHEMA_V4: &str = "
+CREATE TABLE gates (
+    key TEXT NOT NULL,
+    closed_by TEXT NOT NULL,
+    until_ms INTEGER,
+    reason TEXT NOT NULL,
+    closed_ms INTEGER NOT NULL,
+    PRIMARY KEY (key, closed_by)
+);
+ALTER TABLE runs ADD COLUMN account TEXT;
+ALTER TABLE runs ADD COLUMN model TEXT;
+";
+
 /// Opens the state database in WAL mode and brings its schema to the current version.
 pub fn open(path: &Path) -> rusqlite::Result<Connection> {
     let conn = Connection::open(path)?;
@@ -91,7 +106,7 @@ pub fn open(path: &Path) -> rusqlite::Result<Connection> {
     // NORMAL in WAL mode survives a process crash (kill -9, criterion 8); only power loss can drop a commit.
     conn.pragma_update(None, "synchronous", "NORMAL")?;
     let version: i32 = conn.pragma_query_value(None, "user_version", |r| r.get(0))?;
-    for (to, sql) in [(1, SCHEMA_V1), (2, SCHEMA_V2), (3, SCHEMA_V3)]
+    for (to, sql) in [(1, SCHEMA_V1), (2, SCHEMA_V2), (3, SCHEMA_V3), (4, SCHEMA_V4)]
         .into_iter()
         .filter(|(to, _)| *to > version)
     {

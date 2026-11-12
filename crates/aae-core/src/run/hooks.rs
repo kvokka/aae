@@ -2,10 +2,10 @@
 //! effect that commits with the event; the runner executes them after commit, one after another in plugin order,
 //! and sends the combined decision of a deciding event back to the core.
 
-use super::{Decision, Msg, RunHandler, answer_from};
+use super::{Decision, Msg, RunHandler, decide::parse};
 use crate::{
     BoxFuture,
-    config::{Layer, Sourced},
+    config::Sourced,
     driver::Answer,
     process::{self, Exit, Spec},
     writer::{CoreHandle, Error, Event, Tx},
@@ -294,7 +294,7 @@ fn decision(kind: &str, said: Said, plugin: &str, event: &Value) -> Result<Optio
                 "run.preparing" => Decision::Deny { reason },
                 "run.requires_action" => Decision::Answer(Answer::Deny { message: reason }),
                 "run.finishing" => Decision::Veto { reason },
-                _ => Decision::Fail { reason },
+                _ => Decision::Fail { reason, gate: None },
             }));
         }
         Said::Decided(value) => value,
@@ -303,67 +303,6 @@ fn decision(kind: &str, said: Said, plugin: &str, event: &Value) -> Result<Optio
         error: "output",
         exit_code: Some(0),
         stderr: format!("decision not allowed on `{kind}`: {value}"),
-    })
-}
-
-fn parse(kind: &str, v: &Value, plugin: &str, event: &Value) -> Option<Decision> {
-    let text = |key: &str| v[key].as_str().map(str::to_owned);
-    let after = || match &v["after"] {
-        Value::Null => Some(Duration::ZERO),
-        after => crate::config::duration(after.as_str()?).ok(),
-    };
-    Some(match (kind, v["decision"].as_str()?) {
-        ("run.preparing", "proceed") => {
-            let workdir = match &v["workdir"] {
-                Value::Null => None,
-                dir => Some(PathBuf::from(dir.as_str()?)),
-            };
-            if workdir.as_ref().is_some_and(|d| !d.is_absolute()) {
-                return None;
-            }
-            let mut env = BTreeMap::new();
-            for (name, value) in v["env"].as_object().into_iter().flatten() {
-                let value = match value {
-                    Value::Null => None,
-                    value => Some(Sourced {
-                        value: value.as_str()?.to_owned(),
-                        from: Layer::Plugin(plugin.to_owned()),
-                    }),
-                };
-                env.insert(name.clone(), value);
-            }
-            Decision::Proceed {
-                workdir,
-                env,
-                prompt_append: match &v["prompt_append"] {
-                    Value::Null => None,
-                    append => Some(append.as_str()?.to_owned()),
-                },
-            }
-        }
-        ("run.preparing", "deny") => Decision::Deny {
-            reason: text("reason")?,
-        },
-        ("run.requires_action", "answer") if event["data"]["request"]["kind"] != "question" => return None,
-        ("run.requires_action", _) => Decision::Answer(answer_from(v)?),
-        ("run.attempt_failed", "resume") => Decision::Resume { after: after()? },
-        ("run.attempt_failed", "new_session") => Decision::NewSession { after: after()? },
-        ("run.attempt_failed" | "run.turn_ended_without_outcome", "fail") => Decision::Fail {
-            reason: text("reason")?,
-        },
-        ("run.turn_ended_without_outcome", "continue") => Decision::Continue {
-            message: text("message")?,
-        },
-        ("run.finishing", "accept") => Decision::Accept,
-        ("run.finishing", "veto") => Decision::Veto {
-            reason: text("reason")?,
-        },
-        // An exec step has no session to take a remark (contracts 6.2).
-        ("run.finishing", "remark") if event["data"]["run"]["step_kind"] == "exec" => return None,
-        ("run.finishing", "remark") => Decision::Remark {
-            message: text("message")?,
-        },
-        _ => return None,
     })
 }
 
