@@ -1,0 +1,296 @@
+#!/usr/bin/env python3
+"""loopctl — машина состояний автономного цикла coder → reviewer.
+
+  loopctl next              следующий шаг: печатает, какого субагента и с каким промптом запустить
+  loopctl status            краткое состояние
+  loopctl halt "<причина>"  остановить цикл (мастер может после этого завершиться)
+  loopctl wait <секунд>     пауза (до 590 с), например при лимите API
+
+Состояние — .loop/state.json; отчёты — .loop/cycles/NN/{coder,review}.md;
+дампы обрезанных по контексту агентов — .loop/handoffs/; находки и вопросы — .loop/JOURNAL.md.
+"""
+import json
+import os
+import re
+import subprocess
+import sys
+import time
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[2]
+LOOP = ROOT / ".loop"
+STATE = LOOP / "state.json"
+JOURNAL = LOOP / "JOURNAL.md"
+PROTECTED = [".claude", "scripts/loop", "CLAUDE.md"]
+MAX_ATTEMPTS = {"coder": 3, "reviewer": 2}
+DONE_SCORE = 9.0
+STAGNATION = 3
+
+
+def git(*args, check=False):
+    r = subprocess.run(["git", *args], cwd=ROOT, capture_output=True, text=True)
+    if check and r.returncode:
+        raise SystemExit(f"git {' '.join(args)}: {r.stderr.strip()}")
+    return r
+
+
+def head():
+    return git("rev-parse", "HEAD", check=True).stdout.strip()
+
+
+def load():
+    return json.loads(STATE.read_text())
+
+
+def save(st):
+    STATE.write_text(json.dumps(st, ensure_ascii=False, indent=2) + "\n")
+
+
+def cdir(n):
+    return LOOP / "cycles" / f"{n:02d}"
+
+
+def rel(p):
+    return str(Path(p).relative_to(ROOT))
+
+
+def journal(who, kind, text):
+    with open(JOURNAL, "a") as f:
+        f.write(f"\n## {time.strftime('%Y-%m-%dT%H:%M:%S%z')} · цикл {load().get('cycle')} · {who} · {kind}\n\n{text}\n")
+
+
+def handoffs(n, role):
+    return sorted((LOOP / "handoffs").glob(f"*-c{n:02d}-{role}-*.md"))
+
+
+def report_status(path):
+    if not path.exists():
+        return None
+    m = re.search(r"^STATUS:\s*(\S+)", path.read_text(), re.M)
+    return m.group(1) if m else None
+
+
+def parse_review(path):
+    if not path.exists():
+        return None, None
+    txt = path.read_text()
+    s = re.search(r"^SCORE:\s*(\d+(?:\.\d+)?)\s*/\s*10", txt, re.M)
+    v = re.search(r"^VERDICT:\s*(continue|complete)", txt, re.M)
+    return (float(s.group(1)) if s else None), (v.group(1) if v else None)
+
+
+def busy_agent():
+    """Тип живого coder/reviewer по маркерам хука (.loop/run/agents), иначе None."""
+    sys.path.insert(0, str(ROOT / ".claude" / "hooks"))
+    os.environ.setdefault("CLAUDE_PROJECT_DIR", str(ROOT))
+    import loop_guard
+    busy = loop_guard.live_agents({"coder", "reviewer"})
+    return busy[0]["type"] if busy else None
+
+
+def scores(st):
+    return [h.get("score") for h in st.get("history", [])]
+
+
+def stagnating(st):
+    sc = [s for s in scores(st) if s is not None]
+    if len(sc) <= STAGNATION:
+        return None
+    window = sc[-STAGNATION:]
+    return window if max(window) <= sc[-STAGNATION - 1] else None
+
+
+def guard_harness(st):
+    """Откат правок файлов харнесса, сделанных внутри цикла."""
+    base = st.get("base")
+    changed = git("diff", "--name-only", base, "HEAD", "--", *PROTECTED).stdout.split()
+    if not changed:
+        return ""
+    git("checkout", base, "--", *PROTECTED)
+    git("commit", "-m", f"loop: откат правок харнесса в цикле {st['cycle']}", "--", *PROTECTED)
+    journal("loopctl", "НАРУШЕНИЕ", "В цикле изменены файлы харнесса, правки откатаны: " + ", ".join(changed))
+    return f"ВНИМАНИЕ: агент изменил файлы харнесса ({', '.join(changed)}), правки откатаны и записаны в журнал.\n"
+
+
+def commit_and_push(msg):
+    git("add", "-A", ".loop")
+    git("commit", "-m", msg, "--", ".loop")
+    r = git("push", "origin", "HEAD:main")
+    if r.returncode:
+        journal("loopctl", "НАХОДКА", f"git push не прошёл, повтор в следующем цикле:\n\n```\n{r.stderr.strip()[-1500:]}\n```")
+        git("add", "-A", ".loop")
+        git("commit", "-m", "loop: журнал", "--", ".loop")
+        return "push: ОШИБКА (записано в журнал, повтор в следующем цикле)"
+    return "push: ok"
+
+
+# ------------------------------------------------------------------ prompts
+def coder_prompt(st):
+    n, mx = st["cycle"], st["max_cycles"]
+    lines = [f"Цикл {n} из {mx}. Ты — coder.",
+             f"Твой отчёт: {rel(cdir(n) / 'coder.md')} — создай сразу по шаблону из своей инструкции и обновляй по ходу.",
+             f"База цикла (коммит до твоих изменений): {st['base']}."]
+    prev = cdir(n - 1) / "review.md"
+    if n > 1 and prev.exists():
+        lines.append(f"Предыдущее ревью: {rel(prev)} — раздел «Обязательно до продолжения» выполняется первым.")
+    for h in handoffs(n - 1, "coder") + handoffs(n, "coder"):
+        lines.append(f"Предыдущий запуск кодера обрезан по контексту, дамп: {rel(h)}.")
+    if not (LOOP / "PLAN.md").exists():
+        lines.append("Плана .loop/PLAN.md ещё нет: этот цикл — планирование. Составь план по протоколу "
+                     "из своей инструкции (критичные части — вместе с expert). Код продукта в этом цикле не пишется, "
+                     "кроме каркаса репозитория, если он нужен плану.")
+    stg = stagnating(st)
+    if stg:
+        lines.append(f"Застой: оценка не растёт {STAGNATION} цикла подряд ({stg}). Прежде чем кодить, разбери с expert "
+                     "причину и запиши вывод в отчёт и в .loop/JOURNAL.md.")
+    if st.get("attempt", 1) > 1:
+        lines.append(f"Повторный запуск (попытка {st['attempt']}): прошлый запуск не оставил отчёта со строкой STATUS. "
+                     f"Посмотри `git log {st['base']}..HEAD` и `git status`, продолжи с того места.")
+    lines.append("Вернуть родителю: не больше 5 строк — STATUS и путь к отчёту. Всё содержательное — в отчёте.")
+    return "\n".join(lines)
+
+
+def reviewer_prompt(st):
+    n, mx = st["cycle"], st["max_cycles"]
+    lines = [f"Цикл {n} из {mx}. Ты — reviewer.",
+             f"Проверяешь изменения {st['base']}..HEAD (и незакоммиченное, если есть — это замечание).",
+             f"Отчёт кодера: {rel(cdir(n) / 'coder.md')}."]
+    for h in handoffs(n, "coder"):
+        lines.append(f"Кодер обрезан по контексту, дамп: {rel(h)}.")
+    prev = cdir(n - 1) / "review.md"
+    if n > 1 and prev.exists():
+        lines.append(f"Предыдущее ревью: {rel(prev)} — проверь, закрыты ли его обязательные пункты.")
+    lines.append(f"Запиши ревью в {rel(cdir(n) / 'review.md')} строго по формату из своей инструкции "
+                 "(первые строки — SCORE, VERDICT, BLOCKERS).")
+    if st.get("attempt", 1) > 1:
+        lines.append("Повторный запуск: прошлый не оставил ревью со строками SCORE и VERDICT.")
+    lines.append("Вернуть родителю: не больше 5 строк — SCORE, VERDICT, путь к ревью.")
+    return "\n".join(lines)
+
+
+def instruct(st, agent, prompt, note=""):
+    print(f"=== ЦИКЛ {st['cycle']}/{st['max_cycles']} · фаза {agent} · попытка {st.get('attempt', 1)} ===")
+    if note:
+        print(note.rstrip())
+    print(f"ДЕЙСТВИЕ: запусти субагента `{agent}` (subagent_type=\"{agent}\", без параметра model) "
+          "РОВНО с этим промптом:")
+    print("---8<---")
+    print(prompt)
+    print("---8<---")
+    print("ПОТОМ: когда агент завершится (результат пришёл сразу или уведомлением, даже пустой) — снова "
+          "`scripts/loop/loopctl next`. Если агент ушёл в фон — закончи ход и жди уведомления.")
+
+
+def finished(st, why):
+    print(f"LOOP FINISHED: {why}")
+    print(f"Оценки по циклам: {scores(st)}")
+    print("Последнее ревью: " + (rel(cdir(st['cycle']) / 'review.md') if st.get("cycle") else "—"))
+
+
+# ------------------------------------------------------------------ state machine
+def open_cycle(st, note=""):
+    if st["cycle"] >= st["max_cycles"]:
+        st.update(status="halted", phase=None, halt_reason=f"исчерпан лимит циклов ({st['max_cycles']})")
+        save(st)
+        journal("loopctl", "ИТОГ", f"Цикл остановлен: {st['halt_reason']}. Оценки: {scores(st)}")
+        push = commit_and_push(f"loop: остановка — {st['halt_reason']}")
+        return finished(st, f"{st['halt_reason']}; {push}")
+    st["cycle"] += 1
+    st.update(status="running", phase="coder", attempt=1, base=head(),
+              started=time.strftime("%Y-%m-%dT%H:%M:%S%z"))
+    cdir(st["cycle"]).mkdir(parents=True, exist_ok=True)
+    save(st)
+    instruct(st, "coder", coder_prompt(st), note)
+
+
+def cmd_next():
+    st = load()
+    if st["status"] in ("done", "halted"):
+        return finished(st, st.get("halt_reason") or st["status"])
+    n = st["cycle"]
+    busy = busy_agent()
+    if busy:
+        print(f"ЖДИ: `{busy}` ещё работает (в фоне). Закончи ход и дождись уведомления о его завершении, "
+              "затем снова `scripts/loop/loopctl next`. Второго агента не запускай.")
+        return
+    if st.get("phase") is None:
+        return open_cycle(st)
+
+    if st["phase"] == "coder":
+        status = report_status(cdir(n) / "coder.md")
+        cut = handoffs(n, "coder")
+        if status or cut:
+            note = guard_harness(st)
+            st.update(phase="reviewer", attempt=1, coder_status=status or "cut")
+            save(st)
+            return instruct(st, "reviewer", reviewer_prompt(st), note)
+        st["attempt"] = st.get("attempt", 1) + 1
+        if st["attempt"] > MAX_ATTEMPTS["coder"]:
+            journal("loopctl", "НАХОДКА", f"Кодер {MAX_ATTEMPTS['coder']} раза не оставил отчёт; ревью идёт по git.")
+            note = guard_harness(st)
+            st.update(phase="reviewer", attempt=1, coder_status="no-report")
+            save(st)
+            return instruct(st, "reviewer", reviewer_prompt(st), note)
+        save(st)
+        return instruct(st, "coder", coder_prompt(st))
+
+    if st["phase"] == "reviewer":
+        score, verdict = parse_review(cdir(n) / "review.md")
+        if score is None or verdict is None:
+            st["attempt"] = st.get("attempt", 1) + 1
+            if st["attempt"] <= MAX_ATTEMPTS["reviewer"]:
+                save(st)
+                return instruct(st, "reviewer", reviewer_prompt(st))
+            journal("loopctl", "НАХОДКА", f"Ревьюер не оставил SCORE/VERDICT в цикле {n}; оценка пропущена.")
+        st.setdefault("history", []).append({
+            "cycle": n, "base": st["base"], "head": head(), "coder_status": st.get("coder_status"),
+            "score": score, "verdict": verdict, "ended": time.strftime("%Y-%m-%dT%H:%M:%S%z")})
+        st.update(phase=None, attempt=0)
+        if verdict == "complete" and score is not None and score >= DONE_SCORE:
+            st.update(status="done", halt_reason=f"ревьюер: complete, оценка {score}/10")
+            save(st)
+            journal("loopctl", "ИТОГ", f"Цикл завершён: {st['halt_reason']}. Оценки: {scores(st)}")
+            push = commit_and_push(f"loop: цикл {n} — complete, {score}/10")
+            return finished(st, f"{st['halt_reason']}; {push}")
+        save(st)
+        push = commit_and_push(f"loop: цикл {n} — ревью {score}/10")
+        return open_cycle(st, f"Итог цикла {n}: оценка {score}/10, {verdict}; {push}")
+
+    raise SystemExit(f"неизвестная фаза: {st.get('phase')}")
+
+
+def cmd_status():
+    st = load()
+    print(f"status={st['status']} cycle={st['cycle']}/{st['max_cycles']} phase={st.get('phase')} "
+          f"attempt={st.get('attempt')} base={(st.get('base') or '')[:10]}")
+    for h in st.get("history", [])[-10:]:
+        print(f"  цикл {h['cycle']:>2}: score={h['score']} verdict={h['verdict']} coder={h['coder_status']}")
+
+
+def cmd_halt(reason):
+    st = load()
+    st.update(status="halted", halt_reason=reason)
+    save(st)
+    journal("overseer", "ИТОГ", f"Цикл остановлен мастером: {reason}")
+    print(commit_and_push(f"loop: остановка — {reason}"))
+
+
+def main():
+    a = sys.argv[1:]
+    if not a or a[0] in ("-h", "--help"):
+        print(__doc__)
+    elif a[0] == "next":
+        cmd_next()
+    elif a[0] == "status":
+        cmd_status()
+    elif a[0] == "halt":
+        cmd_halt(" ".join(a[1:]) or "без причины")
+    elif a[0] == "wait":
+        time.sleep(min(int(a[1]) if len(a) > 1 else 300, 590))
+        print("ok")
+    else:
+        raise SystemExit(__doc__)
+
+
+if __name__ == "__main__":
+    main()

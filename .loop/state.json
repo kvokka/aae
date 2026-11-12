@@ -1,0 +1,9 @@
+{
+  "max_cycles": 30,
+  "status": "ready",
+  "cycle": 0,
+  "phase": null,
+  "attempt": 0,
+  "base": null,
+  "history": []
+}
