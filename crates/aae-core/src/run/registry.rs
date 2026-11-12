@@ -78,7 +78,7 @@ impl RunHandler {
                     .execute("UPDATE instances SET state = 'stopping' WHERE id = ?1", [id])?;
                 Ok(())
             }
-            Some((state, 0, 0)) if state == "ready" => Self::stop_instance(tx, id),
+            Some((state, 0, 0)) if state == "ready" => Self::stop_instance(tx, id, "idle"),
             Some((state, 0, idle_ms)) if state == "ready" => {
                 let now = tx.now_ms();
                 tx.sql().execute(
@@ -102,7 +102,7 @@ impl RunHandler {
             )
             .optional()?;
         match idle {
-            Some(_) => Self::stop_instance(tx, id),
+            Some(_) => Self::stop_instance(tx, id, "idle"),
             None => Ok(()),
         }
     }
@@ -129,7 +129,7 @@ impl RunHandler {
                     .execute("UPDATE instances SET state = 'ready' WHERE id = ?1", [id])?;
                 Self::instance_event(tx, id, "instance.ready", json!({ "reason": null }))
             }
-            Some("stopping") => Self::stop_instance(tx, id),
+            Some("stopping") => Self::stop_instance(tx, id, "idle"),
             // Unknown: nothing may run for it.
             _ => {
                 let payload =
@@ -160,9 +160,9 @@ impl RunHandler {
         }
     }
 
-    /// The stop of `id` is done.
-    pub(super) fn instance_stopped(tx: &mut Tx<'_>, id: &str) -> Result<(), Error> {
-        Self::instance_event(tx, id, "instance.stopped", json!({ "reason": "idle" }))?;
+    /// The stop of `id` is done; `reason` is the one of the stop (contracts 1.3).
+    pub(super) fn instance_stopped(tx: &mut Tx<'_>, id: &str, reason: &str) -> Result<(), Error> {
+        Self::instance_event(tx, id, "instance.stopped", json!({ "reason": reason }))?;
         tx.sql().execute("DELETE FROM instances WHERE id = ?1", [id])?;
         Ok(())
     }
@@ -179,7 +179,7 @@ impl RunHandler {
         Ok(handles.iter().filter_map(|h| serde_json::from_str(h).ok()).collect())
     }
 
-    fn stop_instance(tx: &mut Tx<'_>, id: &str) -> Result<(), Error> {
+    pub(super) fn stop_instance(tx: &mut Tx<'_>, id: &str, reason: &str) -> Result<(), Error> {
         let (harness, handle): (String, Option<String>) =
             tx.sql()
                 .query_row("SELECT harness, handle FROM instances WHERE id = ?1", [id], |r| {
@@ -191,7 +191,8 @@ impl RunHandler {
         )?;
         tx.clear_deadline(&format!("{id}:idle"))?;
         let handle: Value = handle.and_then(|h| serde_json::from_str(&h).ok()).unwrap_or_default();
-        let payload = json!({ "op": "stop_instance", "harness": harness, "instance": id, "handle": handle });
+        let payload =
+            json!({ "op": "stop_instance", "harness": harness, "instance": id, "handle": handle, "reason": reason });
         tx.effect(id, "stop", &payload)
     }
 

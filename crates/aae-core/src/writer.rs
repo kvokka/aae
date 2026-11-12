@@ -12,6 +12,8 @@ use tokio::{
 
 /// How long an idempotency key is remembered.
 const IDEMPOTENCY_KEEP_MS: i64 = 86_400_000;
+/// The longest the writer sleeps without reading the wall clock (deadlines are wall-clock times).
+const RECHECK_MS: i64 = 30_000;
 
 pub type BoxFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
 
@@ -243,7 +245,12 @@ async fn run<H: Handler, E: Executor>(
                 let _ = done.send((effect.id, effect.key, ok));
             });
         }
-        let wake = [deadline_wake, effect_wake, journal_wake].into_iter().flatten().min();
+        // The sleep is monotonic and wakes late after the machine slept: the wall clock is read again this often.
+        let recheck = Some(now + RECHECK_MS);
+        let wake = [deadline_wake, effect_wake, journal_wake, recheck]
+            .into_iter()
+            .flatten()
+            .min();
         let sleep = async {
             match wake {
                 Some(at) => tokio::time::sleep_until(clock.instant_at(at)).await,

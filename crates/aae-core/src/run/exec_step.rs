@@ -48,9 +48,19 @@ impl RunHandler {
             .map(|(k, v)| (k, &v["value"]))
             .collect();
         let timeout_ms = row.timeout_ms.unwrap_or(super::machine::STEP_TIMEOUT_MS);
+        // Run ids repeat across daemons; the marker that recovery kills the command by must not.
+        let Some(token) = super::new_token() else {
+            return self.terminal(
+                tx,
+                row,
+                "failed",
+                Some("infrastructure"),
+                "no randomness for the marker",
+            );
+        };
         let payload = json!({
             "op": "exec", "run": row.id, "attempt": row.attempt, "command": config["command"],
-            "cwd": row.workdir, "env": env, "timeout_ms": timeout_ms,
+            "cwd": row.workdir, "env": env, "timeout_ms": timeout_ms, "marker": format!("x-{}", &token[..16]),
         });
         // Its own key: a `stop_exec` on the run's key must not queue behind the running command.
         tx.effect(&format!("exec:{}", row.id), &row.attempt.to_string(), &payload)?;
@@ -117,6 +127,8 @@ pub(super) async fn run(running: &Running, payload: &Value) -> Msg {
     let pairs: Vec<(String, String)> = serde_json::from_value(payload["env"].clone()).unwrap_or_default();
     env.retain(|(k, _)| !pairs.iter().any(|(p, _)| p == k));
     env.extend(pairs);
+    let marker = payload["marker"].as_str().unwrap_or_default();
+    env.push((crate::orphans::INSTANCE_ENV.to_owned(), marker.to_owned()));
     let stop = Arc::new(Notify::new());
     let lock = || running.lock().unwrap_or_else(PoisonError::into_inner);
     lock().insert(run.clone(), stop.clone());

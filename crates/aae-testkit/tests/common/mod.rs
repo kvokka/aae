@@ -3,14 +3,20 @@
 #![allow(dead_code)]
 
 use aae_core::{
-    BoxFuture, Clock, CoreHandle, Journal, config,
+    BoxFuture, Clock, CoreHandle, Error, Journal, config,
     driver::{Normalized, SessionState, StopReason},
     open,
     run::{self, Create, Decision, HookRunner, Msg},
 };
 use aae_testkit::{ScriptedDriver, Step};
 use serde_json::Value;
-use std::{fs, path::PathBuf, sync::Arc, time::Duration};
+use std::{
+    fs,
+    path::{Path, PathBuf},
+    sync::Arc,
+    time::Duration,
+};
+use tokio::task::JoinHandle;
 
 pub(crate) const FILES: &[(&str, &str)] = &[
     ("config.toml", "projects = [\"shop\"]\n[harness.scripted]\n"),
@@ -40,7 +46,9 @@ pub(crate) struct World {
     pub(crate) core: CoreHandle<Msg>,
     pub(crate) driver: ScriptedDriver,
     pub(crate) journal: PathBuf,
-    _dir: tempfile::TempDir,
+    hooks: Arc<dyn HookRunner>,
+    task: JoinHandle<Result<(), Error>>,
+    pub(crate) dir: tempfile::TempDir,
 }
 
 /// A hook runner lost after the dispatch: decisions come from the test or from the deadline (contracts 3.3).
@@ -78,25 +86,43 @@ pub(crate) fn world_on(extra: &[(&str, &str)], hooks: Arc<dyn HookRunner>, drive
         fs::create_dir_all(path.parent().unwrap()).unwrap();
         fs::write(path, text).unwrap();
     }
-    let config = config::load(&dir.path().join("config.toml")).unwrap();
-    let journal = dir.path().join("journal");
-    let (core, _task) = run::start(
-        open(&dir.path().join("state.db")).unwrap(),
+    let (core, task) = core_on(dir.path(), hooks.clone(), &driver);
+    World {
+        core,
+        driver,
+        journal: dir.path().join("journal"),
+        hooks,
+        task,
+        dir,
+    }
+}
+
+fn core_on(
+    dir: &Path,
+    hooks: Arc<dyn HookRunner>,
+    driver: &ScriptedDriver,
+) -> (CoreHandle<Msg>, JoinHandle<Result<(), Error>>) {
+    let config = config::load(&dir.join("config.toml")).unwrap();
+    run::start(
+        open(&dir.join("state.db")).unwrap(),
         Clock::managed(0),
         Arc::new(config),
         vec![Arc::new(driver.clone())],
         hooks,
-        Journal::new(&journal),
-    );
-    World {
-        core,
-        driver,
-        journal,
-        _dir: dir,
-    }
+        Journal::new(&dir.join("journal")),
+    )
 }
 
 impl World {
+    /// The daemon dies without a word (its writer is dropped mid-flight) and a new one starts on its state, with a
+    /// new driver: the old one's processes are unknown to it.
+    pub(crate) async fn restart(&mut self) {
+        self.task.abort();
+        let _ = (&mut self.task).await;
+        self.driver = ScriptedDriver::new(1);
+        (self.core, self.task) = core_on(self.dir.path(), self.hooks.clone(), &self.driver);
+    }
+
     pub(crate) async fn create(&self) -> String {
         self.create_on("web").await
     }

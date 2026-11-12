@@ -84,7 +84,7 @@ Observed events (§5.4):
 
 | Type | `data` |
 |---|---|
-| `daemon.started` | `{version, pid, interrupted_runs}` |
+| `daemon.started` | `{version, pid, interrupted_runs}`; `interrupted_runs` is how many runs recovery moved to `interrupted` |
 | `daemon.stopping` | `{reason: "signal"\|"drain"\|"restart"}` |
 | `config.reloaded` | `{config_generation, restarted_instances: [id]}` |
 | `instance.starting`, `instance.ready`, `instance.stopped` | `{instance: {id, harness, fingerprint, pid, pgid}, reason}`; `pid`/`pgid` null before spawn, `reason` null except `stopped` (`idle`, `config`, `cancel`, `shutdown`, `recovery`) |
@@ -529,8 +529,12 @@ of a run whose gate the operator closed parks it instead (invariant 18).
 - Daemon start (§5.6): open the state and drain the outbox; for every recorded instance check pid + start time,
   kill its process group and sweep every process carrying its marker `AAE_INSTANCE=<id>` in the environment, wait
   for the end (invariants 6, 7); runs in `starting`, `running`, `requires_action` → `interrupted` with
-  `daemon_crash`; runs in `preparing`, `finishing`, `interrupted` keep their state — their deciding event is still
-  in the outbox and its hooks run again; re-arm deadlines and schedules; resync.
+  `daemon_crash`, the launches, prompts and answers they still had queued dropped, and the command of an exec step
+  killed by its `AAE_INSTANCE` marker (random per attempt) before any later attempt runs it; runs in `preparing`,
+  `finishing`, `interrupted` keep their state — their hook effect is still
+  queued and its hooks run again; re-arm deadlines and schedules; resync. Deadlines are wall-clock times:
+  the writer reads the wall clock at least every 30 s, so a deadline passed while the machine slept fires late by
+  at most that.
 - A resumed attempt after `daemon_crash` checks the transcript for the last unsettled key: `Absent` → send the
   same prompt with the same key; `Unanswered` or `Answered` → send the reconcile prompt (config text, default
   "Your previous turn was interrupted. Check the current state of the work and continue toward the goal.") with a

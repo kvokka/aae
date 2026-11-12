@@ -82,7 +82,8 @@ impl Executor for RunExecutor {
                     crate::orphans::sweep(&id);
                     self.starts.lock().unwrap_or_else(PoisonError::into_inner).remove(&id);
                     // A stopped writer drops the message; recovery (WP-20) finds the record on restart.
-                    let _ = core.send(None, Msg::InstanceStopped { id }).await;
+                    let reason = payload["reason"].as_str().unwrap_or("idle").to_owned();
+                    let _ = core.send(None, Msg::InstanceStopped { id, reason }).await;
                     return true;
                 }
                 (Some("prompt"), Ok(handle)) => {
