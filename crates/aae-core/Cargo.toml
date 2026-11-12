@@ -1,0 +1,20 @@
+[package]
+name = "aae-core"
+description = "Core of aae: the single writer of the runtime state"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+rusqlite = { version = "0.42.0", features = ["bundled"] }
+serde_json = "1.0.154"
+tokio = { version = "1.54.1", features = ["rt", "sync", "time", "macros"] }
+
+[dev-dependencies]
+tempfile = "3.27.0"
+tokio = { version = "1.54.1", features = ["rt", "macros", "time", "test-util"] }
