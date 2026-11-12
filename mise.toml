@@ -9,3 +9,27 @@ rust = { version = "1.99.1", components = "clippy,rustfmt,rust-src,rust-analyzer
 tokei = "15.0.0"
 zig = "0.17.1"
 "cargo:cargo-zigbuild" = "0.24.1"
+claude = "2.1.322"
+codex = "0.166.0"
+"github:Dicklesworthstone/beads_rust" = "0.7.6"
+jq = "1.8.2"
+
+[tasks.ci]
+description = "Checks that CI runs on every commit"
+run = [
+  "cargo fmt --all --check",
+  "cargo clippy --all-targets --locked -q -- -D warnings",
+  "cargo nextest run --locked --no-tests=warn",
+  "cargo deny check",
+  "cargo machete",
+  "scripts/budget-selftest.sh",
+  "scripts/budget.sh",
+]
+
+[tasks.build-all]
+description = "Release builds for the four targets of spec §13"
+run = """
+for t in x86_64-unknown-linux-musl aarch64-unknown-linux-musl x86_64-apple-darwin aarch64-apple-darwin; do
+  cargo zigbuild --release --locked --target "$t"
+done
+"""
