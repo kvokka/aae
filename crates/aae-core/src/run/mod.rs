@@ -50,6 +50,13 @@ pub enum Msg {
         run: String,
         reason: String,
     },
+    /// Fires `trigger` (`<pack>.<name>`, or the name of a project trigger) on a rig by hand, as its schedule would;
+    /// the reply is `{"run": "<id>"}` or `{"skipped": <reason>, "detail": <text>}`.
+    Fire {
+        project: String,
+        rig: String,
+        trigger: String,
+    },
     /// The operator closes a gate (spec §5.7): automation never removes this closure (invariant 18).
     CloseGate(GateSpec),
     /// The operator opens a gate: every closure of `key` goes.
@@ -257,6 +264,7 @@ impl Handler for RunHandler {
         match msg {
             Msg::Create(create) => return self.create(tx, create),
             Msg::Finish { run, token, outcome } => return self.finish(tx, &run, &token, &outcome),
+            Msg::Fire { project, rig, trigger } => return self.fire_by_hand(tx, &project, &rig, &trigger),
             Msg::Cancel { run, reason } => self.cancel(tx, &run, &reason),
             Msg::CloseGate(gate) => self.close_gate(tx, &gate, "operator"),
             Msg::OpenGate { key } => self.open_gate(tx, &key, None),

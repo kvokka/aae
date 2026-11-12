@@ -516,6 +516,64 @@
           }
         }
       }
+    },
+    "/v1/triggers/fire": {
+      "post": {
+        "summary": "Fires a trigger by hand: `{\"run\": id}`, or `{\"skipped\": reason, \"detail\": text}` when it does not start a run\n(an overlapping live run, for one).",
+        "operationId": "fire",
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FireTrigger"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -614,6 +672,26 @@
           "token": {
             "type": "string",
             "description": "The attempt token the session got."
+          }
+        }
+      },
+      "FireTrigger": {
+        "type": "object",
+        "required": [
+          "project",
+          "rig",
+          "trigger"
+        ],
+        "properties": {
+          "project": {
+            "type": "string"
+          },
+          "rig": {
+            "type": "string"
+          },
+          "trigger": {
+            "type": "string",
+            "description": "`<pack>.<name>`, or the name of a project trigger."
           }
         }
       },

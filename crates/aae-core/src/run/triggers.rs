@@ -98,6 +98,22 @@ impl RunHandler {
         if let Some(at) = next(&a.trigger.source, tx.now_ms()) {
             tx.set_deadline(id, at)?;
         }
+        self.fire(tx, &a, None).map(drop)
+    }
+
+    pub(super) fn fire_by_hand(
+        &mut self,
+        tx: &mut Tx<'_>,
+        project: &str,
+        rig: &str,
+        name: &str,
+    ) -> Result<Value, Error> {
+        let config = self.config.clone();
+        let own = format!("{project}.{name}");
+        let found = assigned(&config)
+            .into_iter()
+            .find(|a| a.project == project && a.rig == rig && (a.name == name || a.name == own));
+        let a = found.ok_or_else(|| super::rejected(format!("no trigger `{name}` on `{project}/{rig}`")))?;
         self.fire(tx, &a, None)
     }
 
@@ -124,8 +140,9 @@ impl RunHandler {
         Ok(())
     }
 
-    /// One firing: `trigger.fired` with the run it queued, or `trigger.skipped` with why (contracts 1.3).
-    fn fire(&mut self, tx: &mut Tx<'_>, a: &Assigned<'_>, cause: Option<&Value>) -> Result<(), Error> {
+    /// One firing: `trigger.fired` with the run it queued, or `trigger.skipped` with why (contracts 1.3); the reply
+    /// of [`Msg::Fire`](super::Msg::Fire).
+    fn fire(&mut self, tx: &mut Tx<'_>, a: &Assigned<'_>, cause: Option<&Value>) -> Result<Value, Error> {
         let text = |key: &str| cause.and_then(|e| e[key].as_str()).map(str::to_owned);
         let cause_seq = cause.map_or(Value::Null, |e| e["seq"].clone());
         let parent = text("run");
@@ -139,7 +156,7 @@ impl RunHandler {
                 correlation: text("correlation"),
                 data,
             })
-            .map(drop)
+            .map(|_| json!({ "skipped": reason, "detail": detail }))
         };
         let inputs = match a.trigger.inputs.resolve(cause.map(event_view).as_ref()) {
             Ok(Value::Object(inputs)) => inputs,
@@ -200,6 +217,7 @@ impl RunHandler {
         };
         let row = Row::load(tx, &run)?;
         let data = json!({ "trigger": a.name, "cause_seq": cause_seq, "new_run": run, "inputs": inputs });
-        row.emit(tx, "trigger.fired", data).map(drop)
+        row.emit(tx, "trigger.fired", data)?;
+        Ok(json!({ "run": run }))
     }
 }

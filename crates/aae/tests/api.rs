@@ -134,3 +134,24 @@ async fn one_daemon_per_state_directory_whatever_its_socket() {
         "{stderr}"
     );
 }
+
+#[tokio::test]
+async fn a_trigger_fired_by_hand_starts_a_run_and_skips_while_it_lives() {
+    let d = Daemon::start(|dir| {
+        let project = "[rigs.web]\npath = \"web\"\n\
+            [[trigger]]\nname = \"sweep\"\nevery = \"24h\"\nrun = \"slow\"\nrig = \"web\"\n";
+        fs::write(dir.join("config/aae/shop/aae.toml"), project).unwrap();
+    })
+    .await;
+    let fire = json!({ "project": "shop", "rig": "web", "trigger": "sweep" });
+    let run = d.post("/v1/triggers/fire", fire.clone(), Some("f1")).await.unwrap()["run"].clone();
+    d.until_state(run.as_str().unwrap(), "running").await;
+    let again = d.post("/v1/triggers/fire", fire.clone(), Some("f2")).await.unwrap();
+    assert_eq!(again["skipped"], "overlap");
+    assert_eq!(d.post("/v1/triggers/fire", fire, Some("f1")).await.unwrap()["run"], run);
+    let unknown = json!({ "project": "shop", "rig": "web", "trigger": "nope" });
+    match d.post("/v1/triggers/fire", unknown, None).await {
+        Err(ClientError::Api { status: 409, error }) => assert_eq!(error["code"], "rejected"),
+        other => panic!("{other:?}"),
+    }
+}

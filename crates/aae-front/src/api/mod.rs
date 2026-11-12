@@ -4,6 +4,7 @@
 mod events;
 mod gates;
 mod runs;
+mod triggers;
 
 use aae_core::{
     CoreHandle, Journal,
@@ -48,6 +49,7 @@ fn router() -> OpenApiRouter<Arc<Api>> {
         .routes(routes!(runs::finish))
         .routes(routes!(gates::list, gates::close))
         .routes(routes!(gates::open))
+        .routes(routes!(triggers::fire))
         .routes(routes!(events::stream))
         .routes(routes!(daemon))
 }

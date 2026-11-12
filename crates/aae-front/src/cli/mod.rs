@@ -20,6 +20,7 @@ pub const OPERATIONS: &[(&str, &str, &str)] = &[
     ("gate list", "GET", "/v1/gates"),
     ("gate close", "POST", "/v1/gates"),
     ("gate open", "POST", "/v1/gates/open"),
+    ("trigger fire", "POST", "/v1/triggers/fire"),
     ("events", "GET", "/v1/events"),
     ("status", "GET", "/v1/daemon"),
 ];
@@ -55,6 +56,9 @@ pub enum Command {
     /// Issue gates: pause and resume what starts.
     #[command(subcommand)]
     Gate(GateCommand),
+    /// Triggers: fire one by hand.
+    #[command(subcommand)]
+    Trigger(TriggerCommand),
     /// Follow the events, from `--from` or from now on.
     Events {
         #[arg(long)]
@@ -116,6 +120,22 @@ pub enum RunCommand {
         request: String,
         decision: Decision,
         text: Option<String>,
+        /// The idempotency key: a repeat with the same key changes nothing.
+        #[arg(long = "key")]
+        idempotency: Option<String>,
+    },
+}
+
+#[derive(Subcommand)]
+pub enum TriggerCommand {
+    /// Fire a trigger on a rig as its schedule would: prints the run it started, or why it skipped.
+    Fire {
+        /// `<pack>.<name>`, or the name of a project trigger.
+        trigger: String,
+        #[arg(long)]
+        project: String,
+        #[arg(long)]
+        rig: String,
         /// The idempotency key: a repeat with the same key changes nothing.
         #[arg(long = "key")]
         idempotency: Option<String>,
@@ -315,6 +335,19 @@ async fn execute(client: &Client, cli: Cli) -> Result<ExitCode, ClientError> {
             print(
                 &client
                     .request("POST", "/v1/gates", Some(&body), idempotency.as_deref())
+                    .await?,
+            );
+        }
+        Command::Trigger(TriggerCommand::Fire {
+            trigger,
+            project,
+            rig,
+            idempotency,
+        }) => {
+            let body = json!({ "project": project, "rig": rig, "trigger": trigger });
+            print(
+                &client
+                    .request("POST", "/v1/triggers/fire", Some(&body), idempotency.as_deref())
                     .await?,
             );
         }
