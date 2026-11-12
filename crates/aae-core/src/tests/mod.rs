@@ -1,5 +1,6 @@
 mod config;
 mod config_layers;
+mod cron;
 mod idempotency;
 mod journal;
 mod template;

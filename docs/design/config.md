@@ -151,6 +151,17 @@ a `bead` input and a field of `Bead` (contracts 5.2); `run.<field>` a field of `
 formula, every required input is given, placeholders exist only with `on` and their paths exist in that event's
 payload, as do the paths of `where`. `rig` is allowed only in a project's `[[trigger]]`.
 
+- A trigger runs on the rigs that list it in `triggers` and, for a project trigger, on its `rig`; one that no rig
+  names never fires. An event trigger sees the events whose `project` and `rig` are its own or null.
+- `cron` is read in UTC: minute, hour, day of month, month, day of week; each field is `*`, a value, `a-b`, any of
+  them with `/step`, or a comma list; months and days also take `jan`..`dec` and `sun`..`sat`, and day 7 is Sunday.
+  When both day fields are restricted, a day matching either fires (as in Vixie cron).
+- `every` first fires one interval after the daemon first sees the trigger, then one interval after each firing.
+  A schedule missed while the daemon was down fires once at start, and the next one is counted from then.
+- A trigger on `trigger.skipped` is a config error: a skip that fires a trigger could skip again forever.
+- A run started by a trigger is one level deeper than the run of its event (1 without one, a schedule included);
+  past depth 10 the firing is skipped with `depth`.
+
 ## Plugin: `<plugin>/plugin.toml`
 
 ```toml

@@ -13,6 +13,7 @@ mod queue;
 mod read;
 mod registry;
 mod row;
+mod triggers;
 
 use crate::{
     clock::Clock,
@@ -284,12 +285,18 @@ impl Handler for RunHandler {
         match id.rsplit_once(':').unwrap_or((id, "")) {
             (gate, "gate") => self.gate_timer(tx, gate),
             (instance, "idle") => Self::instance_idle(tx, instance),
+            (_, "trigger") => self.scheduled(tx, id),
             (run, what) => self.on_deadline(tx, run, what),
         }
     }
 
     fn emitted(&mut self, tx: &mut Tx<'_>, events: &[Value]) -> Result<(), Error> {
-        self.dispatch(tx, events)
+        self.dispatch(tx, events)?;
+        self.match_triggers(tx, events)
+    }
+
+    fn started(&mut self, tx: &mut Tx<'_>) -> Result<(), Error> {
+        self.arm_schedules(tx)
     }
 }
 

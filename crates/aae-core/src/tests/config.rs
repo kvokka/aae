@@ -142,7 +142,9 @@ fn a_valid_config_loads_with_every_reference_resolved() {
     assert!(matches!(&project_trigger.source, Source::Event { on, .. } if on == "bead.ready"));
     let gascity = &shop.packs[1];
     assert_eq!(gascity.version.as_deref(), Some("0.3.0"));
-    assert!(matches!(&gascity.triggers[0].source, Source::Cron(c) if c == "0 3 * * *"));
+    assert!(
+        matches!(&gascity.triggers[0].source, Source::Cron(c) if *c == crate::cron::Cron::parse("0 3 * * *").unwrap())
+    );
     let agent = &gascity.agents["implementer"];
     assert_eq!(
         (agent.harness.as_str(), agent.prompt.as_deref()),

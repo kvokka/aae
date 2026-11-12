@@ -111,8 +111,7 @@ pub enum Source {
         on: String,
         filter: Filter,
     },
-    /// A five-field cron expression.
-    Cron(String),
+    Cron(crate::cron::Cron),
     /// At most one firing per interval.
     Every(Duration),
 }

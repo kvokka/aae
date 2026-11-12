@@ -112,6 +112,22 @@ impl Tx<'_> {
         self.tx.execute("DELETE FROM deadlines WHERE id = ?1", [id])?;
         Ok(())
     }
+
+    /// Runs `f` as one unit of the transaction: when it fails, what it wrote and emitted is undone and the rest of
+    /// the transaction stays.
+    pub(crate) fn unit<T>(&mut self, f: impl FnOnce(&mut Self) -> Result<T, Error>) -> Result<T, Error> {
+        let emitted = self.events.len();
+        self.tx.execute_batch("SAVEPOINT unit")?;
+        let result = f(self);
+        match result {
+            Ok(_) => self.tx.execute_batch("RELEASE unit")?,
+            Err(_) => {
+                self.tx.execute_batch("ROLLBACK TO unit; RELEASE unit")?;
+                self.events.truncate(emitted);
+            }
+        }
+        result
+    }
 }
 
 /// The domain logic run inside the writer. It keeps its state in the database: an error rolls the transaction
@@ -120,9 +136,14 @@ pub trait Handler: Send + 'static {
     type Msg: Send + 'static;
     fn handle(&mut self, tx: &mut Tx<'_>, msg: Self::Msg) -> Result<Value, Error>;
     fn deadline(&mut self, tx: &mut Tx<'_>, id: &str) -> Result<(), Error>;
-    /// Sees, before commit, the envelopes of the events the transaction emitted: what the handler queues here
-    /// commits with them (the hook dispatcher of docs/design/contracts.md 3.5).
+    /// Sees, before commit, the envelopes of the events the transaction emitted: what the handler queues or emits
+    /// here commits with them (the hook dispatcher and the trigger matcher of docs/design/contracts.md 3.5). The
+    /// events it emits here come back to it, until a call emits none.
     fn emitted(&mut self, _tx: &mut Tx<'_>, _events: &[Value]) -> Result<(), Error> {
+        Ok(())
+    }
+    /// Runs once in its own transaction when the writer starts, before any message or deadline.
+    fn started(&mut self, _tx: &mut Tx<'_>) -> Result<(), Error> {
         Ok(())
     }
 }
@@ -185,6 +206,16 @@ async fn run<H: Handler, E: Executor>(
     mut journal: Journal,
     mut inbox: mpsc::Receiver<Input<H::Msg>>,
 ) -> Result<(), Error> {
+    {
+        let mut tx = Tx {
+            tx: conn.transaction()?,
+            now_ms: clock.now_ms(),
+            events: Vec::new(),
+        };
+        handler.started(&mut tx)?;
+        settle(&mut tx, &mut handler)?;
+        tx.tx.commit()?;
+    }
     let (done_tx, mut done_rx) = mpsc::unbounded_channel::<(i64, String, bool)>();
     let mut in_flight = HashSet::new();
     let mut journal_failures = 0;
@@ -255,8 +286,7 @@ fn process<H: Handler>(
         events: Vec::new(),
     };
     let reply = handler.handle(&mut tx, msg)?;
-    let events = std::mem::take(&mut tx.events);
-    handler.emitted(&mut tx, &events)?;
+    settle(&mut tx, handler)?;
     if let Some(key) = key {
         // A key is kept a day: a client retries within seconds or minutes, and the table must not grow forever.
         tx.tx.execute(
@@ -291,10 +321,7 @@ fn fire_deadlines<H: Handler>(conn: &mut Connection, handler: &mut H, now_ms: i6
             now_ms,
             events: Vec::new(),
         };
-        let fired = handler.deadline(&mut tx, &id).and_then(|()| {
-            let events = std::mem::take(&mut tx.events);
-            handler.emitted(&mut tx, &events)
-        });
+        let fired = handler.deadline(&mut tx, &id).and_then(|()| settle(&mut tx, handler));
         match fired {
             Ok(()) => tx.tx.commit()?,
             // A failing deadline is dropped rather than fired again forever; its effects are rolled back.
@@ -303,5 +330,16 @@ fn fire_deadlines<H: Handler>(conn: &mut Connection, handler: &mut H, now_ms: i6
                 conn.execute("DELETE FROM deadlines WHERE id = ?1", [&id])?;
             }
         }
+    }
+}
+
+/// Hands the handler the events of the transaction until it emits no more.
+fn settle<H: Handler>(tx: &mut Tx<'_>, handler: &mut H) -> Result<(), Error> {
+    loop {
+        let events = std::mem::take(&mut tx.events);
+        if events.is_empty() {
+            return Ok(());
+        }
+        handler.emitted(tx, &events)?;
     }
 }

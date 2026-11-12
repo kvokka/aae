@@ -2,6 +2,7 @@
 
 mod clock;
 pub mod config;
+pub mod cron;
 pub mod driver;
 mod effects;
 mod journal;

@@ -6,7 +6,10 @@ use super::{
     load::{Loader, parent, reference, resolve},
     schema::{bead_path, event_path, run_path},
 };
-use crate::template::{Filter, Inputs, Template};
+use crate::{
+    cron::Cron,
+    template::{Filter, Inputs, Template},
+};
 use serde_json::Value;
 use std::{collections::BTreeMap, fs, path::Path};
 
@@ -121,6 +124,8 @@ impl Loader {
                     .ok()?;
                 match event_path(&on, "seq", false) {
                     None => self.fail(file, format!("{what}: unknown event type `{on}`")),
+                    // A skip that fires a trigger could skip again in the same transaction forever.
+                    Some(_) if on == "trigger.skipped" => self.fail(file, format!("{what}: no trigger on `{on}`")),
                     Some(_) => {
                         for bad in filter.paths().filter(|p| event_path(&on, p, true) != Some(true)) {
                             self.fail(file, format!("{what}: `{on}` has no `{bad}`"));
@@ -129,8 +134,10 @@ impl Loader {
                 }
                 Source::Event { on, filter }
             }
-            (None, Some(cron), None) if cron.split_whitespace().count() == 5 => Source::Cron(cron),
-            (None, Some(cron), None) => return self.none(file, format!("{what}: `{cron}` is not five cron fields")),
+            (None, Some(cron), None) => match Cron::parse(&cron) {
+                Ok(cron) => Source::Cron(cron),
+                Err(e) => return self.none(file, format!("{what}: {e}")),
+            },
             (None, None, Some(every)) => Source::Every(duration(&every).map_err(|e| self.fail(file, e)).ok()?),
             _ => return self.none(file, format!("{what}: needs exactly one of `on`, `cron`, `every`")),
         };

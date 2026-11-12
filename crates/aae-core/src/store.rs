@@ -123,6 +123,12 @@ CREATE TABLE instances (
 CREATE INDEX instances_fingerprint ON instances (fingerprint, state);
 ";
 
+/// The trigger (`<pack>.<name>`) that started a run, for the overlap check of spec §9.5.
+const SCHEMA_V7: &str = "
+ALTER TABLE runs ADD COLUMN trigger TEXT;
+CREATE INDEX runs_trigger ON runs (trigger);
+";
+
 /// Opens the state database in WAL mode and brings its schema to the current version.
 pub fn open(path: &Path) -> rusqlite::Result<Connection> {
     let conn = Connection::open(path)?;
@@ -137,6 +143,7 @@ pub fn open(path: &Path) -> rusqlite::Result<Connection> {
         (4, SCHEMA_V4),
         (5, SCHEMA_V5),
         (6, SCHEMA_V6),
+        (7, SCHEMA_V7),
     ]
     .into_iter()
     .filter(|(to, _)| *to > version)

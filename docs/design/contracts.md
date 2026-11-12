@@ -250,6 +250,10 @@ runs the hooks of every deciding event still pending; the run waits in its state
 - The journal writer acknowledges after the line is written and flushed; the trigger matcher after the run it
   created (or the `trigger.skipped`) is committed — the idempotency key is `(trigger, seq)`; the hook dispatcher
   after all hooks of the event finished and, for a deciding event, after the decision is committed.
+- The trigger matcher keeps the `(trigger, seq)` guarantee in the strongest shape: it matches in the transaction
+  that commits the event, so the run it creates (or its `trigger.skipped`) commits with the event or not at all,
+  and events the firing emits are matched in the same transaction. A schedule fires in the transaction of its
+  deadline, which sets the next one.
 - The hook dispatcher is the same guarantee in another shape: the transaction that commits an event also queues
   the hooks on it as one effect. The key is `hooks:<run>` for a deciding event (a run waits on at most one) and
   `hooks:<run>:obs` for an observed one; each key runs its hooks in `seq` order, and a slow observed hook never
