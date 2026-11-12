@@ -11,6 +11,7 @@ rust-version.workspace = true
 workspace = true
 
 [dependencies]
+aae-br = { version = "0.1.0", path = "../aae-br" }
 aae-claude = { version = "0.1.0", path = "../aae-claude" }
 aae-codex = { version = "0.1.0", path = "../aae-codex" }
 aae-core = { version = "0.1.0", path = "../aae-core" }

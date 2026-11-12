@@ -1,12 +1,14 @@
 //! `aae daemon`: the core and the API on a unix socket, in the foreground (spec §13), until SIGTERM or SIGINT.
 
+use aae_br::Br;
 use aae_claude::Claude;
 use aae_codex::Codex;
 use aae_core::{
     Clock, Journal, config,
     driver::{Driver, ProcessPart},
     open,
-    run::{self, ExecHooks, Reader},
+    run::{self, ExecHooks, Msg, Reader},
+    tracker::Tracker,
 };
 use aae_front::{
     api::{self, Api},
@@ -14,6 +16,7 @@ use aae_front::{
 };
 use serde_json::json;
 use std::{
+    collections::{BTreeMap, BTreeSet},
     fs::{DirBuilder, File, Permissions, TryLockError},
     io,
     os::unix::fs::{DirBuilderExt, PermissionsExt},
@@ -23,6 +26,7 @@ use std::{
 use tokio::{
     net::{UnixListener, UnixStream},
     signal::unix::{SignalKind, signal},
+    sync::mpsc,
 };
 
 /// Where the daemon keeps its files (XDG base directories).
@@ -84,19 +88,57 @@ pub(crate) async fn run(paths: Paths) -> Result<(), String> {
         }
         drivers.push(driver);
     }
+    // A project with a `.beads` directory has br as its tracker (spec §10.2).
+    let beads: Vec<(String, PathBuf)> = config
+        .projects
+        .iter()
+        .map(|p| (p.name.clone(), p.root.join(".beads")))
+        .filter(|(_, dir)| dir.is_dir())
+        .collect();
+    let trackers: BTreeMap<String, Arc<dyn Tracker>> = beads
+        .iter()
+        .map(|(name, dir)| (name.clone(), Arc::new(Br::new(dir.clone())) as Arc<dyn Tracker>))
+        .collect();
+    if let Some(why) = (!beads.is_empty())
+        .then(|| aae_core::untested(Path::new("br"), aae_br::TESTED))
+        .flatten()
+    {
+        eprintln!("aae daemon: warning: {why}");
+    }
     let config = Arc::new(config);
     let (core, task) = run::start(
         conn,
         Clock::system(),
         config.clone(),
         drivers,
-        // The br adapter (WP-31) fills this in; until then no project has a tracker.
-        std::collections::BTreeMap::new(),
+        trackers,
         Arc::new(ExecHooks {
             socket: Some(paths.socket.clone()),
         }),
         journal,
     );
+    // Each watched write tells the core to read its project's tracker; a burst of writes is one read.
+    let (changed, mut changes) = mpsc::unbounded_channel::<String>();
+    let mut watchers = Vec::new();
+    for (name, dir) in beads {
+        let (changed, project) = (changed.clone(), name.clone());
+        match aae_br::watch(&dir, move || drop(changed.send(project.clone()))) {
+            Ok(w) => watchers.push(w),
+            Err(e) => eprintln!("aae daemon: warning: tracker of `{name}` is not watched: {e}"),
+        }
+    }
+    let notify = core.clone();
+    tokio::spawn(async move {
+        while let Some(first) = changes.recv().await {
+            let mut projects = BTreeSet::from([first]);
+            while let Ok(more) = changes.try_recv() {
+                projects.insert(more);
+            }
+            for project in projects {
+                let _ = notify.send(None, Msg::TrackerChanged(project)).await;
+            }
+        }
+    });
     let api = Api {
         core,
         reader: Reader::open(&db).map_err(|e| format!("{}: {e}", db.display()))?,
@@ -114,7 +156,7 @@ pub(crate) async fn run(paths: Paths) -> Result<(), String> {
     let _ = std::fs::remove_file(&paths.socket);
     // shortcut: the writer is left as a crash leaves it (the state is crash-safe); a drain that lets running
     // attempts end first comes with the daemon operations of WP-22b.
-    drop(task);
+    drop((task, watchers));
     served.map_err(|e| format!("serving the API: {e}"))
 }
 
