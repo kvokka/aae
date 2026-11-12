@@ -174,6 +174,14 @@ fn worktree_on_real_git() {
     assert!(!tree.exists());
     assert_eq!(git(&repo, &["log", "-1", "--format=%s", "aae/r1"]), "work");
 
+    // Prepared again with the branch left: the branch is checked out as it is, its commit kept.
+    let decision = run("worktree", &event("run.preparing", "r1", &repo, "shop.dev"), &params)
+        .unwrap()
+        .unwrap();
+    let tree = Path::new(decision["workdir"].as_str().unwrap()).to_owned();
+    assert_eq!(git(&tree, &["log", "-1", "--format=%s"]), "work");
+    std::fs::remove_dir_all(&tree).unwrap();
+
     // A detached HEAD whose commit no ref reaches is left in place.
     let decision = run("worktree", &event("run.preparing", "r2", &repo, "shop.dev"), &params)
         .unwrap()

@@ -48,14 +48,20 @@ fn ours(workdir: &Path, id: &str) -> bool {
 }
 
 /// Creates the worktree of run `id` from the HEAD of the repository at `workdir`; one already there is reused, so a
-/// hook run again after a crash decides the same.
+/// hook run again after a crash decides the same; an existing branch `aae/<id>` is checked out, never reset.
 fn create(workdir: &Path, id: &str) -> Result<Value, String> {
     let common = git(workdir, &["rev-parse", "--path-format=absolute", "--git-common-dir"])?;
     let path = PathBuf::from(common).join(DIR).join(id);
     if !path.join(".git").exists() {
         let branch = format!("aae/{id}");
         let at = path.to_string_lossy();
-        git(workdir, &["worktree", "add", "-B", &branch, &at, "HEAD"])?;
+        // A worktree removed by hand stays registered, and its branch may hold commits: take the branch as it is.
+        git(workdir, &["worktree", "prune"])?;
+        if git(workdir, &["branch", "--list", &branch])?.is_empty() {
+            git(workdir, &["worktree", "add", "-b", &branch, &at, "HEAD"])?;
+        } else {
+            git(workdir, &["worktree", "add", &at, &branch])?;
+        }
     }
     Ok(json!({ "decision": "proceed", "workdir": path }))
 }
