@@ -181,6 +181,10 @@ impl RunExecutor {
             .get_or_init(|| async {
                 let process = ProcessPart(p["process"].clone());
                 let started = driver.start_instance(&id, &process, self.sink.clone()).await;
+                if started.is_err() {
+                    // The record goes with `instance_failed`; a later instance gets a new id.
+                    self.starts.lock().unwrap_or_else(PoisonError::into_inner).remove(&id);
+                }
                 let msg = match &started {
                     Ok(handle) => Msg::InstanceReady {
                         id: id.clone(),

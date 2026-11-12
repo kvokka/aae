@@ -19,7 +19,9 @@ use std::{
 };
 use tokio::{sync::broadcast, task::JoinHandle};
 
+mod play;
 mod step;
+use play::session_id;
 pub use step::Step;
 
 /// Plays one queued scenario per `send_prompt` (after acknowledging the prompt) and per `respond` (the
@@ -41,6 +43,8 @@ struct State {
     /// The attempt token the core handed over and the session environment, by `(run, attempt)`.
     tokens: HashMap<(String, u32), (String, BTreeMap<String, String>)>,
     texts: Vec<String>,
+    /// Set by [`ScriptedDriver::stall_sessions`].
+    stalled: bool,
 }
 
 struct Instance {
@@ -85,6 +89,11 @@ impl ScriptedDriver {
         self.lock().scenarios.push_back(steps);
     }
 
+    /// Every later `start_session` never returns: a process that never reports its session.
+    pub fn stall_sessions(&self) {
+        self.lock().stalled = true;
+    }
+
     /// The token of attempt `attempt` of `run`, as the agent of the attempt would find it in its environment.
     pub fn token(&self, run: &str, attempt: u32) -> Option<String> {
         self.lock().tokens.get(&(run.to_owned(), attempt)).map(|t| t.0.clone())
@@ -97,95 +106,6 @@ impl ScriptedDriver {
         let env = state.tokens.get(&(run.to_owned(), attempt)).map(|t| t.1.clone());
         (env, state.texts.clone())
     }
-
-    fn lock(&self) -> std::sync::MutexGuard<'_, State> {
-        self.state.lock().unwrap_or_else(std::sync::PoisonError::into_inner)
-    }
-
-    /// The session behind `session` if it lives on `instance` and the instance is alive.
-    fn live_session<'a>(
-        state: &'a mut State,
-        instance: &InstanceHandle,
-        session: &SessionRef,
-    ) -> Result<&'a mut Session, Failure> {
-        if !state.instances.get(&instance.id).is_some_and(|i| i.alive) {
-            return Err(Failure::new(FailureKind::HarnessCrash, Source::Adapter));
-        }
-        match state.sessions.get_mut(&session_id(session)?) {
-            Some(s) if s.instance == instance.id => Ok(s),
-            _ => Err(Failure::new(FailureKind::TranscriptDivergence, Source::Adapter)),
-        }
-    }
-
-    /// Plays the next scenario on `session`, after `first` if given.
-    fn play(&self, instance: &InstanceHandle, session: &SessionRef, first: Option<Normalized>) -> Result<(), Failure> {
-        let mut state = self.lock();
-        Self::live_session(&mut state, instance, session)?;
-        let steps = state.scenarios.pop_front().unwrap_or_default();
-        let first = first.filter(|_| !matches!(steps.first(), Some(Step::NoAck)));
-        let target = Self::live_session(&mut state, instance, session)?;
-        if let Some(previous) = target.playing.take() {
-            previous.abort();
-        }
-        target.in_turn = true;
-        let (driver, instance, session) = (self.clone(), instance.id.clone(), session.clone());
-        target.playing = Some(tokio::spawn(async move {
-            if let Some(event) = first {
-                driver.emit(&instance, Some(&session), event);
-            }
-            for step in steps {
-                match step {
-                    Step::NoAck => {}
-                    Step::Wait(d) => tokio::time::sleep(d).await,
-                    Step::Emit(event) => driver.emit(&instance, Some(&session), event),
-                    Step::Exit { code, signal } => {
-                        driver.exit(&instance, code, signal);
-                        return;
-                    }
-                }
-            }
-        }));
-        Ok(())
-    }
-
-    fn emit(&self, instance: &str, session: Option<&SessionRef>, event: Normalized) {
-        let mut state = self.lock();
-        if let (Some(session), Normalized::TurnEnded { stop_reason }) = (session, &event)
-            && let Some(last) = session_id(session).ok().and_then(|id| state.sessions.get_mut(&id))
-            && let Some(prompt) = last.prompts.last_mut()
-        {
-            prompt.1 |= *stop_reason == StopReason::Completed;
-            last.in_turn = false;
-        }
-        if let Some(i) = state.instances.get_mut(instance).filter(|i| i.alive) {
-            i.seq += 1;
-            let _ = i.sink.send(DriverEvent {
-                instance: instance.to_owned(),
-                session: session.cloned(),
-                seq: i.seq,
-                event,
-            });
-        }
-    }
-
-    fn exit(&self, instance: &str, code: Option<i32>, signal: Option<i32>) {
-        self.emit(instance, None, Normalized::Exited { code, signal });
-        let mut state = self.lock();
-        if let Some(i) = state.instances.get_mut(instance) {
-            i.alive = false;
-        }
-        for session in state.sessions.values_mut().filter(|s| s.instance == instance) {
-            if let Some(playing) = session.playing.take() {
-                playing.abort();
-            }
-        }
-    }
-}
-
-fn session_id(session: &SessionRef) -> Result<u64, Failure> {
-    session.0["session"]
-        .as_u64()
-        .ok_or_else(|| Failure::new(FailureKind::TranscriptDivergence, Source::Adapter))
 }
 
 fn ready<'a, T: Send + 'a>(value: T) -> BoxFuture<'a, T> {
@@ -271,6 +191,9 @@ impl Driver for ScriptedDriver {
         _session: &'a SessionPart,
     ) -> BoxFuture<'a, Result<SessionRef, Failure>> {
         let mut state = self.lock();
+        if state.stalled {
+            return Box::pin(std::future::pending());
+        }
         if !state.instances.get(&instance.id).is_some_and(|i| i.alive) {
             return ready(Err(Failure::new(FailureKind::HarnessCrash, Source::Adapter)));
         }

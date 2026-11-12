@@ -179,7 +179,8 @@ async fn pump(from: Option<impl AsyncRead + Unpin>, keep: usize, into: Shared) {
 }
 
 /// The process `pid` that started at `start_time` (field 22 of `/proc/<pid>/stat`) still runs; a zombie does not.
-// shortcut: Linux only (`/proc`); elsewhere every process reads as gone — macOS is out of the first release (§1.1).
+// shortcut: Linux only (`/proc`); elsewhere every process reads as gone — macOS ships but is not checked in the
+// first release (§1.1).
 fn alive(pid: i32, start_time: u64) -> bool {
     let Ok(stat) = std::fs::read_to_string(format!("/proc/{pid}/stat")) else {
         return false;

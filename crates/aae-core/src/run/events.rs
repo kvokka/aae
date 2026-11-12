@@ -108,9 +108,10 @@ impl RunHandler {
             .iter()
             .filter(|(_, _, s)| wide || (session.is_some() && *s == session))
             .collect();
-        // A session-per-process harness may report before its session is known.
+        // A session-per-process harness may report before its session is known; an attempt with a known
+        // session never takes another session's event.
         if owners.is_empty() && live.len() == 1 {
-            owners = live.iter().collect();
+            owners = live.iter().filter(|(_, _, s)| s.is_none()).collect();
         }
         for (run, attempt, _) in owners {
             self.attempt_event(tx, run, *attempt, event.event.clone())?;

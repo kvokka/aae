@@ -17,7 +17,7 @@ mod row;
 use crate::{
     clock::Clock,
     config::Config,
-    driver::{Answer, Driver, DriverEvent, Failure, InstanceHandle, SessionRef},
+    driver::{Answer, Driver, DriverEvent, Failure, InstanceHandle, Normalized, SessionRef},
     journal::Journal,
     writer::{self, CoreHandle, Error, Handler, Tx},
 };
@@ -26,7 +26,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use std::{
     collections::BTreeMap,
-    sync::{Arc, OnceLock},
+    sync::{Arc, OnceLock, PoisonError},
     time::Duration,
 };
 use tokio::{sync::mpsc, task::JoinHandle};
@@ -214,19 +214,27 @@ pub fn start(
     let drivers: Drivers = Arc::new(drivers.into_iter().map(|d| (d.harness().to_owned(), d)).collect());
     let core = Arc::new(OnceLock::new());
     let (sink, mut events) = mpsc::unbounded_channel();
+    let starts = exec::Starts::default();
     let executor = exec::RunExecutor {
         drivers: drivers.clone(),
         core: core.clone(),
         sink,
         hooks,
         running: exec_step::Running::default(),
-        starts: exec::Starts::default(),
+        starts: starts.clone(),
     };
     let (handle, task) = writer::start(conn, clock, RunHandler { config, drivers }, executor, journal);
     let _ = core.set(handle.clone());
     let forward = handle.clone();
     tokio::spawn(async move {
         while let Some(event) = events.recv().await {
+            // A dead process is never started again: its record goes (`instance_failed`) or is stopping.
+            if matches!(event.event, Normalized::Exited { .. }) {
+                starts
+                    .lock()
+                    .unwrap_or_else(PoisonError::into_inner)
+                    .remove(&event.instance);
+            }
             if forward.send(None, Msg::Driver(event)).await.is_err() {
                 return;
             }

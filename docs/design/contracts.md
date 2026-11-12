@@ -572,7 +572,9 @@ of a run whose gate the operator closed parks it instead (invariant 18).
   after `instance_idle` (`<id>:idle` deadline; 0 — at once; a new session in that time takes it again). Stop:
   state `stopping`, then the effect; when it is done the record goes and `instance.stopped` is emitted. An
   `exited` event of an instance not `stopping` is a crash: `instance.failed`, the record goes, and the event fails
-  every live attempt on the instance (an event with a session goes to that session's attempt only).
+  every live attempt on the instance (an event with a session goes to that session's attempt only; the one
+  exception is the only live attempt on an instance whose session is not known yet, which gets it — a process
+  that reports before its session is recorded).
 - Confirmed death (invariant 6): a launch first waits until the instances still `stopping` that served its run (or
   the run it continues) are gone by pid + start time (`/proc/<pid>/stat`), up to 30 s; past that the attempt
   fails with `unknown`.

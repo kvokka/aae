@@ -5,12 +5,12 @@ mod common;
 
 use aae_core::{
     Journal,
-    driver::Normalized,
+    driver::{DriverEvent, Failure, FailureKind, Normalized, SessionRef, Source},
     run::{Create, Msg},
 };
 use aae_testkit::{ScriptedDriver, Step};
 use common::{World, world_driven};
-use serde_json::Value;
+use serde_json::{Value, json};
 use std::time::Duration;
 
 /// Two rigs and two agents: `dev` and `same` share a process part, `other` has its own.
@@ -71,6 +71,21 @@ impl World {
         };
         self.core.send(None, msg).await.unwrap();
     }
+
+    /// A crash of session `session` reported on the first instance.
+    async fn crash(&self, session: u64) {
+        let event = DriverEvent {
+            instance: self.instance_events()[0].1.clone(),
+            session: Some(SessionRef(json!({ "session": session }))),
+            seq: 1_000,
+            event: Normalized::Failure(Failure::new(FailureKind::HarnessCrash, Source::Adapter)),
+        };
+        self.core.send(None, Msg::Driver(event)).await.unwrap();
+    }
+}
+
+fn failed(events: &[(String, Value)]) -> bool {
+    events.iter().any(|(t, _)| t == "run.attempt_failed")
 }
 
 fn id(data: &Value) -> String {
@@ -147,4 +162,26 @@ async fn a_shared_instance_that_dies_fails_every_attempt_on_it() {
         1,
         "{failed:?}"
     );
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_late_event_of_another_session_leaves_the_live_attempt_alone() {
+    let w = world_driven(FILES, ScriptedDriver::new(2));
+    let (one, two) = two_running(&w, "same").await;
+    w.cancel(&one).await;
+    tokio::time::sleep(Duration::from_secs(1)).await;
+    // The cancelled thread reports late; only `two` lives on the shared instance.
+    w.crash(424_242).await;
+    assert!(!failed(&w.events(&two, Duration::from_secs(1)).await));
+}
+
+#[tokio::test(start_paused = true)]
+async fn an_event_before_the_session_is_known_reaches_the_only_attempt() {
+    let w = world_driven(FILES, ScriptedDriver::new(1));
+    w.driver.stall_sessions();
+    let run = w.start("web", "build").await;
+    tokio::time::sleep(Duration::from_secs(1)).await;
+    w.crash(7).await;
+    let events = w.events(&run, Duration::from_secs(1)).await;
+    assert!(failed(&events), "{events:?}");
 }
