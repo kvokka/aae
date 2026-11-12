@@ -224,6 +224,40 @@ async fn the_orchestrator_and_the_agent_limit_started_runs() {
 }
 
 #[tokio::test(start_paused = true)]
+async fn a_run_continues_the_session_of_a_finished_run_only_when_asked() {
+    let w = world(&[]);
+    let mut slow = hollow_turn();
+    slow.insert(1, Step::Wait(Duration::from_secs(10)));
+    w.driver.script(slow);
+    let first = w.create().await;
+    let create = |from: &str| Create {
+        project: "shop".into(),
+        rig: "web".into(),
+        formula: "build".into(),
+        inputs: serde_json::Map::new(),
+        correlation: None,
+        depth: 0,
+        parent_run: None,
+        continue_from: Some(from.into()),
+    };
+    let early = w.core.send(None, Msg::Create(create(&first))).await;
+    assert!(matches!(early, Err(Error::Rejected(_))), "still running");
+    w.events(&first, Duration::from_secs(11)).await;
+    let nobody = w.core.send(None, Msg::Create(create("run_99"))).await;
+    assert!(matches!(nobody, Err(Error::Rejected(_))));
+    w.driver.script(hollow_turn());
+    let reply = w.core.send(None, Msg::Create(create(&first))).await.unwrap();
+    let events = w
+        .events(reply["run"].as_str().unwrap(), Duration::from_millis(200))
+        .await;
+    let attempts = &last(&events, "run.turn_ended_without_outcome")["attempts"];
+    assert_eq!(attempts[0]["kind"], "resume");
+    let plain = w.create().await;
+    let events = w.events(&plain, Duration::from_millis(200)).await;
+    assert_eq!(last(&events, "run.started")["run"]["id"], plain.as_str());
+}
+
+#[tokio::test(start_paused = true)]
 async fn a_run_must_name_a_runnable_formula_with_its_inputs() {
     let w = world(&[]);
     let create = |formula: &str, inputs: Value| Create {
@@ -234,6 +268,7 @@ async fn a_run_must_name_a_runnable_formula_with_its_inputs() {
         correlation: None,
         depth: 0,
         parent_run: None,
+        continue_from: None,
     };
     for (formula, inputs) in [("nope", json!({})), ("build", json!({ "extra": 1 }))] {
         let sent = w.core.send(None, Msg::Create(create(formula, inputs))).await;

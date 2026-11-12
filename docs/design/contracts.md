@@ -284,7 +284,7 @@ trait Driver: Send + Sync {
     fn send_prompt(&self, instance: &InstanceHandle, session: &SessionRef, text: &str, key: PromptKey) -> BoxFuture<Result<(), Failure>>;
     fn cancel_turn(&self, instance: &InstanceHandle, session: &SessionRef) -> BoxFuture<Result<(), Failure>>;
     fn respond(&self, instance: &InstanceHandle, session: &SessionRef, request_id: &str, answer: &Answer) -> BoxFuture<Result<(), Failure>>;
-    fn close_session(&self, instance: &InstanceHandle, session: &SessionRef) -> BoxFuture<()>;
+    fn close_session(&self, instance: &InstanceHandle, session: &SessionRef) -> BoxFuture<()>; // transcript stays
 
     // transcript
     fn transcript(&self, instance: &InstanceHandle, session: &SessionRef, key: PromptKey) -> BoxFuture<Result<Transcript, Failure>>;
@@ -464,6 +464,7 @@ to the next prompt) the step `timeout` pauses like in `requires_action`. Trigger
 | From | On | To | Effects after commit |
 |---|---|---|---|
 | — | create (API, CLI, MCP, trigger) with an idempotency key | `queued` | — |
+| — | create with `continue_from: <run>` (a terminal run with a session; never implicit, §9.3) | `queued` | the first attempt resumes that run's last session with the formula prompt; a later `resume` uses the run's own session, or that one while it has none; a harness other than the agent's → `failed{infrastructure}` |
 | `queued` | slot free, workdir free, no gate of the run closed | `preparing` | bead claim (the ownership record and generation are written in this transaction, invariant 3); `run.preparing` hooks |
 | `preparing` | decision `proceed` (or no hooks) | `starting` | attempt 1: instance acquire, `start_session`, `send_prompt` (prompt step) or spawn (exec step) |
 | `preparing` | `deny`, template error, claim error `Claimed` | `failed{check}`, `failed{infrastructure}`, `failed{infrastructure, bead_claimed}` | — |

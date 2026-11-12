@@ -348,9 +348,13 @@ impl Driver for ScriptedDriver {
     }
 
     fn close_session<'a>(&'a self, _instance: &'a InstanceHandle, session: &'a SessionRef) -> BoxFuture<'a, ()> {
-        let removed = session_id(session).ok().and_then(|id| self.lock().sessions.remove(&id));
-        if let Some(playing) = removed.and_then(|s| s.playing) {
-            playing.abort();
+        // Closing detaches the session from its process; the transcript stays resumable, like a harness's does.
+        let mut state = self.lock();
+        if let Some(s) = session_id(session).ok().and_then(|id| state.sessions.get_mut(&id)) {
+            s.instance.clear();
+            if let Some(playing) = s.playing.take() {
+                playing.abort();
+            }
         }
         ready(())
     }

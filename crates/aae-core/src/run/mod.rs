@@ -6,6 +6,7 @@ mod events;
 mod exec;
 mod finish;
 mod machine;
+mod queue;
 mod row;
 
 use crate::{
@@ -104,6 +105,8 @@ pub struct Create {
     pub correlation: Option<String>,
     pub depth: u32,
     pub parent_run: Option<String>,
+    /// A terminal run whose last session this run continues (spec §9.3); never implicit.
+    pub continue_from: Option<String>,
 }
 
 /// The decisions of contracts 3.2 the run machine applies.

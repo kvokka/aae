@@ -86,6 +86,7 @@ impl World {
             correlation: None,
             depth: 0,
             parent_run: None,
+            continue_from: None,
         };
         let reply = self.core.send(None, Msg::Create(create)).await.unwrap();
         reply["run"].as_str().unwrap().to_owned()

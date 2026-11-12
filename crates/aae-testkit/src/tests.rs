@@ -317,7 +317,7 @@ async fn background_work_and_events_outside_a_turn() {
 }
 
 #[tokio::test]
-async fn unknown_sessions_have_no_transcript_and_cannot_resume() {
+async fn unknown_sessions_have_no_transcript_and_closed_ones_resume() {
     let s = setup().await;
     // The core holds drivers as trait objects.
     let driver: &dyn Driver = &s.driver;
@@ -331,7 +331,16 @@ async fn unknown_sessions_have_no_transcript_and_cannot_resume() {
         .unwrap_err();
     assert_eq!(err.kind, FailureKind::TranscriptDivergence);
     driver.close_session(&s.instance, &s.session).await;
-    assert_eq!(s.transcript(1).await, Transcript::Missing);
+    let closed = s.transcript(1).await;
+    assert_eq!(
+        closed,
+        Transcript::Present {
+            prompt: PromptState::Absent
+        },
+        "a closed session keeps its transcript"
+    );
+    let part = SessionPart(Value::Null);
+    s.driver.resume_session(&s.instance, &s.session, &part).await.unwrap();
 }
 
 #[test]

@@ -1,8 +1,8 @@
-//! The run states and transitions of docs/design/contracts.md 6.1–6.2 that do not come from a harness: creation,
-//! the queue, preparation, attempts and the terminal states.
+//! The run states and transitions of docs/design/contracts.md 6.1–6.2 that do not come from a harness:
+//! preparation, attempts and the terminal states.
 
 use super::{
-    Create, RunHandler, rejected,
+    RunHandler,
     row::{Row, attempts},
 };
 use crate::{
@@ -23,136 +23,7 @@ const RECONCILE: &str =
     "Your previous turn was interrupted. Check the current state of the work and continue toward the goal.";
 
 impl RunHandler {
-    pub(super) fn create(&mut self, tx: &mut Tx<'_>, c: Create) -> Result<Value, Error> {
-        let project = self.config.projects.iter().find(|p| p.name == c.project);
-        let project = project.ok_or_else(|| rejected(format!("no project `{}`", c.project)))?;
-        let rig = project.rigs.get(&c.rig);
-        let rig = rig.ok_or_else(|| rejected(format!("no rig `{}` in `{}`", c.rig, c.project)))?;
-        let (name, formula) = project.formula(&c.formula).map_err(rejected)?;
-        let Step::Prompt { agent, .. } = &formula.step else {
-            return Err(rejected(format!(
-                "`{name}` is an exec step; exec steps are not run yet"
-            )));
-        };
-        if let Some(extra) = c.inputs.keys().find(|k| !formula.inputs.contains_key(*k)) {
-            return Err(rejected(format!("`{name}` has no input `{extra}`")));
-        }
-        let missing = formula
-            .inputs
-            .iter()
-            .find(|(k, i)| i.required && !c.inputs.contains_key(*k));
-        if let Some((key, _)) = missing {
-            return Err(rejected(format!("`{name}` needs input `{key}`")));
-        }
-        let n: i64 = tx
-            .sql()
-            .query_row("SELECT COALESCE(MAX(n), 0) + 1 FROM runs", [], |r| r.get(0))?;
-        let id = format!("run_{n}");
-        let correlation = c.correlation.unwrap_or_else(|| format!("cor_{n}"));
-        tx.sql().execute(
-            "INSERT INTO runs (n, id, project, rig, formula, agent, inputs, correlation, depth, parent_run, \
-             workdir, state, created_ms) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, 'queued', ?12)",
-            params![
-                n,
-                id,
-                c.project,
-                c.rig,
-                name.to_string(),
-                agent.to_string(),
-                Value::Object(c.inputs).to_string(),
-                correlation,
-                c.depth,
-                c.parent_run,
-                rig.path.to_string_lossy(),
-                tx.now_ms()
-            ],
-        )?;
-        let row = Row::load(tx, &id)?;
-        let waiting = self.blocker(tx, &row)?;
-        Self::queued(tx, &row, waiting, true)?;
-        tx.set_deadline(&row.deadline("state"), tx.now_ms() + QUEUE_TIMEOUT_MS)?;
-        self.schedule(tx)?;
-        Ok(json!({ "run": id }))
-    }
-
-    /// A workdir holds one live started run (spec §9.3).
-    fn workdir_busy(tx: &Tx<'_>, row: &Row) -> Result<bool, Error> {
-        let busy = tx.sql().query_row(
-            "SELECT EXISTS (SELECT 1 FROM runs WHERE workdir = ?1 AND id != ?2 \
-             AND state NOT IN ('queued', 'passed', 'failed', 'cancelled'))",
-            params![row.workdir, row.id],
-            |r| r.get(0),
-        )?;
-        Ok(busy)
-    }
-
-    /// Why a queued run cannot start yet, `None` when it can: its workdir is busy, or the orchestrator or its agent
-    /// has as many started runs as allowed (spec §9.3; a parked run has no process and holds no slot).
-    fn blocker(&self, tx: &Tx<'_>, row: &Row) -> Result<Option<&'static str>, Error> {
-        if Self::workdir_busy(tx, row)? {
-            return Ok(Some("workdir"));
-        }
-        let started = "state NOT IN ('queued', 'parked', 'passed', 'failed', 'cancelled')";
-        let all: u32 = tx
-            .sql()
-            .query_row(&format!("SELECT COUNT(*) FROM runs WHERE {started}"), [], |r| r.get(0))?;
-        let agent: u32 = tx.sql().query_row(
-            &format!("SELECT COUNT(*) FROM runs WHERE project = ?1 AND agent = ?2 AND {started}"),
-            params![row.project, row.agent],
-            |r| r.get(0),
-        )?;
-        let project = self.config.projects.iter().find(|p| p.name == row.project);
-        let limit = project.into_iter().flat_map(|p| &p.packs).find_map(|pack| {
-            let mut agents = pack.agents.iter();
-            agents
-                .find(|(n, _)| format!("{}.{n}", pack.name) == row.agent)?
-                .1
-                .max_runs
-        });
-        let full = all >= self.config.max_runs || limit.is_some_and(|l| agent >= l);
-        Ok(full.then_some("concurrency"))
-    }
-
-    /// Emits `run.queued` on creation (`first`) and whenever the reason the run waits for changes.
-    fn queued(tx: &mut Tx<'_>, row: &Row, waiting: Option<&str>, first: bool) -> Result<(), Error> {
-        let changed = tx.sql().execute(
-            "UPDATE runs SET waiting_for = ?2 WHERE id = ?1 AND waiting_for IS NOT ?2",
-            params![row.id, waiting],
-        )?;
-        if changed == 0 && !first {
-            return Ok(());
-        }
-        row.emit(
-            tx,
-            "run.queued",
-            json!({ "run": row.view(), "waiting_for": waiting, "gate": null }),
-        )
-        .map(drop)
-    }
-
-    /// Starts every queued run that may start, oldest first.
-    pub(super) fn schedule(&mut self, tx: &mut Tx<'_>) -> Result<(), Error> {
-        let queued: Vec<String> = {
-            let mut stmt = tx
-                .sql()
-                .prepare("SELECT id FROM runs WHERE state = 'queued' ORDER BY n")?;
-            stmt.query_map([], |r| r.get(0))?.collect::<Result<_, _>>()?
-        };
-        for id in queued {
-            let row = Row::load(tx, &id)?;
-            // A run started meanwhile by a nested schedule (a terminal state during preparation) is not queued.
-            if row.state != "queued" {
-                continue;
-            }
-            match self.blocker(tx, &row)? {
-                None => self.prepare(tx, row)?,
-                waiting => Self::queued(tx, &row, waiting, false)?,
-            }
-        }
-        Ok(())
-    }
-
-    fn prepare(&mut self, tx: &mut Tx<'_>, mut row: Row) -> Result<(), Error> {
+    pub(super) fn prepare(&mut self, tx: &mut Tx<'_>, mut row: Row) -> Result<(), Error> {
         tx.clear_deadline(&row.deadline("state"))?;
         row.started_ms = Some(tx.now_ms());
         tx.sql().execute(
@@ -221,17 +92,32 @@ impl RunHandler {
             let reason = format!("no driver for harness `{}`", config.harness);
             return self.terminal(tx, row, "failed", Some("infrastructure"), &reason);
         };
-        let previous: Option<String> = tx
-            .sql()
-            .query_row(
-                "SELECT session FROM attempts WHERE run = ?1 AND session IS NOT NULL ORDER BY n DESC LIMIT 1",
-                [&row.id],
-                |r| r.get(0),
-            )
-            .optional()?;
-        let resume = previous
-            .filter(|_| kind == "resume")
-            .and_then(|s| serde_json::from_str::<SessionRef>(&s).ok());
+        let last_session = |tx: &Tx<'_>, run: &str| {
+            tx.sql()
+                .query_row(
+                    "SELECT session, harness FROM attempts WHERE run = ?1 AND session IS NOT NULL ORDER BY n DESC LIMIT 1",
+                    [run],
+                    |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?)),
+                )
+                .optional()
+        };
+        let own = last_session(tx, &row.id)?;
+        // A run that continues the session of another run (spec §9.3) starts there, and resumes there while it has
+        // no session of its own.
+        let from: Option<String> =
+            tx.sql()
+                .query_row("SELECT continue_from FROM runs WHERE id = ?1", [&row.id], |r| r.get(0))?;
+        let from = from.map(|f| last_session(tx, &f)).transpose()?.flatten();
+        if let Some((_, harness)) = from.as_ref().filter(|(_, h)| *h != config.harness) {
+            let reason = format!("the continued session is of harness `{harness}`");
+            return self.terminal(tx, row, "failed", Some("infrastructure"), &reason);
+        }
+        let session = match (row.attempt, kind) {
+            (0, _) => from,
+            (_, "resume") => own.or(from),
+            _ => None,
+        };
+        let resume = session.and_then(|(s, _)| serde_json::from_str::<SessionRef>(&s).ok());
         let Some(token) = super::new_token() else {
             return self.terminal(
                 tx,
@@ -281,8 +167,8 @@ impl RunHandler {
             Err(failure) => return self.attempt_failed(tx, row, failure),
         };
         let prompt = match resume {
-            Some(_) => RECONCILE.to_owned(),
-            None => row.prompt.clone().unwrap_or_default(),
+            Some(_) if row.attempt > 1 => RECONCILE.to_owned(),
+            _ => row.prompt.clone().unwrap_or_default(),
         };
         let payload = json!({
             "op": "launch", "run": row.id, "attempt": row.attempt, "harness": config.harness,
