@@ -16,10 +16,15 @@ impl RunHandler {
         let rig = project.rigs.get(&c.rig);
         let rig = rig.ok_or_else(|| rejected(format!("no rig `{}` in `{}`", c.rig, c.project)))?;
         let (name, formula) = project.formula(&c.formula).map_err(rejected)?;
-        let Step::Prompt { agent, .. } = &formula.step else {
-            return Err(rejected(format!(
-                "`{name}` is an exec step; exec steps are not run yet"
-            )));
+        // An exec step has no agent; the runs table keeps it as an empty name.
+        let agent = match &formula.step {
+            Step::Prompt { agent, .. } => agent.to_string(),
+            Step::Exec { .. } if c.continue_from.is_some() => {
+                return Err(rejected(format!(
+                    "`{name}` is an exec step: it has no session to continue"
+                )));
+            }
+            Step::Exec { .. } => String::new(),
         };
         if let Some(extra) = c.inputs.keys().find(|k| !formula.inputs.contains_key(*k)) {
             return Err(rejected(format!("`{name}` has no input `{extra}`")));
@@ -65,7 +70,7 @@ impl RunHandler {
                 c.project,
                 c.rig,
                 name.to_string(),
-                agent.to_string(),
+                agent,
                 Value::Object(c.inputs).to_string(),
                 correlation,
                 c.depth,

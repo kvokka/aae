@@ -4,6 +4,7 @@
 mod decide;
 mod events;
 mod exec;
+mod exec_step;
 mod finish;
 mod hooks;
 mod machine;
@@ -29,6 +30,7 @@ use tokio::{sync::mpsc, task::JoinHandle};
 
 /// Ceiling of the core: attempts per run (invariant 16).
 pub const MAX_ATTEMPTS: u32 = 20;
+pub use crate::process::Exit;
 pub use finish::MAX_REMARKS;
 pub use hooks::{ExecHooks, HookRunner};
 
@@ -73,6 +75,14 @@ pub enum Msg {
         failure: Failure,
     },
     Driver(DriverEvent),
+    /// The command of an exec step ended; `stdout` and `stderr` are their last 4 KiB.
+    ExecDone {
+        run: String,
+        attempt: u32,
+        exit: Exit,
+        stdout: String,
+        stderr: String,
+    },
     /// A hook on `event` failed: the core reports it as `plugin.hook_failed` with `data` (contracts 1.3).
     HookFailed {
         event: Value,
@@ -173,6 +183,7 @@ pub fn start(
         core: core.clone(),
         sink,
         hooks,
+        running: exec_step::Running::default(),
     };
     let (handle, task) = writer::start(conn, clock, RunHandler { config, drivers }, executor, journal);
     let _ = core.set(handle.clone());
@@ -206,6 +217,13 @@ impl Handler for RunHandler {
             Msg::Session { run, attempt, session } => self.session(tx, &run, attempt, &session),
             Msg::AttemptFailed { run, attempt, failure } => self.launch_failed(tx, &run, attempt, failure),
             Msg::Driver(event) => self.driver_event(tx, event),
+            Msg::ExecDone {
+                run,
+                attempt,
+                exit,
+                stdout,
+                stderr,
+            } => self.exec_done(tx, &run, attempt, exit, &stdout, &stderr),
             Msg::HookFailed { event, data } => Self::hook_failed(tx, &event, data),
         }?;
         Ok(Value::Null)

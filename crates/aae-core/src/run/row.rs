@@ -70,9 +70,19 @@ impl Row {
     }
 
     /// `RunView` of contracts 1.3; the generation is the attempt number until bead ownership (WP-19) needs more.
+    /// A run of an exec step: it has no agent.
+    pub(super) fn exec(&self) -> bool {
+        self.agent.is_empty()
+    }
+
     pub(super) fn view(&self) -> Value {
+        let (agent, step_kind) = if self.exec() {
+            (None, "exec")
+        } else {
+            (Some(&self.agent), "prompt")
+        };
         json!({
-            "id": self.id, "formula": self.formula, "agent": self.agent, "step_kind": "prompt",
+            "id": self.id, "formula": self.formula, "agent": agent, "step_kind": step_kind,
             "state": self.state, "class": self.class, "attempt": self.attempt, "generation": self.attempt,
             "bead": null, "workdir": self.workdir, "depth": self.depth, "parent_run": self.parent_run,
             "created_at": rfc3339_ms(self.created_ms), "started_at": self.started_ms.map(rfc3339_ms),

@@ -473,12 +473,14 @@ to the next prompt) the step `timeout` pauses like in `requires_action`. Trigger
 | `queued` | slot free, workdir free, no gate of the run closed | `preparing` | bead claim (the ownership record and generation are written in this transaction, invariant 3); `run.preparing` hooks |
 | `preparing` | decision `proceed` (or no hooks) | `starting` | attempt 1: instance acquire, `start_session`, `send_prompt` (prompt step) or spawn (exec step) |
 | `preparing` | `deny`, template error, claim error `Claimed` | `failed{check}`, `failed{infrastructure}`, `failed{infrastructure, bead_claimed}` | — |
-| `starting` | `prompt.acked` of the first prompt (exec: spawn succeeded) | `running` | — |
+| `starting` | `prompt.acked` of the first prompt | `running` | — |
 | `running` | `permission.requested` | `requires_action` | `run.requires_action` hooks |
 | `requires_action` | answer from a hook or a human, or `human_timeout` | `running` | `respond` |
 | `running` | turn ended, idle without background, outcome declared | `finishing` | `run.finishing` hooks |
 | `running` | turn ended, idle without background, no outcome | `running` | `run.turn_ended_without_outcome` hooks; `continue` → next prompt in the same attempt; `fail` or no decision → `failed{hollow_done}` (with the hook reason for `fail`) |
-| `running` (exec) | exit 0 / other code | `finishing` with outcome `pass` / `fail` | `run.finishing` hooks |
+| `preparing` (exec) | decision `proceed` (or no hooks) | `running` (no session to start: the command is spawned at once) | the command runs in the workdir with `PATH`, `HOME`, `LANG` of the daemon and the `env` of `run.preparing` |
+| `running` (exec) | exit 0 / other code or a signal | `finishing` with outcome `pass` / `fail`, `summary` `exit <code>`, `data` `{exit_code, stdout, stderr}` (last 4 KiB each) | `run.finishing` hooks |
+| `running` (exec) | exit 75 / timeout / spawn error | `interrupted` with failure `unknown` (`text` `exit 75 (EX_TEMPFAIL)`, scope `run`) / `runaway_turn` / `workspace_failure` | `run.attempt_failed` hooks; every attempt runs the command again |
 | `starting`, `running`, `requires_action` | `failure`, `exited`, deadline, exec exit 75 | `interrupted` | stop the session (cancel, then stop the instance if it is the session's own, then sweep descendants); `run.attempt_failed` hooks |
 | `finishing` | accept / veto / remark | `passed` or `failed{agent}` / `failed{check}` / `running` | bead close or conditional release; on remark the message goes as the next prompt of the same attempt, the declared outcome is cleared, the token stays valid. A remark for an exec step is not allowed (hook failure) |
 | `interrupted` | `resume` / `new_session` | `starting` after `after` | new attempt: `generation + 1`, new token; `resume` first checks the transcript (invariant 17), `Missing` → attempt failure `transcript_divergence` |

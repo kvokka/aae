@@ -6,7 +6,7 @@ use super::{
     row::{Row, attempts},
 };
 use crate::{
-    config::{EffectiveConfig, Sourced, Step},
+    config::{Sourced, Step},
     driver::{Failure, PromptKey, SessionPlan, SessionRef},
     journal::rfc3339_ms,
     writer::{Error, Tx},
@@ -37,14 +37,14 @@ impl RunHandler {
             Ok(p) => p,
             Err(reason) => return self.terminal(tx, row, "failed", Some("infrastructure"), &reason),
         };
-        let env_keys: Vec<&String> = config.env.keys().collect();
+        let env_keys: Vec<&String> = config["env"].as_object().into_iter().flat_map(|e| e.keys()).collect();
         let data = json!({ "run": row.view(), "workdir": row.workdir, "env_keys": env_keys, "prompt_append": null });
         tx.sql().execute(
             "UPDATE runs SET prompt = ?2, timeout_ms = ?3, config = ?4 WHERE id = ?1",
-            params![row.id, prompt, timeout_ms, json!(config).to_string()],
+            params![row.id, prompt, timeout_ms, config.to_string()],
         )?;
-        row.config = Some(json!(config).to_string());
-        row.prompt = Some(prompt);
+        row.config = Some(config.to_string());
+        row.prompt = prompt;
         row.timeout_ms = Some(timeout_ms);
         self.deciding(tx, row, "run.preparing", data)
     }
@@ -61,18 +61,21 @@ impl RunHandler {
         if let Some(dir) = workdir {
             row.workdir = dir.to_string_lossy().into_owned();
         }
-        if let Some(text) = prompt_append {
-            row.prompt = Some(format!("{}\n\n{text}", row.prompt.unwrap_or_default()));
+        // An exec step has no prompt to append to.
+        if let (Some(text), Some(prompt)) = (prompt_append, &row.prompt) {
+            row.prompt = Some(format!("{prompt}\n\n{text}"));
         }
-        let config = row.config.as_deref().map(serde_json::from_str::<EffectiveConfig>);
+        let config = row.config.as_deref().map(serde_json::from_str::<Value>);
         if let (Some(Ok(mut config)), false) = (config, env.is_empty()) {
-            for (name, value) in env {
-                match value {
-                    Some(value) => config.env.insert(name, value),
-                    None => config.env.remove(&name),
-                };
+            if let Some(vars) = config["env"].as_object_mut() {
+                for (name, value) in env {
+                    match value {
+                        Some(value) => vars.insert(name, json!(value)),
+                        None => vars.remove(&name),
+                    };
+                }
             }
-            row.config = Some(json!(config).to_string());
+            row.config = Some(config.to_string());
         }
         tx.sql().execute(
             "UPDATE runs SET workdir = ?2, prompt = ?3, config = ?4 WHERE id = ?1",
@@ -81,8 +84,9 @@ impl RunHandler {
         self.start_attempt(tx, row, "new_session")
     }
 
-    /// The prompt, the step timeout and the effective config of a run, from the config of now.
-    fn render(&self, row: &Row) -> Result<(String, i64, crate::config::EffectiveConfig), String> {
+    /// The prompt, the step timeout and the config snapshot of a run, from the config of now: the effective config
+    /// of a prompt step; `{"command", "env"}` of an exec step.
+    fn render(&self, row: &Row) -> Result<(Option<String>, i64, Value), String> {
         let project = self.config.projects.iter().find(|p| p.name == row.project);
         let project = project.ok_or(format!("project `{}` is gone from the config", row.project))?;
         let rig = project
@@ -90,8 +94,15 @@ impl RunHandler {
             .get(&row.rig)
             .ok_or(format!("rig `{}` is gone from the config", row.rig))?;
         let (_, formula) = project.formula(&row.formula)?;
-        let Step::Prompt { agent, prompt, timeout } = &formula.step else {
-            return Err(format!("`{}` is no longer a prompt step", row.formula));
+        let timeout_ms = |t: &Option<std::time::Duration>| {
+            t.map_or(STEP_TIMEOUT_MS, |t| i64::try_from(t.as_millis()).unwrap_or(i64::MAX))
+        };
+        let (agent, prompt, timeout) = match (&formula.step, row.exec()) {
+            (Step::Exec { command, timeout }, true) => {
+                return Ok((None, timeout_ms(timeout), json!({ "command": command, "env": {} })));
+            }
+            (Step::Prompt { agent, prompt, timeout }, false) => (agent, prompt, timeout),
+            _ => return Err(format!("`{}` changed its step kind", row.formula)),
         };
         if agent.to_string() != row.agent {
             return Err(format!("`{}` now names agent `{agent}`", row.formula));
@@ -107,12 +118,14 @@ impl RunHandler {
             "project": { "name": project.name, "path": project.root },
         });
         let text = prompt.render(&context).map_err(|e| format!("prompt: {e}"))?;
-        let timeout_ms = timeout.map_or(STEP_TIMEOUT_MS, |t| i64::try_from(t.as_millis()).unwrap_or(i64::MAX));
-        Ok((text, timeout_ms, config))
+        Ok((Some(text), timeout_ms(timeout), json!(config)))
     }
 
     /// A new attempt (contracts 6.2): a new or resumed session on an instance of its own, then the prompt.
     pub(super) fn start_attempt(&mut self, tx: &mut Tx<'_>, mut row: Row, kind: &str) -> Result<(), Error> {
+        if row.exec() {
+            return self.start_exec(tx, row);
+        }
         let config = row
             .config
             .as_deref()
@@ -250,6 +263,13 @@ impl RunHandler {
         let Some((harness, handle, session)) = live else {
             return Ok(());
         };
+        if row.exec() {
+            tx.effect(
+                &row.id,
+                &format!("stop:{}", row.attempt),
+                &json!({ "op": "stop_exec", "run": row.id }),
+            )?;
+        }
         tx.sql().execute(
             "UPDATE attempts SET ended_ms = ?3, failure = ?4 WHERE run = ?1 AND n = ?2",
             params![row.id, row.attempt, tx.now_ms(), failure.map(Value::to_string)],

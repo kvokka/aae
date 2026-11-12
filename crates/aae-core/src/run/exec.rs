@@ -24,6 +24,7 @@ pub(super) struct RunExecutor {
     pub core: Arc<OnceLock<CoreHandle<Msg>>>,
     pub sink: EventSink,
     pub hooks: Arc<dyn super::HookRunner>,
+    pub running: super::exec_step::Running,
 }
 
 impl Executor for RunExecutor {
@@ -31,8 +32,17 @@ impl Executor for RunExecutor {
     fn execute<'a>(&'a self, _key: &'a str, payload: &'a Value) -> BoxFuture<'a, bool> {
         Box::pin(async move {
             let Some(core) = self.core.get() else { return true };
-            if payload["op"] == "hooks" {
-                self.hooks.run(core, payload).await;
+            match payload["op"].as_str() {
+                Some("hooks") => self.hooks.run(core, payload).await,
+                Some("exec") => {
+                    let msg = super::exec_step::run(&self.running, payload).await;
+                    // A stopped writer drops the message; recovery (WP-20) finds the attempt on restart.
+                    let _ = core.send(None, msg).await;
+                }
+                Some("stop_exec") => super::exec_step::stop(&self.running, payload["run"].as_str().unwrap_or_default()),
+                _ => {}
+            }
+            if payload["harness"].is_null() {
                 return true;
             }
             let Some(driver) = payload["harness"].as_str().and_then(|h| self.drivers.get(h)) else {
@@ -77,7 +87,7 @@ impl Executor for RunExecutor {
     }
 }
 
-fn attempt(payload: &Value) -> u32 {
+pub(super) fn attempt(payload: &Value) -> u32 {
     payload["attempt"]
         .as_u64()
         .and_then(|n| u32::try_from(n).ok())

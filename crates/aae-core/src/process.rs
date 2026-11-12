@@ -12,6 +12,7 @@ use std::{
 use tokio::{
     io::{AsyncRead, AsyncReadExt, AsyncWriteExt},
     process::Command,
+    sync::Notify,
     time::timeout,
 };
 
@@ -31,12 +32,24 @@ pub(crate) struct Spec<'a> {
     pub(crate) timeout: Duration,
     /// Bytes kept from the end of stdout and of stderr each.
     pub(crate) keep: usize,
+    /// Ends the command early, as its timeout would.
+    pub(crate) stop: Option<&'a Notify>,
 }
 
-#[derive(Debug, PartialEq, Eq)]
-pub(crate) enum Exit {
+/// What a command gets from the daemon's environment: nothing else is inherited.
+pub(crate) fn base_env() -> Vec<(String, String)> {
+    ["PATH", "HOME", "LANG"]
+        .into_iter()
+        .filter_map(|k| std::env::var(k).ok().map(|v| (k.to_owned(), v)))
+        .collect()
+}
+
+/// How a command ended.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Exit {
     Code(i32),
     Signal(i32),
+    /// The timeout passed, or the command was stopped.
     TimedOut,
     SpawnFailed(String),
 }
@@ -102,13 +115,23 @@ pub(crate) async fn run(spec: Spec<'_>) -> Output {
         };
         tokio::join!(feed, pumps.0, pumps.1);
     });
-    let exit = match timeout(spec.timeout, child.wait()).await {
-        Ok(Ok(status)) => match (status.code(), status.signal()) {
+    let stopped = async {
+        match spec.stop {
+            Some(stop) => stop.notified().await,
+            None => std::future::pending().await,
+        }
+    };
+    let waited = tokio::select! {
+        waited = timeout(spec.timeout, child.wait()) => waited.ok(),
+        () = stopped => None,
+    };
+    let exit = match waited {
+        Some(Ok(status)) => match (status.code(), status.signal()) {
             (Some(code), _) => Exit::Code(code),
             (None, signal) => Exit::Signal(signal.unwrap_or_default()),
         },
-        Ok(Err(e)) => Exit::SpawnFailed(e.to_string()),
-        Err(_) => {
+        Some(Err(e)) => Exit::SpawnFailed(e.to_string()),
+        None => {
             signal(Signal::TERM);
             if timeout(GRACE, child.wait()).await.is_err() {
                 signal(Signal::KILL);
@@ -170,6 +193,7 @@ mod tests {
             stdin,
             timeout: limit,
             keep,
+            stop: None,
         })
         .await
     }
@@ -219,6 +243,7 @@ mod tests {
             stdin: b"",
             timeout: Duration::from_secs(1),
             keep: 10,
+            stop: None,
         })
         .await;
         assert!(matches!(out.exit, Exit::SpawnFailed(_)));

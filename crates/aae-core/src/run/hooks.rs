@@ -239,10 +239,7 @@ impl Prepared {
 async fn invoke(hook: &Value, event: &Value) -> Result<Said, Failed> {
     let command: Vec<String> = serde_json::from_value(hook["command"].clone()).unwrap_or_default();
     let dir = PathBuf::from(hook["dir"].as_str().unwrap_or("/"));
-    let mut env: Vec<(String, String)> = ["PATH", "HOME", "LANG"]
-        .into_iter()
-        .filter_map(|k| std::env::var(k).ok().map(|v| (k.to_owned(), v)))
-        .collect();
+    let mut env = process::base_env();
     env.push(("AAE_PLUGIN_DIR".to_owned(), dir.to_string_lossy().into_owned()));
     let stdin = format!("{event}\n");
     let timeout = Duration::from_millis(hook["timeout_ms"].as_u64().unwrap_or(30_000));
@@ -253,6 +250,7 @@ async fn invoke(hook: &Value, event: &Value) -> Result<Said, Failed> {
         stdin: stdin.as_bytes(),
         timeout,
         keep: usize::try_from(MAX_STDOUT).unwrap_or(usize::MAX),
+        stop: None,
     })
     .await;
     let cut = out.stderr.len().saturating_sub(STDERR_TAIL);
@@ -354,6 +352,8 @@ fn parse(kind: &str, v: &Value, plugin: &str, event: &Value) -> Option<Decision>
         ("run.finishing", "veto") => Decision::Veto {
             reason: text("reason")?,
         },
+        // An exec step has no session to take a remark (contracts 6.2).
+        ("run.finishing", "remark") if event["data"]["run"]["step_kind"] == "exec" => return None,
         ("run.finishing", "remark") => Decision::Remark {
             message: text("message")?,
         },
