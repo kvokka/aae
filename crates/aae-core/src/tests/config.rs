@@ -248,6 +248,10 @@ fn triggers_are_checked_against_events_and_formulas() {
             "has no `bead.nope`",
         ),
         (
+            "name = \"t\"\non = \"run.passed\"\nwhere = { run = \"r1\" }\nrun = \"audit\"",
+            "has no `run`",
+        ),
+        (
             "name = \"t\"\non = \"bead.gone\"\nrun = \"audit\"",
             "unknown event type `bead.gone`",
         ),
@@ -330,6 +334,16 @@ fn files_reject_unknown_keys_and_undeclared_names() {
         "hook `lint` needs",
     );
     fails(&[(agent, "harness = \"claude\"\nprompt = \"role.md\"\n")], "role.md");
+    let unreadable_prompt = ("gascity/agents/reviewer/prompt.md/.keep", "");
+    fails(
+        &[
+            ("gascity/agents/reviewer/agent.toml", "harness = \"claude\"\n"),
+            unreadable_prompt,
+        ],
+        "prompt.md",
+    );
+    let slow_hook = BASE[1].1.replace("\"10s\"", "\"6m\"");
+    fails(&[("plugins/mail/plugin.toml", slow_hook.as_str())], "ceiling is 300s");
     let pack = "gascity/pack.toml";
     fails(
         &[(
@@ -346,6 +360,11 @@ fn files_reject_unknown_keys_and_undeclared_names() {
     fails(&[("shop/aae.toml", no_rig.as_str())], "is not a directory");
     let bad_override = BASE[3].1.replace("overrides.implementer", "overrides.reviewer");
     fails(&[("shop/aae.toml", bad_override.as_str())], "no agent `reviewer`");
+    let orchestrator_override = format!("{}[overrides.reviewer]\nmodel = \"opus\"\n", BASE[0].1);
+    fails(
+        &[("config.toml", orchestrator_override.as_str())],
+        "no project has agent `reviewer`",
+    );
 }
 
 #[test]
@@ -358,19 +377,4 @@ fn every_error_is_reported_with_its_file() {
     assert_eq!(errors.len(), 2, "{errors:?}");
     assert!(errors[0].file.ends_with("gascity/agents/implementer/agent.toml"));
     assert!(errors[1].file.ends_with("gascity/formulas/implement.md"));
-}
-
-#[test]
-fn event_paths_follow_the_payload_schemas() {
-    use crate::config::schema::event_path;
-    assert_eq!(event_path("bead.ready", "bead.labels"), Some(true));
-    assert_eq!(event_path("bead.ready", "bead.labels.x"), Some(false));
-    assert_eq!(event_path("bead.ready", "seq"), Some(true));
-    assert_eq!(event_path("bead.ready", "seq.x"), Some(false));
-    assert_eq!(event_path("run.passed", "run"), Some(true));
-    assert_eq!(event_path("run.passed", "run.formula"), Some(true));
-    assert_eq!(event_path("run.passed", "outcome.data.x.y"), Some(true));
-    assert_eq!(event_path("gate.opened", "rig"), Some(true));
-    assert_eq!(event_path("gate.opened", "gate"), Some(false));
-    assert_eq!(event_path("no.such", "seq"), None);
 }

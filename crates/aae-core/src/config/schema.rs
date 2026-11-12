@@ -88,7 +88,7 @@ const REQUEST: Shape = Obj(&[
     ("text", Leaf),
 ]);
 
-/// The envelope fields of the event view (contracts 1.2); `run` is a string here and a `RunView` in payloads.
+/// The envelope fields of the event view (contracts 1.2); `run` is the run id here, hidden by a `RunView` payload.
 const ENVELOPE: &[&str] = &["seq", "ts", "type", "project", "rig", "run", "correlation"];
 
 /// The `data` keys of an event type, `None` for a type that 1.3 does not define.
@@ -175,26 +175,33 @@ fn payload(event_type: &str) -> Option<&'static [(&'static str, Shape)]> {
     })
 }
 
-fn has(shape: &Shape, path: &str) -> bool {
+/// The shape at a dotted path, `None` if the path cannot exist.
+fn at<'a>(shape: &'a Shape, path: &str) -> Option<&'a Shape> {
     let mut shape = shape;
     for key in path.split('.') {
         shape = match shape {
-            Any => return true,
-            Leaf => return false,
-            Obj(fields) => match fields.iter().find(|(name, _)| *name == key) {
-                Some((_, inner)) => inner,
-                None => return false,
-            },
+            Any => return Some(&Any),
+            Leaf => return None,
+            Obj(fields) => &fields.iter().find(|(name, _)| *name == key)?.1,
         };
     }
-    true
+    Some(shape)
 }
 
-/// Whether `path` can exist in the event view of `event_type`; `None` for a type that 1.3 does not define.
-pub(crate) fn event_path(event_type: &str, path: &str) -> Option<bool> {
+fn has(shape: &Shape, path: &str) -> bool {
+    at(shape, path).is_some()
+}
+
+/// Whether `path` can exist in the event view of `event_type`; `None` for a type that 1.3 does not define. A payload
+/// key hides the envelope field of the same name, as in the view (contracts 1.2). With `matchable`, a path that ends
+/// on an object is refused too: a `where` matcher never equals an object (contracts 2.2).
+pub(crate) fn event_path(event_type: &str, path: &str, matchable: bool) -> Option<bool> {
     let data = payload(event_type)?;
     let top = path.split('.').next().unwrap_or_default();
-    Some(has(&Obj(data), path) || (path == top && ENVELOPE.contains(&top)))
+    Some(match data.iter().any(|(name, _)| *name == top) {
+        true => at(&Obj(data), path).is_some_and(|shape| !(matchable && matches!(shape, Obj(_)))),
+        false => path == top && ENVELOPE.contains(&top),
+    })
 }
 
 /// Whether `path` exists in a `Bead` (contracts 5.2).

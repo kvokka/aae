@@ -83,6 +83,34 @@ pub(super) fn project(loader: &mut Loader, project: &mut Project) {
     }
 }
 
+/// An orchestrator override must name an agent of at least one project and be ambiguous in none.
+pub(super) fn orchestrator_overrides<'a>(
+    loader: &mut Loader,
+    file: &std::path::Path,
+    keys: impl Iterator<Item = &'a String>,
+    projects: &[Project],
+) {
+    let has_agent = |p: &Pack, n: &str| p.agents.contains_key(n);
+    for key in keys {
+        let name = super::load::reference(key);
+        let found: Vec<Result<Name, String>> = projects
+            .iter()
+            .map(|p| {
+                let own = p.packs.first().map(|pack| pack.name.as_str()).unwrap_or_default();
+                resolve(&p.packs, own, &name, has_agent, "agent")
+            })
+            .collect();
+        if let Some(Err(e)) = found
+            .iter()
+            .find(|r| r.as_ref().is_err_and(|e| e.contains("ambiguous")))
+        {
+            loader.fail(file, format!("overrides: {e}"));
+        } else if !found.iter().any(Result::is_ok) {
+            loader.fail(file, format!("overrides: no project has agent `{key}`"));
+        }
+    }
+}
+
 /// A bare name resolves to the referring pack's own item first, then to the only pack that has it.
 pub(super) fn resolve(
     packs: &[Pack],

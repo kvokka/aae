@@ -42,18 +42,18 @@ impl fmt::Display for Unresolved {
     }
 }
 
-/// The event as filters and templates see it: envelope fields and the keys of `data` on one level.
+/// The event as filters and templates see it: envelope fields and the keys of `data` on one level, a `data` key hiding
+/// the envelope field of the same name (the `RunView` of `run.*` payloads hides the run id, which is its `id`).
 pub fn event_view(envelope: &Value) -> Value {
     let mut view = Map::new();
     if let Value::Object(fields) = envelope {
         for (key, value) in fields {
-            match (key.as_str(), value) {
-                ("data", Value::Object(data)) => view.extend(data.clone()),
-                ("schema", _) => {}
-                _ => {
-                    view.insert(key.clone(), value.clone());
-                }
+            if !matches!(key.as_str(), "data" | "schema") {
+                view.insert(key.clone(), value.clone());
             }
+        }
+        if let Some(Value::Object(data)) = fields.get("data") {
+            view.extend(data.clone());
         }
     }
     Value::Object(view)

@@ -131,3 +131,55 @@ fn schedule_inputs_have_no_placeholders() {
         "inputs start at `event`"
     );
 }
+
+#[test]
+fn a_loaded_where_on_the_run_view_matches_a_journal_envelope() {
+    use crate::config::Source;
+    let trigger = "name = \"t\"\non = \"run.passed\"\nwhere = { \"run.formula\" = \"implement\" }\nrun = \"audit\"";
+    let project = super::config::BASE[3].1;
+    let project = format!(
+        "{}[[trigger]]\n{trigger}\n",
+        &project[..project.find("[[trigger]]").unwrap()]
+    );
+    let config = super::config::load_with(&[("shop/aae.toml", project.as_str())]).unwrap();
+    let Source::Event { filter, .. } = &config.projects[0].packs[0].triggers[0].source else {
+        panic!("an event trigger");
+    };
+    let passed = |formula: &str| {
+        let body = json!({
+            "type": "run.passed", "project": "shop", "rig": "backend", "run": "r1", "correlation": null,
+            "data": { "run": { "id": "r1", "formula": formula }, "outcome": { "result": "pass" } }
+        });
+        crate::journal::envelope(3, 0, &body.to_string())
+    };
+    assert!(filter.matches(&event_view(&passed("implement"))));
+    assert!(!filter.matches(&event_view(&passed("audit"))));
+    assert_eq!(event_view(&passed("implement"))["run"]["id"], json!("r1"));
+}
+
+#[test]
+fn event_paths_follow_the_payload_schemas() {
+    use crate::config::schema::event_path;
+    assert_eq!(event_path("bead.ready", "bead.labels", false), Some(true));
+    assert_eq!(event_path("bead.ready", "bead.labels.x", false), Some(false));
+    assert_eq!(event_path("bead.ready", "seq", false), Some(true));
+    assert_eq!(event_path("bead.ready", "seq.x", false), Some(false));
+    assert_eq!(event_path("run.passed", "run", false), Some(true));
+    assert_eq!(event_path("run.passed", "run.formula", false), Some(true));
+    assert_eq!(event_path("run.passed", "outcome.data.x.y", false), Some(true));
+    assert_eq!(event_path("gate.opened", "rig", false), Some(true));
+    assert_eq!(event_path("gate.opened", "gate", false), Some(false));
+    assert_eq!(event_path("no.such", "seq", false), None);
+    assert_eq!(
+        event_path("run.passed", "run", true),
+        Some(false),
+        "an object never matches"
+    );
+    assert_eq!(event_path("run.passed", "run.formula", true), Some(true));
+    assert_eq!(
+        event_path("run.state_changed", "run", true),
+        Some(true),
+        "the envelope run id"
+    );
+    assert_eq!(event_path("run.state_changed", "run.formula", false), Some(false));
+}

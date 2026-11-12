@@ -170,7 +170,7 @@ fn outbox_after(conn: &Connection, seq: i64) -> rusqlite::Result<Vec<(i64, i64, 
     rows.collect()
 }
 
-fn envelope(seq: i64, ts_ms: i64, body: &str) -> Value {
+pub(crate) fn envelope(seq: i64, ts_ms: i64, body: &str) -> Value {
     let mut event = json!({ "schema": SCHEMA, "seq": seq, "ts": rfc3339_ms(ts_ms) });
     if let (Some(out), Ok(Value::Object(fields))) = (event.as_object_mut(), serde_json::from_str::<Value>(body)) {
         out.extend(fields);
@@ -178,7 +178,6 @@ fn envelope(seq: i64, ts_ms: i64, body: &str) -> Value {
     event
 }
 
-/// The `seq` of the last line of complete JSONL `bytes`.
 /// The `seq` of the last line that parses: a damaged line is skipped, not taken for the end of the file.
 fn last_seq(bytes: &[u8]) -> Option<i64> {
     bytes

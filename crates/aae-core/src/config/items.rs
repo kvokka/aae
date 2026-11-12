@@ -36,7 +36,8 @@ impl Loader {
         }
         let prompt = match prompt {
             Some(p) => self.text(&file, &dir.join(p)),
-            None => fs::read_to_string(dir.join("prompt.md")).ok(),
+            None if !dir.join("prompt.md").exists() => None,
+            None => self.text(&file, &dir.join("prompt.md")),
         };
         let settings = self.settings(&file, dir, settings, plugins);
         Some(Agent {
@@ -112,10 +113,10 @@ impl Loader {
                 let filter = Filter::parse(&raw.filter)
                     .map_err(|e| self.fail(file, format!("{what}: {e}")))
                     .ok()?;
-                match event_path(&on, "seq") {
+                match event_path(&on, "seq", false) {
                     None => self.fail(file, format!("{what}: unknown event type `{on}`")),
                     Some(_) => {
-                        for bad in filter.paths().filter(|p| event_path(&on, p) != Some(true)) {
+                        for bad in filter.paths().filter(|p| event_path(&on, p, true) != Some(true)) {
                             self.fail(file, format!("{what}: `{on}` has no `{bad}`"));
                         }
                     }
@@ -136,7 +137,7 @@ impl Loader {
             .ok()?;
         for path in inputs.paths() {
             let inner = path.strip_prefix("event.").unwrap_or_default();
-            if on.is_some_and(|on| event_path(on, inner) != Some(true)) {
+            if on.is_some_and(|on| event_path(on, inner, false) != Some(true)) {
                 self.fail(file, format!("{what}: `{}` has no `{inner}`", on.unwrap_or_default()));
             }
         }

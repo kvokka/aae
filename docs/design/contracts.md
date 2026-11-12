@@ -57,8 +57,10 @@ Version rules:
 ### 1.2 Event view: the namespace of filters and templates
 
 Filters and templates (see 2) see an event as one flat object: the envelope fields `seq`, `ts`, `type`, `project`,
-`rig`, `run`, `correlation`, plus every key of `data` at the same level. Payload keys never reuse envelope names, so
-the view is unambiguous. Example: `bead.labels` and `bead.epic` of a `bead.ready` event.
+`rig`, `run`, `correlation`, plus every key of `data` at the same level. The only payload key that reuses an envelope
+name is `run`: where a payload carries a `RunView`, the view's `run` is that object and the run id is `run.id`;
+elsewhere `run` is the envelope's run id. Examples: `bead.labels` and `bead.epic` of a `bead.ready` event,
+`run.formula` of a `run.passed` event.
 
 ### 1.3 Payloads
 
@@ -125,7 +127,8 @@ applies to the run. Credentials and environment values never enter an event: the
 
 A path is a dotted chain of object keys into the event view (see 1.2) or into the run context of a prompt template:
 `bead.epic`, `project`; the word `data` never appears in a path. No indexing, no wildcards. A path that a payload of the event type
-cannot have is a config error at load time (the payload schemas of 1.3 are known to the loader).
+cannot have is a config error at load time (the payload schemas of 1.3 are known to the loader); so is a `where` path
+that ends on an object, which no matcher can equal.
 
 ### 2.2 `where`
 

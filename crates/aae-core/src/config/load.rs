@@ -44,6 +44,7 @@ impl Loader {
         for project in &mut projects {
             super::check::project(&mut self, project);
         }
+        super::check::orchestrator_overrides(&mut self, file, overrides.keys(), &projects);
         let config = Config {
             harnesses: raw.harness,
             settings,
@@ -98,13 +99,16 @@ impl Loader {
             }
             let mut hooks = Vec::new();
             for hook in raw.hook {
-                if event_path(&hook.on, "seq").is_none() {
+                if event_path(&hook.on, "seq", false).is_none() {
                     self.fail(&manifest, format!("hook on unknown event type `{}`", hook.on));
                 }
                 if hook.command.is_empty() {
                     self.fail(&manifest, format!("hook on `{}` has an empty command", hook.on));
                 }
                 let timeout = self.timeout(&manifest, hook.timeout.as_deref());
+                if timeout.is_some_and(|t| t.as_secs_f64() > 300.0) {
+                    self.fail(&manifest, format!("hook on `{}`: the timeout ceiling is 300s", hook.on));
+                }
                 hooks.push(OrchestratorHook {
                     on: hook.on,
                     command: hook.command,
