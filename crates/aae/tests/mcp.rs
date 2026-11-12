@@ -123,7 +123,25 @@ async fn a_run_started_over_mcp_is_followed_listed_and_cancelled_there() {
     let (_, error) = call(&d, "cancel_run", json!({ "id": run, "reason": "enough" })).await;
     assert!(!error);
     state("cancelled").await;
+    // The stateless epoch calls the same tools and marks its results.
+    let params = json!({ "name": "run_state", "arguments": { "id": run } });
+    let modern = rpc(&d, true, "tools/call", params).await["result"].clone();
+    assert_eq!(modern["resultType"], "complete");
+    assert_eq!(modern["_meta"]["io.modelcontextprotocol/serverInfo"]["name"], "aae");
+    let view: Value = serde_json::from_str(modern["content"][0]["text"].as_str().unwrap()).unwrap();
+    assert_eq!(view["state"], "cancelled");
 
+    let (text, error) = call(
+        &d,
+        "start_run",
+        json!({ "project": "shop", "rig": "web", "formula": "slow",
+        "continue_from": "nope" }),
+    )
+    .await;
+    assert!(
+        error && text.as_str().unwrap().contains("it has no session to continue"),
+        "{text}"
+    );
     let (text, error) = call(&d, "start_run", json!({ "project": "shop" })).await;
     assert!(error && text.as_str().unwrap().starts_with("bad_request"), "{text}");
     let (text, error) = call(&d, "run_state", json!({ "id": "nope" })).await;
