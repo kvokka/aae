@@ -1,7 +1,7 @@
 //! The single writer (spec §5.1, invariants 1, 9, 10): every message is handled in one SQLite transaction that
 //! also records the events (outbox), the effects and the deadlines it caused; effects run only after commit.
 
-use crate::{clock::Clock, effects};
+use crate::{clock::Clock, effects, journal::Journal};
 use rusqlite::{Connection, OptionalExtension, params};
 use serde_json::{Value, json};
 use std::{collections::HashSet, fmt, future::Future, pin::Pin, sync::Arc};
@@ -152,9 +152,10 @@ pub fn start<H: Handler, E: Executor>(
     clock: Clock,
     handler: H,
     executor: E,
+    journal: Journal,
 ) -> (CoreHandle<H::Msg>, JoinHandle<Result<(), Error>>) {
     let (tx, inbox) = mpsc::channel(256);
-    let task = tokio::spawn(run(conn, clock, handler, Arc::new(executor), inbox));
+    let task = tokio::spawn(run(conn, clock, handler, Arc::new(executor), journal, inbox));
     (CoreHandle { tx }, task)
 }
 
@@ -163,13 +164,26 @@ async fn run<H: Handler, E: Executor>(
     clock: Clock,
     mut handler: H,
     executor: Arc<E>,
+    journal: Journal,
     mut inbox: mpsc::Receiver<Input<H::Msg>>,
 ) -> Result<(), Error> {
     let (done_tx, mut done_rx) = mpsc::unbounded_channel::<(i64, String, bool)>();
     let mut in_flight = HashSet::new();
+    let mut journal_failures = 0;
     loop {
         let now = clock.now_ms();
         let deadline_wake = fire_deadlines(&mut conn, &mut handler, now)?;
+        // A failed journal write leaves the events in the outbox and is retried with the effect backoff.
+        let journal_wake = match journal.drain(&mut conn) {
+            Ok(()) => {
+                journal_failures = 0;
+                None
+            }
+            Err(_) => {
+                journal_failures += 1;
+                Some(now + effects::backoff_ms(journal_failures - 1))
+            }
+        };
         let (due, effect_wake) = effects::heads(&conn, &in_flight, now)?;
         for effect in due {
             in_flight.insert(effect.key.clone());
@@ -180,10 +194,7 @@ async fn run<H: Handler, E: Executor>(
                 let _ = done.send((effect.id, effect.key, ok));
             });
         }
-        let wake = match (deadline_wake, effect_wake) {
-            (Some(a), Some(b)) => Some(a.min(b)),
-            (a, b) => a.or(b),
-        };
+        let wake = [deadline_wake, effect_wake, journal_wake].into_iter().flatten().min();
         let sleep = async {
             match wake {
                 Some(at) => tokio::time::sleep_until(clock.instant_at(at)).await,

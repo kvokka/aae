@@ -2,10 +2,12 @@
 
 mod clock;
 mod effects;
+mod journal;
 mod store;
 mod writer;
 
 pub use clock::Clock;
+pub use journal::{Journal, ReadError, SCHEMA};
 pub use store::open;
 pub use writer::{BoxFuture, CoreHandle, Error, Event, Executor, Handler, Tx, start};
 

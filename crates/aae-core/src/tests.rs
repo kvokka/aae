@@ -1,4 +1,4 @@
-use crate::{BoxFuture, Clock, Error, Event, Executor, Handler, Tx, effects, open, start};
+use crate::{BoxFuture, Clock, Error, Event, Executor, Handler, Journal, Tx, effects, open, start};
 use serde_json::{Value, json};
 use std::{
     path::Path,
@@ -82,10 +82,7 @@ impl Executor for TestExecutor {
         Box::pin(async move {
             let seq = payload["seq"].as_i64().unwrap_or(0);
             let reader = rusqlite::Connection::open(&self.db).unwrap();
-            let committed: i64 = reader
-                .query_row("SELECT COUNT(*) FROM outbox WHERE seq = ?1", [seq], |r| r.get(0))
-                .unwrap();
-            assert_eq!(committed, 1, "effect ran before its transaction committed");
+            assert!(max_seq(&reader) >= seq, "effect ran before its transaction committed");
             self.calls.push(format!("{key}:start"), self.clock.now_ms());
             tokio::time::sleep(self.hold).await;
             self.calls.push(format!("{key}:end"), self.clock.now_ms());
@@ -126,6 +123,10 @@ struct Rig {
 }
 
 fn rig(db: &Path, clock: Clock, fail_first: usize, hold: Duration) -> Rig {
+    rig_with(db, clock, fail_first, hold, Journal::new(&db.with_file_name("journal")))
+}
+
+fn rig_with(db: &Path, clock: Clock, fail_first: usize, hold: Duration, journal: Journal) -> Rig {
     let (fired, calls) = (Log::default(), Log::default());
     let executor = TestExecutor {
         clock,
@@ -134,7 +135,13 @@ fn rig(db: &Path, clock: Clock, fail_first: usize, hold: Duration) -> Rig {
         fail_first,
         hold,
     };
-    let (core, task) = start(open(db).unwrap(), clock, TestHandler { fired: fired.clone() }, executor);
+    let (core, task) = start(
+        open(db).unwrap(),
+        clock,
+        TestHandler { fired: fired.clone() },
+        executor,
+        journal,
+    );
     Rig {
         core,
         task,
@@ -148,6 +155,16 @@ async fn settle() {
     for _ in 0..50 {
         tokio::task::yield_now().await;
     }
+}
+
+/// The last `seq` ever committed (the outbox itself is emptied by the journal).
+fn max_seq(conn: &rusqlite::Connection) -> i64 {
+    conn.query_row(
+        "SELECT COALESCE(MAX(seq), 0) FROM sqlite_sequence WHERE name = 'outbox'",
+        [],
+        |r| r.get(0),
+    )
+    .unwrap_or(0)
 }
 
 fn count(db: &Path, table: &str) -> i64 {
@@ -169,7 +186,7 @@ async fn repeated_message_does_not_repeat_the_effect() {
     let second = r.core.send(Some("cmd-1"), work()).await.unwrap();
     settle().await;
     assert_eq!(first, second);
-    assert_eq!(count(&db, "outbox"), 1);
+    assert_eq!(max_seq(&rusqlite::Connection::open(&db).unwrap()), 1);
     assert_eq!(r.calls.take().iter().filter(|(w, _)| w.ends_with(":start")).count(), 1);
     assert_eq!(count(&db, "effects"), 0);
 }
@@ -184,7 +201,7 @@ async fn nothing_of_a_rejected_message_is_committed_or_executed() {
         Err(Error::Rejected(_))
     ));
     settle().await;
-    assert_eq!(count(&db, "outbox"), 0);
+    assert_eq!(max_seq(&rusqlite::Connection::open(&db).unwrap()), 0);
     assert_eq!(count(&db, "effects"), 0);
     assert_eq!(count(&db, "idempotency"), 0);
     assert!(r.calls.take().is_empty());
@@ -358,5 +375,89 @@ async fn a_pending_effect_absorbs_its_duplicate() {
         starts, 2,
         "one failed try and one retry, no third run for the duplicate"
     );
-    assert_eq!(count(&db, "outbox"), 2);
+    assert_eq!(max_seq(&rusqlite::Connection::open(&db).unwrap()), 2);
+}
+
+#[tokio::test(start_paused = true)]
+async fn journal_rotates_continues_from_seq_and_reports_a_gap() {
+    let dir = tempfile::tempdir().unwrap();
+    let db = dir.path().join("state.db");
+    let journal_dir = dir.path().join("journal");
+    let journal = Journal::with_limits(&journal_dir, 400, 3);
+    let r = rig_with(&db, Clock::new(T0), 0, Duration::ZERO, journal);
+    for _ in 0..20 {
+        r.core
+            .send(
+                None,
+                Msg::Work {
+                    effect_key: "a",
+                    dedupe: "x",
+                },
+            )
+            .await
+            .unwrap();
+    }
+    settle().await;
+    let mut files: Vec<_> = std::fs::read_dir(&journal_dir)
+        .unwrap()
+        .map(|e| e.unwrap().path())
+        .collect();
+    files.sort();
+    assert_eq!(files.len(), 3);
+    assert!(files.iter().all(|f| std::fs::metadata(f).unwrap().len() <= 400));
+    assert_eq!(count(&db, "outbox"), 0, "acknowledged events leave the outbox");
+
+    let journal = Journal::with_limits(&journal_dir, 400, 3);
+    let crate::ReadError::Gap { oldest } = journal.read_from(1, 100).unwrap_err() else {
+        panic!("expected a gap")
+    };
+    assert!(oldest > 1);
+    let tail = journal.read_from(oldest, 100).unwrap();
+    let seqs: Vec<i64> = tail.iter().map(|e| e["seq"].as_i64().unwrap()).collect();
+    assert_eq!(seqs, (oldest..=20).collect::<Vec<_>>());
+    let last = &journal.read_from(20, 100).unwrap()[0];
+    assert_eq!(last["schema"], json!(crate::SCHEMA));
+    assert_eq!(last["type"], json!("test.work"));
+    assert_eq!(last["ts"], json!("2027-01-15T08:00:00.000Z"));
+    assert_eq!(last["data"], json!({}));
+    assert!(journal.read_from(21, 100).unwrap().is_empty());
+}
+
+#[test]
+fn journal_does_not_repeat_lines_written_before_a_crash_and_keeps_rows_for_lagging_consumers() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut conn = open(&dir.path().join("state.db")).unwrap();
+    conn.execute("INSERT INTO consumers (name, seq) VALUES ('other', 0)", [])
+        .unwrap();
+    for _ in 0..3 {
+        conn.execute("INSERT INTO outbox (ts_ms, body) VALUES (0, '{\"type\":\"t\"}')", [])
+            .unwrap();
+    }
+    let journal = Journal::new(&dir.path().join("journal"));
+    journal.drain(&mut conn).unwrap();
+    assert_eq!(
+        count(&dir.path().join("state.db"), "outbox"),
+        3,
+        "'other' has not acknowledged"
+    );
+    // A crash after the write and before the acknowledgement.
+    conn.execute("UPDATE consumers SET seq = 0 WHERE name = 'journal'", [])
+        .unwrap();
+    journal.drain(&mut conn).unwrap();
+    assert_eq!(journal.read_from(0, 100).unwrap().len(), 3);
+    crate::store::ack(&mut conn, "other", 3).unwrap();
+    assert_eq!(
+        count(&dir.path().join("state.db"), "outbox"),
+        0,
+        "the last acknowledgement drops the rows"
+    );
+}
+
+#[test]
+fn timestamps_are_rfc3339_utc_with_milliseconds() {
+    use crate::journal::rfc3339_ms;
+    assert_eq!(rfc3339_ms(0), "1970-01-01T00:00:00.000Z");
+    assert_eq!(rfc3339_ms(T0), "2027-01-15T08:00:00.000Z");
+    assert_eq!(rfc3339_ms(951_782_400_123), "2000-02-29T00:00:00.123Z");
+    assert_eq!(rfc3339_ms(-1), "1969-12-31T23:59:59.999Z");
 }

@@ -9,7 +9,7 @@ Assessed 2026-11-12 on top of `12207b5` (the commit before the assessment).
 
 | Component | Score | Missing for the next point |
 |---|---|---|
-| Event loop and state | 3 | `crates/aae-core`: single writer, WAL state, outbox with `seq`, idempotency keys, effect queue, deadlines on the managed clock, with model-free tests; missing: outbox consumers and the journal (WP-10), runtime tables of runs and attempts (WP-14) |
+| Event loop and state | 3 | `crates/aae-core`: single writer, WAL state, outbox with `seq`, durable consumer acknowledgements, JSONL journal (rotation, read from `seq`, gap), idempotency keys, effect queue, deadlines on the managed clock, with model-free tests; missing: runtime tables of runs and attempts (WP-14) and a daemon to run it by hand (WP-22) |
 | Runs and finisher | 2 | code: state machine and finisher (WP-14); contract: `contracts.md` 6 |
 | Triggers and schedules | 2 | code (WP-17); contract: `contracts.md` 2, 3.5 |
 | Issue gates | 2 | code (WP-16); contract: `contracts.md` 7 |

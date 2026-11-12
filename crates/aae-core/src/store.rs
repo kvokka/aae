@@ -21,6 +21,9 @@ CREATE TABLE effects (
     next_at_ms INTEGER NOT NULL,
     UNIQUE (key, dedupe)
 );
+-- Durable outbox consumers and the last seq each acknowledged (docs/design/contracts.md 3.5).
+CREATE TABLE consumers (name TEXT PRIMARY KEY, seq INTEGER NOT NULL);
+INSERT INTO consumers (name, seq) VALUES ('journal', 0);
 ";
 
 /// Opens the state database in WAL mode and brings its schema to the current version.
@@ -36,4 +39,16 @@ pub fn open(path: &Path) -> rusqlite::Result<Connection> {
         ))?;
     }
     Ok(conn)
+}
+
+/// Records that the durable consumer `name` has handled every event up to `seq`, and drops the outbox rows that
+/// all consumers have handled (docs/design/contracts.md 3.5).
+pub(crate) fn ack(conn: &mut Connection, name: &str, seq: i64) -> rusqlite::Result<()> {
+    let tx = conn.transaction()?;
+    tx.execute(
+        "UPDATE consumers SET seq = MAX(seq, ?2) WHERE name = ?1",
+        rusqlite::params![name, seq],
+    )?;
+    tx.execute("DELETE FROM outbox WHERE seq <= (SELECT MIN(seq) FROM consumers)", [])?;
+    tx.commit()
 }
