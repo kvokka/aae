@@ -1,0 +1,11 @@
+[flags] files + plugin + 2 MCP: result "success"; skills ["p-skill"]
+[flags] mcp_servers ["\"fileMcp\"=\"connected\"", "\"inlineMcp\"=\"connected\""]; hooks file: UserPromptSubmit 1, Stop 1; plugin: UserPromptSubmit 1, Stop 1
+[flags] resume without the flags: result "success"; same session true; skills []
+[flags] resume: mcp_servers []; hooks file: UserPromptSubmit 1, Stop 1; plugin: UserPromptSubmit 1, Stop 1
+[flags] inline --settings JSON: result "success"; hooks inline: UserPromptSubmit 1, Stop 1
+[sources] empty: reply "NONE"; rig-skill false; rig MCP []; hooks rig: UserPromptSubmit 0, Stop 0; other skills 19, other MCP 0, plugins 4; result in 2214 ms
+[sources] project: reply "RIGMARK-CLAUDE-MD"; rig-skill true; rig MCP ["\"rigMcp\"=\"connected\""]; hooks rig: UserPromptSubmit 1, Stop 1; other skills 19, other MCP 0, plugins 4; result in 2259 ms
+[sources] project-local: reply "RIGMARK-CLAUDE-MD"; rig-skill true; rig MCP ["\"rigMcp\"=\"connected\""]; hooks rig: UserPromptSubmit 1, Stop 1; other skills 19, other MCP 0, plugins 4; result in 2460 ms
+[sources] host: reply "RIGMARK-CLAUDE-MD"; rig-skill true; rig MCP ["\"rigMcp\"=\"connected\""]; hooks rig: UserPromptSubmit 1, Stop 1; other skills 24, other MCP 1, plugins 4; result in 2760 ms
+[auth] auth-none: apiKeySource "none"; result "success" is_error true "Not logged in · Please run /login"; 290 ms
+[auth] auth-token: apiKeySource "none"; result "success" is_error false "OK"; 3876 ms

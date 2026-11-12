@@ -147,3 +147,28 @@ WP-04: строка «Hooks per thread» в `docs/design/experiments.md` утв�
 Итоги и логи остаются в `docs/design/experiments.md` и `logs/`; код — в коммите `1629c3a` (ссылка в каждом разделе).
 Библиотеки `01-claude-protocol` и `03-codex-appserver` (клиент, поддельный провайдер) оставлены для WP-05.
 Строки опытов: 1 487 → 862 / 1 500. Лимит не поднимался.
+
+## 2026-11-12T10:30 · цикл 4 · coder · НАХОДКА
+
+Харнесс: субагенты `helper`/`subcoder`/`expert` недоступны (Agent → «Agent type 'subcoder' not found. Available
+agents: coder, reviewer»), а `coder` запрещён хуком политики. WP-05 делаю сам, без параллели. Предложение владельцу:
+зарегистрировать определения `helper`, `subcoder`, `expert` в `.claude/agents/`.
+
+## 2026-11-12T11:30 · цикл 4 · coder · НАХОДКА
+
+WP-05 (опыты 4–5). Живые прогоны: claude haiku — 9 сессий (8 с ходом модели, 1 — отказ без логина за 290 мс), по
+одной на случай; codex — без модели (поддельный провайдер; логина codex на хосте нет). Итог — `docs/design/experiments.md`,
+«Config and credential delivery». Главное: [Д] §6.3 «конфиг рига действует без хоста» подтверждён для обоих —
+claude `--setting-sources project,local` (хуки, skills, CLAUDE.md, `.mcp.json` рига работают, хост отсечён); codex —
+`.codex/`, `AGENTS.md`, `.agents/skills` из `cwd` работают со свежим `CODEX_HOME`, запись trust не нужна. [НП] §7.5
+stdio-MCP на тред codex закрыт: работает, сервер на тред, гибнет вместе с app-server. Флаги claude при `--resume`
+не сохраняются — адаптер передаёт их заново. Учётные данные claude через `CLAUDE_CODE_OAUTH_TOKEN` при своём
+`CLAUDE_CONFIG_DIR` — работает; логин ChatGPT в отдельном `CODEX_HOME` — по-прежнему [НП].
+
+## 2026-11-12T11:30 · цикл 4 · coder · НАХОДКА
+
+codex: отдельный `CODEX_HOME` не отсекает `~/.agents/skills` хоста — их читает из `$HOME`. Значит, выключенное
+наследование хоста у codex = свой `CODEX_HOME` и свой `HOME`; `HOME` входит в отпечаток экземпляра (§7.3) вместе с
+`CODEX_HOME`, корнями skills и ключом провайдера. `bypass_hook_trust` действует только из `thread/start.config`
+(из `config.toml` — нет). Ключ провайдера — значение только из окружения процесса; на тред можно сменить лишь имя
+переменной (`env_key`). Учесть в WP-18, WP-29.

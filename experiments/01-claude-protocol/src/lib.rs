@@ -44,9 +44,13 @@ impl Claude {
         let tag = uuid();
         let mut cmd = Command::new("claude");
         cmd.args(["-p", "--input-format", "stream-json", "--output-format", "stream-json"])
-            .args(["--verbose", "--setting-sources", "", "--strict-mcp-config"])
-            .args(args)
-            .current_dir(work)
+            .arg("--verbose")
+            .args(args);
+        // Host settings off unless the caller picks its own sources.
+        if !args.contains(&"--setting-sources") {
+            cmd.args(["--setting-sources", "", "--strict-mcp-config"]);
+        }
+        cmd.current_dir(work)
             .env_clear()
             .envs(
                 ["PATH", "HOME", "LANG", "USER", "TERM"]

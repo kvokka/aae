@@ -94,7 +94,7 @@ todo | doing | done | blocked. Пакеты с пометкой «критичн
   (`config.hooks` + `bypass_hook_trust`), но окружение хуков — процессное; ключ идемпотентности — `clientUserMessageId`
   без дедупликации на стороне codex; генерация — `src/bin/gen.rs` (typify). Stdio-MCP на тред не проверялся.
 
-### WP-05 · Опыты 4 и 5: доставка конфига и учётных данных · размер M · статус: todo
+### WP-05 · Опыты 4 и 5: доставка конфига и учётных данных · размер M · статус: done
 - Спека: §6.3, §6.4, §6.5, §16 (4, 5); шпаргалки: aae-context/04 §1–§7
 - Зависит от: WP-01
 - Результат: `experiments/04-config-delivery/`: хуки, skills, MCP в сессию без записи в риг для claude и codex,
@@ -106,6 +106,9 @@ todo | doing | done | blocked. Пакеты с пометкой «критичн
 - Примечание: живые haiku и дешёвая codex, по 1–3 прогона на вопрос. Опора — библиотеки `01-claude-protocol` и
   `03-codex-appserver` (поддельный провайдер). Отдельный вопрос (ревью 03): stdio-MCP на тред codex
   (`thread/start.config.mcp_servers`) — §7.5 [НП].
+  Сделано в цикле 04: `experiments/04-config-delivery/`; [Д] §6.3 подтверждён для обоих харнессов, stdio-MCP на
+  тред codex работает; открыто — логин ChatGPT в своём `CODEX_HOME` (нет логина на хосте) и user `CLAUDE.md` при
+  `--setting-sources project`.
 
 ### WP-06 · Опыт 3: источник событий br · размер S · статус: done
 - Спека: §9.5, §10.2, §16 (3); шпаргалки: aae-context/03 §1, §5, §6, §8

@@ -156,7 +156,8 @@ Code: `experiments/05-br-events` (one scenario, fresh workspace with an isolated
 
 Code: `experiments/03-codex-appserver` (`src/lib.rs`: client over stdio or a WebSocket on a unix socket and a fake
 Responses API provider, kept for experiments 4–5; `src/main.rs`: scenarios `threads stdio|unix` and `reconnect`,
-removed from the tree after recording, last in commit `1629c3a`; `src/bin/gen.rs`: type generator). Output: `experiments/03-codex-appserver/logs/run.txt`, message logs next to it. No live model: every
+removed from the tree after recording, last in commit `1629c3a`; `src/bin/gen.rs`: type generator). Output:
+`experiments/03-codex-appserver/logs/run.txt`, message logs next to it. No live model: every
 turn goes to the fake provider, `HOME` and `CODEX_HOME` are fresh directories, the process environment holds only
 `PATH`, `HOME`, `CODEX_HOME`, `SHELL`.
 
@@ -186,7 +187,8 @@ listed in `gen.rs`, collects the definitions they reach and generates `src/gener
 (9 roots → 83 definitions → 5.1k lines, excluded from the line budgets). The four types the scenarios parse
 (`ThreadStartResponse`, `ThreadResumeResponse`, `TurnCompletedNotification`, `HookCompletedNotification`)
 deserialized every message received. `InitializeResponse` is only in the non-v2 bundle
-(`codex_app_server_protocol.schemas.json`); the client reads it as plain JSON. For WP-29: the same generator as a dev tool of the adapter crate, the output
+(`codex_app_server_protocol.schemas.json`); the client reads it as plain JSON. For WP-29: the same generator as a dev
+tool of the adapter crate, the output
 committed under `generated/`, regenerated on every codex version bump and checked by the contract tests.
 
 **Fake provider** (sketch for WP-26): an HTTP server on `127.0.0.1` given to codex as
@@ -223,3 +225,68 @@ call; claude runs on haiku with `--permission-mode bypassPermissions`. Output: `
 Consequences: the attempt token goes into the process environment for claude (a process per session anyway) and
 into `shell_environment_policy.set` of the thread for codex, re-sent with every `thread/resume`. Hooks do not see
 the per-thread value (experiment 2), so a hook that must call the finisher gets the token on its command line.
+
+## Config and credential delivery (experiments 4 and 5)
+
+Code: `experiments/04-config-delivery` (`src/bin/claude.rs`: scenarios `flags`, `sources`, `auth`;
+`src/bin/codex.rs`: scenarios `mcp`, `rig`, `process`, and `codex mcp TAG ROOT` — a stdio MCP server with one tool
+`tag_<TAG>` that records its pid, used by both harnesses). Output: `logs/claude/run.txt`, `logs/codex/run.txt`,
+message logs next to them. claude: haiku, clean environment as above, a fresh rig per run; the run that inherits
+the host keeps no log (it reads the operator's own config), only counts. codex: the fake provider of experiment 2,
+fresh `HOME` and `CODEX_HOME`, no live model; the "host" is an imitation `CODEX_HOME`, the real `~/.codex` is not
+touched.
+
+<!-- MEASURE id=config-delivery-claude date=2026-11-12 ver=claude-2.1.322 env=linux-arm64-orbstack src=experiments/04-config-delivery/logs/claude/run.txt note="haiku, n=1 per case, 9 sessions; host counts depend on the operator's config" -->
+<!-- MEASURE id=config-delivery-codex date=2026-11-12 ver=codex-0.167.2 env=linux-arm64-orbstack src=experiments/04-config-delivery/logs/codex/run.txt note="fake provider, n=1 per scenario" -->
+
+### claude
+
+| Channel | Works? | Evidence and notes |
+|---|---|---|
+| Hooks: `--settings <file outside the rig>` | yes | `UserPromptSubmit` and `Stop` fired once each |
+| Hooks: `--settings '<inline JSON>'` | yes | the same, no file at all |
+| Hooks: `hooks/hooks.json` inside a `--plugin-dir` plugin | yes | fired next to the `--settings` ones |
+| Skills: `--plugin-dir` (`.claude-plugin/plugin.json` + `skills/<name>/SKILL.md`) | yes | `init.skills` holds `aae-p:p-skill` |
+| MCP: `--mcp-config <file>` and `--mcp-config '<inline JSON>'` (twice in one run) + `--strict-mcp-config` | yes | both `connected` in `init.mcp_servers` |
+| Flags on `--resume` | **not kept** | resume without the flags: same session, but no plugin skill, no MCP, no hook fired. The adapter passes the full flag set on every resume |
+| `--setting-sources ""` | cuts host and rig | no rig hook, skill, `CLAUDE.md` or `.mcp.json`; 19 built-in skills and 4 plugins stay |
+| `--setting-sources project` (and `project,local`) | **rig works, host cut** | rig hook fired, `rig-skill` listed, the model quoted the `CLAUDE.md` marker, rig `.mcp.json` server `connected` (`enableAllProjectMcpServers` in the rig settings); host skills and MCP absent (19 skills, 0 other MCP — as with `""`) |
+| No source limit (`user,project,local`, host inherited) | rig works, host added | +5 skills, +1 MCP from the host |
+| Own empty `CLAUDE_CONFIG_DIR`, nothing delivered | refused | result `is_error: true`, "Not logged in · Please run /login", 290 ms after spawn |
+| Own `CLAUDE_CONFIG_DIR` + `CLAUDE_CODE_OAUTH_TOKEN` (subscription access token of the host) | yes | turn completed, `apiKeySource: "none"` |
+
+Open: whether `--setting-sources project` also drops the user-level `~/.claude/CLAUDE.md` (the host has one; not
+told apart in this run); refresh of a delivered OAuth token after expiry (spec §6.4).
+
+### codex
+
+| Channel | Scope | Works? | Evidence and notes |
+|---|---|---|---|
+| stdio MCP: `thread/start.config.mcp_servers.<n> = {command, args}` | thread | yes | each of two threads saw only its own tool in the provider request; one server process per thread (plus one short-lived start that exited at once); `mcpServerStatus/list{threadId}` names the thread's server |
+| HTTP MCP: `config.mcp_servers.<n> = {url, http_headers}` | thread | yes | codex POSTed `/mcp` with the custom header (`x-aae-agent`) and `user-agent: codex-mcp-client/0.167.2` |
+| MCP server lifetime | — | — | `thread/unsubscribe` does not stop the thread's server; when app-server exits on stdin EOF, every server it started is gone (no orphans) |
+| Skills: `$CODEX_HOME/skills/<name>/SKILL.md` | process | yes | scope `user` in `skills/list`, named in the provider request |
+| Skills: `skills/extraRoots/set` | process | yes | an extra root outside rig and homes; scope `user` |
+| Skills: `$HOME/.agents/skills` with a separate `CODEX_HOME` | process | **read** | a separate `CODEX_HOME` does not cut the host's `~/.agents/skills`; only another `HOME` does |
+| Skills per thread | — | no | no field in `thread/start`; per thread only via the rig (`.agents/skills` in `cwd`) |
+| Rig: `.codex/config.toml`, `AGENTS.md`, `.agents/skills` in `cwd` | thread | yes | all three reached the provider request with a fresh `CODEX_HOME`, with and without a `trust_level = "trusted"` entry for the `cwd` |
+| Hooks: `-c hooks.<Event>=[…]` at spawn | process | yes, with the bypass | fired with `source: sessionFlags` |
+| Hooks: `hooks.json` in `CODEX_HOME` | process | yes, with the bypass | fired with `source: user` |
+| `bypass_hook_trust` | thread | thread only | set in `config.toml` of `CODEX_HOME` it has no effect (no hook ran); set in `thread/start.config` it lets process-level and user hooks run too |
+| Host config (`config.toml` of `CODEX_HOME`: instructions, MCP) | process | yes | marker and the host MCP tool reached the thread; the MCP server started per thread |
+| Provider key: `env_key` of the provider, value in the app-server environment | process | yes | `authorization: bearer <key>` at the provider |
+| Provider key per thread | thread | name only | `config.model_providers.<p>.env_key` in `thread/start` is applied (a missing variable fails the turn: "Missing environment variable"), but the value is still read from the process environment; `experimental_bearer_token` in the thread config was ignored |
+| ChatGPT subscription login in a separate `CODEX_HOME` | process | not checked | the host has no codex login (spec §6.4 stays open) |
+
+### Consequences
+
+- claude (WP-27): the adapter delivers everything with flags and files in the state directory: `--settings`
+  (file or inline), `--plugin-dir` for skills and plugin hooks, `--mcp-config` + `--strict-mcp-config`; and repeats
+  the whole set on every `--resume`. Host inheritance off = `--setting-sources project,local` (not `""`): the rig's
+  own config keeps working — the spec §6.3 assumption holds for claude. With an isolated `CLAUDE_CONFIG_DIR` the
+  adapter delivers `CLAUDE_CODE_OAUTH_TOKEN` (or `ANTHROPIC_API_KEY`).
+- codex (WP-29): MCP, hooks (`config.hooks`), instructions and `bypass_hook_trust` go per thread; skills, the
+  provider key value and the host layer are per process. The instance fingerprint (spec §7.3) therefore holds
+  `CODEX_HOME`, `HOME`, the skill roots and the provider and its key; MCP and hooks are not in it. Host
+  inheritance off = own `CODEX_HOME` **and** own `HOME` (or the host's `~/.agents/skills` leak in); the rig's
+  `.codex/`, `AGENTS.md` and `.agents/skills` keep working — the spec §6.3 assumption holds for codex as well.

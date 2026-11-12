@@ -191,6 +191,8 @@ impl Client {
 #[derive(Clone, Debug)]
 pub struct Seen {
     pub path: String,
+    /// Request line and headers.
+    pub head: String,
     pub model: String,
     pub body: String,
 }
@@ -232,6 +234,7 @@ fn serve(n: usize, conn: std::net::TcpStream, log: &Mutex<Vec<Seen>>) {
     let model = v["model"].as_str().unwrap_or("").to_owned();
     log.lock().unwrap().push(Seen {
         path: path.clone(),
+        head: head.clone(),
         model,
         body: body.clone(),
     });

@@ -54,6 +54,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "config-delivery"
+version = "0.1.0"
+dependencies = [
+ "claude-protocol",
+ "codex-appserver",
+ "serde_json",
+]
+
+[[package]]
 name = "const-oid"
 version = "0.10.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
