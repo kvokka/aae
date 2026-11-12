@@ -171,6 +171,28 @@ async fn failed_runs_release_the_bead_and_the_third_closes_its_gate_until_the_op
 }
 
 #[tokio::test(start_paused = true)]
+async fn a_bead_taken_over_by_hand_mid_run_is_a_divergence_and_stays_untouched() {
+    let w = world(FIX);
+    let bead = w.tracker.add(&[], None);
+    w.driver.script(slow_turn());
+    let run = w.run_on(json!(bead)).await;
+    tokio::time::sleep(Duration::from_secs(1)).await;
+    w.tracker.assign(&bead, "bob");
+    w.finish(&run, Verdict::Pass, "fixed").await;
+    tokio::time::sleep(Duration::from_secs(20)).await;
+    let diverged = w.all("resync.diverged");
+    assert_eq!(
+        (diverged.len(), &diverged[0]["observed"], &diverged[0]["expected"]),
+        (1, &json!("bob"), &json!(format!("aae:{run}")))
+    );
+    let held = w.tracker.bead(&bead).unwrap();
+    assert_eq!(
+        (held.status.as_str(), held.assignee.as_deref()),
+        ("in_progress", Some("bob"))
+    );
+}
+
+#[tokio::test(start_paused = true)]
 async fn a_bead_someone_else_holds_fails_the_run_as_bead_claimed_and_stays_theirs() {
     let w = world(FIX);
     let bead = w.tracker.add(&[], None);
