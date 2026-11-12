@@ -11,8 +11,8 @@ use std::path::{Path, PathBuf};
 
 /// The br versions the adapter is tested on, oldest and newest; the daemon warns outside them.
 pub const TESTED: [(u32, u32, u32); 2] = [(0, 7, 6), (0, 7, 6)];
-/// How long a call waits for br's write lock before it is `Unavailable`.
-const LOCK_TIMEOUT_MS: &str = "10000";
+/// How long a call (and a read of `events`) waits for br's write lock before it is `Unavailable`.
+const LOCK_TIMEOUT_MS: u64 = 10_000;
 /// The actor of the daemon's own reads.
 const READER: &str = "aae";
 
@@ -30,7 +30,13 @@ impl Br {
     async fn br(&self, actor: &str, args: &[&str]) -> Result<Value, Fail> {
         let out = tokio::process::Command::new("br")
             .args(args)
-            .args(["--json", "--actor", actor, "--lock-timeout", LOCK_TIMEOUT_MS])
+            .args([
+                "--json",
+                "--actor",
+                actor,
+                "--lock-timeout",
+                &LOCK_TIMEOUT_MS.to_string(),
+            ])
             .env("BEADS_DIR", &self.dir)
             .env("RUST_LOG", "error")
             .stdin(std::process::Stdio::null())
@@ -87,8 +93,26 @@ impl Br {
     }
 
     /// The rows of br's `events` after `after`, read-only, the database closed again at once (a reader left open
-    /// stops br's WAL checkpoints).
-    fn rows(&self, after: i64) -> Result<Vec<Row>, TrackerError> {
+    /// stops br's WAL checkpoints). The read holds br's writer lock `.write.lock` shared: br's own SQLite does not
+    /// hold the stock WAL index locks, so a stock reader that thinks it is alone resets `beads.db-shm`, and a br
+    /// write opening at that moment fails with `SHM changed identity or length` (br's reads are not affected).
+    async fn rows(&self, after: i64) -> Result<Vec<Row>, TrackerError> {
+        let lock = std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(self.dir.join(".write.lock"))
+            .map_err(|e| unavailable(format!("br write lock: {e}")))?;
+        let deadline = tokio::time::Instant::now() + std::time::Duration::from_millis(LOCK_TIMEOUT_MS);
+        // Polled, not waited for: a br write may hold the lock for seconds, longer than an async thread may block.
+        loop {
+            match lock.try_lock_shared() {
+                Ok(()) => break,
+                Err(std::fs::TryLockError::WouldBlock) if tokio::time::Instant::now() < deadline => {
+                    tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+                }
+                Err(e) => return Err(unavailable(format!("br write lock: {e}"))),
+            }
+        }
         let flags = rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY | rusqlite::OpenFlags::SQLITE_OPEN_NO_MUTEX;
         let db = rusqlite::Connection::open_with_flags(self.dir.join("beads.db"), flags).map_err(sql)?;
         let mut stmt = db
@@ -192,7 +216,7 @@ impl Tracker for Br {
 
     fn changes(&self, after: i64) -> BoxFuture<'_, Result<Vec<Change>, TrackerError>> {
         Box::pin(async move {
-            let rows = self.rows(after)?;
+            let rows = self.rows(after).await?;
             let mut out: Vec<Change> = Vec::new();
             // One command writes several rows in a row, of one bead and one actor, each kind once: one change.
             let mut groups: Vec<&[Row]> = Vec::new();

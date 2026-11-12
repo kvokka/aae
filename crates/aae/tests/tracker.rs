@@ -16,7 +16,11 @@ fn br(project: &Path, args: &[&str]) -> String {
         .current_dir(project)
         .output()
         .unwrap();
-    assert!(out.status.success(), "br {args:?}");
+    assert!(
+        out.status.success(),
+        "br {args:?}: {}",
+        String::from_utf8_lossy(&out.stderr)
+    );
     String::from_utf8(out.stdout).unwrap().trim().to_owned()
 }
 
@@ -36,6 +40,7 @@ async fn until_event(events: &mut aae_front::client::Events, kind: &str, id: &st
 async fn a_bead_written_by_hand_is_seen_and_a_run_on_it_claims_and_closes_it_in_br() {
     let fix = "name = \"fix\"\n[inputs]\nbead = { type = \"bead\", required = true }\n\
                [step]\nkind = \"exec\"\ncommand = [\"true\"]\ntimeout = \"10s\"\n";
+    let seed = std::cell::RefCell::new(String::new());
     let d = Daemon::start(|dir| {
         let project = dir.join("config/aae/shop");
         std::fs::write(project.join("formulas/fix.toml"), fix).unwrap();
@@ -48,10 +53,13 @@ async fn a_bead_written_by_hand_is_seen_and_a_run_on_it_claims_and_closes_it_in_
                 .success()
         );
         br(&project, &["init", "--prefix", "t", "-q"]);
+        *seed.borrow_mut() = br(&project, &["create", "Seed", "-l", "rig:api", "--silent"]);
     })
     .await;
     let project = d.dir.path().join("config/aae/shop");
     let mut events = d.client.events(Some(1)).await.unwrap();
+    // The first read of a tracker is its history, not news: write by hand only after it (the seed turns ready).
+    until_event(&mut events, "bead.ready", &seed.borrow()).await;
     let id = br(&project, &["create", "Fix the cart", "-l", "rig:web", "--silent"]);
     let created = until_event(&mut events, "bead.created", &id).await;
     assert_eq!(
