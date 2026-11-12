@@ -7,6 +7,7 @@ mod c05a_chain;
 mod c05b_schedule;
 mod c07_idle;
 mod c08_crash;
+mod c16_beads;
 mod c18_journal;
 mod c19_gates;
 
@@ -58,6 +59,12 @@ pub(crate) const ALL: &[Scenario] = &[
         title: "20 x kill -9 of the daemon mid-step: up within 30 s, each run ends once, no firing lost or doubled",
         launch: Launch::Ci,
         run: |env| Box::pin(c08_crash::run(env)),
+    },
+    Scenario {
+        criterion: "16",
+        title: "a bead: claim held through a crash, returned on failure, closed on pass, one run per bead",
+        launch: Launch::Ci,
+        run: |env| Box::pin(c16_beads::run(env)),
     },
     Scenario {
         criterion: "18",

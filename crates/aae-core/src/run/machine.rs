@@ -112,7 +112,10 @@ impl RunHandler {
         };
         let (agent, prompt, timeout) = match (&formula.step, row.exec()) {
             (Step::Exec { command, timeout }, true) => {
-                return Ok((None, timeout_ms(timeout), json!({ "command": command, "env": {} })));
+                // The tracker by an explicit path, as in a session (spec §10.2): br's own search would climb.
+                let beads = project.root.join(".beads").to_string_lossy().into_owned();
+                let env = json!({ "BEADS_DIR": { "value": beads } });
+                return Ok((None, timeout_ms(timeout), json!({ "command": command, "env": env })));
             }
             (Step::Prompt { agent, prompt, timeout }, false) => (agent, prompt, timeout),
             _ => return Err(format!("`{}` changed its step kind", row.formula)),

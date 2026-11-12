@@ -406,8 +406,8 @@ tests of §7.8 (WP-28, WP-30).
 
 Twelve operations (§10.1); the trait in code carries those its callers use (the core: `claim`, `release`, `close`,
 `ready(None)`), and the adapter adds the rest with the API that needs them. Every call names the actor: `aae:<run id>` when the daemon acts for a run, `aae` for
-the daemon's own reads. Sessions get `BD_ACTOR=aae:<run id>:<attempt n>` and the database path in their
-environment ([experiments](experiments.md#br-as-an-event-source-experiment-3)). An actor of any other form is a
+the daemon's own reads. Sessions and exec steps get `BD_ACTOR=aae:<run id>:<attempt n>` and the database path in
+their environment ([experiments](experiments.md#br-as-an-event-source-experiment-3)). An actor of any other form is a
 human or an outside tool and starts a new correlation chain (§9.5).
 
 ```rust
@@ -440,7 +440,7 @@ updated|closed` for it; every bead ready at that read is new to the set and rais
 is `aae:<run id>[:<attempt n>]` carries that run and its correlation; `bead.ready` carries those of the last such
 write in the same read (the write that freed the bead is usually that one); the rig of a bead event is the bead's
 `rig:` label, absent without one. The daemon gives a project a tracker when `<project>/.beads` exists, and every
-session of the project gets `BEADS_DIR` (layer: project) and `BD_ACTOR=aae:<run id>:<attempt n>`.
+session and exec step of the project gets `BEADS_DIR` (layer: project) and `BD_ACTOR=aae:<run id>:<attempt n>`.
 
 ### 5.2 Types and errors
 
