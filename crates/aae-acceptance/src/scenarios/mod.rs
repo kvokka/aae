@@ -5,6 +5,7 @@ mod c03_exec;
 mod c04_finisher;
 mod c05a_chain;
 mod c05b_schedule;
+mod c06_hop;
 mod c07_idle;
 mod c08_crash;
 mod c16_beads;
@@ -47,6 +48,12 @@ pub(crate) const ALL: &[Scenario] = &[
         title: "a schedule fires on time; the firings missed while the daemon is down fire once",
         launch: Launch::Ci,
         run: |env| Box::pin(c05b_schedule::run(env)),
+    },
+    Scenario {
+        criterion: "6",
+        title: "30 hops from run.passed of A to the harness launch of B by a subscription: p50 <= 1 s, p90 <= 3 s",
+        launch: Launch::Ci,
+        run: |env| Box::pin(c06_hop::run(env)),
     },
     Scenario {
         criterion: "7",
