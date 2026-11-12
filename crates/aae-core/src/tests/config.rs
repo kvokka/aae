@@ -364,6 +364,8 @@ fn files_reject_unknown_keys_and_undeclared_names() {
     );
     let no_rig = BASE[3].1.replace("path = \"backend\"", "path = \"frontend\"");
     fails(&[("shop/aae.toml", no_rig.as_str())], "is not a directory");
+    let bad_rig = BASE[3].1.replace("backend", "back end").replace("[rigs.back end", "[rigs.\"back end\"");
+    fails(&[("shop/aae.toml", bad_rig.as_str())], "rig name `back end`");
     let bad_override = BASE[3].1.replace("overrides.implementer", "overrides.reviewer");
     fails(&[("shop/aae.toml", bad_override.as_str())], "no agent `reviewer`");
     let orchestrator_override = format!("{}[overrides.reviewer]\nmodel = \"opus\"\n", BASE[0].1);

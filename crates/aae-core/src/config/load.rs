@@ -217,6 +217,13 @@ impl Loader {
         let mut rigs = BTreeMap::new();
         for (rig, r) in raw.rigs {
             self.name(&file, "rig", &rig);
+            // The rig is the tracker label `rig:<name>`; br takes labels of `[A-Za-z0-9_:-]`, 50 at most (§10.2).
+            if rig.len() > 46 || !rig.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_') {
+                self.fail(
+                    &file,
+                    format!("rig name `{rig}`: ASCII letters, digits, `-` and `_`, 46 at most"),
+                );
+            }
             let path = resolve(dir, &r.path);
             if !path.is_dir() {
                 self.fail(&file, format!("rig `{rig}`: `{}` is not a directory", path.display()));
