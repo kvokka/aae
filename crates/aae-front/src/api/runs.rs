@@ -23,7 +23,8 @@ pub(crate) struct CreateRun {
     continue_from: Option<String>,
 }
 
-/// Starts a run of a formula; the reply is `{"run": "<id>"}`.
+/// Starts a run of a formula; the reply is `{"run": "<id>"}`, or `{"nothing_ready": true}` when a bead input
+/// `{ next_ready = true }` finds no ready bead to take (spec §10.3).
 #[utoipa::path(post, path = "/v1/runs", request_body = CreateRun,
     params(("Idempotency-Key" = Option<String>, Header, description = "Repeats return the first reply")),
     responses((status = OK, body = Object), (status = CONFLICT, body = Object)))]

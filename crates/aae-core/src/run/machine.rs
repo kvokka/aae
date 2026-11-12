@@ -32,6 +32,15 @@ impl RunHandler {
         )?;
         row.set_state(tx, "preparing", None)?;
         row.emit(tx, "run.started", json!({ "run": row.view() }))?;
+        match row.bead.clone() {
+            // The prompt may show the bead: it renders once the claim returned it.
+            Some(bead) if row.bead_data.is_none() => Self::claim(tx, &row, &bead),
+            _ => self.render_and_prepare(tx, row),
+        }
+    }
+
+    /// Renders the prompt and asks the `run.preparing` hooks.
+    pub(super) fn render_and_prepare(&mut self, tx: &mut Tx<'_>, mut row: Row) -> Result<(), Error> {
         let prepared = self.render(&row);
         let (prompt, timeout_ms, config) = match prepared {
             Ok(p) => p,
@@ -115,6 +124,7 @@ impl RunHandler {
         let context = json!({
             "inputs": serde_json::from_str::<Value>(&row.inputs).unwrap_or_default(),
             "rig": rig_view, "run": row.view(),
+            "bead": row.bead_data.as_deref().map(serde_json::from_str::<Value>).transpose().ok().flatten(),
             "project": { "name": project.name, "path": project.root },
         });
         let text = prompt.render(&context).map_err(|e| format!("prompt: {e}"))?;
@@ -346,6 +356,7 @@ impl RunHandler {
         )?;
         row.class = class.map(str::to_owned);
         row.set_state(tx, state, Some(reason))?;
+        self.let_go_bead(tx, &row, state, reason)?;
         match state {
             "passed" => row.emit(tx, "run.passed", json!({ "run": row.view(), "outcome": outcome }))?,
             "failed" => row.emit(

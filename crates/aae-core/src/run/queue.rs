@@ -3,14 +3,14 @@
 
 use super::{Create, RunHandler, machine::QUEUE_TIMEOUT_MS, rejected, row::Row};
 use crate::{
-    config::Step,
+    config::{InputType, Step},
     writer::{Error, Tx},
 };
 use rusqlite::{OptionalExtension, params};
 use serde_json::{Value, json};
 
 impl RunHandler {
-    pub(super) fn create(&mut self, tx: &mut Tx<'_>, c: Create) -> Result<Value, Error> {
+    pub(super) fn create(&mut self, tx: &mut Tx<'_>, mut c: Create) -> Result<Value, Error> {
         let project = self.config.projects.iter().find(|p| p.name == c.project);
         let project = project.ok_or_else(|| rejected(format!("no project `{}`", c.project)))?;
         let rig = project.rigs.get(&c.rig);
@@ -36,6 +36,24 @@ impl RunHandler {
         if let Some((key, _)) = missing {
             return Err(rejected(format!("`{name}` needs input `{key}`")));
         }
+        // A run holds at most one bead (spec §10.3); its input becomes the id of the bead it works on.
+        let bead_input = formula
+            .inputs
+            .iter()
+            .find(|(k, i)| i.kind == InputType::Bead && c.inputs.contains_key(*k));
+        let bead = match bead_input {
+            Some(_) if !self.trackers.contains_key(&c.project) => {
+                return Err(rejected(format!("`{}` has no tracker", c.project)));
+            }
+            Some((key, _)) => match Self::pick_bead(tx, &c.project, &c.rig, &c.inputs[key])? {
+                Some(id) => {
+                    c.inputs.insert(key.clone(), json!(id));
+                    Some(id)
+                }
+                None => return Ok(json!({ "nothing_ready": true })),
+            },
+            None => None,
+        };
         if let Some(from) = &c.continue_from {
             let found: Option<(String, bool)> = tx
                 .sql()
@@ -60,10 +78,13 @@ impl RunHandler {
             .query_row("SELECT COALESCE(MAX(n), 0) + 1 FROM runs", [], |r| r.get(0))?;
         let id = format!("run_{n}");
         let correlation = c.correlation.unwrap_or_else(|| format!("cor_{n}"));
+        if let Some(bead) = &bead {
+            Self::own_bead(tx, &c.project, bead, &id)?;
+        }
         tx.sql().execute(
             "INSERT INTO runs (n, id, project, rig, formula, agent, inputs, correlation, depth, parent_run, \
-             workdir, state, created_ms, continue_from) \
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, 'queued', ?12, ?13)",
+             workdir, state, created_ms, continue_from, bead) \
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, 'queued', ?12, ?13, ?14)",
             params![
                 n,
                 id,
@@ -77,7 +98,8 @@ impl RunHandler {
                 c.parent_run,
                 rig.path.to_string_lossy(),
                 tx.now_ms(),
-                c.continue_from
+                c.continue_from,
+                bead
             ],
         )?;
         let row = Row::load(tx, &id)?;

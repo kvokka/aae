@@ -30,6 +30,7 @@ pub(super) type Starts = Arc<Mutex<HashMap<String, Arc<OnceCell<Result<InstanceH
 
 pub(super) struct RunExecutor {
     pub drivers: Drivers,
+    pub trackers: super::beads::Trackers,
     pub core: Arc<OnceLock<CoreHandle<Msg>>>,
     pub sink: EventSink,
     pub hooks: Arc<dyn super::HookRunner>,
@@ -44,6 +45,7 @@ impl Executor for RunExecutor {
             let Some(core) = self.core.get() else { return true };
             match payload["op"].as_str() {
                 Some("hooks") => self.hooks.run(core, payload).await,
+                Some("tracker") => return super::beads::execute(&self.trackers, core, payload).await,
                 Some("exec") => {
                     let msg = super::exec_step::run(&self.running, payload).await;
                     // A stopped writer drops the message; recovery (WP-20) finds the attempt on restart.

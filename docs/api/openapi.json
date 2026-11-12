@@ -262,7 +262,7 @@
         }
       },
       "post": {
-        "summary": "Starts a run of a formula; the reply is `{\"run\": \"<id>\"}`.",
+        "summary": "Starts a run of a formula; the reply is `{\"run\": \"<id>\"}`, or `{\"nothing_ready\": true}` when a bead input\n`{ next_ready = true }` finds no ready bead to take (spec §10.3).",
         "operationId": "create",
         "parameters": [
           {

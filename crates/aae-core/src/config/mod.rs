@@ -19,6 +19,8 @@ use std::{collections::BTreeMap, fmt, path::PathBuf, time::Duration};
 pub struct Config {
     /// Runs started at once across every project (spec §9.3).
     pub max_runs: u32,
+    /// Failed runs of a bead before the core closes the bead's gate (spec §10.3).
+    pub bead_failures: u32,
     pub harnesses: BTreeMap<String, Harness>,
     /// Layer 2 of spec §6.3.
     pub settings: Settings,

@@ -29,10 +29,13 @@ pub(super) struct Row {
     pub(super) next: Option<String>,
     pub(super) created_ms: i64,
     pub(super) started_ms: Option<i64>,
+    pub(super) bead: Option<String>,
+    /// The bead as the claim returned it (contracts 5.2).
+    pub(super) bead_data: Option<String>,
 }
 
 const COLUMNS: &str = "id, project, rig, formula, agent, inputs, correlation, depth, parent_run, workdir, state, \
-    class, attempt, prompt, timeout_ms, config, next, created_ms, started_ms";
+    class, attempt, prompt, timeout_ms, config, next, created_ms, started_ms, bead, bead_data";
 
 impl Row {
     pub(super) fn load(tx: &Tx<'_>, run: &str) -> Result<Self, Error> {
@@ -62,6 +65,8 @@ impl Row {
                 next: r.get(16)?,
                 created_ms: r.get(17)?,
                 started_ms: r.get(18)?,
+                bead: r.get(19)?,
+                bead_data: r.get(20)?,
             })
         })
         .optional()
@@ -71,12 +76,12 @@ impl Row {
         !matches!(self.state.as_str(), "passed" | "failed" | "cancelled")
     }
 
-    /// `RunView` of contracts 1.3; the generation is the attempt number until bead ownership (WP-19) needs more.
     /// A run of an exec step: it has no agent.
     pub(super) fn exec(&self) -> bool {
         self.agent.is_empty()
     }
 
+    /// `RunView` of contracts 1.3; the generation is the attempt number.
     pub(super) fn view(&self) -> Value {
         let (agent, step_kind) = if self.exec() {
             (None, "exec")
@@ -86,7 +91,7 @@ impl Row {
         json!({
             "id": self.id, "formula": self.formula, "agent": agent, "step_kind": step_kind,
             "state": self.state, "class": self.class, "attempt": self.attempt, "generation": self.attempt,
-            "bead": null, "workdir": self.workdir, "depth": self.depth, "parent_run": self.parent_run,
+            "bead": self.bead, "workdir": self.workdir, "depth": self.depth, "parent_run": self.parent_run,
             "created_at": rfc3339_ms(self.created_ms), "started_at": self.started_ms.map(rfc3339_ms),
         })
     }

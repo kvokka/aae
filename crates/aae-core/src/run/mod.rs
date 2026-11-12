@@ -1,6 +1,7 @@
 //! Runs (spec §9.3, docs/design/contracts.md 6): the run state machine inside the single writer, the effects that
 //! drive a harness through its [`Driver`], and the driver events fed back to the writer as messages.
 
+mod beads;
 mod decide;
 mod events;
 mod exec;
@@ -21,6 +22,7 @@ use crate::{
     config::Config,
     driver::{Answer, Driver, DriverEvent, Failure, InstanceHandle, Normalized, SessionRef},
     journal::Journal,
+    tracker::{Bead, Tracker, TrackerError},
     writer::{self, CoreHandle, Error, Handler, Tx},
 };
 use rusqlite::Connection;
@@ -124,6 +126,18 @@ pub enum Msg {
         event: Value,
         data: Value,
     },
+    /// The result of the tracker call of the effect `payload`.
+    Tracked {
+        payload: Value,
+        result: Result<Option<Bead>, TrackerError>,
+    },
+    /// The ready set of the tracker of `project`.
+    Ready {
+        project: String,
+        beads: Vec<Bead>,
+    },
+    /// The tracker of the project changed: its ready set is read again.
+    TrackerChanged(String),
     /// The finisher of an attempt; the reply is `{"answer": "accepted"|"stale_attempt"|"run_terminal"|"invalid"}`
     /// (contracts 6.3).
     Finish {
@@ -212,28 +226,42 @@ pub enum Decision {
     },
 }
 
-/// Starts the writer with the run machine on `conn` (opened by `store::open`), one driver per harness.
+/// Starts the writer with the run machine on `conn` (opened by `store::open`), one driver per harness and the
+/// trackers of the projects that have one, by project name.
 pub fn start(
     conn: Connection,
     clock: Clock,
     config: Arc<Config>,
     drivers: Vec<Arc<dyn Driver>>,
+    trackers: BTreeMap<String, Arc<dyn Tracker>>,
     hooks: Arc<dyn HookRunner>,
     journal: Journal,
 ) -> (CoreHandle<Msg>, JoinHandle<Result<(), Error>>) {
     let drivers: Drivers = Arc::new(drivers.into_iter().map(|d| (d.harness().to_owned(), d)).collect());
+    let trackers = Arc::new(trackers);
     let core = Arc::new(OnceLock::new());
     let (sink, mut events) = mpsc::unbounded_channel();
     let starts = exec::Starts::default();
     let executor = exec::RunExecutor {
         drivers: drivers.clone(),
+        trackers: trackers.clone(),
         core: core.clone(),
         sink,
         hooks,
         running: exec_step::Running::default(),
         starts: starts.clone(),
     };
-    let (handle, task) = writer::start(conn, clock, RunHandler { config, drivers }, executor, journal);
+    let (handle, task) = writer::start(
+        conn,
+        clock,
+        RunHandler {
+            config,
+            drivers,
+            trackers,
+        },
+        executor,
+        journal,
+    );
     let _ = core.set(handle.clone());
     let forward = handle.clone();
     tokio::spawn(async move {
@@ -257,6 +285,7 @@ pub fn start(
 struct RunHandler {
     config: Arc<Config>,
     drivers: Drivers,
+    trackers: beads::Trackers,
 }
 
 impl Handler for RunHandler {
@@ -287,6 +316,9 @@ impl Handler for RunHandler {
                 stderr,
             } => self.exec_done(tx, &run, attempt, exit, &stdout, &stderr),
             Msg::HookFailed { event, data } => Self::hook_failed(tx, &event, data),
+            Msg::Tracked { payload, result } => self.tracked(tx, &payload, result),
+            Msg::Ready { project, beads } => Self::ready(tx, &project, &beads),
+            Msg::TrackerChanged(project) => self.sync_trackers(tx, Some(&project), "changed"),
         }?;
         Ok(Value::Null)
     }
@@ -307,6 +339,7 @@ impl Handler for RunHandler {
 
     fn started(&mut self, tx: &mut Tx<'_>) -> Result<(), Error> {
         self.recover(tx)?;
+        self.sync_trackers(tx, None, "start")?;
         self.arm_schedules(tx)
     }
 }

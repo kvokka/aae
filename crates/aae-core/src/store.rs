@@ -129,6 +129,29 @@ ALTER TABLE runs ADD COLUMN trigger TEXT;
 CREATE INDEX runs_trigger ON runs (trigger);
 ";
 
+/// Bead ownership (spec §10.3, invariants 2–4): the owner run of a bead (the truth the tracker's assignee mirrors),
+/// the generation of its claims and the failed runs counted toward its gate; the last ready set of each project's
+/// tracker, in the tracker's order; the bead of a run and its data as the claim returned it.
+const SCHEMA_V8: &str = "
+CREATE TABLE beads (
+    project TEXT NOT NULL,
+    id TEXT NOT NULL,
+    owner TEXT,
+    generation INTEGER NOT NULL DEFAULT 0,
+    failures INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (project, id)
+);
+CREATE TABLE ready_beads (
+    project TEXT NOT NULL,
+    pos INTEGER NOT NULL,
+    id TEXT NOT NULL,
+    body TEXT NOT NULL,
+    PRIMARY KEY (project, pos)
+);
+ALTER TABLE runs ADD COLUMN bead TEXT;
+ALTER TABLE runs ADD COLUMN bead_data TEXT;
+";
+
 /// Opens the state database in WAL mode and brings its schema to the current version.
 pub fn open(path: &Path) -> rusqlite::Result<Connection> {
     let conn = Connection::open(path)?;
@@ -144,6 +167,7 @@ pub fn open(path: &Path) -> rusqlite::Result<Connection> {
         (5, SCHEMA_V5),
         (6, SCHEMA_V6),
         (7, SCHEMA_V7),
+        (8, SCHEMA_V8),
     ]
     .into_iter()
     .filter(|(to, _)| *to > version)

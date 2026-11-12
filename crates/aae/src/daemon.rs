@@ -90,6 +90,8 @@ pub(crate) async fn run(paths: Paths) -> Result<(), String> {
         Clock::system(),
         config.clone(),
         drivers,
+        // The br adapter (WP-31) fills this in; until then no project has a tracker.
+        std::collections::BTreeMap::new(),
         Arc::new(ExecHooks {
             socket: Some(paths.socket.clone()),
         }),

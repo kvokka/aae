@@ -171,3 +171,27 @@ async fn an_operator_closure_that_has_already_ended_is_rejected() {
     assert!(reply.is_err(), "{reply:?}");
     assert!(w.all("gate.closed").is_empty());
 }
+
+#[tokio::test(start_paused = true)]
+async fn gates_survive_a_restart_and_a_closure_with_until_still_opens_by_its_timer() {
+    let mut w = world(&[]);
+    w.operator(Msg::CloseGate(gate(RIG, None))).await;
+    w.operator(Msg::CloseGate(gate("project:shop", Some(60_000)))).await;
+    w.restart().await;
+    w.driver.script(hollow_turn());
+    let run = w.create().await;
+    let events = w.events(&run, Duration::from_secs(120)).await;
+    assert_eq!(last(&events, "run.queued")["waiting_for"], "gate");
+    let opened = w.all("gate.opened");
+    assert_eq!(opened.len(), 1, "{opened:?}");
+    assert_eq!(
+        (opened[0]["key"].as_str(), opened[0]["by"].as_str()),
+        (Some("project:shop"), Some("timer"))
+    );
+    assert!(
+        w.states(&run).await.is_empty(),
+        "the operator's pause outlived the restart"
+    );
+    w.operator(Msg::OpenGate { key: RIG.into() }).await;
+    assert_eq!(w.states(&run).await.last().unwrap(), "failed");
+}

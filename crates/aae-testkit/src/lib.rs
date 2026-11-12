@@ -24,8 +24,10 @@ pub mod anthropic;
 pub mod openai;
 mod play;
 mod step;
+mod tracker;
 use play::session_id;
 pub use step::Step;
+pub use tracker::MemoryTracker;
 
 /// Plays one queued scenario per `send_prompt` (after acknowledging the prompt) and per `respond` (the
 /// continuation after a permission request). With no scenario left the prompt is acknowledged and the turn never

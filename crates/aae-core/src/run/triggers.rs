@@ -205,13 +205,14 @@ impl RunHandler {
         };
         let created = tx.unit(|tx| {
             let reply = self.create(tx, create)?;
-            let run = reply["run"].as_str().unwrap_or_default().to_owned();
+            let run = reply["run"].as_str().map(str::to_owned);
             tx.sql()
                 .execute("UPDATE runs SET trigger = ?2 WHERE id = ?1", params![run, a.name])?;
             Ok(run)
         });
         let run = match created {
-            Ok(run) => run,
+            Ok(Some(run)) => run,
+            Ok(None) => return skip(tx, "nothing_ready", "no ready bead to take".to_owned()),
             Err(Error::Rejected(reason)) => return skip(tx, "rejected", reason),
             Err(e) => return Err(e),
         };

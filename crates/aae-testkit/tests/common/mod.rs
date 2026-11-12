@@ -8,7 +8,7 @@ use aae_core::{
     open,
     run::{self, Create, Decision, HookRunner, Msg},
 };
-use aae_testkit::{ScriptedDriver, Step};
+use aae_testkit::{MemoryTracker, ScriptedDriver, Step};
 use serde_json::Value;
 use std::{
     fs,
@@ -45,6 +45,8 @@ pub(crate) const POLICY: &[(&str, &str)] = &[
 pub(crate) struct World {
     pub(crate) core: CoreHandle<Msg>,
     pub(crate) driver: ScriptedDriver,
+    /// The tracker of project `shop`; it outlives restarts, as a tracker database would.
+    pub(crate) tracker: MemoryTracker,
     pub(crate) journal: PathBuf,
     hooks: Arc<dyn HookRunner>,
     task: JoinHandle<Result<(), Error>>,
@@ -86,10 +88,12 @@ pub(crate) fn world_on(extra: &[(&str, &str)], hooks: Arc<dyn HookRunner>, drive
         fs::create_dir_all(path.parent().unwrap()).unwrap();
         fs::write(path, text).unwrap();
     }
-    let (core, task) = core_on(dir.path(), hooks.clone(), &driver);
+    let tracker = MemoryTracker::new();
+    let (core, task) = core_on(dir.path(), hooks.clone(), &driver, &tracker);
     World {
         core,
         driver,
+        tracker,
         journal: dir.path().join("journal"),
         hooks,
         task,
@@ -101,6 +105,7 @@ fn core_on(
     dir: &Path,
     hooks: Arc<dyn HookRunner>,
     driver: &ScriptedDriver,
+    tracker: &MemoryTracker,
 ) -> (CoreHandle<Msg>, JoinHandle<Result<(), Error>>) {
     let config = config::load(&dir.join("config.toml")).unwrap();
     run::start(
@@ -108,6 +113,11 @@ fn core_on(
         Clock::managed(0),
         Arc::new(config),
         vec![Arc::new(driver.clone())],
+        [(
+            "shop".to_owned(),
+            Arc::new(tracker.clone()) as Arc<dyn aae_core::tracker::Tracker>,
+        )]
+        .into(),
         hooks,
         Journal::new(&dir.join("journal")),
     )
@@ -120,7 +130,7 @@ impl World {
         self.task.abort();
         let _ = (&mut self.task).await;
         self.driver = ScriptedDriver::new(1);
-        (self.core, self.task) = core_on(self.dir.path(), self.hooks.clone(), &self.driver);
+        (self.core, self.task) = core_on(self.dir.path(), self.hooks.clone(), &self.driver, &self.tracker);
     }
 
     pub(crate) async fn create(&self) -> String {

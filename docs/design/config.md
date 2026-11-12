@@ -46,6 +46,7 @@ and a session part.
 ```toml
 projects = ["~/work/shop"]          # project directories, each with an aae.toml
 max_runs = 8                        # runs started at once across all projects (default 8, at least 1)
+bead_failures = 3                   # failed runs of a bead before the core closes its gate (default 3, at least 1)
 
 [harness.claude]                    # harnesses agents may choose (§6.1)
 model = "sonnet"                    # default model of the harness

@@ -69,6 +69,9 @@ impl RunHandler {
         if !row.exec() {
             keys.push(format!("agent:{}", row.agent));
         }
+        if let Some(bead) = &row.bead {
+            keys.push(format!("bead:{}/{bead}", row.project));
+        }
         let (account, model): (Option<String>, Option<String>) =
             tx.sql()
                 .query_row("SELECT account, model FROM runs WHERE id = ?1", [&row.id], |r| {
@@ -148,6 +151,9 @@ impl RunHandler {
         }
         if !closures(tx.sql(), tx.now_ms(), Some(&[key.to_owned()]))?.is_empty() {
             return Ok(());
+        }
+        if by.is_none() {
+            Self::forgive_bead(tx, key)?;
         }
         let opened_by = if by.is_some() { "timer" } else { "operator" };
         gate_event(tx, "gate.opened", json!({ "key": key, "by": opened_by }))?;

@@ -90,6 +90,7 @@ pub(super) struct OrchestratorFile {
     #[serde(default)]
     pub projects: Vec<PathBuf>,
     pub max_runs: Option<NonZeroU32>,
+    pub bead_failures: Option<NonZeroU32>,
     #[serde(default)]
     pub harness: BTreeMap<String, Harness>,
     #[serde(default)]

@@ -92,6 +92,7 @@ fn daemon(dir: &Path, start_ms: i64) -> (CoreHandle<Msg>, JoinHandle<Result<(), 
         Clock::managed(start_ms),
         Arc::new(config),
         vec![Arc::new(ScriptedDriver::new(1))],
+        Default::default(),
         Arc::new(Lost),
         Journal::new(&dir.join("journal")),
     )

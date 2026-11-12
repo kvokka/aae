@@ -16,6 +16,8 @@ use std::{
 
 /// Runs started at once when the orchestrator config does not say (spec §9.3).
 const DEFAULT_MAX_RUNS: u32 = 8;
+/// Failed runs of a bead before the core closes its gate (spec §10.3).
+const DEFAULT_BEAD_FAILURES: u32 = 3;
 
 #[derive(Default)]
 pub(super) struct Loader {
@@ -51,6 +53,7 @@ impl Loader {
         super::check::orchestrator_overrides(&mut self, file, overrides.keys(), &projects);
         let config = Config {
             max_runs: raw.max_runs.map_or(DEFAULT_MAX_RUNS, NonZeroU32::get),
+            bead_failures: raw.bead_failures.map_or(DEFAULT_BEAD_FAILURES, NonZeroU32::get),
             harnesses: raw.harness,
             settings,
             overrides,

@@ -403,7 +403,8 @@ tests of §7.8 (WP-28, WP-30).
 
 ### 5.1 Operations
 
-Twelve operations (§10.1). Every call names the actor: `aae:<run id>` when the daemon acts for a run, `aae` for
+Twelve operations (§10.1); the trait in code carries those its callers use (the core: `claim`, `release`, `close`,
+`ready(None)`), and the adapter adds the rest with the API that needs them. Every call names the actor: `aae:<run id>` when the daemon acts for a run, `aae` for
 the daemon's own reads. Sessions get `BD_ACTOR=aae:<run id>:<attempt n>` and the database path in their
 environment ([experiments](experiments.md#br-as-an-event-source-experiment-3)). An actor of any other form is a
 human or an outside tool and starts a new correlation chain (§9.5).
@@ -455,7 +456,7 @@ then calls `changes` from its stored cursor (and on start and after recovery wit
 | State | Meaning | Deadline (default) | On deadline |
 |---|---|---|---|
 | `queued` | not started: waits for a concurrency slot, a free workdir or an open gate; the reason is visible (`run.queued`) | `queue_timeout` 7 d | `failed{infrastructure, queue_timeout}` |
-| `preparing` | ownership recorded, `run.preparing` hooks running, workdir and environment being fixed, snapshot of the effective config written | hook deadline (see 3.3) | the hooks count as failed → deny → `failed{check, hook_deadline}` |
+| `preparing` | the bead claim confirmed, `run.preparing` hooks running, workdir and environment being fixed, snapshot of the effective config written | `start_timeout` for the claim, then the hook deadline (see 3.3) | the hooks count as failed → deny → `failed{check, hook_deadline}` |
 | `starting` | an attempt: instance acquired, session started or resumed, first prompt sent, waiting for `prompt.acked` | `start_timeout` 120 s | attempt failure `stall` |
 | `running` | the agent works (or the `exec` command runs) | step `timeout` of the formula (default 45 m) per attempt → `runaway_turn`; silence budgets: first event after ack 5 min, model thinking 5 min, tool running 10 min, background work after the turn 30 min → `stall` | attempt failure |
 | `requires_action` | waits for an answer to a permission request or question; not silence; the step `timeout` of `running` pauses here and resumes with the time it had left | `human_timeout` 1 h | answer `deny`, back to `running` |
@@ -476,11 +477,11 @@ to the next prompt) the step `timeout` pauses like in `requires_action`. Trigger
 
 | From | On | To | Effects after commit |
 |---|---|---|---|
-| — | create (API, CLI, MCP, trigger) with an idempotency key | `queued` | — |
+| — | create (API, CLI, MCP, trigger) with an idempotency key | `queued` | — (with a bead input the run is recorded as the bead's owner in this transaction, invariant 3: a bead another live run holds refuses; `{ next_ready = true, epic }` takes the first bead of the last ready set, in the tracker's order, that is in the epic, of the run's rig or of no rig, without an owner and without a closed gate; none → the reply `{"nothing_ready": true}`, for a trigger `trigger.skipped{nothing_ready}`; the input then holds the bead id) |
 | — | create with `continue_from: <run>` (a terminal run with a session; never implicit, §9.3) | `queued` | the first attempt resumes that run's last session with the formula prompt; a later `resume` uses the run's own session, or that one while it has none; a harness other than the agent's → `failed{infrastructure}` |
-| `queued` | slot free, workdir free, no gate of the run closed | `preparing` | bead claim (the ownership record and generation are written in this transaction, invariant 3); `run.preparing` hooks |
+| `queued` | slot free, workdir free, no gate of the run closed | `preparing` | with a bead: the tracker claim as owner `aae:<run>` (queue `tracker:<project>`), and the prompt renders once the claim returned the bead; `run.preparing` hooks |
 | `preparing` | decision `proceed` (or no hooks) | `starting` | attempt 1: instance acquire, `start_session`, `send_prompt` |
-| `preparing` | `deny`, template error, claim error `Claimed` | `failed{check}`, `failed{infrastructure}`, `failed{infrastructure, bead_claimed}` | — |
+| `preparing` | `deny`, template error, claim error `Claimed` / `NotFound` / `Invalid`, no claim answer within `start_timeout` | `failed{check}`, `failed{infrastructure}`, `failed{infrastructure, bead_claimed / bead_not_found / bead_invalid}`, `failed{infrastructure, tracker_unavailable}` | — |
 | `starting` | `prompt.acked` of the first prompt | `running` | — |
 | `running` | `permission.requested` | `requires_action` | `run.requires_action` hooks |
 | `requires_action` | answer from a hook or a human, or `human_timeout` | `running` | `respond` |
@@ -498,8 +499,13 @@ to the next prompt) the step `timeout` pauses like in `requires_action`. Trigger
 | `preparing`, `interrupted` | an attempt would start while a key of the run is closed (by anyone, invariant 18) | `parked` (`then`: `new_session` from `preparing`, the decided kind from `interrupted`) | — |
 | any non-terminal | operator cancel | `cancelled` | stop the session, conditional release of the bead |
 
-Every terminal transition releases the run's hold on its workdir and, with a bead, increments or resets the
-bead's failure counter (§10.3; default threshold 3 → gate `bead:…` closed by the core). Operator holds (§5.7
+Every terminal transition releases the run's hold on its workdir and its ownership of its bead. A bead the run
+claimed is closed (`passed`) or released conditionally (`failed`, `cancelled`) by an effect on the queue
+`tracker:<project>`, followed by a new read of the ready set; a refusal (`OwnerMismatch`, `NotFound`) is
+`resync.diverged{subject: "bead"}`, an unavailable tracker `tracker.sync_failed` and a retry, and the outcome of the
+run never changes. The failure counter of the bead (§10.3): a failed run that held the claim adds one, `passed`
+resets it, `cancelled` and a refused claim leave it; at `bead_failures` (orchestrator config, default 3) the core
+closes the gate `bead:<project>/<id>`, and the operator opening that gate resets the counter. Operator holds (§5.7
 gates closed by the operator, cancel) are read by every automatic decision: a decision that would start an attempt
 of a run whose gate the operator closed parks it instead (invariant 18).
 

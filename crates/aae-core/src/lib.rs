@@ -11,6 +11,7 @@ mod process;
 pub mod run;
 mod store;
 pub mod template;
+pub mod tracker;
 mod version;
 mod writer;
 
