@@ -98,12 +98,17 @@ impl Drop for Daemon {
 }
 
 pub(crate) fn spawn(dir: &std::path::Path) -> Child {
-    Command::new(env!("CARGO_BIN_EXE_aae"))
+    command(dir).spawn().unwrap()
+}
+
+/// `aae daemon` in the XDG tree under `dir`.
+pub(crate) fn command(dir: &std::path::Path) -> Command {
+    let mut command = Command::new(env!("CARGO_BIN_EXE_aae"));
+    command
         .arg("daemon")
         .env("HOME", dir)
         .env("XDG_CONFIG_HOME", dir.join("config"))
         .env("XDG_STATE_HOME", dir.join("state"))
-        .env("XDG_RUNTIME_DIR", dir.join("run"))
-        .spawn()
-        .unwrap()
+        .env("XDG_RUNTIME_DIR", dir.join("run"));
+    command
 }

@@ -3,8 +3,9 @@
 mod common;
 
 use aae_front::client::{ClientError, SseEvent};
-use common::{Daemon, spawn};
+use common::{Daemon, command, spawn};
 use serde_json::{Value, json};
+use std::os::unix::fs::PermissionsExt;
 use std::{fs, time::Duration};
 
 async fn next_event(events: &mut aae_front::client::Events) -> SseEvent {
@@ -115,4 +116,21 @@ async fn one_daemon_per_socket_and_a_stop_signal_removes_the_socket() {
     );
     assert!(d.terminate().success());
     assert!(!d.socket().exists());
+}
+
+#[tokio::test]
+async fn one_daemon_per_state_directory_whatever_its_socket() {
+    let d = Daemon::start(|_| {}).await;
+    assert_eq!(fs::metadata(d.socket()).unwrap().permissions().mode() & 0o777, 0o600);
+    let second = command(d.dir.path())
+        .env("XDG_RUNTIME_DIR", d.dir.path().join("other-run"))
+        .output()
+        .unwrap();
+    let stderr = String::from_utf8_lossy(&second.stderr);
+    assert!(!second.status.success(), "a second daemon must not share the state");
+    let state = d.dir.path().join("state/aae");
+    assert!(
+        stderr.contains(&format!("another daemon owns {}", state.display())),
+        "{stderr}"
+    );
 }

@@ -10,9 +10,9 @@ use aae_front::{
 };
 use serde_json::json;
 use std::{
-    fs::DirBuilder,
+    fs::{DirBuilder, File, Permissions, TryLockError},
     io,
-    os::unix::fs::DirBuilderExt,
+    os::unix::fs::{DirBuilderExt, PermissionsExt},
     path::{Path, PathBuf},
     sync::Arc,
 };
@@ -54,6 +54,8 @@ pub(crate) async fn run(paths: Paths) -> Result<(), String> {
         format!("the config has errors:\n{}", lines.join("\n"))
     })?;
     private_dir(&paths.state)?;
+    // Held until the daemon exits: one writer per state directory (spec §5.1), whatever socket it serves.
+    let _lock = lock(&paths.state)?;
     let db = paths.state.join("state.db");
     let conn = open(&db).map_err(|e| format!("{}: {e}", db.display()))?;
     let journal_dir = paths.state.join("journal");
@@ -88,6 +90,17 @@ pub(crate) async fn run(paths: Paths) -> Result<(), String> {
     served.map_err(|e| format!("serving the API: {e}"))
 }
 
+/// An exclusive lock on the state directory; the OS drops it with the process, so a crash leaves none behind.
+fn lock(state: &Path) -> Result<File, String> {
+    let path = state.join("lock");
+    let file = File::create(&path).map_err(|e| format!("{}: {e}", path.display()))?;
+    match file.try_lock() {
+        Ok(()) => Ok(file),
+        Err(TryLockError::WouldBlock) => Err(format!("another daemon owns {}", state.display())),
+        Err(TryLockError::Error(e)) => Err(format!("{}: {e}", path.display())),
+    }
+}
+
 fn private_dir(dir: &Path) -> Result<(), String> {
     DirBuilder::new()
         .recursive(true)
@@ -109,7 +122,10 @@ async fn bind(socket: &Path) -> Result<UnixListener, String> {
         }
         std::fs::remove_file(socket).map_err(|e| format!("{shown}: {e}"))?;
     }
-    UnixListener::bind(socket).map_err(|e| format!("{shown}: {e}"))
+    let listener = UnixListener::bind(socket).map_err(|e| format!("{shown}: {e}"))?;
+    // The directory may be a shared one given by `--socket`; the socket itself is the owner's only.
+    std::fs::set_permissions(socket, Permissions::from_mode(0o600)).map_err(|e| format!("{shown}: {e}"))?;
+    Ok(listener)
 }
 
 fn stop_signal() -> io::Result<impl Future<Output = ()> + Send + 'static> {
