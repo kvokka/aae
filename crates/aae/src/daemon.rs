@@ -4,7 +4,10 @@ use aae_core::{
     Clock, Journal, config, open,
     run::{self, ExecHooks, Reader},
 };
-use aae_front::api::{self, Api};
+use aae_front::{
+    api::{self, Api},
+    dirs,
+};
 use serde_json::json;
 use std::{
     fs::DirBuilder,
@@ -28,26 +31,18 @@ pub(crate) struct Paths {
 impl Paths {
     /// The XDG locations, with `--config` and `--socket` taking precedence.
     pub(crate) fn resolve(config: Option<PathBuf>, socket: Option<PathBuf>) -> Result<Self, String> {
-        let home = || std::env::var_os("HOME").map(PathBuf::from).ok_or("HOME is not set");
-        let xdg = |var: &str, fallback: &str| -> Result<PathBuf, String> {
-            match std::env::var_os(var).map(PathBuf::from).filter(|p| p.is_absolute()) {
-                Some(dir) => Ok(dir),
-                None => Ok(home()?.join(fallback)),
-            }
-        };
-        let state = xdg("XDG_STATE_HOME", ".local/state")?.join("aae");
-        let runtime = std::env::var_os("XDG_RUNTIME_DIR")
-            .map(PathBuf::from)
-            .filter(|p| p.is_absolute())
-            .map_or_else(|| state.clone(), |dir| dir.join("aae"));
         let config = match config {
             Some(config) => config,
-            None => xdg("XDG_CONFIG_HOME", ".config")?.join("aae/config.toml"),
+            None => dirs::xdg("XDG_CONFIG_HOME", ".config")?.join("aae/config.toml"),
+        };
+        let socket = match socket {
+            Some(socket) => socket,
+            None => dirs::socket()?,
         };
         Ok(Self {
             config,
-            state,
-            socket: socket.unwrap_or_else(|| runtime.join("aae.sock")),
+            state: dirs::state()?,
+            socket,
         })
     }
 }

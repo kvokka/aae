@@ -23,7 +23,10 @@ impl fmt::Display for ClientError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Io(e) => write!(f, "daemon socket: {e}"),
-            Self::Api { status, error } => write!(f, "{status} {}: {}", error["code"], error["message"]),
+            Self::Api { status, error } => {
+                let text = |key: &str| error[key].as_str().unwrap_or_default().to_owned();
+                write!(f, "{} ({status} {})", text("message"), text("code"))
+            }
         }
     }
 }
