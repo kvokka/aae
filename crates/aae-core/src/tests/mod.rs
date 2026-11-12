@@ -1,3 +1,4 @@
+mod config;
 mod journal;
 mod template;
 

@@ -209,6 +209,16 @@ impl Inputs {
         })
     }
 
+    /// Every placeholder path, `event.` included.
+    pub fn paths(&self) -> Vec<&str> {
+        match self {
+            Self::Template(template) => template.paths().collect(),
+            Self::Table(entries) => entries.iter().flat_map(|(_, v)| v.paths()).collect(),
+            Self::List(items) => items.iter().flat_map(Self::paths).collect(),
+            Self::Literal(_) => Vec::new(),
+        }
+    }
+
     /// The inputs of one firing; `view` is the event view of the firing event, `None` for a schedule.
     pub fn resolve(&self, view: Option<&Value>) -> Result<Value, Unresolved> {
         self.resolve_in(&serde_json::json!({ "event": view }))

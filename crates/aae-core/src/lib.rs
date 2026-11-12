@@ -1,6 +1,7 @@
 //! Core of aae: the single writer of the runtime state (spec §4, §5).
 
 mod clock;
+pub mod config;
 pub mod driver;
 mod effects;
 mod journal;
