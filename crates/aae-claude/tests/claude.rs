@@ -59,12 +59,13 @@ async fn until(
     panic!("no expected event in {seen:?}");
 }
 
-/// One turn; `edit` changes the config first. The events, the transcript and the raw messages of the turn.
+/// One turn; `edit` changes the config first. The events, the transcript, the raw messages of the turn and the
+/// bodies of the model requests.
 async fn turn(
     plan: Vec<Reply>,
     state: &Path,
     edit: impl FnOnce(&mut EffectiveConfig),
-) -> (Vec<Normalized>, Transcript, Vec<Value>) {
+) -> (Vec<Normalized>, Transcript, Vec<Value>, Vec<Value>) {
     let provider = Provider::start(plan).await;
     let driver = Claude::new("claude".into(), state.join("state"), None);
     let workdir = state.join("rig");
@@ -92,13 +93,14 @@ async fn turn(
     let raw = std::iter::from_fn(|| live.try_recv().ok()).collect();
     driver.stop_instance(&instance, Duration::from_secs(4)).await;
     until(&mut events, |e| matches!(e, Normalized::Exited { .. })).await;
-    (seen, transcript, raw)
+    let requests = provider.requests().into_iter().map(|r| r.body).collect();
+    (seen, transcript, raw, requests)
 }
 
 #[tokio::test]
 async fn a_reply_is_acked_and_completed_and_is_in_the_transcript() {
     let dir = tempfile::tempdir().unwrap();
-    let (seen, transcript, _) = turn(vec![Reply::Text("OK".into())], dir.path(), |_| {}).await;
+    let (seen, transcript, ..) = turn(vec![Reply::Text("OK".into())], dir.path(), |_| {}).await;
     let key = PromptKey::new("r1", 1, 1);
     assert!(seen.contains(&Normalized::PromptAcked { key }), "{seen:?}");
     assert!(seen.contains(&Normalized::TurnStarted));
@@ -147,7 +149,7 @@ async fn hooks_skills_and_mcp_servers_reach_the_session() {
     )
     .unwrap();
     let marker = dir.path().join("hook-fired");
-    let (_, _, raw) = turn(vec![Reply::Text("OK".into())], dir.path(), |c| {
+    let (_, _, raw, _) = turn(vec![Reply::Text("OK".into())], dir.path(), |c| {
         let hook = Hook {
             enabled: true,
             event: Some("UserPromptSubmit".into()),
@@ -184,4 +186,23 @@ fn sourced<T>(value: T) -> Sourced<T> {
         value,
         from: Layer::Agent,
     }
+}
+
+/// Host inheritance off: the rig's `CLAUDE.md` reaches the model, the host's personal one does not (spec §6.4).
+#[tokio::test]
+async fn an_isolated_session_reads_the_rig_but_not_the_host() {
+    let dir = tempfile::tempdir().unwrap();
+    let home = dir.path().join("home");
+    std::fs::create_dir_all(home.join(".claude")).unwrap();
+    std::fs::write(home.join(".claude/CLAUDE.md"), "HOST-MARKER-7\n").unwrap();
+    std::fs::create_dir_all(dir.path().join("rig")).unwrap();
+    std::fs::write(dir.path().join("rig/CLAUDE.md"), "RIG-MARKER-7\n").unwrap();
+    let (.., requests) = turn(vec![Reply::Text("OK".into())], dir.path(), |c| {
+        let home = home.to_string_lossy().into_owned();
+        c.env.insert("HOME".into(), sourced(home));
+    })
+    .await;
+    let sent = Value::from(requests).to_string();
+    assert!(sent.contains("RIG-MARKER-7"), "the rig's CLAUDE.md is read");
+    assert!(!sent.contains("HOST-MARKER-7"), "the host's is not");
 }
