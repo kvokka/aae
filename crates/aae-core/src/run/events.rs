@@ -17,13 +17,13 @@ use rusqlite::{OptionalExtension, params};
 use serde_json::json;
 
 /// Silence budgets of `running` (contracts 6.1).
-const SILENCE_MS: i64 = 5 * 60_000;
+pub(super) const SILENCE_MS: i64 = 5 * 60_000;
 const TOOL_SILENCE_MS: i64 = 10 * 60_000;
 const BACKGROUND_SILENCE_MS: i64 = 30 * 60_000;
 const HUMAN_TIMEOUT_MS: i64 = 3_600_000;
 
 /// States in which an attempt is live and its session may report.
-fn attempt_live(state: &str) -> bool {
+pub(super) fn attempt_live(state: &str) -> bool {
     matches!(state, "starting" | "running" | "requires_action")
 }
 
@@ -157,25 +157,11 @@ impl RunHandler {
                 };
                 let request = json!({ "id": request_id, "kind": kind, "tool": tool, "input": input, "text": text });
                 // Waiting for an answer is not working: the step timeout pauses until the answer.
-                let state_at: Option<i64> = tx
-                    .sql()
-                    .query_row(
-                        "SELECT at_ms FROM deadlines WHERE id = ?1",
-                        [row.deadline("state")],
-                        |r| r.get(0),
-                    )
-                    .optional()?;
+                Self::pause_step(tx, &row)?;
                 tx.sql().execute(
-                    "UPDATE attempts SET request = ?3, paused_ms = ?4 WHERE run = ?1 AND n = ?2",
-                    params![
-                        row.id,
-                        attempt,
-                        request.to_string(),
-                        state_at.map(|at| at - tx.now_ms())
-                    ],
+                    "UPDATE attempts SET request = ?3 WHERE run = ?1 AND n = ?2",
+                    params![row.id, attempt, request.to_string()],
                 )?;
-                tx.clear_deadline(&row.deadline("state"))?;
-                tx.clear_deadline(&row.deadline("silence"))?;
                 row.set_state(tx, "requires_action", None)?;
                 let at = tx.now_ms() + HUMAN_TIMEOUT_MS;
                 tx.set_deadline(&row.deadline("human"), at)?;
@@ -192,7 +178,7 @@ impl RunHandler {
     }
 
     /// Idle without background: a turn that ended settles; one that has not ended yet is no news.
-    fn turn_settled(&mut self, tx: &mut Tx<'_>, row: Row, attempt: u32) -> Result<(), Error> {
+    fn turn_settled(&mut self, tx: &mut Tx<'_>, mut row: Row, attempt: u32) -> Result<(), Error> {
         let ended: bool = tx.sql().query_row(
             "SELECT turn_ended FROM attempts WHERE run = ?1 AND n = ?2",
             params![row.id, attempt],
@@ -201,16 +187,41 @@ impl RunHandler {
         if !ended {
             return Ok(());
         }
-        tx.sql().execute(
-            "UPDATE attempts SET turn_ended = 0 WHERE run = ?1 AND n = ?2",
+        let (outcome, prompts): (Option<String>, i64) = tx.sql().query_row(
+            "UPDATE attempts SET turn_ended = 0 WHERE run = ?1 AND n = ?2 RETURNING outcome, prompts",
             params![row.id, attempt],
+            |r| Ok((r.get(0)?, r.get(1)?)),
         )?;
-        for what in ["state", "silence"] {
-            tx.clear_deadline(&row.deadline(what))?;
+        // Between turns nothing works: the step timeout pauses until the next prompt (contracts 6.1).
+        Self::pause_step(tx, &row)?;
+        let remarks = prompts - 1;
+        if let Some(outcome) = outcome {
+            row.set_state(tx, "finishing", None)?;
+            let outcome: serde_json::Value = serde_json::from_str(&outcome).unwrap_or_default();
+            let data = json!({ "run": row.view(), "outcome": outcome, "remarks": remarks });
+            return self.deciding(tx, row, "run.finishing", data);
         }
-        let data = json!({ "run": row.view(), "stop_reason": "completed", "remarks": 0,
+        let data = json!({ "run": row.view(), "stop_reason": "completed", "remarks": remarks,
             "attempts": attempts(tx, &row.id)? });
         self.deciding(tx, row, "run.turn_ended_without_outcome", data)
+    }
+
+    /// Keeps what is left of the step timeout in `paused_ms` and stops the step and silence clocks.
+    pub(super) fn pause_step(tx: &mut Tx<'_>, row: &Row) -> Result<(), Error> {
+        let state_at: Option<i64> = tx
+            .sql()
+            .query_row(
+                "SELECT at_ms FROM deadlines WHERE id = ?1",
+                [row.deadline("state")],
+                |r| r.get(0),
+            )
+            .optional()?;
+        tx.sql().execute(
+            "UPDATE attempts SET paused_ms = ?3 WHERE run = ?1 AND n = ?2",
+            params![row.id, row.attempt, state_at.map(|at| at - tx.now_ms())],
+        )?;
+        tx.clear_deadline(&row.deadline("state"))?;
+        tx.clear_deadline(&row.deadline("silence"))
     }
 
     pub(super) fn answer(&mut self, tx: &mut Tx<'_>, run: &str, request: &str, answer: &Answer) -> Result<(), Error> {

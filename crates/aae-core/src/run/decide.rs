@@ -57,7 +57,8 @@ impl RunHandler {
     /// blocks on the veto events and is "no plugin decision" on the others (contracts 3.3).
     pub(super) fn decide_deadline(&mut self, tx: &mut Tx<'_>, row: Row) -> Result<(), Error> {
         match row.state.as_str() {
-            "preparing" | "finishing" => self.terminal(tx, row, "failed", Some("check"), "hook_deadline"),
+            "preparing" => self.terminal(tx, row, "failed", Some("check"), "hook_deadline"),
+            "finishing" => self.finished(tx, row, Some("hook_deadline")),
             _ => self.apply(tx, row, None),
         }
     }
@@ -80,6 +81,10 @@ impl RunHandler {
             ("running", Some(Decision::Fail { reason })) => {
                 self.terminal(tx, row, "failed", Some("hollow_done"), &reason)
             }
+            ("running", Some(Decision::Continue { message })) => self.next_prompt(tx, row, &message, "hollow_done"),
+            ("finishing", None | Some(Decision::Accept)) => self.finished(tx, row, None),
+            ("finishing", Some(Decision::Veto { reason })) => self.finished(tx, row, Some(&reason)),
+            ("finishing", Some(Decision::Remark { message })) => self.next_prompt(tx, row, &message, "check"),
             (state, Some(d)) => Err(rejected(format!("{d:?} does not apply to a run in `{state}`"))),
             (state, None) => Err(rejected(format!("a run in `{state}` waits for no decision"))),
         }

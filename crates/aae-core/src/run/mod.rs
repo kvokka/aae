@@ -4,6 +4,7 @@
 mod decide;
 mod events;
 mod exec;
+mod finish;
 mod machine;
 mod row;
 
@@ -15,6 +16,7 @@ use crate::{
     writer::{self, CoreHandle, Error, Handler, Tx},
 };
 use rusqlite::Connection;
+use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use std::{
     collections::BTreeMap,
@@ -25,6 +27,7 @@ use tokio::{sync::mpsc, task::JoinHandle};
 
 /// Ceiling of the core: attempts per run (invariant 16).
 pub const MAX_ATTEMPTS: u32 = 20;
+pub use finish::MAX_REMARKS;
 
 type Drivers = Arc<BTreeMap<String, Arc<dyn Driver>>>;
 
@@ -67,6 +70,28 @@ pub enum Msg {
         failure: Failure,
     },
     Driver(DriverEvent),
+    /// The finisher of an attempt; the reply is `{"answer": "accepted"|"stale_attempt"|"run_terminal"|"invalid"}`
+    /// (contracts 6.3).
+    Finish {
+        run: String,
+        token: String,
+        outcome: Outcome,
+    },
+}
+
+/// The outcome an agent declares (contracts 1.3 `Outcome`).
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct Outcome {
+    pub result: Verdict,
+    pub summary: String,
+    pub data: Option<Value>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Verdict {
+    Pass,
+    Fail,
 }
 
 /// A run to create: by hand (`correlation` and `parent_run` absent, depth 0) or by a trigger.
@@ -98,6 +123,18 @@ pub enum Decision {
     },
     Fail {
         reason: String,
+    },
+    /// On `run.turn_ended_without_outcome`: `message` goes as the next prompt of the attempt.
+    Continue {
+        message: String,
+    },
+    Accept,
+    Veto {
+        reason: String,
+    },
+    /// On `run.finishing`: `message` goes as the next prompt of the attempt; the declared outcome is cleared.
+    Remark {
+        message: String,
     },
 }
 
@@ -141,6 +178,7 @@ impl Handler for RunHandler {
     fn handle(&mut self, tx: &mut Tx<'_>, msg: Msg) -> Result<Value, Error> {
         match msg {
             Msg::Create(create) => return self.create(tx, create),
+            Msg::Finish { run, token, outcome } => return self.finish(tx, &run, &token, &outcome),
             Msg::Cancel { run, reason } => self.cancel(tx, &run, &reason),
             Msg::Decide { run, seq, decision } => self.decide(tx, &run, seq, decision),
             Msg::Answer { run, request, answer } => self.answer(tx, &run, &request, &answer),
@@ -183,6 +221,23 @@ fn answer_from(value: &Value) -> Option<Answer> {
         "answer" => Answer::Text { text: text("text")? },
         _ => return None,
     })
+}
+
+/// A fresh attempt token: 32 random bytes as hex (contracts 6.3).
+fn new_token() -> Option<String> {
+    let mut bytes = [0u8; 32];
+    getrandom::fill(&mut bytes).ok()?;
+    Some(hex(&bytes))
+}
+
+/// The form the state keeps a token in.
+fn token_sha256(token: &str) -> String {
+    use sha2::Digest;
+    hex(&sha2::Sha256::digest(token.as_bytes()))
+}
+
+fn hex(bytes: &[u8]) -> String {
+    bytes.iter().map(|b| format!("{b:02x}")).collect()
 }
 
 /// A failure as events and the attempts table carry it (contracts 1.3).

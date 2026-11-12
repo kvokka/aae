@@ -187,30 +187,47 @@ impl RunHandler {
         let resume = previous
             .filter(|_| kind == "resume")
             .and_then(|s| serde_json::from_str::<SessionRef>(&s).ok());
+        let Some(token) = super::new_token() else {
+            return self.terminal(
+                tx,
+                row,
+                "failed",
+                Some("infrastructure"),
+                "no randomness for the attempt token",
+            );
+        };
         row.attempt += 1;
         let (run, attempt, workdir) = (row.id.clone(), row.attempt, PathBuf::from(&row.workdir));
+        let token_sha256 = super::token_sha256(&token);
         let plan = match resume.clone() {
             Some(session) => SessionPlan::Resume {
                 session,
                 workdir,
                 run,
                 attempt,
+                token,
             },
-            None => SessionPlan::New { workdir, run, attempt },
+            None => SessionPlan::New {
+                workdir,
+                run,
+                attempt,
+                token,
+            },
         };
         tx.sql().execute(
             "UPDATE runs SET attempt = ?2, next = NULL WHERE id = ?1",
             params![row.id, row.attempt],
         )?;
         tx.sql().execute(
-            "INSERT INTO attempts (run, n, kind, harness, started_ms) VALUES (?1, ?2, ?3, ?4, ?5)",
+            "INSERT INTO attempts (run, n, kind, harness, started_ms, token_sha256) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
             // The kind that happens: a resume with no session to resume is a new session.
             params![
                 row.id,
                 row.attempt,
                 if resume.is_some() { "resume" } else { "new_session" },
                 config.harness,
-                tx.now_ms()
+                tx.now_ms(),
+                token_sha256
             ],
         )?;
         row.set_state(tx, "starting", None)?;
@@ -292,6 +309,7 @@ impl RunHandler {
         class: Option<&str>,
         reason: &str,
     ) -> Result<(), Error> {
+        let outcome = Self::outcome(tx, &row)?;
         self.end_attempt(tx, &row, None)?;
         for what in ["state", "decide"] {
             tx.clear_deadline(&row.deadline(what))?;
@@ -303,10 +321,11 @@ impl RunHandler {
         row.class = class.map(str::to_owned);
         row.set_state(tx, state, Some(reason))?;
         match state {
+            "passed" => row.emit(tx, "run.passed", json!({ "run": row.view(), "outcome": outcome }))?,
             "failed" => row.emit(
                 tx,
                 "run.failed",
-                json!({ "run": row.view(), "class": class, "reason": reason, "outcome": null }),
+                json!({ "run": row.view(), "class": class, "reason": reason, "outcome": outcome }),
             )?,
             _ => row.emit(
                 tx,

@@ -10,6 +10,7 @@ version = "0.1.0"
 name = "aae-core"
 version = "0.1.0"
 dependencies = [
+ "getrandom",
  "rusqlite",
  "serde",
  "serde_json",

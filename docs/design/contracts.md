@@ -446,7 +446,7 @@ then calls `changes` from its stored cursor (and on start and after recovery wit
 | `starting` | an attempt: instance acquired, session started or resumed, first prompt sent, waiting for `prompt.acked` | `start_timeout` 120 s | attempt failure `stall` |
 | `running` | the agent works (or the `exec` command runs) | step `timeout` of the formula (default 45 m) per attempt → `runaway_turn`; silence budgets: first event after ack 5 min, model thinking 5 min, tool running 10 min, background work after the turn 30 min → `stall` | attempt failure |
 | `requires_action` | waits for an answer to a permission request or question; not silence; the step `timeout` of `running` pauses here and resumes with the time it had left | `human_timeout` 1 h | answer `deny`, back to `running` |
-| `finishing` | outcome declared and the session idle without background; `run.finishing` hooks running | hook deadline | the hooks count as failed → veto → `failed{check, hook_deadline}` |
+| `finishing` | outcome declared and the session idle without background; `run.finishing` hooks running | hook deadline | the hooks count as failed → veto → `failed{check, hook_deadline}` (a declared `fail` stays `failed{agent}`) |
 | `interrupted` | the current attempt ended with a failure (or by a daemon restart); `run.attempt_failed` is deciding | hook deadline, then the decision's `after` | no decision → `failed{infrastructure}` |
 | `parked` | a started run waits for a gate; no harness process | the gate's `until`; for a gate without `until`, `park_timeout` 7 d | `failed{infrastructure, park_timeout}` |
 | `passed`, `failed{class}`, `cancelled` | terminal | — | — |
@@ -455,7 +455,9 @@ then calls `changes` from its stored cursor (and on start and after recovery wit
 so that the state machine has one place where `run.attempt_failed` is decided.
 
 Ceilings of the core (invariant 16): 20 attempts per run, 10 remarks per attempt (`continue` after a hollow turn
-and `remark` after `run.finishing` both count). Trigger depth (§9.5): default 10, ceiling 100.
+and `remark` after `run.finishing` both count). The eleventh fails the run with reason `remarks_ceiling` and the class
+the event would give: `hollow_done` for `continue`, `check` for `remark`. Between turns (from idle without background
+to the next prompt) the step `timeout` pauses like in `requires_action`. Trigger depth (§9.5): default 10, ceiling 100.
 
 ### 6.2 Transitions
 
@@ -486,13 +488,16 @@ of a run whose gate the operator closed parks it instead (invariant 18).
 
 ### 6.3 Finisher
 
-- Every attempt gets a token: 32 random bytes, base64url. The state keeps its SHA-256 with `(run, attempt,
-  generation)`. The token is valid while its attempt is the run's current one and the run is not terminal.
+- Every attempt gets a token: 32 random bytes as 64 hex digits. The state keeps its SHA-256 with `(run, attempt,
+  generation)`; the token itself reaches the adapter through `SessionPlan` and lives only in the attempt's launch
+  effect until it runs. The token is valid while its attempt is the run's current one and the run is not
+  terminal.
 - The session environment carries `AAE_RUN`, `AAE_ATTEMPT_TOKEN` and `AAE_SOCKET` (see 4.6 for how each harness
   gets it).
 - CLI: `aae finish pass|fail --summary <text> [--data <json>|@<file>]` → `POST` of the outcome to the API with the
   token. Answers: accepted; `stale_attempt` (an older or ended attempt — nothing changes); `run_terminal`;
-  `invalid`. With the daemon unreachable the command retries with backoff for 60 s, then exits with code 75.
+  `invalid` (unknown token or run, `summary` over 4 KiB, `data` over 64 KiB, or a call while the run is
+  `finishing`: the declared outcome is under check). With the daemon unreachable the command retries with backoff for 60 s, then exits with code 75.
 - The table of §9.4 maps onto 6.2: a call during a turn stores the outcome (`running` stays); a repeated call
   replaces it; the end of the turn with background work keeps `running` until idle without background (deadline:
   background silence budget).

@@ -49,6 +49,8 @@ struct State {
     sessions: HashMap<u64, Session>,
     /// Numbers instances and sessions.
     started: u64,
+    /// The attempt tokens the core handed over, by `(run, attempt)`.
+    tokens: HashMap<(String, u32), String>,
 }
 
 struct Instance {
@@ -84,6 +86,11 @@ impl ScriptedDriver {
     /// Queues the scenario played by the next `send_prompt` or `respond`.
     pub fn script(&self, steps: Vec<Step>) {
         self.lock().scenarios.push_back(steps);
+    }
+
+    /// The token of attempt `attempt` of `run`, as the agent of the attempt would find it in its environment.
+    pub fn token(&self, run: &str, attempt: u32) -> Option<String> {
+        self.lock().tokens.get(&(run.to_owned(), attempt)).cloned()
     }
 
     fn lock(&self) -> std::sync::MutexGuard<'_, State> {
@@ -195,7 +202,20 @@ impl Driver for ScriptedDriver {
 
     /// The native block needs a process of its own; the model and the working directory ride with the session.
     fn split(&self, config: &EffectiveConfig, plan: &SessionPlan) -> Result<Split, Failure> {
-        let (SessionPlan::New { workdir, .. } | SessionPlan::Resume { workdir, .. }) = plan;
+        let (SessionPlan::New {
+            workdir,
+            run,
+            attempt,
+            token,
+        }
+        | SessionPlan::Resume {
+            workdir,
+            run,
+            attempt,
+            token,
+            ..
+        }) = plan;
+        self.lock().tokens.insert((run.clone(), *attempt), token.clone());
         let process = ProcessPart(json!({ "native": config.native.as_ref().map(|n| &n.value) }));
         let model = config.model.as_ref().map(|m| &m.value);
         let session = SessionPart(json!({ "model": model, "workdir": workdir }));

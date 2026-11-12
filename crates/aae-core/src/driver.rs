@@ -53,20 +53,22 @@ impl Split {
     }
 }
 
-/// What the session of an attempt is; `run` and `attempt` name files in the state directory and set the attempt
-/// environment.
+/// What the session of an attempt is; `run` and `attempt` name files in the state directory; `run` and `token` set
+/// the attempt environment (`AAE_RUN`, `AAE_ATTEMPT_TOKEN`, contracts 6.3).
 #[derive(Clone, Debug, PartialEq)]
 pub enum SessionPlan {
     New {
         workdir: PathBuf,
         run: String,
         attempt: u32,
+        token: String,
     },
     Resume {
         session: SessionRef,
         workdir: PathBuf,
         run: String,
         attempt: u32,
+        token: String,
     },
 }
 

@@ -72,6 +72,15 @@ CREATE TABLE attempts (
 CREATE INDEX attempts_instance ON attempts (instance);
 ";
 
+/// The finisher (docs/design/contracts.md 6.3): the attempt token by its SHA-256, the declared outcome and the
+/// number of prompts the attempt sent (remarks = prompts - 1).
+const SCHEMA_V3: &str = "
+ALTER TABLE attempts ADD COLUMN token_sha256 TEXT;
+ALTER TABLE attempts ADD COLUMN outcome TEXT;
+ALTER TABLE attempts ADD COLUMN prompts INTEGER NOT NULL DEFAULT 1;
+CREATE INDEX attempts_token ON attempts (token_sha256);
+";
+
 /// Opens the state database in WAL mode and brings its schema to the current version.
 pub fn open(path: &Path) -> rusqlite::Result<Connection> {
     let conn = Connection::open(path)?;
@@ -79,7 +88,7 @@ pub fn open(path: &Path) -> rusqlite::Result<Connection> {
     // NORMAL in WAL mode survives a process crash (kill -9, criterion 8); only power loss can drop a commit.
     conn.pragma_update(None, "synchronous", "NORMAL")?;
     let version: i32 = conn.pragma_query_value(None, "user_version", |r| r.get(0))?;
-    for (to, sql) in [(1, SCHEMA_V1), (2, SCHEMA_V2)]
+    for (to, sql) in [(1, SCHEMA_V1), (2, SCHEMA_V2), (3, SCHEMA_V3)]
         .into_iter()
         .filter(|(to, _)| *to > version)
     {

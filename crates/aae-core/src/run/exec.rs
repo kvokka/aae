@@ -47,6 +47,10 @@ impl Executor for RunExecutor {
                     driver.stop_instance(&handle, STOP_GRACE).await;
                     Ok(())
                 }
+                (Some("prompt"), Ok(handle)) => {
+                    let text = payload["text"].as_str().unwrap_or_default();
+                    driver.send_prompt(&handle, &session, text, key(payload)).await
+                }
                 (Some("respond"), Ok(handle)) => match answer_from(&payload["answer"]) {
                     Some(answer) => {
                         let request = payload["request"].as_str().unwrap_or_default();
@@ -77,18 +81,22 @@ fn attempt(payload: &Value) -> u32 {
         .unwrap_or_default()
 }
 
+fn key(payload: &Value) -> PromptKey {
+    PromptKey(
+        payload["key"]
+            .as_str()
+            .and_then(|k| Uuid::parse_str(k).ok())
+            .unwrap_or_default(),
+    )
+}
+
 impl RunExecutor {
     /// Instance, then session (new or resumed after a transcript check, invariant 17), then the prompt. The writer
     /// learns the instance and the session before the next call, so every event of them finds its attempt.
     async fn launch(&self, core: &CoreHandle<Msg>, driver: &dyn Driver, p: &Value) -> Result<(), Failure> {
         let run = p["run"].as_str().unwrap_or_default().to_owned();
         let attempt = attempt(p);
-        let key = PromptKey(
-            p["key"]
-                .as_str()
-                .and_then(|k| Uuid::parse_str(k).ok())
-                .unwrap_or_default(),
-        );
+        let key = key(p);
         let process = ProcessPart(p["process"].clone());
         let part = SessionPart(p["session"].clone());
         let handle = driver.start_instance(&process, self.sink.clone()).await?;
