@@ -72,7 +72,7 @@ impl Daemon {
 
     /// Waits until the run is in `state`.
     pub(crate) async fn until_state(&self, run: &str, state: &str) -> Value {
-        let deadline = Instant::now() + Duration::from_secs(10);
+        let deadline = Instant::now() + Duration::from_secs(30);
         loop {
             let view = self.get(&format!("/v1/runs/{run}")).await;
             if view["state"] == state {

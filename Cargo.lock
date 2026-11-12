@@ -9,6 +9,7 @@ dependencies = [
  "aae-claude",
  "aae-core",
  "aae-front",
+ "aae-testkit",
  "clap",
  "serde_json",
  "tempfile",
