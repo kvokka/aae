@@ -236,7 +236,7 @@ until `human_timeout`.
 
 ### 3.4 Decisions and restarts
 
-A deciding event stays in the outbox until its decision is committed (see 3.5). A decision message names the event
+The hook effect of a deciding event stays queued until its decision is committed (see 3.5). A decision message names the event
 `seq` and the run generation of the event; the core applies it only if the run is still in the state that emitted
 that event with that generation, else it is dropped as stale and nothing changes. After a restart the dispatcher
 runs the hooks of every deciding event still pending; the run waits in its state meanwhile (the run was moved to
@@ -244,26 +244,25 @@ runs the hooks of every deciding event still pending; the run waits in its state
 
 ### 3.5 Outbox lifetime
 
-- Every committed event is an outbox row. Durable consumers: the journal writer, the trigger matcher and the
-  hook dispatcher. Each acknowledges a row in its own transaction; the row is deleted in the transaction of the
-  last acknowledgement.
-- The journal writer acknowledges after the line is written and flushed; the trigger matcher after the run it
-  created (or the `trigger.skipped`) is committed — the idempotency key is `(trigger, seq)`; the hook dispatcher
-  after all hooks of the event finished and, for a deciding event, after the decision is committed.
-- The trigger matcher keeps the `(trigger, seq)` guarantee in the strongest shape: it matches in the transaction
-  that commits the event, so the run it creates (or its `trigger.skipped`) commits with the event or not at all,
-  and events the firing emits are matched in the same transaction. A schedule fires in the transaction of its
-  deadline, which sets the next one.
-- The hook dispatcher is the same guarantee in another shape: the transaction that commits an event also queues
-  the hooks on it as one effect. The key is `hooks:<run>` for a deciding event (a run waits on at most one) and
-  `hooks:<run>:obs` for an observed one; each key runs its hooks in `seq` order, and a slow observed hook never
-  holds a deciding one past its deadline (3.3). The effect is
-  deleted only after every hook finished and the decision message was handled; a crash runs it again.
-- There is no time-based expiry: a row lives until all durable consumers acknowledge it, so a crash neither
-  loses nor doubles a trigger or a hook decision. Every consumer is bounded in time (hook timeouts, journal write
-  errors retried with the effect backoff), so the outbox drains. The depth and the age of the oldest row are part
+- Every committed event is an outbox row. The one durable consumer is the journal writer: it acknowledges the
+  rows after the lines are written and flushed (`consumers` table), and the acknowledged rows are deleted in that
+  transaction.
+- Triggers and hooks are not outbox consumers; each is tied to the transaction that commits the event instead,
+  which keeps the same at-most-once-per-`seq` guarantee in a stronger shape:
+  - The trigger matcher matches in the transaction that commits the event, so the run it creates (or its
+    `trigger.skipped`) commits with the event or not at all — the key `(trigger, seq)` holds by construction —
+    and events the firing emits are matched in the same transaction. A schedule fires in the transaction of its
+    deadline, which sets the next one.
+  - The transaction that commits an event also queues the hooks on it as one effect. The key is `hooks:<run>` for
+    a deciding event (a run waits on at most one) and `hooks:<run>:obs` for an observed one; each key runs its
+    hooks in `seq` order, and a slow observed hook never holds a deciding one past its deadline (3.3). The effect
+    is deleted only after every hook finished and the decision message was handled; a crash runs it again.
+- There is no time-based expiry: a row lives until the journal writer acknowledges it, and a hook effect lives
+  until its decision is handled, so a crash neither loses nor doubles a journal line, a trigger or a hook decision.
+  Both are bounded in time (hook timeouts, journal write errors retried with the effect backoff), so the outbox
+  drains. The depth and the age of the oldest row are part
   of the daemon status (API) and of `aae doctor`.
-- API event streams are not durable consumers: they read the journal from a `seq` (§5.3) and get the "gap" error
+- API event streams are not outbox consumers: they read the journal from a `seq` (§5.3) and get the "gap" error
   when it is rotated away.
 
 ## 4. Driver interface
@@ -471,7 +470,7 @@ so that the state machine has one place where `run.attempt_failed` is decided.
 Ceilings of the core (invariant 16): 20 attempts per run, 10 remarks per attempt (`continue` after a hollow turn
 and `remark` after `run.finishing` both count). The eleventh fails the run with reason `remarks_ceiling` and the class
 the event would give: `hollow_done` for `continue`, `check` for `remark`. Between turns (from idle without background
-to the next prompt) the step `timeout` pauses like in `requires_action`. Trigger depth (§9.5): default 10, ceiling 100.
+to the next prompt) the step `timeout` pauses like in `requires_action`. Trigger depth (§9.5): a trigger does not start a run deeper than 10 (`trigger.skipped{depth}`); the limit is fixed, with no setting.
 
 ### 6.2 Transitions
 
