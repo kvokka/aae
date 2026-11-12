@@ -30,6 +30,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "aae-codex"
+version = "0.1.0"
+dependencies = [
+ "aae-core",
+ "aae-testkit",
+ "rustix",
+ "serde_json",
+ "tempfile",
+ "tokio",
+ "toml",
+]
+
+[[package]]
 name = "aae-core"
 version = "0.1.0"
 dependencies = [
