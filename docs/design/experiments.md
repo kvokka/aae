@@ -3,7 +3,9 @@
 Results of the throwaway experiments that precede the core. Code lives in `experiments/` (a separate Cargo
 workspace outside the product budgets, ≤ 1 500 lines in total, checked by `scripts/budget.sh`). Every number carries
 a `MEASURE` marker. Logs are sanitized samples (`<home>`, `<work>` placeholders; long `tools`/`skills` arrays are
-replaced by their length) and serve as fixtures for the scripted harness.
+replaced by their length) and serve as fixtures for the scripted harness. Once an experiment is recorded, its
+scenario code may leave the tree to free the line limit; the section then names the commit that still holds it
+(`git show <commit>:<path>`), and the logs stay.
 
 Common setup for the claude experiments: `claude -p --input-format stream-json --output-format stream-json
 --verbose --setting-sources "" --strict-mcp-config --model haiku`, clean environment (only `PATH`, `HOME`, `LANG`,
@@ -52,7 +54,8 @@ Consequences for the claude adapter (WP-27):
 
 ## claude processes and background work (experiment 1b)
 
-Code: `experiments/02-claude-process` (`orphans`, `orphans subreaper`, `background`). Logs:
+Code: `experiments/02-claude-process` (`orphans`, `orphans subreaper`, `background`), removed from the tree after
+recording; last in commit `1629c3a`. Logs:
 `experiments/02-claude-process/logs/`.
 
 <!-- MEASURE id=claude-process-1b date=2026-11-12 ver=claude-2.1.322 env=linux-arm64-orbstack src=experiments/02-claude-process/logs note="haiku, n=1 per scenario" -->
@@ -120,7 +123,8 @@ is `idle`, (b) the last `background_tasks_changed` had an empty list (or none ar
 ## br as an event source (experiment 3)
 
 Code: `experiments/05-br-events` (one scenario, fresh workspace with an isolated `HOME`, the `notify` crate on the
-`.beads/` directory, `rusqlite` read-only on `beads.db`). Output: `experiments/05-br-events/logs/run.txt`.
+`.beads/` directory, `rusqlite` read-only on `beads.db`), removed from the tree after recording; last in commit
+`1629c3a`. Output: `experiments/05-br-events/logs/run.txt`.
 
 <!-- MEASURE id=br-events-exp3 date=2026-11-12 ver=br-0.7.6 env=linux-arm64-orbstack src=experiments/05-br-events/logs/run.txt note="20 creates, 9 reads, 16 concurrent claims, 4 attribution cases; database of 20 beads; two runs agree" -->
 
@@ -151,8 +155,8 @@ Code: `experiments/05-br-events` (one scenario, fresh workspace with an isolated
 ## codex app-server (experiment 2)
 
 Code: `experiments/03-codex-appserver` (`src/lib.rs`: client over stdio or a WebSocket on a unix socket and a fake
-Responses API provider; `src/main.rs`: scenarios `threads stdio|unix` and `reconnect`; `src/bin/gen.rs`: type
-generator). Output: `experiments/03-codex-appserver/logs/run.txt`, message logs next to it. No live model: every
+Responses API provider, kept for experiments 4–5; `src/main.rs`: scenarios `threads stdio|unix` and `reconnect`,
+removed from the tree after recording, last in commit `1629c3a`; `src/bin/gen.rs`: type generator). Output: `experiments/03-codex-appserver/logs/run.txt`, message logs next to it. No live model: every
 turn goes to the fake provider, `HOME` and `CODEX_HOME` are fresh directories, the process environment holds only
 `PATH`, `HOME`, `CODEX_HOME`, `SHELL`.
 

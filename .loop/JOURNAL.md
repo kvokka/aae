@@ -139,3 +139,11 @@ WP-04: строка «Hooks per thread» в `docs/design/experiments.md` утв�
 `bypass_hook_trust` и своим набором (`UserPromptSubmit`) исполнил только его; A — свои два; тред C с полным набором
 без bypass — ни одного; D с bypass — оба. Вывод «набор хуков — часть конфига треда, не процесса» теперь доказан;
 решение «хуки не входят в отпечаток экземпляра» (§7.3) в силе. Логи — `experiments/03-codex-appserver/logs/run.txt`.
+
+## 2026-11-12T10:20 · цикл 4 · coder · РЕШЕНИЕ
+
+Лимит опытов §16 (вопрос цикла 3, мнение ревьюера 03 — допустимо). Из дерева удалён код записанных опытов:
+`experiments/02-claude-process`, `experiments/05-br-events`, сценарии `experiments/03-codex-appserver/src/main.rs`.
+Итоги и логи остаются в `docs/design/experiments.md` и `logs/`; код — в коммите `1629c3a` (ссылка в каждом разделе).
+Библиотеки `01-claude-protocol` и `03-codex-appserver` (клиент, поддельный провайдер) оставлены для WP-05.
+Строки опытов: 1 487 → 862 / 1 500. Лимит не поднимался.
