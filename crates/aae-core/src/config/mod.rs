@@ -1,6 +1,7 @@
 //! Configuration: the files of the orchestrator, projects, packs, agents, formulas, triggers and plugins
 //! (spec §6, §8, §9.1, §9.5, §11; docs/design/config.md), loaded and validated as a whole.
 
+mod assemble;
 mod check;
 mod files;
 mod items;
@@ -8,6 +9,7 @@ mod load;
 pub(crate) mod schema;
 
 use crate::template::{Filter, Inputs, Template};
+pub use assemble::{EffectiveConfig, Layer, Sourced};
 pub use files::{Harness, Hook, Input, InputType, Mcp, McpScope, PluginUse, Settings, Skill};
 use std::{collections::BTreeMap, fmt, path::PathBuf, time::Duration};
 

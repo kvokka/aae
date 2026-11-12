@@ -2,7 +2,7 @@ use crate::config::{Config, ConfigError, Name, Source, Step, load};
 use std::{fs, time::Duration};
 
 /// A valid config: an orchestrator with a plugin, a project with a rig and a project trigger, and one pack.
-const BASE: &[(&str, &str)] = &[
+pub(super) const BASE: &[(&str, &str)] = &[
     (
         "config.toml",
         r#"projects = ["shop"]
@@ -92,7 +92,7 @@ command = ["sh", "-c", "true"]
 ];
 
 /// Loads `BASE` with `changes` written over it (same path replaces, a new path adds).
-fn load_with(changes: &[(&str, &str)]) -> Result<Config, Vec<ConfigError>> {
+pub(super) fn load_with(changes: &[(&str, &str)]) -> Result<Config, Vec<ConfigError>> {
     let dir = tempfile::tempdir().unwrap();
     for (path, text) in BASE
         .iter()

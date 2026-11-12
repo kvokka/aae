@@ -84,7 +84,7 @@ pub(super) fn project(loader: &mut Loader, project: &mut Project) {
 }
 
 /// A bare name resolves to the referring pack's own item first, then to the only pack that has it.
-fn resolve(
+pub(super) fn resolve(
     packs: &[Pack],
     own: &str,
     name: &Name,

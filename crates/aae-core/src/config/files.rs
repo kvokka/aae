@@ -1,6 +1,6 @@
 //! The TOML shape of every config file (docs/design/config.md). Unknown keys are errors.
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 use std::{collections::BTreeMap, path::PathBuf};
 
@@ -28,7 +28,7 @@ pub struct Settings {
     pub native: BTreeMap<String, Value>,
 }
 
-#[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "lowercase")]
 pub enum McpScope {
     Orchestrator,
@@ -37,7 +37,7 @@ pub enum McpScope {
 }
 
 /// An MCP server: a command (stdio) or a URL (HTTP), exactly one of them.
-#[derive(Clone, Debug, Deserialize, PartialEq)]
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct Mcp {
     pub command: Option<Vec<String>>,
@@ -50,7 +50,7 @@ pub struct Mcp {
 }
 
 /// A harness hook in the Claude dialect (spec §11.2); `enabled = false` alone switches off a lower layer's hook.
-#[derive(Clone, Debug, Deserialize, PartialEq)]
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct Hook {
     #[serde(default = "yes")]
@@ -61,7 +61,7 @@ pub struct Hook {
     pub timeout: Option<String>,
 }
 
-#[derive(Clone, Debug, Deserialize, PartialEq)]
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct Skill {
     #[serde(default = "yes")]
@@ -70,7 +70,7 @@ pub struct Skill {
 }
 
 /// A plugin attached to agents, in attachment order.
-#[derive(Clone, Debug, Deserialize, PartialEq)]
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct PluginUse {
     pub name: String,

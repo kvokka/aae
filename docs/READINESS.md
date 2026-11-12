@@ -14,7 +14,7 @@ Assessed 2026-11-13 on top of `9430610` (the last code commit assessed).
 | Triggers and schedules | 2 | code (WP-17); contract: `contracts.md` 2, 3.5; the `where` and `inputs` language is code (`aae-core/src/template.rs`) |
 | Issue gates | 2 | code (WP-16); contract: `contracts.md` 7 |
 | Recovery | 2 | code (WP-20); contract: `contracts.md` 6.4 |
-| Config assembly | 3 | the files are code (`aae-core/src/config/`, format in `docs/design/config.md`): load and validation of the orchestrator, projects, rigs, packs, agents, formulas, triggers and plugins with model-free tests; missing: the seven layers with provenance and the effective config (WP-12), reload held by the daemon (WP-22) |
+| Config assembly | 3 | code: the files (`aae-core/src/config/`, format in `docs/design/config.md`) with load and validation, the seven layers merged with the layer of every value, "explain", the snapshot value, the driver `split` with fingerprints; model-free tests; missing: a command to explain by hand (WP-23), reload held by the daemon (WP-22) |
 | Instance and service registry | 2 | code (WP-18); contract: `contracts.md` 8 |
 | claude adapter | 2 | code (WP-27); contract: `contracts.md` 4 |
 | codex adapter | 2 | code (WP-29); contract: `contracts.md` 4 |

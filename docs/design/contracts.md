@@ -255,15 +255,15 @@ in, tests wire the scripted driver in (`crates/aae-testkit`). Futures are boxed;
 sink handed to `start_instance`. The adapter translates and executes; it never retries a turn, parks or decides
 an outcome (§4, §7.2).
 
-In code (`crates/aae-core/src/driver.rs`) `split` joins the trait with config assembly (WP-12), and
-`Capabilities.versions` with the first adapter (WP-27): until then neither has a producer.
+In code (`crates/aae-core/src/driver.rs`) `Capabilities.versions` joins with the first adapter (WP-27): until then
+it has no producer.
 
 ```rust
 trait Driver: Send + Sync {
     fn harness(&self) -> &'static str;                        // "claude", "codex"
     fn capabilities(&self, process: &ProcessPart) -> Capabilities;
     fn account(&self, process: &ProcessPart) -> Option<String>;
-    fn split(&self, config: &EffectiveConfig, plan: &SessionPlan) -> Result<Split, ConfigError>;
+    fn split(&self, config: &EffectiveConfig, plan: &SessionPlan) -> Result<Split, Failure>;   // kind config_error
 
     // instance
     fn start_instance(&self, process: &ProcessPart, sink: EventSink) -> BoxFuture<Result<InstanceHandle, Failure>>;

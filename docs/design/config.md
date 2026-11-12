@@ -29,6 +29,18 @@ contribution of a plugin; the top level of `agent.toml`; and the overrides `[ove
 | `plugins` | array of `{name, enabled = true, config = {..}}`, in attachment order | named list |
 | `native.<harness>` | any table, passed to the adapter as is | by key |
 
+## Effective config and "explain config"
+
+`Config::effective(project, rig, agent)` merges the layers of §6.3 for one session: the harness default model,
+orchestrator, project and rig settings, then the contributions of the attached plugins in attachment order, the
+agent, and the overrides of the orchestrator, the project and the rig. Plugins attach first (the `plugins` key of
+every layer), so a stronger layer can detach a plugin and its whole contribution. An override applies when its key
+resolves (see Names) to the agent. Every value keeps its layer; `explain()` prints one line per value with its
+layer and one line for the host: inherited by the harness and invisible to aae, or off. The effective config
+serializes to JSON: a run keeps it as its snapshot, and `env` is the whole session environment besides what the
+adapter adds (§6.5). The adapter's `split` turns it into a process part, keyed by its fingerprint (contracts 8),
+and a session part.
+
 ## Orchestrator: `~/.config/aae/config.toml`
 
 ```toml

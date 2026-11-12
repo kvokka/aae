@@ -4,9 +4,11 @@
 
 use aae_core::{
     BoxFuture,
+    config::EffectiveConfig,
     driver::{
         Answer, Capabilities, Driver, DriverEvent, EventSink, Failure, FailureKind, Health, InstanceHandle, Normalized,
-        ProcessPart, PromptKey, PromptState, SessionPart, SessionRef, Source, StopReason, Transcript,
+        ProcessPart, PromptKey, PromptState, SessionPart, SessionPlan, SessionRef, Source, Split, StopReason,
+        Transcript,
     },
 };
 use serde_json::{Value, json};
@@ -185,6 +187,15 @@ impl Driver for ScriptedDriver {
 
     fn account(&self, _process: &ProcessPart) -> Option<String> {
         None
+    }
+
+    /// The native block needs a process of its own; the model and the working directory ride with the session.
+    fn split(&self, config: &EffectiveConfig, plan: &SessionPlan) -> Result<Split, Failure> {
+        let (SessionPlan::New { workdir, .. } | SessionPlan::Resume { workdir, .. }) = plan;
+        let process = ProcessPart(json!({ "native": config.native.as_ref().map(|n| &n.value) }));
+        let model = config.model.as_ref().map(|m| &m.value);
+        let session = SessionPart(json!({ "model": model, "workdir": workdir }));
+        Ok(Split::new(self.harness(), process, session))
     }
 
     fn start_instance<'a>(

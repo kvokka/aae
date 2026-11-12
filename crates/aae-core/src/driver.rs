@@ -1,9 +1,10 @@
 //! The driver interface between the core and a harness adapter (docs/design/contracts.md 4). The adapter
 //! translates and executes; it never retries a turn, parks or decides an outcome (spec §4, §7.2).
 
-use crate::BoxFuture;
+use crate::{BoxFuture, config::EffectiveConfig};
 use serde_json::Value;
-use std::time::Duration;
+use sha2::{Digest, Sha256};
+use std::{path::PathBuf, time::Duration};
 use tokio::sync::{broadcast, mpsc};
 use uuid::Uuid;
 
@@ -14,6 +15,59 @@ pub struct ProcessPart(pub Value);
 /// The part of the effective config that a session on a shared process carries; opaque to the core.
 #[derive(Clone, Debug, PartialEq)]
 pub struct SessionPart(pub Value);
+
+/// SHA-256 of the harness name and the canonical JSON of a [`ProcessPart`], hex: sessions whose process parts are
+/// equal share an instance (contracts 8).
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct Fingerprint(pub String);
+
+impl Fingerprint {
+    pub fn of(harness: &str, process: &ProcessPart) -> Self {
+        // `serde_json` maps keep their keys sorted, so the text is canonical.
+        let digest = Sha256::new()
+            .chain_update(harness.as_bytes())
+            .chain_update([0])
+            .chain_update(process.0.to_string().as_bytes())
+            .finalize();
+        Self(digest.iter().map(|b| format!("{b:02x}")).collect())
+    }
+}
+
+/// The effective config split by the adapter into what needs its own process and what a session carries.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Split {
+    pub process: ProcessPart,
+    pub session: SessionPart,
+    pub fingerprint: Fingerprint,
+}
+
+impl Split {
+    pub fn new(harness: &str, process: ProcessPart, session: SessionPart) -> Self {
+        let fingerprint = Fingerprint::of(harness, &process);
+        Self {
+            process,
+            session,
+            fingerprint,
+        }
+    }
+}
+
+/// What the session of an attempt is; `run` and `attempt` name files in the state directory and set the attempt
+/// environment.
+#[derive(Clone, Debug, PartialEq)]
+pub enum SessionPlan {
+    New {
+        workdir: PathBuf,
+        run: String,
+        attempt: u32,
+    },
+    Resume {
+        session: SessionRef,
+        workdir: PathBuf,
+        run: String,
+        attempt: u32,
+    },
+}
 
 /// Everything the adapter needs to resume a session; the core stores it and hands it back.
 #[derive(Clone, Debug, PartialEq)]
@@ -256,6 +310,8 @@ pub trait Driver: Send + Sync {
     fn capabilities(&self, process: &ProcessPart) -> Capabilities;
     /// The account id the gates use (spec §5.7): a stable hash of the credential source, never the credential.
     fn account(&self, process: &ProcessPart) -> Option<String>;
+    /// A config the harness cannot express is a `config_error` failure of the attempt.
+    fn split(&self, config: &EffectiveConfig, plan: &SessionPlan) -> Result<Split, Failure>;
 
     fn start_instance<'a>(
         &'a self,
