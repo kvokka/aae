@@ -4,8 +4,8 @@ Per-component readiness on the 0–10 scale of spec §14: 0 nothing; 2 contract 
 path works by hand; 6 model-free tests green, including failure paths; 8 the component's §15 criteria green on the
 owner's host; 10 real owner runs without intervention (criterion 20). Updated at the end of every work session.
 
-Assessed 2026-11-13 on top of `e30dc17` (the last code commit assessed).
-<!-- MEASURE id=readiness date=2026-11-13 ver=e30dc17 env=linux-arm64-orbstack src=docs/READINESS.md note="self-assessment by the implementing agent; re-assess at the end of every session" -->
+Assessed 2026-11-13 on top of `7c52070` (the last code commit assessed).
+<!-- MEASURE id=readiness date=2026-11-13 ver=7c52070 env=linux-arm64-orbstack src=docs/READINESS.md note="self-assessment by the implementing agent; re-assess at the end of every session" -->
 
 | Component | Score | Missing for the next point |
 |---|---|---|
