@@ -282,8 +282,9 @@ told apart in this run); refresh of a delivered OAuth token after expiry (spec �
 ### Consequences
 
 - claude (WP-27): the adapter delivers everything with flags and files in the state directory: `--settings`
-  (file or inline), `--plugin-dir` for skills and plugin hooks, `--mcp-config` + `--strict-mcp-config`; and repeats
-  the whole set on every `--resume`. Host inheritance off = `--setting-sources project,local` (not `""`): the rig's
+  (file or inline), `--plugin-dir` for skills and plugin hooks, `--mcp-config`; and repeats the whole set on every
+  `--resume`. It does not pass `--strict-mcp-config`: that would cut the rig's `.mcp.json` too, and with
+  inheritance off the setting sources and the own config directory already cut the host's servers. Host inheritance off = `--setting-sources project,local` (not `""`): the rig's
   own config keeps working — the spec §6.3 assumption holds for claude. With an isolated `CLAUDE_CONFIG_DIR` the
   adapter delivers `CLAUDE_CODE_OAUTH_TOKEN` (or `ANTHROPIC_API_KEY`).
 - codex (WP-29): MCP, hooks (`config.hooks`), instructions and `bypass_hook_trust` go per thread; skills, the

@@ -27,7 +27,7 @@ contribution of a plugin; the top level of `agent.toml`; and the overrides `[ove
 | `hooks.<name>` | `{event, matcher, command, timeout}` (harness hooks, Claude dialect, §11.2) or `{enabled = false}` | named list |
 | `skills.<name>` | `{path}` (must exist) or `{enabled = false}` | named list |
 | `plugins` | array of `{name, enabled = true, config = {..}}`, in attachment order | named list |
-| `native.<harness>` | any table, passed to the adapter as is | by key |
+| `native.<harness>` | any table, passed to the adapter as is; `native.claude` is a table of claude settings keys, delivered with `--settings` together with the hooks | by key |
 
 ## Effective config and "explain config"
 

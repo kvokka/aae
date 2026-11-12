@@ -182,7 +182,7 @@ pub fn load(orchestrator_file: &std::path::Path) -> Result<Config, Vec<ConfigErr
 }
 
 /// A duration with one unit: `"500ms"`, `"30s"`, `"45m"`, `"2h"` (contracts conventions).
-pub(crate) fn duration(text: &str) -> Result<Duration, String> {
+pub fn duration(text: &str) -> Result<Duration, String> {
     let split = text.find(|c: char| !c.is_ascii_digit()).unwrap_or(text.len());
     let (number, unit) = text.split_at(split);
     let n: u64 = number

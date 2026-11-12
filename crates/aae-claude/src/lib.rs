@@ -82,21 +82,23 @@ impl Claude {
         command
             .args(part::args(p))
             .env_clear()
-            .envs(part::env(p, id, self.socket.as_deref()))
+            .envs(part::env(p, id, self.socket.as_deref(), &part::host_dir()))
             .current_dir(p["workdir"].as_str().unwrap_or("."))
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
             .process_group(0);
-        let config_error = |e: std::io::Error| {
+        let config_error = |what: &Path, e: std::io::Error| {
             let mut failure = Failure::new(FailureKind::ConfigError, Source::Adapter);
-            failure.raw = format!("{}: {e}", self.binary.display());
+            failure.raw = format!("{}: {e}", what.display());
             failure
         };
+        let files = Path::new(p["files"].as_str().unwrap_or_default());
+        part::materialize(p).map_err(|e| config_error(files, e))?;
         if let Some(dir) = p["config_dir"].as_str() {
-            std::fs::create_dir_all(dir).map_err(config_error)?;
+            std::fs::create_dir_all(dir).map_err(|e| config_error(Path::new(dir), e))?;
         }
-        let mut child = orphans::spawn(&mut command).map_err(config_error)?;
+        let mut child = orphans::spawn(&mut command).map_err(|e| config_error(&self.binary, e))?;
         let pid = child.id().and_then(|p| i32::try_from(p).ok()).unwrap_or_default();
         let crashed = Failure::new(FailureKind::HarnessCrash, Source::Adapter);
         let start_time = orphans::start_time(pid).ok_or(crashed)?;

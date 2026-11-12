@@ -2,13 +2,14 @@
 
 use aae_claude::Claude;
 use aae_core::{
-    config::{EffectiveConfig, Layer, Sourced},
+    config::{EffectiveConfig, Hook, Layer, Mcp, Skill, Sourced},
     driver::{
         Driver, DriverEvent, Failure, FailureKind, Normalized, PromptKey, PromptState, SessionPlan, StopReason,
         Transcript,
     },
 };
 use aae_testkit::anthropic::{Provider, Reply};
+use serde_json::Value;
 use std::{collections::BTreeMap, path::Path, time::Duration};
 use tokio::sync::mpsc;
 
@@ -58,7 +59,12 @@ async fn until(
     panic!("no expected event in {seen:?}");
 }
 
-async fn turn(plan: Vec<Reply>, state: &Path) -> (Vec<Normalized>, Transcript) {
+/// One turn; `edit` changes the config first. The events, the transcript and the raw messages of the turn.
+async fn turn(
+    plan: Vec<Reply>,
+    state: &Path,
+    edit: impl FnOnce(&mut EffectiveConfig),
+) -> (Vec<Normalized>, Transcript, Vec<Value>) {
     let provider = Provider::start(plan).await;
     let driver = Claude::new("claude".into(), state.join("state"), None);
     let workdir = state.join("rig");
@@ -69,10 +75,13 @@ async fn turn(plan: Vec<Reply>, state: &Path) -> (Vec<Normalized>, Transcript) {
         attempt: 1,
         token: "t".into(),
     };
-    let split = driver.split(&config(&provider), &plan).unwrap();
+    let mut config = config(&provider);
+    edit(&mut config);
+    let split = driver.split(&config, &plan).unwrap();
     let (sink, mut events) = mpsc::unbounded_channel();
     let instance = driver.start_instance("i1", &split.process, sink).await.unwrap();
     let session = driver.start_session(&instance, &split.session).await.unwrap();
+    let mut live = driver.live(&session).unwrap();
     let key = PromptKey::new("r1", 1, 1);
     driver
         .send_prompt(&instance, &session, "Reply with exactly: OK", key)
@@ -80,15 +89,16 @@ async fn turn(plan: Vec<Reply>, state: &Path) -> (Vec<Normalized>, Transcript) {
         .unwrap();
     let seen = until(&mut events, |e| matches!(e, Normalized::TurnEnded { .. })).await;
     let transcript = driver.transcript(&instance, &session, key).await.unwrap();
+    let raw = std::iter::from_fn(|| live.try_recv().ok()).collect();
     driver.stop_instance(&instance, Duration::from_secs(4)).await;
     until(&mut events, |e| matches!(e, Normalized::Exited { .. })).await;
-    (seen, transcript)
+    (seen, transcript, raw)
 }
 
 #[tokio::test]
 async fn a_reply_is_acked_and_completed_and_is_in_the_transcript() {
     let dir = tempfile::tempdir().unwrap();
-    let (seen, transcript) = turn(vec![Reply::Text("OK".into())], dir.path()).await;
+    let (seen, transcript, _) = turn(vec![Reply::Text("OK".into())], dir.path(), |_| {}).await;
     let key = PromptKey::new("r1", 1, 1);
     assert!(seen.contains(&Normalized::PromptAcked { key }), "{seen:?}");
     assert!(seen.contains(&Normalized::TurnStarted));
@@ -109,7 +119,7 @@ async fn a_reply_is_acked_and_completed_and_is_in_the_transcript() {
 #[tokio::test]
 async fn an_api_error_is_a_classified_failure() {
     let dir = tempfile::tempdir().unwrap();
-    let (seen, _) = turn(vec![Reply::Billing], dir.path()).await;
+    let (seen, ..) = turn(vec![Reply::Billing], dir.path(), |_| {}).await;
     let failure: Vec<&Failure> = seen
         .iter()
         .filter_map(|e| match e {
@@ -124,4 +134,54 @@ async fn an_api_error_is_a_classified_failure() {
             stop_reason: StopReason::Failed
         })
     );
+}
+
+#[tokio::test]
+async fn hooks_skills_and_mcp_servers_reach_the_session() {
+    let dir = tempfile::tempdir().unwrap();
+    let skill = dir.path().join("skills/mail");
+    std::fs::create_dir_all(&skill).unwrap();
+    std::fs::write(
+        skill.join("SKILL.md"),
+        "---\nname: mail\ndescription: Sends mail.\n---\n\nSay mail.\n",
+    )
+    .unwrap();
+    let marker = dir.path().join("hook-fired");
+    let (_, _, raw) = turn(vec![Reply::Text("OK".into())], dir.path(), |c| {
+        let hook = Hook {
+            enabled: true,
+            event: Some("UserPromptSubmit".into()),
+            matcher: None,
+            command: Some(format!("touch {}", marker.display())),
+            timeout: Some("10s".into()),
+        };
+        c.hooks.insert("mark".into(), sourced(hook));
+        let path = Some(skill.clone());
+        c.skills.insert("mail".into(), sourced(Skill { enabled: true, path }));
+        let server = Mcp {
+            command: Some(vec!["true".into()]),
+            env: BTreeMap::new(),
+            url: None,
+            headers: BTreeMap::new(),
+            scope: None,
+        };
+        c.mcp.insert("mine".into(), sourced(server));
+    })
+    .await;
+    assert!(marker.exists(), "the hook fired");
+    let init = raw
+        .iter()
+        .find(|m| m["type"] == "system" && m["subtype"] == "init")
+        .expect("an init message");
+    let skills = init["skills"].to_string();
+    assert!(skills.contains("\"aae:mail\""), "{skills}");
+    let servers = init["mcp_servers"].to_string();
+    assert!(servers.contains("\"mine\""), "{servers}");
+}
+
+fn sourced<T>(value: T) -> Sourced<T> {
+    Sourced {
+        value,
+        from: Layer::Agent,
+    }
 }
