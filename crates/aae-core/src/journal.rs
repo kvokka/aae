@@ -18,6 +18,9 @@ pub struct Journal {
     dir: PathBuf,
     max_bytes: u64,
     files: usize,
+    /// `(written, acked)`: the last `seq` in the files and the last one acknowledged in the state. Unknown until
+    /// the first drain, and again after a failed write, so the files are checked once instead of on every drain.
+    cursor: Option<(i64, i64)>,
 }
 
 #[derive(Debug)]
@@ -41,11 +44,14 @@ impl Journal {
         Self::with_limits(dir, 10 * 1024 * 1024, 5)
     }
 
-    pub fn with_limits(dir: &Path, max_bytes: u64, files: usize) -> Self {
+    /// `files` counts the current file, so rotation needs at least two.
+    pub(crate) fn with_limits(dir: &Path, max_bytes: u64, files: usize) -> Self {
+        assert!(files >= 2, "a journal without rotated files would grow without limit");
         Self {
             dir: dir.to_owned(),
             max_bytes,
-            files: files.max(1),
+            files,
+            cursor: None,
         }
     }
 
@@ -59,23 +65,52 @@ impl Journal {
 
     /// Appends every outbox event after the journal's cursor, then acknowledges them and drops the outbox rows
     /// all consumers have acknowledged. Lines already in the file (written before a crash, not yet acknowledged)
-    /// are not written twice.
-    pub(crate) fn drain(&self, conn: &mut Connection) -> Result<(), io::Error> {
-        let acked: i64 = conn
-            .query_row("SELECT seq FROM consumers WHERE name = ?1", [CONSUMER], |r| r.get(0))
-            .map_err(io::Error::other)?;
-        let cursor = acked.max(last_seq(&self.path(0))?.unwrap_or(0));
-        let rows = outbox_after(conn, cursor).map_err(io::Error::other)?;
-        let mut last = cursor;
-        for (seq, ts_ms, body) in rows {
-            let line = envelope(seq, ts_ms, &body).to_string();
-            self.append(&line)?;
-            last = seq;
+    /// are not written twice. With nothing new in the outbox it does no file I/O.
+    pub(crate) fn drain(&mut self, conn: &mut Connection) -> io::Result<()> {
+        let result = self.drain_inner(conn);
+        if result.is_err() {
+            self.cursor = None;
         }
-        if last > acked {
-            store::ack(conn, CONSUMER, last).map_err(io::Error::other)?;
+        result
+    }
+
+    fn drain_inner(&mut self, conn: &mut Connection) -> io::Result<()> {
+        let (mut written, mut acked) = match self.cursor {
+            Some(cursor) => cursor,
+            None => {
+                let acked: i64 = conn
+                    .query_row("SELECT seq FROM consumers WHERE name = ?1", [CONSUMER], |r| r.get(0))
+                    .map_err(io::Error::other)?;
+                (acked.max(self.recover()?.unwrap_or(0)), acked)
+            }
+        };
+        for (seq, ts_ms, body) in outbox_after(conn, written).map_err(io::Error::other)? {
+            self.append(&envelope(seq, ts_ms, &body).to_string())?;
+            written = seq;
         }
+        if written > acked {
+            store::ack(conn, CONSUMER, written).map_err(io::Error::other)?;
+            acked = written;
+        }
+        self.cursor = Some((written, acked));
         Ok(())
+    }
+
+    /// The last `seq` in the files. A torn last line (a write cut short by a crash or a full disk) is cut off, so
+    /// the next line does not glue onto it. Without a current file (a crash right after rotation) the rotated one
+    /// holds the last line.
+    fn recover(&self) -> io::Result<Option<i64>> {
+        let current = self.path(0);
+        if let Ok(bytes) = fs::read(&current) {
+            let keep = bytes.iter().rposition(|&b| b == b'\n').map_or(0, |i| i + 1);
+            if keep < bytes.len() {
+                OpenOptions::new().write(true).open(&current)?.set_len(keep as u64)?;
+            }
+            if let Some(seq) = last_seq(&bytes[..keep]) {
+                return Ok(Some(seq));
+            }
+        }
+        Ok(fs::read(self.path(1)).ok().and_then(|bytes| last_seq(&bytes)))
     }
 
     fn append(&self, line: &str) -> io::Result<()> {
@@ -143,15 +178,10 @@ fn envelope(seq: i64, ts_ms: i64, body: &str) -> Value {
     event
 }
 
-fn last_seq(path: &Path) -> io::Result<Option<i64>> {
-    let Ok(file) = File::open(path) else { return Ok(None) };
-    let mut last = None;
-    for line in BufReader::new(file).lines() {
-        if let Ok(event) = serde_json::from_str::<Value>(&line?) {
-            last = event["seq"].as_i64().or(last);
-        }
-    }
-    Ok(last)
+/// The `seq` of the last line of complete JSONL `bytes`.
+fn last_seq(bytes: &[u8]) -> Option<i64> {
+    let line = bytes.strip_suffix(b"\n")?.rsplit(|&b| b == b'\n').next()?;
+    serde_json::from_slice::<Value>(line).ok()?["seq"].as_i64()
 }
 
 /// `2026-11-12T14:05:00.123Z` from milliseconds since the Unix epoch (days-to-civil, proleptic Gregorian).

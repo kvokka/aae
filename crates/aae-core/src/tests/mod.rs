@@ -1,3 +1,5 @@
+mod journal;
+
 use crate::{BoxFuture, Clock, Error, Event, Executor, Handler, Journal, Tx, effects, open, start};
 use serde_json::{Value, json};
 use std::{
@@ -177,7 +179,7 @@ fn count(db: &Path, table: &str) -> i64 {
 async fn repeated_message_does_not_repeat_the_effect() {
     let dir = tempfile::tempdir().unwrap();
     let db = dir.path().join("state.db");
-    let r = rig(&db, Clock::new(T0), 0, Duration::ZERO);
+    let r = rig(&db, Clock::managed(T0), 0, Duration::ZERO);
     let work = || Msg::Work {
         effect_key: "run-1",
         dedupe: "start",
@@ -195,7 +197,7 @@ async fn repeated_message_does_not_repeat_the_effect() {
 async fn nothing_of_a_rejected_message_is_committed_or_executed() {
     let dir = tempfile::tempdir().unwrap();
     let db = dir.path().join("state.db");
-    let r = rig(&db, Clock::new(T0), 0, Duration::ZERO);
+    let r = rig(&db, Clock::managed(T0), 0, Duration::ZERO);
     assert!(matches!(
         r.core.send(Some("cmd-1"), Msg::WorkThenFail).await,
         Err(Error::Rejected(_))
@@ -211,7 +213,7 @@ async fn nothing_of_a_rejected_message_is_committed_or_executed() {
 async fn deadline_fires_at_its_exact_time_without_polling() {
     let dir = tempfile::tempdir().unwrap();
     let db = dir.path().join("state.db");
-    let r = rig(&db, Clock::new(T0), 0, Duration::ZERO);
+    let r = rig(&db, Clock::managed(T0), 0, Duration::ZERO);
     // An odd offset: a polling loop would fire on a multiple of its interval, not on this millisecond.
     let at = T0 + 3_600_007;
     r.core.send(None, Msg::Deadline { id: "d1", at_ms: at }).await.unwrap();
@@ -239,7 +241,7 @@ async fn deadline_fires_at_its_exact_time_without_polling() {
 async fn deadline_and_seq_survive_a_restart() {
     let dir = tempfile::tempdir().unwrap();
     let db = dir.path().join("state.db");
-    let r = rig(&db, Clock::new(T0), 0, Duration::ZERO);
+    let r = rig(&db, Clock::managed(T0), 0, Duration::ZERO);
     r.core
         .send(
             None,
@@ -264,7 +266,7 @@ async fn deadline_and_seq_survive_a_restart() {
     drop(core);
     task.await.unwrap().unwrap();
     // The daemon comes back two minutes later: the missed deadline fires once, at start.
-    let r = rig(&db, Clock::new(T0 + 120_000), 0, Duration::ZERO);
+    let r = rig(&db, Clock::managed(T0 + 120_000), 0, Duration::ZERO);
     let reply = r
         .core
         .send(
@@ -285,7 +287,7 @@ async fn deadline_and_seq_survive_a_restart() {
 async fn effects_retry_with_backoff_one_at_a_time_per_key() {
     let dir = tempfile::tempdir().unwrap();
     let db = dir.path().join("state.db");
-    let r = rig(&db, Clock::new(T0), 3, Duration::from_millis(100));
+    let r = rig(&db, Clock::managed(T0), 3, Duration::from_millis(100));
     r.core
         .send(
             None,
@@ -346,7 +348,7 @@ fn backoff_doubles_from_half_a_second_to_five_minutes() {
 async fn a_pending_effect_absorbs_its_duplicate() {
     let dir = tempfile::tempdir().unwrap();
     let db = dir.path().join("state.db");
-    let r = rig(&db, Clock::new(T0), 1, Duration::ZERO);
+    let r = rig(&db, Clock::managed(T0), 1, Duration::ZERO);
     // Two distinct messages queue the same (key, dedupe) while the first copy waits for its retry.
     r.core
         .send(
@@ -378,86 +380,18 @@ async fn a_pending_effect_absorbs_its_duplicate() {
     assert_eq!(max_seq(&rusqlite::Connection::open(&db).unwrap()), 2);
 }
 
-#[tokio::test(start_paused = true)]
-async fn journal_rotates_continues_from_seq_and_reports_a_gap() {
-    let dir = tempfile::tempdir().unwrap();
-    let db = dir.path().join("state.db");
-    let journal_dir = dir.path().join("journal");
-    let journal = Journal::with_limits(&journal_dir, 400, 3);
-    let r = rig_with(&db, Clock::new(T0), 0, Duration::ZERO, journal);
-    for _ in 0..20 {
-        r.core
-            .send(
-                None,
-                Msg::Work {
-                    effect_key: "a",
-                    dedupe: "x",
-                },
-            )
-            .await
-            .unwrap();
-    }
-    settle().await;
-    let mut files: Vec<_> = std::fs::read_dir(&journal_dir)
+#[test]
+fn the_system_clock_reads_the_system_time() {
+    let wall = || {
+        i64::try_from(
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_millis(),
+        )
         .unwrap()
-        .map(|e| e.unwrap().path())
-        .collect();
-    files.sort();
-    assert_eq!(files.len(), 3);
-    assert!(files.iter().all(|f| std::fs::metadata(f).unwrap().len() <= 400));
-    assert_eq!(count(&db, "outbox"), 0, "acknowledged events leave the outbox");
-
-    let journal = Journal::with_limits(&journal_dir, 400, 3);
-    let crate::ReadError::Gap { oldest } = journal.read_from(1, 100).unwrap_err() else {
-        panic!("expected a gap")
     };
-    assert!(oldest > 1);
-    let tail = journal.read_from(oldest, 100).unwrap();
-    let seqs: Vec<i64> = tail.iter().map(|e| e["seq"].as_i64().unwrap()).collect();
-    assert_eq!(seqs, (oldest..=20).collect::<Vec<_>>());
-    let last = &journal.read_from(20, 100).unwrap()[0];
-    assert_eq!(last["schema"], json!(crate::SCHEMA));
-    assert_eq!(last["type"], json!("test.work"));
-    assert_eq!(last["ts"], json!("2027-01-15T08:00:00.000Z"));
-    assert_eq!(last["data"], json!({}));
-    assert!(journal.read_from(21, 100).unwrap().is_empty());
-}
-
-#[test]
-fn journal_does_not_repeat_lines_written_before_a_crash_and_keeps_rows_for_lagging_consumers() {
-    let dir = tempfile::tempdir().unwrap();
-    let mut conn = open(&dir.path().join("state.db")).unwrap();
-    conn.execute("INSERT INTO consumers (name, seq) VALUES ('other', 0)", [])
-        .unwrap();
-    for _ in 0..3 {
-        conn.execute("INSERT INTO outbox (ts_ms, body) VALUES (0, '{\"type\":\"t\"}')", [])
-            .unwrap();
-    }
-    let journal = Journal::new(&dir.path().join("journal"));
-    journal.drain(&mut conn).unwrap();
-    assert_eq!(
-        count(&dir.path().join("state.db"), "outbox"),
-        3,
-        "'other' has not acknowledged"
-    );
-    // A crash after the write and before the acknowledgement.
-    conn.execute("UPDATE consumers SET seq = 0 WHERE name = 'journal'", [])
-        .unwrap();
-    journal.drain(&mut conn).unwrap();
-    assert_eq!(journal.read_from(0, 100).unwrap().len(), 3);
-    crate::store::ack(&mut conn, "other", 3).unwrap();
-    assert_eq!(
-        count(&dir.path().join("state.db"), "outbox"),
-        0,
-        "the last acknowledgement drops the rows"
-    );
-}
-
-#[test]
-fn timestamps_are_rfc3339_utc_with_milliseconds() {
-    use crate::journal::rfc3339_ms;
-    assert_eq!(rfc3339_ms(0), "1970-01-01T00:00:00.000Z");
-    assert_eq!(rfc3339_ms(T0), "2027-01-15T08:00:00.000Z");
-    assert_eq!(rfc3339_ms(951_782_400_123), "2000-02-29T00:00:00.123Z");
-    assert_eq!(rfc3339_ms(-1), "1969-12-31T23:59:59.999Z");
+    let before = wall();
+    let now = Clock::system().now_ms();
+    assert!((before..=wall()).contains(&now));
 }

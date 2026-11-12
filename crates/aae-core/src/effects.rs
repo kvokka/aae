@@ -31,7 +31,7 @@ pub(crate) fn heads(
         Ok((
             r.get::<_, i64>(0)?,
             r.get::<_, String>(1)?,
-            r.get::<_, String>(2)?,
+            r.get::<_, Value>(2)?,
             r.get::<_, i64>(3)?,
         ))
     })?;
@@ -41,7 +41,6 @@ pub(crate) fn heads(
             continue;
         }
         if next_at <= now_ms {
-            let payload = serde_json::from_str(&payload).unwrap_or(Value::Null);
             due.push(Due { id, key, payload });
         } else {
             wake = Some(wake.map_or(next_at, |w| w.min(next_at)));

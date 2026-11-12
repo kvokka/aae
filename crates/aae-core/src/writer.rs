@@ -164,7 +164,7 @@ async fn run<H: Handler, E: Executor>(
     clock: Clock,
     mut handler: H,
     executor: Arc<E>,
-    journal: Journal,
+    mut journal: Journal,
     mut inbox: mpsc::Receiver<Input<H::Msg>>,
 ) -> Result<(), Error> {
     let (done_tx, mut done_rx) = mpsc::unbounded_channel::<(i64, String, bool)>();
@@ -224,11 +224,11 @@ fn process<H: Handler>(
 ) -> Result<Value, Error> {
     let tx = conn.transaction()?;
     if let Some(key) = &key {
-        let stored: Option<String> = tx
+        let stored: Option<Value> = tx
             .query_row("SELECT reply FROM idempotency WHERE key = ?1", [key], |r| r.get(0))
             .optional()?;
         if let Some(stored) = stored {
-            return Ok(serde_json::from_str(&stored).unwrap_or(Value::Null));
+            return Ok(stored);
         }
     }
     let mut tx = Tx { tx, now_ms };
