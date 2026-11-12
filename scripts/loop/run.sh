@@ -11,9 +11,12 @@ command -v claude >/dev/null || { echo "claude не найден в PATH" >&2; e
 mise install -q >/dev/null
 
 export AAE_LOOP=1
-# Мастер сжимается при ~267k (окно 300k минус буфер 33k); рабочим агентам сжатие
-# блокирует хук PreCompact, их контекст режут пороги 300k/420k (.claude/hooks/loop_guard.py).
+# Окно сжатия 300k (сжатие при ~267k) задано только модели Sonnet: так его получает мастер.
+# Глобальный autoCompactWindow протекает во всех субагентов, а modelSettings — только в
+# субагентов той же модели (проверено на 2.1.322): Opus/Fable-агенты видят полное окно 1M,
+# helper (тоже Sonnet) видит 300k, но его сжатие, как и у всех рабочих агентов, блокирует
+# хук PreCompact — их контекст режут пороги 300k/420k (.claude/hooks/loop_guard.py).
 exec claude --agent overseer --model claude-sonnet-5-5 --effort medium \
   --permission-mode bypassPermissions \
-  --settings '{"autoCompactWindow": 300000}' \
+  --settings '{"modelSettings": {"claude-sonnet-5-5": {"autoCompactWindow": 300000}}}' \
   "Старт или продолжение автономного цикла. Выполни scripts/loop/loopctl next и следуй инструкции."

@@ -107,7 +107,7 @@ def guard_harness(st):
     if not changed:
         return ""
     git("checkout", base, "--", *PROTECTED)
-    git("commit", "-m", f"loop: откат правок харнесса в цикле {st['cycle']}", "--", *PROTECTED)
+    git("commit", "-m", f"loop: revert harness edits made in cycle {st['cycle']}", "--", *PROTECTED)
     journal("loopctl", "НАРУШЕНИЕ", "В цикле изменены файлы харнесса, правки откатаны: " + ", ".join(changed))
     return f"ВНИМАНИЕ: агент изменил файлы харнесса ({', '.join(changed)}), правки откатаны и записаны в журнал.\n"
 
@@ -119,7 +119,7 @@ def commit_and_push(msg):
     if r.returncode:
         journal("loopctl", "НАХОДКА", f"git push не прошёл, повтор в следующем цикле:\n\n```\n{r.stderr.strip()[-1500:]}\n```")
         git("add", "-A", ".loop")
-        git("commit", "-m", "loop: журнал", "--", ".loop")
+        git("commit", "-m", "loop: journal", "--", ".loop")
         return "push: ОШИБКА (записано в журнал, повтор в следующем цикле)"
     return "push: ok"
 
@@ -193,7 +193,7 @@ def open_cycle(st, note=""):
         st.update(status="halted", phase=None, halt_reason=f"исчерпан лимит циклов ({st['max_cycles']})")
         save(st)
         journal("loopctl", "ИТОГ", f"Цикл остановлен: {st['halt_reason']}. Оценки: {scores(st)}")
-        push = commit_and_push(f"loop: остановка — {st['halt_reason']}")
+        push = commit_and_push(f"loop: stop after cycle {st['cycle']} (cycle limit reached)")
         return finished(st, f"{st['halt_reason']}; {push}")
     st["cycle"] += 1
     st.update(status="running", phase="coder", attempt=1, base=head(),
@@ -250,10 +250,10 @@ def cmd_next():
             st.update(status="done", halt_reason=f"ревьюер: complete, оценка {score}/10")
             save(st)
             journal("loopctl", "ИТОГ", f"Цикл завершён: {st['halt_reason']}. Оценки: {scores(st)}")
-            push = commit_and_push(f"loop: цикл {n} — complete, {score}/10")
+            push = commit_and_push(f"loop: cycle {n} review, complete, {score}/10")
             return finished(st, f"{st['halt_reason']}; {push}")
         save(st)
-        push = commit_and_push(f"loop: цикл {n} — ревью {score}/10")
+        push = commit_and_push(f"loop: cycle {n} review, {score}/10")
         return open_cycle(st, f"Итог цикла {n}: оценка {score}/10, {verdict}; {push}")
 
     raise SystemExit(f"неизвестная фаза: {st.get('phase')}")
@@ -272,7 +272,7 @@ def cmd_halt(reason):
     st.update(status="halted", halt_reason=reason)
     save(st)
     journal("overseer", "ИТОГ", f"Цикл остановлен мастером: {reason}")
-    print(commit_and_push(f"loop: остановка — {reason}"))
+    print(commit_and_push("loop: stopped by overseer (see .loop/JOURNAL.md)"))
 
 
 def main():

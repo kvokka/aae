@@ -31,7 +31,7 @@ SOFT = int(os.environ.get("AAE_CTX_SOFT", "300000"))
 HARD = int(os.environ.get("AAE_CTX_HARD", "420000"))
 WARN_STEP = int(os.environ.get("AAE_CTX_WARN_STEP", "30000"))
 MAX_CHILDREN = int(os.environ.get("AAE_MAX_CHILDREN", "3"))
-# Главный поток сжимается при окне --settings autoCompactWindow=300000 (порог ~267k).
+# Мастер (Sonnet) сжимается при окне modelSettings.claude-sonnet-5-5.autoCompactWindow=300000 (порог ~267k).
 MASTER_COMPACT_AT = int(os.environ.get("AAE_MASTER_COMPACT_AT", "240000"))
 LOOP = os.environ.get("AAE_LOOP") == "1"
 
