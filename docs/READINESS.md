@@ -4,13 +4,13 @@ Per-component readiness on the 0–10 scale of spec §14: 0 nothing; 2 contract 
 path works by hand; 6 model-free tests green, including failure paths; 8 the component's §15 criteria green on the
 owner's host; 10 real owner runs without intervention (criterion 20). Updated at the end of every work session.
 
-Assessed 2026-11-13 on top of `dfb085b` (the last code commit assessed).
-<!-- MEASURE id=readiness date=2026-11-13 ver=dfb085b env=linux-arm64-orbstack src=docs/READINESS.md note="self-assessment by the implementing agent; re-assess at the end of every session" -->
+Assessed 2026-11-13 on top of `8da61bd` (the last code commit assessed).
+<!-- MEASURE id=readiness date=2026-11-13 ver=8da61bd env=linux-arm64-orbstack src=docs/READINESS.md note="self-assessment by the implementing agent; re-assess at the end of every session" -->
 
 | Component | Score | Missing for the next point |
 |---|---|---|
-| Event loop and state | 3 | `crates/aae-core`: single writer, WAL state, outbox with `seq`, durable consumer acknowledgements, JSONL journal (rotation, read from `seq`, gap), idempotency keys, effect queue, deadlines, a system clock for the daemon and a managed one for deterministic checks, the driver trait with a scripted driver (`crates/aae-testkit`), with model-free tests; runs and attempts tables (state schema v2); missing: a daemon to run it by hand (WP-22) |
-| Runs and finisher | 3 | `crates/aae-core/src/run`: run state machine of contracts 6.1–6.2 for prompt steps (queue by workdir, preparing with the config snapshot and the rendered prompt, attempts, deciding events with the no-decision outcome and decisions, attempt ceiling, deadlines and silence budgets, requires_action, cancel, hollow turn), tested on the scripted driver; missing: the finisher, `finishing` and remarks, concurrency limits, explicit session continuation (WP-14b), exec steps (WP-15), a manual path (WP-22) |
+| Event loop and state | 3 | `crates/aae-core`: single writer, WAL state, outbox with `seq`, durable consumer acknowledgements, JSONL journal (rotation, read from `seq`, gap), idempotency keys, effect queue, deadlines, a system clock for the daemon and a managed one for deterministic checks, the driver trait with a scripted driver (`crates/aae-testkit`), with model-free tests; runs and attempts tables (state schema v3); missing: a daemon to run it by hand (WP-22) |
+| Runs and finisher | 3 | `crates/aae-core/src/run`: run state machine of contracts 6.1–6.3 for prompt steps (queue by workdir, orchestrator and agent concurrency limits, preparing with the config snapshot and the rendered prompt, attempts with tokens, deciding events with explicit abstain and the hook deadline, decisions, attempt and remark ceilings, deadlines and silence budgets with the step timeout paused between turns and in requires_action, cancel, hollow turn and `continue`, the finisher with `stale_attempt`/`run_terminal`/`invalid`, `finishing` with accept, veto and remark, `passed`, explicit continuation of another run's session), tested on the scripted driver; missing: operator holds (gates, WP-16), exec steps (WP-15), recovery (WP-20), the `aae finish` command and a manual path (WP-22, WP-23) |
 | Triggers and schedules | 2 | code (WP-17); contract: `contracts.md` 2, 3.5; the `where` and `inputs` language is code (`aae-core/src/template.rs`) |
 | Issue gates | 2 | code (WP-16); contract: `contracts.md` 7 |
 | Recovery | 2 | code (WP-20); contract: `contracts.md` 6.4 |
