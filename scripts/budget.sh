@@ -53,10 +53,11 @@ markers=$(git -c submodule.recurse=false grep -nE --untracked '(<!--|//|#) MEASU
 ((rc <= 1)) || err "git grep failed with code $rc"
 while IFS= read -r line; do
   [[ -z "$line" || "$line" =~ MEASURE\ id=\< ]] && continue
+  bare=$(sed 's/"[^"]*"//g' <<<"$line") # keys inside quoted values (note="... ver=1") do not count
   for key in id ver env; do
-    [[ "$line" =~ $key=[^[:space:]\"] ]] || err "MEASURE marker without $key: $line"
+    [[ "$bare" =~ [[:space:]]$key=[^[:space:]\"] ]] || err "MEASURE marker without $key: $line"
   done
-  [[ "$line" =~ date=[0-9]{4}-[0-9]{2}-[0-9]{2} ]] || err "MEASURE marker without date: $line"
+  [[ "$bare" =~ [[:space:]]date=[0-9]{4}-[0-9]{2}-[0-9]{2} ]] || err "MEASURE marker without date: $line"
 done <<<"$markers"
 
 [[ -f docs/READINESS.md ]] || err "docs/READINESS.md is missing (spec §14)"
