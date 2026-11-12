@@ -165,13 +165,17 @@ impl RunHandler {
                 row.set_state(tx, "requires_action", None)?;
                 let at = tx.now_ms() + HUMAN_TIMEOUT_MS;
                 tx.set_deadline(&row.deadline("human"), at)?;
-                // shortcut: the event waits for a human only; hook decisions on it come with the hook runner (WP-15).
-                row.emit(
+                let seq = row.emit(
                     tx,
                     "run.requires_action",
                     json!({ "run": row.view(), "request": request, "deadline": rfc3339_ms(at) }),
-                )
-                .map(drop)
+                )?;
+                // Hooks may answer first; a human may answer any time until `human_timeout` (contracts 3.3).
+                if !self.hooks(Some(&row.project), "run.requires_action").is_empty() {
+                    tx.sql()
+                        .execute("UPDATE runs SET waiting = ?2 WHERE id = ?1", params![row.id, seq])?;
+                }
+                Ok(())
             }
             _ => silence(tx, &row, SILENCE_MS),
         }
@@ -245,6 +249,8 @@ impl RunHandler {
             |r| r.get(0),
         )?;
         tx.clear_deadline(&row.deadline("human"))?;
+        tx.sql()
+            .execute("UPDATE runs SET waiting = NULL WHERE id = ?1", [run])?;
         if let Some(left) = paused {
             tx.set_deadline(&row.deadline("state"), tx.now_ms() + left)?;
         }

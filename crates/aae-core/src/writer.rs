@@ -53,6 +53,8 @@ pub struct Event {
 pub struct Tx<'a> {
     tx: rusqlite::Transaction<'a>,
     now_ms: i64,
+    /// The envelopes of the events emitted so far, for [`Handler::emitted`].
+    events: Vec<Value>,
 }
 
 impl Tx<'_> {
@@ -75,11 +77,14 @@ impl Tx<'_> {
             "correlation": event.correlation,
             "data": event.data,
         });
+        let body = body.to_string();
         self.tx.execute(
             "INSERT INTO outbox (ts_ms, body) VALUES (?1, ?2)",
-            params![self.now_ms, body.to_string()],
+            params![self.now_ms, body],
         )?;
-        Ok(self.tx.last_insert_rowid())
+        let seq = self.tx.last_insert_rowid();
+        self.events.push(crate::journal::envelope(seq, self.now_ms, &body));
+        Ok(seq)
     }
 
     /// Queues an effect for after commit; a pending effect with the same `(key, dedupe)` absorbs it.
@@ -112,6 +117,11 @@ pub trait Handler: Send + 'static {
     type Msg: Send + 'static;
     fn handle(&mut self, tx: &mut Tx<'_>, msg: Self::Msg) -> Result<Value, Error>;
     fn deadline(&mut self, tx: &mut Tx<'_>, id: &str) -> Result<(), Error>;
+    /// Sees, before commit, the envelopes of the events the transaction emitted: what the handler queues here
+    /// commits with them (the hook dispatcher of docs/design/contracts.md 3.5).
+    fn emitted(&mut self, _tx: &mut Tx<'_>, _events: &[Value]) -> Result<(), Error> {
+        Ok(())
+    }
 }
 
 /// Runs committed effects. `true` means done; `false` retries the effect with backoff.
@@ -236,8 +246,14 @@ fn process<H: Handler>(
             return Ok(stored);
         }
     }
-    let mut tx = Tx { tx, now_ms };
+    let mut tx = Tx {
+        tx,
+        now_ms,
+        events: Vec::new(),
+    };
     let reply = handler.handle(&mut tx, msg)?;
+    let events = std::mem::take(&mut tx.events);
+    handler.emitted(&mut tx, &events)?;
     if let Some(key) = key {
         // shortcut: idempotency rows are never pruned; add retention together with the API (WP-22).
         tx.tx.execute(
@@ -263,8 +279,16 @@ fn fire_deadlines<H: Handler>(conn: &mut Connection, handler: &mut H, now_ms: i6
         }
         let tx = conn.transaction()?;
         tx.execute("DELETE FROM deadlines WHERE id = ?1", [&id])?;
-        let mut tx = Tx { tx, now_ms };
-        match handler.deadline(&mut tx, &id) {
+        let mut tx = Tx {
+            tx,
+            now_ms,
+            events: Vec::new(),
+        };
+        let fired = handler.deadline(&mut tx, &id).and_then(|()| {
+            let events = std::mem::take(&mut tx.events);
+            handler.emitted(&mut tx, &events)
+        });
+        match fired {
             Ok(()) => tx.tx.commit()?,
             // A failing deadline is dropped rather than fired again forever; its effects are rolled back.
             Err(_) => {

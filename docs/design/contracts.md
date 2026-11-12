@@ -179,7 +179,9 @@ timeout = "30s"
 - stdin: the event envelope (see 1.1) as one JSON line, then EOF.
 - cwd: the plugin directory. Environment: `PATH`, `HOME`, `LANG`, plus `AAE_SOCKET` (API socket),
   `AAE_PLUGIN_DIR` and `AAE_PLUGIN_PARAMS` (the plugin parameters from config as a JSON object). Nothing else is
-  inherited from the daemon.
+  inherited from the daemon. `AAE_SOCKET` comes with the API socket (WP-22), `AAE_PLUGIN_PARAMS` with plugin
+  parameters in config (WP-32); until then they are not set.
+- A program path with a `/` is relative to the plugin directory; a bare name is looked up on `PATH`.
 - Own process group; at the timeout `SIGTERM` to the group, `SIGKILL` 2 s later.
 - stdout is read up to 64 KiB (more is an `output` failure); the last 4 KiB of stderr are kept.
 - Result: exit 0 with empty stdout — no objection and no decision; exit 0 with one JSON object on stdout — the
@@ -247,6 +249,9 @@ runs the hooks of every deciding event still pending; the run waits in its state
 - The journal writer acknowledges after the line is written and flushed; the trigger matcher after the run it
   created (or the `trigger.skipped`) is committed — the idempotency key is `(trigger, seq)`; the hook dispatcher
   after all hooks of the event finished and, for a deciding event, after the decision is committed.
+- The hook dispatcher is the same guarantee in another shape: the transaction that commits an event also queues
+  the hooks on it as one effect (key `hooks:<run>`, so the hooks of one run run in `seq` order). The effect is
+  deleted only after every hook finished and the decision message was handled; a crash runs it again.
 - There is no time-based expiry: a row lives until all durable consumers acknowledge it, so a crash neither
   loses nor doubles a trigger or a hook decision. Every consumer is bounded in time (hook timeouts, journal write
   errors retried with the effect backoff), so the outbox drains. The depth and the age of the oldest row are part

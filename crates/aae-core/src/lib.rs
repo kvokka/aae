@@ -5,6 +5,7 @@ pub mod config;
 pub mod driver;
 mod effects;
 mod journal;
+mod process;
 pub mod run;
 mod store;
 pub mod template;

@@ -5,6 +5,7 @@ mod decide;
 mod events;
 mod exec;
 mod finish;
+mod hooks;
 mod machine;
 mod queue;
 mod row;
@@ -29,6 +30,7 @@ use tokio::{sync::mpsc, task::JoinHandle};
 /// Ceiling of the core: attempts per run (invariant 16).
 pub const MAX_ATTEMPTS: u32 = 20;
 pub use finish::MAX_REMARKS;
+pub use hooks::{ExecHooks, HookRunner};
 
 type Drivers = Arc<BTreeMap<String, Arc<dyn Driver>>>;
 
@@ -71,6 +73,11 @@ pub enum Msg {
         failure: Failure,
     },
     Driver(DriverEvent),
+    /// A hook on `event` failed: the core reports it as `plugin.hook_failed` with `data` (contracts 1.3).
+    HookFailed {
+        event: Value,
+        data: Value,
+    },
     /// The finisher of an attempt; the reply is `{"answer": "accepted"|"stale_attempt"|"run_terminal"|"invalid"}`
     /// (contracts 6.3).
     Finish {
@@ -114,7 +121,13 @@ pub struct Create {
 pub enum Decision {
     /// Every hook on the event finished without a decision: the "no plugin decision" outcome, at once (3.3).
     Abstain,
-    Proceed,
+    /// On `run.preparing`: the session starts in `workdir`, with `env` changed (`None` removes a variable) and
+    /// `prompt_append` after the prompt.
+    Proceed {
+        workdir: Option<std::path::PathBuf>,
+        env: BTreeMap<String, Option<crate::config::Sourced<String>>>,
+        prompt_append: Option<String>,
+    },
     Deny {
         reason: String,
     },
@@ -131,6 +144,8 @@ pub enum Decision {
     Continue {
         message: String,
     },
+    /// On `run.requires_action`: the answer to the open request.
+    Answer(Answer),
     Accept,
     Veto {
         reason: String,
@@ -147,6 +162,7 @@ pub fn start(
     clock: Clock,
     config: Arc<Config>,
     drivers: Vec<Arc<dyn Driver>>,
+    hooks: Arc<dyn HookRunner>,
     journal: Journal,
 ) -> (CoreHandle<Msg>, JoinHandle<Result<(), Error>>) {
     let drivers: Drivers = Arc::new(drivers.into_iter().map(|d| (d.harness().to_owned(), d)).collect());
@@ -156,6 +172,7 @@ pub fn start(
         drivers: drivers.clone(),
         core: core.clone(),
         sink,
+        hooks,
     };
     let (handle, task) = writer::start(conn, clock, RunHandler { config, drivers }, executor, journal);
     let _ = core.set(handle.clone());
@@ -189,6 +206,7 @@ impl Handler for RunHandler {
             Msg::Session { run, attempt, session } => self.session(tx, &run, attempt, &session),
             Msg::AttemptFailed { run, attempt, failure } => self.launch_failed(tx, &run, attempt, failure),
             Msg::Driver(event) => self.driver_event(tx, event),
+            Msg::HookFailed { event, data } => Self::hook_failed(tx, &event, data),
         }?;
         Ok(Value::Null)
     }
@@ -196,6 +214,10 @@ impl Handler for RunHandler {
     fn deadline(&mut self, tx: &mut Tx<'_>, id: &str) -> Result<(), Error> {
         let (run, what) = id.rsplit_once(':').unwrap_or((id, ""));
         self.on_deadline(tx, run, what)
+    }
+
+    fn emitted(&mut self, tx: &mut Tx<'_>, events: &[Value]) -> Result<(), Error> {
+        self.dispatch(tx, events)
     }
 }
 

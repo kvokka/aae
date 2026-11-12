@@ -9,27 +9,17 @@ use crate::{
 use rusqlite::params;
 use serde_json::{Value, json};
 
-/// The default hook timeout and the slack of a deciding event's deadline (contracts 3.1, 3.3).
-const HOOK_TIMEOUT_MS: i64 = 30_000;
+/// The slack of a deciding event's deadline (contracts 3.3).
 const DECIDE_SLACK_MS: i64 = 5_000;
 
 impl RunHandler {
     /// Emits a deciding event; with no hook on its type the "no plugin decision" outcome applies at once, else at
     /// the deadline of contracts 3.3 unless a decision comes first.
     pub(super) fn deciding(&mut self, tx: &mut Tx<'_>, row: Row, kind: &str, mut data: Value) -> Result<(), Error> {
-        let project = self.config.projects.iter().find(|p| p.name == row.project);
-        let hooks = self
-            .config
-            .plugins
+        let timeouts: Vec<i64> = self
+            .hooks(Some(&row.project), kind)
             .iter()
-            .chain(project.into_iter().flat_map(|p| &p.plugins));
-        let timeouts: Vec<i64> = hooks
-            .flat_map(|p| &p.hooks)
-            .filter(|h| h.on == kind)
-            .map(|h| {
-                h.timeout
-                    .map_or(HOOK_TIMEOUT_MS, |t| i64::try_from(t.as_millis()).unwrap_or(i64::MAX))
-            })
+            .filter_map(|h| h["timeout_ms"].as_i64())
             .collect();
         let at = tx.now_ms() + timeouts.iter().sum::<i64>() + DECIDE_SLACK_MS * i64::from(!timeouts.is_empty());
         data["deadline"] = json!(rfc3339_ms(at));
@@ -69,7 +59,25 @@ impl RunHandler {
             .execute("UPDATE runs SET waiting = NULL WHERE id = ?1", [&row.id])?;
         tx.clear_deadline(&row.deadline("decide"))?;
         match (row.state.as_str(), decision) {
-            ("preparing", None | Some(Decision::Proceed)) => self.start_attempt(tx, row, "new_session"),
+            ("preparing", None) => self.start_attempt(tx, row, "new_session"),
+            (
+                "preparing",
+                Some(Decision::Proceed {
+                    workdir,
+                    env,
+                    prompt_append,
+                }),
+            ) => self.prepared(tx, row, workdir, env, prompt_append),
+            // A hook without an answer leaves the request to a human until `human_timeout`.
+            ("requires_action", None) => Ok(()),
+            ("requires_action", Some(Decision::Answer(answer))) => {
+                let request: String = tx.sql().query_row(
+                    "SELECT json_extract(request, '$.id') FROM attempts WHERE run = ?1 AND n = ?2",
+                    params![row.id, row.attempt],
+                    |r| r.get(0),
+                )?;
+                self.answer(tx, &row.id, &request, &answer)
+            }
             ("preparing", Some(Decision::Deny { reason })) => self.terminal(tx, row, "failed", Some("check"), &reason),
             ("interrupted", None) => self.terminal(tx, row, "failed", Some("infrastructure"), "no_decision"),
             ("interrupted", Some(Decision::Fail { reason })) => {

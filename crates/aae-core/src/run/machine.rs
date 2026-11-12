@@ -6,14 +6,14 @@ use super::{
     row::{Row, attempts},
 };
 use crate::{
-    config::Step,
+    config::{EffectiveConfig, Sourced, Step},
     driver::{Failure, PromptKey, SessionPlan, SessionRef},
     journal::rfc3339_ms,
     writer::{Error, Tx},
 };
 use rusqlite::{OptionalExtension, params};
 use serde_json::{Value, json};
-use std::path::PathBuf;
+use std::{collections::BTreeMap, path::PathBuf};
 
 pub(super) const QUEUE_TIMEOUT_MS: i64 = 7 * 24 * 3_600_000;
 pub(super) const START_TIMEOUT_MS: i64 = 120_000;
@@ -47,6 +47,38 @@ impl RunHandler {
         row.prompt = Some(prompt);
         row.timeout_ms = Some(timeout_ms);
         self.deciding(tx, row, "run.preparing", data)
+    }
+
+    /// Applies the `run.preparing` modifications of the hooks (contracts 3.2), then starts the first attempt.
+    pub(super) fn prepared(
+        &mut self,
+        tx: &mut Tx<'_>,
+        mut row: Row,
+        workdir: Option<PathBuf>,
+        env: BTreeMap<String, Option<Sourced<String>>>,
+        prompt_append: Option<String>,
+    ) -> Result<(), Error> {
+        if let Some(dir) = workdir {
+            row.workdir = dir.to_string_lossy().into_owned();
+        }
+        if let Some(text) = prompt_append {
+            row.prompt = Some(format!("{}\n\n{text}", row.prompt.unwrap_or_default()));
+        }
+        let config = row.config.as_deref().map(serde_json::from_str::<EffectiveConfig>);
+        if let (Some(Ok(mut config)), false) = (config, env.is_empty()) {
+            for (name, value) in env {
+                match value {
+                    Some(value) => config.env.insert(name, value),
+                    None => config.env.remove(&name),
+                };
+            }
+            row.config = Some(json!(config).to_string());
+        }
+        tx.sql().execute(
+            "UPDATE runs SET workdir = ?2, prompt = ?3, config = ?4 WHERE id = ?1",
+            params![row.id, row.workdir, row.prompt, row.config],
+        )?;
+        self.start_attempt(tx, row, "new_session")
     }
 
     /// The prompt, the step timeout and the effective config of a run, from the config of now.

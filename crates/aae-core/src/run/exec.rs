@@ -23,16 +23,19 @@ pub(super) struct RunExecutor {
     pub drivers: Drivers,
     pub core: Arc<OnceLock<CoreHandle<Msg>>>,
     pub sink: EventSink,
+    pub hooks: Arc<dyn super::HookRunner>,
 }
 
 impl Executor for RunExecutor {
     /// A driver failure is an attempt failure reported to the writer, never a retry of the effect.
     fn execute<'a>(&'a self, _key: &'a str, payload: &'a Value) -> BoxFuture<'a, bool> {
         Box::pin(async move {
-            let (Some(core), Some(driver)) = (
-                self.core.get(),
-                payload["harness"].as_str().and_then(|h| self.drivers.get(h)),
-            ) else {
+            let Some(core) = self.core.get() else { return true };
+            if payload["op"] == "hooks" {
+                self.hooks.run(core, payload).await;
+                return true;
+            }
+            let Some(driver) = payload["harness"].as_str().and_then(|h| self.drivers.get(h)) else {
                 return true;
             };
             let handle = serde_json::from_value::<InstanceHandle>(payload["handle"].clone());

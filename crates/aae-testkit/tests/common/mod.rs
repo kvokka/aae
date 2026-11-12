@@ -3,10 +3,10 @@
 #![allow(dead_code)]
 
 use aae_core::{
-    Clock, CoreHandle, Journal, config,
+    BoxFuture, Clock, CoreHandle, Journal, config,
     driver::{Normalized, SessionState, StopReason},
     open,
-    run::{self, Create, Msg},
+    run::{self, Create, HookRunner, Msg},
 };
 use aae_testkit::{ScriptedDriver, Step};
 use serde_json::Value;
@@ -43,7 +43,21 @@ pub(crate) struct World {
     _dir: tempfile::TempDir,
 }
 
+/// A hook runner lost after the dispatch: decisions come from the test or from the deadline (contracts 3.3).
+struct Lost;
+
+impl HookRunner for Lost {
+    fn run<'a>(&'a self, _: &'a CoreHandle<Msg>, _: &'a Value) -> BoxFuture<'a, ()> {
+        Box::pin(async {})
+    }
+}
+
+/// The world with a lost hook runner: the test decides.
 pub(crate) fn world(extra: &[(&str, &str)]) -> World {
+    world_with(extra, Arc::new(Lost))
+}
+
+pub(crate) fn world_with(extra: &[(&str, &str)], hooks: Arc<dyn HookRunner>) -> World {
     let dir = tempfile::tempdir().unwrap();
     for (path, text) in FILES
         .iter()
@@ -62,6 +76,7 @@ pub(crate) fn world(extra: &[(&str, &str)]) -> World {
         Clock::managed(0),
         Arc::new(config),
         vec![Arc::new(driver.clone())],
+        hooks,
         Journal::new(&journal),
     );
     World {
