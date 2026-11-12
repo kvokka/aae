@@ -1,0 +1,9 @@
+[package]
+name = "claude-process"
+version = "0.1.0"
+edition.workspace = true
+publish.workspace = true
+
+[dependencies]
+claude-protocol = { version = "0.1.0", path = "../01-claude-protocol" }
+libc = "0.2.191"
