@@ -1,0 +1,22 @@
+[stdio] initialize in 158 ms: "aae-exp/0.167.2 (Ubuntu 26.4.0; aarch64) unknown (aae-exp; 0.0.1)"
+[stdio] rss empty: 89920 kB
+[stdio] two parallel turns (thread, status, ms): [("B", Completed, 106), ("A", Completed, 119)]
+[stdio] thread A: provider requests ["own marker true, other marker false"]; hook files ["ups: session_id is thread true, AAE_TAG=\"\"", "stop: session_id is thread true, AAE_TAG=\"\""]; hook/completed ["UserPromptSubmit/SessionFlags/Completed", "Stop/SessionFlags/Completed"]
+[stdio] thread B: provider requests ["own marker true, other marker false"]; hook files []; hook/completed []
+[stdio] rss after 2 threads: 147404 kB
+[stdio] repeated clientUserMessageId: turn Some(Completed), provider requests +1, clientIds in history [String("key-a1"), String("key-a1")]
+[stdio] rss after 4 threads: 154684 kB
+[unix] initialize in 158 ms: "aae-exp/0.167.2 (Ubuntu 26.4.0; aarch64) unknown (aae-exp; 0.0.1)"
+[unix] rss empty: 90608 kB
+[unix] two parallel turns (thread, status, ms): [("B", Completed, 72), ("A", Completed, 77)]
+[unix] thread A: provider requests ["own marker true, other marker false"]; hook files ["ups: session_id is thread true, AAE_TAG=\"\"", "stop: session_id is thread true, AAE_TAG=\"\""]; hook/completed ["UserPromptSubmit/SessionFlags/Completed", "Stop/SessionFlags/Completed"]
+[unix] thread B: provider requests ["own marker true, other marker false"]; hook files []; hook/completed []
+[unix] rss after 2 threads: 149736 kB
+[unix] repeated clientUserMessageId: turn Some(Completed), provider requests +1, clientIds in history [String("key-a1"), String("key-a1")]
+[unix] rss after 4 threads: 156952 kB
+[reconnect] first client gone; app-server alive: true
+[reconnect] loaded threads: 1
+[reconnect] resume: thread status Active([])
+[reconnect] cut turn seen by the second client: Some(Completed) after 5013 ms
+[reconnect] next turn from the second client: Some(Completed)
+[stdio-eof] app-server exited Some(ExitStatus(unix_wait_status(0))) after 21 ms; responses requests 1
