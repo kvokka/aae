@@ -518,3 +518,30 @@ agents: coder, reviewer», а `coder` хук запрещает. WP-26b (под�
 Ревью 16: SCORE 4.7, один обязательный пункт. `aae-claude/src/part.rs`, `settings()`: `settings["hooks"][event]` на
 `IndexMut` паникует, если `native.claude.hooks` — не объект. Такое бывает при включённом хуке aae; `split` вызывается
 в писателе ядра (`run/machine.rs:196`), так что паника убивает цикл событий. Нужен `config_error`. Секции спеки не сжимались.
+
+## 2026-11-13T15:40 · цикл 17 · coder · РЕШЕНИЕ
+
+WP-29, адаптер codex: (1) типы из схемы (`generated/`, typify, ~5k строк), которые предлагал `experiments.md`, не
+делались: адаптер читает ~15 полей через `serde_json::Value`, как адаптер claude; формы закреплены тестами на
+настоящем codex 0.167.2 с подделкой (`aae-codex/tests/codex.rs`, `crates/aae/tests/codex.rs`) и будут закреплены
+контрактными WP-30. (2) `permission_mode` для codex — его approval policy (`untrusted|on-request|never`); песочница
+задаётся `native.codex.sandbox_mode`, адаптер её не выбирает (на хосте владельца bwrap не работает, тесты идут с
+`danger-full-access`). (3) `native.codex` — ключи `config.toml`, уходят флагами `-c` процесса (провайдер модели —
+процессный, опыт 2), значит входят в отпечаток. (4) `config.env` агента — окружение процесса (там ключ провайдера),
+`AAE_RUN`/`AAE_ATTEMPT_TOKEN` — `shell_environment_policy.set` треда. (5) Ядро закрывает ход на
+`State{Idle,false}` после `TurnEnded`; у codex `idle` приходит до `turn/completed`, поэтому адаптер глушит `idle`
+внутри хода и шлёт его сразу после `TurnEnded` (и ещё раз, когда кончилась последняя фоновая команда). `docs/design/config.md`.
+
+## 2026-11-13T15:45 · цикл 17 · coder · НАХОДКА
+
+codex 0.167.2 на подделке (без модели): инструмент команд — `exec_command` с аргументом `cmd` (не `shell`), успешный
+ответ Responses — `response.created` → `output_item.added/done` → `response.completed` с `usage`; `codex exec` и
+app-server принимают его (`aae-testkit/tests/openai.rs`, `aae-codex/tests/codex.rs`). Живая модель не вызывалась.
+Субагентов у кодера по-прежнему нет (`helper`/`subcoder`/`expert` не зарегистрированы) — всё сделано в одном контексте.
+
+## 2026-11-13T16:30 · цикл 17 · reviewer · НАХОДКА
+
+Ревью 17: SCORE 4.9, один обязательный пункт. Адаптер codex: `cancel_turn` (эффект `stop` на каждом конце попытки)
+ставит `interrupted` и уже завершённому ходу, потому что `turns` в `aae-codex/src/rpc.rs` не чистится. Флаг живёт до
+следующего хода, и при resume в общем экземпляре первый сбой (квота, 401) уходит в `Cancelled` без класса — ворота
+аккаунта не закрываются (путь критерия 10). Решение «типы codex руками, не из схемы» (§7.5) принято. Секции не сжимались.
