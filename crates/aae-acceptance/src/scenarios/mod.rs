@@ -6,6 +6,7 @@ mod c04_finisher;
 mod c05a_chain;
 mod c05b_schedule;
 mod c07_idle;
+mod c08_crash;
 mod c18_journal;
 mod c19_gates;
 
@@ -51,6 +52,12 @@ pub(crate) const ALL: &[Scenario] = &[
         title: "the idle daemon with one project: RSS <= 50 MB, CPU <= 1 % over 10 minutes",
         launch: Launch::Ci,
         run: |env| Box::pin(c07_idle::run(env)),
+    },
+    Scenario {
+        criterion: "8",
+        title: "20 x kill -9 of the daemon mid-step: up within 30 s, each run ends once, no firing lost or doubled",
+        launch: Launch::Ci,
+        run: |env| Box::pin(c08_crash::run(env)),
     },
     Scenario {
         criterion: "18",
