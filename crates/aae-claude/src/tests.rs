@@ -107,7 +107,7 @@ fn hooks_join_the_native_settings_and_mcp_servers_take_claude_form() {
         command: Some("true".into()),
         timeout: Some("90s".into()),
     };
-    let config = EffectiveConfig {
+    let mut config = EffectiveConfig {
         harness: "claude".into(),
         model: None,
         effort: None,
@@ -167,6 +167,12 @@ fn hooks_join_the_native_settings_and_mcp_servers_take_claude_form() {
     );
     assert!(args.iter().any(|a| a == "--mcp-config"));
     assert!(!args.iter().any(|a| a == "--plugin-dir"), "no skills, no plugin");
+    // A native `hooks` of a foreign shape is refused, neither a panic in the core's writer nor a silent overwrite.
+    for native in [json!({ "hooks": "x" }), json!({ "hooks": { "Stop": {} } })] {
+        config.native = Some(agent(native));
+        let err = part::process(&config, &plan, Path::new("/state")).unwrap_err();
+        assert_eq!(err.kind, FailureKind::ConfigError, "{}", err.raw);
+    }
 }
 
 #[test]

@@ -109,9 +109,18 @@ fn settings(config: &EffectiveConfig) -> Result<Value, Failure> {
             entry["timeout"] = json!(timeout.as_secs().max(1));
         }
         let matcher = json!({ "matcher": hook.matcher.clone().unwrap_or_default(), "hooks": [entry] });
-        match &mut settings["hooks"][event] {
+        let shape = || config_error(format!("the claude native `hooks.{event}` must be a list of matchers"));
+        let hooks = &mut settings["hooks"];
+        if hooks.is_null() {
+            *hooks = json!({});
+        }
+        let Value::Object(hooks) = hooks else {
+            return Err(shape());
+        };
+        match hooks.entry(event.clone()).or_insert(Value::Null) {
             Value::Array(list) => list.push(matcher),
-            slot => *slot = json!([matcher]),
+            slot @ Value::Null => *slot = json!([matcher]),
+            _ => return Err(shape()),
         }
     }
     Ok(if settings == json!({}) { Value::Null } else { settings })
