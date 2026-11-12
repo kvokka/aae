@@ -115,6 +115,8 @@ impl Stream {
             "thread/status/changed" => {
                 let status = &params["status"];
                 let state = match status["type"].as_str() {
+                    // In a turn `idle` comes just before `turn/completed`; the state follows the turn end instead.
+                    Some("idle") if thread.open => return vec![],
                     Some("idle") => SessionState::Idle,
                     Some("active") => match status["activeFlags"].as_array().is_some_and(|f| !f.is_empty()) {
                         true => SessionState::RequiresAction,
@@ -163,7 +165,15 @@ impl Stream {
                         _ => thread.commands.remove(&item_id),
                     };
                 }
-                activity(thread, now, !thread.commands.is_empty())
+                let mut out = activity(thread, now, !thread.commands.is_empty());
+                // The last background command of an ended turn is done: the thread is idle without background.
+                if command && method == "item/completed" && !thread.open && thread.commands.is_empty() {
+                    out.push(Normalized::State {
+                        state: SessionState::Idle,
+                        background: false,
+                    });
+                }
+                out
             }
             "item/commandExecution/requestApproval"
             | "item/fileChange/requestApproval"
@@ -229,6 +239,11 @@ impl Stream {
             }
         };
         out.push(Normalized::TurnEnded { stop_reason });
+        let background = !thread.commands.is_empty();
+        out.push(Normalized::State {
+            state: SessionState::Idle,
+            background,
+        });
         // The commands of a turn outlive it (a background command): they stay known to the thread.
         let rest = Thread {
             model: thread.model,

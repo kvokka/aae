@@ -1,9 +1,10 @@
 //! `aae daemon`: the core and the API on a unix socket, in the foreground (spec §13), until SIGTERM or SIGINT.
 
 use aae_claude::Claude;
+use aae_codex::Codex;
 use aae_core::{
     Clock, Journal, config,
-    driver::Driver,
+    driver::{Driver, ProcessPart},
     open,
     run::{self, ExecHooks, Reader},
 };
@@ -68,14 +69,20 @@ pub(crate) async fn run(paths: Paths) -> Result<(), String> {
     // Descendants of instances that left their group are re-parented here and reaped (invariant 7).
     aae_core::orphans::adopt_orphans().map_err(|e| format!("cannot become the child subreaper: {e}"))?;
     let mut drivers: Vec<Arc<dyn Driver>> = Vec::new();
-    if let Some(claude) = config.harnesses.get("claude") {
-        // shortcut: without `binary` the `claude` on PATH runs, not the mise-pinned one (§6.5); `aae doctor` (WP-35).
-        let binary = claude.binary.clone().unwrap_or_else(|| "claude".into());
-        let claude = Claude::new(binary, paths.state.clone(), Some(paths.socket.clone()));
-        if let Some(why) = claude.untested() {
+    for (name, harness) in &config.harnesses {
+        // shortcut: without `binary` the harness on PATH runs, not the mise-pinned one (§6.5); `aae doctor` (WP-35).
+        let binary = harness.binary.clone().unwrap_or_else(|| name.into());
+        let (state, socket) = (paths.state.clone(), Some(paths.socket.clone()));
+        let driver: Arc<dyn Driver> = match name.as_str() {
+            "claude" => Arc::new(Claude::new(binary.clone(), state, socket)),
+            "codex" => Arc::new(Codex::new(binary.clone(), state, socket)),
+            _ => continue,
+        };
+        let tested = driver.capabilities(&ProcessPart(json!(null))).versions;
+        if let Some(why) = aae_core::untested(&binary, tested) {
             eprintln!("aae daemon: warning: {why}");
         }
-        drivers.push(Arc::new(claude));
+        drivers.push(driver);
     }
     let (core, task) = run::start(
         conn,

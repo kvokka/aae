@@ -102,7 +102,7 @@ impl Codex {
         let (instances, id) = (self.instances.clone(), id.to_owned());
         let reader = instance.clone();
         tokio::spawn(async move {
-            let mut send = rpc::sender(id.clone(), sink);
+            let mut send = rpc::sender(id.clone(), reader.home.clone(), sink);
             rpc::read(&reader, lines, &mut send).await;
             let status = child.wait().await.ok();
             orphans::waited(u32::try_from(pid).ok());
@@ -213,7 +213,7 @@ impl Driver for Codex {
             let result = known.call("thread/start", session.0.clone(), None).await?;
             let thread = result["thread"]["id"].as_str().ok_or_else(crashed)?;
             self.bind(&known, thread, &result);
-            Ok(SessionRef(json!({ "thread_id": thread, "codex_home": known.home })))
+            Ok(rpc::session(thread, &known.home))
         })
     }
 

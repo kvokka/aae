@@ -101,12 +101,17 @@ fn rpc_failure(method: &str, error: &Value) -> Failure {
     failure
 }
 
+/// The reference of a thread of the process with `home`; events carry the same one the core stored.
+pub(crate) fn session(thread: &str, home: &Value) -> SessionRef {
+    SessionRef(json!({ "thread_id": thread, "codex_home": home }))
+}
+
 /// The event sender of an instance: `seq` counts from 1.
-pub(crate) fn sender(instance: String, sink: EventSink) -> impl FnMut(Option<String>, Normalized) {
+pub(crate) fn sender(instance: String, home: Value, sink: EventSink) -> impl FnMut(Option<String>, Normalized) {
     let mut seq = 0;
     move |thread, event| {
         seq += 1;
-        let session = thread.map(|t| SessionRef(json!({ "thread_id": t })));
+        let session = thread.map(|t| session(&t, &home));
         let _ = sink.send(DriverEvent {
             instance: instance.clone(),
             session,

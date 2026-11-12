@@ -7,6 +7,7 @@ name = "aae"
 version = "0.1.0"
 dependencies = [
  "aae-claude",
+ "aae-codex",
  "aae-core",
  "aae-front",
  "aae-testkit",

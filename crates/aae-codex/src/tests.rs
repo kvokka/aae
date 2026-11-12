@@ -90,12 +90,12 @@ fn a_turn_runs_a_command_and_ends_only_on_turn_completed() {
                 output_tokens: 2,
                 rate_limit: None
             },
+            Normalized::TurnEnded {
+                stop_reason: StopReason::Completed
+            },
             Normalized::State {
                 state: SessionState::Idle,
                 background: false
-            },
-            Normalized::TurnEnded {
-                stop_reason: StopReason::Completed
             },
         ]
     );
@@ -146,6 +146,11 @@ fn a_usage_limit_is_a_quota_with_the_reset_of_the_exhausted_window() {
             stop_reason: StopReason::Failed
         }
     );
+    let idle = Normalized::State {
+        state: SessionState::Idle,
+        background: false,
+    };
+    assert_eq!(events[4], idle, "the state follows the turn end");
 }
 
 #[test]
@@ -204,10 +209,10 @@ fn a_401_retry_reports_the_logout_once_and_an_interrupt_cancels() {
     stream.interrupted("t");
     let events = play(&mut stream, &[turn_completed("failed", Value::Null)]);
     assert_eq!(
-        events,
-        [Normalized::TurnEnded {
+        events[0],
+        Normalized::TurnEnded {
             stop_reason: StopReason::Cancelled
-        }]
+        }
     );
 }
 
