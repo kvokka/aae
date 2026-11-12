@@ -3,6 +3,7 @@
 
 mod part;
 mod stream;
+mod version;
 
 use aae_core::{
     BoxFuture,
@@ -191,6 +192,7 @@ impl Driver for Claude {
             retries_429: true,
             // Only a subscription login reports when its limit resets.
             reset_time: process.0["env"]["ANTHROPIC_API_KEY"].is_null(),
+            versions: version::TESTED,
         }
     }
 

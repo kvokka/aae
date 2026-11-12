@@ -71,11 +71,11 @@ pub(crate) async fn run(paths: Paths) -> Result<(), String> {
     if let Some(claude) = config.harnesses.get("claude") {
         // shortcut: without `binary` the `claude` on PATH runs, not the mise-pinned one (§6.5); `aae doctor` (WP-35).
         let binary = claude.binary.clone().unwrap_or_else(|| "claude".into());
-        drivers.push(Arc::new(Claude::new(
-            binary,
-            paths.state.clone(),
-            Some(paths.socket.clone()),
-        )));
+        let claude = Claude::new(binary, paths.state.clone(), Some(paths.socket.clone()));
+        if let Some(why) = claude.untested() {
+            eprintln!("aae daemon: warning: {why}");
+        }
+        drivers.push(Arc::new(claude));
     }
     let (core, task) = run::start(
         conn,

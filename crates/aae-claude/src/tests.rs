@@ -237,3 +237,10 @@ async fn a_process_that_dies_in_a_turn_reports_its_stderr_and_is_forgotten() {
             .is_err()
     );
 }
+
+#[test]
+fn a_version_is_read_from_the_version_output() {
+    assert_eq!(version::parse("2.1.322 (Claude Code)"), Some((2, 1, 322)));
+    assert_eq!(version::parse("claude"), None);
+    assert_eq!(version::parse("2.1"), None);
+}

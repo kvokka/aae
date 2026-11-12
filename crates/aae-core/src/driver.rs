@@ -135,6 +135,8 @@ pub struct Capabilities {
     pub retries_429: bool,
     /// A quota failure of this process part can carry `retry_at`.
     pub reset_time: bool,
+    /// The tested versions of the harness binary, `[lowest, highest]` as `(major, minor, patch)`, inclusive.
+    pub versions: [(u32, u32, u32); 2],
 }
 
 /// The failure kinds of spec §7.1 (contracts 4.4).

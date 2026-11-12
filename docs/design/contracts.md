@@ -374,7 +374,8 @@ Success traps (§7.2) are the adapter's: claude `subtype:"success"` with `is_err
 - `retries_429`: claude true, codex false (§7.2); copied into `Failure.retried_by_harness` for rate limits.
 - `reset_time`: whether a quota failure can carry `retry_at` for this process part (claude: subscription login
   only; codex: yes, from the rate-limit update).
-- `versions`: the tested range of the harness binary; outside it `aae doctor` and instance start warn.
+- `versions`: the tested range of the harness binary, `[lowest, highest]` inclusive; outside it the daemon warns at
+  start, and `aae doctor` does.
 
 `account(process)` returns the account id the gates use (§5.7): a stable hash of the credential source of the
 process part, never the credential itself.

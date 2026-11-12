@@ -76,6 +76,7 @@ impl ScriptedDriver {
                 instance_idle: Duration::ZERO,
                 retries_429: false,
                 reset_time: true,
+                versions: [(0, 0, 0), (u32::MAX, u32::MAX, u32::MAX)],
             },
             state: Arc::default(),
         }
