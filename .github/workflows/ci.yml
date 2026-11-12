@@ -26,3 +26,11 @@ jobs:
       - run: mise run build-all
       - name: Built binary runs without extra runtimes
         run: target/aarch64-unknown-linux-musl/release/aae --version
+
+  acceptance:
+    runs-on: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@v7
+      - uses: jdx/mise-action@v5
+      - uses: Swatinem/rust-cache@v2
+      - run: mise run acceptance-ci

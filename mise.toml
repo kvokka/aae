@@ -33,3 +33,11 @@ for t in x86_64-unknown-linux-musl aarch64-unknown-linux-musl x86_64-apple-darwi
   cargo zigbuild --release --locked --target "$t"
 done
 """
+
+[tasks.acceptance]
+description = "The whole acceptance spec (spec §9.2, §15); scenarios with a real model cost money and need a login"
+run = ["cargo build -q --locked -p aae", "cargo run -q --locked -p aae-acceptance"]
+
+[tasks.acceptance-ci]
+description = "The acceptance scenarios without a model, as CI runs them"
+run = ["cargo build -q --locked -p aae", "cargo run -q --locked -p aae-acceptance -- --ci"]

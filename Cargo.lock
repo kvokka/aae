@@ -19,6 +19,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "aae-acceptance"
+version = "0.1.0"
+dependencies = [
+ "aae-front",
+ "aae-testkit",
+ "serde_json",
+ "tempfile",
+ "tokio",
+]
+
+[[package]]
 name = "aae-br"
 version = "0.1.0"
 dependencies = [
