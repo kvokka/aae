@@ -2,13 +2,13 @@
 //! came from, so that "explain config" can show it.
 
 use super::{Config, Hook, Mcp, Name, PluginUse, Settings, Skill, check::resolve};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::{collections::BTreeMap, fmt, fmt::Write as _};
 
 /// The layer a value came from, weakest first. The host layer is not here: the harness merges it itself and the
 /// core never sees its content (spec §6.3).
-#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "layer", content = "name", rename_all = "snake_case")]
 pub enum Layer {
     /// `[harness.<name>]` of the orchestrator: the default model of the harness.
@@ -40,7 +40,7 @@ impl fmt::Display for Layer {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Serialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Sourced<T> {
     pub value: T,
     pub from: Layer,
@@ -48,7 +48,7 @@ pub struct Sourced<T> {
 
 /// The merged settings a session starts with (contracts 4.2); serializable, so a run keeps it as its snapshot.
 /// `env` is the whole session environment besides what the adapter adds: nothing is inherited from the daemon.
-#[derive(Clone, Debug, PartialEq, Serialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct EffectiveConfig {
     pub harness: String,
     pub model: Option<Sourced<String>>,

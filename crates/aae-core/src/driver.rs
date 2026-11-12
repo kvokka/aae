@@ -2,6 +2,7 @@
 //! translates and executes; it never retries a turn, parks or decides an outcome (spec §4, §7.2).
 
 use crate::{BoxFuture, config::EffectiveConfig};
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use sha2::{Digest, Sha256};
 use std::{path::PathBuf, time::Duration};
@@ -70,11 +71,11 @@ pub enum SessionPlan {
 }
 
 /// Everything the adapter needs to resume a session; the core stores it and hands it back.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct SessionRef(pub Value);
 
 /// A running harness process: `pid` and its kernel `start_time` identify the process (spec §5.2).
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct InstanceHandle {
     pub id: String,
     pub pid: i32,
@@ -133,7 +134,8 @@ pub struct Capabilities {
 }
 
 /// The failure kinds of spec §7.1 (contracts 4.4).
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
 pub enum FailureKind {
     QuotaExhausted,
     RateLimited,
@@ -154,7 +156,8 @@ pub enum FailureKind {
     Unknown,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
 pub enum Scope {
     Session,
     Instance,
@@ -164,7 +167,8 @@ pub enum Scope {
     Rig,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
 pub enum Source {
     Harness,
     Adapter,

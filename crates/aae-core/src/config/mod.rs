@@ -138,6 +138,20 @@ pub struct Name {
     pub name: String,
 }
 
+impl Project {
+    /// The formula a run of this project names; a bare name resolves as written in the project root pack (spec §8.2).
+    pub fn formula(&self, reference: &str) -> Result<(Name, &Formula), String> {
+        let own = self.packs.first().map(|p| p.name.as_str()).unwrap_or_default();
+        let has = |p: &Pack, n: &str| p.formulas.contains_key(n);
+        let name = check::resolve(&self.packs, own, &load::reference(reference), has, "formula")?;
+        let pack = self.packs.iter().find(|p| p.name == name.pack);
+        let formula = pack
+            .and_then(|p| p.formulas.get(&name.name))
+            .ok_or(format!("no formula `{name}`"))?;
+        Ok((name, formula))
+    }
+}
+
 impl fmt::Display for Name {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}.{}", self.pack, self.name)

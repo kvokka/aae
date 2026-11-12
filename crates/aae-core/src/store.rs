@@ -1,8 +1,6 @@
 use rusqlite::Connection;
 use std::path::Path;
 
-const SCHEMA_VERSION: i32 = 1;
-
 const SCHEMA_V1: &str = "
 CREATE TABLE outbox (
     seq INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -26,6 +24,54 @@ CREATE TABLE consumers (name TEXT PRIMARY KEY, seq INTEGER NOT NULL);
 INSERT INTO consumers (name, seq) VALUES ('journal', 0);
 ";
 
+/// Runs and their attempts (docs/design/contracts.md 6). `waiting` is the `seq` of the deciding event whose
+/// decision the run waits for; `next` is the attempt kind an `interrupted` run starts when its `after` passes.
+const SCHEMA_V2: &str = "
+CREATE TABLE runs (
+    n INTEGER PRIMARY KEY,
+    id TEXT NOT NULL UNIQUE,
+    project TEXT NOT NULL,
+    rig TEXT NOT NULL,
+    formula TEXT NOT NULL,
+    agent TEXT NOT NULL,
+    inputs TEXT NOT NULL,
+    correlation TEXT NOT NULL,
+    depth INTEGER NOT NULL,
+    parent_run TEXT,
+    workdir TEXT NOT NULL,
+    state TEXT NOT NULL,
+    class TEXT,
+    reason TEXT,
+    attempt INTEGER NOT NULL DEFAULT 0,
+    prompt TEXT,
+    timeout_ms INTEGER,
+    config TEXT,
+    waiting INTEGER,
+    next TEXT,
+    created_ms INTEGER NOT NULL,
+    started_ms INTEGER
+);
+CREATE INDEX runs_state ON runs (state);
+CREATE TABLE attempts (
+    run TEXT NOT NULL,
+    n INTEGER NOT NULL,
+    kind TEXT NOT NULL,
+    harness TEXT NOT NULL,
+    instance TEXT,
+    handle TEXT,
+    session TEXT,
+    request TEXT,
+    turn_ended INTEGER NOT NULL DEFAULT 0,
+    -- What was left of the step timeout when the attempt began to wait for an answer.
+    paused_ms INTEGER,
+    started_ms INTEGER NOT NULL,
+    ended_ms INTEGER,
+    failure TEXT,
+    PRIMARY KEY (run, n)
+);
+CREATE INDEX attempts_instance ON attempts (instance);
+";
+
 /// Opens the state database in WAL mode and brings its schema to the current version.
 pub fn open(path: &Path) -> rusqlite::Result<Connection> {
     let conn = Connection::open(path)?;
@@ -33,10 +79,11 @@ pub fn open(path: &Path) -> rusqlite::Result<Connection> {
     // NORMAL in WAL mode survives a process crash (kill -9, criterion 8); only power loss can drop a commit.
     conn.pragma_update(None, "synchronous", "NORMAL")?;
     let version: i32 = conn.pragma_query_value(None, "user_version", |r| r.get(0))?;
-    if version < SCHEMA_VERSION {
-        conn.execute_batch(&format!(
-            "BEGIN; {SCHEMA_V1} PRAGMA user_version = {SCHEMA_VERSION}; COMMIT;"
-        ))?;
+    for (to, sql) in [(1, SCHEMA_V1), (2, SCHEMA_V2)]
+        .into_iter()
+        .filter(|(to, _)| *to > version)
+    {
+        conn.execute_batch(&format!("BEGIN; {sql} PRAGMA user_version = {to}; COMMIT;"))?;
     }
     Ok(conn)
 }

@@ -60,6 +60,11 @@ impl Tx<'_> {
         self.now_ms
     }
 
+    /// The transaction itself, for the domain tables of the core.
+    pub(crate) fn sql(&self) -> &rusqlite::Transaction<'_> {
+        &self.tx
+    }
+
     /// Appends the event to the outbox and returns its `seq`.
     pub fn emit(&mut self, event: &Event) -> Result<i64, Error> {
         let body = json!({
