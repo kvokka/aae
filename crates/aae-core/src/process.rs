@@ -94,6 +94,7 @@ pub(crate) async fn run(spec: Spec<'_>) -> Output {
         Err(e) => return spawn_failed(e.to_string()),
     };
     let pid = child.id();
+    let _own = Own(pid);
     let group = pid.and_then(|id| i32::try_from(id).ok()).and_then(Pid::from_raw);
     let signal = |sig| {
         if let Some(group) = group {
@@ -141,7 +142,6 @@ pub(crate) async fn run(spec: Spec<'_>) -> Output {
             Exit::TimedOut
         }
     };
-    crate::orphans::waited(pid);
     if timeout(DRAIN, &mut io).await.is_err() {
         signal(Signal::KILL);
         // A descendant that left the group keeps the pipes: its output is cut where it is.
@@ -206,6 +206,15 @@ pub(crate) async fn wait_dead(pid: i32, start_time: u64, limit: Duration) -> boo
         tokio::time::sleep(Duration::from_millis(50)).await;
     }
     true
+}
+
+/// Tells the orphan reaper the child is no longer its own however [`run`] ends, a dropped future included.
+struct Own(Option<u32>);
+
+impl Drop for Own {
+    fn drop(&mut self) {
+        crate::orphans::waited(self.0);
+    }
 }
 
 #[cfg(test)]

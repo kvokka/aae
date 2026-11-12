@@ -144,6 +144,8 @@ mod tests {
     }
 
     /// An orphan that cleared its environment is adopted and reaped; the daemon's own child is left to its `wait`.
+    /// Needs a process of its own (nextest): under `cargo test` an exited child of a parallel test that spawned
+    /// without [`spawn`] could be reaped too.
     #[tokio::test]
     async fn adopted_orphans_are_reaped_and_own_children_are_not() {
         adopt_orphans().unwrap();

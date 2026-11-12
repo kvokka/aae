@@ -228,7 +228,8 @@ pub fn start(
     let forward = handle.clone();
     tokio::spawn(async move {
         while let Some(event) = events.recv().await {
-            // A dead process is never started again (its record goes or is stopping); its descendants go with it.
+            // A dead process is never started again; its record goes or is stopping, and either way its descendants
+            // are swept by an effect.
             if matches!(event.event, Normalized::Exited { .. }) {
                 starts
                     .lock()

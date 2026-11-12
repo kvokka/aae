@@ -139,12 +139,13 @@ impl RunHandler {
         }
     }
 
-    /// The instance `id` could not start: its record goes, the attempts on it fail through their launches.
+    /// The instance `id` could not start or died: its record goes, its marked descendants are killed (invariant
+    /// 7), the attempts on it fail through their launches.
     pub(super) fn instance_failed(tx: &mut Tx<'_>, id: &str, failure: &Failure) -> Result<(), Error> {
         let data = json!({ "failure": super::failure_json(failure) });
         Self::instance_event(tx, id, "instance.failed", data)?;
         tx.sql().execute("DELETE FROM instances WHERE id = ?1", [id])?;
-        Ok(())
+        tx.effect(id, "sweep", &json!({ "op": "sweep", "instance": id }))
     }
 
     /// The process of `id` ended: a stop the registry asked for, or a crash.

@@ -50,6 +50,11 @@ impl Executor for RunExecutor {
                     let _ = core.send(None, msg).await;
                 }
                 Some("stop_exec") => super::exec_step::stop(&self.running, payload["run"].as_str().unwrap_or_default()),
+                Some("sweep") => {
+                    let id = payload["instance"].as_str().unwrap_or_default().to_owned();
+                    // Walking `/proc` is synchronous.
+                    let _ = tokio::task::spawn_blocking(move || crate::orphans::sweep(&id)).await;
+                }
                 _ => {}
             }
             if payload["harness"].is_null() {

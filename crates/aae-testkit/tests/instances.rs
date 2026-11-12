@@ -11,7 +11,10 @@ use aae_core::{
 use aae_testkit::{ScriptedDriver, Step};
 use common::{World, world_driven};
 use serde_json::{Value, json};
-use std::time::Duration;
+use std::{
+    process::{Child, Command},
+    time::Duration,
+};
 
 /// Two rigs and two agents: `dev` and `same` share a process part, `other` has its own.
 const FILES: &[(&str, &str)] = &[
@@ -84,6 +87,29 @@ impl World {
     }
 }
 
+/// A real process marked with the first instance's id, as a tool command of the harness would be.
+fn marked(w: &World) -> Child {
+    Command::new("sleep")
+        .arg("300")
+        .env(aae_core::orphans::INSTANCE_ENV, &w.instance_events()[0].1)
+        .spawn()
+        .unwrap()
+}
+
+/// Whether `child` is killed within a few real seconds; the sweep walks `/proc` on a blocking thread.
+async fn killed(mut child: Child) -> bool {
+    for _ in 0..300 {
+        if child.try_wait().unwrap().is_some() {
+            return true;
+        }
+        tokio::time::sleep(Duration::from_millis(10)).await;
+        std::thread::sleep(Duration::from_millis(10));
+    }
+    let _ = child.kill();
+    let _ = child.wait();
+    false
+}
+
 fn failed(events: &[(String, Value)]) -> bool {
     events.iter().any(|(t, _)| t == "run.attempt_failed")
 }
@@ -140,19 +166,24 @@ async fn a_full_instance_or_another_fingerprint_gets_an_instance_of_its_own() {
     assert_eq!(w.count("instance.stopped"), 2, "no idle time: stopped at once");
 }
 
+#[cfg(target_os = "linux")] // the sweep reads `/proc`
 #[tokio::test(start_paused = true)]
 async fn a_shared_instance_that_dies_fails_every_attempt_on_it() {
     let w = world_driven(FILES, ScriptedDriver::new(2));
     // The second prompt plays the death of the process.
     w.driver
         .script(vec![Step::Emit(Normalized::Activity { tool_running: false })]);
-    w.driver.script(vec![Step::Exit {
-        code: Some(1),
-        signal: None,
-    }]);
+    w.driver.script(vec![
+        Step::Wait(Duration::from_secs(5)),
+        Step::Exit {
+            code: Some(1),
+            signal: None,
+        },
+    ]);
     let (one, two) = two_running(&w, "same").await;
+    let orphan = marked(&w);
     for run in [&one, &two] {
-        let events = w.events(run, Duration::from_secs(1)).await;
+        let events = w.events(run, Duration::from_secs(10)).await;
         let failed = common::last(&events, "run.attempt_failed");
         assert_eq!(failed["failure"]["kind"], "harness_crash", "{run}");
     }
@@ -162,6 +193,7 @@ async fn a_shared_instance_that_dies_fails_every_attempt_on_it() {
         1,
         "{failed:?}"
     );
+    assert!(killed(orphan).await, "its marked descendants are swept (invariant 7)");
 }
 
 #[tokio::test(start_paused = true)]
@@ -186,16 +218,19 @@ async fn an_event_before_the_session_is_known_reaches_the_only_attempt() {
     assert!(failed(&events), "{events:?}");
 }
 
+#[cfg(target_os = "linux")] // the sweep reads `/proc`
 #[tokio::test(start_paused = true)]
 async fn an_instance_found_dead_by_its_health_fails_every_attempt_on_it() {
     let w = world_driven(FILES, ScriptedDriver::new(2));
     w.driver.script(vec![]);
     w.driver.script(vec![Step::Vanish]);
     let (one, two) = two_running(&w, "same").await;
+    let orphan = marked(&w);
     for run in [&one, &two] {
         let events = w.events(run, Duration::from_secs(31)).await;
         let failed = common::last(&events, "run.attempt_failed");
         assert_eq!(failed["failure"]["kind"], "harness_crash", "{run}");
     }
     assert_eq!(w.count("instance.failed"), 1);
+    assert!(killed(orphan).await, "its marked descendants are swept");
 }
