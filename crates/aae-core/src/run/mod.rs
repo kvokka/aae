@@ -10,6 +10,7 @@ mod gates;
 mod hooks;
 mod machine;
 mod queue;
+mod read;
 mod row;
 
 use crate::{
@@ -35,6 +36,7 @@ pub use crate::process::Exit;
 pub use finish::MAX_REMARKS;
 pub use gates::{GateSpec, valid_key};
 pub use hooks::{ExecHooks, HookRunner};
+pub use read::{Reader, RunFilter};
 
 type Drivers = Arc<BTreeMap<String, Arc<dyn Driver>>>;
 
@@ -274,7 +276,8 @@ fn answer_json(answer: &Answer) -> Value {
     }
 }
 
-fn answer_from(value: &Value) -> Option<Answer> {
+/// An answer in the form of `answer_json` (the API takes it so too); `None` if it is not one.
+pub fn answer_from(value: &Value) -> Option<Answer> {
     let text = |key: &str| value[key].as_str().map(str::to_owned);
     Some(match value["decision"].as_str()? {
         "allow" => Answer::Allow {

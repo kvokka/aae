@@ -6,7 +6,7 @@ use crate::{
     journal::{parse_rfc3339_ms, rfc3339_ms},
     writer::{Error, Event, Tx},
 };
-use rusqlite::params;
+use rusqlite::{Connection, params};
 use serde_json::{Value, json};
 
 /// A parked run waiting on a gate without `until` fails after this long (contracts 6.1).
@@ -27,14 +27,16 @@ pub fn valid_key(key: &str) -> bool {
     key == "orchestrator" || KINDS.iter().any(|k| key.strip_prefix(k).is_some_and(|n| !n.is_empty()))
 }
 
-/// The `{key, until, reason, closed_by, closed_at}` of the closures on `keys`, oldest first; a closure whose `until`
-/// has passed counts as open even before its timer fires.
-fn closures(tx: &Tx<'_>, keys: &[String]) -> Result<Vec<Value>, Error> {
-    let mut stmt = tx.sql().prepare(
+/// The `{key, until, reason, closed_by, closed_at}` of the closures on `keys` (`None`: on every key), oldest first;
+/// a closure whose `until` has passed counts as open even before its timer fires.
+pub(super) fn closures(conn: &Connection, now_ms: i64, keys: Option<&[String]>) -> Result<Vec<Value>, Error> {
+    let mut stmt = conn.prepare(
         "SELECT key, until_ms, reason, closed_by, closed_ms FROM gates \
-         WHERE key IN (SELECT value FROM json_each(?1)) AND (until_ms IS NULL OR until_ms > ?2) ORDER BY closed_ms",
+         WHERE (?1 IS NULL OR key IN (SELECT value FROM json_each(?1))) AND (until_ms IS NULL OR until_ms > ?2) \
+         ORDER BY closed_ms",
     )?;
-    let rows = stmt.query_map(params![json!(keys).to_string(), tx.now_ms()], |r| {
+    let keys = keys.map(|k| json!(k).to_string());
+    let rows = stmt.query_map(params![keys, now_ms], |r| {
         Ok(json!({
             "key": r.get::<_, String>(0)?, "until": r.get::<_, Option<i64>>(1)?.map(rfc3339_ms),
             "reason": r.get::<_, String>(2)?, "closed_by": r.get::<_, String>(3)?,
@@ -78,7 +80,7 @@ impl RunHandler {
 
     /// Every active closure on the keys of `row` (`gates` of `run.attempt_failed`).
     pub(super) fn gates_of(tx: &Tx<'_>, row: &Row) -> Result<Vec<Value>, Error> {
-        closures(tx, &Self::keys(tx, row)?)
+        closures(tx.sql(), tx.now_ms(), Some(&Self::keys(tx, row)?))
     }
 
     /// The oldest active closure on the keys of `row`: what keeps it from starting.
@@ -121,7 +123,7 @@ impl RunHandler {
             Some(at) => tx.set_deadline(&timer, at)?,
             None => tx.clear_deadline(&timer)?,
         }
-        let closure = closures(tx, std::slice::from_ref(&gate.key))?;
+        let closure = closures(tx.sql(), tx.now_ms(), Some(std::slice::from_ref(&gate.key)))?;
         let closure = closure.into_iter().find(|c| c["closed_by"] == by);
         gate_event(tx, "gate.closed", json!({ "gate": closure }))?;
         // The queued runs on the key now wait for it: their reason changes.
@@ -144,7 +146,7 @@ impl RunHandler {
         {
             tx.clear_deadline(&format!("{closer}@{key}:gate"))?;
         }
-        if !closures(tx, &[key.to_owned()])?.is_empty() {
+        if !closures(tx.sql(), tx.now_ms(), Some(&[key.to_owned()]))?.is_empty() {
             return Ok(());
         }
         let opened_by = if by.is_some() { "timer" } else { "operator" };

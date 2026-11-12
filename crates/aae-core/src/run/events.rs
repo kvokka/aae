@@ -206,7 +206,7 @@ impl RunHandler {
             return self.deciding(tx, row, "run.finishing", data);
         }
         let data = json!({ "run": row.view(), "stop_reason": "completed", "remarks": remarks,
-            "attempts": attempts(tx, &row.id)? });
+            "attempts": attempts(tx.sql(), &row.id)? });
         self.deciding(tx, row, "run.turn_ended_without_outcome", data)
     }
 

@@ -1,5 +1,6 @@
 mod config;
 mod config_layers;
+mod idempotency;
 mod journal;
 mod template;
 
@@ -176,24 +177,6 @@ fn count(db: &Path, table: &str) -> i64 {
     let conn = rusqlite::Connection::open(db).unwrap();
     conn.query_row(&format!("SELECT COUNT(*) FROM {table}"), [], |r| r.get(0))
         .unwrap()
-}
-
-#[tokio::test(start_paused = true)]
-async fn repeated_message_does_not_repeat_the_effect() {
-    let dir = tempfile::tempdir().unwrap();
-    let db = dir.path().join("state.db");
-    let r = rig(&db, Clock::managed(T0), 0, Duration::ZERO);
-    let work = || Msg::Work {
-        effect_key: "run-1",
-        dedupe: "start",
-    };
-    let first = r.core.send(Some("cmd-1"), work()).await.unwrap();
-    let second = r.core.send(Some("cmd-1"), work()).await.unwrap();
-    settle().await;
-    assert_eq!(first, second);
-    assert_eq!(max_seq(&rusqlite::Connection::open(&db).unwrap()), 1);
-    assert_eq!(r.calls.take().iter().filter(|(w, _)| w.ends_with(":start")).count(), 1);
-    assert_eq!(count(&db, "effects"), 0);
 }
 
 #[tokio::test(start_paused = true)]

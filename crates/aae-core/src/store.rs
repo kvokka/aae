@@ -99,6 +99,11 @@ ALTER TABLE runs ADD COLUMN account TEXT;
 ALTER TABLE runs ADD COLUMN model TEXT;
 ";
 
+const SCHEMA_V5: &str = "
+ALTER TABLE idempotency ADD COLUMN at_ms INTEGER NOT NULL DEFAULT 0;
+CREATE INDEX idempotency_at ON idempotency (at_ms);
+";
+
 /// Opens the state database in WAL mode and brings its schema to the current version.
 pub fn open(path: &Path) -> rusqlite::Result<Connection> {
     let conn = Connection::open(path)?;
@@ -106,9 +111,15 @@ pub fn open(path: &Path) -> rusqlite::Result<Connection> {
     // NORMAL in WAL mode survives a process crash (kill -9, criterion 8); only power loss can drop a commit.
     conn.pragma_update(None, "synchronous", "NORMAL")?;
     let version: i32 = conn.pragma_query_value(None, "user_version", |r| r.get(0))?;
-    for (to, sql) in [(1, SCHEMA_V1), (2, SCHEMA_V2), (3, SCHEMA_V3), (4, SCHEMA_V4)]
-        .into_iter()
-        .filter(|(to, _)| *to > version)
+    for (to, sql) in [
+        (1, SCHEMA_V1),
+        (2, SCHEMA_V2),
+        (3, SCHEMA_V3),
+        (4, SCHEMA_V4),
+        (5, SCHEMA_V5),
+    ]
+    .into_iter()
+    .filter(|(to, _)| *to > version)
     {
         conn.execute_batch(&format!("BEGIN; {sql} PRAGMA user_version = {to}; COMMIT;"))?;
     }

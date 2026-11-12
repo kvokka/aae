@@ -12,7 +12,7 @@ pub mod template;
 mod writer;
 
 pub use clock::Clock;
-pub use journal::{Journal, ReadError, SCHEMA};
+pub use journal::{Journal, ReadError, SCHEMA, parse_rfc3339_ms, rfc3339_ms};
 pub use store::open;
 pub use writer::{BoxFuture, CoreHandle, Error, Event, Executor, Handler, Tx, start};
 

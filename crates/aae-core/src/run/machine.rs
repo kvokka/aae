@@ -259,7 +259,7 @@ impl RunHandler {
         let failure = super::failure_json(&failure);
         self.end_attempt(tx, &row, Some(&failure))?;
         row.set_state(tx, "interrupted", failure["kind"].as_str())?;
-        let attempts = attempts(tx, &row.id)?;
+        let attempts = attempts(tx.sql(), &row.id)?;
         let agent_failures: Vec<Value> = {
             let mut stmt = tx.sql().prepare(
                 "SELECT a.run, json_extract(a.failure, '$.kind'), a.ended_ms FROM attempts a \

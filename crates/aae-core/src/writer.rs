@@ -10,6 +10,9 @@ use tokio::{
     task::JoinHandle,
 };
 
+/// How long an idempotency key is remembered.
+const IDEMPOTENCY_KEEP_MS: i64 = 86_400_000;
+
 pub type BoxFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
 
 #[derive(Debug)]
@@ -255,10 +258,14 @@ fn process<H: Handler>(
     let events = std::mem::take(&mut tx.events);
     handler.emitted(&mut tx, &events)?;
     if let Some(key) = key {
-        // shortcut: idempotency rows are never pruned; add retention together with the API (WP-22).
+        // A key is kept a day: a client retries within seconds or minutes, and the table must not grow forever.
         tx.tx.execute(
-            "INSERT INTO idempotency (key, reply) VALUES (?1, ?2)",
-            params![key, reply.to_string()],
+            "DELETE FROM idempotency WHERE at_ms < ?1",
+            [now_ms - IDEMPOTENCY_KEEP_MS],
+        )?;
+        tx.tx.execute(
+            "INSERT INTO idempotency (key, reply, at_ms) VALUES (?1, ?2, ?3)",
+            params![key, reply.to_string(), now_ms],
         )?;
     }
     tx.tx.commit()?;

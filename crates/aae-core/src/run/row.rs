@@ -5,7 +5,7 @@ use crate::{
     journal::rfc3339_ms,
     writer::{Error, Event, Tx},
 };
-use rusqlite::{OptionalExtension, params};
+use rusqlite::{Connection, OptionalExtension, params};
 use serde_json::{Value, json};
 
 /// One row of `runs`.
@@ -36,33 +36,35 @@ const COLUMNS: &str = "id, project, rig, formula, agent, inputs, correlation, de
 
 impl Row {
     pub(super) fn load(tx: &Tx<'_>, run: &str) -> Result<Self, Error> {
+        Self::read(tx.sql(), run)?.ok_or_else(|| rejected(format!("no run `{run}`")))
+    }
+
+    pub(super) fn read(conn: &Connection, run: &str) -> rusqlite::Result<Option<Self>> {
         let sql = format!("SELECT {COLUMNS} FROM runs WHERE id = ?1");
-        tx.sql()
-            .query_row(&sql, [run], |r| {
-                Ok(Self {
-                    id: r.get(0)?,
-                    project: r.get(1)?,
-                    rig: r.get(2)?,
-                    formula: r.get(3)?,
-                    agent: r.get(4)?,
-                    inputs: r.get(5)?,
-                    correlation: r.get(6)?,
-                    depth: r.get(7)?,
-                    parent_run: r.get(8)?,
-                    workdir: r.get(9)?,
-                    state: r.get(10)?,
-                    class: r.get(11)?,
-                    attempt: r.get(12)?,
-                    prompt: r.get(13)?,
-                    timeout_ms: r.get(14)?,
-                    config: r.get(15)?,
-                    next: r.get(16)?,
-                    created_ms: r.get(17)?,
-                    started_ms: r.get(18)?,
-                })
+        conn.query_row(&sql, [run], |r| {
+            Ok(Self {
+                id: r.get(0)?,
+                project: r.get(1)?,
+                rig: r.get(2)?,
+                formula: r.get(3)?,
+                agent: r.get(4)?,
+                inputs: r.get(5)?,
+                correlation: r.get(6)?,
+                depth: r.get(7)?,
+                parent_run: r.get(8)?,
+                workdir: r.get(9)?,
+                state: r.get(10)?,
+                class: r.get(11)?,
+                attempt: r.get(12)?,
+                prompt: r.get(13)?,
+                timeout_ms: r.get(14)?,
+                config: r.get(15)?,
+                next: r.get(16)?,
+                created_ms: r.get(17)?,
+                started_ms: r.get(18)?,
             })
-            .optional()?
-            .ok_or_else(|| rejected(format!("no run `{run}`")))
+        })
+        .optional()
     }
 
     pub(super) fn live(&self) -> bool {
@@ -115,8 +117,8 @@ impl Row {
 }
 
 /// `Attempts` of contracts 1.3: the last 20 attempts of a run, newest last.
-pub(super) fn attempts(tx: &Tx<'_>, run: &str) -> Result<Vec<Value>, Error> {
-    let mut stmt = tx.sql().prepare(
+pub(super) fn attempts(conn: &Connection, run: &str) -> Result<Vec<Value>, Error> {
+    let mut stmt = conn.prepare(
         "SELECT n, kind, started_ms, ended_ms, json_extract(failure, '$.kind') FROM \
          (SELECT * FROM attempts WHERE run = ?1 ORDER BY n DESC LIMIT 20) ORDER BY n",
     )?;

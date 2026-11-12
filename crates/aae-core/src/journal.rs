@@ -9,6 +9,7 @@ use std::{
     io::{self, BufRead, BufReader, Write},
     path::{Path, PathBuf},
 };
+use tokio::sync::watch;
 
 /// Version of the event envelope (docs/design/contracts.md 1.1).
 pub const SCHEMA: u32 = 1;
@@ -21,6 +22,8 @@ pub struct Journal {
     /// `(written, acked)`: the last `seq` in the files and the last one acknowledged in the state. Unknown until
     /// the first drain, and again after a failed write, so the files are checked once instead of on every drain.
     cursor: Option<(i64, i64)>,
+    /// The last `seq` written to the files, for readers that wait for new events.
+    written: watch::Sender<i64>,
 }
 
 #[derive(Debug)]
@@ -52,7 +55,13 @@ impl Journal {
             max_bytes,
             files,
             cursor: None,
+            written: watch::channel(0).0,
         }
+    }
+
+    /// The last `seq` this journal wrote; it changes after every drain that wrote something.
+    pub fn subscribe(&self) -> watch::Receiver<i64> {
+        self.written.subscribe()
     }
 
     /// `events.jsonl` is the current file, `events.1.jsonl` the one before it, and so on.
@@ -93,6 +102,8 @@ impl Journal {
             acked = written;
         }
         self.cursor = Some((written, acked));
+        self.written
+            .send_if_modified(|last| std::mem::replace(last, written) != written);
         Ok(())
     }
 
@@ -187,7 +198,7 @@ fn last_seq(bytes: &[u8]) -> Option<i64> {
 }
 
 /// `2026-11-12T14:05:00.123Z` from milliseconds since the Unix epoch (days-to-civil, proleptic Gregorian).
-pub(crate) fn rfc3339_ms(ms: i64) -> String {
+pub fn rfc3339_ms(ms: i64) -> String {
     let (days, rem) = (ms.div_euclid(86_400_000), ms.rem_euclid(86_400_000));
     let z = days + 719_468;
     let era = z.div_euclid(146_097);
@@ -203,7 +214,7 @@ pub(crate) fn rfc3339_ms(ms: i64) -> String {
 }
 
 /// Milliseconds since the Unix epoch of a UTC time `YYYY-MM-DDTHH:MM:SS[.fff]Z`, the form events carry.
-pub(crate) fn parse_rfc3339_ms(text: &str) -> Option<i64> {
+pub fn parse_rfc3339_ms(text: &str) -> Option<i64> {
     let (date, time) = text.strip_suffix('Z')?.split_once('T')?;
     let num = |s: &str| s.parse::<i64>().ok().filter(|_| s.bytes().all(|b| b.is_ascii_digit()));
     let mut d = date.splitn(3, '-').map(num);
