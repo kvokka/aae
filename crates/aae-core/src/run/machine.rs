@@ -67,6 +67,7 @@ impl RunHandler {
         env: BTreeMap<String, Option<Sourced<String>>>,
         prompt_append: Option<String>,
     ) -> Result<(), Error> {
+        let moved = workdir.is_some();
         if let Some(dir) = workdir {
             row.workdir = dir.to_string_lossy().into_owned();
         }
@@ -90,7 +91,10 @@ impl RunHandler {
             "UPDATE runs SET workdir = ?2, prompt = ?3, config = ?4 WHERE id = ?1",
             params![row.id, row.workdir, row.prompt, row.config],
         )?;
-        self.start_attempt(tx, row, "new_session")
+        self.start_attempt(tx, row, "new_session")?;
+        // The workdir the run held while preparing (the rig's, spec §9.3) is free once a hook moved the run: a run
+        // waiting for it may start (`worktree`, spec §11.5).
+        if moved { self.schedule(tx) } else { Ok(()) }
     }
 
     /// The prompt, the step timeout and the config snapshot of a run, from the config of now: the effective config
