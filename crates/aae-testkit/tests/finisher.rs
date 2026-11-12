@@ -150,6 +150,13 @@ async fn continue_after_a_hollow_turn_counts_toward_the_remarks_ceiling() {
     let w = hooked("run.turn_ended_without_outcome");
     w.driver.script(hollow_turn());
     let run = w.create().await;
+    w.seq_of(&run, "run.turn_ended_without_outcome", 0).await;
+    let token = w.driver.token(&run, 1).unwrap();
+    assert_eq!(
+        w.finish(&run, &token, Verdict::Pass, "late").await,
+        "invalid",
+        "the turn is over"
+    );
     for n in 0..=MAX_REMARKS as usize {
         w.driver.script(hollow_turn());
         let message = "Keep going.".to_owned();

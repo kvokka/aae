@@ -49,8 +49,13 @@ impl RunHandler {
             return answer("stale_attempt");
         }
         let data_len = outcome.data.as_ref().map_or(0, |d| d.to_string().len());
-        // In `finishing` the declared outcome is under check and the session is idle: nothing may replace it.
-        if row.state == "finishing" || outcome.summary.len() > MAX_SUMMARY || data_len > MAX_DATA {
+        // In `finishing` the declared outcome is under check; a `running` run that waits for a decision has ended
+        // its turn without one (contracts 6.3). Either way nothing may be declared now.
+        let waiting: Option<i64> = tx
+            .sql()
+            .query_row("SELECT waiting FROM runs WHERE id = ?1", [run], |r| r.get(0))?;
+        let closed = row.state == "finishing" || (row.state == "running" && waiting.is_some());
+        if closed || outcome.summary.len() > MAX_SUMMARY || data_len > MAX_DATA {
             return answer("invalid");
         }
         tx.sql().execute(

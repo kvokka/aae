@@ -252,9 +252,11 @@ async fn a_run_continues_the_session_of_a_finished_run_only_when_asked() {
         .await;
     let attempts = &last(&events, "run.turn_ended_without_outcome")["attempts"];
     assert_eq!(attempts[0]["kind"], "resume");
+    w.driver.script(hollow_turn());
     let plain = w.create().await;
     let events = w.events(&plain, Duration::from_millis(200)).await;
-    assert_eq!(last(&events, "run.started")["run"]["id"], plain.as_str());
+    let attempts = &last(&events, "run.turn_ended_without_outcome")["attempts"];
+    assert_eq!(attempts[0]["kind"], "new_session", "no implicit reuse");
 }
 
 #[tokio::test(start_paused = true)]
