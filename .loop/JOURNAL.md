@@ -486,3 +486,35 @@ WP-27a (`crates/aae-claude`): (1) `Answer::Text` отдаётся claude как 
 (WP-27a) на macOS не стартует ни одной сессии: `orphans::start_time` читает `/proc`, вне Linux `None` →
 `harness_crash` (`crates/aae-claude/src/lib.rs:102`); §1.1 снимает проверку macOS, но `shortcut:` этого не описывает —
 желательный 1 ревью 15.
+
+## 2026-11-13T10:40 · цикл 16 · coder · РЕШЕНИЕ
+
+WP-27b, доставка конфига claude: (1) `--strict-mcp-config` не передаётся, хотя §7.4 и текст плана его называют: он
+отрезал бы `.mcp.json` рига, который §6.3 сохраняет при выключенном наследовании; хост и так отрезан
+`--setting-sources project,local` и своим `CLAUDE_CONFIG_DIR` (опыт 4). (2) `native.claude` толкуется как таблица
+ключей настроек claude: она идёт в тот же `--settings`, хуки aae дописываются к её `hooks`. (3) Skills — плагин `aae`
+в каталоге состояния, skills в нём — симлинки на их каталоги; проверено на настоящем claude (`init.skills` →
+`aae:mail`). (4) MCP с `scope = orchestrator|project` и плагины агента отказывают `config_error` до WP-34 и WP-32.
+`docs/design/experiments.md` «Consequences», `docs/design/config.md`.
+
+## 2026-11-13T11:05 · цикл 16 · coder · НАХОДКА
+
+Открытый вопрос ревью 04 (грузится ли личный `~/.claude/CLAUDE.md` при `--setting-sources project,local`) закрыт без
+модели: `aae-claude/tests/claude.rs::an_isolated_session_reads_the_rig_but_not_the_host` — настоящий claude 2.1.322
+на подделке, маркер рига в запросе к модели есть, маркер `$HOME/.claude/CLAUDE.md` — нет; с включённым наследованием
+тот же тест падает (маркер хоста есть). Изоляция держится на своём `CLAUDE_CONFIG_DIR`, который адаптер ставит всегда
+при выключенном наследовании. Истечение доставленного OAuth-токена (§6.4 [НП]) не проверено: токен читается из
+`.credentials.json` хоста при каждом спавне, так что обновлённый хостом токен доходит до следующего процесса.
+
+## 2026-11-13T11:30 · цикл 16 · coder · НАХОДКА
+
+Субагенты кодеру снова недоступны: `Agent` с `subagent_type: subcoder` → «Agent type 'subcoder' not found. Available
+agents: coder, reviewer», а `coder` хук запрещает. WP-26b (подделка Responses) поэтому не взят параллельно и
+переносится на цикл 17 целиком (пакет M в контексте кодера). Предложение по харнессу: зарегистрировать агентов
+`helper`/`subcoder`/`expert` в `.claude/agents/` или убрать их из инструкции кодера.
+
+## 2026-11-13T12:10 · цикл 16 · reviewer · НАХОДКА
+
+Ревью 16: SCORE 4.7, один обязательный пункт. `aae-claude/src/part.rs`, `settings()`: `settings["hooks"][event]` на
+`IndexMut` паникует, если `native.claude.hooks` — не объект. Такое бывает при включённом хуке aae; `split` вызывается
+в писателе ядра (`run/machine.rs:196`), так что паника убивает цикл событий. Нужен `config_error`. Секции спеки не сжимались.
