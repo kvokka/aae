@@ -128,11 +128,11 @@ fn core_on(
 
 impl World {
     /// The daemon dies without a word (its writer is dropped mid-flight) and a new one starts on its state, with a
-    /// new driver: the old one's processes are unknown to it.
+    /// new driver: the old one's processes are unknown to it, the transcripts of its sessions survive.
     pub(crate) async fn restart(&mut self) {
         self.task.abort();
         let _ = (&mut self.task).await;
-        self.driver = ScriptedDriver::new(1);
+        self.driver = self.driver.after_crash();
         (self.core, self.task) = core_on(self.dir.path(), self.hooks.clone(), &self.driver, &self.tracker);
     }
 

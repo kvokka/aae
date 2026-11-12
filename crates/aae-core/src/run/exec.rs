@@ -5,7 +5,7 @@ use crate::{
     BoxFuture,
     driver::{
         Driver, DriverEvent, EventSink, Failure, FailureKind, Health, InstanceHandle, Normalized, ProcessPart,
-        PromptKey, SessionPart, SessionRef, Source, Transcript,
+        PromptKey, PromptState, SessionPart, SessionRef, Source, Transcript,
     },
     writer::{CoreHandle, Executor},
 };
@@ -89,8 +89,18 @@ impl Executor for RunExecutor {
                     return true;
                 }
                 (Some("prompt"), Ok(handle)) => {
-                    let text = payload["text"].as_str().unwrap_or_default();
-                    driver.send_prompt(&handle, &session, text, key(payload)).await
+                    let (text, key) = (payload["text"].as_str().unwrap_or_default(), key(payload));
+                    let sent = driver.send_prompt(&handle, &session, text, key).await;
+                    if sent.is_ok() {
+                        let run = payload["run"].as_str().unwrap_or_default().to_owned();
+                        let msg = Msg::PromptSent {
+                            run,
+                            attempt: attempt(payload),
+                            key,
+                        };
+                        let _ = core.send(None, msg).await;
+                    }
+                    sent
                 }
                 (Some("respond"), Ok(handle)) => match answer_from(&payload["answer"]) {
                     Some(answer) => {
@@ -160,25 +170,48 @@ impl RunExecutor {
         if core.send(None, msg).await.is_err() {
             return Ok(());
         }
+        let (mut key, mut text) = (key, p["prompt"].as_str().unwrap_or_default().to_owned());
         let session = match p["resume"].clone() {
             Value::Null => driver.start_session(&handle, &part).await?,
             value => {
                 let session = SessionRef(value);
                 driver.resume_session(&handle, &session, &part).await?;
-                if driver.transcript(&handle, &session, key).await? == Transcript::Missing {
-                    return Err(Failure::new(FailureKind::TranscriptDivergence, Source::Core));
+                // The prompt the daemon died under is checked, else the new one (it only shows the session is there).
+                let retry = &p["retry"];
+                let check = if retry.is_null() { key } else { self::key(retry) };
+                match driver.transcript(&handle, &session, check).await? {
+                    Transcript::Missing => {
+                        return Err(Failure::new(FailureKind::TranscriptDivergence, Source::Core));
+                    }
+                    // The harness never got it: the same prompt with the same key, so it cannot run twice.
+                    Transcript::Present {
+                        prompt: PromptState::Absent,
+                    } if !retry.is_null() => {
+                        (key, text) = (check, retry["text"].as_str().unwrap_or_default().to_owned());
+                        let msg = Msg::PromptReplayed {
+                            run: run.clone(),
+                            attempt,
+                            key,
+                            text: text.clone(),
+                        };
+                        if core.send(None, msg).await.is_err() {
+                            return Ok(());
+                        }
+                    }
+                    Transcript::Present { .. } => {}
                 }
                 session
             }
         };
         let msg = Msg::Session {
-            run,
+            run: run.clone(),
             attempt,
             session: session.clone(),
         };
         let _ = core.send(None, msg).await;
-        let text = p["prompt"].as_str().unwrap_or_default();
-        driver.send_prompt(&handle, &session, text, key).await
+        driver.send_prompt(&handle, &session, &text, key).await?;
+        let _ = core.send(None, Msg::PromptSent { run, attempt, key }).await;
+        Ok(())
     }
 
     /// The one start of the registry's instance `p["instance"]`, shared by every launch waiting for it.

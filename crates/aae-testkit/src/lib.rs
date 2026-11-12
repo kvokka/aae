@@ -50,6 +50,10 @@ struct State {
     texts: Vec<String>,
     /// Set by [`ScriptedDriver::stall_sessions`].
     stalled: bool,
+    /// Set by [`ScriptedDriver::lose_prompts`].
+    losing: bool,
+    /// The key of every prompt sent, in order.
+    keys: Vec<PromptKey>,
 }
 
 struct Instance {
@@ -98,6 +102,42 @@ impl ScriptedDriver {
     /// Every later `start_session` never returns: a process that never reports its session.
     pub fn stall_sessions(&self) {
         self.lock().stalled = true;
+    }
+
+    /// Every later `send_prompt` returns but the harness never gets the prompt: no transcript entry, no ack.
+    pub fn lose_prompts(&self, losing: bool) {
+        self.lock().losing = losing;
+    }
+
+    /// The key of every prompt sent so far, in order.
+    pub fn keys(&self) -> Vec<PromptKey> {
+        self.lock().keys.clone()
+    }
+
+    /// The driver of a daemon started after this one died: no process of it is known, the transcripts of its
+    /// sessions survive (as a harness keeps them on disk), and so do the prompts and keys sent so far.
+    pub fn after_crash(&self) -> Self {
+        let old = self.lock();
+        let sessions = old.sessions.iter().map(|(id, s)| {
+            let session = Session {
+                instance: String::new(),
+                prompts: s.prompts.clone(),
+                playing: None,
+                in_turn: false,
+            };
+            (*id, session)
+        });
+        let state = State {
+            sessions: sessions.collect(),
+            started: old.started,
+            texts: old.texts.clone(),
+            keys: old.keys.clone(),
+            ..State::default()
+        };
+        Self {
+            capabilities: self.capabilities,
+            state: Arc::new(Mutex::new(state)),
+        }
     }
 
     /// The token of attempt `attempt` of `run`, as the agent of the attempt would find it in its environment.
@@ -248,7 +288,15 @@ impl Driver for ScriptedDriver {
         text: &'a str,
         key: PromptKey,
     ) -> BoxFuture<'a, Result<(), Failure>> {
-        self.lock().texts.push(text.to_owned());
+        let losing = {
+            let mut state = self.lock();
+            state.texts.push(text.to_owned());
+            state.keys.push(key);
+            state.losing
+        };
+        if losing {
+            return ready(Ok(()));
+        }
         let recorded = Self::live_session(&mut self.lock(), instance, session).map(|s| s.prompts.push((key, false)));
         ready(recorded.and_then(|()| self.play(instance, session, Some(Normalized::PromptAcked { key }))))
     }

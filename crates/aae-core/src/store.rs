@@ -155,6 +155,19 @@ ALTER TABLE runs ADD COLUMN bead_data TEXT;
 /// The last tracker write each project's tracker events were read to (`Change::seq`).
 const SCHEMA_V9: &str = "CREATE TABLE tracker_cursors (project TEXT PRIMARY KEY, seq INTEGER NOT NULL);";
 
+/// The delivery record of every prompt of an attempt (docs/design/contracts.md 6.4): `n` counts from 1.
+const SCHEMA_V10: &str = "
+CREATE TABLE prompts (
+    run TEXT NOT NULL,
+    attempt INTEGER NOT NULL,
+    n INTEGER NOT NULL,
+    key TEXT NOT NULL,
+    text TEXT NOT NULL,
+    state TEXT NOT NULL CHECK (state IN ('intent', 'sent', 'acked', 'settled')),
+    PRIMARY KEY (run, attempt, n)
+);
+";
+
 /// Opens the state database in WAL mode and brings its schema to the current version.
 pub fn open(path: &Path) -> rusqlite::Result<Connection> {
     let conn = Connection::open(path)?;
@@ -172,6 +185,7 @@ pub fn open(path: &Path) -> rusqlite::Result<Connection> {
         (7, SCHEMA_V7),
         (8, SCHEMA_V8),
         (9, SCHEMA_V9),
+        (10, SCHEMA_V10),
     ]
     .into_iter()
     .filter(|(to, _)| *to > version)

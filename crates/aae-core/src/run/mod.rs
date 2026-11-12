@@ -12,6 +12,7 @@ mod gates;
 mod hooks;
 mod machine;
 mod msg;
+mod prompts;
 mod queue;
 mod read;
 mod recover;
@@ -126,6 +127,13 @@ impl Handler for RunHandler {
             Msg::InstanceFailed { id, failure } => Self::instance_failed(tx, &id, &failure),
             Msg::InstanceStopped { id, reason } => Self::instance_stopped(tx, &id, &reason),
             Msg::Session { run, attempt, session } => self.session(tx, &run, attempt, &session),
+            Msg::PromptReplayed {
+                run,
+                attempt,
+                key,
+                text,
+            } => prompts::intent(tx, &run, attempt, 1, key, &text),
+            Msg::PromptSent { run, attempt, key } => prompts::advance(tx, &run, attempt, Some(key), "sent"),
             Msg::AttemptFailed { run, attempt, failure } => self.launch_failed(tx, &run, attempt, failure),
             Msg::Driver(event) => self.driver_event(tx, event),
             Msg::ExecDone {

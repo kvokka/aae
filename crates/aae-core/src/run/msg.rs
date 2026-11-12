@@ -2,7 +2,7 @@
 
 use super::{Exit, GateSpec};
 use crate::{
-    driver::{Answer, DriverEvent, Failure, InstanceHandle, SessionRef},
+    driver::{Answer, DriverEvent, Failure, InstanceHandle, PromptKey, SessionRef},
     tracker::{Bead, Change, TrackerError},
 };
 use serde::{Deserialize, Serialize};
@@ -69,6 +69,20 @@ pub enum Msg {
         run: String,
         attempt: u32,
         session: SessionRef,
+    },
+    /// The launch of an attempt sends again the prompt the daemon died under, which the harness never got: it is
+    /// the attempt's first prompt now (contracts 6.4).
+    PromptReplayed {
+        run: String,
+        attempt: u32,
+        key: PromptKey,
+        text: String,
+    },
+    /// `send_prompt` of the attempt returned for prompt `key`.
+    PromptSent {
+        run: String,
+        attempt: u32,
+        key: PromptKey,
     },
     /// A driver call of an attempt failed.
     AttemptFailed {

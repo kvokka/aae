@@ -120,6 +120,7 @@ dependencies = [
  "aae-core",
  "aae-plugins",
  "axum",
+ "rusqlite",
  "serde_json",
  "tempfile",
  "tokio",

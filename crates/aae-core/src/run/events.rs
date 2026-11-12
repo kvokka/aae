@@ -6,10 +6,7 @@ use super::{
     row::{Row, attempts},
 };
 use crate::{
-    driver::{
-        Answer, DriverEvent, Failure, FailureKind, InstanceHandle, Normalized, PromptKey, SessionRef, SessionState,
-        Source,
-    },
+    driver::{Answer, DriverEvent, Failure, FailureKind, InstanceHandle, Normalized, SessionRef, SessionState, Source},
     journal::rfc3339_ms,
     writer::{Error, Tx},
 };
@@ -124,9 +121,12 @@ impl RunHandler {
             return Ok(());
         };
         let silence = |tx: &mut Tx<'_>, row: &Row, ms: i64| tx.set_deadline(&row.deadline("silence"), tx.now_ms() + ms);
+        if let Normalized::PromptAcked { key } = &event {
+            super::prompts::advance(tx, &row.id, attempt, Some(*key), "acked")?;
+        }
         match event {
             Normalized::PromptAcked { key } if row.state == "starting" => {
-                if key != PromptKey::new(&row.id, attempt, 1) {
+                if super::prompts::first(tx, &row.id, attempt)? != Some(key.0.to_string()) {
                     return Ok(());
                 }
                 row.set_state(tx, "running", None)?;
@@ -142,6 +142,7 @@ impl RunHandler {
             _ if row.state != "running" => Ok(()),
             Normalized::Activity { tool_running: true } => silence(tx, &row, TOOL_SILENCE_MS),
             Normalized::TurnEnded { .. } => {
+                super::prompts::advance(tx, &row.id, attempt, None, "settled")?;
                 tx.sql().execute(
                     "UPDATE attempts SET turn_ended = 1 WHERE run = ?1 AND n = ?2",
                     params![row.id, attempt],

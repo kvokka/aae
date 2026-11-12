@@ -253,10 +253,16 @@ impl RunHandler {
             Some(_) if row.attempt > 1 => RECONCILE.to_owned(),
             _ => row.prompt.clone().unwrap_or_default(),
         };
+        let key = PromptKey::new(&row.id, row.attempt, 1);
+        super::prompts::intent(tx, &row.id, row.attempt, 1, key, &prompt)?;
+        let retry = match resume {
+            Some(_) => super::prompts::unsettled(tx, &row.id, row.attempt)?,
+            None => None,
+        };
         let payload = json!({
             "op": "launch", "run": row.id, "attempt": row.attempt, "harness": config.harness,
             "instance": instance, "handle": handle, "after": after, "process": split.process.0, "session": split.session.0, "resume": resume.map(|s| s.0),
-            "prompt": prompt, "key": PromptKey::new(&row.id, row.attempt, 1).0.to_string(),
+            "prompt": prompt, "key": key.0.to_string(), "retry": retry.map(|(key, text)| json!({ "key": key, "text": text })),
         });
         tx.effect(&row.id, &format!("launch:{}", row.attempt), &payload)?;
         tx.set_deadline(&row.deadline("state"), tx.now_ms() + START_TIMEOUT_MS)

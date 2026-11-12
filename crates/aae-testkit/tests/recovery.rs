@@ -7,7 +7,7 @@ use aae_core::{
     Journal,
     run::{Decision, ExecHooks},
 };
-use common::{POLICY, World, last, world, world_with};
+use common::{POLICY, World, hollow_turn, last, world, world_with};
 use serde_json::{Value, json};
 use std::{sync::Arc, time::Duration};
 
@@ -110,4 +110,65 @@ async fn wait_for<T>(mut probe: impl FnMut() -> Option<T>) -> T {
         tokio::time::sleep(Duration::from_millis(50)).await;
     }
     panic!("not within 5 s");
+}
+
+/// `(attempt, n, key, state)` of every prompt of `run`, from the delivery record.
+fn prompts(w: &World, run: &str) -> Vec<(u32, u32, String, String)> {
+    let db = rusqlite::Connection::open(w.dir.path().join("state.db")).unwrap();
+    let mut stmt = db
+        .prepare("SELECT attempt, n, key, state FROM prompts WHERE run = ?1 ORDER BY attempt, n")
+        .unwrap();
+    let rows = stmt.query_map([run], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?)));
+    rows.unwrap().collect::<Result<_, _>>().unwrap()
+}
+
+/// The run resumes its session after a restart under it.
+async fn resume_after_restart(w: &mut World, run: &str) -> Vec<String> {
+    w.restart().await;
+    let decision = Decision::Resume {
+        after: Duration::ZERO,
+        gate: None,
+    };
+    w.decide(run, "run.attempt_failed", 0, decision).await;
+    let states = w.states(run).await;
+    assert_eq!(states[states.len() - 3..], ["interrupted", "starting", "running"]);
+    w.driver.sent(run, 2).1
+}
+
+#[tokio::test]
+async fn a_prompt_the_harness_never_got_goes_again_with_its_key_after_a_restart() {
+    let mut w = world(POLICY);
+    w.driver.lose_prompts(true);
+    let run = w.create().await;
+    wait_for(|| (!w.driver.keys().is_empty()).then_some(())).await;
+    let texts = resume_after_restart(&mut w, &run).await;
+    assert_eq!(texts, ["Build web.", "Build web."], "the same prompt, no reconcile");
+    let keys = w.driver.keys();
+    assert_eq!((keys.len(), keys[0]), (2, keys[1]), "with the same key");
+    let rows = prompts(&w, &run);
+    assert_eq!((&rows[0].3, &rows[1].3), (&"sent".to_owned(), &"acked".to_owned()));
+    assert_eq!(rows[0].2, rows[1].2);
+}
+
+#[tokio::test]
+async fn a_prompt_the_harness_got_brings_the_reconcile_prompt_with_a_new_key_after_a_restart() {
+    let mut w = world(POLICY);
+    let run = w.create().await;
+    assert_eq!(w.states(&run).await.last().unwrap(), "running");
+    let texts = resume_after_restart(&mut w, &run).await;
+    assert!(texts[1].starts_with("Your previous turn was interrupted"), "{texts:?}");
+    let keys = w.driver.keys();
+    assert!(keys.len() == 2 && keys[0] != keys[1], "{keys:?}");
+    let states: Vec<_> = prompts(&w, &run).into_iter().map(|p| p.3).collect();
+    assert_eq!(states, ["acked", "acked"]);
+}
+
+#[tokio::test]
+async fn a_prompt_whose_turn_ended_is_settled() {
+    let w = world(&[]);
+    w.driver.script(hollow_turn());
+    let run = w.create().await;
+    w.states(&run).await;
+    let rows = prompts(&w, &run);
+    assert_eq!((rows.len(), rows[0].1, rows[0].3.as_str()), (1, 1, "settled"));
 }

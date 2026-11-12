@@ -116,7 +116,9 @@ impl RunHandler {
         if row.state != "running" {
             row.set_state(tx, "running", None)?;
         }
-        let key = PromptKey::new(&row.id, row.attempt, u32::try_from(prompts + 1).unwrap_or(u32::MAX));
+        let n = u32::try_from(prompts + 1).unwrap_or(u32::MAX);
+        let key = PromptKey::new(&row.id, row.attempt, n);
+        super::prompts::intent(tx, &row.id, row.attempt, n, key, text)?;
         let payload = json!({
             "op": "prompt", "run": row.id, "attempt": row.attempt, "harness": harness, "text": text,
             "handle": serde_json::from_str::<Value>(&handle).unwrap_or_default(),
