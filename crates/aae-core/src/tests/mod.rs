@@ -1,4 +1,5 @@
 mod journal;
+mod template;
 
 use crate::{BoxFuture, Clock, Error, Event, Executor, Handler, Journal, Tx, effects, open, start};
 use serde_json::{Value, json};

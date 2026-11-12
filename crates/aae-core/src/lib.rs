@@ -5,6 +5,7 @@ pub mod driver;
 mod effects;
 mod journal;
 mod store;
+pub mod template;
 mod writer;
 
 pub use clock::Clock;
