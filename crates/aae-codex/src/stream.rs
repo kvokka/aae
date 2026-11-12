@@ -79,8 +79,18 @@ impl Stream {
         self.threads.entry(thread.to_owned()).or_default().model = model;
     }
 
-    pub(crate) fn interrupted(&mut self, thread: &str) {
-        self.threads.entry(thread.to_owned()).or_default().interrupted = true;
+    /// `turn/start` was accepted: the turn is open before its `turn/started` arrives.
+    pub(crate) fn accepted(&mut self, thread: &str) {
+        self.threads.entry(thread.to_owned()).or_default().open = true;
+    }
+
+    /// We interrupt the open turn of `thread`; false when no turn is open and there is nothing to interrupt.
+    pub(crate) fn interrupted(&mut self, thread: &str) -> bool {
+        let Some(open) = self.threads.get_mut(thread).filter(|t| t.open) else {
+            return false;
+        };
+        open.interrupted = true;
+        true
     }
 
     /// The threads with a turn in flight.

@@ -263,7 +263,9 @@ impl Driver for Codex {
             let Some(turn) = lock(&known.turns).get(thread).cloned() else {
                 return Ok(());
             };
-            lock(&known.stream).interrupted(thread);
+            if !lock(&known.stream).interrupted(thread) {
+                return Ok(());
+            }
             let params = json!({ "threadId": thread, "turnId": turn });
             known.call("turn/interrupt", params, None).await.map(|_| ())
         })

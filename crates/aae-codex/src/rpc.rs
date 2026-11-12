@@ -140,6 +140,7 @@ pub(crate) async fn read(
             if let (Some((thread, key)), Ok(result)) = (lock(&instance.acks).remove(&id), &reply) {
                 let turn = result["turn"]["id"].as_str().unwrap_or_default().to_owned();
                 lock(&instance.turns).insert(thread.clone(), turn);
+                lock(&instance.stream).accepted(&thread);
                 send(Some(thread), Normalized::PromptAcked { key });
             }
             if let Some(tx) = lock(&instance.pending).remove(&id) {
@@ -154,6 +155,8 @@ pub(crate) async fn read(
         if method == "turn/started" {
             let turn = msg["params"]["turn"]["id"].as_str().unwrap_or_default().to_owned();
             lock(&instance.turns).insert(thread.to_owned(), turn);
+        } else if method == "turn/completed" {
+            lock(&instance.turns).remove(thread);
         }
         let events = lock(&instance.stream).message(&msg, Instant::now());
         if msg.get("id").is_some() {

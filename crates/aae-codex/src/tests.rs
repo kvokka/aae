@@ -199,14 +199,15 @@ fn a_401_retry_reports_the_logout_once_and_an_interrupt_cancels() {
             "codexErrorInfo": { "responseStreamDisconnected": { "httpStatusCode": 401 } } } }),
         )
     };
-    let events = play(&mut stream, &[retry(1), retry(2)]);
-    assert!(matches!(&events[0], Normalized::Retrying { attempt: 1, .. }));
+    let started = note("turn/started", json!({ "threadId": "t", "turn": { "id": "u" } }));
+    let events = play(&mut stream, &[started, retry(1), retry(2)]);
+    assert!(matches!(&events[1], Normalized::Retrying { attempt: 1, .. }));
     assert!(
-        matches!(&events[1], Normalized::Failure(f) if f.kind == FailureKind::AuthRequired && f.retried_by_harness)
+        matches!(&events[2], Normalized::Failure(f) if f.kind == FailureKind::AuthRequired && f.retried_by_harness)
     );
-    assert!(matches!(&events[2], Normalized::Retrying { attempt: 2, .. }));
-    assert_eq!(events.len(), 3);
-    stream.interrupted("t");
+    assert!(matches!(&events[3], Normalized::Retrying { attempt: 2, .. }));
+    assert_eq!(events.len(), 4);
+    assert!(stream.interrupted("t"));
     let events = play(&mut stream, &[turn_completed("failed", Value::Null)]);
     assert_eq!(
         events[0],
@@ -214,6 +215,31 @@ fn a_401_retry_reports_the_logout_once_and_an_interrupt_cancels() {
             stop_reason: StopReason::Cancelled
         }
     );
+}
+
+#[test]
+fn an_interrupt_after_the_turn_ended_does_not_cancel_the_next_turn() {
+    let mut stream = Stream::new(None);
+    let started = note("turn/started", json!({ "threadId": "t", "turn": { "id": "u" } }));
+    play(
+        &mut stream,
+        &[started.clone(), turn_completed("completed", Value::Null)],
+    );
+    assert!(!stream.interrupted("t"));
+    let quota = note(
+        "error",
+        json!({ "threadId": "t", "willRetry": false, "error": { "message": "You've hit your usage limit.",
+            "codexErrorInfo": "usageLimitExceeded" } }),
+    );
+    let events = play(&mut stream, &[started, quota, turn_completed("failed", Value::Null)]);
+    assert!(
+        events
+            .iter()
+            .any(|e| matches!(e, Normalized::Failure(f) if f.kind == FailureKind::QuotaExhausted))
+    );
+    assert!(events.contains(&Normalized::TurnEnded {
+        stop_reason: StopReason::Failed
+    }));
 }
 
 #[test]
