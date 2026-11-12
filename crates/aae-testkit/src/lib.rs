@@ -1,6 +1,7 @@
 //! The scripted driver (spec §14): a fake harness for core tests that plays prepared scenarios — delays, a turn
 //! that ends without an outcome, provider errors, hangs, a process dying mid-turn, permission requests, events
-//! outside a turn, background work. Nothing of it runs in the product.
+//! outside a turn, background work; and fake providers for the real harnesses ([`anthropic`]). Nothing of it runs in
+//! the product.
 
 use aae_core::{
     BoxFuture,
@@ -19,6 +20,7 @@ use std::{
 };
 use tokio::{sync::broadcast, task::JoinHandle};
 
+pub mod anthropic;
 mod play;
 mod step;
 use play::session_id;

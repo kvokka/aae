@@ -54,9 +54,11 @@ name = "aae-testkit"
 version = "0.1.0"
 dependencies = [
  "aae-core",
+ "axum",
  "serde_json",
  "tempfile",
  "tokio",
+ "tokio-stream",
 ]
 
 [[package]]
