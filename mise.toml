@@ -10,7 +10,7 @@ tokei = "15.0.0"
 zig = "0.17.1"
 "cargo:cargo-zigbuild" = "0.24.1"
 claude = "2.1.322"
-codex = "0.166.0"
+codex = "0.167.2"
 "github:Dicklesworthstone/beads_rust" = "0.7.6"
 jq = "1.8.2"
 

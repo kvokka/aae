@@ -41,7 +41,7 @@ todo | doing | done | blocked. Пакеты с пометкой «критичн
   `scripts/budget.sh` (tokei + jq: строки по частям §14 по путям из таблицы выше, лимиты, жёсткий стоп; файл
   продукта ≤ 400 строк; у каждого маркера `MEASURE` заполнены `id`, `date`, `ver`, `env`; есть
   `docs/READINESS.md`); `docs/READINESS.md` (19 компонентов §14, балл 0, маркер `MEASURE`); `mise.toml`:
-  закреплены claude 2.1.322, codex 0.166.0, br 0.7.6, jq, задачи `mise run ci` / `build-all`;
+  закреплены claude 2.1.322, codex 0.167.2, br 0.7.6, jq, задачи `mise run ci` / `build-all`;
   `.github/workflows/ci.yml`: fmt, clippy `-D warnings`, nextest, cargo-deny, cargo-machete, budget.sh, сборка
   4 целей через cargo-zigbuild.
 - Готово, когда: `mise run ci` зелёный локально; `cargo zigbuild` собирает 4 цели локально; budget.sh
