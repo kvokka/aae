@@ -116,3 +116,32 @@ is `idle`, (b) the last `background_tasks_changed` had an empty list (or none ar
 `task_notification` arrived after the last `result`. Condition (c) closes the wake-up window seen at 22.10.
 
 <!-- MEASURE id=claude-idle-two-signals date=2026-11-12 ver=claude-2.1.322 env=linux-arm64-orbstack src=experiments/02-claude-process/logs/background.ndjson note="n=1; state idle with a live background shell, 0.1 s idle+empty window before a self-started turn" -->
+
+## br as an event source (experiment 3)
+
+Code: `experiments/05-br-events` (one scenario, fresh workspace with an isolated `HOME`, the `notify` crate on the
+`.beads/` directory, `rusqlite` read-only on `beads.db`). Output: `experiments/05-br-events/logs/run.txt`.
+
+<!-- MEASURE id=br-events-exp3 date=2026-11-12 ver=br-0.7.6 env=linux-arm64-orbstack src=experiments/05-br-events/logs/run.txt note="20 creates, 9 reads, 16 concurrent claims, 4 attribution cases; database of 20 beads; two runs agree" -->
+
+| Question | Answer |
+|---|---|
+| Signal | Every mutating command rewrites `issues.jsonl` by rename exactly once; `notify` reports it as two events, `Modify(Name(To))` and `Modify(Name(Both))`. 20/20 sequential creates and 16/16 concurrent claims gave one rename each — no loss, no extra. Reads (`list`, `show`, `ready`) gave none; the database files see open/close/write traffic on reads too, so they are not a signal. |
+| Latency | The rename lands 23–62 ms after the command starts (median 41 ms) and always before the command exits. |
+| Change content | The `events` table, read after the cursor (`WHERE id > ?`), with the database opened read-only per signal and closed at once: 0.6–0.7 ms per read including open/close. It held exactly one row per create and two per claim (`status_changed` + `assignee_changed`), 32/32 rows attributed to the right claimer under concurrency. A full snapshot (`br list --all --json`) costs 8–9 ms at 20 beads and grows linearly (60 ms at 5 000 beads per the context notes) and carries no actor. |
+| Attribution | `--actor X` and the environment variable `BD_ACTOR=X` both land in `events.actor`. `BR_ACTOR` does nothing; `BR_AGENT_NAME`, `BR_HARNESS`, `BR_MODEL` are **not** recorded in 0.7.6 (columns stay empty) despite the help text. |
+
+<!-- MEASURE id=br-rename-latency date=2026-11-12 ver=br-0.7.6 env=linux-arm64-orbstack src=experiments/05-br-events/logs/run.txt note="n=20 sequential creates, 20-bead database; grows with database size (auto-flush rewrites the whole file)" -->
+<!-- MEASURE id=br-events-read-cost date=2026-11-12 ver=br-0.7.6 env=linux-arm64-orbstack src=experiments/05-br-events/logs/run.txt note="rusqlite bundled, open read-only + query + close, mean of 100, ~60 rows" -->
+
+**Chosen method** for `bead.*` (WP-31):
+
+1. Watch the `.beads/` directory (not the file: the rename replaces the inode). Any rename of `issues.jsonl` means
+   "something changed"; signals are coalesced, and a missed or duplicate signal costs nothing because of step 2.
+2. On a signal, open `beads.db` read-only, read `events` after the stored cursor, close. Map rows to `bead.*` events;
+   `bead.ready` is derived by re-reading `br ready` and diffing with the last set. On start and after recovery, read
+   from the stored cursor without waiting for a signal.
+3. Attribution: every session gets `BD_ACTOR=<attempt actor>` in its environment, and aae's own calls pass
+   `--actor`; `events.actor` then names the run behind every change (correlation, spec §9.5).
+4. Guard against the private schema: the exact `br` version is pinned (spec §13) and a contract test reads
+   `events` on that version.

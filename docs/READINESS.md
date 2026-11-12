@@ -18,7 +18,7 @@ Assessed 2026-11-12 on top of `a66dec1` (the commit before the assessment).
 | Instance and service registry | 0 | contract (WP-08) |
 | claude adapter | 0 | contract (WP-08); protocol and process experiments done (`docs/design/experiments.md`) |
 | codex adapter | 0 | app-server experiment (WP-04) and contract (WP-08) |
-| br adapter | 0 | event-source experiment (WP-06) and contract (WP-08) |
+| br adapter | 0 | contract (WP-08); event-source experiment done (`docs/design/experiments.md`) |
 | Plugin hook execution | 0 | contract (WP-08) |
 | `default-policy` | 0 | contract (WP-08) |
 | `worktree` | 0 | contract (WP-08) |
