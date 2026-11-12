@@ -288,6 +288,10 @@ mod tests {
             .unwrap();
         assert_eq!(crate::orphans::start_time(pid), Some(start));
         assert!(!wait_dead(pid, start, Duration::from_millis(200)).await);
+        assert!(
+            wait_dead(pid, start + 1, Duration::ZERO).await,
+            "another start time is another process"
+        );
         child.kill().unwrap();
         assert!(wait_dead(pid, start, Duration::from_secs(5)).await, "a zombie is dead");
         child.wait().unwrap();

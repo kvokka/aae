@@ -76,7 +76,8 @@ subtree — a per-session cgroup is unavailable without root. On GitHub runners 
 1. Every session process in its own process group (`kill(-pgid)` for the harness itself).
 2. A per-attempt marker variable in the session environment; on cleanup the daemon kills every process carrying
    the marker (`/proc/<pid>/environ`; macOS is out of scope for the first release, spec §1.1). The same sweep runs during
-   recovery after a daemon crash.
+   recovery after a daemon crash. Known macOS differences until it is checked: no sweep, no subreaper, and a process
+   is told by its pid alone (no start time), so a reused pid passes for the old process.
 3. Linux: the daemon is a child subreaper, so descendants that dropped the marker still become its children and are
    reaped. The daemon must reap only pids it does not manage itself (peek with `waitid(P_ALL, WNOWAIT)` first), or
    it steals exit statuses of its own session processes.

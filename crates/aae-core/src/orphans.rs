@@ -2,8 +2,8 @@
 //! process and its descendants carry `AAE_INSTANCE=<id>` and are killed by it once the instance is gone; the
 //! daemon is the child subreaper, so descendants that dropped the marker are reaped by it, not left as zombies.
 
-// shortcut: Linux only (`/proc`, `PR_SET_CHILD_SUBREAPER`); elsewhere nothing is found or adopted — macOS ships but
-// is not checked in the first release (§1.1).
+// shortcut: Linux only (`/proc`, `PR_SET_CHILD_SUBREAPER`); elsewhere nothing is found or adopted and a process is
+// told by its pid alone (`start_time`) — macOS ships but is not checked in the first release (§1.1).
 
 use rustix::process::{Pid, Signal, WaitOptions, getpid, kill_process, waitpid};
 use std::{
@@ -56,9 +56,9 @@ pub fn adopt_orphans() -> io::Result<()> {
     Ok(())
 }
 
-/// `(pid, state, ppid)` of every process in `/proc`.
 /// The kernel start time of the live process `pid` (field 22 of `/proc/<pid>/stat`); `None` for a zombie or a
 /// process that is gone. pid + start time identify a process (spec §5.2).
+#[cfg(target_os = "linux")]
 pub fn start_time(pid: i32) -> Option<u64> {
     let stat = std::fs::read_to_string(format!("/proc/{pid}/stat")).ok()?;
     let mut fields = stat.rsplit_once(')')?.1.split_whitespace();
@@ -66,6 +66,14 @@ pub fn start_time(pid: i32) -> Option<u64> {
     fields.nth(18)?.parse().ok()
 }
 
+/// shortcut: without `/proc` every existing process starts at 0, so a reused pid passes for the old process and a
+/// zombie for a live one; read `kinfo_proc` through `sysctl` once macOS is checked (§1.1).
+#[cfg(not(target_os = "linux"))]
+pub fn start_time(pid: i32) -> Option<u64> {
+    rustix::process::test_kill_process(Pid::from_raw(pid)?).ok().map(|()| 0)
+}
+
+/// `(pid, state, ppid)` of every process in `/proc`.
 fn processes() -> impl Iterator<Item = (i32, String, i32)> {
     let entries = std::fs::read_dir("/proc").into_iter().flatten().flatten();
     entries.filter_map(|e| {

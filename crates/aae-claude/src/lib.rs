@@ -25,7 +25,7 @@ use std::{
 };
 use stream::Stream;
 use tokio::{
-    io::{AsyncBufReadExt, AsyncWriteExt, BufReader},
+    io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader},
     process::{ChildStdin, Command},
     sync::broadcast,
 };
@@ -37,7 +37,7 @@ pub struct Claude {
     binary: PathBuf,
     state: PathBuf,
     socket: Option<PathBuf>,
-    instances: Mutex<HashMap<String, Arc<Instance>>>,
+    instances: Arc<Mutex<HashMap<String, Arc<Instance>>>>,
 }
 
 struct Instance {
@@ -55,7 +55,7 @@ impl Claude {
             binary,
             state,
             socket,
-            instances: Mutex::default(),
+            instances: Arc::default(),
         }
     }
 
@@ -86,7 +86,7 @@ impl Claude {
             .current_dir(p["workdir"].as_str().unwrap_or("."))
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
-            .stderr(Stdio::null())
+            .stderr(Stdio::piped())
             .process_group(0);
         let config_error = |e: std::io::Error| {
             let mut failure = Failure::new(FailureKind::ConfigError, Source::Adapter);
@@ -117,6 +117,8 @@ impl Claude {
             instance.live.clone(),
         );
         let mut lines = BufReader::new(child.stdout.take().expect("stdout is piped")).lines();
+        let stderr = tokio::spawn(tail(child.stderr.take().expect("stderr is piped")));
+        let instances = self.instances.clone();
         let id = id.to_owned();
         self.instances
             .lock()
@@ -158,11 +160,14 @@ impl Claude {
             }
             let status = child.wait().await.ok();
             orphans::waited(u32::try_from(pid).ok());
+            instances.lock().unwrap_or_else(PoisonError::into_inner).remove(&id);
+            let stderr = tokio::time::timeout(Duration::from_secs(1), stderr).await;
+            let stderr = stderr.ok().and_then(Result::ok).unwrap_or_default();
             let (code, signal) = (status.and_then(|s| s.code()), status.and_then(|s| s.signal()));
             let events = stream
                 .lock()
                 .unwrap_or_else(PoisonError::into_inner)
-                .exited(code, signal);
+                .exited(code, signal, &stderr);
             for event in events {
                 let wide = matches!(event, Normalized::Exited { .. });
                 send((!wide).then_some(&session), event);
@@ -340,6 +345,16 @@ impl Driver for Claude {
             .find(|i| i.session.0["session_id"] == *id)
             .map(|i| i.live.subscribe())
     }
+}
+
+/// The last 4 KiB of `stderr`, read to its end (a descendant may hold it open past the exit: the caller bounds it).
+async fn tail(mut stderr: tokio::process::ChildStderr) -> String {
+    let (mut kept, mut buf) = (Vec::new(), [0; 4096]);
+    while let Ok(n @ 1..) = stderr.read(&mut buf).await {
+        kept.extend_from_slice(&buf[..n]);
+        kept.drain(..kept.len().saturating_sub(buf.len()));
+    }
+    String::from_utf8_lossy(&kept).into_owned()
 }
 
 /// Where the prompt `key` stands in the session file `<config>/projects/<workdir, non-alphanumerics as ->/<id>.jsonl`.

@@ -69,7 +69,7 @@ fn a_reply_is_acked_started_and_completed() {
         ]
     );
     assert_eq!(
-        s.exited(Some(0), None),
+        s.exited(Some(0), None, ""),
         vec![Normalized::Exited {
             code: Some(0),
             signal: None
@@ -250,8 +250,9 @@ fn an_exit_in_an_open_turn_is_a_crash_even_with_code_zero() {
         &mut s,
         &[json!({ "type": "command_lifecycle", "command_uuid": KEY, "state": "queued" })],
     );
-    let events = s.exited(Some(0), None);
+    let events = s.exited(Some(0), None, "Error: boom\n");
     assert_eq!(failure(&events).kind, FailureKind::HarnessCrash);
+    assert_eq!(failure(&events).raw, "exited with code 0 in a turn: Error: boom");
     assert_eq!(
         events.last(),
         Some(&Normalized::Exited {

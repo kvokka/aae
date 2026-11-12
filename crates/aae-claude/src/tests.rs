@@ -75,3 +75,49 @@ fn a_config_the_adapter_cannot_deliver_is_a_config_error() {
     });
     assert_eq!(driver.split(&config, &plan).unwrap_err().kind, FailureKind::ConfigError);
 }
+
+/// A process that dies on its own in a turn: its stderr is in the failure and the driver forgets it.
+#[tokio::test]
+async fn a_process_that_dies_in_a_turn_reports_its_stderr_and_is_forgotten() {
+    use std::os::unix::fs::PermissionsExt;
+    let dir = tempfile::tempdir().unwrap();
+    let script = dir.path().join("claude");
+    let init = r#"{"type":"system","subtype":"init"}"#;
+    std::fs::write(
+        &script,
+        format!("#!/bin/sh\necho '{init}'\necho 'Error: boom' >&2\nexit 1\n"),
+    )
+    .unwrap();
+    std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755)).unwrap();
+    let driver = Claude::new(script, dir.path().join("state"), None);
+    let mut p = process(false, true);
+    p["workdir"] = json!(dir.path());
+    let (sink, mut events) = tokio::sync::mpsc::unbounded_channel();
+    let instance = driver.start("i1", &p, sink).await.unwrap();
+    let session = driver
+        .start_session(&instance, &SessionPart(Value::Null))
+        .await
+        .unwrap();
+    let mut failure = None;
+    while let Some(event) = events.recv().await {
+        match event.event {
+            Normalized::Failure(f) => failure = Some(f),
+            Normalized::Exited { .. } => break,
+            _ => {}
+        }
+    }
+    let failure = failure.expect("a failure in the open turn");
+    assert_eq!(failure.kind, FailureKind::HarnessCrash);
+    assert!(
+        failure.raw.ends_with("exited with code 1 in a turn: Error: boom"),
+        "{}",
+        failure.raw
+    );
+    assert!(driver.live(&session).is_none());
+    assert!(
+        driver
+            .start_session(&instance, &SessionPart(Value::Null))
+            .await
+            .is_err()
+    );
+}

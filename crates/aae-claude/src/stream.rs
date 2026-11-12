@@ -149,13 +149,17 @@ impl Stream {
     }
 
     /// stdout closed and the process exited: a turn left open is a crash, whatever the exit code.
-    pub(crate) fn exited(&mut self, code: Option<i32>, signal: Option<i32>) -> Vec<Normalized> {
+    /// `stderr` is the tail of the process's stderr: the only word of a claude that dies on its own.
+    pub(crate) fn exited(&mut self, code: Option<i32>, signal: Option<i32>, stderr: &str) -> Vec<Normalized> {
         let mut out = Vec::new();
         if std::mem::take(&mut self.open) {
-            let how = match (code, signal) {
+            let mut how = match (code, signal) {
                 (Some(code), _) => format!("exited with code {code} in a turn"),
                 (None, signal) => format!("killed by signal {} in a turn", signal.unwrap_or_default()),
             };
+            if !stderr.trim().is_empty() {
+                how = format!("{how}: {}", stderr.trim());
+            }
             out.push(Normalized::Failure(self.failure(FailureKind::HarnessCrash, how)));
         }
         out.push(Normalized::Exited { code, signal });
