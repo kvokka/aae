@@ -147,3 +147,53 @@ Code: `experiments/05-br-events` (one scenario, fresh workspace with an isolated
    `--actor`; `events.actor` then names the run behind every change (correlation, spec §9.5).
 4. Guard against the private schema: the exact `br` version is pinned (spec §13) and a contract test reads
    `events` on that version.
+
+## codex app-server (experiment 2)
+
+Code: `experiments/03-codex-appserver` (`src/lib.rs`: client over stdio or a WebSocket on a unix socket and a fake
+Responses API provider; `src/main.rs`: scenarios `threads stdio|unix` and `reconnect`; `src/bin/gen.rs`: type
+generator). Output: `experiments/03-codex-appserver/logs/run.txt`, message logs next to it. No live model: every
+turn goes to the fake provider, `HOME` and `CODEX_HOME` are fresh directories, the process environment holds only
+`PATH`, `HOME`, `CODEX_HOME`, `SHELL`.
+
+<!-- MEASURE id=codex-appserver-exp2 date=2026-11-12 ver=codex-0.167.2 env=linux-arm64-orbstack src=experiments/03-codex-appserver/logs/run.txt note="fake provider, n=1 per scenario and transport in the recorded run; 2–3 earlier development runs agreed" -->
+
+| Question | Answer |
+|---|---|
+| Transport | Both work and carry the same messages (compare `threads-stdio.ndjson` and `threads-unix.ndjson`). **Chosen: stdio.** It needs no WebSocket code (handshake, masking, ping) on a transport the vendor calls experimental and unsupported, and no socket directory with `0700`. The one thing only the socket gives — the server outliving its client — is not needed in the first release (spec §5.6); with stdio the server ends with the daemon (below), so no stale app-server is left holding thread writer locks. |
+| Two threads in one process | Two `turn/start` sent back to back on two threads both completed (72–119 ms with the fake provider). Each provider request carried only its own thread's `model` and `developerInstructions`. |
+| Config per thread | `cwd`, `model`, `developerInstructions` and `config` (`shell_environment_policy.set`, `hooks`, `bypass_hook_trust`) given in `thread/start` apply to that thread only. |
+| Hooks per thread | **Work.** `thread/start.config.hooks` takes the same value as the `hooks` key of `hooks.json`; the hooks fire with `run.source: "sessionFlags"`, and two threads of one process ran different sets (A: `UserPromptSubmit` + `Stop`, B: `UserPromptSubmit`). Hook stdin carries `session_id` = thread id. Two conditions: `config.bypass_hook_trust: true` is required — without it the session hooks silently do not run (no `hook/*` notification, no warning); with it every `thread/start` emits a `configWarning` and a `warning` "`--dangerously-bypass-hook-trust` is enabled", which the adapter ignores. **Hooks run with the process environment**: `shell_environment_policy.set` of the thread is not visible to them. So hooks are a per-thread part of the config, the environment of hooks is a per-process part; per-thread values for a hook go into its command line (it is per thread anyway) or are looked up by `session_id`. |
+| Reconnect after a client restart (unix socket) | The server and the running turn survive the disconnect. The new client sees the thread in `thread/loaded/list`; `thread/resume` returns it as `active`; the second client then gets `turn/completed{completed}` of the turn the first one started, and its own next turn works. |
+| Client end on stdio | Closing stdin in the middle of a turn (the provider holds the answer for 6 s) makes app-server exit with status 0 within 21 ms; the turn is lost. |
+| Idempotency key | `clientUserMessageId` is **not** deduplicated: the same value sent again on an idle thread started a new turn and a new provider request, and the history (`thread/read{includeTurns:true}`) then held two `userMessage` items with that `clientId`. So the key is the `clientUserMessageId` (derived from the attempt key) and the check is the adapter's: after a restart it reads the thread history for its `clientId` before sending; a turn with an answer after it means "delivered", an `interrupted` one means "send a continuation with a new key" — the same rule as for claude above. |
+
+<!-- MEASURE id=codex-appserver-rss date=2026-11-12 ver=codex-0.167.2 env=linux-arm64-orbstack src=experiments/03-codex-appserver/logs/run.txt note="VmRSS of app-server, fake provider, one short turn per thread, stdio and unix runs; SHELL=/bin/sh and an empty HOME, so no rc files" -->
+<!-- MEASURE id=codex-appserver-initialize date=2026-11-12 ver=codex-0.167.2 env=linux-arm64-orbstack src=experiments/03-codex-appserver/logs/run.txt note="from before spawn to the initialize response, 150–177 ms over 7 runs of both transports, empty CODEX_HOME" -->
+<!-- MEASURE id=codex-stdio-eof-exit date=2026-11-12 ver=codex-0.167.2 env=linux-arm64-orbstack src=experiments/03-codex-appserver/logs/run.txt note="n=1, stdin closed 1 s into a turn whose provider answer was delayed by 6 s" -->
+
+Memory on 0.167.2: 89–91 MB empty, 147–150 MB with two threads after one turn each, 155–158 MB with four — the
+same as on 0.166.0 (spec §7.3). `initialize` answered 150–177 ms after spawn on both transports (77 ms on 0.166.0 per the context notes, other setup).
+
+**Types.** `codex app-server generate-json-schema --out DIR` writes the bundle;
+`cargo run -p codex-appserver --bin gen -- DIR/codex_app_server_protocol.v2.schemas.json` takes the hand-picked roots
+listed in `gen.rs`, collects the definitions they reach and generates `src/generated/protocol.rs` with `typify`
+(9 roots → 83 definitions → 5.1k lines, excluded from the line budgets). The four types the scenarios parse (`ThreadStartResponse`, `ThreadResumeResponse`,
+`TurnCompletedNotification`, `HookCompletedNotification`) deserialized every message received. `InitializeResponse` is only in the non-v2 bundle (`codex_app_server_protocol.schemas.json`); the
+client reads it as plain JSON. For WP-29: the same generator as a dev tool of the adapter crate, the output
+committed under `generated/`, regenerated on every codex version bump and checked by the contract tests.
+
+**Fake provider** (sketch for WP-26): an HTTP server on `127.0.0.1` given to codex as
+`[model_providers.fake] base_url = "http://…/v1", wire_api = "responses"` in `CODEX_HOME/config.toml`. A turn is
+answered with `content-length` SSE of three events — `response.created`, `response.output_item.done` with a
+`message` item of one `output_text`, `response.completed` with `usage` — and `connection: close`. Unknown model
+names only cause a `warning` "Model metadata for `<model>` not found".
+
+Consequences for the codex adapter (WP-29) and the instance registry (WP-18):
+
+- One app-server per fingerprint over stdio, spawned and owned by the daemon; the hook set is not part of the
+  fingerprint, the process environment is.
+- Every session-level hook needs `bypass_hook_trust: true` on its thread; per-session data reaches hooks through
+  the command line or `session_id`, never through `shell_environment_policy`.
+- A daemon restart ends the process and all its turns; recovery is `thread/resume` in a new process plus the
+  history check of the idempotency key.
