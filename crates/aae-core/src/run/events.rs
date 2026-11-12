@@ -243,10 +243,15 @@ impl RunHandler {
         else {
             return Err(rejected(format!("`{run}` has no open request `{request}`")));
         };
+        // `RETURNING` would give the value after the update: read what was left first.
         let paused: Option<i64> = tx.sql().query_row(
-            "UPDATE attempts SET request = NULL, paused_ms = NULL WHERE run = ?1 AND n = ?2 RETURNING paused_ms",
+            "SELECT paused_ms FROM attempts WHERE run = ?1 AND n = ?2",
             params![run, row.attempt],
             |r| r.get(0),
+        )?;
+        tx.sql().execute(
+            "UPDATE attempts SET request = NULL, paused_ms = NULL WHERE run = ?1 AND n = ?2",
+            params![run, row.attempt],
         )?;
         tx.clear_deadline(&row.deadline("human"))?;
         tx.sql()
