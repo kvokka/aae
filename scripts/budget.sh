@@ -46,6 +46,14 @@ printf 'budget: %-9s %6d / 30000 (hard stop 35000)\n' total "$total"
 ((total <= 30000)) || err "release budget exceeded"
 ((total <= 35000)) || err "HARD STOP exceeded: no new features until a deletion pass"
 
+# Spec §16: the throwaway experiments stay within 1 500 code lines in total.
+mapfile -t exp < <(git ls-files -co --exclude-standard -- 'experiments/*.rs' || true)
+if ((${#exp[@]})); then
+  n=$(tokei -o json "${exp[@]}" | jq '.Total.code')
+  printf 'budget: %-9s %6d / 1500\n' experiments "$n"
+  ((n <= 1500)) || err "experiments exceed 1500 lines (spec §16)"
+fi
+
 # Every MEASURE marker carries non-empty id, date, ver and env. `id=<...>` is the format template, not a marker.
 rc=0
 markers=$(git -c submodule.recurse=false grep -nE --untracked '(<!--|//|#) MEASURE id=' -- . \
