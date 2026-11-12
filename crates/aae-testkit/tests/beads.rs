@@ -199,3 +199,37 @@ async fn an_unavailable_tracker_is_reported_and_the_claim_retried_until_it_answe
     tokio::time::sleep(Duration::from_secs(10)).await;
     assert!(w.states(&run).await.contains(&"running".to_owned()));
 }
+
+#[tokio::test(start_paused = true)]
+async fn a_trigger_on_the_next_ready_bead_takes_each_bead_once_then_skips_with_nothing_ready() {
+    let take = "[rigs.web]\npath = \"web\"\n\n[[trigger]]\nname = \"take\"\nevery = \"1h\"\nrun = \"fix\"\nrig = \"web\"\n\
+        inputs = { bead = { next_ready = true } }\n";
+    let w = world(&[FIX[0], FIX[1], ("shop/aae.toml", take)]);
+    let beads = [
+        w.tracker.add(&[], None),
+        w.tracker.add(&["rig:api"], None),
+        w.tracker.add(&["rig:web"], None),
+    ];
+    w.changed().await;
+    let fire = || Msg::Fire {
+        project: "shop".into(),
+        rig: "web".into(),
+        trigger: "take".into(),
+    };
+    let mut taken = Vec::new();
+    for _ in 0..2 {
+        let run = w.core.send(None, fire()).await.unwrap()["run"]
+            .as_str()
+            .unwrap()
+            .to_owned();
+        let events = w.events(&run, Duration::ZERO).await;
+        taken.push(last(&events, "run.queued")["run"]["bead"].as_str().unwrap().to_owned());
+    }
+    assert_eq!(
+        taken,
+        [beads[0].clone(), beads[2].clone()],
+        "a bead of another rig is not taken"
+    );
+    let third = w.core.send(None, fire()).await.unwrap();
+    assert_eq!(third["skipped"], "nothing_ready");
+}
