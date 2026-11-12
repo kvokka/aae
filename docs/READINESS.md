@@ -4,27 +4,27 @@ Per-component readiness on the 0–10 scale of spec §14: 0 nothing; 2 contract 
 path works by hand; 6 model-free tests green, including failure paths; 8 the component's §15 criteria green on the
 owner's host; 10 real owner runs without intervention (criterion 20). Updated at the end of every work session.
 
-Assessed 2026-11-12 on top of `8994286` (the commit before the assessment).
-<!-- MEASURE id=readiness date=2026-11-12 ver=8994286 env=linux-arm64-orbstack src=docs/READINESS.md note="self-assessment by the implementing agent; re-assess at the end of every session" -->
+Assessed 2026-11-12 on top of `12207b5` (the commit before the assessment).
+<!-- MEASURE id=readiness date=2026-11-12 ver=12207b5 env=linux-arm64-orbstack src=docs/READINESS.md note="self-assessment by the implementing agent; re-assess at the end of every session" -->
 
 | Component | Score | Missing for the next point |
 |---|---|---|
-| Event loop and state | 0 | contract (WP-08) |
-| Runs and finisher | 0 | contract (WP-08) |
-| Triggers and schedules | 0 | contract (WP-08) |
-| Issue gates | 0 | contract (WP-08) |
-| Recovery | 0 | contract (WP-08) |
-| Config assembly | 0 | contract (WP-08) |
-| Instance and service registry | 0 | contract (WP-08); codex process/thread split settled by experiment 2 |
-| claude adapter | 0 | contract (WP-08); protocol and process experiments done (`docs/design/experiments.md`) |
-| codex adapter | 0 | contract (WP-08); app-server experiment done (`docs/design/experiments.md`) |
-| br adapter | 0 | contract (WP-08); event-source experiment done (`docs/design/experiments.md`) |
-| Plugin hook execution | 0 | contract (WP-08) |
-| `default-policy` | 0 | contract (WP-08) |
-| `worktree` | 0 | contract (WP-08) |
-| Shared MCP | 0 | contract (WP-08) |
-| HTTP API | 0 | contract (WP-08) |
-| CLI | 0 | contract (WP-08); only `aae --version` exists |
-| MCP frontend | 0 | contract (WP-08) |
-| Acceptance spec | 0 | runner skeleton (WP-24) |
-| Delivery and `doctor` | 1 | workspace, CI, budget checks and cross-builds exist; `doctor` contract (WP-08) |
+| Event loop and state | 2 | code: state, single writer, outbox, effect queue (WP-09, WP-10); contract: `docs/design/contracts.md` 1, 3.5 |
+| Runs and finisher | 2 | code: state machine and finisher (WP-14); contract: `contracts.md` 6 |
+| Triggers and schedules | 2 | code (WP-17); contract: `contracts.md` 2, 3.5 |
+| Issue gates | 2 | code (WP-16); contract: `contracts.md` 7 |
+| Recovery | 2 | code (WP-20); contract: `contracts.md` 6.4 |
+| Config assembly | 1 | written contract of layers, provenance and the effective config value (WP-11, WP-12); only its use by the driver is fixed (`contracts.md` 4.2) |
+| Instance and service registry | 2 | code (WP-18); contract: `contracts.md` 8 |
+| claude adapter | 2 | code (WP-27); contract: `contracts.md` 4 |
+| codex adapter | 2 | code (WP-29); contract: `contracts.md` 4 |
+| br adapter | 2 | code (WP-31); contract: `contracts.md` 5 |
+| Plugin hook execution | 2 | code (WP-15); contract: `contracts.md` 3 |
+| `default-policy` | 2 | code (WP-33); contract: `contracts.md` 10 |
+| `worktree` | 0 | contract (WP-33); its hook decision shape is fixed (`contracts.md` 3.2) |
+| Shared MCP | 0 | contract (WP-34) |
+| HTTP API | 0 | contract (WP-22); the finisher call is fixed (`contracts.md` 6.3) |
+| CLI | 0 | contract (WP-23); only `aae --version` exists |
+| MCP frontend | 0 | contract (WP-25) |
+| Acceptance spec | 0 | runner skeleton (WP-24); how fakes reach the daemon is fixed (`contracts.md` 9) |
+| Delivery and `doctor` | 1 | workspace, CI, budget checks and cross-builds exist; `doctor` contract (WP-35) |
