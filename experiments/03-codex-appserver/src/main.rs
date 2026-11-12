@@ -73,8 +73,7 @@ fn threads(transport: &str) {
     println!("[{transport}] rss empty: {} kB", rss_kb(child.id()));
     let a = thread_id(&c.request("thread/start", thread_params(&env, "A")));
     let mut pb = thread_params(&env, "B");
-    // B: only one hook and no trust bypass.
-    pb["config"].as_object_mut().unwrap().remove("bypass_hook_trust");
+    // B: its own set, only one hook; the trust bypass stays.
     pb["config"]["hooks"] = json!({"UserPromptSubmit": hook(format!("cat > {r}/hook-B-ups.json; echo \"$AAE_TAG\" > {r}/hook-B-ups.env", r = env.root))});
     let b = thread_id(&c.request("thread/start", pb));
     let started = Instant::now();
@@ -151,9 +150,18 @@ fn threads(transport: &str) {
     for tag in ["C", "D"] {
         let mut params = thread_params(&env, tag);
         params["cwd"] = json!(format!("{}/ws-a", env.root));
+        if tag == "C" {
+            // C: the full set without the trust bypass.
+            params["config"].as_object_mut().unwrap().remove("bypass_hook_trust");
+        }
         let id = thread_id(&c.request("thread/start", params));
         turn(&mut c, &id, "Reply OK", &format!("key-{tag}"));
         completed(&mut c, &id, 30);
+        println!(
+            "[{transport}] thread {tag} (bypass_hook_trust {}): hook/completed {:?}",
+            tag != "C",
+            hooks_of(&c, &id)
+        );
     }
     println!("[{transport}] rss after 4 threads: {} kB", rss_kb(child.id()));
     save(&env, &c, &format!("threads-{transport}.ndjson"));
