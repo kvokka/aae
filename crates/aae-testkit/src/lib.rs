@@ -58,6 +58,8 @@ struct Session {
     /// Prompts in order, with whether a completed turn followed.
     prompts: Vec<(PromptKey, bool)>,
     playing: Option<JoinHandle<()>>,
+    /// A turn is in flight: from a prompt or a response until `turn.ended`.
+    in_turn: bool,
 }
 
 /// No process has this pid (it is above every `pid_max`), so nothing real is ever signalled through it.
@@ -108,6 +110,7 @@ impl ScriptedDriver {
         if let Some(previous) = target.playing.take() {
             previous.abort();
         }
+        target.in_turn = true;
         let (driver, instance, session) = (self.clone(), instance.id.clone(), session.clone());
         target.playing = Some(tokio::spawn(async move {
             if let Some(event) = first {
@@ -134,6 +137,7 @@ impl ScriptedDriver {
             && let Some(prompt) = last.prompts.last_mut()
         {
             prompt.1 |= *stop_reason == StopReason::Completed;
+            last.in_turn = false;
         }
         if let Some(i) = state.instances.get_mut(instance).filter(|i| i.alive) {
             i.seq += 1;
@@ -237,6 +241,7 @@ impl Driver for ScriptedDriver {
                 instance: instance.id.clone(),
                 prompts: Vec::new(),
                 playing: None,
+                in_turn: false,
             },
         );
         drop(state);
@@ -282,15 +287,18 @@ impl Driver for ScriptedDriver {
         instance: &'a InstanceHandle,
         session: &'a SessionRef,
     ) -> BoxFuture<'a, Result<(), Failure>> {
-        let playing = Self::live_session(&mut self.lock(), instance, session).map(|s| s.playing.take());
-        ready(playing.map(|playing| {
+        let playing = Self::live_session(&mut self.lock(), instance, session).map(|s| (s.in_turn, s.playing.take()));
+        ready(playing.map(|(in_turn, playing)| {
             if let Some(playing) = playing {
                 playing.abort();
             }
-            let ended = Normalized::TurnEnded {
-                stop_reason: StopReason::Cancelled,
-            };
-            self.emit(&instance.id, Some(session), ended);
+            // A real harness ends only a turn that is in flight; an idle session sees nothing.
+            if in_turn {
+                let ended = Normalized::TurnEnded {
+                    stop_reason: StopReason::Cancelled,
+                };
+                self.emit(&instance.id, Some(session), ended);
+            }
         }))
     }
 

@@ -159,6 +159,22 @@ async fn a_hang_sends_nothing_after_the_ack_until_cancelled() {
 }
 
 #[tokio::test(start_paused = true)]
+async fn cancelling_an_idle_session_ends_no_turn() {
+    let mut s = setup().await;
+    s.driver.cancel_turn(&s.instance, &s.session).await.unwrap();
+    assert_eq!(next(&mut s.events).await, None);
+    s.driver.script(vec![Step::Emit(Normalized::TurnEnded {
+        stop_reason: StopReason::Completed,
+    })]);
+    s.prompt(1).await;
+    next(&mut s.events).await;
+    next(&mut s.events).await;
+    // The scenario has played out: the turn is over, cancelling it again sends nothing.
+    s.driver.cancel_turn(&s.instance, &s.session).await.unwrap();
+    assert_eq!(next(&mut s.events).await, None);
+}
+
+#[tokio::test(start_paused = true)]
 async fn the_process_dies_mid_turn_and_later_calls_fail() {
     let mut s = setup().await;
     s.driver.script(vec![

@@ -317,7 +317,7 @@ They are input messages of the core, not journal events; the core turns some of 
 | `usage` | `input_tokens, output_tokens, rate_limit: {utilization, resets_at} \| null` | gate inputs for the policy (via the next failure event) |
 | `retrying` | `attempt, delay, text` | watchdog: activity; the harness is retrying by itself |
 | `activity` | `tool_running: bool` | watchdog only: moves the silence deadline, kept in memory, no transaction; the adapter coalesces it to at most one per second per session |
-| `failure` | `Failure` (see 1.3) | ends the attempt with `run.attempt_failed`, unless `scope` is the tool call (`tool_failure` of one call is not an attempt failure) |
+| `failure` | `Failure` (see 1.3) | ends the attempt with `run.attempt_failed`; a failed single tool call is never sent (the harness hands it back to the model), `tool_failure` means a tool is gone for the whole session (4.4) |
 | `exited` | `code, signal` | the instance process is gone: every session on it gets `harness_crash` (one session per instance) or `adapter_crash` (shared instance) unless a failure was already reported |
 
 ### 4.4 Failure kinds
