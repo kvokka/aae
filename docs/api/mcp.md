@@ -1,0 +1,30 @@
+# MCP frontend
+
+The daemon serves a small MCP server on its API socket at `/mcp` (spec §12). It is connected to no agent by
+default: tool descriptions cost tokens in every session, so an agent gets it only by naming it in its own config.
+
+## Tools
+
+| Tool | Arguments | Same as |
+|---|---|---|
+| `list_formulas` | `project`? | the formulas of the config, named as `start_run` takes them, with their inputs |
+| `start_run` | `project`, `rig`, `formula`, `inputs`?, `continue_from`? | `POST /v1/runs` |
+| `run_state` | `id` | `GET /v1/runs/{id}` |
+| `list_runs` | `project`?, `state`?, `limit`? | `GET /v1/runs` |
+| `cancel_run` | `id`, `reason`? | `POST /v1/runs/{id}/cancel` |
+
+A tool result carries the API's JSON reply as text. An API error (`bad_request`, `not_found`, `rejected`, ...) is a
+result with `isError: true` and the text `<code>: <message>`; an unknown tool is the JSON-RPC error `-32602`.
+
+## Protocol epochs
+
+Both epochs are served (spec §11.4), chosen per request:
+
+- `MCP-Protocol-Version: 2026-07-28` — stateless: `server/discover`, `tools/list`, `tools/call`; results carry
+  `resultType: "complete"`.
+- Otherwise the `initialize` epoch: `initialize` answers the requested version if it is one of 2025-11-25,
+  2025-06-18, 2025-03-26 (else 2025-11-25), `notifications/initialized` gets 202. No `Mcp-Session-Id` is issued,
+  so a daemon restart never makes a client's session unknown. `server/discover` here is `-32601`, the answer on
+  which claude falls back to `initialize`.
+
+`GET /mcp` is 405: the server opens no stream of its own. One JSON-RPC message per request (no batches).

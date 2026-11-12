@@ -3,6 +3,7 @@
 
 mod events;
 mod gates;
+mod mcp;
 mod runs;
 mod triggers;
 
@@ -32,6 +33,8 @@ pub struct Api {
     pub written: watch::Receiver<i64>,
     /// The daemon's own facts for `GET /v1/daemon`.
     pub daemon: Value,
+    /// The config the daemon runs with (the MCP tool `list_formulas`).
+    pub config: Arc<aae_core::config::Config>,
 }
 
 type State = axum::extract::State<Arc<Api>>;
@@ -62,7 +65,12 @@ pub fn openapi() -> utoipa::openapi::OpenApi {
 /// Serves the API on `listener` until `stop` resolves; open requests and event streams are cut then (a request
 /// cut after its commit is repeated safely with its idempotency key).
 pub async fn serve(listener: UnixListener, api: Api, stop: impl Future<Output = ()>) -> std::io::Result<()> {
-    let app = router().split_for_parts().0.with_state(Arc::new(api));
+    // MCP is not a REST operation: it stays out of the OpenAPI document.
+    let app = router()
+        .split_for_parts()
+        .0
+        .route("/mcp", axum::routing::post(mcp::post).get(mcp::get))
+        .with_state(Arc::new(api));
     tokio::select! {
         served = axum::serve(listener, app) => served,
         () = stop => Ok(()),
