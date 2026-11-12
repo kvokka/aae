@@ -271,7 +271,11 @@ impl RunHandler {
                 let deny = Answer::Deny {
                     message: "No answer came in time.".to_owned(),
                 };
-                self.answer(tx, run, &request.unwrap_or_default(), &deny)
+                match self.answer(tx, run, &request.unwrap_or_default(), &deny) {
+                    // Nothing to answer through: the run may not stay in `requires_action` without a deadline.
+                    Err(Error::Rejected(_)) => self.attempt_failed(tx, row, stall(FailureKind::Unknown)),
+                    other => other,
+                }
             }
             ("decide", _) => self.decide_deadline(tx, row),
             _ => Ok(()),
