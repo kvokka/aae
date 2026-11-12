@@ -68,12 +68,8 @@ impl RunHandler {
             ],
         )?;
         let row = Row::load(tx, &id)?;
-        let waiting = Self::workdir_busy(tx, &row)?.then_some("workdir");
-        row.emit(
-            tx,
-            "run.queued",
-            json!({ "run": row.view(), "waiting_for": waiting, "gate": null }),
-        )?;
+        let waiting = self.blocker(tx, &row)?;
+        Self::queued(tx, &row, waiting, true)?;
         tx.set_deadline(&row.deadline("state"), tx.now_ms() + QUEUE_TIMEOUT_MS)?;
         self.schedule(tx)?;
         Ok(json!({ "run": id }))
@@ -90,7 +86,51 @@ impl RunHandler {
         Ok(busy)
     }
 
-    /// Starts every queued run whose workdir is free, oldest first.
+    /// Why a queued run cannot start yet, `None` when it can: its workdir is busy, or the orchestrator or its agent
+    /// has as many started runs as allowed (spec §9.3; a parked run has no process and holds no slot).
+    fn blocker(&self, tx: &Tx<'_>, row: &Row) -> Result<Option<&'static str>, Error> {
+        if Self::workdir_busy(tx, row)? {
+            return Ok(Some("workdir"));
+        }
+        let started = "state NOT IN ('queued', 'parked', 'passed', 'failed', 'cancelled')";
+        let all: u32 = tx
+            .sql()
+            .query_row(&format!("SELECT COUNT(*) FROM runs WHERE {started}"), [], |r| r.get(0))?;
+        let agent: u32 = tx.sql().query_row(
+            &format!("SELECT COUNT(*) FROM runs WHERE project = ?1 AND agent = ?2 AND {started}"),
+            params![row.project, row.agent],
+            |r| r.get(0),
+        )?;
+        let project = self.config.projects.iter().find(|p| p.name == row.project);
+        let limit = project.into_iter().flat_map(|p| &p.packs).find_map(|pack| {
+            let mut agents = pack.agents.iter();
+            agents
+                .find(|(n, _)| format!("{}.{n}", pack.name) == row.agent)?
+                .1
+                .max_runs
+        });
+        let full = all >= self.config.max_runs || limit.is_some_and(|l| agent >= l);
+        Ok(full.then_some("concurrency"))
+    }
+
+    /// Emits `run.queued` on creation (`first`) and whenever the reason the run waits for changes.
+    fn queued(tx: &mut Tx<'_>, row: &Row, waiting: Option<&str>, first: bool) -> Result<(), Error> {
+        let changed = tx.sql().execute(
+            "UPDATE runs SET waiting_for = ?2 WHERE id = ?1 AND waiting_for IS NOT ?2",
+            params![row.id, waiting],
+        )?;
+        if changed == 0 && !first {
+            return Ok(());
+        }
+        row.emit(
+            tx,
+            "run.queued",
+            json!({ "run": row.view(), "waiting_for": waiting, "gate": null }),
+        )
+        .map(drop)
+    }
+
+    /// Starts every queued run that may start, oldest first.
     pub(super) fn schedule(&mut self, tx: &mut Tx<'_>) -> Result<(), Error> {
         let queued: Vec<String> = {
             let mut stmt = tx
@@ -100,8 +140,13 @@ impl RunHandler {
         };
         for id in queued {
             let row = Row::load(tx, &id)?;
-            if row.state == "queued" && !Self::workdir_busy(tx, &row)? {
-                self.prepare(tx, row)?;
+            // A run started meanwhile by a nested schedule (a terminal state during preparation) is not queued.
+            if row.state != "queued" {
+                continue;
+            }
+            match self.blocker(tx, &row)? {
+                None => self.prepare(tx, row)?,
+                waiting => Self::queued(tx, &row, waiting, false)?,
             }
         }
         Ok(())

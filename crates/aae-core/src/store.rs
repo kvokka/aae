@@ -73,12 +73,13 @@ CREATE INDEX attempts_instance ON attempts (instance);
 ";
 
 /// The finisher (docs/design/contracts.md 6.3): the attempt token by its SHA-256, the declared outcome and the
-/// number of prompts the attempt sent (remarks = prompts - 1).
+/// number of prompts the attempt sent (remarks = prompts - 1); why a queued run waits.
 const SCHEMA_V3: &str = "
 ALTER TABLE attempts ADD COLUMN token_sha256 TEXT;
 ALTER TABLE attempts ADD COLUMN outcome TEXT;
 ALTER TABLE attempts ADD COLUMN prompts INTEGER NOT NULL DEFAULT 1;
 CREATE INDEX attempts_token ON attempts (token_sha256);
+ALTER TABLE runs ADD COLUMN waiting_for TEXT;
 ";
 
 /// Opens the state database in WAL mode and brings its schema to the current version.

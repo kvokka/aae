@@ -45,6 +45,7 @@ and a session part.
 
 ```toml
 projects = ["~/work/shop"]          # project directories, each with an aae.toml
+max_runs = 8                        # runs started at once across all projects (default 8, at least 1)
 
 [harness.claude]                    # harnesses agents may choose (§6.1)
 model = "sonnet"                    # default model of the harness
@@ -115,7 +116,11 @@ Content: `agents/<agent>/agent.toml` (plus `prompt.md` and any other files of th
 ## Agent: `agents/<agent>/agent.toml`
 
 `harness` (required; one of the orchestrator's `[harness.*]`), `prompt` (role prompt file, default `prompt.md`
-when it exists), then the settings keys above.
+when it exists), `max_runs` (optional positive integer: runs of this agent started at once in its project; the
+orchestrator's `max_runs` still applies), then the settings keys above.
+
+A run counts toward both limits from `preparing` until it is terminal, except while `parked` (no harness process).
+A run over a limit waits in `queued` with `waiting_for = "concurrency"`; a busy workdir is reported first.
 
 ## Formula: `formulas/<file>.toml`
 

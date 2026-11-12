@@ -74,9 +74,13 @@ pub(crate) fn world(extra: &[(&str, &str)]) -> World {
 
 impl World {
     pub(crate) async fn create(&self) -> String {
+        self.create_on("web").await
+    }
+
+    pub(crate) async fn create_on(&self, rig: &str) -> String {
         let create = Create {
             project: "shop".into(),
-            rig: "web".into(),
+            rig: rig.into(),
             formula: "build".into(),
             inputs: serde_json::Map::new(),
             correlation: None,

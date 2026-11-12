@@ -315,6 +315,10 @@ fn files_reject_unknown_keys_and_undeclared_names() {
     );
     fails(&[(agent, "effort = \"high\"\n")], "`harness` is required");
     fails(
+        &[(agent, "harness = \"claude\"\nmax_runs = 0\n")],
+        "`max_runs` must be a positive",
+    );
+    fails(
         &[(agent, "harness = \"claude\"\nplugins = [{ name = \"chat\" }]\n")],
         "plugin `chat` is not declared",
     );

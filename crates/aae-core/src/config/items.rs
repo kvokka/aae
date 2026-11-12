@@ -23,13 +23,18 @@ impl Loader {
             Some(_) => Err(format!("`{key}` must be a string")),
         };
         let (harness, prompt) = (text("harness"), text("prompt"));
+        let max_runs = match table.remove("max_runs") {
+            None => Ok(None),
+            Some(toml::Value::Integer(n)) if u32::try_from(n).is_ok_and(|n| n > 0) => Ok(u32::try_from(n).ok()),
+            Some(_) => Err("`max_runs` must be a positive 32-bit integer".to_owned()),
+        };
         let parsed = toml::Value::Table(table)
             .try_into::<Settings>()
             .map_err(|e| e.to_string());
-        let (harness, prompt, settings) = match (harness, prompt, parsed) {
-            (Ok(Some(h)), Ok(p), Ok(s)) => (h, p, s),
+        let (harness, prompt, settings, max_runs) = match (harness, prompt, parsed, max_runs) {
+            (Ok(Some(h)), Ok(p), Ok(s), Ok(m)) => (h, p, s, m),
             (Ok(None), ..) => return self.none(&file, "`harness` is required"),
-            (Err(e), ..) | (_, Err(e), _) | (.., Err(e)) => return self.none(&file, e),
+            (Err(e), ..) | (_, Err(e), ..) | (_, _, Err(e), _) | (.., Err(e)) => return self.none(&file, e),
         };
         if !self.harnesses.contains(&harness) {
             self.fail(&file, format!("harness `{harness}` is not in the orchestrator config"));
@@ -44,6 +49,7 @@ impl Loader {
             harness,
             prompt,
             settings,
+            max_runs,
         })
     }
 

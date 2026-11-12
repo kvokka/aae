@@ -198,6 +198,32 @@ async fn one_workdir_holds_one_live_run_and_cancel_frees_it() {
     assert!(matches!(w.core.send(None, again).await, Err(Error::Rejected(_))));
 }
 #[tokio::test(start_paused = true)]
+async fn the_orchestrator_and_the_agent_limit_started_runs() {
+    let rigs = (
+        "shop/aae.toml",
+        "[rigs.web]\npath = \"web\"\n[rigs.api]\npath = \"api\"\n",
+    );
+    let orchestrator = (
+        "config.toml",
+        "projects = [\"shop\"]\nmax_runs = 1\n[harness.scripted]\n",
+    );
+    let agent = ("shop/agents/dev/agent.toml", "harness = \"scripted\"\nmax_runs = 1\n");
+    for limit in [orchestrator, agent] {
+        let w = world(&[rigs, ("shop/api/.keep", ""), limit]);
+        let first = w.create_on("web").await;
+        let second = w.create_on("api").await;
+        let events = w.events(&second, Duration::from_millis(200)).await;
+        assert_eq!(last(&events, "run.queued")["waiting_for"], "concurrency", "{}", limit.0);
+        let cancel = Msg::Cancel {
+            run: first,
+            reason: "operator".into(),
+        };
+        w.core.send(None, cancel).await.unwrap();
+        assert_eq!(w.states(&second).await, ["preparing", "starting", "running"]);
+    }
+}
+
+#[tokio::test(start_paused = true)]
 async fn a_run_must_name_a_runnable_formula_with_its_inputs() {
     let w = world(&[]);
     let create = |formula: &str, inputs: Value| Create {

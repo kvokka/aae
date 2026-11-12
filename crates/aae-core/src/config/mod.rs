@@ -17,6 +17,8 @@ use std::{collections::BTreeMap, fmt, path::PathBuf, time::Duration};
 /// when [`load`] fails (spec §6.5).
 #[derive(Clone, Debug, Default)]
 pub struct Config {
+    /// Runs started at once across every project (spec §9.3).
+    pub max_runs: u32,
     pub harnesses: BTreeMap<String, Harness>,
     /// Layer 2 of spec §6.3.
     pub settings: Settings,
@@ -69,6 +71,8 @@ pub struct Agent {
     pub prompt: Option<String>,
     /// Layer 6.
     pub settings: Settings,
+    /// Runs of this agent started at once in its project; no limit but the orchestrator's when absent.
+    pub max_runs: Option<u32>,
 }
 
 #[derive(Clone, Debug)]

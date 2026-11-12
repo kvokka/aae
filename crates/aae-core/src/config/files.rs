@@ -2,7 +2,7 @@
 
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
-use std::{collections::BTreeMap, path::PathBuf};
+use std::{collections::BTreeMap, num::NonZeroU32, path::PathBuf};
 
 /// The settings of one layer of spec §6.3; paths are absolute once loaded.
 #[derive(Clone, Debug, Default, Deserialize, PartialEq)]
@@ -89,6 +89,7 @@ fn yes() -> bool {
 pub(super) struct OrchestratorFile {
     #[serde(default)]
     pub projects: Vec<PathBuf>,
+    pub max_runs: Option<NonZeroU32>,
     #[serde(default)]
     pub harness: BTreeMap<String, Harness>,
     #[serde(default)]

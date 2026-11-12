@@ -10,8 +10,12 @@ use serde::de::DeserializeOwned;
 use std::{
     collections::{BTreeMap, BTreeSet},
     fs,
+    num::NonZeroU32,
     path::{Path, PathBuf},
 };
+
+/// Runs started at once when the orchestrator config does not say (spec §9.3).
+const DEFAULT_MAX_RUNS: u32 = 8;
 
 #[derive(Default)]
 pub(super) struct Loader {
@@ -46,6 +50,7 @@ impl Loader {
         }
         super::check::orchestrator_overrides(&mut self, file, overrides.keys(), &projects);
         let config = Config {
+            max_runs: raw.max_runs.map_or(DEFAULT_MAX_RUNS, NonZeroU32::get),
             harnesses: raw.harness,
             settings,
             overrides,
