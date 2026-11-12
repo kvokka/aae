@@ -127,6 +127,9 @@ pub(super) async fn run(running: &Running, payload: &Value) -> Msg {
     let pairs: Vec<(String, String)> = serde_json::from_value(payload["env"].clone()).unwrap_or_default();
     env.retain(|(k, _)| !pairs.iter().any(|(p, _)| p == k));
     env.extend(pairs);
+    // The tracker actor of the attempt (contracts 5.1), as for a session: br attributes the command's writes to the run.
+    env.retain(|(k, _)| k != "BD_ACTOR");
+    env.push(("BD_ACTOR".to_owned(), format!("aae:{run}:{}", payload["attempt"])));
     let marker = payload["marker"].as_str().unwrap_or_default();
     env.push((crate::orphans::INSTANCE_ENV.to_owned(), marker.to_owned()));
     let stop = Arc::new(Notify::new());

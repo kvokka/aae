@@ -3,6 +3,7 @@
 mod c02_prompt;
 mod c03_exec;
 mod c04_finisher;
+mod c05a_chain;
 mod c07_idle;
 mod c18_journal;
 mod c19_gates;
@@ -31,6 +32,12 @@ pub(crate) const ALL: &[Scenario] = &[
         title: "no pass without the finisher; a stale finisher is rejected; a remark passes on the second go",
         launch: Launch::Ci,
         run: |env| Box::pin(c04_finisher::run(env)),
+    },
+    Scenario {
+        criterion: "5a",
+        title: "an exec planner creates three beads of an epic; a subscription closes each; one correlation",
+        launch: Launch::Ci,
+        run: |env| Box::pin(c05a_chain::run(env)),
     },
     Scenario {
         criterion: "7",

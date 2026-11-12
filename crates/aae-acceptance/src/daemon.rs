@@ -120,6 +120,27 @@ impl Daemon {
     }
 }
 
+impl Daemon {
+    /// The journal from its start as `(type, envelope)`, read until `done` holds for what was read, up to `within`.
+    pub(crate) async fn journal_until(
+        &self,
+        within: Duration,
+        mut done: impl FnMut(&[(String, Value)]) -> bool,
+    ) -> Vec<(String, Value)> {
+        let deadline = tokio::time::Instant::now() + within;
+        let mut events = self.client.events(Some(1)).await.unwrap();
+        let mut seen = Vec::new();
+        while !done(&seen) {
+            let next = tokio::time::timeout_at(deadline, events.next()).await;
+            let Ok(Some(event)) = next.map(Result::unwrap) else {
+                panic!("the journal did not get there within {within:?}: {seen:?}");
+            };
+            seen.push((event.event.clone(), serde_json::from_str(&event.data).unwrap()));
+        }
+        seen
+    }
+}
+
 impl Drop for Daemon {
     fn drop(&mut self) {
         let _ = self.child.kill();
