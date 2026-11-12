@@ -142,7 +142,10 @@ fn worktree_on_real_git() {
         git(&repo, &["config", config[0], config[1]]);
     }
     git(&repo, &["commit", "-q", "--allow-empty", "-m", "base"]);
-    let event = |kind: &str, id: &str, workdir: &Path, agent: &str| json!({ "type": kind, "data": { "run": { "id": id, "agent": agent, "formula": "shop.fix", "workdir": workdir } } });
+    let event = |kind: &str, id: &str, workdir: &Path, agent: &str| {
+        let run = json!({ "id": id, "agent": agent, "formula": "shop.fix", "workdir": workdir });
+        json!({ "type": kind, "data": { "run": run } })
+    };
     let params = json!({ "agents": ["dev"] });
     assert_eq!(
         run("worktree", &event("run.preparing", "r0", &repo, "shop.other"), &params),
