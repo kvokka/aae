@@ -13,7 +13,7 @@ use aae_core::{
 };
 use serde_json::{Value, json};
 use std::{
-    collections::{HashMap, VecDeque},
+    collections::{BTreeMap, HashMap, VecDeque},
     sync::{Arc, Mutex},
     time::Duration,
 };
@@ -49,8 +49,9 @@ struct State {
     sessions: HashMap<u64, Session>,
     /// Numbers instances and sessions.
     started: u64,
-    /// The attempt tokens the core handed over, by `(run, attempt)`.
-    tokens: HashMap<(String, u32), String>,
+    /// The attempt token the core handed over and the session environment, by `(run, attempt)`.
+    tokens: HashMap<(String, u32), (String, BTreeMap<String, String>)>,
+    texts: Vec<String>,
 }
 
 struct Instance {
@@ -90,7 +91,15 @@ impl ScriptedDriver {
 
     /// The token of attempt `attempt` of `run`, as the agent of the attempt would find it in its environment.
     pub fn token(&self, run: &str, attempt: u32) -> Option<String> {
-        self.lock().tokens.get(&(run.to_owned(), attempt)).cloned()
+        self.lock().tokens.get(&(run.to_owned(), attempt)).map(|t| t.0.clone())
+    }
+
+    /// The environment the session of attempt `attempt` of `run` gets from the effective config, and every prompt
+    /// text sent so far, in order.
+    pub fn sent(&self, run: &str, attempt: u32) -> (Option<BTreeMap<String, String>>, Vec<String>) {
+        let state = self.lock();
+        let env = state.tokens.get(&(run.to_owned(), attempt)).map(|t| t.1.clone());
+        (env, state.texts.clone())
     }
 
     fn lock(&self) -> std::sync::MutexGuard<'_, State> {
@@ -215,7 +224,8 @@ impl Driver for ScriptedDriver {
             token,
             ..
         }) = plan;
-        self.lock().tokens.insert((run.clone(), *attempt), token.clone());
+        let env = config.env.iter().map(|(k, v)| (k.clone(), v.value.clone())).collect();
+        self.lock().tokens.insert((run.clone(), *attempt), (token.clone(), env));
         let process = ProcessPart(json!({ "native": config.native.as_ref().map(|n| &n.value) }));
         let model = config.model.as_ref().map(|m| &m.value);
         let session = SessionPart(json!({ "model": model, "workdir": workdir }));
@@ -310,9 +320,10 @@ impl Driver for ScriptedDriver {
         &'a self,
         instance: &'a InstanceHandle,
         session: &'a SessionRef,
-        _text: &'a str,
+        text: &'a str,
         key: PromptKey,
     ) -> BoxFuture<'a, Result<(), Failure>> {
+        self.lock().texts.push(text.to_owned());
         let recorded = Self::live_session(&mut self.lock(), instance, session).map(|s| s.prompts.push((key, false)));
         ready(recorded.and_then(|()| self.play(instance, session, Some(Normalized::PromptAcked { key }))))
     }

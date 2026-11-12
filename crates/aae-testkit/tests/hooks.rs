@@ -102,6 +102,11 @@ echo '{"decision":"proceed","prompt_append":"two"}'"#;
         (&failed["class"], &failed["run"]["workdir"]),
         (&json!("hollow_done"), &json!("/tmp"))
     );
+    let (env, prompts) = w.driver.sent(&run, 1);
+    assert_eq!(
+        (env.unwrap()["X"].as_str(), prompts.as_slice()),
+        ("1", ["Build web.\n\none\n\ntwo".to_owned()].as_slice())
+    );
 }
 
 #[tokio::test]
@@ -239,4 +244,32 @@ async fn a_hook_parks_a_run_on_a_gate_it_closes() {
         )
     );
     assert_eq!(w.until(None, "gate.closed", 0).await["gate"]["reason"], "quota");
+}
+
+#[tokio::test]
+async fn the_first_decision_in_connection_order_wins_on_attempt_failed() {
+    let w = policy(&[
+        ("run.attempt_failed", "true"),
+        ("run.attempt_failed", r#"echo '{"decision":"fail","reason":"first"}'"#),
+        ("run.attempt_failed", r#"echo '{"decision":"new_session"}'"#),
+    ]);
+    w.driver.script(vec![Step::Exit {
+        code: Some(1),
+        signal: None,
+    }]);
+    let run = w.create().await;
+    assert_eq!(w.until(Some(&run), "run.failed", 0).await["reason"], "first");
+}
+
+#[tokio::test]
+async fn one_veto_among_accepts_blocks_on_finishing() {
+    let w = policy(&[
+        ("run.finishing", r#"echo '{"decision":"accept"}'"#),
+        ("run.finishing", r#"echo '{"decision":"veto","reason":"no"}'"#),
+    ]);
+    w.driver.script(slow_turn());
+    let run = w.create().await;
+    assert_eq!(w.declare(&run).await, "accepted");
+    let failed = w.until(Some(&run), "run.failed", 0).await;
+    assert_eq!((&failed["class"], &failed["reason"]), (&json!("check"), &json!("no")));
 }
