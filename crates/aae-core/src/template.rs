@@ -16,9 +16,31 @@ impl fmt::Display for SyntaxError {
 
 impl std::error::Error for SyntaxError {}
 
-/// A path that is absent or null in the values it is resolved against.
+/// A placeholder that cannot be substituted: its path is absent or null in the values it is resolved against, or,
+/// inside text, it holds an object or array (`not_scalar`).
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Unresolved(pub String);
+pub struct Unresolved {
+    pub path: String,
+    pub not_scalar: bool,
+}
+
+impl Unresolved {
+    fn absent(path: &str) -> Self {
+        Self {
+            path: path.to_owned(),
+            not_scalar: false,
+        }
+    }
+}
+
+impl fmt::Display for Unresolved {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self.not_scalar {
+            true => write!(f, "`{}` is an object or array, not text", self.path),
+            false => write!(f, "`{}` has no value", self.path),
+        }
+    }
+}
 
 /// The event as filters and templates see it: envelope fields and the keys of `data` on one level.
 pub fn event_view(envelope: &Value) -> Value {
@@ -145,7 +167,13 @@ impl Template {
                 Part::Path(path) => match lookup(context, path) {
                     Some(Value::String(s)) => out.push_str(s),
                     Some(v @ (Value::Number(_) | Value::Bool(_))) => out.push_str(&v.to_string()),
-                    _ => return Err(Unresolved(path.clone())),
+                    Some(Value::Object(_) | Value::Array(_)) => {
+                        return Err(Unresolved {
+                            path: path.clone(),
+                            not_scalar: true,
+                        });
+                    }
+                    _ => return Err(Unresolved::absent(path)),
                 },
             }
         }
@@ -155,7 +183,7 @@ impl Template {
     /// A template that is exactly one placeholder keeps the JSON type of its value.
     fn resolve(&self, context: &Value) -> Result<Value, Unresolved> {
         match self.0.as_slice() {
-            [Part::Path(path)] => lookup(context, path).cloned().ok_or_else(|| Unresolved(path.clone())),
+            [Part::Path(path)] => lookup(context, path).cloned().ok_or_else(|| Unresolved::absent(path)),
             _ => self.render(context).map(Value::String),
         }
     }

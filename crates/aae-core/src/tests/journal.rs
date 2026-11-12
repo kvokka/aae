@@ -140,6 +140,27 @@ fn a_torn_last_line_is_cut_off_before_the_next_write() {
 }
 
 #[test]
+fn a_damaged_last_line_does_not_make_the_journal_repeat_lines() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut conn = outbox(dir.path(), 3);
+    let journal_dir = dir.path().join("journal");
+    std::fs::create_dir(&journal_dir).unwrap();
+    let current = journal_dir.join("events.jsonl");
+    let written = "{\"schema\":1,\"seq\":1,\"type\":\"t\"}\n{\"schema\":1,\"seq\":2,\"type\":\"t\"}\n#damaged#\n";
+    std::fs::write(&current, written).unwrap();
+    Journal::new(&journal_dir).drain(&mut conn).unwrap();
+    let text = std::fs::read_to_string(&current).unwrap();
+    let tail = text
+        .strip_prefix(written)
+        .expect("the lines already written stay as they are");
+    let added: Vec<Value> = tail.lines().map(|l| serde_json::from_str(l).unwrap()).collect();
+    assert_eq!(
+        added.iter().map(|e| e["seq"].as_i64().unwrap()).collect::<Vec<_>>(),
+        [3]
+    );
+}
+
+#[test]
 fn a_crash_between_rotation_and_write_does_not_repeat_the_rotated_lines() {
     let dir = tempfile::tempdir().unwrap();
     let mut conn = outbox(dir.path(), 3);

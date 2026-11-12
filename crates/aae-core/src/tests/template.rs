@@ -64,11 +64,20 @@ fn a_prompt_template_substitutes_scalars_and_fails_on_missing_values() {
     assert_eq!(t.render(&context).unwrap(), "Fix bd-1 (p2) in /src.");
     assert_eq!(t.paths().collect::<Vec<_>>(), ["bead.id", "bead.priority", "rig.path"]);
     let missing = Template::parse("{{ inputs.goal }}", PROMPT).unwrap();
-    assert_eq!(missing.render(&context), Err(Unresolved("inputs.goal".into())));
+    assert_eq!(
+        missing.render(&context),
+        Err(Unresolved {
+            path: "inputs.goal".into(),
+            not_scalar: false
+        })
+    );
     let object = Template::parse("{{ rig }}", PROMPT).unwrap();
     assert_eq!(
         object.render(&context),
-        Err(Unresolved("rig".into())),
+        Err(Unresolved {
+            path: "rig".into(),
+            not_scalar: true
+        }),
         "an object is not text"
     );
 }
@@ -103,7 +112,13 @@ fn inputs_keep_json_types_map_recursively_and_report_unresolved_paths() {
         })
     );
     let other = event_view(&json!({ "seq": 8, "type": "bead.ready", "data": { "bead": { "id": "bd-2" } } }));
-    assert_eq!(inputs.resolve(Some(&other)), Err(Unresolved("event.bead.epic".into())));
+    assert_eq!(
+        inputs.resolve(Some(&other)),
+        Err(Unresolved {
+            path: "event.bead.epic".into(),
+            not_scalar: false
+        })
+    );
 }
 
 #[test]

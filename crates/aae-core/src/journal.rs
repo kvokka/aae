@@ -179,9 +179,12 @@ fn envelope(seq: i64, ts_ms: i64, body: &str) -> Value {
 }
 
 /// The `seq` of the last line of complete JSONL `bytes`.
+/// The `seq` of the last line that parses: a damaged line is skipped, not taken for the end of the file.
 fn last_seq(bytes: &[u8]) -> Option<i64> {
-    let line = bytes.strip_suffix(b"\n")?.rsplit(|&b| b == b'\n').next()?;
-    serde_json::from_slice::<Value>(line).ok()?["seq"].as_i64()
+    bytes
+        .strip_suffix(b"\n")?
+        .rsplit(|&b| b == b'\n')
+        .find_map(|line| serde_json::from_slice::<Value>(line).ok()?["seq"].as_i64())
 }
 
 /// `2026-11-12T14:05:00.123Z` from milliseconds since the Unix epoch (days-to-civil, proleptic Gregorian).
