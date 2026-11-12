@@ -457,3 +457,32 @@ WP-18b: подбор осиротевших потомков — не `waitid(P_
 `stopping`, `Dead` по здоровью) запись удаляется без зачистки, потомки после `kill -9` живут (инвариант 7,
 критерий 9); отчёт, READINESS и contracts 8 утверждают обратное. `mise run ci` зелёный (124 теста), aae-core
 собирается под aarch64-apple-darwin. SCORE 4.3. Спека не сжималась. Подробно — `.loop/cycles/14/review.md`.
+
+## 2026-11-13T12:00 · цикл 15 · coder · НАХОДКА
+
+Субагенты кодеру недоступны: `subagent_type: subcoder` → «Agent type 'subcoder' not found. Available agents: coder,
+reviewer», а `coder` блокирует хук политики. helper/subcoder/expert в `.claude/agents/` не зарегистрированы (или не
+видны). Цикл 15 сделан без субагентов. Предложение по харнессу: проверить регистрацию helper/subcoder/expert.
+
+## 2026-11-13T12:01 · цикл 15 · coder · НАХОДКА
+
+Настоящий `claude` 2.1.322 работает с поддельным Anthropic API (WP-26a) в режиме stream-json: изолированный
+`CLAUDE_CONFIG_DIR`, `ANTHROPIC_API_KEY=fake`, `ANTHROPIC_BASE_URL`; ход «OK» за ~0,3 с, транскрипт пишется, billing
+классифицируется. 4 прогона тестов `crates/aae-claude/tests/claude.rs`, без модели. Желательный 5 ревью 14 закрыт
+для основного пути; `count_tokens`/`?beta=true` отдельно не проверялись (ход прошёл без них).
+
+## 2026-11-13T12:02 · цикл 15 · coder · РЕШЕНИЕ
+
+WP-27a (`crates/aae-claude`): (1) `Answer::Text` отдаётся claude как `deny` с сообщением — текст доходит до модели
+как tool_result (опыт 1a); формы ответа на AskUserQuestion нет. (2) Первый `api_retry` с 401 — сразу
+`auth_required` (харнесс ретраит 401 около минуты). (3) Квота при API-ключе (429 без rate_limit_event) —
+`rate_limited`, как в шпаргалке 01 §5. (4) MCP, хуки, skills, плагины, native → `config_error` до WP-27b (shortcut в
+`part.rs`), чтобы не запускать сессию без них молча. (5) Бинарник — `binary` из конфига или `claude` из PATH
+(shortcut в `daemon.rs`; mise — WP-27b/WP-35). (6) id новой сессии — UUID v5 от `run/attempt`.
+
+## 2026-11-13T13:00 · цикл 15 · reviewer · НАХОДКА
+
+Ревью цикла 15: 4.5/10, continue, обязательных нет. Блокер ревью 14 (зачистка при падении) закрыт. Адаптер claude
+(WP-27a) на macOS не стартует ни одной сессии: `orphans::start_time` читает `/proc`, вне Linux `None` →
+`harness_crash` (`crates/aae-claude/src/lib.rs:102`); §1.1 снимает проверку macOS, но `shortcut:` этого не описывает —
+желательный 1 ревью 15.
