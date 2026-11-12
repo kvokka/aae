@@ -22,7 +22,7 @@ fn policy(hooks: &[(&str, &str)]) -> World {
 }
 
 /// A world whose plugin `policy` has the hooks `(event, script, timeout)`, each run as `sh <script>` in the plugin
-/// directory.
+/// directory with `AAE_SOCKET` set to `/run/aae.sock`.
 fn policy_timed(hooks: &[(&str, &str, &str)]) -> World {
     let mut toml = "name = \"policy\"\nversion = \"0.1.0\"\n".to_owned();
     let mut files = vec![(
@@ -35,7 +35,10 @@ fn policy_timed(hooks: &[(&str, &str, &str)]) -> World {
     }
     files.push(("policy/plugin.toml".to_owned(), toml));
     let files: Vec<(&str, &str)> = files.iter().map(|(p, t)| (p.as_str(), t.as_str())).collect();
-    world_with(&files, Arc::new(ExecHooks))
+    let hooks = ExecHooks {
+        socket: Some("/run/aae.sock".into()),
+    };
+    world_with(&files, Arc::new(hooks))
 }
 
 impl World {
@@ -88,7 +91,7 @@ fn slow_turn() -> Vec<Step> {
 
 #[tokio::test]
 async fn preparing_hooks_chain_their_changes() {
-    let one = r#"echo '{"decision":"proceed","workdir":"/tmp","env":{"X":"1"},"prompt_append":"one"}'"#;
+    let one = r#"echo '{"decision":"proceed","workdir":"/tmp","env":{"X":"'"$AAE_SOCKET"'"},"prompt_append":"one"}'"#;
     let two = r#"read -r e
 case "$e" in *'"prompt_append":"one"'*) ;; *) exit 1 ;; esac
 case "$e" in *'"X"'*) ;; *) exit 1 ;; esac
@@ -105,7 +108,7 @@ echo '{"decision":"proceed","prompt_append":"two"}'"#;
     let (env, prompts) = w.driver.sent(&run, 1);
     assert_eq!(
         (env.unwrap()["X"].as_str(), prompts.as_slice()),
-        ("1", ["Build web.\n\none\n\ntwo".to_owned()].as_slice())
+        ("/run/aae.sock", ["Build web.\n\none\n\ntwo".to_owned()].as_slice())
     );
 }
 

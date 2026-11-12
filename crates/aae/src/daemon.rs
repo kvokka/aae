@@ -67,7 +67,9 @@ pub(crate) async fn run(paths: Paths) -> Result<(), String> {
         Clock::system(),
         Arc::new(config),
         Vec::new(),
-        Arc::new(ExecHooks),
+        Arc::new(ExecHooks {
+            socket: Some(paths.socket.clone()),
+        }),
         journal,
     );
     let api = Api {

@@ -19,7 +19,10 @@ fn check(script: &str) -> (World, Create) {
         "name = \"check\"\n[step]\nkind = \"exec\"\ncommand = [\"sh\", \"-c\", {}]\ntimeout = \"2s\"\n",
         json!(script)
     );
-    let w = world_with(&[("shop/formulas/check.toml", &formula)], Arc::new(ExecHooks));
+    let w = world_with(
+        &[("shop/formulas/check.toml", &formula)],
+        Arc::new(ExecHooks::default()),
+    );
     let create = Create {
         project: "shop".into(),
         rig: "web".into(),

@@ -11,7 +11,11 @@ use crate::{
     writer::{CoreHandle, Error, Event, Tx},
 };
 use serde_json::{Value, json};
-use std::{collections::BTreeMap, path::PathBuf, time::Duration};
+use std::{
+    collections::BTreeMap,
+    path::{Path, PathBuf},
+    time::Duration,
+};
 
 const HOOK_TIMEOUT_MS: i64 = 30_000;
 const HOOK_CEILING_MS: i64 = 300_000;
@@ -99,12 +103,15 @@ pub trait HookRunner: Send + Sync + 'static {
     fn run<'a>(&'a self, core: &'a CoreHandle<Msg>, payload: &'a Value) -> BoxFuture<'a, ()>;
 }
 
-/// The hooks as commands of their plugins.
-pub struct ExecHooks;
+/// The hooks as commands of their plugins; `socket` is the API socket a hook gets in `AAE_SOCKET`.
+#[derive(Default)]
+pub struct ExecHooks {
+    pub socket: Option<PathBuf>,
+}
 
 impl HookRunner for ExecHooks {
     fn run<'a>(&'a self, core: &'a CoreHandle<Msg>, payload: &'a Value) -> BoxFuture<'a, ()> {
-        Box::pin(run(core, payload))
+        Box::pin(run(core, payload, self.socket.as_deref()))
     }
 }
 
@@ -123,7 +130,7 @@ struct Failed {
 }
 
 /// Runs the hooks of one event and, for a deciding event, sends the decision (contracts 3.3).
-async fn run(core: &CoreHandle<Msg>, payload: &Value) {
+async fn run(core: &CoreHandle<Msg>, payload: &Value, socket: Option<&Path>) {
     let mut event = payload["event"].clone();
     let kind = event["type"].as_str().unwrap_or_default().to_owned();
     let deciding = DECIDING.contains(&kind.as_str());
@@ -132,7 +139,7 @@ async fn run(core: &CoreHandle<Msg>, payload: &Value) {
     for hook in payload["hooks"].as_array().into_iter().flatten() {
         let plugin = hook["plugin"].as_str().unwrap_or_default();
         // Hooks on observed events may only exit 0 or fail (contracts 3.2).
-        let said = invoke(hook, &event).await.and_then(|said| match said {
+        let said = invoke(hook, &event, socket).await.and_then(|said| match said {
             Said::Blocked(stderr) if !deciding => Err(Failed {
                 error: "exit",
                 exit_code: Some(2),
@@ -242,11 +249,12 @@ impl Prepared {
     }
 }
 
-async fn invoke(hook: &Value, event: &Value) -> Result<Said, Failed> {
+async fn invoke(hook: &Value, event: &Value, socket: Option<&Path>) -> Result<Said, Failed> {
     let command: Vec<String> = serde_json::from_value(hook["command"].clone()).unwrap_or_default();
     let dir = PathBuf::from(hook["dir"].as_str().unwrap_or("/"));
     let mut env = process::base_env();
     env.push(("AAE_PLUGIN_DIR".to_owned(), dir.to_string_lossy().into_owned()));
+    env.extend(socket.map(|s| ("AAE_SOCKET".to_owned(), s.to_string_lossy().into_owned())));
     let stdin = format!("{event}\n");
     let timeout = Duration::from_millis(hook["timeout_ms"].as_u64().unwrap_or(30_000));
     let out = process::run(Spec {
