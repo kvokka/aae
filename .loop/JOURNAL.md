@@ -231,3 +231,11 @@ WP-09/WP-10 (`crates/aae-core`). 1) Схема состояния растёт �
 первом `drain` и после ошибки записи. Восстановление: обрезать оборванную последнюю строку, при отсутствии
 `events.jsonl` брать последний `seq` из `events.1.jsonl`. Нет новых строк в outbox — нет файлового I/O (тест).
 `payload` эффекта и сохранённый ответ читаются как JSON через `rusqlite` feature `serde_json`: ошибка — `Error::Storage`, не `Null`.
+
+## 2026-11-13T10:40 · цикл 6 · coder · РЕШЕНИЕ
+
+WP-13: трейт `Driver` (`crates/aae-core/src/driver.rs`) без `split`/`Fingerprint` (придут с WP-12 — нет производителя
+`EffectiveConfig`) и без `Capabilities.versions` (с WP-27) — записано в contracts 4.1 и в примечаниях плана.
+`PromptKey` = UUID v5 от `aae:prompt:<run>/<attempt>/<prompt>` в пространстве URL (contracts 4.2). Сценарный драйвер
+(`crates/aae-testkit`) отдаёт pid `i32::MAX` — процесса с таким pid нет, восстановление WP-20 не убьёт чужое. Код 75
+из списка §14 — не драйвер, а `exec`-шаг: остаётся WP-14.

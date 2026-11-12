@@ -255,6 +255,9 @@ in, tests wire the scripted driver in (`crates/aae-testkit`). Futures are boxed;
 sink handed to `start_instance`. The adapter translates and executes; it never retries a turn, parks or decides
 an outcome (§4, §7.2).
 
+In code (`crates/aae-core/src/driver.rs`) `split` joins the trait with config assembly (WP-12), and
+`Capabilities.versions` with the first adapter (WP-27): until then neither has a producer.
+
 ```rust
 trait Driver: Send + Sync {
     fn harness(&self) -> &'static str;                        // "claude", "codex"
@@ -290,7 +293,7 @@ trait Driver: Send + Sync {
 | `Split` | `{ process: ProcessPart, session: SessionPart, fingerprint: Fingerprint }`; the two parts are opaque serializable values of the adapter; `fingerprint` = SHA-256 of the harness name and the canonical JSON of `process` (see 8) |
 | `InstanceHandle` | `{ id, pid, start_time, pgid }`; `start_time` is the kernel start time of `pid` (`/proc/<pid>/stat`), pid + start time identify the process (§5.2) |
 | `SessionRef` | opaque JSON the adapter fills with everything resume needs; the core stores and returns it. claude: `{session_id, config_dir}`; codex: `{thread_id, codex_home}` (§7.1: the transcript lives in `CODEX_HOME`) |
-| `PromptKey` | UUID v5 of `"<run>/<attempt n>/<prompt n>"`; the idempotency key of one prompt (see 6.4) |
+| `PromptKey` | UUID v5 of `"aae:prompt:<run>/<attempt n>/<prompt n>"` in the URL namespace; the idempotency key of one prompt (see 6.4) |
 | `Answer` | `Allow { updated_input }`, `Deny { message }`, `Text { text }` (decisions of `run.requires_action`) |
 | `Transcript` | `Missing` or `Present { prompt: Absent \| Unanswered \| Answered }` — whether the session exists and where the prompt with `key` stands in it |
 | `Health` | `Ok`, `Degraded { text }`, `Dead` |
