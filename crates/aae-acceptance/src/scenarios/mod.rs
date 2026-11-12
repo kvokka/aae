@@ -4,6 +4,7 @@ mod c02_prompt;
 mod c03_exec;
 mod c04_finisher;
 mod c05a_chain;
+mod c05b_schedule;
 mod c07_idle;
 mod c18_journal;
 mod c19_gates;
@@ -38,6 +39,12 @@ pub(crate) const ALL: &[Scenario] = &[
         title: "an exec planner creates three beads of an epic; a subscription closes each; one correlation",
         launch: Launch::Ci,
         run: |env| Box::pin(c05a_chain::run(env)),
+    },
+    Scenario {
+        criterion: "5b",
+        title: "a schedule fires on time; the firings missed while the daemon is down fire once",
+        launch: Launch::Ci,
+        run: |env| Box::pin(c05b_schedule::run(env)),
     },
     Scenario {
         criterion: "7",

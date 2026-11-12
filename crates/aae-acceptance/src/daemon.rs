@@ -82,8 +82,14 @@ impl Daemon {
 
     /// Kills the daemon with SIGKILL and starts it again on the same tree.
     pub(crate) async fn restart(&mut self) {
+        self.restart_after(Duration::ZERO).await;
+    }
+
+    /// Kills the daemon with SIGKILL and starts it again on the same tree after `down`.
+    pub(crate) async fn restart_after(&mut self, down: Duration) {
         let _ = self.child.kill();
         let _ = self.child.wait();
+        tokio::time::sleep(down).await;
         self.child = command(&self.env, self.dir.path(), &self.home)
             .arg("daemon")
             .spawn()
