@@ -207,7 +207,8 @@ async fn a_process_that_dies_in_a_turn_reports_its_stderr_and_is_forgotten() {
     let init = r#"{"type":"system","subtype":"init"}"#;
     std::fs::write(
         &script,
-        format!("#!/bin/sh\necho '{init}'\necho 'Error: boom' >&2\nexit 1\n"),
+        // It dies only once started: dead before `start` reads its start time, it would fail the start instead.
+        format!("#!/bin/sh\necho '{init}'\nwhile [ ! -e go ]; do sleep 0.01; done\necho 'Error: boom' >&2\nexit 1\n"),
     )
     .unwrap();
     std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755)).unwrap();
@@ -220,6 +221,7 @@ async fn a_process_that_dies_in_a_turn_reports_its_stderr_and_is_forgotten() {
         .start_session(&instance, &SessionPart(Value::Null))
         .await
         .unwrap();
+    std::fs::write(dir.path().join("go"), "").unwrap();
     let mut failure = None;
     while let Some(event) = events.recv().await {
         match event.event {
