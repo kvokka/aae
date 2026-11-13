@@ -24,6 +24,7 @@ dependencies = [
 name = "aae-acceptance"
 version = "0.1.0"
 dependencies = [
+ "aae-core",
  "aae-front",
  "aae-testkit",
  "serde_json",

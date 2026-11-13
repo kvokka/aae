@@ -90,7 +90,7 @@ Loading is all or nothing, every error is reported with its file, and an unknown
 ## Triggers
 
 A run need not be started by hand. A `[[trigger]]` in `aae.toml` starts a formula on an event, on a cron schedule
-(UTC) or at an interval:
+(in the system time zone, or the one `timezone` names; see [Trigger](../design/config.md#trigger)) or at an interval:
 
 ```toml
 [[trigger]]

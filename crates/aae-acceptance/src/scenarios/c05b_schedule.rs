@@ -2,22 +2,37 @@
 //! it is back, the next one an interval later.
 //!
 //! The real daemon has no managed clock (contracts 9: no test mode), so this runs on the wall clock with an `every`
-//! of seconds; the same rules on the managed clock, `cron` included, are core tests (`aae-testkit/tests/triggers.rs`).
+//! of a second. It checks the times the daemon wrote in its journal, never what the test saw at some moment: a loaded
+//! host delays when the test looks, not what the daemon did. The same rules on the managed clock, `cron` included,
+//! are core tests (`aae-testkit/tests/triggers.rs`).
 
 use super::exec_formula;
 use crate::{
     Env,
     daemon::{Daemon, write},
 };
+use aae_core::parse_rfc3339_ms;
+use serde_json::Value;
 use std::{sync::Arc, time::Duration};
 
 const EVERY: Duration = Duration::from_secs(1);
+const EVERY_MS: i64 = 1000;
+const WITHIN: Duration = Duration::from_secs(60);
 
-/// The runs of the scheduled formula so far.
-async fn fired(d: &Daemon) -> usize {
-    let runs = d.get("/v1/runs?project=shop&limit=1000").await;
-    let runs = runs.as_array().expect("a list of runs");
-    runs.iter().filter(|r| r["formula"] == "shop.tick").count()
+/// Per `daemon.started` in the journal: its time and the times of the firings after it, in milliseconds. A firing
+/// skipped because the last run is still on (`overlap`: one the kill interrupted is retried at start) counts: the
+/// schedule did fire.
+fn lives(seen: &[(String, Value)]) -> Vec<(i64, Vec<i64>)> {
+    let mut lives: Vec<(i64, Vec<i64>)> = Vec::new();
+    for (kind, event) in seen {
+        let ts = || parse_rfc3339_ms(event["ts"].as_str().expect("ts")).expect("an RFC 3339 ts");
+        match kind.as_str() {
+            "daemon.started" => lives.push((ts(), Vec::new())),
+            "trigger.fired" | "trigger.skipped" => lives.last_mut().expect("a firing after a start").1.push(ts()),
+            _ => {}
+        }
+    }
+    lives
 }
 
 pub(crate) async fn run(env: Arc<Env>) -> String {
@@ -33,25 +48,47 @@ pub(crate) async fn run(env: Arc<Env>) -> String {
         exec_formula(root, "tick", "", "\"true\"");
     })
     .await;
-    // `every` first fires one interval after the daemon first sees the trigger.
-    tokio::time::sleep(EVERY / 2).await;
-    assert_eq!(fired(&d).await, 0, "nothing before the first interval");
-    tokio::time::sleep(EVERY * 2).await;
-    let before = fired(&d).await;
-    assert_eq!(before, 2, "on time: once per interval");
-
+    // Two runs over, so the kill seldom interrupts one.
+    d.journal_until(WITHIN, |seen| {
+        seen.iter().filter(|(kind, _)| kind == "run.passed").count() >= 2
+    })
+    .await;
     // Down for three intervals and more: three firings missed.
     d.restart_after(EVERY * 3 + EVERY / 2).await;
-    tokio::time::sleep(EVERY / 2).await;
-    assert_eq!(fired(&d).await, before + 1, "the missed firings fire once at start");
-    tokio::time::sleep(EVERY).await;
-    assert_eq!(
-        fired(&d).await,
-        before + 2,
-        "the next one an interval after the catch-up"
+    let seen = d
+        .journal_until(WITHIN, |seen| {
+            let lives = lives(seen);
+            lives.len() == 2 && lives[1].1.len() >= 2
+        })
+        .await;
+    let lives = lives(&seen);
+    let [(up, before), (back, after)] = lives.as_slice() else {
+        panic!("two daemon starts: {lives:?}")
+    };
+
+    // `every` first fires one interval after the daemon first sees the trigger, then an interval after each firing.
+    assert!(
+        before[0] >= up + EVERY_MS,
+        "nothing before the first interval: {lives:?}"
+    );
+    let spaced = |f: &[i64]| f.windows(2).all(|w| w[1] - w[0] >= EVERY_MS);
+    assert!(spaced(before), "once per interval: {lives:?}");
+    let last = before.last().expect("a firing");
+    assert!(back - last >= 3 * EVERY_MS, "down for three intervals: {lives:?}");
+    // Set again from start, the first firing would be an interval after it, not before.
+    assert!(
+        after[0] - back < EVERY_MS,
+        "the missed firings fire at start: {lives:?}"
+    );
+    assert!(
+        spaced(after),
+        "once, the next one an interval after the catch-up: {lives:?}"
     );
     format!(
-        "every {} s; {before} firings, 3 missed while down, 1 at start, 1 after",
-        EVERY.as_secs()
+        "every {} s; {} firings, 3 missed while down, 1 at start ({} ms after it), the next {} ms later",
+        EVERY.as_secs(),
+        before.len(),
+        after[0] - back,
+        after[1] - after[0]
     )
 }

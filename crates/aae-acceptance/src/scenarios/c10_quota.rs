@@ -6,12 +6,10 @@ use crate::{
     Env,
     daemon::{Daemon, write},
 };
+use aae_core::parse_rfc3339_ms;
 use aae_testkit::openai::{Provider, Reply};
-use serde_json::json;
-use std::{
-    sync::Arc,
-    time::{Duration, Instant},
-};
+use serde_json::{Value, json};
+use std::{sync::Arc, time::Duration};
 
 /// When the fake's quota resets after the first request.
 const RESET: Duration = Duration::from_secs(10);
@@ -45,7 +43,6 @@ pub(crate) async fn run(env: Arc<Env>) -> String {
             seen.iter().any(|(k, _)| k == "run.attempt_failed") && seen.iter().any(|(k, _)| k == "gate.closed")
         })
         .await;
-    let limited = Instant::now();
     let failed = seen.iter().find(|(k, _)| k == "run.attempt_failed").unwrap();
     let failure = &failed.1["data"]["failure"];
     assert_eq!(failure["kind"], "quota_exhausted", "{failure}");
@@ -56,38 +53,65 @@ pub(crate) async fn run(env: Arc<Env>) -> String {
         .iter()
         .find(|g| g["key"].as_str().is_some_and(|k| k.starts_with("account:")));
     let gate = gate.unwrap_or_else(|| panic!("no account gate in {gates}"));
-    assert!(gate["until"].is_string(), "the gate opens at the reset: {gate}");
+    let until = gate["until"].as_str().and_then(parse_rfc3339_ms);
+    let until = until.unwrap_or_else(|| panic!("the gate opens at the reset: {gate}"));
+    let limited = parse_rfc3339_ms(failed.1["ts"].as_str().unwrap()).unwrap();
+    assert!(
+        until >= limited + i64::try_from(RESET.as_millis()).unwrap(),
+        "the gate holds until the reset at least: {gate}"
+    );
 
     let body = json!({ "project": "shop", "rig": "api", "formula": "dev" });
     let second = d.post("/v1/runs", body).await.unwrap()["run"]
         .as_str()
         .unwrap()
         .to_owned();
-    tokio::time::sleep(RESET / 2).await;
-    assert!(limited.elapsed() < RESET, "checked before the reset");
-    let view = d.get(&format!("/v1/runs/{second}")).await;
-    assert_eq!(
-        view["state"], "parked",
-        "the second run of the account waits for the gate: {view}"
-    );
-    assert_eq!(view["waiting_for"], gate["key"], "the account gate holds it: {view}");
-    assert_eq!(
-        provider.requests().len(),
-        1,
-        "nothing reached the provider while the gate was closed"
-    );
-
     d.until_state(&first, "passed", RESET + MARGIN + WITHIN).await;
     d.until_state(&second, "passed", WITHIN).await;
-    let after = limited.elapsed();
+
+    // What the daemon did, from its journal: the times are its own, not when this test happened to look.
+    let seen = d
+        .journal_until(WITHIN, |seen| {
+            seen.iter().filter(|(k, _)| k == "run.passed").count() >= 2
+        })
+        .await;
+    let ts = |e: &Value| parse_rfc3339_ms(e["ts"].as_str().unwrap()).unwrap();
+    let opened = seen
+        .iter()
+        .find(|(k, e)| k == "gate.opened" && e["data"]["key"] == gate["key"])
+        .map(|(_, e)| ts(e))
+        .unwrap_or_else(|| panic!("the gate never opened: {seen:?}"));
+    assert!(opened >= until, "the gate opened at its time: {opened} < {until}");
+    let held = seen.iter().any(|(_, e)| {
+        e["run"] == second.as_str()
+            && (e["data"]["waiting_for"] == gate["key"] || e["data"]["gate"]["key"] == gate["key"])
+    });
+    assert!(held, "the account gate held the second run: {seen:?}");
+    // An attempt launches its agent on the way to `starting`; a parked run waits in `parked`.
+    let launches = |run: &str| -> Vec<i64> {
+        let to_starting = |e: &Value| e["run"] == run && e["data"]["to"] == "starting";
+        let of = seen.iter().filter(|(k, e)| k == "run.state_changed" && to_starting(e));
+        of.map(|(_, e)| ts(e)).collect()
+    };
+    let (first_launches, second_launches) = (launches(&first), launches(&second));
+    assert_eq!(
+        first_launches.len(),
+        2,
+        "the first run once before the limit, once after: {seen:?}"
+    );
     assert!(
-        after + Duration::from_secs(1) >= RESET,
-        "passed only after the reset: {after:?}"
+        first_launches[1] >= opened,
+        "the first run again only after the reset: {seen:?}"
+    );
+    assert!(!second_launches.is_empty(), "the second run launched: {seen:?}");
+    assert!(
+        second_launches.iter().all(|&at| at >= opened),
+        "nothing of the second run while the gate was closed: {seen:?}"
     );
     format!(
-        "gate {} until {}; both runs passed {:.1} s after the limit",
+        "gate {} until {}; opened {} ms after the limit, nothing of the second run before",
         gate["key"],
         gate["until"],
-        after.as_secs_f64()
+        opened - limited
     )
 }

@@ -12,6 +12,7 @@ publish = false
 workspace = true
 
 [dependencies]
+aae-core = { version = "0.1.0", path = "../aae-core" }
 aae-front = { version = "0.1.0", path = "../aae-front" }
 aae-testkit = { version = "0.1.0", path = "../aae-testkit" }
 serde_json = "1.0.154"
