@@ -250,9 +250,14 @@ pub(crate) fn host_provider(part: &mut Value, host: &Path, isolated: bool) {
         return;
     };
     if isolated && let Some(overrides) = part["overrides"].as_array_mut() {
+        // The flags are in `argv`, which any user of the host sees: keys that hold secrets stay out.
+        let mut table = provider.as_table().cloned().unwrap_or_default();
+        table.retain(|k, _| k != "http_headers" && k != "experimental_bearer_token");
+        // One table value, so a provider name with a dot stays one key.
+        let providers = toml::Table::from_iter([(name.clone(), toml::Value::Table(table))]);
         let flags = [
             format!("model_provider={}", toml::Value::from(name.as_str())),
-            format!("model_providers.{name}={provider}"),
+            format!("model_providers={}", toml::Value::Table(providers)),
         ];
         overrides.splice(0..0, flags.map(Value::from));
     }

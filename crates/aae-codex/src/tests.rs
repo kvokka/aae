@@ -368,8 +368,8 @@ fn a_process_without_a_key_of_its_own_logs_in_by_the_host_provider() {
     assert!(!login(false).0, "no host config, no key");
     std::fs::write(
         host.path().join("config.toml"),
-        "model_provider = \"proxy\"\n[model_providers.proxy]\nenv_key = \"CARGO_MANIFEST_DIR\"\n\
-         base_url = \"http://proxy\"\n",
+        "model_provider = \"my.proxy\"\n[model_providers.\"my.proxy\"]\nenv_key = \"CARGO_MANIFEST_DIR\"\n\
+         base_url = \"http://proxy\"\nexperimental_bearer_token = \"secret\"\nhttp_headers = { a = \"secret\" }\n",
     )
     .unwrap();
     let (keyed, args) = login(false);
@@ -382,11 +382,15 @@ fn a_process_without_a_key_of_its_own_logs_in_by_the_host_provider() {
     let (keyed, args) = login(true);
     assert!(keyed);
     let at = |flag: &str| args.iter().position(|a| a.starts_with(flag)).expect(flag);
-    assert!(at("model_provider=\"proxy\"") < at("model=\"m\""), "{args:?}");
-    let table: toml::Table = toml::from_str(&args[at("model_providers.proxy=")]).unwrap();
+    assert!(at("model_provider=\"my.proxy\"") < at("model=\"m\""), "{args:?}");
+    let table: toml::Table = toml::from_str(&args[at("model_providers=")]).unwrap();
     assert_eq!(
-        table["model_providers"]["proxy"]["base_url"].as_str(),
+        table["model_providers"]["my.proxy"]["base_url"].as_str(),
         Some("http://proxy")
+    );
+    assert!(
+        !args.iter().any(|a| a.contains("secret")),
+        "secrets stay out of argv: {args:?}"
     );
 }
 
