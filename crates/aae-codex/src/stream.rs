@@ -12,11 +12,13 @@ use std::{
 /// The harness wording of a failed turn → its kind; the first rule with a matching needle wins. Needles are looked
 /// for in `<codexErrorInfo> <message> <additionalDetails>` of the turn's final error.
 const KINDS: &[(&[&str], FailureKind)] = &[
-    (&["usageLimitExceeded"], FailureKind::QuotaExhausted),
+    // codex reports a provider's `insufficient_quota` as `usageLimitExceeded` too, worded "Quota exceeded. Check
+    // your plan and billing details." (contract scenario 7): billing goes first.
     (
         &["insufficient_quota", "usage_not_included", "billing"],
         FailureKind::Billing,
     ),
+    (&["usageLimitExceeded"], FailureKind::QuotaExhausted),
     (&["rateLimitExceeded", ":429}"], FailureKind::RateLimited),
     (
         &[
