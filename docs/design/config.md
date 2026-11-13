@@ -200,7 +200,29 @@ payload, as do the paths of `where`. `rig` is allowed only in a project's `[[tri
   A schedule missed while the daemon was down fires once at start, and the next one is counted from then.
 - A trigger on `trigger.skipped` is a config error: a skip that fires a trigger could skip again forever.
 - A run started by a trigger is one level deeper than the run of its event (1 without one, a schedule included);
-  past depth 10 the firing is skipped with `depth`.
+  past depth 10 the firing is skipped with `depth`. Loops are bounded by this depth, not by the length of a chain:
+  a long epic is legal. Repeated runs over one bead are bounded by the bead's failure count (`bead_failures`).
+
+### How runs start and what a firing guarantees
+
+A run starts in one of three ways, all in the core: an explicit call (`POST /v1/runs`, `aae run start`, the MCP tool
+`start_run`), an event subscription (`on`) or a schedule (`cron`, `every`). A trigger can also be fired by hand
+(`POST /v1/triggers/fire`, `aae trigger fire`) and switched off and on per rig by the operator
+(`POST /v1/triggers/disable|enable`, `aae trigger disable|enable`, event `trigger.switched`); a trigger that is off
+fires neither on its schedule nor on events, only by hand, and stays off across restarts.
+
+- A firing is idempotent on `(trigger, event seq)`. Triggers match in the transaction that commits the event, not
+  on the JSONL journal, so the new run (or its `trigger.skipped`) commits with the event or not at all: a `kill -9`
+  of the daemon neither loses nor doubles a firing (contracts §3.5).
+- Overlap: while a run started by the same trigger with the same inputs is alive, a new firing is skipped with
+  `trigger.skipped{overlap}`.
+- A run started by a trigger inherits the correlation of its event. A tracker event carries the correlation of the
+  run whose attempt made the write, known from the br actor `aae:<run>[:<attempt>]`; a write by a human starts a
+  new chain (contracts §5).
+- Tracker events are `bead.created`, `bead.updated`, `bead.closed` and `bead.ready`; `bead.ready` is raised when a
+  bead first enters the ready set: open, unclaimed, every blocker closed.
+- The event schema and its version, the `where` and `inputs` language, hook decisions and timeouts and the outbox
+  lifetime are fixed in `docs/design/contracts.md`.
 
 ## Plugin: `<plugin>/plugin.toml`
 
