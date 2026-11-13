@@ -1,13 +1,13 @@
 {
   "max_cycles": 83,
-  "status": "running",
-  "cycle": 44,
-  "phase": null,
-  "attempt": 0,
-  "base": "c10cb431c739f1a8e8503c0ecec10f7ec3445bb2",
-  "started": "2026-11-14T05:27:19+0700",
+  "status": "halted",
+  "cycle": 45,
+  "phase": "reviewer",
+  "attempt": 1,
+  "base": "1a732a4b0e8c023b0aa6b2557361d9e51b37da99",
+  "started": "2026-11-14T06:19:56+0700",
   "coder_status": "done",
-  "halt_reason": null,
+  "halt_reason": "пауза по просьбе владельца после цикла 45: новый цикл не начинать, ждать указаний",
   "history_round1": [
     {
       "cycle": 1,
