@@ -57,5 +57,5 @@ The acceptance criteria of the first release are executable scenarios in `crates
 every commit (about 11 minutes: one of them watches an idle daemon for 10). `mise run acceptance` runs all of them,
 including those that call a real model: they use the cheapest model, cost money and need your harness login. Pass
 criterion numbers to run only those: `cargo build -p aae && cargo run -p aae-acceptance -- --ci 3 19`. The report,
-with the date and the versions of `aae` and the harnesses, goes to `target/acceptance/report.md`. The criteria checked by hand
-(the claude half of 10, 20, 21) are described in `docs/acceptance-manual.md`.
+with the date and the versions of `aae` and the harnesses, goes to `target/acceptance/report.md`. The criteria
+checked by hand (the claude half of 10, 20, 21) are described in `docs/acceptance-manual.md`.

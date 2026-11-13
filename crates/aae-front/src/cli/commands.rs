@@ -34,7 +34,7 @@ pub enum RunCommand {
     /// Show a run.
     Show { id: String },
     /// Follow a run live until it ends: its events from `--from` (default: the oldest held) and the raw messages of
-    /// its session from now on.
+    /// its session from now on. Exits 0 however the run ends; `aae run show` gives the outcome.
     Watch {
         id: String,
         #[arg(long)]

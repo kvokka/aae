@@ -1,5 +1,5 @@
 //! The CLI (spec §12): a thin client of the API, one command per API operation, JSON output with `--json`.
-//! Without a daemon only `aae daemon`, `aae doctor` and `aae --version` work.
+//! Without a daemon only `aae daemon`, `aae doctor`, `aae fetch` and `aae --version` work.
 
 mod commands;
 mod config;
