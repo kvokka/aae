@@ -70,8 +70,14 @@ impl Handler for TestHandler {
         }
     }
 
+    /// The deadline `flaky` fails its first firing after emitting an event.
     fn deadline(&mut self, tx: &mut Tx<'_>, id: &str) -> Result<(), Error> {
+        let first = !self.fired.0.lock().unwrap().iter().any(|(w, _)| w == id);
         self.fired.push(id.to_owned(), tx.now_ms());
+        if id == "flaky" && first {
+            tx.emit(&event("test.flaky"))?;
+            return Err(Error::Rejected("flaky".into()));
+        }
         Ok(())
     }
 }
@@ -224,6 +230,28 @@ async fn deadline_fires_at_its_exact_time_without_polling() {
     settle().await;
     assert_eq!(r.fired.take(), vec![("d1".to_owned(), at)]);
     assert_eq!(r.clock.now_ms(), at);
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_deadline_that_fails_is_rolled_back_and_fires_again_a_minute_later() {
+    let dir = tempfile::tempdir().unwrap();
+    let db = dir.path().join("state.db");
+    let r = rig(&db, Clock::managed(T0), 0, Duration::ZERO);
+    let msg = Msg::Deadline {
+        id: "flaky",
+        at_ms: T0 + 10,
+    };
+    r.core.send(None, msg).await.unwrap();
+    tokio::time::sleep(Duration::from_millis(10)).await;
+    settle().await;
+    assert_eq!(*r.fired.0.lock().unwrap(), vec![("flaky".to_owned(), T0 + 10)]);
+    assert_eq!(max_seq(&rusqlite::Connection::open(&db).unwrap()), 0, "rolled back");
+    assert_eq!(count(&db, "deadlines"), 1, "kept");
+    tokio::time::sleep(Duration::from_millis(60_000)).await;
+    settle().await;
+    let fired = r.fired.take();
+    assert_eq!(fired[1..], [("flaky".to_owned(), T0 + 60_010)]);
+    assert_eq!(count(&db, "deadlines"), 0);
 }
 
 #[tokio::test(start_paused = true)]

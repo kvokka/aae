@@ -14,6 +14,8 @@ use tokio::{
 const IDEMPOTENCY_KEEP_MS: i64 = 86_400_000;
 /// The longest the writer sleeps without reading the wall clock (deadlines are wall-clock times).
 const RECHECK_MS: i64 = 30_000;
+/// How long after a failed firing a deadline fires again.
+const DEADLINE_RETRY_MS: i64 = 60_000;
 
 pub type BoxFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
 
@@ -322,10 +324,14 @@ fn fire_deadlines<H: Handler>(conn: &mut Connection, handler: &mut H, now_ms: i6
         let fired = handler.deadline(&mut tx, &id).and_then(|()| settle(&mut tx, handler));
         match fired {
             Ok(()) => tx.tx.commit()?,
-            // A failing deadline is dropped rather than fired again forever; its effects are rolled back.
+            // Its effects are rolled back and it fires again later: a dropped deadline would leave a run with no exit
+            // or a schedule silent until the next start (invariant 14).
             Err(_) => {
                 drop(tx);
-                conn.execute("DELETE FROM deadlines WHERE id = ?1", [&id])?;
+                conn.execute(
+                    "UPDATE deadlines SET at_ms = ?2 WHERE id = ?1",
+                    params![id, now_ms + DEADLINE_RETRY_MS],
+                )?;
             }
         }
     }
