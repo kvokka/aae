@@ -22,6 +22,7 @@ run = [
   "cargo nextest run --locked --no-tests=warn",
   "cargo deny check",
   "cargo machete",
+  "scripts/unused-pub.sh",
   "scripts/budget-selftest.sh",
   "scripts/budget.sh",
 ]
