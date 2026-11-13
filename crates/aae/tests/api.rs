@@ -155,3 +155,21 @@ async fn a_trigger_fired_by_hand_starts_a_run_and_skips_while_it_lives() {
         other => panic!("{other:?}"),
     }
 }
+
+/// A replayed reload answers as the first one did and leaves the config the daemon runs with alone.
+#[tokio::test]
+async fn a_replayed_reload_keeps_the_config_it_applied() {
+    let d = Daemon::start(|_| {}).await;
+    let reload = d.post("/v1/config/reload", json!({}), Some("r1")).await.unwrap();
+    assert_eq!(reload["config_generation"], 2);
+    let project = "[rigs.web]\npath = \"web\"\n\
+        [[trigger]]\nname = \"sweep\"\nevery = \"24h\"\nrun = \"slow\"\nrig = \"web\"\n";
+    fs::write(d.dir.path().join("config/aae/shop/aae.toml"), project).unwrap();
+    let replay = d.post("/v1/config/reload", json!({}), Some("r1")).await.unwrap();
+    assert_eq!(replay, reload);
+    let triggers = d.get("/v1/triggers").await;
+    assert_eq!(triggers, json!([]), "the file read by the replay is not applied");
+    let fresh = d.post("/v1/config/reload", json!({}), Some("r2")).await.unwrap();
+    assert_eq!(fresh["config_generation"], 3);
+    assert_eq!(d.get("/v1/triggers").await[0]["trigger"], "shop.sweep");
+}

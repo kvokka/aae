@@ -129,7 +129,7 @@
     },
     "/v1/config/reload": {
       "post": {
-        "summary": "Reads the config file again: new runs and the schedules take it, running runs keep their snapshot, idle\ninstances stop. A file with errors changes nothing (400 with the errors); a change of the harnesses or the\ntrackers needs a daemon restart (409).",
+        "summary": "Reads the config file again: new runs and the schedules take it, running runs keep their snapshot, idle\ninstances no agent uses any more stop. A file with errors changes nothing (400 with the errors); a change of the\nharnesses or the trackers needs a daemon restart (409). A replayed key answers as before and applies nothing.",
         "operationId": "reload",
         "parameters": [
           {

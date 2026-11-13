@@ -150,6 +150,7 @@ pub(crate) async fn run(paths: Paths) -> Result<(), String> {
             "socket": paths.socket, "started_at": aae_core::rfc3339_ms(Clock::system().now_ms()),
         }),
         config: RwLock::new(config),
+        applied: tokio::sync::Mutex::new(1),
         load: Box::new(move || load(&paths.config)),
     };
     let stop = stop_signal().map_err(|e| format!("signals: {e}"))?;

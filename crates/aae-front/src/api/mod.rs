@@ -37,6 +37,9 @@ pub struct Api {
     pub daemon: Value,
     /// The config the daemon runs with; a reload replaces it.
     pub config: RwLock<Arc<Config>>,
+    /// The generation `config` is (1 at start); held from reading the file to replacing `config`, so reloads apply
+    /// in order and a replayed reload does not replace it.
+    pub applied: tokio::sync::Mutex<u64>,
     /// Reads the daemon's config file with every check a start makes, or says what is wrong in it.
     pub load: Box<dyn Fn() -> Result<Config, Vec<String>> + Send + Sync>,
 }

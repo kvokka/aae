@@ -162,18 +162,23 @@ pub(crate) async fn check(state: State) -> Reply {
 }
 
 /// Reads the config file again: new runs and the schedules take it, running runs keep their snapshot, idle
-/// instances stop. A file with errors changes nothing (400 with the errors); a change of the harnesses or the
-/// trackers needs a daemon restart (409).
+/// instances no agent uses any more stop. A file with errors changes nothing (400 with the errors); a change of the
+/// harnesses or the trackers needs a daemon restart (409). A replayed key answers as before and applies nothing.
 #[utoipa::path(post, path = "/v1/config/reload",
     params(("Idempotency-Key" = Option<String>, Header)),
     responses((status = OK, body = Object), (status = BAD_REQUEST, body = Object), (status = CONFLICT, body = Object)))]
 pub(crate) async fn reload(state: State, headers: HeaderMap) -> Reply {
+    let mut applied = state.applied.lock().await;
     let config = Arc::new((state.load)().map_err(|errors| {
         let mut e = ApiError::new(StatusCode::BAD_REQUEST, "config_error", "the config has errors");
         e.extra = json!({ "errors": errors });
         e
     })?);
     let reply = state.core.send(key(&headers), Msg::Reload(config.clone())).await?;
-    *state.config.write().unwrap_or_else(std::sync::PoisonError::into_inner) = config;
+    let generation = reply["config_generation"].as_u64().unwrap_or_default();
+    if generation > *applied {
+        *applied = generation;
+        *state.config.write().unwrap_or_else(std::sync::PoisonError::into_inner) = config;
+    }
     Ok(Json(reply))
 }
