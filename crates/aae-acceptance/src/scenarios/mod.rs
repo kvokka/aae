@@ -15,6 +15,7 @@ mod c13_instances;
 mod c14_shared_mcp;
 mod c15_plugin;
 mod c16_beads;
+mod c17_mcp;
 mod c18_journal;
 mod c19_gates;
 
@@ -120,6 +121,12 @@ pub(crate) const ALL: &[Scenario] = &[
         title: "a bead: claim held through a crash, returned on failure, closed on pass, one run per bead",
         launch: Launch::Ci,
         run: |env| Box::pin(c16_beads::run(env)),
+    },
+    Scenario {
+        criterion: "17",
+        title: "a session of the cheapest real claude model calls list_formulas on the daemon's MCP and reports it",
+        launch: Launch::Request,
+        run: |env| Box::pin(c17_mcp::run(env)),
     },
     Scenario {
         criterion: "18",
