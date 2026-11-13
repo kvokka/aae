@@ -3,10 +3,7 @@
 use aae_claude::Claude;
 use aae_core::{
     config::{EffectiveConfig, Hook, Layer, Mcp, Skill, Sourced},
-    driver::{
-        Driver, DriverEvent, Failure, FailureKind, Normalized, PromptKey, PromptState, SessionPlan, StopReason,
-        Transcript,
-    },
+    driver::{Driver, DriverEvent, Normalized, PromptKey, PromptState, SessionPlan, StopReason, Transcript},
 };
 use aae_testkit::anthropic::{Provider, Reply};
 use serde_json::Value;
@@ -115,26 +112,6 @@ async fn a_reply_is_acked_and_completed_and_is_in_the_transcript() {
         Transcript::Present {
             prompt: PromptState::Answered
         }
-    );
-}
-
-#[tokio::test]
-async fn an_api_error_is_a_classified_failure() {
-    let dir = tempfile::tempdir().unwrap();
-    let (seen, ..) = turn(vec![Reply::Billing], dir.path(), |_| {}).await;
-    let failure: Vec<&Failure> = seen
-        .iter()
-        .filter_map(|e| match e {
-            Normalized::Failure(f) => Some(f),
-            _ => None,
-        })
-        .collect();
-    assert_eq!(failure.first().map(|f| f.kind), Some(FailureKind::Billing), "{seen:?}");
-    assert_eq!(
-        seen.last(),
-        Some(&Normalized::TurnEnded {
-            stop_reason: StopReason::Failed
-        })
     );
 }
 

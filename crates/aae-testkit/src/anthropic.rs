@@ -24,6 +24,8 @@ pub enum Reply {
     Text(String),
     /// A `tool_use` of `Bash` running the command (a permission request, a long or a background command).
     Bash(String),
+    /// The same with `run_in_background`: the turn may end while the command still runs.
+    Background(String),
     /// 429 `rate_limit_error` with `retry-after: 1`.
     RateLimited,
     /// The account quota: 429 with `retry-after: 3600` and the `anthropic-ratelimit-unified-*` headers of a
@@ -130,8 +132,9 @@ async fn answer(n: usize, reply: Reply, body: &Value) -> Response {
             let delta = json!({ "type": "text_delta", "text": text });
             message(n, model, stream, block, delta, "end_turn")
         }
-        Reply::Bash(command) => {
-            let input = json!({ "command": command, "description": "run a command" });
+        Reply::Bash(ref command) | Reply::Background(ref command) => {
+            let background = matches!(reply, Reply::Background(_));
+            let input = json!({ "command": command, "description": "run a command", "run_in_background": background });
             let block = json!({ "type": "tool_use", "id": format!("toolu_fake_{n}"), "name": "Bash", "input": input });
             let delta = json!({ "type": "input_json_delta", "partial_json": input.to_string() });
             message(n, model, stream, block, delta, "tool_use")
