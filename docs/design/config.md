@@ -343,3 +343,19 @@ or for a project).
   reaches (then `plugin.hook_failed` says why); the branch is deleted only when it is merged. A run with
   `continue_from` starts in the workdir of the run it continues (a session resumes where it ran); when that is a
   worktree of this plugin, it is brought back on its branch if it was removed, whether or not the run is chosen.
+
+### Where the bundled plugins end and the core begins
+
+The mechanisms live in the core: resuming an attempt, a new session that keeps ownership, issue gates, the counters
+the policy reads, the ceiling of 20 attempts per run, the watchdog and every deadline. The bundled plugins only
+choose a reaction and its thresholds; they never change a harness. With `default-policy` off, the "no plugin decision"
+column of contracts 1.3 applies: a failed attempt ends the run `failed` with class `infrastructure`. The
+bundled plugins are compiled into the same binary, need no external runtime, and are counted on their own budget
+line (`plugins` in `scripts/budget.sh`, 1500 lines) inside the release total.
+
+Postmortem 0001 (`docs/postmortems/0001-loop-stalled-after-transient-auth-error.md`) shaped `auth_required`: a
+proxy or WAF 403 passes by itself, so every `auth_required` first gets a bounded wait that each failure re-arms and
+whose next attempt is the probe; it goes to an operator (`until: null`) only after `auth_escalate_s` of failing, or
+when the next attempt would be the last under the attempts ceiling, so a large threshold never turns into
+`failed{attempts_ceiling}` and blind retries by new runs. The raw error stays in `failure.raw`. Not done: telling a
+real logout from a WAF page by the raw error; a real logout waits as long as a WAF 403 (up to `auth_escalate_s`).
