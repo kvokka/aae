@@ -14,6 +14,10 @@ codex = "0"
 "github:Dicklesworthstone/beads_rust" = "0.7.6"
 jq = "1.8.2"
 
+[tasks.test]
+description = "Unit and integration tests, with 1000 new chaos seeds; the local loop"
+run = "cargo nextest run --locked"
+
 [tasks.ci]
 description = "Checks that CI runs on every commit"
 run = [

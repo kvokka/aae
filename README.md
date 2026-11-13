@@ -50,11 +50,19 @@ all projects at once (checked with bv 0.25.0).
 or anyone acting on their behalf. Check whether that rider applies to you before you install br. Whether it applies to
 Claude or Codex agents running `br` inside an aae session has not been assessed.
 
-## Acceptance spec
+## Development
+
+- `mise run test` runs the unit and integration tests (about 30 s on 9 cores). The chaos stand among them plays 1000
+  new seeds each time and prints its base seeds; a failure names its seed and the command that replays it
+  (`AAE_CHAOS_SEED=<n> cargo nextest run -p aae-testkit --test chaos`).
+- `mise run ci` adds formatting, clippy, `cargo deny`, `cargo machete` and the line budgets; it stays about a minute.
+- `mise run acceptance-ci` runs the model-free acceptance scenarios (below) on real daemons; CI runs it on every
+  commit, locally it is optional.
+
 
 The acceptance criteria of the first release are executable scenarios in `crates/aae-acceptance`, each on a real
 `aae daemon` in a temporary directory tree. `mise run acceptance-ci` runs the scenarios without a model, as CI does on
-every commit (about 11 minutes: one of them watches an idle daemon for 10). `mise run acceptance` runs all of them,
+every commit (about a minute: one of them watches an idle daemon for 30 s). `mise run acceptance` runs all of them,
 including those that call a real model: they use the cheapest model, cost money and need your harness login. Pass
 criterion numbers to run only those: `cargo build -p aae && cargo run -p aae-acceptance -- --ci 3 19`. The report,
 with the date and the versions of `aae` and the harnesses, goes to `target/acceptance/report.md`. The criteria
