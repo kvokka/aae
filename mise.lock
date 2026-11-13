@@ -23,97 +23,98 @@ backend = "cargo:cargo-zigbuild"
 specifiers = ["0.24.1"]
 
 [[tools.claude]]
-version = "2.1.322"
+version = "2.1.323"
 backend = "aqua:anthropics/claude-code"
-specifiers = ["2.1.322"]
+specifiers = ["2.1"]
 
 [tools.claude."platforms.linux-arm64"]
-checksum = "sha256:65c1ad35e804ef463f34585d0c080afd4bf2e9018c7bad1f29efb8df4e9c3750"
+checksum = "sha256:808fa9c71caf7ebed9383d3e38bee6e7dd2fa80877ac12c6c27438786295099e"
 checksum_source = "mise-versions"
-url = "https://github.com/anthropics/claude-code/releases/download/v2.1.322/claude-linux-arm64.tar.gz"
-url_api = "https://api.github.com/repos/anthropics/claude-code/releases/assets/729756936"
+url = "https://github.com/anthropics/claude-code/releases/download/v2.1.323/claude-linux-arm64.tar.gz"
+url_api = "https://api.github.com/repos/anthropics/claude-code/releases/assets/741010436"
 
 [tools.claude."platforms.linux-arm64-musl"]
-checksum = "sha256:6a76c3d064b1f9af9995402a6e50498a7491eba15f48c98e0119a13b88bc2c19"
+checksum = "sha256:4ea5c26be8713cf3f0e4797a58fd99ed5ec09c2a6e62f68cc2bdffceba55e7b4"
 checksum_source = "mise-versions"
-url = "https://github.com/anthropics/claude-code/releases/download/v2.1.322/claude-linux-arm64-musl.tar.gz"
-url_api = "https://api.github.com/repos/anthropics/claude-code/releases/assets/729756940"
+url = "https://github.com/anthropics/claude-code/releases/download/v2.1.323/claude-linux-arm64-musl.tar.gz"
+url_api = "https://api.github.com/repos/anthropics/claude-code/releases/assets/741010433"
 
 [tools.claude."platforms.linux-x64"]
-checksum = "sha256:3d2bc5ae54d4d4cd63510e9fcca5b6d48d2b18806708df8c8f691aa486c5dca8"
+checksum = "sha256:522255678548859b9799b7b098c03a3aa286c9a9ede01957e35f4713ccc43631"
 checksum_source = "mise-versions"
-url = "https://github.com/anthropics/claude-code/releases/download/v2.1.322/claude-linux-x64.tar.gz"
-url_api = "https://api.github.com/repos/anthropics/claude-code/releases/assets/729757174"
+url = "https://github.com/anthropics/claude-code/releases/download/v2.1.323/claude-linux-x64.tar.gz"
+url_api = "https://api.github.com/repos/anthropics/claude-code/releases/assets/741010604"
 
 [tools.claude."platforms.linux-x64-musl"]
-checksum = "sha256:28a7eca835d0da7a2c70d8bb4aea62e90cc7446b30a4f21505390fe9957fd58c"
+checksum = "sha256:98521f31423e718f7351738e5c342d88d61d2c59f2c7a469b88c281ccc05196a"
 checksum_source = "mise-versions"
-url = "https://github.com/anthropics/claude-code/releases/download/v2.1.322/claude-linux-x64-musl.tar.gz"
-url_api = "https://api.github.com/repos/anthropics/claude-code/releases/assets/729756935"
+url = "https://github.com/anthropics/claude-code/releases/download/v2.1.323/claude-linux-x64-musl.tar.gz"
+url_api = "https://api.github.com/repos/anthropics/claude-code/releases/assets/741010437"
 
 [tools.claude."platforms.macos-arm64"]
-checksum = "sha256:0ff389f1a313f50778c2472c2f85882ca82c10156398c68cfc3c332004694646"
+checksum = "sha256:89a467ec2efb5b34bd9bad1a99d9c29eda804de03de5e2f65d787b72b1502361"
 checksum_source = "mise-versions"
-url = "https://github.com/anthropics/claude-code/releases/download/v2.1.322/claude-darwin-arm64.tar.gz"
-url_api = "https://api.github.com/repos/anthropics/claude-code/releases/assets/729756939"
+url = "https://github.com/anthropics/claude-code/releases/download/v2.1.323/claude-darwin-arm64.tar.gz"
+url_api = "https://api.github.com/repos/anthropics/claude-code/releases/assets/741010434"
 
 [tools.claude."platforms.macos-x64"]
-checksum = "sha256:7a7291c5ae01c8f8e91dc2636da43f905bd3cb52b1170229850f83f3fef194e1"
+checksum = "sha256:0c08c4d786c101237f33e3e1fcaf193d8afe479ae4a9cd2db20f645815393b7a"
 checksum_source = "mise-versions"
-url = "https://github.com/anthropics/claude-code/releases/download/v2.1.322/claude-darwin-x64.tar.gz"
-url_api = "https://api.github.com/repos/anthropics/claude-code/releases/assets/729756937"
+url = "https://github.com/anthropics/claude-code/releases/download/v2.1.323/claude-darwin-x64.tar.gz"
+url_api = "https://api.github.com/repos/anthropics/claude-code/releases/assets/741010435"
 
 [tools.claude."platforms.windows-x64"]
-checksum = "sha256:f0453dac97a91f2a71b70c7cfc93cc392098056963628df84f9396a1b7a90471"
+checksum = "sha256:8d3a40ac0e124382e084b8777e43aaa1305a213cf39bdd3e8ea60b65ca3dc84b"
 checksum_source = "mise-versions"
-url = "https://github.com/anthropics/claude-code/releases/download/v2.1.322/claude-win32-x64.zip"
-url_api = "https://api.github.com/repos/anthropics/claude-code/releases/assets/729757227"
+url = "https://github.com/anthropics/claude-code/releases/download/v2.1.323/claude-win32-x64.zip"
+url_api = "https://api.github.com/repos/anthropics/claude-code/releases/assets/741010692"
 
 [[tools.codex]]
-version = "0.167.2"
+version = "0.168.0"
 backend = "aqua:openai/codex"
-specifiers = ["0.167.2"]
+specifiers = ["0"]
 
 [tools.codex."platforms.linux-arm64"]
-checksum = "sha256:56b08c1214e062a5b61684bacb5033c4372a01062a47c87c49a32be83af70695"
-url = "https://github.com/openai/codex/releases/download/rust-v0.167.2/codex-package-aarch64-unknown-linux-musl.tar.gz"
-url_api = "https://api.github.com/repos/openai/codex/releases/assets/737166959"
+checksum = "sha256:127d5990f5b48bb327cf48a1bd1d09d65b7a626186158608189b37e84846dd07"
+checksum_source = "mise-versions"
+url = "https://github.com/openai/codex/releases/download/rust-v0.168.0/codex-package-aarch64-unknown-linux-musl.tar.gz"
+url_api = "https://api.github.com/repos/openai/codex/releases/assets/742171575"
 
 [tools.codex."platforms.linux-arm64-musl"]
-checksum = "sha256:56b08c1214e062a5b61684bacb5033c4372a01062a47c87c49a32be83af70695"
+checksum = "sha256:127d5990f5b48bb327cf48a1bd1d09d65b7a626186158608189b37e84846dd07"
 checksum_source = "mise-versions"
-url = "https://github.com/openai/codex/releases/download/rust-v0.167.2/codex-package-aarch64-unknown-linux-musl.tar.gz"
-url_api = "https://api.github.com/repos/openai/codex/releases/assets/737166959"
+url = "https://github.com/openai/codex/releases/download/rust-v0.168.0/codex-package-aarch64-unknown-linux-musl.tar.gz"
+url_api = "https://api.github.com/repos/openai/codex/releases/assets/742171575"
 
 [tools.codex."platforms.linux-x64"]
-checksum = "sha256:3d77be1748d35a4bb0e7f8752cde3b11890c63338e8c599f01eafa4a59e17b3d"
+checksum = "sha256:3acbff91c0a8e30767d47c8b6941279a603ab4087280aa3e546537cef3622cb8"
 checksum_source = "mise-versions"
-url = "https://github.com/openai/codex/releases/download/rust-v0.167.2/codex-package-x86_64-unknown-linux-musl.tar.gz"
-url_api = "https://api.github.com/repos/openai/codex/releases/assets/737172355"
+url = "https://github.com/openai/codex/releases/download/rust-v0.168.0/codex-package-x86_64-unknown-linux-musl.tar.gz"
+url_api = "https://api.github.com/repos/openai/codex/releases/assets/742176091"
 
 [tools.codex."platforms.linux-x64-musl"]
-checksum = "sha256:3d77be1748d35a4bb0e7f8752cde3b11890c63338e8c599f01eafa4a59e17b3d"
+checksum = "sha256:3acbff91c0a8e30767d47c8b6941279a603ab4087280aa3e546537cef3622cb8"
 checksum_source = "mise-versions"
-url = "https://github.com/openai/codex/releases/download/rust-v0.167.2/codex-package-x86_64-unknown-linux-musl.tar.gz"
-url_api = "https://api.github.com/repos/openai/codex/releases/assets/737172355"
+url = "https://github.com/openai/codex/releases/download/rust-v0.168.0/codex-package-x86_64-unknown-linux-musl.tar.gz"
+url_api = "https://api.github.com/repos/openai/codex/releases/assets/742176091"
 
 [tools.codex."platforms.macos-arm64"]
-checksum = "sha256:e791290651bce41938fb160b5de2bd9ff8bcf3401ca3e236c73f485fca4be1bb"
+checksum = "sha256:2795694bb5b89234e3da0dd0c2c9e7a71764521080caed17bf12c1e0458058ca"
 checksum_source = "mise-versions"
-url = "https://github.com/openai/codex/releases/download/rust-v0.167.2/codex-package-aarch64-apple-darwin.tar.gz"
-url_api = "https://api.github.com/repos/openai/codex/releases/assets/737163825"
+url = "https://github.com/openai/codex/releases/download/rust-v0.168.0/codex-package-aarch64-apple-darwin.tar.gz"
+url_api = "https://api.github.com/repos/openai/codex/releases/assets/742169550"
 
 [tools.codex."platforms.macos-x64"]
-checksum = "sha256:d0c2ff50bf7366ab89d8213a498eead05ca01515098b290fb37a9b8dcad3e054"
+checksum = "sha256:67993fcb3051a1261c68751e1171f9c5a01662dfa42268cc58ea39cd175981a5"
 checksum_source = "mise-versions"
-url = "https://github.com/openai/codex/releases/download/rust-v0.167.2/codex-package-x86_64-apple-darwin.tar.gz"
-url_api = "https://api.github.com/repos/openai/codex/releases/assets/737169064"
+url = "https://github.com/openai/codex/releases/download/rust-v0.168.0/codex-package-x86_64-apple-darwin.tar.gz"
+url_api = "https://api.github.com/repos/openai/codex/releases/assets/742172928"
 
 [tools.codex."platforms.windows-x64"]
-checksum = "sha256:20b0f94105f40b617bf209b1679b8674ab6d3d8f303e767ae43cf1860a8705da"
+checksum = "sha256:f6757eb2a4daaad569b01b3ea519c9009d38d0bac5fc4082ff02517e00537797"
 checksum_source = "mise-versions"
-url = "https://github.com/openai/codex/releases/download/rust-v0.167.2/codex-package-x86_64-pc-windows-msvc.tar.gz"
-url_api = "https://api.github.com/repos/openai/codex/releases/assets/737170578"
+url = "https://github.com/openai/codex/releases/download/rust-v0.168.0/codex-package-x86_64-pc-windows-msvc.tar.gz"
+url_api = "https://api.github.com/repos/openai/codex/releases/assets/742174778"
 
 [[tools."github:Dicklesworthstone/beads_rust"]]
 version = "0.7.6"
