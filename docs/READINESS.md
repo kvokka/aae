@@ -4,8 +4,8 @@ Per-component readiness on the 0–10 scale of spec §14: 0 nothing; 2 contract 
 path works by hand; 6 model-free tests green, including failure paths; 8 the component's §15 criteria green on the
 owner's host; 10 real owner runs without intervention (criterion 20). Updated at the end of every work session.
 
-Assessed 2026-11-13 after cycle 39 (WP-39: criterion 2 and 8 x 5 on the real codex, the host provider's key under host inheritance), with the scores of review 38 as the base: every component at 8, all criteria of §15 green on the owner's host except those left to the owner (20, 21, the claude half of 10).
-<!-- MEASURE id=readiness date=2026-11-13 ver=WP-39 env=linux-arm64-orbstack src=docs/READINESS.md note="self-assessment by the implementing agent; re-assess at the end of every session" -->
+Assessed 2026-11-14 after cycle 40 (WP-39: the whole `mise run acceptance` green, 21 of 21, with the request scenarios on claude haiku and codex gpt-5.6-luna; an isolated codex logs in by the host model provider), with the scores of review 38 as the base: every component at 8, all criteria of §15 green on the owner's host except those left to the owner (20, 21, the claude half of 10).
+<!-- MEASURE id=readiness date=2026-11-14 ver=WP-39 env=linux-arm64-orbstack src=docs/READINESS.md note="self-assessment by the implementing agent; re-assess at the end of every session" -->
 
 | Component | Score | Missing for the next point |
 |---|---|---|
