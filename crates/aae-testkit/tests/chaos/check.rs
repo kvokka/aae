@@ -88,8 +88,18 @@ pub(crate) fn check(w: &World, play: &mut Play) -> Result<(), String> {
         ));
     }
     for (run, state, attempt, waiting) in &all {
-        if *attempt > MAX_ATTEMPTS {
-            return Err(format!("{run}: attempt {attempt} over the ceiling (invariant 16)"));
+        // Attempts that parked on an account gate are outside the ceiling (spec §2.1 item 12).
+        let counted: u32 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM attempts WHERE run = ?1 AND waited = 0",
+                [run],
+                |r| r.get(0),
+            )
+            .unwrap();
+        if counted > MAX_ATTEMPTS {
+            return Err(format!(
+                "{run}: {counted} attempts of {attempt} over the ceiling (invariant 16)"
+            ));
         }
         let open: i64 = conn
             .query_row(

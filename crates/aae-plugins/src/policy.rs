@@ -2,7 +2,7 @@
 //! count comes from the event (`attempts`, `gates`, `keys`), so the policy keeps no state and the same event always
 //! gets the same decision: a hook run again after a daemon crash decides the same.
 
-use aae_core::{parse_rfc3339_ms, rfc3339_ms, run::MAX_ATTEMPTS};
+use aae_core::{parse_rfc3339_ms, rfc3339_ms};
 use serde::Deserialize;
 use serde_json::{Value, json};
 
@@ -22,13 +22,11 @@ pub(crate) struct Params {
     backoff_cap_s: i64,
     /// From this many consecutive rate limits on, the model gate closes instead of a backoff.
     backoff_park_from: usize,
-    /// The bounded wait on `auth_required` (postmortem 0001): the account gate closes for
-    /// `min(base · 2^(n−1), cap)` after `n` consecutive such failures; the attempt after it probes the cause.
+    /// The wait on `auth_required` and `billing` (postmortem 0001, spec §2.1 item 12): the account gate closes for
+    /// `min(base · 2^(n−1), cap)` after `n` consecutive such failures; the attempt after it probes the cause. No
+    /// escalation to an operator, and the core does not count these attempts against its ceiling.
     auth_backoff_base_s: i64,
     auth_backoff_cap_s: i64,
-    /// Once `auth_required` has lasted this long, or the next attempt would be the last under the core's attempts
-    /// ceiling, the account gate stays closed until an operator opens it.
-    auth_escalate_s: i64,
     /// An attempt shorter than this that crashed is a rapid crash.
     rapid_s: i64,
     /// This many consecutive rapid crashes close the agent gate for `crash_pause_s`.
@@ -51,8 +49,7 @@ impl Default for Params {
             backoff_cap_s: 5 * 60,
             backoff_park_from: 3,
             auth_backoff_base_s: 30,
-            auth_backoff_cap_s: 30 * 60,
-            auth_escalate_s: 4 * 60 * 60,
+            auth_backoff_cap_s: 60 * 60,
             rapid_s: 30,
             crash_loop: 5,
             crash_pause_s: 5 * 60,
@@ -130,27 +127,18 @@ fn attempt_failed(event: &Value, p: &Params) -> Value {
                 resume(backoff(p.backoff_base_s, p.backoff_cap_s, n))
             }
         }
-        // An auth failure may be a passing proxy or WAF error (postmortem 0001): a bounded wait, re-armed on every
-        // failure, until it has lasted `auth_escalate_s` since the first attempt of the streak started.
-        "auth_required" | "billing" => {
-            let n = streak(&[kind]);
-            let since = attempts
-                .len()
-                .checked_sub(n)
-                .and_then(|i| time(&attempts.get(i)?["started_at"]));
-            // Also escalate when the next attempt is the last the core allows: past the attempts ceiling the run
-            // fails, the account gate is gone and new runs start a fresh streak, a blind retry forever.
-            let ceiling = attempts.len() + 1 >= usize::try_from(MAX_ATTEMPTS).unwrap_or(usize::MAX);
-            let lasting = kind == "billing" || ceiling || now - since.unwrap_or(now) >= p.auth_escalate_s * 1000;
-            match key("account:") {
-                account if !lasting => park(
-                    account,
+        // An auth failure may be a passing proxy or WAF error (postmortem 0001): a growing wait, re-armed on every
+        // failure. A run without an account key cannot park: it fails.
+        "auth_required" | "billing" => match key("account:") {
+            Some(account) => {
+                let n = streak(&[kind]);
+                park(
+                    Some(account),
                     Some(now + backoff(p.auth_backoff_base_s, p.auth_backoff_cap_s, n) * 1000),
-                ),
-                Some(account) => park(Some(account), None),
-                None => fail(kind),
+                )
             }
-        }
+            None => fail(kind),
+        },
         "context_overflow" | "transcript_divergence" => json!({ "decision": "new_session" }),
         "config_error" => fail_closing(kind, key("agent:")),
         "workspace_failure" => fail_closing(kind, key("rig:")),

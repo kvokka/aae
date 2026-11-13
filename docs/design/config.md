@@ -336,7 +336,7 @@ or for a project).
 - `default-policy` (on unless `enabled = false`) decides on `run.attempt_failed` and
   `run.turn_ended_without_outcome` as in contracts 10. Parameters, all integers: `quota_margin_s` (60),
   `quota_wait_s` (1800), `model_pause_s` (600), `backoff_base_s` (10), `backoff_cap_s` (300), `backoff_park_from`
-  (3), `auth_backoff_base_s` (30), `auth_backoff_cap_s` (1800), `auth_escalate_s` (14400), `rapid_s` (30),
+  (3), `auth_backoff_base_s` (30), `auth_backoff_cap_s` (3600), `rapid_s` (30),
   `crash_loop` (5), `crash_pause_s` (300), `resume_failures` (3), `unknown_after_s` (30), `unknown_retries` (3).
 - `worktree` (off) gives each run of the agents in `agents` and the formulas in `formulas` (bare or qualified names;
   both empty: every run) a git worktree of its rig on the branch `aae/<run>`, in `<git common dir>/aae/worktrees/<run>`,
@@ -348,15 +348,16 @@ or for a project).
 ### Where the bundled plugins end and the core begins
 
 The mechanisms live in the core: resuming an attempt, a new session that keeps ownership, issue gates, the counters
-the policy reads, the ceiling of 20 attempts per run, the watchdog and every deadline. The bundled plugins only
+the policy reads, the ceiling of 20 attempts per run (waits on an account gate not counted), the watchdog and every deadline. The bundled plugins only
 choose a reaction and its thresholds; they never change a harness. With `default-policy` off, the "no plugin decision"
 column of contracts 1.3 applies: a failed attempt ends the run `failed` with class `infrastructure`. The
 bundled plugins are compiled into the same binary, need no external runtime, and are counted on their own budget
 line (`plugins` in `scripts/budget.sh`, 1500 lines) inside the release total.
 
-Postmortem 0001 (`docs/postmortems/0001-loop-stalled-after-transient-auth-error.md`) shaped `auth_required`: a
-proxy or WAF 403 passes by itself, so every `auth_required` first gets a bounded wait that each failure re-arms and
-whose next attempt is the probe; it goes to an operator (`until: null`) only after `auth_escalate_s` of failing, or
-when the next attempt would be the last under the attempts ceiling, so a large threshold never turns into
-`failed{attempts_ceiling}` and blind retries by new runs. The raw error stays in `failure.raw`. Not done: telling a
-real logout from a WAF page by the raw error; a real logout waits as long as a WAF 403 (up to `auth_escalate_s`).
+Postmortem 0001 (`docs/postmortems/0001-loop-stalled-after-transient-auth-error.md`) and the owner's decision of
+2026-11-14 (spec §2.1 item 12) shaped `auth_required` and `billing`: a proxy or WAF 403 passes by itself, so every
+such failure parks the account gate for a wait that grows with each failure in a row up to an hour, and the next
+attempt is the probe. Nothing goes to an operator and there is no alerting: the journal and the logs tell it. The
+core does not count these attempts against its ceiling, so a long outage never ends in `failed{attempts_ceiling}`.
+The raw error stays in `failure.raw`. Not done: telling a real logout from a WAF page by the raw error; a real
+logout is probed once an hour until someone logs in.

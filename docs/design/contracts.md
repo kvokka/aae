@@ -484,7 +484,7 @@ session and exec step of the project gets `BEADS_DIR` (layer: project) and `BD_A
 `interrupted` in §9.3 names the daemon restart only; here it is every attempt failure waiting for its decision,
 so that the state machine has one place where `run.attempt_failed` is decided.
 
-Ceilings of the core (invariant 16): 20 attempts per run, 10 remarks per attempt (`continue` after a hollow turn
+Ceilings of the core (invariant 16): 20 attempts per run, not counting the attempts whose failure the decision parked on an `account:` gate (spec §2.1 item 12: a wait on the account does not spend the ceiling; the attempt is marked `waited` in the state), 10 remarks per attempt (`continue` after a hollow turn
 and `remark` after `run.finishing` both count). The eleventh fails the run with reason `remarks_ceiling` and the class
 the event would give: `hollow_done` for `continue`, `check` for `remark`. Between turns (from idle without background
 to the next prompt) the step `timeout` pauses like in `requires_action`. Trigger depth (§9.5): a trigger does not start a run deeper than 10 (`trigger.skipped{depth}`); the limit is fixed, with no setting.
@@ -662,8 +662,7 @@ not have (an exec run has no agent key, a run whose harness reported no account 
 | `quota_exhausted` | `park{gate: account, until: retry_at + 60 s, then: resume}`; no `retry_at` → `until` now + 30 min |
 | `rate_limited`, `overloaded` with `retried_by_harness` | `park{gate: model, until: now + 10 min, then: resume}` |
 | `rate_limited`, `overloaded` without | `resume{after: min(10 s · 2^(n−1), 5 min)}` over `n` consecutive such failures; from the 3rd — the `park` above |
-| `auth_required` | `park{gate: account, until: now + min(30 s · 2^(n−1), 30 min), then: resume}` over `n` consecutive such failures (postmortem 0001: a proxy or WAF error passes by itself; the attempt after the wait is the probe); `until: null` (an operator must act) once the first attempt of the streak started 4 h ago or more, or when the next attempt would be the last under the core's ceiling of 20 attempts per run, so the escalation never gives way to `failed{attempts_ceiling}` and a blind retry by new runs |
-| `billing` | `park{gate: account, until: null, then: resume}` |
+| `auth_required`, `billing` | `park{gate: account, until: now + min(30 s · 2^(n−1), 1 h), then: resume}` over `n` consecutive failures of that kind (postmortem 0001: a proxy or WAF error passes by itself; the attempt after the wait is the probe); never escalated to an operator, and these attempts do not count against the core's ceiling (spec §2.1 item 12); no account key: `fail` |
 | `context_overflow`, `transcript_divergence` | `new_session` |
 | `config_error` | `fail{gate: agent, until: null}` |
 | `harness_crash`, `adapter_crash` | `resume`; 5 consecutive attempts shorter than 30 s → `park{gate: agent, until: now + 5 min, then: resume}`; 3 consecutive failed resumes → `new_session` |

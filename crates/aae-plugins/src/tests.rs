@@ -84,7 +84,7 @@ fn default_policy_follows_contracts_10() {
             failed("unknown", none.clone(), &[("resume", "unknown", 9); 4], json!([])),
             json!({"decision": "fail", "reason": "unknown"}),
         ),
-        // Postmortem 0001: a bounded wait on the account, longer with every failure in a row.
+        // Postmortem 0001, spec §2.1 item 12: a wait on the account, longer with every failure in a row.
         (
             failed(
                 "auth_required",
@@ -98,7 +98,7 @@ fn default_policy_follows_contracts_10() {
         (
             failed("billing", none.clone(), &[("resume", "billing", 9)], json!([])),
             json!({"decision": "park", "then": "resume", "gate": {"key": "account:claude/a1",
-                "until": null, "reason": "billing"}}),
+                "until": "2026-11-13T12:00:30.000Z", "reason": "billing"}}),
         ),
         // A gate that closed while the attempt ran answers its failure: park on it, no new closure.
         (
@@ -190,17 +190,15 @@ fn every_policy_threshold_comes_from_the_config() {
     assert_eq!(until(&based), "2026-11-13T12:00:02.000Z");
     let capped = policy(&auth, json!({"auth_backoff_cap_s": 5}));
     assert_eq!(until(&capped), "2026-11-13T12:00:05.000Z");
-    let escalated = policy(&auth, json!({"auth_escalate_s": 3600}));
-    assert_eq!(
-        escalated["gate"],
-        json!({"key": "account:claude/a1", "until": null, "reason": "auth_required"})
+    assert!(check("default-policy", &json!({"auth_escalate_s": 3600})).is_err());
+    // However long it lasts, the wait grows to an hour and never goes to an operator.
+    let long = failed(
+        "auth_required",
+        none.clone(),
+        &[("resume", "auth_required", 9); 40],
+        json!([]),
     );
-    // Younger than `auth_escalate_s`, but the next attempt is the last under the core's ceiling: escalate now.
-    let near_ceiling = &[("resume", "auth_required", 9); aae_core::run::MAX_ATTEMPTS as usize - 1];
-    let ceiling = failed("auth_required", none.clone(), near_ceiling, json!([]));
-    assert_eq!(policy(&ceiling, json!({}))["gate"]["until"], Value::Null);
-    let below = failed("auth_required", none.clone(), &near_ceiling[1..], json!([]));
-    assert_eq!(until(&policy(&below, json!({}))), "2026-11-13T12:30:00.000Z");
+    assert_eq!(until(&policy(&long, json!({}))), "2026-11-13T13:00:00.000Z");
 
     let unknown = failed("unknown", none, &[("resume", "unknown", 9); 2], json!([]));
     assert_eq!(policy(&unknown, json!({}))["decision"], "resume");

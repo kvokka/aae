@@ -96,6 +96,12 @@ impl RunHandler {
             }
             ("interrupted", Some(Decision::Park { gate, then })) => {
                 self.policy_gate(tx, Some(&gate))?;
+                if gate.key.starts_with("account:") {
+                    tx.sql().execute(
+                        "UPDATE attempts SET waited = 1 WHERE run = ?1 AND n = ?2",
+                        params![row.id, row.attempt],
+                    )?;
+                }
                 self.retry(tx, row, &then, None)
             }
             ("running", None) => self.terminal(tx, row, "failed", Some("hollow_done"), "no_decision"),
@@ -117,7 +123,7 @@ impl RunHandler {
     }
 
     /// Schedules the next attempt of an `interrupted` run after `after` (`None`: parks it on its closed gate),
-    /// within the attempts ceiling.
+    /// within the attempts ceiling: waits on an account gate (owner decision, spec §2.1 item 12) do not count.
     fn retry(
         &mut self,
         tx: &mut Tx<'_>,
@@ -125,7 +131,12 @@ impl RunHandler {
         kind: &str,
         after: Option<std::time::Duration>,
     ) -> Result<(), Error> {
-        if row.attempt >= MAX_ATTEMPTS {
+        let counted: u32 = tx.sql().query_row(
+            "SELECT COUNT(*) FROM attempts WHERE run = ?1 AND waited = 0",
+            [&row.id],
+            |r| r.get(0),
+        )?;
+        if counted >= MAX_ATTEMPTS {
             return self.terminal(tx, row, "failed", Some("infrastructure"), "attempts_ceiling");
         }
         let Some(after) = after else {

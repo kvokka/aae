@@ -1,12 +1,12 @@
-//! Postmortem 0001 on the scripted driver and the bundled `default-policy`: a passing 403 parks the account for a
-//! bounded wait, the attempt after it probes the cause, and only a 403 that lasts waits for an operator. Bundled hooks
-//! run on blocking threads, so real time.
+//! Postmortem 0001 on the scripted driver and the bundled `default-policy`: a 403 parks the account for a growing
+//! wait, the attempt after it probes the cause, and a 403 that lasts keeps waiting, past the attempts ceiling, with no
+//! operator (spec §2.1 item 12). Bundled hooks run on blocking threads, so real time.
 
 mod common;
 
 use aae_core::{
     driver::{Failure, FailureKind, Normalized, Source},
-    run::{ExecHooks, Msg, Outcome, Verdict},
+    run::{ExecHooks, MAX_ATTEMPTS, Msg, Outcome, Verdict},
 };
 use aae_testkit::Step;
 use common::{World, hollow_turn, world_with};
@@ -101,26 +101,46 @@ async fn a_passing_403_with_a_lost_or_doubled_end_recovers_by_itself() {
 }
 
 #[tokio::test]
-async fn a_lasting_403_waits_for_an_operator_after_the_configured_time() {
-    let w = world("auth_backoff_base_s = 1\nauth_backoff_cap_s = 1\nauth_escalate_s = 2\n");
-    for _ in 0..5 {
+async fn a_lasting_403_keeps_waiting_past_the_attempts_ceiling() {
+    // Spec §2.1 item 12: no operator, and the waits on the account gate do not count against the ceiling.
+    let w = world("auth_backoff_base_s = 0\nauth_backoff_cap_s = 0\n");
+    let past = MAX_ATTEMPTS + 2;
+    for _ in 0..past {
         w.driver.script(vec![forbidden()]);
     }
+    let mut turn = hollow_turn();
+    turn.insert(1, Step::Wait(Duration::from_secs(2)));
+    w.driver.script(turn);
     let run = w.create().await;
-    w.until(Some(&run), "run.parked", 2).await;
-    tokio::time::sleep(Duration::from_secs(3)).await;
-    // Two bounded waits, then the gate closes for good: no more attempts until an operator opens it.
-    let until: Vec<Value> = w
-        .every(&run, "run.parked")
-        .iter()
-        .map(|p| p["gate"]["until"].clone())
-        .collect();
-    assert_eq!(until.len(), 3, "{until:?}");
-    assert!(
-        until[0].is_string() && until[1].is_string() && until[2].is_null(),
-        "{until:?}"
-    );
-    assert_eq!(w.every(&run, "run.attempt_failed").len(), 3);
-    w.core.send(None, Msg::OpenGate { key: ACCOUNT.into() }).await.unwrap();
-    w.until(Some(&run), "run.attempt_failed", 3).await;
+    let started = Instant::now();
+    let token = loop {
+        if let Some(token) = w.driver.token(&run, past + 1) {
+            break token;
+        }
+        assert!(
+            started.elapsed() < Duration::from_secs(20),
+            "no attempt past the ceiling"
+        );
+        tokio::time::sleep(Duration::from_millis(20)).await;
+    };
+    let outcome = Outcome {
+        result: Verdict::Pass,
+        summary: "done".into(),
+        data: None,
+    };
+    w.core
+        .send(
+            None,
+            Msg::Finish {
+                run: run.clone(),
+                token,
+                outcome,
+            },
+        )
+        .await
+        .unwrap();
+    w.until(Some(&run), "run.passed", 0).await;
+    let failed = w.every(&run, "run.attempt_failed");
+    assert_eq!(failed.len(), past as usize);
+    assert!(failed.iter().all(|f| f["failure"]["kind"] == "auth_required"));
 }

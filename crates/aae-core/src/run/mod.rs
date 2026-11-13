@@ -38,7 +38,7 @@ use std::{
 };
 use tokio::{sync::mpsc, task::JoinHandle};
 
-/// Ceiling of the core: attempts per run (invariant 16).
+/// Ceiling of the core: attempts per run, not counting those that parked on an account gate (invariant 16).
 pub const MAX_ATTEMPTS: u32 = 20;
 pub use crate::process::Exit;
 pub use finish::MAX_REMARKS;

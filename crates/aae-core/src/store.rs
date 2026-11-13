@@ -189,6 +189,8 @@ pub fn open(path: &Path) -> rusqlite::Result<Connection> {
         (11, "ALTER TABLE attempts ADD COLUMN services TEXT;"),
         // The triggers the operator switched off, by `<project>/<rig>/<trigger>`.
         (12, "CREATE TABLE triggers_off (id TEXT PRIMARY KEY);"),
+        // An attempt whose failure parked the run on an account gate: outside the attempts ceiling (invariant 16).
+        (13, "ALTER TABLE attempts ADD COLUMN waited INTEGER NOT NULL DEFAULT 0;"),
     ]
     .into_iter()
     .filter(|(to, _)| *to > version)
