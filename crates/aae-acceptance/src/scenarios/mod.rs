@@ -23,7 +23,7 @@ use crate::{
     Launch, Scenario,
     daemon::{Daemon, write},
 };
-use std::{path::Path, process::Command};
+use std::{fs, os::unix::fs::PermissionsExt, path::Path, process::Command};
 
 /// Kept apart from the marker text, so the marker check of CI does not take the template for a marker.
 pub(crate) const MARK: &str = "MEASURE";
@@ -311,4 +311,13 @@ pub(crate) fn tracker(root: &Path) {
     let git = Command::new("git").args(["init", "-q"]).current_dir(&project).status();
     assert!(git.is_ok_and(|s| s.success()), "git init");
     br(root, &["init", "--prefix", "t", "-q"]);
+}
+
+/// Writes an executable script `name` into rig `web` of `shop` under `root` that waits `secs` seconds without a
+/// `sleep` process: a resumed model that looks for its interrupted command with `pgrep sleep` would otherwise wait on
+/// the commands of the scenarios running beside it.
+pub(crate) fn hold(root: &Path, name: &str, secs: u32) {
+    let path = root.join(format!("config/aae/shop/web/{name}"));
+    write(&path, format!("#!/usr/bin/env bash\nread -rt {secs} <> <(:) || true\n"));
+    fs::set_permissions(&path, fs::Permissions::from_mode(0o755)).unwrap();
 }

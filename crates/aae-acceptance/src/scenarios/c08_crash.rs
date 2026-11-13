@@ -6,7 +6,7 @@
 //! after `daemon_crash` is covered on the scripted driver (`aae-testkit/tests/recovery.rs`). The request part of the
 //! criterion, [`on_live`], kills the daemon five times in the middle of a real claude or codex turn, mid-tool.
 
-use super::{Live, exec_formula};
+use super::{Live, exec_formula, hold};
 use crate::{
     Env,
     daemon::{Daemon, write},
@@ -166,8 +166,10 @@ fn described(pids: &[u32]) -> Vec<String> {
 /// turn while its shell tool runs; every run resumes and passes by the finisher, and its follower fires once.
 pub(crate) async fn on_live(env: Arc<Env>, live: Live) -> String {
     let aae = env.aae.display().to_string();
+    let hold_name = format!("hold-{}", live.name());
     let mut d = Daemon::start_on_host(&env, |root| {
         live.agent(root);
+        hold(root, &hold_name, 15);
         write(
             root.join("config/aae/shop/aae.toml"),
             format!("[rigs.web]\npath = \"web\"\n{TRIGGER}"),
@@ -179,7 +181,7 @@ pub(crate) async fn on_live(env: Arc<Env>, live: Live) -> String {
         write(
             root.join("config/aae/shop/formulas/work.md"),
             format!(
-                "Run this shell command once, in the foreground, and wait for it: `touch started && sleep 15`. \
+                "Run this shell command once, in the foreground, and wait for it: `touch started && ./{hold_name}`. \
                  Then run this shell command once: `{aae} finish pass --summary done`. Then stop."
             ),
         );
@@ -282,7 +284,10 @@ async fn settle(d: &Daemon, work: &[String]) -> usize {
     assert_eq!(parents, work.iter().cloned().collect(), "every passed run fired once");
     // An app-server the live daemon keeps for reuse until it idles out is its own, not an orphan.
     let mut left = steps(d.dir.path(), d.pid());
-    left.retain(|&pid| !descends(pid, d.pid()));
+    left.retain(|&pid| {
+        let app_server = fs::read_to_string(format!("/proc/{pid}/cmdline")).is_ok_and(|c| c.contains("app-server"));
+        !(app_server && descends(pid, d.pid()))
+    });
     assert!(
         left.is_empty(),
         "no process left at the end: {:?}",

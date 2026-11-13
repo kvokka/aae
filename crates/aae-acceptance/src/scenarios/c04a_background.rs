@@ -5,12 +5,14 @@
 use crate::{
     Env,
     daemon::{Daemon, write},
+    scenarios::hold,
 };
 use std::{fs, sync::Arc, time::Duration};
 
 pub(crate) async fn run(env: Arc<Env>) -> String {
     let aae = env.aae.display().to_string();
     let d = Daemon::start_on_host(&env, |root| {
+        hold(root, "hold-background", 30);
         write(
             root.join("config/aae/config.toml"),
             "projects = [\"shop\"]\n[harness.claude]\n",
@@ -28,7 +30,7 @@ pub(crate) async fn run(env: Arc<Env>) -> String {
             format!(
                 "Do exactly these two steps, in this order, and nothing else.\n\
                  1. Start a subagent with the Task tool in the background (run_in_background: true). Its task: \
-                 run the shell command `sleep 30 && touch background-done` in the current directory, then reply \
+                 run the shell command `./hold-background && touch background-done` in the current directory, then reply \
                  \"done\".\n\
                  2. Right after starting it, without waiting for it, run this shell command once: \
                  `touch finish-called && {aae} finish pass --summary started`.\n\
