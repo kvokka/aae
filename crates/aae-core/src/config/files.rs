@@ -101,6 +101,8 @@ pub(super) struct OrchestratorFile {
     pub max_runs: Option<NonZeroU32>,
     pub bead_failures: Option<NonZeroU32>,
     pub api_tcp: Option<std::net::SocketAddr>,
+    /// The IANA name of the zone `cron` is read in; the system zone when absent.
+    pub timezone: Option<String>,
     #[serde(default)]
     pub harness: BTreeMap<String, Harness>,
     #[serde(default)]

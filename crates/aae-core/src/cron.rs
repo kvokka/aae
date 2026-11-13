@@ -1,6 +1,11 @@
-//! Five-field cron expressions of schedule triggers (spec §9.5), in UTC: minute, hour, day of month, month, day of
-//! week. A field is `*`, a value, a range `a-b`, any of them with a step `/n`, or a comma list of those; months and
-//! days of week also take three-letter English names, and day of week 7 is Sunday like 0.
+//! Five-field cron expressions of schedule triggers (spec §9.5), read in the time zone of the config (the system
+//! one unless `timezone` says): minute, hour, day of month, month, day of week. A field is `*`, a value, a range
+//! `a-b`, any of them with a step `/n`, or a comma list of those; months and days of week also take three-letter
+//! English names, and day of week 7 is Sunday like 0. A local time skipped by a
+//! clock change fires when the clock has moved on (02:30 in a spring gap fires at 03:30); a local time that repeats
+//! fires once, on its first pass.
+
+use jiff::{Timestamp, tz::TimeZone};
 
 const RANGES: [(u32, u32); 5] = [(0, 59), (0, 23), (1, 31), (1, 12), (0, 7)];
 const MONTHS: [&str; 12] = [
@@ -45,9 +50,25 @@ impl Cron {
         })
     }
 
-    /// The first matching minute strictly after `after_ms` (milliseconds since the Unix epoch); `None` when none
-    /// comes within 28 years, the period of the calendar (`0 0 30 2 *`).
-    pub fn next_after(&self, after_ms: i64) -> Option<i64> {
+    /// The first matching minute strictly after `after_ms` (milliseconds since the Unix epoch) in `tz`; `None` when
+    /// none comes within 28 years, the period of the calendar (`0 0 30 2 *`).
+    pub fn next_after(&self, after_ms: i64, tz: &TimeZone) -> Option<i64> {
+        let mut local =
+            after_ms + i64::from(tz.to_offset(Timestamp::from_millisecond(after_ms).ok()?).seconds()) * 1000;
+        // A match in a repeated hour maps to its first pass, which may be past: take the next match then.
+        for _ in 0..DAY_MINUTES {
+            local = self.next_local(local)?;
+            let civil = jiff::tz::Offset::UTC.to_datetime(Timestamp::from_millisecond(local).ok()?);
+            let at = tz.to_ambiguous_timestamp(civil).compatible().ok()?.as_millisecond();
+            if at > after_ms {
+                return Some(at);
+            }
+        }
+        None
+    }
+
+    /// [`Self::next_after`] on the local clock: `after_ms` and the result are local times read as UTC.
+    fn next_local(&self, after_ms: i64) -> Option<i64> {
         let first = after_ms.div_euclid(MINUTE_MS) + 1;
         let (day0, minute0) = (first.div_euclid(DAY_MINUTES), first.rem_euclid(DAY_MINUTES));
         (day0..day0 + 366 * 28)

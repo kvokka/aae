@@ -1,6 +1,6 @@
 //! Triggers checked against the events and the formulas they name (spec §9.5).
 
-use super::config::{BASE, fails};
+use super::config::{BASE, fails, load_with};
 
 /// The project file with its trigger replaced by `trigger`.
 fn project_trigger(trigger: &str) -> String {
@@ -68,4 +68,17 @@ fn triggers_are_checked_against_events_and_formulas() {
         &[("gascity/pack.toml", with_rig.as_str())],
         "gets its rig from the project",
     );
+}
+
+#[test]
+fn cron_reads_the_system_zone_unless_timezone_names_one() {
+    let with = |zone: &str| {
+        BASE[0]
+            .1
+            .replace("projects", &format!("timezone = \"{zone}\"\nprojects"))
+    };
+    let config = load_with(&[("config.toml", with("Europe/Berlin").as_str())]).unwrap();
+    assert_eq!(config.timezone.iana_name(), Some("Europe/Berlin"));
+    fails(&[("config.toml", with("Mars/Olympus").as_str())], "`timezone`");
+    assert_eq!(load_with(BASE).unwrap().timezone, jiff::tz::TimeZone::system());
 }

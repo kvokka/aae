@@ -115,10 +115,10 @@ pub(super) fn list(
 }
 
 /// The next firing of a schedule after `now_ms`; `None` for an event trigger or a cron that never matches.
-fn next(source: &Source, now_ms: i64) -> Option<i64> {
+fn next(source: &Source, now_ms: i64, tz: &jiff::tz::TimeZone) -> Option<i64> {
     match source {
         Source::Event { .. } => None,
-        Source::Cron(cron) => cron.next_after(now_ms),
+        Source::Cron(cron) => cron.next_after(now_ms, tz),
         Source::Every(every) => Some(now_ms + i64::try_from(every.as_millis()).unwrap_or(i64::MAX - now_ms)),
     }
 }
@@ -130,9 +130,11 @@ impl RunHandler {
         self.arm_schedules_after(tx, None)
     }
 
-    /// [`Self::arm_schedules`] after a reload from `old`: a schedule whose source changed is set again from now.
+    /// [`Self::arm_schedules`] after a reload from `old`: a schedule whose source changed is set again from now, and
+    /// so is every `cron` when `timezone` changed.
     pub(super) fn arm_schedules_after(&self, tx: &mut Tx<'_>, old: Option<&Config>) -> Result<(), Error> {
         if let Some(old) = old {
+            let zone_moved = old.timezone != self.config.timezone;
             let before: Vec<(String, Option<(&str, String)>)> = assigned(old)
                 .iter()
                 .map(|a| (a.deadline(), schedule(&a.trigger.source)))
@@ -140,7 +142,8 @@ impl RunHandler {
             for a in assigned(&self.config) {
                 let id = a.deadline();
                 let now = schedule(&a.trigger.source);
-                if now.is_some() && before.iter().any(|(b, was)| *b == id && *was != now) {
+                let moved = zone_moved && matches!(a.trigger.source, Source::Cron(_));
+                if now.is_some() && before.iter().any(|(b, was)| *b == id && (*was != now || moved)) {
                     tx.clear_deadline(&id)?;
                 }
             }
@@ -148,7 +151,12 @@ impl RunHandler {
         let schedules: Vec<(String, Option<i64>)> = assigned(&self.config)
             .iter()
             .filter(|a| !matches!(a.trigger.source, Source::Event { .. }))
-            .map(|a| (a.deadline(), next(&a.trigger.source, tx.now_ms())))
+            .map(|a| {
+                (
+                    a.deadline(),
+                    next(&a.trigger.source, tx.now_ms(), &self.config.timezone),
+                )
+            })
             .collect();
         let armed: Vec<String> = {
             let mut stmt = tx.sql().prepare("SELECT id FROM deadlines WHERE id LIKE '%:trigger'")?;
@@ -172,7 +180,7 @@ impl RunHandler {
         let Some(a) = assigned(&config).into_iter().find(|a| a.deadline() == id) else {
             return Ok(());
         };
-        if let Some(at) = next(&a.trigger.source, tx.now_ms()) {
+        if let Some(at) = next(&a.trigger.source, tx.now_ms(), &self.config.timezone) {
             tx.set_deadline(id, at)?;
         }
         if a.off(tx)? {

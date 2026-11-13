@@ -67,9 +67,17 @@ impl Loader {
         if raw.api_tcp.is_some_and(|a| !a.ip().is_loopback()) {
             self.fail(file, "`api_tcp` must be a loopback address");
         }
+        let timezone = match raw.timezone.as_deref().map(jiff::tz::TimeZone::get) {
+            None => jiff::tz::TimeZone::system(),
+            Some(Ok(tz)) => tz,
+            Some(Err(e)) => self
+                .none(file, format!("`timezone`: {e}"))
+                .unwrap_or(jiff::tz::TimeZone::UTC),
+        };
         let config = Config {
             api_tcp: raw.api_tcp,
             api_token: String::new(),
+            timezone,
             max_runs: raw.max_runs.map_or(DEFAULT_MAX_RUNS, NonZeroU32::get),
             bead_failures: raw.bead_failures.map_or(DEFAULT_BEAD_FAILURES, NonZeroU32::get),
             harnesses: raw.harness,

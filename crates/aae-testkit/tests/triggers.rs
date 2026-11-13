@@ -76,7 +76,13 @@ impl HookRunner for Lost {
 }
 
 fn write(dir: &Path, project: &str) {
-    let extra = [("shop/aae.toml", project), ("shop/formulas/next.toml", NEXT)];
+    // The schedules below are written in UTC, whatever the zone of the machine.
+    let config = format!("timezone = \"UTC\"\n{}", common::FILES[0].1);
+    let extra = [
+        ("shop/aae.toml", project),
+        ("shop/formulas/next.toml", NEXT),
+        ("config.toml", &config),
+    ];
     for (path, text) in common::FILES.iter().chain(&extra) {
         let path = dir.join(path);
         fs::create_dir_all(path.parent().unwrap()).unwrap();
@@ -239,13 +245,24 @@ async fn a_reload_rearms_changed_schedules_and_the_listing_shows_the_next_firing
     // A week from the reload, 10 ms of the managed clock after the start.
     assert_eq!(weekly, Some("2026-11-20T02:59:30.010Z".into()));
 
+    // Another zone re-arms the cron: the next 04:00 in Tokyo (+9) is 19:00Z.
+    let file = dir.path().join("config.toml");
+    fs::write(
+        &file,
+        fs::read_to_string(&file).unwrap().replace("\"UTC\"", "\"Asia/Tokyo\""),
+    )
+    .unwrap();
+    let after = Arc::new(config::load(&file).unwrap());
+    core.send(None, Msg::Reload(after.clone())).await.unwrap();
+    assert_eq!(next(&after).0, Some("2026-11-13T19:00:00.000Z".into()));
+
     let mut other = (*after).clone();
     other.harnesses.insert("codex".into(), Default::default());
     let refused = core.send(None, Msg::Reload(Arc::new(other))).await.unwrap_err();
     assert!(refused.to_string().contains("restart the daemon"), "{refused}");
     tokio::time::sleep(Duration::from_millis(100)).await;
     let reloaded = journal(dir.path(), "config.reloaded");
-    assert_eq!(reloaded.len(), 1);
+    assert_eq!(reloaded.len(), 2);
     assert_eq!(reloaded[0]["data"]["restarted_instances"], serde_json::json!([]));
 }
 

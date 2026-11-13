@@ -13,8 +13,8 @@ error in every file.
 - Load is all or nothing: every error found is reported with its file, and an invalid config is never applied.
   The daemon re-reads only on an explicit command (§6.5): `aae config reload` (`POST /v1/config/reload`); on
   error the previous config stays in force, and `aae config check` reports the errors without applying anything.
-- A reload is taken by new runs and by the schedules (a schedule whose `cron`/`every` changed is set again from the
-  reload; a removed one is dropped); running runs keep the snapshot they prepared with; an idle instance stops with
+- A reload is taken by new runs and by the schedules (a schedule whose `cron`/`every` changed, and every `cron` when
+  `timezone` changed, is set again from the reload; a removed one is dropped); running runs keep the snapshot they prepared with; an idle instance stops with
   reason `config` only when no agent of the new config, on any rig, starts sessions on its fingerprint (a changed MCP
   restarts only the instances it is part of). It emits `config.reloaded` with the generation (1 at daemon start).
   A change of the set of harnesses, a harness `binary`, `max_sessions` or `instance_idle_s` (a harness `model` is
@@ -122,6 +122,7 @@ projects = ["~/work/shop"]          # project directories, each with an aae.toml
 max_runs = 8                        # runs started at once across all projects (default 8, at least 1)
 bead_failures = 3                   # failed runs of a bead before the core closes its gate (default 3, at least 1)
 api_tcp = "127.0.0.1:7171"          # the API on TCP too (off by default; loopback only; a reload cannot change it)
+timezone = "Europe/Berlin"          # IANA zone `cron` is read in (default: the system zone; an unknown name is an error)
 
 [harness.claude]                    # harnesses agents may choose (§6.1)
 model = "sonnet"                    # default model of the harness
@@ -265,9 +266,11 @@ payload, as do the paths of `where`. `rig` is allowed only in a project's `[[tri
 
 - A trigger runs on the rigs that list it in `triggers` and, for a project trigger, on its `rig`; one that no rig
   names never fires. An event trigger sees the events whose `project` and `rig` are its own or null.
-- `cron` is read in UTC: minute, hour, day of month, month, day of week; each field is `*`, a value, `a-b`, any of
+- `cron` is read in the orchestrator's `timezone`, the system zone by default: minute, hour, day of month, month, day of week; each field is `*`, a value, `a-b`, any of
   them with `/step`, or a comma list; months and days also take `jan`..`dec` and `sun`..`sat`, and day 7 is Sunday.
   When both day fields are restricted, a day matching either fires (as in Vixie cron).
+  A local time skipped by a clock change fires when the clock moves on (02:30 in a spring gap fires at 03:30); a
+  local time that repeats fires once, on its first pass, so `*/15` is silent in the repeated hour's second pass.
 - `every` first fires one interval after the daemon first sees the trigger, then one interval after each firing.
   A schedule missed while the daemon was down fires once at start, and the next one is counted from then.
 - A trigger on `trigger.skipped` is a config error: a skip that fires a trigger could skip again forever.

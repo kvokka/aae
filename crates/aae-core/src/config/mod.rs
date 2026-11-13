@@ -17,7 +17,7 @@ use std::{collections::BTreeMap, fmt, path::PathBuf, time::Duration};
 
 /// The whole configuration of one daemon. Loading it is all or nothing: the caller keeps its previous `Config`
 /// when [`load`] fails (spec §6.5).
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug)]
 pub struct Config {
     /// Runs started at once across every project (spec §9.3).
     pub max_runs: u32,
@@ -27,6 +27,8 @@ pub struct Config {
     pub api_tcp: Option<std::net::SocketAddr>,
     /// The token of `api_tcp` for this daemon start: not from a file, the daemon sets it.
     pub api_token: String,
+    /// The zone `cron` schedules are read in: `timezone` of the orchestrator config, else the system one.
+    pub timezone: jiff::tz::TimeZone,
     pub harnesses: BTreeMap<String, Harness>,
     /// Layer 2 of spec §6.3.
     pub settings: Settings,
