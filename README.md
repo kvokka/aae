@@ -1,5 +1,19 @@
 # aae
 
+aae (Adaptive Agent Executor) is an event-driven orchestrator for coding agents. One daemon runs formulas — an
+agent with a prompt, or a command — as runs on your projects, through the agents' own harnesses (Claude Code,
+Codex), started by hand, by events, by a schedule or by a task tracker, and decides each run's end by an explicit
+finisher and by plugins.
+
+## Documentation
+
+- [Installing aae](docs/guide/install.md)
+- [Your first project](docs/guide/first-project.md)
+- [Your first formula with an agent](docs/guide/first-formula.md)
+- [Writing a plugin](docs/guide/plugin.md)
+- Reference: [configuration files](docs/design/config.md), [contracts](docs/design/contracts.md) (events, hooks,
+  run states), [HTTP API](docs/api/openapi.json)
+
 ## Running the daemon
 
 `aae daemon` runs in the foreground. It finds the `claude`, `codex` and `br` binaries through mise (`mise which
