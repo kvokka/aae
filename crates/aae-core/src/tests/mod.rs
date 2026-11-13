@@ -1,6 +1,7 @@
 mod config;
 mod config_builtin;
 mod config_layers;
+mod config_triggers;
 mod cron;
 mod idempotency;
 mod journal;
