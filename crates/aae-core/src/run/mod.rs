@@ -17,6 +17,7 @@ mod queue;
 mod read;
 mod recover;
 mod registry;
+mod reload;
 mod row;
 mod triggers;
 
@@ -77,6 +78,7 @@ pub fn start(
         clock,
         RunHandler {
             config,
+            generation: 1,
             drivers,
             trackers,
         },
@@ -105,6 +107,8 @@ pub fn start(
 
 struct RunHandler {
     config: Arc<Config>,
+    /// The generation of `config` in this daemon: 1 at start, one more on every reload.
+    generation: u64,
     drivers: Drivers,
     trackers: beads::Trackers,
 }
@@ -151,6 +155,7 @@ impl Handler for RunHandler {
                 changes,
             } => Self::ready(tx, &project, &beads, &changes),
             Msg::TrackerChanged(project) => self.sync_trackers(tx, Some(&project), "changed"),
+            Msg::Reload(config) => return self.reload(tx, config),
         }?;
         Ok(Value::Null)
     }

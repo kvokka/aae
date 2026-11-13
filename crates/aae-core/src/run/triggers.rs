@@ -56,6 +56,37 @@ fn assigned(config: &Config) -> Vec<Assigned<'_>> {
     out
 }
 
+/// A schedule as written: `("cron", expression)` or `("every", seconds)`; `None` for an event trigger.
+fn schedule(source: &Source) -> Option<(&'static str, String)> {
+    match source {
+        Source::Event { .. } => None,
+        Source::Cron(cron) => Some(("cron", cron.to_string())),
+        Source::Every(every) => Some(("every", format!("{}s", every.as_secs()))),
+    }
+}
+
+/// Every trigger on every rig it runs on, with its next firing from `deadlines` (milliseconds by deadline id).
+pub(super) fn list(
+    config: &Config,
+    deadline: impl Fn(&str) -> Result<Option<i64>, Error>,
+) -> Result<Vec<Value>, Error> {
+    assigned(config)
+        .iter()
+        .map(|a| {
+            let (source, written) = match &a.trigger.source {
+                Source::Event { on, .. } => ("event", on.clone()),
+                other => schedule(other).unwrap_or_default(),
+            };
+            let next = deadline(&a.deadline())?.map(crate::rfc3339_ms);
+            Ok(json!({
+                "project": a.project, "rig": a.rig, "trigger": a.name, "formula": a.trigger.run.to_string(),
+                "source": source, "on": (source == "event").then_some(&written),
+                "schedule": (source != "event").then_some(&written), "next_at": next,
+            }))
+        })
+        .collect()
+}
+
 /// The next firing of a schedule after `now_ms`; `None` for an event trigger or a cron that never matches.
 fn next(source: &Source, now_ms: i64) -> Option<i64> {
     match source {
@@ -69,6 +100,24 @@ impl RunHandler {
     /// At start: a schedule without a deadline gets one; a deadline whose schedule left the config goes. A deadline
     /// missed while the daemon was down is past, so it fires once now (spec §9.5).
     pub(super) fn arm_schedules(&self, tx: &mut Tx<'_>) -> Result<(), Error> {
+        self.arm_schedules_after(tx, None)
+    }
+
+    /// [`Self::arm_schedules`] after a reload from `old`: a schedule whose source changed is set again from now.
+    pub(super) fn arm_schedules_after(&self, tx: &mut Tx<'_>, old: Option<&Config>) -> Result<(), Error> {
+        if let Some(old) = old {
+            let before: Vec<(String, Option<(&str, String)>)> = assigned(old)
+                .iter()
+                .map(|a| (a.deadline(), schedule(&a.trigger.source)))
+                .collect();
+            for a in assigned(&self.config) {
+                let id = a.deadline();
+                let now = schedule(&a.trigger.source);
+                if now.is_some() && before.iter().any(|(b, was)| *b == id && *was != now) {
+                    tx.clear_deadline(&id)?;
+                }
+            }
+        }
         let schedules: Vec<(String, Option<i64>)> = assigned(&self.config)
             .iter()
             .filter(|a| !matches!(a.trigger.source, Source::Event { .. }))

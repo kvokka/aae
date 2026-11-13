@@ -12,10 +12,18 @@ const DAY_MINUTES: i64 = 1440;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Cron {
+    /// The expression as written.
+    text: String,
     /// One bit per allowed value of each field, in field order.
     fields: [u64; 5],
     /// Day of month and day of week are both restricted: a day matches either, as in Vixie cron.
     either_day: bool,
+}
+
+impl std::fmt::Display for Cron {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.text)
+    }
 }
 
 impl Cron {
@@ -30,7 +38,11 @@ impl Cron {
         }
         fields[4] |= fields[4] >> 7 & 1;
         let either_day = !parts[2].starts_with('*') && !parts[4].starts_with('*');
-        Ok(Self { fields, either_day })
+        Ok(Self {
+            text: text.to_owned(),
+            fields,
+            either_day,
+        })
     }
 
     /// The first matching minute strictly after `after_ms` (milliseconds since the Unix epoch); `None` when none

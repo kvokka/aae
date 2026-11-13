@@ -63,6 +63,15 @@ impl Reader {
         ids.iter().filter_map(|id| self.run(id).transpose()).collect()
     }
 
+    /// Every trigger of `config` on every rig it runs on, with its next firing (contracts 1.3).
+    pub fn triggers(&self, config: &crate::config::Config) -> Result<Vec<Value>, Error> {
+        let conn = self.conn();
+        super::triggers::list(config, |id| {
+            let at = conn.query_row("SELECT at_ms FROM deadlines WHERE id = ?1", [id], |r| r.get(0));
+            Ok(rusqlite::OptionalExtension::optional(at)?)
+        })
+    }
+
     /// Every active gate closure at `now_ms` (contracts 7), oldest first.
     pub fn gates(&self, now_ms: i64) -> Result<Vec<Value>, Error> {
         closures(&self.conn(), now_ms, None)

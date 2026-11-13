@@ -117,6 +117,8 @@ pub enum Msg {
     },
     /// The tracker of the project changed: its ready set is read again.
     TrackerChanged(String),
+    /// The config file was read again; the reply is `{config_generation, restarted_instances}`.
+    Reload(std::sync::Arc<crate::config::Config>),
     /// The finisher of an attempt; the reply is `{"answer": "accepted"|"stale_attempt"|"run_terminal"|"invalid"}`
     /// (contracts 6.3).
     Finish {

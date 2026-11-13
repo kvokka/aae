@@ -198,3 +198,52 @@ async fn a_schedule_fires_on_the_managed_clock_and_once_after_downtime() {
     tokio::time::sleep(Duration::from_secs(2)).await;
     assert_eq!(firings(dir.path(), "shop.hourly"), 2);
 }
+
+/// A reload re-arms a schedule whose source changed, drops a removed one and arms a new one; the trigger listing
+/// shows each next firing; a reload that needs a restart is refused and changes nothing.
+#[tokio::test]
+async fn a_reload_rearms_changed_schedules_and_the_listing_shows_the_next_firings() {
+    let dir = tempfile::tempdir().unwrap();
+    write(dir.path(), SCHEDULES);
+    let (core, _task) = daemon(dir.path(), T0);
+    tokio::time::sleep(Duration::from_millis(10)).await;
+    let reader = run::Reader::open(&dir.path().join("state.db")).unwrap();
+    let next = |config: &config::Config| {
+        let list = reader.triggers(config).unwrap();
+        let at = |name: &str| list.iter().find(|t| t["trigger"] == name).map(|t| t["next_at"].clone());
+        (at("shop.nightly"), at("shop.hourly"), at("shop.weekly"))
+    };
+    let before = config::load(&dir.path().join("config.toml")).unwrap();
+    let listed = reader.triggers(&before).unwrap();
+    assert_eq!(listed[0]["schedule"], "0 3 * * *", "{listed:?}");
+    assert_eq!(
+        next(&before),
+        (
+            Some("2026-11-13T03:00:00.000Z".into()),
+            Some("2026-11-13T03:59:30.000Z".into()),
+            None
+        )
+    );
+
+    let changed = SCHEDULES.replace("0 3 * * *", "0 4 * * *").replace(
+        "name = \"hourly\"\nevery = \"1h\"",
+        "name = \"weekly\"\nevery = \"168h\"",
+    );
+    write(dir.path(), &changed);
+    let after = Arc::new(config::load(&dir.path().join("config.toml")).unwrap());
+    let reply = core.send(None, Msg::Reload(after.clone())).await.unwrap();
+    assert_eq!(reply["config_generation"], 2, "{reply}");
+    let (nightly, hourly, weekly) = next(&after);
+    assert_eq!((nightly, hourly), (Some("2026-11-13T04:00:00.000Z".into()), None));
+    // A week from the reload; the managed clock moved a few milliseconds since the start.
+    assert!(weekly.unwrap().as_str().unwrap().starts_with("2026-11-20T02:59:30"));
+
+    let mut other = (*after).clone();
+    other.harnesses.insert("codex".into(), Default::default());
+    let refused = core.send(None, Msg::Reload(Arc::new(other))).await.unwrap_err();
+    assert!(refused.to_string().contains("restart the daemon"), "{refused}");
+    tokio::time::sleep(Duration::from_millis(100)).await;
+    let reloaded = journal(dir.path(), "config.reloaded");
+    assert_eq!(reloaded.len(), 1);
+    assert_eq!(reloaded[0]["data"]["restarted_instances"], serde_json::json!([]));
+}
