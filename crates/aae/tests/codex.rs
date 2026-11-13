@@ -147,3 +147,38 @@ async fn a_codex_killed_in_a_command_is_resumed_and_its_run_passes() {
     assert!(typed <= Duration::from_secs(1), "typed in {typed:?}");
     d.until_state(&run, "passed").await;
 }
+
+/// Criterion 8 for codex: after `kill -9` of the daemon mid-turn, the next daemon resumes the same thread in a new
+/// app-server, finds the prompt unanswered by its `clientId` and reconciles; the run passes.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_codex_thread_is_resumed_after_a_daemon_restart_and_its_run_passes() {
+    let finish = format!("{} finish pass --summary built", env!("CARGO_BIN_EXE_aae"));
+    let plan = vec![Reply::Command("sleep 20".into()), Reply::Task(finish)];
+    let provider = Provider::start(plan).await;
+    let mut d = daemon(&provider).await;
+    let run = d.create("build", None).await;
+    let started = Instant::now();
+    while processes(d.dir.path(), "sleep 20").is_empty() {
+        assert!(started.elapsed() < Duration::from_secs(30), "no command running");
+        tokio::time::sleep(Duration::from_millis(50)).await;
+    }
+    d.child.kill().unwrap();
+    d.child.wait().unwrap();
+    d.child = common::spawn(d.dir.path());
+    while d.client.request("GET", "/v1/daemon", None, None).await.is_err() {
+        assert!(
+            started.elapsed() < Duration::from_secs(40),
+            "the daemon did not come up"
+        );
+        tokio::time::sleep(Duration::from_millis(20)).await;
+    }
+    let view = d.until_state(&run, "passed").await;
+    let attempts = view["attempts"].as_array().unwrap();
+    assert_eq!(attempts.len(), 2, "{view}");
+    assert!(attempts[0]["session"].is_object(), "{view}");
+    assert_eq!(attempts[0]["session"], attempts[1]["session"], "the same thread");
+    // The reconciling turn carries the history of the first one: the command it was running.
+    let last = provider.requests().last().unwrap().body["input"].to_string();
+    assert!(last.contains("sleep 20"), "{last}");
+    assert!(last.contains("previous turn was interrupted"), "{last}");
+}
