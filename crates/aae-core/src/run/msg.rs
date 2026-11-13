@@ -61,6 +61,10 @@ pub enum Msg {
         id: String,
         failure: Failure,
     },
+    /// The periodic resync found the process of a registry instance gone (spec §5.1).
+    InstanceGone {
+        handle: InstanceHandle,
+    },
     /// The stop of the registry's instance `id` is done; `reason` is the one of the stop (contracts 1.3).
     InstanceStopped {
         id: String,

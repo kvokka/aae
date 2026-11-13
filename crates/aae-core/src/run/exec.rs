@@ -61,6 +61,18 @@ impl Executor for RunExecutor {
                     let _ = core.send(None, Msg::ServiceStopped { id, reason }).await;
                 }
                 Some("stop_exec") => super::exec_step::stop(&self.running, payload["run"].as_str().unwrap_or_default()),
+                Some("check_instances") => {
+                    for instance in payload["instances"].as_array().into_iter().flatten() {
+                        let driver = instance["harness"].as_str().and_then(|h| self.drivers.get(h));
+                        let handle = serde_json::from_value::<InstanceHandle>(instance["handle"].clone());
+                        if let (Some(driver), Ok(handle)) = (driver, handle)
+                            && matches!(driver.health(&handle).await, Health::Dead)
+                        {
+                            // A stopped writer drops the message; recovery kills every instance on restart.
+                            let _ = core.send(None, Msg::InstanceGone { handle }).await;
+                        }
+                    }
+                }
                 Some("sweep") => {
                     let id = payload["instance"].as_str().unwrap_or_default().to_owned();
                     // Walking `/proc` is synchronous.

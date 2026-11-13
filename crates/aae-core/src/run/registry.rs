@@ -3,7 +3,7 @@
 
 use super::RunHandler;
 use crate::{
-    driver::{Capabilities, Failure, FailureKind, InstanceHandle, Source, Split},
+    driver::{Capabilities, DriverEvent, Failure, FailureKind, InstanceHandle, Normalized, Source, Split},
     writer::{Error, Event, Tx},
 };
 use rusqlite::{OptionalExtension, params};
@@ -177,6 +177,62 @@ impl RunHandler {
             Some("stopping") | None => Ok(()),
             Some(_) => Self::instance_failed(tx, id, &Failure::new(FailureKind::HarnessCrash, Source::Adapter)),
         }
+    }
+
+    /// Queues the check of every instance process against the process table, for the periodic resync (spec §5.1).
+    pub(super) fn check_instances(tx: &mut Tx<'_>) -> Result<(), Error> {
+        let instances: Vec<Value> = {
+            let mut stmt = tx.sql().prepare(
+                "SELECT harness, handle FROM instances \
+                 WHERE kind = 'instance' AND state != 'stopping' AND handle IS NOT NULL ORDER BY rowid",
+            )?;
+            let rows = stmt.query_map([], |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?)))?;
+            let rows: Vec<(String, String)> = rows.collect::<Result<_, _>>()?;
+            (rows.into_iter())
+                .filter_map(|(harness, handle)| {
+                    Some(json!({ "harness": harness, "handle": serde_json::from_str::<Value>(&handle).ok()? }))
+                })
+                .collect()
+        };
+        if instances.is_empty() {
+            return Ok(());
+        }
+        tx.effect(
+            "daemon",
+            "check_instances",
+            &json!({ "op": "check_instances", "instances": instances }),
+        )
+    }
+
+    /// The resync found the process of `handle` gone by pid + start time: its exit was lost (invariant 20). Nothing is
+    /// ambiguous in that, so it is taken as that exit if the record still holds that process and is not stopping;
+    /// otherwise the record has moved on since the check and nothing is done.
+    pub(super) fn instance_gone(&mut self, tx: &mut Tx<'_>, handle: InstanceHandle) -> Result<(), Error> {
+        let held: Option<(String, Option<String>)> = tx
+            .sql()
+            .query_row("SELECT state, handle FROM instances WHERE id = ?1", [&handle.id], |r| {
+                Ok((r.get(0)?, r.get(1)?))
+            })
+            .optional()?;
+        let Some((state, Some(held))) = held else {
+            return Ok(());
+        };
+        if state == "stopping" || serde_json::from_str::<InstanceHandle>(&held).ok() != Some(handle.clone()) {
+            return Ok(());
+        }
+        let exited = Normalized::Exited {
+            code: None,
+            signal: None,
+        };
+        self.driver_event(
+            tx,
+            DriverEvent {
+                instance: handle.id,
+                session: None,
+                seq: 0,
+                event: exited,
+            },
+        )
     }
 
     /// The stop of `id` is done; `reason` is the one of the stop (contracts 1.3).

@@ -621,6 +621,10 @@ of their own. The adapter reports the account id (4.5, `Driver::account`).
   orphans that exited, never a child it spawned itself (those are reaped by their own `wait`).
 - Health: every 30 s the daemon asks the driver for the health of each instance it started; `Dead` counts as an
   `exited` event of the instance (above).
+- Resync (§5.1): every 5 minutes, with the trackers, the driver is asked for the health of every instance not
+  `stopping` that has a process (pid + start time for claude and codex). One found `Dead` whose record still holds
+  that process and is not `stopping` counts as its `exited` event, as above: a gone process is not ambiguous, so no
+  `resync.diverged`. A record that moved on since the check is left alone.
 - Services (§11.4, [config](config.md#mcp-servers-and-services-spec-114)) use the same record with kind
   `service`: the MCP name, the key `<scope>#<sha256 of the definition>` (scope `orchestrator` or `project:<p>`), the
   port and the token in the process column, the consumer count in `sessions` (an attempt's services are in

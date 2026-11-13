@@ -5,7 +5,7 @@ mod common;
 
 use aae_core::{
     Journal, config,
-    driver::{DriverEvent, Failure, FailureKind, Normalized, SessionRef, Source},
+    driver::{DriverEvent, Failure, FailureKind, InstanceHandle, Normalized, SessionRef, Source},
     run::{Create, Msg},
 };
 use aae_testkit::{ScriptedDriver, Step};
@@ -307,4 +307,50 @@ async fn the_operator_stops_an_idle_instance_and_no_busy_one() {
     assert_eq!(stopped.len(), 1, "{stopped:?}");
     assert_eq!(stopped[0]["data"]["reason"], "operator");
     assert!(reader.instances().unwrap().is_empty(), "the record goes");
+}
+
+/// A process gone with no exit reported is caught by the periodic resync (spec §5.1, invariant 20): the instance
+/// fails as a crash and so does the attempt on it.
+#[tokio::test(start_paused = true)]
+async fn an_instance_whose_exit_was_lost_is_failed_by_the_resync() {
+    let w = world_driven(FILES, ScriptedDriver::new(1));
+    // Its health watcher looks at 40 s, 70 s, … 280 s, 310 s; the process vanishes at 295 s, the resync is at 300 s.
+    w.driver
+        .script(vec![Step::Wait(Duration::from_secs(285)), Step::Vanish]);
+    tokio::time::sleep(Duration::from_secs(10)).await;
+    let run = w.start("web", "build").await;
+    let events = w.events(&run, Duration::from_secs(280)).await;
+    assert!(!failed(&events), "alive until the resync");
+    let events = w.events(&run, Duration::from_secs(15)).await;
+    let failed = common::last(&events, "run.attempt_failed");
+    assert_eq!(failed["failure"]["kind"], "harness_crash");
+    // Failed at the resync, before the watcher's next look.
+    let all = Journal::new(&w.journal).read_from(1, 100_000).unwrap();
+    let failed = all.iter().find(|e| e["type"] == "instance.failed").unwrap();
+    assert_eq!(failed["ts"], "1970-01-01T00:05:00.000Z", "{failed}");
+    assert_eq!(w.count("instance.failed"), 1);
+}
+
+/// A resync report about a process the record no longer holds is stale and changes nothing.
+#[tokio::test(start_paused = true)]
+async fn a_resync_report_on_another_process_of_the_instance_is_ignored() {
+    let w = world_driven(FILES, ScriptedDriver::new(1));
+    let run = w.start("web", "build").await;
+    w.events(&run, Duration::from_secs(1)).await;
+    let reader = aae_core::run::Reader::open(&w.dir.path().join("state.db")).unwrap();
+    let listed = &reader.instances().unwrap()[0];
+    let gone = |pid: &Value| Msg::InstanceGone {
+        handle: InstanceHandle {
+            id: listed["id"].as_str().unwrap().to_owned(),
+            pid: i32::try_from(pid.as_i64().unwrap()).unwrap(),
+            start_time: 0,
+            pgid: i32::try_from(listed["pgid"].as_i64().unwrap()).unwrap(),
+        },
+    };
+    w.core.send(None, gone(&json!(1))).await.unwrap();
+    assert!(!failed(&w.events(&run, Duration::from_secs(1)).await));
+    assert_eq!(w.count("instance.failed"), 0);
+    w.core.send(None, gone(&listed["pid"])).await.unwrap();
+    assert!(failed(&w.events(&run, Duration::from_secs(1)).await));
+    assert_eq!(w.count("instance.failed"), 1);
 }

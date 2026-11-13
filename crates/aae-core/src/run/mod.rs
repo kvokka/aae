@@ -141,6 +141,7 @@ impl Handler for RunHandler {
             Msg::InstanceReady { id, harness, handle } => Self::instance_ready(tx, &id, &harness, &handle),
             Msg::InstanceFailed { id, failure } => Self::instance_failed(tx, &id, &failure),
             Msg::InstanceStopped { id, reason } => Self::instance_stopped(tx, &id, &reason),
+            Msg::InstanceGone { handle } => self.instance_gone(tx, handle),
             Msg::ServiceReady { id } => Self::service_ready(tx, &id),
             Msg::ServiceFailed { id, stderr } => Self::service_failed(tx, &id, &stderr),
             Msg::ServiceStopped { id, reason } => Self::service_stopped(tx, &id, &reason),
@@ -201,14 +202,15 @@ impl Handler for RunHandler {
     }
 }
 
-/// The deadline of the periodic resync: the trackers are read again this often whatever their watchers say, so a
-/// lost signal costs at most this much (spec §5.1).
+/// The deadline of the periodic resync: the trackers are read again and the instance processes checked against the
+/// process table this often whatever their watchers say, so a lost signal costs at most this much (spec §5.1).
 const RESYNC: &str = "daemon:resync";
 const RESYNC_MS: i64 = 5 * 60 * 1000;
 
 impl RunHandler {
     fn resync(&mut self, tx: &mut Tx<'_>) -> Result<(), Error> {
         self.sync_trackers(tx, None, "resync")?;
+        Self::check_instances(tx)?;
         tx.set_deadline(RESYNC, tx.now_ms() + RESYNC_MS)
     }
 }
