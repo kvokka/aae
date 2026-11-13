@@ -194,7 +194,7 @@
     },
     "/v1/daemon/drain": {
       "post": {
-        "summary": "Drains the daemon: no run starts from now on (`daemon.stopping{reason: \"drain\"}`), and it exits once no run\nis in a turn or after `timeout_s`. The reply is `{\"seq\": <daemon.stopping>, \"active_runs\": n}`.",
+        "summary": "Drains the daemon: no run starts from now on (`daemon.stopping{reason: \"drain\"}`), and it exits once no run\nis in a turn or after `timeout_s`. The reply is `{\"seq\": <daemon.stopping>, \"reason\", \"active_runs\": n}`; a drain\nasked while a restart is under way, or the reverse, is refused with 409.",
         "operationId": "drain",
         "parameters": [
           {
@@ -225,6 +225,15 @@
         ],
         "responses": {
           "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "409": {
             "content": {
               "application/json": {
                 "schema": {
@@ -269,6 +278,15 @@
         ],
         "responses": {
           "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "409": {
             "content": {
               "application/json": {
                 "schema": {

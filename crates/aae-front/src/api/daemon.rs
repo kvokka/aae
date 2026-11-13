@@ -32,9 +32,10 @@ pub(crate) struct Drain {
 }
 
 /// Drains the daemon: no run starts from now on (`daemon.stopping{reason: "drain"}`), and it exits once no run
-/// is in a turn or after `timeout_s`. The reply is `{"seq": <daemon.stopping>, "active_runs": n}`.
+/// is in a turn or after `timeout_s`. The reply is `{"seq": <daemon.stopping>, "reason", "active_runs": n}`; a drain
+/// asked while a restart is under way, or the reverse, is refused with 409.
 #[utoipa::path(post, path = "/v1/daemon/drain", params(Drain, ("Idempotency-Key" = Option<String>, Header)),
-    responses((status = OK, body = Object)))]
+    responses((status = OK, body = Object), (status = CONFLICT, body = Object)))]
 pub(crate) async fn drain(state: State, headers: HeaderMap, Query(q): Query<Drain>) -> Reply {
     stop(state, &headers, q, "drain").await
 }
@@ -42,7 +43,7 @@ pub(crate) async fn drain(state: State, headers: HeaderMap, Query(q): Query<Drai
 /// A drain after which the daemon starts again in the same process (`daemon.stopping{reason: "restart"}`);
 /// recovery resumes the runs the drain cut (spec §5.6).
 #[utoipa::path(post, path = "/v1/daemon/restart", params(Drain, ("Idempotency-Key" = Option<String>, Header)),
-    responses((status = OK, body = Object)))]
+    responses((status = OK, body = Object), (status = CONFLICT, body = Object)))]
 pub(crate) async fn restart(state: State, headers: HeaderMap, Query(q): Query<Drain>) -> Reply {
     stop(state, &headers, q, "restart").await
 }
@@ -52,6 +53,10 @@ async fn stop(state: State, headers: &HeaderMap, q: Drain, reason: &'static str)
         reason: reason.to_owned(),
     };
     let mut reply = state.core.send(key(headers), msg).await?;
+    // The first reason wins: a restart asked during a drain does not turn it into one, nor the reverse.
+    if reply["reason"] != reason {
+        return Err(aae_core::Error::Rejected(format!("the daemon is already stopping: {}", reply["reason"])).into());
+    }
     reply["active_runs"] = state.reader.status()?["active_runs"].take();
     let deadline = Instant::now() + Duration::from_secs(q.timeout_s.unwrap_or(300));
     tokio::spawn(async move {
@@ -64,7 +69,6 @@ async fn stop(state: State, headers: &HeaderMap, q: Drain, reason: &'static str)
         {
             tokio::time::sleep(Duration::from_millis(200)).await;
         }
-        // The first reason wins: a restart asked during a drain does not turn it into one.
         state
             .stop
             .send_if_modified(|r| r.is_none() && r.replace(reason).is_none());

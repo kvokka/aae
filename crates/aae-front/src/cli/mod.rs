@@ -127,12 +127,18 @@ pub enum Command {
         /// Seconds the runs in a turn may go on; the daemon stops then anyway (default 300).
         #[arg(long)]
         timeout: Option<u64>,
+        /// The idempotency key: a repeat with the same key does nothing new.
+        #[arg(long)]
+        key: Option<String>,
     },
     /// Drain the daemon, then start it again in the same process.
     Restart {
         /// Seconds the runs in a turn may go on; the daemon restarts then anyway (default 300).
         #[arg(long)]
         timeout: Option<u64>,
+        /// The idempotency key: a repeat with the same key does nothing new.
+        #[arg(long)]
+        key: Option<String>,
     },
 }
 
@@ -221,18 +227,18 @@ async fn execute(client: &Client, cli: Cli) -> Result<ExitCode, ClientError> {
         }
         Command::Finish { result, summary, data } => return finish(client, result, summary, data).await,
         Command::Status => print(json, &client.request("GET", "/v1/daemon", None, None).await?),
-        Command::Drain { timeout } => print(
+        Command::Drain { timeout, key } => print(
             json,
-            &client.request("POST", &stop_path("drain", timeout), None, None).await?,
+            &client
+                .request("POST", &stop_path("drain", timeout), None, key.as_deref())
+                .await?,
         ),
-        Command::Restart { timeout } => {
-            print(
-                json,
-                &client
-                    .request("POST", &stop_path("restart", timeout), None, None)
-                    .await?,
-            );
-        }
+        Command::Restart { timeout, key } => print(
+            json,
+            &client
+                .request("POST", &stop_path("restart", timeout), None, key.as_deref())
+                .await?,
+        ),
     }
     Ok(ExitCode::SUCCESS)
 }

@@ -120,7 +120,7 @@ pub enum Msg {
     /// The config file was read again; the reply is `{config_generation, restarted_instances}`.
     Reload(std::sync::Arc<crate::config::Config>),
     /// The daemon is going to stop (`reason`: `signal`, `drain` or `restart`): no run starts from now on, and
-    /// `daemon.stopping` is emitted once; the reply is `{"seq": <its seq>}` (the first one on a repeat).
+    /// `daemon.stopping` is emitted once; the reply is `{"seq", "reason"}` of the first one.
     Stopping {
         reason: String,
     },

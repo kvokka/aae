@@ -200,6 +200,10 @@ async fn a_drain_starts_no_run_and_stops_the_daemon_when_its_timeout_cuts_a_turn
 
     let drained = d.post("/v1/daemon/drain?timeout_s=2", json!(null), None).await.unwrap();
     assert_eq!(drained["active_runs"], 1, "{drained}");
+    match d.post("/v1/daemon/restart", json!(null), None).await {
+        Err(ClientError::Api { status: 409, .. }) => {}
+        other => panic!("a restart during a drain: {other:?}"),
+    }
     let held = d.create("check", None).await;
     let view = d.until_state(&held, "queued").await;
     assert_eq!(view["waiting_for"], "daemon_stopping", "{view}");
@@ -223,7 +227,11 @@ async fn a_drain_starts_no_run_and_stops_the_daemon_when_its_timeout_cuts_a_turn
 
 #[tokio::test]
 async fn a_restart_starts_the_daemon_again_in_the_same_process() {
-    let d = Daemon::start(|_| {}).await;
+    let d = Daemon::start(|dir| {
+        let brief = "name = \"brief\"\n[step]\nkind = \"exec\"\ncommand = [\"sleep\", \"1\"]\ntimeout = \"10s\"\n";
+        fs::write(dir.join("config/aae/shop/formulas/brief.toml"), brief).unwrap();
+    })
+    .await;
     assert_eq!(
         d.get("/v1/instances").await,
         json!([]),
@@ -234,7 +242,15 @@ async fn a_restart_starts_the_daemon_again_in_the_same_process() {
         other => panic!("{other:?}"),
     }
     let before = d.get("/v1/daemon").await;
-    d.post("/v1/daemon/restart", json!(null), None).await.unwrap();
+    let brief = d.create("brief", None).await;
+    d.until_state(&brief, "running").await;
+    d.post("/v1/daemon/restart?timeout_s=30", json!(null), None)
+        .await
+        .unwrap();
+    // Queued during the drain: the restarted daemon starts it with nothing else touching the queue.
+    let held = d.create("check", None).await;
+    let view = d.until_state(&held, "queued").await;
+    assert_eq!(view["waiting_for"], "daemon_stopping", "{view}");
     let deadline = std::time::Instant::now() + Duration::from_secs(10);
     let after = loop {
         if let Ok(after) = d.client.request("GET", "/v1/daemon", None, None).await
@@ -249,6 +265,13 @@ async fn a_restart_starts_the_daemon_again_in_the_same_process() {
     };
     assert_eq!(after["pid"], before["pid"], "{after}");
     assert_eq!(journal_lines(&d, "daemon.stopping")[0]["data"]["reason"], "restart");
+    d.until_state(&held, "passed").await;
+    d.until_state(&brief, "passed").await;
+    assert_eq!(
+        journal_lines(&d, "run.queued").len(),
+        2,
+        "no run is created by the restart"
+    );
     let run = d.create("check", None).await;
     d.until_state(&run, "passed").await;
 }

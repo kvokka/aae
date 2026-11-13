@@ -14,7 +14,10 @@ the config instead (`[harness.claude] binary = "/path/to/claude"`).
   running this binary with the given `--config` and the `PATH` of the shell that printed them. Install the file
   yourself; aae never starts a daemon on its own.
 - `aae drain` stops the daemon once no run is in a turn (no run starts meanwhile; `--timeout` seconds, 300 by
-  default); `aae restart` does the same, then starts the daemon again in the same process.
+  default); `aae restart` does the same, then starts the daemon again in the same process. A run that waits for a
+  human answer (`requires_action`) counts as in a turn, so a drain with one waits for the answer or the timeout.
+  Runs queued during the drain start after the restart. A drain asked during a restart, or the reverse, is
+  refused (409).
 
 ## The br tracker and its license
 

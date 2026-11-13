@@ -68,19 +68,23 @@ impl RunHandler {
         Ok(data)
     }
 
-    /// The daemon stops: the first call emits `daemon.stopping`, every call answers with its `seq`.
+    /// The daemon stops: the first call emits `daemon.stopping`, every call answers with its `seq` and reason.
     pub(super) fn stopping(&mut self, tx: &mut Tx<'_>, reason: String) -> Result<Value, Error> {
-        if self.stopping.is_none() {
-            self.stopping = Some(tx.emit(&Event {
+        let (seq, reason) = if let Some(first) = &self.stopping {
+            first.clone()
+        } else {
+            let seq = tx.emit(&Event {
                 kind: "daemon.stopping".to_owned(),
                 project: None,
                 rig: None,
                 run: None,
                 correlation: None,
                 data: json!({ "reason": reason }),
-            })?);
-        }
-        Ok(json!({ "seq": self.stopping }))
+            })?;
+            self.stopping = Some((seq, reason.clone()));
+            (seq, reason)
+        };
+        Ok(json!({ "seq": seq, "reason": reason }))
     }
 
     /// The instance fingerprints the agents of the config start new sessions with, on each rig and with none.

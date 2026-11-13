@@ -110,8 +110,8 @@ struct RunHandler {
     config: Arc<Config>,
     /// The generation of `config` in this daemon: 1 at start, one more on every reload.
     generation: u64,
-    /// The `seq` of `daemon.stopping` once the daemon stops: queued and parked runs wait from then on.
-    stopping: Option<i64>,
+    /// The `seq` and reason of `daemon.stopping` once the daemon stops: queued and parked runs wait from then on.
+    stopping: Option<(i64, String)>,
     drivers: Drivers,
     trackers: beads::Trackers,
 }
@@ -184,7 +184,9 @@ impl Handler for RunHandler {
         self.recover(tx)?;
         self.sync_trackers(tx, None, "start")?;
         tx.set_deadline(RESYNC, tx.now_ms() + RESYNC_MS)?;
-        self.arm_schedules(tx)
+        self.arm_schedules(tx)?;
+        // Runs queued while the last daemon drained start now: nothing else would call the queue for them.
+        self.schedule(tx)
     }
 }
 
