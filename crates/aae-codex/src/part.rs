@@ -43,6 +43,7 @@ pub(crate) fn process(config: &EffectiveConfig, state: &Path) -> Result<Value, F
         }
     };
     let env: BTreeMap<_, _> = config.env.iter().map(|(k, v)| (k.clone(), v.value.clone())).collect();
+    let own = CREDENTIALS.iter().any(|k| env.contains_key(*k));
     let mut part = json!({ "env": env, "overrides": overrides });
     // Skills are the process's: codex reads them from `CODEX_HOME/skills`, with no thread field for them.
     let skills: BTreeMap<_, _> = (config.skills.iter())
@@ -59,7 +60,11 @@ pub(crate) fn process(config: &EffectiveConfig, state: &Path) -> Result<Value, F
             ));
         }
         part["home"] = json!(host_home());
+        host_provider(&mut part, &host_home(), false);
         return Ok(part);
+    }
+    if !own {
+        host_provider(&mut part, &host_home(), true);
     }
     let dir = state
         .join("codex")
@@ -188,13 +193,13 @@ pub(crate) fn env(p: &Value, id: &str, socket: Option<&Path>) -> Vec<(String, St
             .map(|(k, v)| (k.clone(), text(v))),
     );
     env.push(("CODEX_HOME".to_owned(), text(&p["home"])));
-    match p["user_home"].as_str() {
-        Some(h) => env.push(("HOME".to_owned(), h.to_owned())),
-        // The host's login (§6.4) may be a provider whose key is a variable of the daemon's environment.
-        None => {
-            env.extend(host_key(Path::new(&text(&p["home"]))).and_then(|k| Some((k.clone(), std::env::var(k).ok()?))))
-        }
-    }
+    env.extend(p["user_home"].as_str().map(|h| ("HOME".to_owned(), h.to_owned())));
+    // The host's login (§6.4) may be a provider whose key is a variable of the daemon's environment.
+    env.extend(
+        p["host_key"]
+            .as_str()
+            .and_then(|k| Some((k.to_owned(), std::env::var(k).ok()?))),
+    );
     env.push((aae_core::orphans::INSTANCE_ENV.to_owned(), id.to_owned()));
     env.extend(socket.map(|s| ("AAE_SOCKET".to_owned(), s.to_string_lossy().into_owned())));
     env
@@ -226,12 +231,34 @@ pub(crate) fn materialize(p: &Value) -> std::io::Result<()> {
     Ok(())
 }
 
+/// The model provider `config.toml` in `home` selects, by name, if the file defines it.
+fn provider(home: &Path) -> Option<(String, toml::Value)> {
+    let config: toml::Table = toml::from_str(&std::fs::read_to_string(home.join("config.toml")).ok()?).ok()?;
+    let name = config.get("model_provider")?.as_str()?;
+    Some((name.to_owned(), config.get("model_providers")?.get(name)?.clone()))
+}
+
 /// The variable that holds the key of the model provider `config.toml` in `home` selects (its `env_key`), if any.
 pub fn host_key(home: &Path) -> Option<String> {
-    let config: toml::Table = toml::from_str(&std::fs::read_to_string(home.join("config.toml")).ok()?).ok()?;
-    let provider = config.get("model_provider")?.as_str()?;
-    let key = config.get("model_providers")?.get(provider)?.get("env_key")?;
-    key.as_str().map(str::to_owned)
+    provider(home)?.1.get("env_key")?.as_str().map(str::to_owned)
+}
+
+/// The host's login by a model provider of the host's codex config in `host` (§6.4): the name of its key variable,
+/// and for an isolated process, which does not read that config, the provider itself as the first `-c` flags.
+pub(crate) fn host_provider(part: &mut Value, host: &Path, isolated: bool) {
+    let Some((name, provider)) = self::provider(host) else {
+        return;
+    };
+    if isolated && let Some(overrides) = part["overrides"].as_array_mut() {
+        let flags = [
+            format!("model_provider={}", toml::Value::from(name.as_str())),
+            format!("model_providers.{name}={provider}"),
+        ];
+        overrides.splice(0..0, flags.map(Value::from));
+    }
+    if let Some(key) = provider.get("env_key").and_then(toml::Value::as_str) {
+        part["host_key"] = json!(key);
+    }
 }
 
 /// The host's codex home: the daemon's `CODEX_HOME`, else `~/.codex`.

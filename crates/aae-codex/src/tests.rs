@@ -357,19 +357,37 @@ fn the_process_gets_the_native_block_and_the_thread_the_rest() {
 }
 
 #[test]
-fn a_process_on_the_host_home_gets_the_key_its_host_provider_names() {
-    let home = tempfile::tempdir().unwrap();
-    let p = json!({ "home": home.path(), "env": {} });
-    let keyed = |p: &Value| part::env(p, "i1", None).iter().any(|(k, _)| k == "CARGO_MANIFEST_DIR");
-    assert!(!keyed(&p), "no host config, no key");
+fn a_process_without_a_key_of_its_own_logs_in_by_the_host_provider() {
+    let host = tempfile::tempdir().unwrap();
+    let login = |isolated: bool| {
+        let mut p = json!({ "home": "/h", "env": {}, "overrides": ["model=\"m\""] });
+        part::host_provider(&mut p, host.path(), isolated);
+        let keyed = part::env(&p, "i1", None).iter().any(|(k, _)| k == "CARGO_MANIFEST_DIR");
+        (keyed, part::args(&p))
+    };
+    assert!(!login(false).0, "no host config, no key");
     std::fs::write(
-        home.path().join("config.toml"),
-        "model_provider = \"proxy\"\n[model_providers.proxy]\nenv_key = \"CARGO_MANIFEST_DIR\"\n",
+        host.path().join("config.toml"),
+        "model_provider = \"proxy\"\n[model_providers.proxy]\nenv_key = \"CARGO_MANIFEST_DIR\"\n\
+         base_url = \"http://proxy\"\n",
     )
     .unwrap();
-    assert!(keyed(&p));
-    // An isolated process has its own home: the host's provider is not its.
-    assert!(!keyed(&json!({ "home": home.path(), "user_home": "/u", "env": {} })));
+    let (keyed, args) = login(false);
+    assert!(keyed);
+    assert!(
+        !args.iter().any(|a| a.contains("proxy")),
+        "codex reads the host config itself: {args:?}"
+    );
+    // An isolated process does not read the host config: the provider comes as flags before the native block's.
+    let (keyed, args) = login(true);
+    assert!(keyed);
+    let at = |flag: &str| args.iter().position(|a| a.starts_with(flag)).expect(flag);
+    assert!(at("model_provider=\"proxy\"") < at("model=\"m\""), "{args:?}");
+    let table: toml::Table = toml::from_str(&args[at("model_providers.proxy=")]).unwrap();
+    assert_eq!(
+        table["model_providers"]["proxy"]["base_url"].as_str(),
+        Some("http://proxy")
+    );
 }
 
 #[test]

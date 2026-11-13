@@ -298,3 +298,6 @@ Open: refresh of a delivered OAuth token after expiry (spec §6.4).
   `CODEX_HOME`, `HOME`, the skill roots and the provider and its key; MCP and hooks are not in it. Host
   inheritance off = own `CODEX_HOME` **and** own `HOME` (or the host's `~/.agents/skills` leak in); the rig's
   `.codex/`, `AGENTS.md` and `.agents/skills` keep working — the spec §6.3 assumption holds for codex as well.
+  Without a key of its own, an isolated process logs in as the host does: the host `auth.json` is linked into its
+  `CODEX_HOME`, and a model provider the host config selects comes as the first `-c` flags with its `env_key`
+  variable passed from the daemon's environment (`aae-codex/src/part.rs::host_provider`).
