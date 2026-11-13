@@ -97,6 +97,13 @@ fn settings(config: &EffectiveConfig) -> Result<Value, Failure> {
             ));
         }
     };
+    // Without the host layer the own config directory and the setting sources drop the user memory, but claude also
+    // reads `CLAUDE.md` up the rig's ancestors, and a rig under `HOME` reaches the host's (criterion 12).
+    if let Some(home) = std::env::var_os("HOME").filter(|_| !config.inherits_host()) {
+        let host = Path::new(&home).join(".claude");
+        let excluded = [host.join("CLAUDE.md"), host.join("rules/**")];
+        settings["claudeMdExcludes"] = json!(excluded);
+    }
     for (name, hook) in config.hooks.iter().filter(|(_, h)| h.value.enabled) {
         let hook = &hook.value;
         let (Some(event), Some(command)) = (&hook.event, &hook.command) else {

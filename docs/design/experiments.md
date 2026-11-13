@@ -256,8 +256,12 @@ touched.
 | Own empty `CLAUDE_CONFIG_DIR`, nothing delivered | refused | result `is_error: true`, "Not logged in · Please run /login", 290 ms after spawn |
 | Own `CLAUDE_CONFIG_DIR` + `CLAUDE_CODE_OAUTH_TOKEN` (subscription access token of the host) | yes | turn completed, `apiKeySource: "none"` |
 
-Open: whether `--setting-sources project` also drops the user-level `~/.claude/CLAUDE.md` (the host has one; not
-told apart in this run); refresh of a delivered OAuth token after expiry (spec §6.4).
+The user-level `~/.claude/CLAUDE.md` is dropped by `--setting-sources project,local` with an own
+`CLAUDE_CONFIG_DIR`, but claude also reads `CLAUDE.md` and `.claude/CLAUDE.md` up the ancestors of its working
+directory, so a rig under `HOME` still reached the host's file (acceptance scenario 12, claude 2.1.322). Without the
+host layer the adapter therefore sets `claudeMdExcludes` to `~/.claude/CLAUDE.md` and `~/.claude/rules/**` in the
+`--settings` file; scenario 12 checks that the isolated session no longer sees it.
+Open: refresh of a delivered OAuth token after expiry (spec §6.4).
 
 ### codex
 
