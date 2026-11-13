@@ -95,6 +95,16 @@ impl Reader {
         Ok(json!({ "outbox_depth": depth, "outbox_oldest_ms": oldest, "active_runs": active }))
     }
 
+    /// The last `seq` the outbox assigned, journaled or not; 0 before the first event.
+    pub fn last_seq(&self) -> Result<i64, Error> {
+        let seq = self.conn().query_row(
+            "SELECT COALESCE((SELECT seq FROM sqlite_sequence WHERE name = 'outbox'), 0)",
+            [],
+            |r| r.get(0),
+        )?;
+        Ok(seq)
+    }
+
     /// Every instance of the registry (contracts 8), oldest first.
     pub fn instances(&self) -> Result<Vec<Value>, Error> {
         let conn = self.conn();

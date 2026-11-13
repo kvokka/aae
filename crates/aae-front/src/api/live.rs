@@ -65,8 +65,6 @@ pub(crate) async fn live(
         },
     };
     let (tx, rx) = mpsc::channel(BATCH);
-    // shortcut: a terminal run whose end rotated out of the journal keeps the stream open until the client leaves;
-    // record the seq of a run's end in the state if a client needs that.
     tokio::spawn(relay(state.0.clone(), id, from, tx));
     let stream: ReceiverStream<Result<Event, Infallible>> = ReceiverStream::new(rx);
     Ok(Sse::new(stream).keep_alive(KeepAlive::default()).into_response())
@@ -76,9 +74,16 @@ async fn relay(state: Arc<Api>, run: String, mut next: i64, tx: mpsc::Sender<Res
     let mut written = state.written.clone();
     let (mut session, mut tap) = (Value::Null, None);
     let mut caught_up = false;
+    // A seq at or after the run's end, once the state shows the run ended: the view closes when it has read past it,
+    // also when the end is before `from` or rotated out of the journal.
+    let mut end = None;
     loop {
         if caught_up {
+            if end.is_some_and(|end| next > end) {
+                return;
+            }
             tokio::select! {
+                () = tx.closed() => return,
                 changed = written.changed() => {
                     if changed.is_err() {
                         return;
@@ -104,7 +109,7 @@ async fn relay(state: Arc<Api>, run: String, mut next: i64, tx: mpsc::Sender<Res
                 }
                 () = tokio::time::sleep(LOOK) => {}
             }
-            look(&state, &run, &mut session, &mut tap);
+            look(&state, &run, &mut session, &mut tap, &mut end);
             continue;
         }
         // Marked seen before the read: a write after it wakes the wait above.
@@ -112,7 +117,7 @@ async fn relay(state: Arc<Api>, run: String, mut next: i64, tx: mpsc::Sender<Res
         match read(&state, next, BATCH) {
             Ok(events) if events.is_empty() => {
                 caught_up = true;
-                look(&state, &run, &mut session, &mut tap);
+                look(&state, &run, &mut session, &mut tap, &mut end);
             }
             Ok(events) => {
                 for envelope in events {
@@ -140,11 +145,22 @@ async fn relay(state: Arc<Api>, run: String, mut next: i64, tx: mpsc::Sender<Res
     }
 }
 
-/// Taps the session of the run's last attempt if it is not the one tapped already.
-fn look(state: &Api, run: &str, session: &mut Value, tap: &mut Option<broadcast::Receiver<Value>>) {
+/// Taps the session of the run's last attempt if it is not the one tapped already; sets `end` once the run ended.
+fn look(
+    state: &Api,
+    run: &str,
+    session: &mut Value,
+    tap: &mut Option<broadcast::Receiver<Value>>,
+    end: &mut Option<i64>,
+) {
     let Ok(Some(view)) = state.reader.run(run) else {
         return;
     };
+    if end.is_none() && matches!(view["state"].as_str(), Some("passed" | "failed" | "cancelled")) {
+        // The run's last event was committed before this read, so its seq is at most the last one assigned.
+        *end = state.reader.last_seq().ok();
+        return;
+    }
     let Some(last) = view["attempts"].as_array().and_then(|a| a.last()) else {
         return;
     };

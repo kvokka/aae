@@ -42,6 +42,15 @@ async fn a_run_started_over_the_api_passes_and_its_events_stream_from_a_seq() {
         "the stream continues from the seq"
     );
     assert_eq!(d.get("/v1/runs?state=passed&project=shop").await[0]["id"], run.as_str());
+    // The live view of an ended run from after its end has nothing to send and closes by itself.
+    let after = d.get("/v1/daemon").await["journal_seq"].as_i64().unwrap() + 1;
+    let mut live = d
+        .client
+        .stream(&format!("/v1/runs/{run}/live?from={after}"))
+        .await
+        .unwrap();
+    let end = tokio::time::timeout(Duration::from_secs(10), live.next()).await;
+    assert!(end.expect("the view closes").unwrap().is_none());
 }
 
 #[tokio::test]
@@ -101,6 +110,13 @@ async fn a_rotated_away_seq_is_an_explicit_gap() {
         Err(ClientError::Api { status: 410, error }) => {
             assert_eq!((&error["code"], &error["oldest"]), (&json!("gap"), &json!(5)));
         }
+        Err(e) => panic!("{e}"),
+        Ok(_) => panic!("no gap"),
+    }
+    // The live view of a run likewise, before its stream starts.
+    let run = d.create("check", None).await;
+    match d.client.stream(&format!("/v1/runs/{run}/live?from=2")).await {
+        Err(ClientError::Api { status: 410, error }) => assert_eq!(error["oldest"], 5),
         Err(e) => panic!("{e}"),
         Ok(_) => panic!("no gap"),
     }
