@@ -179,9 +179,8 @@ timeout = "30s"
 
 - stdin: the event envelope (see 1.1) as one JSON line, then EOF.
 - cwd: the plugin directory. Environment: `PATH`, `HOME`, `LANG`, plus `AAE_SOCKET` (API socket),
-  `AAE_PLUGIN_DIR` and `AAE_PLUGIN_PARAMS` (the plugin parameters from config as a JSON object). Nothing else is
-  inherited from the daemon. `AAE_PLUGIN_PARAMS` comes with plugin parameters in config (WP-32); until then it is
-  not set.
+  `AAE_PLUGIN_DIR` and `AAE_PLUGIN_PARAMS` (the `config` table of the plugin's `[[plugin]]` declaration as a JSON
+  object, `{}` without one). Nothing else is inherited from the daemon.
 - A program path with a `/` is relative to the plugin directory; a bare name is looked up on `PATH`.
 - Own process group; at the timeout `SIGTERM` to the group, `SIGKILL` 2 s later.
 - stdout is read up to 64 KiB (more is an `output` failure); the last 4 KiB of stderr are kept.

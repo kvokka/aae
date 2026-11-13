@@ -54,7 +54,7 @@ impl RunHandler {
                 }
                 hooks.push(json!({
                     "plugin": plugin.name, "dir": plugin.root, "command": command,
-                    "timeout_ms": timeout_ms.min(HOOK_CEILING_MS),
+                    "timeout_ms": timeout_ms.min(HOOK_CEILING_MS), "params": plugin.params,
                 }));
             }
         }
@@ -291,6 +291,8 @@ async fn invoke(hook: &Value, event: &Value, socket: Option<&Path>) -> Result<Sa
     let dir = PathBuf::from(hook["dir"].as_str().unwrap_or("/"));
     let mut env = process::base_env();
     env.push(("AAE_PLUGIN_DIR".to_owned(), dir.to_string_lossy().into_owned()));
+    let params = hook.get("params").filter(|p| p.is_object());
+    env.extend(params.map(|p| ("AAE_PLUGIN_PARAMS".to_owned(), p.to_string())));
     env.extend(socket.map(|s| ("AAE_SOCKET".to_owned(), s.to_string_lossy().into_owned())));
     let stdin = format!("{event}\n");
     let timeout = Duration::from_millis(hook["timeout_ms"].as_u64().unwrap_or(30_000));

@@ -16,6 +16,8 @@ use std::{
 
 /// Runs started at once when the orchestrator config does not say (spec §9.3).
 const DEFAULT_MAX_RUNS: u32 = 8;
+/// What the harness hooks and MCP commands of a plugin's contribution say for the plugin's directory.
+const PLUGIN_DIR: &str = "${AAE_PLUGIN_DIR}";
 /// Failed runs of a bead before the core closes its gate (spec §10.3).
 const DEFAULT_BEAD_FAILURES: u32 = 3;
 
@@ -136,13 +138,24 @@ impl Loader {
                 });
             }
             // A plugin attaches no other plugin to agents.
-            let agent = self.settings(&manifest, &root, raw.agent, &[]);
+            let mut agent = self.settings(&manifest, &root, raw.agent, &[]);
+            // Its harness hooks and MCP servers reach its own files as `${AAE_PLUGIN_DIR}`.
+            let dir = root.to_string_lossy();
+            let at = |text: &mut String| *text = text.replace(PLUGIN_DIR, &dir);
+            agent.hooks.values_mut().filter_map(|h| h.command.as_mut()).for_each(at);
+            agent
+                .mcp
+                .values_mut()
+                .filter_map(|m| m.command.as_mut())
+                .flatten()
+                .for_each(at);
             plugins.push(Plugin {
                 name: raw.name,
                 version: raw.version,
                 root,
                 agent,
                 hooks,
+                params: decl.config,
             });
         }
         plugins

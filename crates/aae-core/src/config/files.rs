@@ -118,6 +118,9 @@ pub struct Harness {
 #[serde(deny_unknown_fields)]
 pub(super) struct PluginDecl {
     pub path: PathBuf,
+    /// The parameters its orchestrator hooks get in `AAE_PLUGIN_PARAMS`.
+    #[serde(default)]
+    pub config: Map<String, Value>,
 }
 
 #[derive(Debug, Deserialize)]

@@ -151,6 +151,8 @@ pub struct Plugin {
     /// Layer 5 contribution to the agents that attach the plugin.
     pub agent: Settings,
     pub hooks: Vec<OrchestratorHook>,
+    /// `config` of its declaration: the parameters of its orchestrator hooks.
+    pub params: serde_json::Map<String, serde_json::Value>,
 }
 
 /// A command on a core event (spec §11.3).

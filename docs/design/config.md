@@ -196,7 +196,10 @@ timeout = "10s"                     # optional
 ```
 
 Plugin names are unique across the orchestrator and the project; an attachment in `plugins` must name a declared
-plugin.
+plugin. A declaration may carry parameters, `[[plugin]] path = ".." config = { .. }`: its orchestrator hooks get them
+in `AAE_PLUGIN_PARAMS` (contracts 3.1). In the `[agent]` contribution, `${AAE_PLUGIN_DIR}` in a harness hook
+`command` or an MCP `command` is replaced with the plugin's directory at load, so they reach the plugin's own files;
+skill paths are relative to it. The example `examples/aae-plugin-review` shows both sides.
 
 ## Bundled plugins: `[builtin.<name>]`
 

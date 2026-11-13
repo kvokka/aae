@@ -22,12 +22,12 @@ fn policy(hooks: &[(&str, &str)]) -> World {
 }
 
 /// A world whose plugin `policy` has the hooks `(event, script, timeout)`, each run as `sh <script>` in the plugin
-/// directory with `AAE_SOCKET` set to `/run/aae.sock`.
+/// directory with `AAE_SOCKET` set to `/run/aae.sock` and the parameters `{"level": 2}`.
 fn policy_timed(hooks: &[(&str, &str, &str)]) -> World {
     let mut toml = "name = \"policy\"\nversion = \"0.1.0\"\n".to_owned();
     let mut files = vec![(
         "config.toml".to_owned(),
-        "projects = [\"shop\"]\nbuiltin = { default-policy = { enabled = false } }\n[harness.scripted]\n[[plugin]]\npath = \"policy\"\n".to_owned(),
+        "projects = [\"shop\"]\nbuiltin = { default-policy = { enabled = false } }\n[harness.scripted]\n[[plugin]]\npath = \"policy\"\nconfig = { level = 2 }\n".to_owned(),
     )];
     for (n, (on, script, timeout)) in hooks.iter().enumerate() {
         toml += &format!("[[hook]]\non = \"{on}\"\ncommand = [\"sh\", \"{n}.sh\"]\ntimeout = \"{timeout}\"\n");
@@ -97,6 +97,7 @@ async fn preparing_hooks_chain_their_changes() {
 case "$e" in *'"prompt_append":"one"'*) ;; *) exit 1 ;; esac
 case "$e" in *'"X"'*) ;; *) exit 1 ;; esac
 case "$e" in *'"workdir":"/tmp"'*) ;; *) exit 1 ;; esac
+[ "$AAE_PLUGIN_PARAMS" = '{"level":2}' ] || exit 1
 echo '{"decision":"proceed","prompt_append":"two"}'"#;
     let w = policy(&[("run.preparing", one), ("run.preparing", two)]);
     w.driver.script(hollow_turn());
