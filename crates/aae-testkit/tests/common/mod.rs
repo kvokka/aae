@@ -51,6 +51,8 @@ pub(crate) struct World {
     /// The tracker of project `shop`; it outlives restarts, as a tracker database would.
     pub(crate) tracker: MemoryTracker,
     pub(crate) journal: PathBuf,
+    /// The managed clock of every daemon of the world: a restart does not turn time back.
+    pub(crate) clock: Clock,
     hooks: Arc<dyn HookRunner>,
     task: JoinHandle<Result<(), Error>>,
     pub(crate) dir: tempfile::TempDir,
@@ -92,12 +94,14 @@ pub(crate) fn world_on(extra: &[(&str, &str)], hooks: Arc<dyn HookRunner>, drive
         fs::write(path, text).unwrap();
     }
     let tracker = MemoryTracker::new();
-    let (core, task) = core_on(dir.path(), hooks.clone(), &driver, &tracker);
+    let clock = Clock::managed(0);
+    let (core, task) = core_on(dir.path(), clock, hooks.clone(), &driver, &tracker);
     World {
         core,
         driver,
         tracker,
         journal: dir.path().join("journal"),
+        clock,
         hooks,
         task,
         dir,
@@ -106,6 +110,7 @@ pub(crate) fn world_on(extra: &[(&str, &str)], hooks: Arc<dyn HookRunner>, drive
 
 fn core_on(
     dir: &Path,
+    clock: Clock,
     hooks: Arc<dyn HookRunner>,
     driver: &ScriptedDriver,
     tracker: &MemoryTracker,
@@ -113,7 +118,7 @@ fn core_on(
     let config = config::load(&dir.join("config.toml")).unwrap();
     run::start(
         open(&dir.join("state.db")).unwrap(),
-        Clock::managed(0),
+        clock,
         Arc::new(config),
         vec![Arc::new(driver.clone())],
         [(
@@ -133,7 +138,13 @@ impl World {
         self.task.abort();
         let _ = (&mut self.task).await;
         self.driver = self.driver.after_crash();
-        (self.core, self.task) = core_on(self.dir.path(), self.hooks.clone(), &self.driver, &self.tracker);
+        (self.core, self.task) = core_on(
+            self.dir.path(),
+            self.clock,
+            self.hooks.clone(),
+            &self.driver,
+            &self.tracker,
+        );
     }
 
     pub(crate) async fn create(&self) -> String {
