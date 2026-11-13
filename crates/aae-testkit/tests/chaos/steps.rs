@@ -62,6 +62,10 @@ pub(crate) struct Play {
     pub(crate) said: BTreeMap<String, bool>,
     /// What a step saw break at once: a second run for a repeated key, a run still live after its cancel.
     pub(crate) broken: Option<String>,
+    /// The journal as checked so far: the bytes read, the last `seq` and the end of every ended run.
+    pub(crate) read: u64,
+    pub(crate) seq: i64,
+    pub(crate) ended: BTreeMap<String, String>,
 }
 
 /// A run of `build`, or of `fix` on `bead`.

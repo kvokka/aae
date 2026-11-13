@@ -15,9 +15,10 @@ use serde_json::Value;
 use std::{
     collections::{HashMap, HashSet},
     fs,
+    hash::{BuildHasher, DefaultHasher, Hash, Hasher, RandomState},
     path::Path,
     sync::Arc,
-    time::{Duration, Instant, SystemTime},
+    time::{Duration, Instant},
 };
 
 const KILLS: usize = 20;
@@ -42,13 +43,16 @@ fn steps(root: &Path, daemon: u32) -> HashSet<u32> {
         .collect()
 }
 
-/// A pause of `from..from + span` ms, different for each kill.
-fn jitter(from: u64, span: u32) -> Duration {
-    let nanos = SystemTime::now()
-        .duration_since(SystemTime::UNIX_EPOCH)
-        .unwrap()
-        .subsec_nanos();
-    Duration::from_millis(from + u64::from(nanos % span))
+/// A pause of `from..from + span` ms for the `nth` kill, drawn from `seed`.
+fn jitter(seed: u64, nth: usize, from: u64, span: u64) -> Duration {
+    let mut h = DefaultHasher::new();
+    (seed, nth).hash(&mut h);
+    Duration::from_millis(from + h.finish() % span)
+}
+
+/// New on every run, so the kills land at new points; `AAE_CRASH_SEED` replays the pauses of a printed one.
+fn seed() -> u64 {
+    std::env::var("AAE_CRASH_SEED").map_or_else(|_| RandomState::new().hash_one(0), |s| s.parse().unwrap())
 }
 
 async fn passed(d: &Daemon) -> usize {
@@ -71,9 +75,11 @@ pub(crate) async fn run(env: Arc<Env>) -> String {
         );
     })
     .await;
+    let seed = seed();
+    eprintln!("c08: kill pauses from seed {seed} (AAE_CRASH_SEED replays them)");
     let mut work = Vec::new();
     let mut slowest = Duration::ZERO;
-    for _ in 0..KILLS {
+    for nth in 0..KILLS {
         work.push(d.create("work").await);
         // Kill only with a step running, at a different point of it each time.
         let deadline = Instant::now() + UP_WITHIN;
@@ -82,7 +88,7 @@ pub(crate) async fn run(env: Arc<Env>) -> String {
             tokio::time::sleep(Duration::from_millis(20)).await;
         }
         // Always within the 2 s step, with room for a loaded host noticing the step late.
-        tokio::time::sleep(jitter(50, 800)).await;
+        tokio::time::sleep(jitter(seed, nth, 50, 800)).await;
         let done = passed(&d).await;
         slowest = slowest.max(kill(&mut d).await);
         let deadline = Instant::now() + Duration::from_secs(5);
@@ -95,7 +101,8 @@ pub(crate) async fn run(env: Arc<Env>) -> String {
     let (attempts, passed) = settle(&d, &work).await;
     assert_eq!(passed, KILLS, "every exec run passes");
     format!(
-        "{KILLS} kills, {} runs, {attempts} attempts failed by the crashes; slowest restart to the first answer {:.2} s",
+        "{KILLS} kills (pause seed {seed}), {} runs, {attempts} attempts failed by the crashes; slowest restart to the \
+         first answer {:.2} s",
         work.len() + passed,
         slowest.as_secs_f64()
     )
@@ -204,9 +211,14 @@ pub(crate) async fn on_live(env: Arc<Env>, live: Live) -> String {
     .await;
     live.logged_in(&d);
     let started = d.path("config/aae/shop/web/started");
+    let seed = seed();
+    eprintln!(
+        "c08 {}: kill pauses from seed {seed} (AAE_CRASH_SEED replays them)",
+        live.name()
+    );
     let mut work = Vec::new();
     let mut slowest = Duration::ZERO;
-    for _ in 0..HARNESS_KILLS {
+    for nth in 0..HARNESS_KILLS {
         let _ = fs::remove_file(&started);
         let run = d.create("work").await;
         // The model's shell tool is running.
@@ -216,7 +228,7 @@ pub(crate) async fn on_live(env: Arc<Env>, live: Live) -> String {
             tokio::time::sleep(Duration::from_millis(100)).await;
         }
         // Within the 15 s command, at a different point each time.
-        tokio::time::sleep(jitter(500, 10_000)).await;
+        tokio::time::sleep(jitter(seed, nth, 500, 10_000)).await;
         slowest = slowest.max(kill(&mut d).await);
         // Criterion 8 asks for a terminal state exactly once, not a pass: whether the resumed model redoes its
         // killed command is the model's choice.

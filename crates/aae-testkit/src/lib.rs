@@ -335,17 +335,19 @@ impl Driver for ScriptedDriver {
         text: &'a str,
         key: PromptKey,
     ) -> BoxFuture<'a, Result<(), Failure>> {
-        let losing = {
+        let recorded = {
             let mut state = self.lock();
             state.texts.push(text.to_owned());
             state.keys.push(key);
-            state.losing
+            let losing = state.losing;
+            // Only a live session can drop a prompt: a dead process refuses it, as a harness's does.
+            Self::live_session(&mut state, instance, session).map(|s| (!losing).then(|| s.prompts.push((key, false))))
         };
-        if losing {
-            return ready(Ok(()));
+        match recorded {
+            Ok(Some(())) => ready(self.play(instance, session, Some(Normalized::PromptAcked { key }))),
+            Ok(None) => ready(Ok(())),
+            Err(e) => ready(Err(e)),
         }
-        let recorded = Self::live_session(&mut self.lock(), instance, session).map(|s| s.prompts.push((key, false)));
-        ready(recorded.and_then(|()| self.play(instance, session, Some(Normalized::PromptAcked { key }))))
     }
 
     fn cancel_turn<'a>(

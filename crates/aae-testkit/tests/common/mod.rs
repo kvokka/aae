@@ -83,7 +83,14 @@ pub(crate) fn world_with(extra: &[(&str, &str)], hooks: Arc<dyn HookRunner>) -> 
 
 /// The world on `driver`.
 pub(crate) fn world_on(extra: &[(&str, &str)], hooks: Arc<dyn HookRunner>, driver: ScriptedDriver) -> World {
-    let dir = tempfile::tempdir().unwrap();
+    // The state and the journal sync every write: in memory, where the machine has it, that costs nothing.
+    let shm = Path::new("/dev/shm");
+    let dir = if shm.is_dir() {
+        tempfile::tempdir_in(shm)
+    } else {
+        tempfile::tempdir()
+    };
+    let dir = dir.unwrap();
     for (path, text) in FILES
         .iter()
         .filter(|(p, _)| !extra.iter().any(|(e, _)| e == p))

@@ -1,9 +1,13 @@
 //! The invariants checked on the state and the journal after every step.
 
 use crate::{TERMINAL, common::World, steps::Play};
-use aae_core::{Journal, run::MAX_ATTEMPTS};
+use aae_core::run::MAX_ATTEMPTS;
 use rusqlite::OptionalExtension;
-use std::collections::BTreeMap;
+use serde_json::Value;
+use std::{
+    fs::File,
+    io::{Read, Seek, SeekFrom},
+};
 
 pub(crate) fn state(w: &World) -> rusqlite::Connection {
     rusqlite::Connection::open(w.dir.path().join("state.db")).unwrap()
@@ -19,30 +23,48 @@ pub(crate) fn runs(w: &World) -> Vec<(String, String, u32, Option<i64>)> {
     rows.unwrap().map(Result::unwrap).collect()
 }
 
-/// The invariants that hold after every step.
-pub(crate) fn check(w: &World, play: &Play) -> Result<(), String> {
-    let journal = Journal::new(&w.journal)
-        .read_from(1, 1_000_000)
-        .map_err(|e| format!("{e:?}"))?;
+/// The journal lines written since the last check. A seed writes far less than the 10 MB that rotates the journal,
+/// so the current file only grows and each check reads only its new whole lines.
+fn new_events(w: &World, play: &mut Play) -> Result<Vec<Value>, String> {
+    let Ok(mut file) = File::open(w.journal.join("events.jsonl")) else {
+        return Ok(Vec::new());
+    };
+    let len = file.metadata().map_err(|e| e.to_string())?.len();
+    if len < play.read {
+        return Err(format!("the journal shrank from {} to {len} bytes", play.read));
+    }
+    let mut text = String::new();
+    file.seek(SeekFrom::Start(play.read))
+        .and_then(|_| file.read_to_string(&mut text))
+        .map_err(|e| e.to_string())?;
+    let whole = text.rfind('\n').map_or(0, |i| i + 1);
+    play.read += whole as u64;
+    text[..whole]
+        .lines()
+        .map(|line| serde_json::from_str(line).map_err(|e| format!("a journal line: {e}")))
+        .collect()
+}
+
+/// The invariants that hold after every step; the journal is checked as it grows.
+pub(crate) fn check(w: &World, play: &mut Play) -> Result<(), String> {
     if let Some(broken) = &play.broken {
         return Err(broken.clone());
     }
-    let mut last = 0;
-    let mut ended: BTreeMap<String, String> = BTreeMap::new();
-    for e in &journal {
+    for e in &new_events(w, play)? {
         let seq = e["seq"].as_i64().unwrap();
+        let last = play.seq;
         if seq <= last {
             return Err(format!("journal seq {seq} after {last}: an event delivered twice"));
         }
-        last = seq;
+        play.seq = seq;
         let (Some(run), Some(kind)) = (e["run"].as_str(), e["type"].as_str()) else {
             continue;
         };
-        if let Some(end) = ended.get(run).filter(|_| kind.starts_with("run.")) {
+        if let Some(end) = play.ended.get(run).filter(|_| kind.starts_with("run.")) {
             return Err(format!("{run}: {kind} at {seq} after {end} (an end is final)"));
         }
         if let Some(end) = kind.strip_prefix("run.").filter(|k| TERMINAL.contains(k)) {
-            ended.insert(run.to_owned(), end.to_owned());
+            play.ended.insert(run.to_owned(), end.to_owned());
             if end == "passed" {
                 if e["data"]["outcome"]["result"] != "pass" {
                     return Err(format!("{run} passed without a pass outcome: {}", e["data"]));
@@ -77,10 +99,10 @@ pub(crate) fn check(w: &World, play: &Play) -> Result<(), String> {
             )
             .unwrap();
         if TERMINAL.contains(&state.as_str()) {
-            if ended.get(run) != Some(state) {
+            if play.ended.get(run) != Some(state) {
                 return Err(format!(
                     "{run} is {state} in the state, {:?} in the journal",
-                    ended.get(run)
+                    play.ended.get(run)
                 ));
             }
             if open != 0 {
@@ -139,7 +161,7 @@ pub(crate) fn check(w: &World, play: &Play) -> Result<(), String> {
 
 /// A failure says whose it is: the agent's only when its last accepted finisher said fail, the infrastructure's when
 /// the attempts ran out (invariant 13).
-fn failed(run: &str, data: &serde_json::Value, play: &Play) -> Result<(), String> {
+fn failed(run: &str, data: &Value, play: &Play) -> Result<(), String> {
     let class = data["class"].as_str().unwrap_or_default();
     let said = play.said.get(run);
     if !["infrastructure", "agent", "check", "hollow_done"].contains(&class) {

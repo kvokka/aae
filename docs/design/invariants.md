@@ -36,7 +36,8 @@ times, how long) are config parameters with defaults; the choice of a reaction i
 
 How they are checked: the deterministic chaos stand (`aae-testkit/tests/chaos`) plays seeded sequences of
 commands, harness behaviour, policy hooks, operator actions, lost and repeated deliveries and daemon crashes, and
-checks invariants 2, 3, 6, 10, 12, 13, 14, 15, 16 and 17 on the state and the journal after every step. The
+checks invariants 2, 3, 6, 10, 12, 13, 14, 15, 16 and 17 on the state and the journal after every step. Every run
+plays new seeds from a random base it prints; a failure names its seed and `AAE_CHAOS_SEED=<n>` replays it. The
 others are covered by the integration suites of `aae-testkit/tests` and by the acceptance scenarios (criterion 8:
 20 `kill -9` of the daemon mid-turn in CI and 5 on each real harness).
 

@@ -5,8 +5,9 @@
 //! the faults stop, every run must reach an end and every hooked event must have had its hooks run. Each full share
 //! of seeds must have killed the daemon with tracker, harness and hook calls recorded and not yet done.
 //!
-//! A failure names its seed: `AAE_CHAOS_SEED=<n> cargo nextest run -p aae-testkit --test chaos` replays it alone;
-//! `AAE_CHAOS_SEEDS=<n>` plays `n` seeds instead of 1000.
+//! Every run plays new seeds: each share starts from a random base seed and prints it. A failure names its seed:
+//! `AAE_CHAOS_SEED=<n> cargo nextest run -p aae-testkit --test chaos` replays it alone; `AAE_CHAOS_SEEDS=<n>` plays
+//! `n` seeds instead of 1000.
 
 mod check;
 #[path = "../common/mod.rs"]
@@ -22,6 +23,7 @@ use common::world_with;
 use serde_json::Value;
 use std::{
     collections::BTreeSet,
+    hash::{BuildHasher, RandomState},
     sync::{Arc, Mutex},
     time::Duration,
 };
@@ -52,8 +54,7 @@ const FIX: &[(&str, &str)] = &[
     ("shop/formulas/fix.md", "Fix {{ bead.title }}."),
 ];
 
-/// Seeds in all, unless `AAE_CHAOS_SEEDS` says otherwise (CI runs a share, `acceptance-ci` all of them); the tests
-/// split the range so that nextest runs them side by side.
+/// Seeds in all, unless `AAE_CHAOS_SEEDS` says otherwise; the tests split them so that nextest runs them side by side.
 const SEEDS: u64 = 1_000;
 const TESTS: u64 = 8;
 /// Steps per seed.
@@ -123,28 +124,40 @@ async fn play(seed: u64) -> Result<Played, String> {
     w.tracker.add(&[], None);
     w.tracker.add(&[], None);
     let mut play = Play::default();
-    let report = |play: &Play, why: String| format!("seed {seed}: {why}\nsteps:\n  {}", play.log.join("\n  "));
+    let report = |play: &Play, why: String| {
+        format!(
+            "seed {seed}: {why}\nreplay: AAE_CHAOS_SEED={seed} cargo nextest run -p aae-testkit --test chaos\n\
+             steps:\n  {}",
+            play.log.join("\n  ")
+        )
+    };
+    // Once the faults stop, on half the seeds nobody acts and the deadlines take every run to an end (invariant 14);
+    // on the others the agent and the policy behave until every run ends.
+    let behave = rng.below(2) == 1;
     for _ in 0..STEPS {
         step(&mut w, &mut rng, &mut play, false).await;
         tokio::time::sleep(Duration::from_millis(1)).await;
-        check(&w, &play).map_err(|why| report(&play, why))?;
+        if let Err(why) = check(&w, &mut play) {
+            return Err(report(&play, why));
+        }
     }
-    // The faults stop. On even seeds nobody acts and the deadlines take every run to an end (invariant 14); on odd
-    // ones the agent and the policy behave until every run ends.
-    play.log.push("-- quiet --".into());
+    play.log.push(format!(
+        "-- quiet, {} --",
+        if behave { "behaving" } else { "nobody acts" }
+    ));
     w.tracker.set_down(false);
     for i in 0..300 {
         if runs(&w).iter().all(|r| TERMINAL.contains(&r.1.as_str())) {
             break;
         }
         // A run the operator's gate holds ends by its own deadline, after the calm steps.
-        if seed % 2 == 1 && i < 100 {
+        if behave && i < 100 {
             step(&mut w, &mut rng, &mut play, true).await;
             tokio::time::sleep(Duration::from_secs(20)).await;
         } else {
             tokio::time::sleep(Duration::from_secs(3_600)).await;
         }
-        check(&w, &play).map_err(|why| report(&play, why))?;
+        check(&w, &mut play).map_err(|why| report(&play, why))?;
     }
     let stuck: Vec<_> = runs(&w)
         .into_iter()
@@ -181,22 +194,24 @@ async fn play(seed: u64) -> Result<Played, String> {
     ))
 }
 
-/// Plays the `nth` share of the seeds; a replayed seed plays in the first share alone.
+/// Plays the `nth` share of the seeds from a random base seed; a replayed seed plays in the first share alone.
 fn seeds(nth: u64) {
-    let range = if let Ok(seed) = std::env::var("AAE_CHAOS_SEED") {
-        let seed: u64 = seed.parse().unwrap();
+    let (base, count) = if let Ok(seed) = std::env::var("AAE_CHAOS_SEED") {
         if nth > 0 {
             return;
         }
-        seed..seed + 1
+        (seed.parse().unwrap(), 1)
     } else {
         let all = std::env::var("AAE_CHAOS_SEEDS").map_or(SEEDS, |n| n.parse().unwrap());
         let share = all.div_ceil(TESTS);
-        (nth * share).min(all)..((nth + 1) * share).min(all)
+        let base = RandomState::new().hash_one(nth);
+        (base, ((nth + 1) * share).min(all).saturating_sub(nth * share))
     };
-    // A share under 100 seeds (a replay, the CI share) is too short to be sure to land every kind of kill.
-    let short = range.end - range.start < 100;
-    for seed in range {
+    // nextest shows the output of a failed test: the base says which seeds this share played.
+    eprintln!("chaos share {nth}: {count} seeds from {base}");
+    // A share under 100 seeds (a replay, a short CI share) is too short to be sure to land every kind of kill.
+    let short = count < 100;
+    for seed in (0..count).map(|i| base.wrapping_add(i)) {
         if let Err(why) = played(seed) {
             panic!("{why}");
         }
@@ -253,9 +268,11 @@ fn played(seed: u64) -> Result<Played, String> {
 }
 
 /// A seed plays the same steps and writes the same journal every time: what failed once fails again on replay.
+/// `AAE_CHAOS_REPLAYS=<n>` checks `n` new seeds instead of 3.
 #[test]
 fn a_seed_replays_the_same() {
-    for seed in [1, 2, 3] {
+    let n = std::env::var("AAE_CHAOS_REPLAYS").map_or(3, |n| n.parse().unwrap());
+    for seed in (0..n).map(|i| RandomState::new().hash_one(i)) {
         let (once, twice) = (played(seed).unwrap(), played(seed).unwrap());
         assert_eq!(once.0, twice.0, "seed {seed}: the steps differ");
         let differ = once.1.lines().zip(twice.1.lines()).find(|(a, b)| a != b);
