@@ -207,12 +207,17 @@ fn login(harness: &str) -> Value {
     let (file, key) = match harness {
         "claude" => (
             home("CLAUDE_CONFIG_DIR", ".claude").join(".credentials.json"),
-            "ANTHROPIC_API_KEY",
+            "ANTHROPIC_API_KEY".to_owned(),
         ),
-        _ => (home("CODEX_HOME", ".codex").join("auth.json"), "OPENAI_API_KEY"),
+        _ => {
+            let codex = home("CODEX_HOME", ".codex");
+            // A host provider with `env_key` takes its key from there, not from the login.
+            let key = aae_codex::host_key(&codex).unwrap_or_else(|| "OPENAI_API_KEY".to_owned());
+            (codex.join("auth.json"), key)
+        }
     };
     let what = format!("{harness} login");
-    match (file.is_file(), env::var_os(key).is_some()) {
+    match (file.is_file(), env::var_os(&key).is_some()) {
         (true, _) => check(what, "ok", file.display().to_string()),
         (false, true) => check(what, "ok", format!("{key} is set")),
         (false, false) => check(

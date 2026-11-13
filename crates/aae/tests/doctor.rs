@@ -89,15 +89,24 @@ fn harnesses_resolve_from_the_config_and_from_mise_and_a_missing_one_fails() {
     let (codex, path) = level(&found, "codex");
     assert!(codex == "ok" && path.ends_with("tools/codex (from mise)"), "{found:?}");
     assert_eq!(level(&found, "claude login").0, "warning", "no login in the fake home");
+    assert_eq!(level(&found, "codex login").0, "warning", "no login in the fake home");
     assert_eq!(level(&found, "state").0, "ok");
 
     script(&dir.path().join(".claude/.credentials.json"), "{}");
+    // A host provider whose key is a variable the daemon has: `PATH` stands in for it.
+    fs::create_dir_all(dir.path().join(".codex")).unwrap();
+    fs::write(
+        dir.path().join(".codex/config.toml"),
+        "model_provider = \"proxy\"\n[model_providers.proxy]\nenv_key = \"PATH\"\n",
+    )
+    .unwrap();
     fs::remove_file(dir.path().join("tools/codex")).unwrap();
     let (passed, found) = doctor(dir.path());
     assert!(!passed, "a missing harness binary is an error");
     assert_eq!(level(&found, "codex"), ("error", level(&found, "codex").1));
     assert!(level(&found, "codex").1.ends_with("not found"), "{found:?}");
     assert_eq!(level(&found, "claude login").0, "ok");
+    assert_eq!(level(&found, "codex login"), ("ok", "PATH is set"));
 }
 
 #[test]

@@ -5,6 +5,8 @@ mod part;
 mod rpc;
 mod stream;
 
+pub use part::host_key;
+
 use aae_core::{
     BoxFuture,
     config::EffectiveConfig,

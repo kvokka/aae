@@ -357,6 +357,22 @@ fn the_process_gets_the_native_block_and_the_thread_the_rest() {
 }
 
 #[test]
+fn a_process_on_the_host_home_gets_the_key_its_host_provider_names() {
+    let home = tempfile::tempdir().unwrap();
+    let p = json!({ "home": home.path(), "env": {} });
+    let keyed = |p: &Value| part::env(p, "i1", None).iter().any(|(k, _)| k == "CARGO_MANIFEST_DIR");
+    assert!(!keyed(&p), "no host config, no key");
+    std::fs::write(
+        home.path().join("config.toml"),
+        "model_provider = \"proxy\"\n[model_providers.proxy]\nenv_key = \"CARGO_MANIFEST_DIR\"\n",
+    )
+    .unwrap();
+    assert!(keyed(&p));
+    // An isolated process has its own home: the host's provider is not its.
+    assert!(!keyed(&json!({ "home": home.path(), "user_home": "/u", "env": {} })));
+}
+
+#[test]
 fn a_text_answers_every_question_of_a_user_input_request_by_its_id() {
     let request = json!({ "id": 7, "method": "item/tool/requestUserInput",
         "params": { "threadId": "t", "questions": [{ "id": "q1" }, { "id": "q2" }] } });

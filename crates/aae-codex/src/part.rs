@@ -188,7 +188,13 @@ pub(crate) fn env(p: &Value, id: &str, socket: Option<&Path>) -> Vec<(String, St
             .map(|(k, v)| (k.clone(), text(v))),
     );
     env.push(("CODEX_HOME".to_owned(), text(&p["home"])));
-    env.extend(p["user_home"].as_str().map(|h| ("HOME".to_owned(), h.to_owned())));
+    match p["user_home"].as_str() {
+        Some(h) => env.push(("HOME".to_owned(), h.to_owned())),
+        // The host's login (§6.4) may be a provider whose key is a variable of the daemon's environment.
+        None => {
+            env.extend(host_key(Path::new(&text(&p["home"]))).and_then(|k| Some((k.clone(), std::env::var(k).ok()?))))
+        }
+    }
     env.push((aae_core::orphans::INSTANCE_ENV.to_owned(), id.to_owned()));
     env.extend(socket.map(|s| ("AAE_SOCKET".to_owned(), s.to_string_lossy().into_owned())));
     env
@@ -218,6 +224,14 @@ pub(crate) fn materialize(p: &Value) -> std::io::Result<()> {
         std::os::unix::fs::symlink(auth, link)?;
     }
     Ok(())
+}
+
+/// The variable that holds the key of the model provider `config.toml` in `home` selects (its `env_key`), if any.
+pub fn host_key(home: &Path) -> Option<String> {
+    let config: toml::Table = toml::from_str(&std::fs::read_to_string(home.join("config.toml")).ok()?).ok()?;
+    let provider = config.get("model_provider")?.as_str()?;
+    let key = config.get("model_providers")?.get(provider)?.get("env_key")?;
+    key.as_str().map(str::to_owned)
 }
 
 /// The host's codex home: the daemon's `CODEX_HOME`, else `~/.codex`.
