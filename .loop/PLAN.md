@@ -813,6 +813,16 @@ todo | doing | done | blocked | split (разбит, работа — в доч�
   с `inherit_host = false` на хосте без `auth.json` — pass); `1348657` `settle` прощает и помощников app-server
   (`codex-code-mode-host`).
 
+### WP-40 · Постмортем 0001 в `default-policy` · размер S · статус: done (цикл 42)
+- Спека: §11.5 (постмортем 0001, [Р]), §5.5 (инвариант 15); `docs/postmortems/0001-*.md`
+- Зависит от: WP-33
+- Результат: `auth_required` — ограниченная перевзводимая парковка аккаунта (бэкофф по серии; следующая попытка —
+  проба), повышение до оператора (`until: null`) только после `auth_escalate_s`; пороги в `[builtin.default-policy]`;
+  `billing` как был; `contracts.md` 10, `config.md`, READINESS, статус постмортема.
+- Готово, когда: юнит-тесты политики; `crates/aae-testkit/tests/auth.rs` — (а) временная 403 с удвоенным и
+  потерянным концом восстанавливается сама, (б) стойкая 403 повышается после настроенного времени; мутация
+  «вернуть `until: null`» роняет оба; `mise run ci` EXIT 0.
+
 ## Покрытие §15
 
 | Критерий | Пакеты |
@@ -858,7 +868,7 @@ todo | doing | done | blocked | split (разбит, работа — в доч�
 | адаптер codex | WP-04, WP-29, WP-30 |
 | адаптер br | WP-06, WP-31 |
 | исполнение хуков плагинов | WP-15, WP-32, WP-21b |
-| `default-policy` | WP-33 |
+| `default-policy` | WP-33, WP-40 |
 | `worktree` | WP-33 |
 | общий MCP | WP-34 |
 | HTTP API | WP-22a, WP-22b1, WP-22c |
