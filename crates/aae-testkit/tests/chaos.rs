@@ -34,6 +34,15 @@ const POLICY: &[(&str, &str)] = &[
     ),
 ];
 
+const FIX: &[(&str, &str)] = &[
+    (
+        "shop/formulas/fix.toml",
+        "name = \"fix\"\n[inputs]\nbead = { type = \"bead\", required = true }\n\
+         [step]\nkind = \"prompt\"\nagent = \"dev\"\nprompt = \"fix.md\"\n",
+    ),
+    ("shop/formulas/fix.md", "Fix {{ bead.title }}."),
+];
+
 /// Seeds per test; the tests split the range so that nextest runs them side by side.
 const SEEDS: u64 = 125;
 /// Steps per seed.
@@ -74,12 +83,14 @@ struct Play {
     broken: Option<String>,
 }
 
-fn create() -> Create {
+/// A run of `build`, or of `fix` on `bead`.
+fn create(bead: Option<&str>) -> Create {
+    let inputs = bead.map(|b| ("bead".to_owned(), serde_json::json!(b)));
     Create {
         project: "shop".into(),
         rig: "web".into(),
-        formula: "build".into(),
-        inputs: serde_json::Map::new(),
+        formula: if bead.is_some() { "fix" } else { "build" }.into(),
+        inputs: inputs.into_iter().collect(),
         correlation: None,
         depth: 0,
         parent_run: None,
@@ -211,11 +222,24 @@ async fn step(w: &mut World, rng: &mut Rng, play: &mut Play, calm: bool) {
         (false, _) => rng.below(24),
     };
     match op {
+        20 => {
+            let down = rng.below(2) == 0;
+            w.tracker.set_down(down);
+            play.log.push(format!("tracker down={down}"));
+        }
         0..=2 => {
             // A keyed create may come again: the client retried (invariant 10).
-            let key = rng.below(4);
-            let reply = w.core.send(Some(&format!("create-{key}")), Msg::Create(create())).await;
-            let run = reply.unwrap()["run"].as_str().unwrap().to_owned();
+            // Keys 4 and 5 are runs on the beads b-1 and b-2: refused while another live run holds the bead.
+            let key = rng.below(6);
+            let bead = (key >= 4).then(|| format!("b-{}", key - 3));
+            let msg = Msg::Create(create(bead.as_deref()));
+            let run = match w.core.send(Some(&format!("create-{key}")), msg).await {
+                Ok(reply) => reply["run"].as_str().unwrap().to_owned(),
+                Err(e) => {
+                    play.log.push(format!("create {key} refused: {e}"));
+                    return;
+                }
+            };
             if let Some(first) = play.keyed.get(&key) {
                 if *first != run {
                     play.broken = Some(format!("create {key} made {run} after {first} (invariant 10)"));
@@ -416,13 +440,33 @@ fn check(w: &World, play: &Play) -> Result<(), String> {
             return Err(format!("{run} is {state} with no deadline (invariant 14)"));
         }
     }
+    // One live owner per bead, and the owner the state records is a live run on that bead (invariants 2, 3).
+    let owners: Vec<(String, Option<String>, i64)> = conn
+        .prepare(
+            "SELECT b.id, b.owner, (SELECT COUNT(*) FROM runs r WHERE r.bead = b.id \
+             AND r.state NOT IN ('passed', 'failed', 'cancelled')) FROM beads b",
+        )
+        .unwrap()
+        .query_map([], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)))
+        .unwrap()
+        .map(Result::unwrap)
+        .collect();
+    for (bead, owner, live) in owners {
+        let held = owner.as_ref().and_then(|o| all.iter().find(|r| &r.0 == o));
+        let bad = live > 1 || owner.is_some() && held.is_none_or(|r| TERMINAL.contains(&r.1.as_str()));
+        if bad {
+            return Err(format!("{bead}: owner {owner:?}, {live} live runs on it"));
+        }
+    }
     Ok(())
 }
 
 /// Plays `seed`; the error is the failed check with the steps that led to it.
 async fn play(seed: u64) -> Result<(), String> {
     let mut rng = Rng::new(seed);
-    let mut w = world(POLICY);
+    let mut w = world(&[POLICY, FIX].concat());
+    w.tracker.add(&[], None);
+    w.tracker.add(&[], None);
     let mut play = Play::default();
     let report = |play: &Play, why: String| format!("seed {seed}: {why}\nsteps:\n  {}", play.log.join("\n  "));
     for _ in 0..STEPS {
@@ -433,6 +477,7 @@ async fn play(seed: u64) -> Result<(), String> {
     // The faults stop. On even seeds nobody acts and the deadlines take every run to an end (invariant 14); on odd
     // ones the agent and the policy behave until every run ends.
     play.log.push("-- quiet --".into());
+    w.tracker.set_down(false);
     for i in 0..300 {
         if runs(&w).iter().all(|r| TERMINAL.contains(&r.1.as_str())) {
             break;
@@ -452,6 +497,17 @@ async fn play(seed: u64) -> Result<(), String> {
         .collect();
     if !stuck.is_empty() {
         return Err(report(&play, format!("no end after the faults stopped: {stuck:?}")));
+    }
+    // Every run ended and the tracker is up: no open bead is left assigned to a run (invariants 4, 5).
+    tokio::time::sleep(Duration::from_secs(3_600)).await;
+    for id in ["b-1", "b-2"] {
+        let bead = w.tracker.bead(id).unwrap();
+        if bead.status != "closed" && bead.assignee.as_deref().is_some_and(|a| a.starts_with("aae:")) {
+            return Err(report(
+                &play,
+                format!("{id} is {} and still held by {:?}", bead.status, bead.assignee),
+            ));
+        }
     }
     Ok(())
 }
