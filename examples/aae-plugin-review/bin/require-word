@@ -1,0 +1,19 @@
+#!/bin/sh
+# An orchestrator hook on `run.finishing` (contracts 3): exit 2 vetoes a pass whose summary lacks the word of the
+# `require` parameter, with stderr as the reason. Without the parameter the hook fails, and a failed veto hook
+# counts as a veto (spec §11.3).
+word=$(printf '%s' "$AAE_PLUGIN_PARAMS" | sed -n 's/.*"require":"\([^"]*\)".*/\1/p')
+if [ -z "$word" ]; then
+    echo "the review plugin needs its require parameter" >&2
+    exit 1
+fi
+event=$(cat)
+case "$event" in
+*'"result":"pass"'*) ;;
+*) exit 0 ;;
+esac
+if printf '%s' "$event" | grep -q "\"summary\":\"[^\"]*$word"; then
+    exit 0
+fi
+echo "the summary of a pass must say the work is $word" >&2
+exit 2

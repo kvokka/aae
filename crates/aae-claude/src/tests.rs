@@ -79,13 +79,6 @@ fn a_config_the_adapter_cannot_deliver_is_a_config_error() {
     config.native = Some(agent(json!("permissions")));
     assert_eq!(driver.split(&config, &plan).unwrap_err().kind, FailureKind::ConfigError);
     config.native = None;
-    config.plugins.push(agent(aae_core::config::PluginUse {
-        name: "p".into(),
-        enabled: true,
-        config: Default::default(),
-    }));
-    assert_eq!(driver.split(&config, &plan).unwrap_err().kind, FailureKind::ConfigError);
-    config.plugins.clear();
     let shared = aae_core::config::Mcp {
         command: Some(vec!["srv".into()]),
         env: Default::default(),

@@ -16,11 +16,6 @@ use uuid::Uuid;
 /// system_prompt, permission_mode, inherit_host, env, settings, mcp, skills}`; `settings` and `mcp` are the JSON
 /// of `--settings` and `--mcp-config`, `skills` the skill directories by name.
 pub(crate) fn process(config: &EffectiveConfig, plan: &SessionPlan, state: &Path) -> Result<Value, Failure> {
-    // shortcut: the agent side of plugins comes with WP-32; until then an attached plugin is refused rather than
-    // run without it.
-    if !config.plugins.is_empty() {
-        return Err(config_error("the claude adapter does not deliver plugins yet".into()));
-    }
     let settings = settings(config)?;
     let mcp = mcp(config)?;
     let skills: BTreeMap<_, _> = config

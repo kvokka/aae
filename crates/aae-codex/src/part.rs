@@ -26,11 +26,10 @@ fn config_error(raw: String) -> Failure {
 /// under the state directory, keyed by the rest of the part, so equal parts share one app-server and its threads
 /// survive a daemon restart; `overrides` are the `-c key=value` flags of the native block.
 pub(crate) fn process(config: &EffectiveConfig, state: &Path) -> Result<Value, Failure> {
-    // shortcut: plugins (WP-32) and skills (WP-29b, `CODEX_HOME/skills`) are refused rather than run without them.
-    if !config.plugins.is_empty() || config.skills.values().any(|s| s.value.enabled) {
-        return Err(config_error(
-            "the codex adapter does not deliver plugins or skills yet".into(),
-        ));
+    // The contributions of attached plugins are already merged into the config (layer 5 of spec §6.3).
+    // shortcut: skills (WP-29b, `CODEX_HOME/skills`) are refused rather than run without them.
+    if config.skills.values().any(|s| s.value.enabled) {
+        return Err(config_error("the codex adapter does not deliver skills yet".into()));
     }
     let overrides = match config.native.as_ref().map(|n| &n.value) {
         None => Vec::new(),

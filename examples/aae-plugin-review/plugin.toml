@@ -1,0 +1,22 @@
+# An example external plugin (spec §11). The agents that attach it get a review checklist skill and a harness hook
+# that reminds them to check their work on every prompt; on the orchestrator side it vetoes a `pass` whose summary
+# does not say the work was checked.
+#
+# Declare it in the orchestrator or a project config, with the word a passing summary must contain:
+#
+#   [[plugin]]
+#   path = "~/aae-plugins/aae-plugin-review"
+#   config = { require = "tested" }
+#
+# and attach it to an agent in its `agent.toml`: `plugins = [{ name = "review" }]`.
+name = "review"
+version = "0.1.0"
+
+[agent]
+skills.review-checklist = { path = "skills/review-checklist" }
+hooks.review-reminder = { event = "UserPromptSubmit", command = "${AAE_PLUGIN_DIR}/hooks/remind.sh", timeout = "10s" }
+
+[[hook]]
+on = "run.finishing"
+command = ["bin/require-word"]
+timeout = "10s"
