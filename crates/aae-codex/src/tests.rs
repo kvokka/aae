@@ -355,3 +355,14 @@ fn the_process_gets_the_native_block_and_the_thread_the_rest() {
     let refused = driver.split(&config, &plan).unwrap_err();
     assert!(refused.raw.contains("inherit_host"), "{}", refused.raw);
 }
+
+#[test]
+fn a_text_answers_every_question_of_a_user_input_request_by_its_id() {
+    let request = json!({ "id": 7, "method": "item/tool/requestUserInput",
+        "params": { "threadId": "t", "questions": [{ "id": "q1" }, { "id": "q2" }] } });
+    let answer = Answer::Text { text: "blue".into() };
+    assert_eq!(
+        reply(&request, &answer),
+        json!({ "id": 7, "result": { "answers": { "q1": { "answers": ["blue"] }, "q2": { "answers": ["blue"] } } } })
+    );
+}

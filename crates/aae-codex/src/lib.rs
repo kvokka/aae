@@ -287,20 +287,7 @@ impl Driver for Codex {
                 failure.raw = format!("no open request `{request_id}`");
                 return Err(failure);
             };
-            let result = match (request["method"].as_str().unwrap_or_default(), answer) {
-                // shortcut: the form is `ToolRequestUserInputResponse` of the pinned codex's generated schema (every
-                // question gets the text), never seen live: the tool is experimental; check it once codex offers it.
-                ("item/tool/requestUserInput", Answer::Text { text }) => {
-                    let questions = request["params"]["questions"].as_array().into_iter().flatten();
-                    let answers: serde_json::Map<String, Value> = questions
-                        .filter_map(|q| Some((q["id"].as_str()?.to_owned(), json!({ "answers": [text] }))))
-                        .collect();
-                    json!({ "answers": answers })
-                }
-                (_, Answer::Allow { .. }) => json!({ "decision": "accept" }),
-                (_, Answer::Deny { .. } | Answer::Text { .. }) => json!({ "decision": "decline" }),
-            };
-            known.write(&json!({ "id": request["id"], "result": result })).await
+            known.write(&reply(&request, answer)).await
         })
     }
 
@@ -351,6 +338,24 @@ impl Driver for Codex {
             .values()
             .find_map(|i| lock(&i.live).get(thread).map(broadcast::Sender::subscribe))
     }
+}
+
+/// The JSON-RPC response to a server request of codex.
+fn reply(request: &Value, answer: &Answer) -> Value {
+    let result = match (request["method"].as_str().unwrap_or_default(), answer) {
+        // shortcut: the form is `ToolRequestUserInputResponse` of the pinned codex's generated schema (every
+        // question gets the text), never seen live: the tool is experimental; check it once codex offers it.
+        ("item/tool/requestUserInput", Answer::Text { text }) => {
+            let questions = request["params"]["questions"].as_array().into_iter().flatten();
+            let answers: serde_json::Map<String, Value> = questions
+                .filter_map(|q| Some((q["id"].as_str()?.to_owned(), json!({ "answers": [text] }))))
+                .collect();
+            json!({ "answers": answers })
+        }
+        (_, Answer::Allow { .. }) => json!({ "decision": "accept" }),
+        (_, Answer::Deny { .. } | Answer::Text { .. }) => json!({ "decision": "decline" }),
+    };
+    json!({ "id": request["id"], "result": result })
 }
 
 #[cfg(test)]
