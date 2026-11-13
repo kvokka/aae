@@ -7,7 +7,7 @@ use serde_json::{Value, json};
 use std::{collections::HashSet, fmt, future::Future, pin::Pin, sync::Arc};
 use tokio::{
     sync::{mpsc, oneshot},
-    task::JoinHandle,
+    task::{JoinHandle, JoinSet},
 };
 
 /// How long an idempotency key is remembered.
@@ -220,7 +220,8 @@ async fn run<H: Handler, E: Executor>(
         settle(&mut tx, &mut handler)?;
         tx.tx.commit()?;
     }
-    let (done_tx, mut done_rx) = mpsc::unbounded_channel::<(i64, String, bool)>();
+    // The effects in flight die with the writer, as they would with the daemon process.
+    let mut running = JoinSet::new();
     let mut in_flight = HashSet::new();
     loop {
         let now = clock.now_ms();
@@ -232,10 +233,9 @@ async fn run<H: Handler, E: Executor>(
         for effect in due {
             in_flight.insert(effect.key.clone());
             let executor = executor.clone();
-            let done = done_tx.clone();
-            tokio::spawn(async move {
+            running.spawn(async move {
                 let ok = executor.execute(&effect.key, &effect.payload).await;
-                let _ = done.send((effect.id, effect.key, ok));
+                (effect.id, effect.key, ok)
             });
         }
         // The sleep is monotonic and wakes late after the machine slept: the wall clock is read again this often.
@@ -255,7 +255,7 @@ async fn run<H: Handler, E: Executor>(
                 let Some(Input { key, msg, reply }) = input else { return Ok(()) };
                 let _ = reply.send(process(&mut conn, &mut handler, clock.now_ms(), key, msg));
             }
-            Some((id, key, ok)) = done_rx.recv() => {
+            Some(Ok((id, key, ok))) = running.join_next() => {
                 in_flight.remove(&key);
                 effects::finish(&conn, id, ok, clock.now_ms())?;
             }

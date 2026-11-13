@@ -143,6 +143,19 @@ impl ScriptedDriver {
         }
     }
 
+    /// The transcripts no live process holds are gone, as when the harness's files are lost: a resume of one is
+    /// refused (invariant 17).
+    pub fn lose_transcripts(&self) {
+        self.lock().sessions.retain(|_, s| !s.instance.is_empty());
+    }
+
+    /// Whether the harness has a transcript of `session`, as the attempts table stores it.
+    pub fn has_transcript(&self, session: &Value) -> bool {
+        session["session"]
+            .as_u64()
+            .is_some_and(|id| self.lock().sessions.contains_key(&id))
+    }
+
     /// The token of attempt `attempt` of `run`, as the agent of the attempt would find it in its environment.
     pub fn token(&self, run: &str, attempt: u32) -> Option<String> {
         self.lock().tokens.get(&(run.to_owned(), attempt)).map(|t| t.0.clone())
