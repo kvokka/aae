@@ -4,8 +4,8 @@ Per-component readiness on the 0–10 scale of spec §14: 0 nothing; 2 contract 
 path works by hand; 6 model-free tests green, including failure paths; 8 the component's §15 criteria green on the
 owner's host; 10 real owner runs without intervention (criterion 20). Updated at the end of every work session.
 
-Assessed 2026-11-13 on top of `a668d89` (review 29 fixes: runs queued during a drain start after the restart, one stop reason; WP-38: four release targets, user guide; WP-39: unused public items check, scenario 4a on a real background subagent).
-<!-- MEASURE id=readiness date=2026-11-13 ver=a668d89 env=linux-arm64-orbstack src=docs/READINESS.md note="self-assessment by the implementing agent; re-assess at the end of every session" -->
+Assessed 2026-11-13 on top of `44ddff9` (WP-21 invariant stand: 1000 seeds with daemon kills, tracker outages, repeated and lost decisions; a failing deadline retries a minute later and is logged; services that never come up or outlive a dead daemon; the mise lock follows the loose claude and codex selectors).
+<!-- MEASURE id=readiness date=2026-11-13 ver=44ddff9 env=linux-arm64-orbstack src=docs/READINESS.md note="self-assessment by the implementing agent; re-assess at the end of every session" -->
 
 | Component | Score | Missing for the next point |
 |---|---|---|
