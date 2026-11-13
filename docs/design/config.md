@@ -71,6 +71,48 @@ serializes to JSON: a run keeps it as its snapshot, and `env` is the whole sessi
 adapter adds (§6.5). The adapter's `split` turns it into a process part, keyed by its fingerprint (contracts 8),
 and a session part.
 
+## Host inheritance (spec §6.4)
+
+`inherit_host` is on by default and is a scalar setting of any layer. On, the harness reads the operator's own
+config (`~/.claude`, `~/.codex`) as it would outside `aae`; `aae` does not see that layer and shows it as one line
+in "explain config". Off, the session gets its own config directory in the state directory and only what `aae`
+assembled, plus the rig's own files (see "Consequences" in `docs/design/experiments.md`).
+
+What inheritance costs, and what the user should know:
+
+- the operator's personal config adds 1.6–2.0 s to a claude start, almost all of it connecting the operator's MCP
+  servers;
+  <!-- MEASURE id=claude-host-config-start date=2026-11-10 ver=claude-2.1.322 env=linux-arm64-orbstack src=reports/42 note="haiku, n=3-7; +1.97 s until init; version taken from CONTEXT.md, report 42 does not record it; re-measure on the owner's current config" -->
+- the operator's stdio MCP servers start in every session, about 45 MB per session on the owner's setup. Shared
+  MCP (one process for many sessions) covers only the servers declared in the `aae` config; `aae doctor` warns
+  when it sees stdio MCP servers in the host settings (`crates/aae/src/doctor.rs`);
+  <!-- MEASURE id=stdio-mcp-per-session date=2026-11-10 ver=gc-a86d05bd7 env=linux-arm64-orbstack src=reports/02,reports/18 note="deja server, PSS 42-62 MB per session; deja version not recorded; depends on the operator's MCP set" -->
+- the operator's own hooks and plugins run in agent sessions;
+- codex rewrites `~/.codex/config.toml` itself (hook trust hashes); the adapters add no writes of their own to
+  the host's files.
+
+With inheritance off, credentials still come from the host; a session whose `env` carries a credential of its
+own uses that one instead.
+
+- claude (`crates/aae-claude/src/part.rs`): an own `CLAUDE_CONFIG_DIR` and `--setting-sources project,local`;
+  the subscription access token is read from the host's `.credentials.json` at every spawn and passed as
+  `CLAUDE_CODE_OAUTH_TOKEN`, so a token the host refreshed reaches the next process. Own credentials:
+  `ANTHROPIC_API_KEY`, `ANTHROPIC_AUTH_TOKEN`, `CLAUDE_CODE_OAUTH_TOKEN`.
+- codex (`crates/aae-codex/src/part.rs`): an own `CODEX_HOME` and `HOME`; the host's `auth.json` is linked into
+  that `CODEX_HOME`, and the model provider the host config selects comes as the first `-c` flags, its `env_key`
+  variable passed from the daemon's environment (`host_provider`). The same variable is passed when inheriting.
+  Own credentials: `OPENAI_API_KEY`, `CODEX_API_KEY`.
+
+Known limits:
+
+- not verified: what happens when an isolated claude's subscription token expires mid-session; a ChatGPT
+  subscription login in a separate `CODEX_HOME` (the owner's host logs codex in by a provider key);
+- macOS keeps the claude login in the keychain, which is not read (the file only);
+- of a host provider, only `env_key` is passed from the environment (`env_http_headers` is not).
+
+Checked by criterion 12 of the acceptance spec (`crates/aae-acceptance`), the unit tests of both adapters and
+`crates/aae/tests/doctor.rs`.
+
 ## Orchestrator: `~/.config/aae/config.toml`
 
 ```toml
