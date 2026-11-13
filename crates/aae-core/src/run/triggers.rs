@@ -24,9 +24,33 @@ struct Assigned<'a> {
 }
 
 impl Assigned<'_> {
-    fn deadline(&self) -> String {
-        format!("{}/{}/{}:trigger", self.project, self.rig, self.name)
+    /// `<project>/<rig>/<trigger>`.
+    fn id(&self) -> String {
+        format!("{}/{}/{}", self.project, self.rig, self.name)
     }
+
+    fn deadline(&self) -> String {
+        format!("{}:trigger", self.id())
+    }
+
+    /// Whether the operator switched it off.
+    fn off(&self, tx: &Tx<'_>) -> Result<bool, Error> {
+        let off = tx.sql().query_row(
+            "SELECT EXISTS (SELECT 1 FROM triggers_off WHERE id = ?1)",
+            [self.id()],
+            |r| r.get(0),
+        )?;
+        Ok(off)
+    }
+}
+
+/// The trigger `name` (`<pack>.<name>`, or the name of a project trigger) on `project/rig`.
+fn find<'a>(config: &'a Config, project: &str, rig: &str, name: &str) -> Result<Assigned<'a>, Error> {
+    let own = format!("{project}.{name}");
+    let found = assigned(config)
+        .into_iter()
+        .find(|a| a.project == project && a.rig == rig && (a.name == name || a.name == own));
+    found.ok_or_else(|| super::rejected(format!("no trigger `{name}` on `{project}/{rig}`")))
 }
 
 /// Every trigger on every rig it runs on: the rigs that list it and, for a project trigger, its `rig`.
@@ -65,10 +89,12 @@ fn schedule(source: &Source) -> Option<(&'static str, String)> {
     }
 }
 
-/// Every trigger on every rig it runs on, with its next firing from `deadlines` (milliseconds by deadline id).
+/// Every trigger on every rig it runs on, with its next firing from `deadlines` (milliseconds by deadline id) and
+/// whether it is on (`off` holds the ids switched off).
 pub(super) fn list(
     config: &Config,
     deadline: impl Fn(&str) -> Result<Option<i64>, Error>,
+    off: &[String],
 ) -> Result<Vec<Value>, Error> {
     assigned(config)
         .iter()
@@ -82,6 +108,7 @@ pub(super) fn list(
                 "project": a.project, "rig": a.rig, "trigger": a.name, "formula": a.trigger.run.to_string(),
                 "source": source, "on": (source == "event").then_some(&written),
                 "schedule": (source != "event").then_some(&written), "next_at": next,
+                "enabled": !off.contains(&a.id()),
             }))
         })
         .collect()
@@ -138,7 +165,8 @@ impl RunHandler {
         Ok(())
     }
 
-    /// The deadline `id` of a schedule: it fires and is set again from now, not from when it was due.
+    /// The deadline `id` of a schedule: it fires and is set again from now, not from when it was due; a trigger
+    /// switched off keeps its schedule and does not fire.
     pub(super) fn scheduled(&mut self, tx: &mut Tx<'_>, id: &str) -> Result<(), Error> {
         let config = self.config.clone();
         let Some(a) = assigned(&config).into_iter().find(|a| a.deadline() == id) else {
@@ -146,6 +174,9 @@ impl RunHandler {
         };
         if let Some(at) = next(&a.trigger.source, tx.now_ms()) {
             tx.set_deadline(id, at)?;
+        }
+        if a.off(tx)? {
+            return Ok(());
         }
         self.fire(tx, &a, None).map(drop)
     }
@@ -158,12 +189,37 @@ impl RunHandler {
         name: &str,
     ) -> Result<Value, Error> {
         let config = self.config.clone();
-        let own = format!("{project}.{name}");
-        let found = assigned(&config)
-            .into_iter()
-            .find(|a| a.project == project && a.rig == rig && (a.name == name || a.name == own));
-        let a = found.ok_or_else(|| super::rejected(format!("no trigger `{name}` on `{project}/{rig}`")))?;
+        let a = find(&config, project, rig, name)?;
         self.fire(tx, &a, None)
+    }
+
+    /// The operator's switch: `trigger.switched` when it changes anything.
+    pub(super) fn switch(
+        &mut self,
+        tx: &mut Tx<'_>,
+        project: &str,
+        rig: &str,
+        name: &str,
+        enabled: bool,
+    ) -> Result<Value, Error> {
+        let a = find(&self.config, project, rig, name)?;
+        let changed = if enabled {
+            tx.sql().execute("DELETE FROM triggers_off WHERE id = ?1", [a.id()])?
+        } else {
+            tx.sql()
+                .execute("INSERT OR IGNORE INTO triggers_off (id) VALUES (?1)", [a.id()])?
+        };
+        if changed > 0 {
+            tx.emit(&Event {
+                kind: "trigger.switched".to_owned(),
+                project: Some(project.to_owned()),
+                rig: Some(rig.to_owned()),
+                run: None,
+                correlation: None,
+                data: json!({ "trigger": a.name, "enabled": enabled }),
+            })?;
+        }
+        Ok(json!({ "trigger": a.name, "enabled": enabled }))
     }
 
     /// Fires the event triggers the committed `events` match (contracts 2.2): same type, the event's project and rig
@@ -181,6 +237,9 @@ impl RunHandler {
             });
             let view = event_view(event);
             for a in listening {
+                if a.off(tx)? {
+                    continue;
+                }
                 if matches!(&a.trigger.source, Source::Event { filter, .. } if filter.matches(&view)) {
                     self.fire(tx, a, Some(event))?;
                 }

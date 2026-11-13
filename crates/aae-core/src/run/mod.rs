@@ -126,6 +126,12 @@ impl Handler for RunHandler {
             Msg::Create(create) => return self.create(tx, create),
             Msg::Finish { run, token, outcome } => return self.finish(tx, &run, &token, &outcome),
             Msg::Fire { project, rig, trigger } => return self.fire_by_hand(tx, &project, &rig, &trigger),
+            Msg::SwitchTrigger {
+                project,
+                rig,
+                trigger,
+                enabled,
+            } => return self.switch(tx, &project, &rig, &trigger, enabled),
             Msg::Cancel { run, reason } => self.cancel(tx, &run, &reason),
             Msg::CloseGate(gate) => self.close_gate(tx, &gate, "operator"),
             Msg::OpenGate { key } => self.open_gate(tx, &key, None),

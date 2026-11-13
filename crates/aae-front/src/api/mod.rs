@@ -73,6 +73,8 @@ fn router() -> OpenApiRouter<Arc<Api>> {
         .routes(routes!(gates::list, gates::close))
         .routes(routes!(gates::open))
         .routes(routes!(triggers::fire))
+        .routes(routes!(triggers::enable))
+        .routes(routes!(triggers::disable))
         .routes(routes!(triggers::list))
         .routes(routes!(config::list_projects))
         .routes(routes!(config::list_agents))

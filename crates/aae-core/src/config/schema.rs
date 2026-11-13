@@ -127,6 +127,7 @@ fn payload(event_type: &str) -> Option<&'static [(&'static str, Shape)]> {
             ("reason", Leaf),
             ("detail", Leaf),
         ],
+        "trigger.switched" => &[("trigger", Leaf), ("enabled", Leaf)],
         "gate.closed" => &[("gate", GATE)],
         "gate.opened" => &[("key", Leaf), ("by", Leaf)],
         "bead.created" | "bead.updated" | "bead.closed" | "bead.ready" => {

@@ -100,5 +100,6 @@ rig = "main"
 ```
 
 `aae trigger list` shows the triggers with their next firing, and
-`aae trigger fire --project hello --rig main hourly-check` fires one by hand. Next:
+`aae trigger fire --project hello --rig main hourly-check` fires one by hand; `aae trigger disable` (with the same
+arguments) stops it firing until `aae trigger enable`. Next:
 [your first formula with an agent](first-formula.md).

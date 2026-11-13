@@ -92,17 +92,25 @@ pub enum TriggerCommand {
     /// List the triggers on their rigs with their next firing.
     List,
     /// Fire a trigger on a rig as its schedule would: prints the run it started, or why it skipped.
-    Fire {
-        /// `<pack>.<name>`, or the name of a project trigger.
-        trigger: String,
-        #[arg(long)]
-        project: String,
-        #[arg(long)]
-        rig: String,
-        /// The idempotency key: a repeat with the same key changes nothing.
-        #[arg(long = "key")]
-        idempotency: Option<String>,
-    },
+    Fire(OnRig),
+    /// Switch a trigger on a rig back on.
+    Enable(OnRig),
+    /// Switch a trigger on a rig off: neither its schedule nor its events fire it, `fire` still does.
+    Disable(OnRig),
+}
+
+/// A trigger on a rig.
+#[derive(clap::Args)]
+pub struct OnRig {
+    /// `<pack>.<name>`, or the name of a project trigger.
+    trigger: String,
+    #[arg(long)]
+    project: String,
+    #[arg(long)]
+    rig: String,
+    /// The idempotency key: a repeat with the same key changes nothing.
+    #[arg(long = "key")]
+    idempotency: Option<String>,
 }
 
 pub(super) async fn run(client: &Client, json: bool, command: RunCommand) -> Result<(), ClientError> {
@@ -233,19 +241,18 @@ pub(super) async fn gate(client: &Client, json: bool, command: GateCommand) -> R
 }
 
 pub(super) async fn trigger(client: &Client, json: bool, command: TriggerCommand) -> Result<(), ClientError> {
-    let TriggerCommand::Fire {
-        trigger,
-        project,
-        rig,
-        idempotency,
-    } = command
-    else {
-        print(json, &client.request("GET", "/v1/triggers", None, None).await?);
-        return Ok(());
+    let (path, on) = match command {
+        TriggerCommand::List => {
+            print(json, &client.request("GET", "/v1/triggers", None, None).await?);
+            return Ok(());
+        }
+        TriggerCommand::Fire(on) => ("/v1/triggers/fire", on),
+        TriggerCommand::Enable(on) => ("/v1/triggers/enable", on),
+        TriggerCommand::Disable(on) => ("/v1/triggers/disable", on),
     };
-    let body = json!({ "project": project, "rig": rig, "trigger": trigger });
+    let body = json!({ "project": on.project, "rig": on.rig, "trigger": on.trigger });
     let reply = client
-        .request("POST", "/v1/triggers/fire", Some(&body), idempotency.as_deref())
+        .request("POST", path, Some(&body), on.idempotency.as_deref())
         .await?;
     print(json, &reply);
     Ok(())

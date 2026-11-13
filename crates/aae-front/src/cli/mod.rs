@@ -26,6 +26,8 @@ pub const OPERATIONS: &[(&str, &str, &str)] = &[
     ("gate open", "POST", "/v1/gates/open"),
     ("trigger fire", "POST", "/v1/triggers/fire"),
     ("trigger list", "GET", "/v1/triggers"),
+    ("trigger enable", "POST", "/v1/triggers/enable"),
+    ("trigger disable", "POST", "/v1/triggers/disable"),
     ("project list", "GET", "/v1/projects"),
     ("agent list", "GET", "/v1/agents"),
     ("formula list", "GET", "/v1/formulas"),
@@ -85,7 +87,7 @@ pub enum Command {
     /// Harness instances: list them, stop an idle one.
     #[command(subcommand)]
     Instance(InstanceCommand),
-    /// Triggers: list them, fire one by hand.
+    /// Triggers: list them, fire one by hand, switch one off and on.
     #[command(subcommand)]
     Trigger(TriggerCommand),
     /// Projects and their rigs.

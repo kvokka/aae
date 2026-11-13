@@ -247,3 +247,81 @@ async fn a_reload_rearms_changed_schedules_and_the_listing_shows_the_next_firing
     assert_eq!(reloaded.len(), 1);
     assert_eq!(reloaded[0]["data"]["restarted_instances"], serde_json::json!([]));
 }
+
+fn switch(trigger: &str, enabled: bool) -> Msg {
+    Msg::SwitchTrigger {
+        project: "shop".into(),
+        rig: "web".into(),
+        trigger: trigger.into(),
+        enabled,
+    }
+}
+
+/// A schedule switched off keeps its next firing and does not fire, across a restart; a hand firing still does; on
+/// again, it fires on its grid.
+#[tokio::test(start_paused = true)]
+async fn a_trigger_switched_off_does_not_fire_until_it_is_on_again() {
+    let dir = tempfile::tempdir().unwrap();
+    write(dir.path(), SCHEDULES);
+    let (core, task) = daemon(dir.path(), T0);
+    let reply = core.send(None, switch("hourly", false)).await.unwrap();
+    assert_eq!(reply, serde_json::json!({ "trigger": "shop.hourly", "enabled": false }));
+    core.send(None, switch("hourly", false)).await.unwrap();
+    assert_eq!(
+        journal(dir.path(), "trigger.switched").len(),
+        1,
+        "a repeated switch changes nothing"
+    );
+    let reader = run::Reader::open(&dir.path().join("state.db")).unwrap();
+    let config = config::load(&dir.path().join("config.toml")).unwrap();
+    let listed = reader.triggers(&config).unwrap();
+    let hourly = listed.iter().find(|t| t["trigger"] == "shop.hourly").unwrap();
+    assert_eq!(
+        (&hourly["enabled"], &hourly["next_at"]),
+        (&Value::Bool(false), &"2026-11-13T03:59:30.000Z".into())
+    );
+    tokio::time::sleep(Duration::from_secs(2 * HOUR)).await;
+    assert_eq!(
+        (firings(dir.path(), "shop.nightly"), firings(dir.path(), "shop.hourly")),
+        (1, 0)
+    );
+
+    task.abort();
+    let _ = task.await;
+    let (core, _task) = daemon(dir.path(), T0 + 3 * 3_600_000);
+    tokio::time::sleep(Duration::from_secs(2 * HOUR)).await;
+    assert_eq!(firings(dir.path(), "shop.hourly"), 0, "the switch outlives a restart");
+    let fire = Msg::Fire {
+        project: "shop".into(),
+        rig: "web".into(),
+        trigger: "hourly".into(),
+    };
+    assert!(core.send(None, fire).await.unwrap()["run"].is_string());
+    core.send(None, switch("shop.hourly", true)).await.unwrap();
+    // Past the next firing on the grid (the run fired by hand still lives: that one is skipped as an overlap).
+    tokio::time::sleep(Duration::from_secs(HOUR + 60)).await;
+    assert_eq!(firings(dir.path(), "shop.hourly"), 2);
+}
+
+/// An event trigger switched off does not fire on its events.
+#[tokio::test]
+async fn an_event_trigger_switched_off_does_not_fire() {
+    let dir = tempfile::tempdir().unwrap();
+    write(dir.path(), CHAIN);
+    let (core, _task) = daemon(dir.path(), 0);
+    core.send(None, switch("after-build", false)).await.unwrap();
+    let create = Create {
+        project: "shop".into(),
+        rig: "web".into(),
+        formula: "build".into(),
+        inputs: serde_json::Map::new(),
+        correlation: None,
+        depth: 0,
+        parent_run: None,
+        continue_from: None,
+    };
+    core.send(None, Msg::Create(create)).await.unwrap();
+    tokio::time::sleep(Duration::from_millis(300)).await;
+    assert_eq!(firings(dir.path(), "shop.after-build"), 0);
+    assert_eq!(by_trigger(&journal(dir.path(), "trigger.fired"), "shop.chain").len(), 0);
+}

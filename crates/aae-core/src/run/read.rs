@@ -66,10 +66,15 @@ impl Reader {
     /// Every trigger of `config` on every rig it runs on, with its next firing (contracts 1.3).
     pub fn triggers(&self, config: &crate::config::Config) -> Result<Vec<Value>, Error> {
         let conn = self.conn();
-        super::triggers::list(config, |id| {
+        let off: Vec<String> = {
+            let mut stmt = conn.prepare("SELECT id FROM triggers_off")?;
+            stmt.query_map([], |r| r.get(0))?.collect::<Result<_, _>>()?
+        };
+        let deadline = |id: &str| {
             let at = conn.query_row("SELECT at_ms FROM deadlines WHERE id = ?1", [id], |r| r.get(0));
             Ok(rusqlite::OptionalExtension::optional(at)?)
-        })
+        };
+        super::triggers::list(config, deadline, &off)
     }
 
     /// `{outbox_depth, outbox_oldest_ms, active_runs}` for the daemon status (contracts 3.5): the outbox rows the

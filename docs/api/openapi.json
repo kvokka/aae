@@ -1029,7 +1029,7 @@
     },
     "/v1/triggers": {
       "get": {
-        "summary": "Lists every trigger on every rig it runs on, with its source and next firing (`next_at`, null for an event\ntrigger).",
+        "summary": "Lists every trigger on every rig it runs on, with its source and next firing (`next_at`, null for an event\ntrigger) and whether it is `enabled`.",
         "operationId": "list",
         "responses": {
           "200": {
@@ -1040,6 +1040,122 @@
                   "items": {
                     "type": "object"
                   }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/triggers/disable": {
+      "post": {
+        "summary": "Switches a trigger on a rig off: neither its schedule nor its events fire it until it is enabled, a hand firing\nstill does. `{\"trigger\": name, \"enabled\": false}`.",
+        "operationId": "disable",
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OnRig"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/triggers/enable": {
+      "post": {
+        "summary": "Switches a trigger on a rig back on: `{\"trigger\": name, \"enabled\": true}`.",
+        "operationId": "enable",
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OnRig"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
                 }
               }
             }
@@ -1068,7 +1184,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/FireTrigger"
+                "$ref": "#/components/schemas/OnRig"
               }
             }
           },
@@ -1205,7 +1321,7 @@
           }
         }
       },
-      "FireTrigger": {
+      "OnRig": {
         "type": "object",
         "required": [
           "project",

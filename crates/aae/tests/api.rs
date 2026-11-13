@@ -136,7 +136,7 @@ async fn one_daemon_per_state_directory_whatever_its_socket() {
 }
 
 #[tokio::test]
-async fn a_trigger_fired_by_hand_starts_a_run_and_skips_while_it_lives() {
+async fn a_trigger_fired_by_hand_starts_a_run_skips_while_it_lives_and_switches_off() {
     let d = Daemon::start(|dir| {
         let project = "[rigs.web]\npath = \"web\"\n\
             [[trigger]]\nname = \"sweep\"\nevery = \"24h\"\nrun = \"slow\"\nrig = \"web\"\n";
@@ -148,12 +148,20 @@ async fn a_trigger_fired_by_hand_starts_a_run_and_skips_while_it_lives() {
     d.until_state(run.as_str().unwrap(), "running").await;
     let again = d.post("/v1/triggers/fire", fire.clone(), Some("f2")).await.unwrap();
     assert_eq!(again["skipped"], "overlap");
-    assert_eq!(d.post("/v1/triggers/fire", fire, Some("f1")).await.unwrap()["run"], run);
+    assert_eq!(
+        d.post("/v1/triggers/fire", fire.clone(), Some("f1")).await.unwrap()["run"],
+        run
+    );
     let unknown = json!({ "project": "shop", "rig": "web", "trigger": "nope" });
     match d.post("/v1/triggers/fire", unknown, None).await {
         Err(ClientError::Api { status: 409, error }) => assert_eq!(error["code"], "rejected"),
         other => panic!("{other:?}"),
     }
+    let off = d.post("/v1/triggers/disable", fire.clone(), None).await.unwrap();
+    assert_eq!(off, json!({ "trigger": "shop.sweep", "enabled": false }));
+    assert_eq!(d.get("/v1/triggers").await[0]["enabled"], false);
+    d.post("/v1/triggers/enable", fire, None).await.unwrap();
+    assert_eq!(d.get("/v1/triggers").await[0]["enabled"], true);
 }
 
 /// A replayed reload answers as the first one did and leaves the config the daemon runs with alone.

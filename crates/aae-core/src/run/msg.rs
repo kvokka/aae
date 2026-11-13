@@ -24,6 +24,14 @@ pub enum Msg {
         rig: String,
         trigger: String,
     },
+    /// The operator switches `trigger` on a rig off or back on: off, neither its schedule nor its events fire it, a
+    /// hand firing still does; the switch outlives restarts and reloads.
+    SwitchTrigger {
+        project: String,
+        rig: String,
+        trigger: String,
+        enabled: bool,
+    },
     /// The operator closes a gate (spec §5.7): automation never removes this closure (invariant 18).
     CloseGate(GateSpec),
     /// The operator opens a gate: every closure of `key` goes.

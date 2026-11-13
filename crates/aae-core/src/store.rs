@@ -187,6 +187,8 @@ pub fn open(path: &Path) -> rusqlite::Result<Connection> {
         (9, SCHEMA_V9),
         (10, SCHEMA_V10),
         (11, "ALTER TABLE attempts ADD COLUMN services TEXT;"),
+        // The triggers the operator switched off, by `<project>/<rig>/<trigger>`.
+        (12, "CREATE TABLE triggers_off (id TEXT PRIMARY KEY);"),
     ]
     .into_iter()
     .filter(|(to, _)| *to > version)
