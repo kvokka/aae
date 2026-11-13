@@ -563,6 +563,14 @@ of a run whose gate the operator closed parks it instead (invariant 18).
 
 ## 7. Issue gates
 
+Issue gates are the core's only "do not start yet" mechanism: a record "key closed until time T, or until removed
+by hand". A run with a closed key waits in `queued` (or `parked`, once started) with the gate as the visible reason.
+Three parties close gates: the policy in answer to a failure (an account limit, an agent quarantined after a crash
+series), the operator (a pause) and the core itself (a bead after a series of failed runs, §10.3). Gates are rows
+in the state: they survive a restart, are listed by the API (`/v1/gates`, `aae gate`), and every closure and opening
+is an event. The account traffic light and the operator hold are built from this one mechanism, with no subsystem
+of their own. The adapter reports the account id (4.5, `Driver::account`).
+
 - Keys: `orchestrator`, `project:<project>`, `rig:<project>/<rig>`, `agent:<agent>` (the qualified agent name of
   §8.2), `bead:<project>/<bead id>`, `account:<harness>/<account id>`, `model:<provider>/<model>`. The keys of a
   run are all of these that it has; a run is admitted only if none is closed.
