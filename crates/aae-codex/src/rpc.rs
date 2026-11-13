@@ -31,8 +31,8 @@ pub(crate) struct Instance {
     /// The `turn/start` requests in flight: their answer acknowledges the prompt of the thread.
     pub(crate) acks: Mutex<HashMap<u64, (String, PromptKey)>>,
     pub(crate) stream: Mutex<Stream>,
-    /// The open server requests by the id the core knows: the JSON-RPC id and the method.
-    pub(crate) requests: Mutex<HashMap<String, (Value, String)>>,
+    /// The open server requests, whole, by the id the core knows.
+    pub(crate) requests: Mutex<HashMap<String, Value>>,
     /// The turn in flight of each thread, for `turn/interrupt`.
     pub(crate) turns: Mutex<HashMap<String, String>>,
     pub(crate) live: Mutex<HashMap<String, broadcast::Sender<Value>>>,
@@ -164,7 +164,7 @@ pub(crate) async fn read(
                 .iter()
                 .any(|(_, e)| matches!(e, Normalized::PermissionRequested { .. }));
             if asks {
-                lock(&instance.requests).insert(msg["id"].to_string(), (msg["id"].clone(), method.to_owned()));
+                lock(&instance.requests).insert(msg["id"].to_string(), msg.clone());
             } else {
                 // A server request the adapter has no answer for would hold the turn forever.
                 let error = json!({ "code": -32601, "message": format!("aae does not answer `{method}`") });

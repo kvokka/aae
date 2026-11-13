@@ -282,18 +282,25 @@ impl Driver for Codex {
     ) -> BoxFuture<'a, Result<(), Failure>> {
         Box::pin(async move {
             let known = self.instance(&instance.id)?;
-            let Some((id, method)) = lock(&known.requests).remove(request_id) else {
+            let Some(request) = lock(&known.requests).remove(request_id) else {
                 let mut failure = Failure::new(FailureKind::Unknown, Source::Adapter);
                 failure.raw = format!("no open request `{request_id}`");
                 return Err(failure);
             };
-            let result = match (method.as_str(), answer) {
-                // shortcut: the answer form of `requestUserInput` is the schema's, not seen live; WP-30 pins it.
-                ("item/tool/requestUserInput", Answer::Text { text }) => json!({ "answers": { "answer": [text] } }),
+            let result = match (request["method"].as_str().unwrap_or_default(), answer) {
+                // shortcut: the form is `ToolRequestUserInputResponse` of the pinned codex's generated schema (every
+                // question gets the text), never seen live: the tool is experimental; check it once codex offers it.
+                ("item/tool/requestUserInput", Answer::Text { text }) => {
+                    let questions = request["params"]["questions"].as_array().into_iter().flatten();
+                    let answers: serde_json::Map<String, Value> = questions
+                        .filter_map(|q| Some((q["id"].as_str()?.to_owned(), json!({ "answers": [text] }))))
+                        .collect();
+                    json!({ "answers": answers })
+                }
                 (_, Answer::Allow { .. }) => json!({ "decision": "accept" }),
                 (_, Answer::Deny { .. } | Answer::Text { .. }) => json!({ "decision": "decline" }),
             };
-            known.write(&json!({ "id": id, "result": result })).await
+            known.write(&json!({ "id": request["id"], "result": result })).await
         })
     }
 
