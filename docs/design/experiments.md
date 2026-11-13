@@ -260,7 +260,9 @@ The user-level `~/.claude/CLAUDE.md` is dropped by `--setting-sources project,lo
 `CLAUDE_CONFIG_DIR`, but claude also reads `CLAUDE.md` and `.claude/CLAUDE.md` up the ancestors of its working
 directory, so a rig under `HOME` still reached the host's file (acceptance scenario 12, claude 2.1.322). Without the
 host layer the adapter therefore sets `claudeMdExcludes` to `~/.claude/CLAUDE.md` and `~/.claude/rules/**` in the
-`--settings` file; scenario 12 checks that the isolated session no longer sees it.
+`--settings` file; scenario 12 checks that the isolated session no longer sees it. `~` here is the `HOME` of the
+daemon process: a daemon run with another `HOME` than the user whose rigs it serves (a system service, for one) does
+not exclude that user's file; run the daemon as that user, as the service files of spec §13 do.
 Open: refresh of a delivered OAuth token after expiry (spec §6.4).
 
 ### codex
