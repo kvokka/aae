@@ -48,7 +48,8 @@ contribution of a plugin; the top level of `agent.toml`; and the overrides `[ove
   after its last session ended. The process gets a clean environment with `env`, `AAE_SERVICE_PORT` (a free port
   on 127.0.0.1 picked by the daemon) and `AAE_SERVICE_TOKEN`; it must listen on that port and refuse requests
   without `Authorization: Bearer <token>`. `${AAE_SERVICE_PORT}` in `url` is replaced with the port, and sessions
-  get the URL with the token and the identity headers. The service is up once its port accepts connections; a
+  get the URL with the token and the identity headers. The service is up once its port accepts connections (that is
+  the whole health check: no health command is declared, and a live service is one whose process lives); a
   session start waits for that up to 30 s, and a server that is not up is a tool failure, not a failed run. A
   service that dies is started again on the same port (with the effect backoff) while sessions use it, so they
   reconnect; with none, it is dropped. A changed definition is a new service; the old one idles out. Events:
