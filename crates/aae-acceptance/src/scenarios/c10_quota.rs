@@ -2,8 +2,12 @@
 //! same account does not start while it is closed; at the reset both runs pass without a human.
 
 use super::codex_agent;
-use crate::{Env, daemon::Daemon};
+use crate::{
+    Env,
+    daemon::{Daemon, write},
+};
 use aae_testkit::openai::{Provider, Reply};
+use serde_json::json;
 use std::{
     sync::Arc,
     time::{Duration, Instant},
@@ -19,7 +23,17 @@ pub(crate) async fn run(env: Arc<Env>) -> String {
     let finish = format!("{} finish pass --summary built", env.aae.display());
     let plan = vec![Reply::UsageLimit(RESET.as_secs()), Reply::Task(finish)];
     let provider = Provider::start(plan).await;
-    let d = Daemon::start(&env, |root| codex_agent(root, "dev", &provider.base_url())).await;
+    let d = Daemon::start(&env, |root| {
+        codex_agent(root, "dev", &provider.base_url());
+        // A second rig, so only the account gate can hold the second run: a workdir holds one run (spec §9.3).
+        let shop = root.join("config/aae/shop");
+        write(
+            shop.join("aae.toml"),
+            "[rigs.web]\npath = \"web\"\n[rigs.api]\npath = \"api\"\n",
+        );
+        write(shop.join("api/.keep"), "");
+    })
+    .await;
     let first = d.create("dev").await;
     let failed = d
         .journal_until(WITHIN, |seen| seen.iter().any(|(k, _)| k == "run.attempt_failed"))
@@ -36,18 +50,19 @@ pub(crate) async fn run(env: Arc<Env>) -> String {
     let gate = gate.unwrap_or_else(|| panic!("no account gate in {gates}"));
     assert!(gate["until"].is_string(), "the gate opens at the reset: {gate}");
 
-    let second = d.create("dev").await;
+    let body = json!({ "project": "shop", "rig": "api", "formula": "dev" });
+    let second = d.post("/v1/runs", body).await.unwrap()["run"]
+        .as_str()
+        .unwrap()
+        .to_owned();
     tokio::time::sleep(RESET / 2).await;
     assert!(limited.elapsed() < RESET, "checked before the reset");
     let view = d.get(&format!("/v1/runs/{second}")).await;
     assert_eq!(
-        view["state"], "queued",
+        view["state"], "parked",
         "the second run of the account waits for the gate: {view}"
     );
-    assert_eq!(
-        view["waiting_for"], "gate",
-        "the gate holds it, not the workdir: {view}"
-    );
+    assert_eq!(view["waiting_for"], gate["key"], "the account gate holds it: {view}");
     assert_eq!(
         provider.requests().len(),
         1,
