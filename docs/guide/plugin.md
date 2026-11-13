@@ -60,6 +60,9 @@ rig settings and the agent's own `agent.toml`, so an agent can still override wh
   claude as they are and translates them for codex. What `remind.sh` prints on `UserPromptSubmit` joins the prompt.
 - `${AAE_PLUGIN_DIR}` in a hook or MCP `command` is replaced with the plugin's directory when the config loads, so
   a command can reach the plugin's own files.
+- **Scripts**: the plugin's `bin/` directory comes first on the `PATH` of the attached agents' sessions.
+- **A prompt fragment**: the top-level key `prompt = "prompt.md"` names a file whose text is appended to the
+  attached agents' system prompt.
 - **A shared MCP server**: give an MCP entry both a `command` and a `url` with `${AAE_SERVICE_PORT}`, for example
   `mcp.notes = { command = ["${AAE_PLUGIN_DIR}/bin/notes-mcp"], url = "http://127.0.0.1:${AAE_SERVICE_PORT}/mcp" }`.
   The daemon runs one process for all sessions instead of one per session; the server listens on

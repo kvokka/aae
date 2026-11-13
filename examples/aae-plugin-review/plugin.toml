@@ -1,6 +1,6 @@
-# An example external plugin (spec §11). The agents that attach it get a review checklist skill and a harness hook
-# that reminds them to check their work on every prompt; on the orchestrator side it vetoes a `pass` whose summary
-# does not say the work was checked.
+# An example external plugin (spec §11). The agents that attach it get a review checklist skill, a harness hook that
+# reminds them to check their work on every prompt, a fragment of their system prompt, and `bin/` on their `PATH`; on
+# the orchestrator side it vetoes a `pass` whose summary does not say the work was checked.
 #
 # Declare it in the orchestrator or a project config, with the word a passing summary must contain:
 #
@@ -11,6 +11,7 @@
 # and attach it to an agent in its `agent.toml`: `plugins = [{ name = "review" }]`.
 name = "review"
 version = "0.1.0"
+prompt = "prompt.md"
 
 [agent]
 skills.review-checklist = { path = "skills/review-checklist" }

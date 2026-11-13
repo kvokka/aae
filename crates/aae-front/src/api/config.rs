@@ -93,14 +93,18 @@ pub(crate) async fn list_packs(state: State, Query(query): Query<ProjectQuery>) 
     Ok(Json(out.into()))
 }
 
-/// Lists the declared plugins (of the orchestrator, or of a project with `project`) and the enabled bundled ones.
+/// Lists the declared plugins (of the orchestrator, or of a project with `project`) and the enabled bundled ones
+/// (of the orchestrator, or those on for the project's runs).
 #[utoipa::path(get, path = "/v1/plugins", params(ProjectQuery),
     responses((status = OK, body = [Object]), (status = NOT_FOUND, body = Object)))]
 pub(crate) async fn list_plugins(state: State, Query(query): Query<ProjectQuery>) -> Reply {
     let config = state.config();
-    let declared = match &query.project {
-        None => &config.plugins,
-        Some(_) => &projects(&config, &query)?[0].plugins,
+    let (declared, bundled) = match &query.project {
+        None => (&config.plugins, &config.bundled),
+        Some(_) => {
+            let project = &projects(&config, &query)?[0];
+            (&project.plugins, &project.bundled)
+        }
     };
     let mut out: Vec<Value> = (declared.iter())
         .map(|p| {
@@ -108,9 +112,7 @@ pub(crate) async fn list_plugins(state: State, Query(query): Query<ProjectQuery>
             json!({ "name": p.name, "version": p.version, "root": p.root, "on": on, "bundled": false })
         })
         .collect();
-    if query.project.is_none() {
-        out.extend((config.bundled.iter()).map(|b| json!({ "name": b.name, "on": b.on, "bundled": true })));
-    }
+    out.extend((bundled.iter()).map(|b| json!({ "name": b.name, "on": b.on, "bundled": true })));
     Ok(Json(out.into()))
 }
 

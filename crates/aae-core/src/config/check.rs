@@ -181,3 +181,18 @@ pub(super) fn bundled(
     }
     on
 }
+
+/// The bundled plugins on for a project: the orchestrator's `on`, except those the project's `tables` decide.
+pub(super) fn project_bundled(
+    loader: &mut Loader,
+    file: &Path,
+    on: &[Bundled],
+    tables: BTreeMap<String, Map<String, Value>>,
+) -> Vec<Bundled> {
+    let own: Vec<String> = tables.keys().cloned().collect();
+    let decides = |b: &Bundled| own.iter().any(|n| n == b.name);
+    let mine = bundled(loader, file, tables).into_iter().filter(decides);
+    let mut all: Vec<Bundled> = on.iter().filter(|b| !decides(b)).cloned().chain(mine).collect();
+    all.sort_by_key(|b| BUNDLED.iter().position(|(n, ..)| *n == b.name));
+    all
+}

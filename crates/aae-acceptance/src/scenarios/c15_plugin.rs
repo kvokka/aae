@@ -1,5 +1,5 @@
-//! Criterion 15: the example external plugin `examples/aae-plugin-review` gives its skill and harness hook only to the
-//! one of two agents that attaches it, vetoes a `pass` whose summary lacks its word, and a failure of its hook does
+//! Criterion 15: the example external plugin `examples/aae-plugin-review` gives its skill, harness hook, prompt
+//! fragment and `bin/` on `PATH` only to the one of two agents that attaches it, vetoes a `pass` whose summary lacks its word, and a failure of its hook does
 //! not bring the daemon down.
 
 use super::claude_agent;
@@ -16,6 +16,9 @@ const PLUGIN: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../../examples/aae-pl
 /// What the plugin's harness hook and skill put before the model.
 const REMINDER: &str = "Review reminder: check your work before you finish.";
 const SKILL: &str = "The checks to make before declaring that a piece of work passes.";
+const FRAGMENT: &str = "Review plugin: before a passing finish, say in its summary how the work was tested.";
+/// What `command -v` says in a session that has the plugin's `bin/` on `PATH`.
+const ON_PATH: &str = "aae-plugin-review/bin/require-word";
 
 /// The orchestrator config declaring the plugin, with its `require` parameter when given.
 fn declare(root: &Path, require: Option<&str>) {
@@ -51,8 +54,10 @@ pub(crate) async fn run(env: Arc<Env>) -> String {
         let finish = format!("{} finish pass --summary '{summary}'", env.aae.display());
         vec![Reply::Bash(finish), Reply::Text("Done.".into())]
     };
+    let mut looks = vec![Reply::Bash("command -v require-word".into())];
+    looks.extend(finish("built"));
     let (vetoed, bare) = (
-        Provider::start(finish("built")).await,
+        Provider::start(looks).await,
         Provider::start(finish("built and tested")).await,
     );
     let d = Daemon::start(&env, |root| {
@@ -75,6 +80,15 @@ pub(crate) async fn run(env: Arc<Env>) -> String {
     assert!(seen(&vetoed, SKILL), "the attaching agent has the skill");
     assert!(!seen(&bare, REMINDER), "the other agent has no hook of the plugin");
     assert!(!seen(&bare, SKILL), "the other agent has no skill of the plugin");
+    assert!(seen(&vetoed, FRAGMENT), "the attaching agent has the prompt fragment");
+    assert!(
+        !seen(&bare, FRAGMENT),
+        "the other agent has no prompt fragment of the plugin"
+    );
+    assert!(
+        seen(&vetoed, ON_PATH),
+        "the plugin's bin/ is on the attaching agent's PATH"
+    );
 
     // Without its parameter the veto hook fails: the run fails on it, the daemon goes on.
     let broken = Provider::start(finish("built and tested")).await;
@@ -97,7 +111,7 @@ pub(crate) async fn run(env: Arc<Env>) -> String {
     let pid = d.pid();
     assert_eq!(d.get("/v1/daemon").await["pid"], pid, "the daemon is up");
     format!(
-        "veto: {reason}; skill and hook only in the attaching agent's session; a failed hook: {}",
+        "veto: {reason}; skill, hook, prompt fragment and bin/ only in the attaching agent's session; a failed hook: {}",
         hook["stderr_tail"].as_str().unwrap_or_default().trim()
     )
 }

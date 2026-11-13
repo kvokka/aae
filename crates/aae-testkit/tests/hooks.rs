@@ -3,12 +3,11 @@
 mod common;
 
 use aae_core::{
-    Journal,
     driver::{Normalized, RequestKind},
     run::{ExecHooks, Msg, Outcome, Verdict},
 };
-use aae_testkit::{ScriptedDriver, Step};
-use common::{World, hollow_turn, world_on, world_with};
+use aae_testkit::Step;
+use common::{World, hollow_turn, world_with};
 use serde_json::{Value, json};
 use std::{
     sync::Arc,
@@ -43,23 +42,6 @@ fn policy_timed(hooks: &[(&str, &str, &str)]) -> World {
 }
 
 impl World {
-    /// The `n`-th event `kind` of `run` (`None`: of any run), waiting for it up to 10 s.
-    async fn until(&self, run: Option<&str>, kind: &str, n: usize) -> Value {
-        let started = Instant::now();
-        loop {
-            let all = Journal::new(&self.journal).read_from(1, 100_000).unwrap_or_default();
-            let found = all
-                .into_iter()
-                .filter(|e| e["type"] == kind && run.is_none_or(|r| e["run"] == r))
-                .nth(n);
-            if let Some(event) = found {
-                return event["data"].clone();
-            }
-            assert!(started.elapsed() < Duration::from_secs(10), "no {kind} #{n}");
-            tokio::time::sleep(Duration::from_millis(20)).await;
-        }
-    }
-
     async fn declare(&self, run: &str) -> Value {
         let started = Instant::now();
         let token = loop {
@@ -303,60 +285,4 @@ async fn the_bundled_default_policy_resumes_a_crash_and_reminds_once() {
     assert_eq!(crashed["keys"][0], "orchestrator");
     let (_, prompts) = w.driver.sent(&run, 2);
     assert!(prompts.last().is_some_and(|p| p.contains("finisher")), "{prompts:?}");
-}
-
-/// `git -C <dir> <args>` without the user's git config; its trimmed stdout.
-fn git(dir: &std::path::Path, args: &[&str]) -> String {
-    let out = std::process::Command::new("git")
-        .env("GIT_CONFIG_GLOBAL", "/dev/null")
-        .env("GIT_CONFIG_NOSYSTEM", "1")
-        .args(["-c", "user.name=t", "-c", "user.email=t@example.com", "-C"])
-        .arg(dir)
-        .args(args)
-        .output()
-        .unwrap();
-    assert!(
-        out.status.success(),
-        "git {args:?}: {}",
-        String::from_utf8_lossy(&out.stderr)
-    );
-    String::from_utf8_lossy(&out.stdout).trim().to_owned()
-}
-
-#[tokio::test]
-async fn two_runs_of_one_rig_work_at_once_each_in_its_worktree() {
-    let config = (
-        "config.toml",
-        "projects = [\"shop\"]\nbuiltin = { default-policy = { enabled = false }, worktree = { agents = [\"dev\"] } }\n\
-         [harness.scripted]\n",
-    );
-    let hooks = ExecHooks {
-        socket: None,
-        bundled: Some(aae_plugins::run),
-    };
-    let w = world_on(&[config], Arc::new(hooks), ScriptedDriver::new(2));
-    let rig = w.dir.path().join("shop/web");
-    git(&rig, &["init", "-q", "-b", "main"]);
-    git(&rig, &["add", "-A"]);
-    git(&rig, &["commit", "-q", "-m", "base"]);
-    w.driver.script(slow_turn());
-    w.driver.script(slow_turn());
-    let (one, two) = (w.create().await, w.create().await);
-    let (failed_one, failed_two) = (
-        w.until(Some(&one), "run.failed", 0).await,
-        w.until(Some(&two), "run.failed", 0).await,
-    );
-    // The second run started while the first still ran: the rig did not hold it.
-    assert!(w.seq_of(&two, "run.started", 0).await < w.seq_of(&one, "run.failed", 0).await);
-    for (run, failed) in [(&one, &failed_one), (&two, &failed_two)] {
-        let tree = std::path::PathBuf::from(failed["run"]["workdir"].as_str().unwrap());
-        assert!(tree.ends_with(format!("aae/worktrees/{run}")), "{tree:?}");
-        let started = Instant::now();
-        while tree.exists() {
-            assert!(started.elapsed() < Duration::from_secs(10), "{tree:?} stays");
-            tokio::time::sleep(Duration::from_millis(20)).await;
-        }
-        // No commit on the branch: it is merged, so it goes with the worktree.
-        assert_eq!(git(&rig, &["branch", "--list", &format!("aae/{run}")]), "");
-    }
 }

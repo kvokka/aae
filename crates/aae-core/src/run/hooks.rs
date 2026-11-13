@@ -59,7 +59,8 @@ impl RunHandler {
             }
         }
         // The bundled plugins come last: a declared plugin decides before the default policy.
-        for bundled in self.config.bundled.iter().filter(|b| b.on.contains(&kind)) {
+        let bundled = project.map_or(&self.config.bundled, |p| &p.bundled);
+        for bundled in bundled.iter().filter(|b| b.on.contains(&kind)) {
             hooks.push(json!({
                 "plugin": bundled.name, "bundled": bundled.name, "params": bundled.params,
                 "timeout_ms": HOOK_TIMEOUT_MS,

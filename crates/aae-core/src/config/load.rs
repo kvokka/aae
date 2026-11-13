@@ -50,9 +50,10 @@ impl Loader {
         let names: Vec<&str> = plugins.iter().map(|p| p.name.as_str()).collect();
         let settings = self.settings(file, &base, raw.settings, &names);
         let overrides = self.overrides(file, &base, raw.overrides, &names);
+        let bundled = super::check::bundled(&mut self, file, raw.builtin);
         let mut projects: Vec<Project> = Vec::new();
         for dir in &raw.projects {
-            let Some(project) = self.project(&resolve(&base, dir), &plugins) else {
+            let Some(project) = self.project(&resolve(&base, dir), &plugins, &bundled) else {
                 continue;
             };
             if projects.iter().any(|p| p.name == project.name) {
@@ -64,7 +65,6 @@ impl Loader {
             super::check::project(&mut self, project);
         }
         super::check::orchestrator_overrides(&mut self, file, overrides.keys(), &projects);
-        let bundled = super::check::bundled(&mut self, file, raw.builtin);
         if raw.api_tcp.is_some_and(|a| !a.ip().is_loopback()) {
             self.fail(file, "`api_tcp` must be a loopback address");
         }
@@ -155,11 +155,14 @@ impl Loader {
                 .filter_map(|m| m.command.as_mut())
                 .flatten()
                 .for_each(at);
+            let prompt = raw.prompt.and_then(|p| self.text(&manifest, &root.join(p)));
             plugins.push(Plugin {
                 name: raw.name,
                 version: raw.version,
+                bin: Some(root.join("bin")).filter(|b| b.is_dir()),
                 root,
                 agent,
+                prompt,
                 hooks,
                 params: decl.config,
             });
@@ -233,7 +236,7 @@ impl Loader {
         text.and_then(|t| duration(t).map_err(|e| self.fail(file, e)).ok())
     }
 
-    fn project(&mut self, dir: &Path, outer: &[Plugin]) -> Option<Project> {
+    fn project(&mut self, dir: &Path, outer: &[Plugin], bundled: &[super::Bundled]) -> Option<Project> {
         let file = dir.join("aae.toml");
         let raw: ProjectFile = self.read(&file)?;
         let name = raw
@@ -299,12 +302,14 @@ impl Loader {
             (pack.version, pack.requires_plugins) = (Some(raw.version), raw.requires_plugins);
             packs.push(pack);
         }
+        let bundled = super::check::project_bundled(self, &file, bundled, raw.builtin);
         Some(Project {
             name,
             root: dir.to_owned(),
             settings,
             overrides,
             plugins,
+            bundled,
             rigs,
             packs,
         })

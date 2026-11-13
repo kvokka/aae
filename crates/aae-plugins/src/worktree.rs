@@ -1,6 +1,7 @@
 //! `worktree` (spec §11.5): on `run.preparing` a run of a chosen agent or formula gets its own git worktree on the
 //! branch `aae/<run>` as its workdir; once the run ends the worktree goes, only when it has no uncommitted change and
-//! its commits are reachable from a ref. The branch stays unless it is merged.
+//! its commits are reachable from a ref. The branch stays unless it is merged. A run continuing the session of a run
+//! that had a worktree works in that same worktree, recreated on its branch if it was removed.
 
 use serde::Deserialize;
 use serde_json::{Value, json};
@@ -25,9 +26,16 @@ pub(crate) fn hook(event: &Value, p: &Params) -> Result<Option<Value>, String> {
     let run = &event["data"]["run"];
     let id = run["id"].as_str().ok_or("the event has no run")?;
     let workdir = Path::new(run["workdir"].as_str().ok_or("the run has no workdir")?);
-    match event["type"].as_str() {
-        Some("run.preparing") if chosen(run, p) => create(workdir, id).map(Some),
-        Some("run.passed" | "run.failed" | "run.cancelled") if ours(workdir, id) => remove(workdir, id).map(|()| None),
+    match (event["type"].as_str(), worktree(workdir)) {
+        // A run continuing another's session got that run's workdir: its worktree, brought back if removed.
+        (Some("run.preparing"), Some((common, of))) => create(&common, of).map(Some),
+        (Some("run.preparing"), None) if chosen(run, p) => {
+            let common = git(workdir, &["rev-parse", "--path-format=absolute", "--git-common-dir"])?;
+            create(Path::new(&common), id).map(Some)
+        }
+        (Some("run.passed" | "run.failed" | "run.cancelled"), Some((common, of))) => {
+            remove(&common, workdir, of).map(|()| None)
+        }
         _ => Ok(None),
     }
 }
@@ -43,31 +51,35 @@ fn chosen(run: &Value, p: &Params) -> bool {
         || named(&p.formulas, &run["formula"])
 }
 
-fn ours(workdir: &Path, id: &str) -> bool {
-    workdir.ends_with(Path::new(DIR).join(id))
+/// The git common dir and the run of a worktree this plugin made: `<common>/aae/worktrees/<run>`.
+fn worktree(workdir: &Path) -> Option<(PathBuf, &str)> {
+    let of = workdir.file_name()?.to_str()?;
+    let dir = workdir.parent()?;
+    let common = dir.ancestors().nth(2)?;
+    dir.ends_with(DIR).then(|| (common.to_owned(), of))
 }
 
-/// Creates the worktree of run `id` from the HEAD of the repository at `workdir`; one already there is reused, so a
-/// hook run again after a crash decides the same; an existing branch `aae/<id>` is checked out, never reset.
-fn create(workdir: &Path, id: &str) -> Result<Value, String> {
-    let common = git(workdir, &["rev-parse", "--path-format=absolute", "--git-common-dir"])?;
-    let path = PathBuf::from(common).join(DIR).join(id);
+/// Creates the worktree of run `id` in the repository with git dir `common`, from its HEAD; one already there is
+/// reused, so a hook run again after a crash decides the same; an existing branch `aae/<id>` is checked out, never
+/// reset.
+fn create(common: &Path, id: &str) -> Result<Value, String> {
+    let path = common.join(DIR).join(id);
     if !path.join(".git").exists() {
         let branch = format!("aae/{id}");
         let at = path.to_string_lossy();
         // A worktree removed by hand stays registered, and its branch may hold commits: take the branch as it is.
-        git(workdir, &["worktree", "prune"])?;
-        if git(workdir, &["branch", "--list", &branch])?.is_empty() {
-            git(workdir, &["worktree", "add", "-b", &branch, &at, "HEAD"])?;
+        git(common, &["worktree", "prune"])?;
+        if git(common, &["branch", "--list", &branch])?.is_empty() {
+            git(common, &["worktree", "add", "-b", &branch, &at, "HEAD"])?;
         } else {
-            git(workdir, &["worktree", "add", &at, &branch])?;
+            git(common, &["worktree", "add", &at, &branch])?;
         }
     }
     Ok(json!({ "decision": "proceed", "workdir": path }))
 }
 
-/// Removes the worktree at `path` unless it holds work a removal would lose.
-fn remove(path: &Path, id: &str) -> Result<(), String> {
+/// Removes the worktree at `path` of run `id` unless it holds work a removal would lose.
+fn remove(common: &Path, path: &Path, id: &str) -> Result<(), String> {
     if !path.exists() {
         return Ok(());
     }
@@ -78,11 +90,10 @@ fn remove(path: &Path, id: &str) -> Result<(), String> {
             path.display()
         ));
     }
-    let common = git(path, &["rev-parse", "--path-format=absolute", "--git-common-dir"])?;
     // Refuses a worktree with uncommitted changes.
-    git(Path::new(&common), &["worktree", "remove", &path.to_string_lossy()])?;
+    git(common, &["worktree", "remove", &path.to_string_lossy()])?;
     // Deletes the branch only when it is merged; an unmerged one is the run's work.
-    let _ = git(Path::new(&common), &["branch", "-d", &format!("aae/{id}")]);
+    let _ = git(common, &["branch", "-d", &format!("aae/{id}")]);
     Ok(())
 }
 

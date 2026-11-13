@@ -31,7 +31,7 @@ impl World {
     }
 
     /// Waits in real time (the service is a real process) until `kind` was emitted `n` times.
-    async fn until(&self, kind: &str, n: usize) {
+    async fn until_count(&self, kind: &str, n: usize) {
         let start = Instant::now();
         while self.count(kind) < n {
             assert!(
@@ -95,7 +95,7 @@ async fn one_service_serves_every_session_and_restarts_on_its_port() {
     ];
     let w = world_driven(&files, driver);
     let (a, b) = (w.create().await, w.create_on("api").await);
-    w.until("service.ready", 1).await;
+    w.until_count("service.ready", 1).await;
     // Both sessions are running before the service is counted.
     w.events(&a, Duration::from_millis(500)).await;
     assert_eq!(w.count("service.starting"), 1, "one process for both sessions");
@@ -120,7 +120,7 @@ async fn one_service_serves_every_session_and_restarts_on_its_port() {
         .args(["-9", &pid.to_string()])
         .status()
         .unwrap();
-    w.until("service.ready", 2).await;
+    w.until_count("service.ready", 2).await;
     assert_eq!(w.count("service.failed"), 1);
     assert_eq!(call(&sa), 200, "the same URL works again");
     assert_ne!(*pids(&log).last().unwrap(), pid);
@@ -140,7 +140,7 @@ async fn one_service_serves_every_session_and_restarts_on_its_port() {
     }
     w.events(&a, Duration::from_millis(500)).await;
     w.core.send(None, StopInstance { id }).await.unwrap();
-    w.until("service.stopped", 1).await;
+    w.until_count("service.stopped", 1).await;
     assert_ne!(call(&sa), 200, "the process is gone");
 }
 
@@ -158,7 +158,7 @@ async fn a_service_that_never_comes_up_fails_the_tool_not_the_run() {
                  url = \"http://127.0.0.1:${AAE_SERVICE_PORT}/mcp\"\n";
     let w = world_driven(&[("shop/agents/dev/agent.toml", agent)], ScriptedDriver::new(1));
     let run = w.create().await;
-    w.until("service.failed", 1).await;
+    w.until_count("service.failed", 1).await;
     // The launch waits for the port at most 30 s, then the session starts with the URL all the same.
     tokio::time::sleep(Duration::from_secs(31)).await;
     let states = w.states(&run).await;
@@ -179,7 +179,7 @@ async fn a_daemon_crash_stops_the_service_it_left_and_the_next_session_gets_a_ne
     driver.stall_sessions();
     let mut w = world_driven(&[("shop/agents/dev/agent.toml", agent.as_str())], driver);
     let first = w.create().await;
-    w.until("service.ready", 1).await;
+    w.until_count("service.ready", 1).await;
     assert_eq!(call(&w.driver.mcp(&first, 1)["probe"]), 200);
     let pid = pids(&log)[0];
     w.restart().await;
@@ -193,7 +193,7 @@ async fn a_daemon_crash_stops_the_service_it_left_and_the_next_session_gets_a_ne
         std::thread::sleep(Duration::from_millis(20));
     }
     let run = w.create().await;
-    w.until("service.ready", 2).await;
+    w.until_count("service.ready", 2).await;
     let server = w.driver.mcp(&run, 1)["probe"].clone();
     assert_eq!(call(&server), 200, "a new service for the new session");
     assert_ne!(*pids(&log).last().unwrap(), pid);

@@ -249,9 +249,16 @@ pub(crate) fn tested(driver: &Arc<dyn Driver>) -> [(u32, u32, u32); 2] {
 /// The config in `file` with the parameters of the bundled plugins checked, or every error in it.
 pub(crate) fn load(file: &Path) -> Result<config::Config, Vec<String>> {
     let config = config::load(file).map_err(|errors| errors.iter().map(ToString::to_string).collect::<Vec<_>>())?;
-    let errors: Vec<String> = (config.bundled.iter())
+    let all = config
+        .bundled
+        .iter()
+        .chain(config.projects.iter().flat_map(|p| &p.bundled));
+    // A project inherits the orchestrator's tables, so the same error is said once.
+    let errors: Vec<String> = all
         .filter_map(|b| aae_plugins::check(b.name, &b.params).err())
         .map(|e| e.to_string())
+        .collect::<std::collections::BTreeSet<_>>()
+        .into_iter()
         .collect();
     match errors.is_empty() {
         true => Ok(config),

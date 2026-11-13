@@ -177,6 +177,19 @@ fn worktree_on_real_git() {
     assert!(!tree.exists());
     assert_eq!(git(&repo, &["log", "-1", "--format=%s", "aae/r1"]), "work");
 
+    // A run continuing r1's session got r1's workdir: the worktree comes back there on r1's branch, chosen or not,
+    // and goes again when that run ends.
+    let decision = run("worktree", &event("run.preparing", "r3", &tree, "shop.other"), &params)
+        .unwrap()
+        .unwrap();
+    assert_eq!(decision["workdir"], json!(tree));
+    assert_eq!(git(&tree, &["log", "-1", "--format=%s"]), "work");
+    assert_eq!(
+        run("worktree", &event("run.passed", "r3", &tree, "shop.other"), &params),
+        Ok(None)
+    );
+    assert!(!tree.exists());
+
     // Prepared again with the branch left: the branch is checked out as it is, its commit kept.
     let decision = run("worktree", &event("run.preparing", "r1", &repo, "shop.dev"), &params)
         .unwrap()

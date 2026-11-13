@@ -152,6 +152,23 @@ impl World {
         self.task.abort_handle()
     }
 
+    /// The `n`-th event `kind` of `run` (`None`: of any run), waiting for it up to 10 s.
+    pub(crate) async fn until(&self, run: Option<&str>, kind: &str, n: usize) -> Value {
+        let started = std::time::Instant::now();
+        loop {
+            let all = Journal::new(&self.journal).read_from(1, 100_000).unwrap_or_default();
+            let found = all
+                .into_iter()
+                .filter(|e| e["type"] == kind && run.is_none_or(|r| e["run"] == r))
+                .nth(n);
+            if let Some(event) = found {
+                return event["data"].clone();
+            }
+            assert!(started.elapsed() < Duration::from_secs(10), "no {kind} #{n}");
+            tokio::time::sleep(Duration::from_millis(20)).await;
+        }
+    }
+
     pub(crate) async fn create(&self) -> String {
         self.create_on("web").await
     }

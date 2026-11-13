@@ -229,6 +229,7 @@ fires neither on its schedule nor on events, only by hand, and stays off across 
 ```toml
 name = "mail"
 version = "0.1.0"
+prompt = "prompt.md"                # optional: its text joins the system prompt of the attached agents
 
 [agent]                             # layer 5 contribution to the agents that attach the plugin (§11.2)
 skills.mail = { path = "skills/mail" }
@@ -243,13 +244,19 @@ Plugin names are unique across the orchestrator and the project; an attachment i
 plugin. A declaration may carry parameters, `[[plugin]] path = ".." config = { .. }`: its orchestrator hooks get them
 in `AAE_PLUGIN_PARAMS` (contracts 3.1). In the `[agent]` contribution, `${AAE_PLUGIN_DIR}` in a harness hook
 `command` or an MCP `command` is replaced with the plugin's directory at load, so they reach the plugin's own files;
-skill paths are relative to it. The example `examples/aae-plugin-review` shows both sides.
+skill paths are relative to it. Beyond its `[agent]` layer a plugin gives its attached agents two things, in
+attachment order: the text of its `prompt` file, after the system prompt the layers give (each fragment after a blank
+line); and its `bin/` directory, when it has one, ahead of `PATH` (the `PATH` a layer sets, or else the daemon's).
+The example `examples/aae-plugin-review` shows both sides.
 
 ## Bundled plugins: `[builtin.<name>]`
 
 The plugins bundled with aae (spec §11.5) run in process as hooks of the contract of contracts 3, after every
 declared plugin, so a declared plugin decides first. `enabled` (boolean) turns one on or off; every other key is a
-parameter, checked when the daemon starts. A table with parameters and no `enabled` turns the plugin on.
+parameter, checked when the daemon starts. A table with parameters and no `enabled` turns the plugin on. A
+project's `aae.toml` may have `[builtin.<name>]` tables too: for the runs of that project such a table replaces the
+orchestrator's table of that plugin whole (spec §11.3: orchestrator-side plugins are turned on for the orchestrator
+or for a project).
 
 - `default-policy` (on unless `enabled = false`) decides on `run.attempt_failed` and
   `run.turn_ended_without_outcome` as in contracts 10. Parameters, all integers: `quota_margin_s` (60),
@@ -259,4 +266,6 @@ parameter, checked when the daemon starts. A table with parameters and no `enabl
 - `worktree` (off) gives each run of the agents in `agents` and the formulas in `formulas` (bare or qualified names;
   both empty: every run) a git worktree of its rig on the branch `aae/<run>`, in `<git common dir>/aae/worktrees/<run>`,
   as its workdir. When the run ends the worktree is removed unless it has uncommitted changes or a HEAD no ref
-  reaches (then `plugin.hook_failed` says why); the branch is deleted only when it is merged.
+  reaches (then `plugin.hook_failed` says why); the branch is deleted only when it is merged. A run with
+  `continue_from` starts in the workdir of the run it continues (a session resumes where it ran); when that is a
+  worktree of this plugin, it is brought back on its branch if it was removed, whether or not the run is chosen.

@@ -67,6 +67,8 @@ pub struct Project {
     pub settings: Settings,
     pub overrides: BTreeMap<String, Settings>,
     pub plugins: Vec<Plugin>,
+    /// The bundled plugins on for its runs: the orchestrator's, with the project's `[builtin.<name>]` tables.
+    pub bundled: Vec<Bundled>,
     pub rigs: BTreeMap<String, Rig>,
     /// The project root pack (named after the project, holding the project triggers) first.
     pub packs: Vec<Pack>,
@@ -154,6 +156,10 @@ pub struct Plugin {
     pub root: PathBuf,
     /// Layer 5 contribution to the agents that attach the plugin.
     pub agent: Settings,
+    /// The text its attached agents get after their system prompt.
+    pub prompt: Option<String>,
+    /// Its `bin/` directory, when it has one: ahead of `PATH` for its attached agents.
+    pub bin: Option<PathBuf>,
     pub hooks: Vec<OrchestratorHook>,
     /// `config` of its declaration: the parameters of its orchestrator hooks.
     pub params: serde_json::Map<String, serde_json::Value>,

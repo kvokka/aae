@@ -4,7 +4,7 @@
 use super::{Config, Hook, Mcp, Name, PluginUse, Settings, Skill, check::resolve};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use std::{collections::BTreeMap, fmt, fmt::Write as _};
+use std::{collections::BTreeMap, fmt, fmt::Write as _, path::PathBuf};
 
 /// The layer a value came from, weakest first. The host layer is not here: the harness merges it itself and the
 /// core never sees its content (spec §6.3).
@@ -103,6 +103,35 @@ impl EffectiveConfig {
         by_key(&mut self.mcp, &settings.mcp, from, |_| true);
         by_key(&mut self.hooks, &settings.hooks, from, |h| h.enabled);
         by_key(&mut self.skills, &settings.skills, from, |s| s.enabled);
+    }
+
+    /// What attached plugins add beyond a settings layer (spec §11.2): their prompt fragments after the system
+    /// prompt and their `bin/` directories ahead of `PATH` (the daemon's when no layer sets it), in attachment order.
+    fn contribute(&mut self, attached: &[&super::Plugin]) {
+        for plugin in attached {
+            let Some(fragment) = &plugin.prompt else { continue };
+            let prompt = self.system_prompt.get_or_insert_with(|| Sourced {
+                value: String::new(),
+                from: Layer::Plugin(plugin.name.clone()),
+            });
+            let gap = if prompt.value.is_empty() { "" } else { "\n\n" };
+            prompt.value = format!("{}{gap}{}", prompt.value, fragment.trim_end());
+        }
+        let bins: Vec<(&String, &PathBuf)> = (attached.iter())
+            .filter_map(|p| Some((&p.name, p.bin.as_ref()?)))
+            .collect();
+        let Some((last, _)) = bins.last() else { return };
+        let path = match self.env.get("PATH") {
+            Some(s) => s.value.clone(),
+            None => std::env::var("PATH").unwrap_or_default(),
+        };
+        let dirs = bins
+            .iter()
+            .map(|(_, bin)| (*bin).clone())
+            .chain(std::env::split_paths(&path));
+        let value = std::env::join_paths(dirs).map_or(path, |p| p.to_string_lossy().into_owned());
+        let from = Layer::Plugin((*last).clone());
+        self.env.insert("PATH".to_owned(), Sourced { value, from });
     }
 
     /// One line per value with its layer, and one line for the host layer (spec §6.3).
@@ -249,14 +278,19 @@ impl Config {
                 }
             }
         }
-        for used in &plugins {
-            let plugin = self
-                .plugins
+        let attached: Vec<&super::Plugin> = (plugins.iter())
+            .filter_map(|used| {
+                self.plugins
+                    .iter()
+                    .chain(&p.plugins)
+                    .find(|d| d.name == used.value.name)
+            })
+            .collect();
+        layers.extend(
+            attached
                 .iter()
-                .chain(&p.plugins)
-                .find(|d| d.name == used.value.name);
-            layers.extend(plugin.map(|d| (Layer::Plugin(d.name.clone()), d.agent.clone())));
-        }
+                .map(|d| (Layer::Plugin(d.name.clone()), d.agent.clone())),
+        );
 
         let mut config = EffectiveConfig {
             harness: a.harness.clone(),
@@ -296,6 +330,7 @@ impl Config {
         for (layer, settings) in layers.iter().chain(&stronger) {
             config.apply(settings, layer);
         }
+        config.contribute(&attached);
         Ok(config)
     }
 }

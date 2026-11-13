@@ -54,23 +54,25 @@ impl RunHandler {
             },
             None => None,
         };
+        // A continued session resumes in the workdir it ran in (a claude transcript is found by its cwd).
+        let mut workdir = rig.path.to_string_lossy().into_owned();
         if let Some(from) = &c.continue_from {
-            let found: Option<(String, bool)> = tx
+            let found: Option<(String, bool, String)> = tx
                 .sql()
                 .query_row(
-                    "SELECT state, EXISTS (SELECT 1 FROM attempts WHERE run = ?1 AND session IS NOT NULL) \
-                     FROM runs WHERE id = ?1",
+                    "SELECT state, EXISTS (SELECT 1 FROM attempts WHERE run = ?1 AND session IS NOT NULL), \
+                     workdir FROM runs WHERE id = ?1",
                     [from],
-                    |r| Ok((r.get(0)?, r.get(1)?)),
+                    |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
                 )
                 .optional()?;
             match found {
                 None => return Err(rejected(format!("no run `{from}` to continue"))),
-                Some((state, _)) if !matches!(state.as_str(), "passed" | "failed" | "cancelled") => {
+                Some((state, ..)) if !matches!(state.as_str(), "passed" | "failed" | "cancelled") => {
                     return Err(rejected(format!("`{from}` is still `{state}`")));
                 }
-                Some((_, false)) => return Err(rejected(format!("`{from}` has no session to continue"))),
-                Some(_) => {}
+                Some((_, false, _)) => return Err(rejected(format!("`{from}` has no session to continue"))),
+                Some((.., dir)) => workdir = dir,
             }
         }
         let n: i64 = tx
@@ -96,7 +98,7 @@ impl RunHandler {
                 correlation,
                 c.depth,
                 c.parent_run,
-                rig.path.to_string_lossy(),
+                workdir,
                 tx.now_ms(),
                 c.continue_from,
                 bead

@@ -630,7 +630,7 @@
     },
     "/v1/plugins": {
       "get": {
-        "summary": "Lists the declared plugins (of the orchestrator, or of a project with `project`) and the enabled bundled ones.",
+        "summary": "Lists the declared plugins (of the orchestrator, or of a project with `project`) and the enabled bundled ones\n(of the orchestrator, or those on for the project's runs).",
         "operationId": "list_plugins",
         "parameters": [
           {

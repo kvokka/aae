@@ -137,3 +137,52 @@ fn a_fingerprint_depends_on_the_process_part_not_on_key_order() {
     assert_ne!(Fingerprint::of("claude", &a), Fingerprint::of("claude", &c));
     assert_eq!(Fingerprint::of("claude", &a).0.len(), 64);
 }
+
+#[test]
+fn an_attached_plugin_puts_its_bin_ahead_of_path_and_its_prompt_after_the_system_prompt() {
+    let mail = "plugins/mail/plugin.toml";
+    let manifest = "name = \"mail\"\nversion = \"0.1.0\"\nprompt = \"prompt.md\"\n";
+    let config = load_with(&[
+        (mail, manifest),
+        ("plugins/mail/prompt.md", "Check the mail first.\n"),
+        ("plugins/mail/bin/mail-send", ""),
+        (
+            "gascity/agents/implementer/agent.toml",
+            "harness = \"claude\"\nsystem_prompt = \"Be brief.\"\nenv = { PATH = \"/usr/bin\" }\nplugins = [{ name = \"mail\" }]\n",
+        ),
+    ])
+    .unwrap();
+    let e = effective(&config, None);
+    let prompt = e.system_prompt.unwrap();
+    assert_eq!(
+        (prompt.value.as_str(), prompt.from),
+        ("Be brief.\n\nCheck the mail first.", Layer::Agent)
+    );
+    let path = &e.env["PATH"];
+    let bin = config.plugins[0].root.join("bin");
+    assert_eq!(path.value, format!("{}:/usr/bin", bin.display()));
+    assert_eq!(path.from, Layer::Plugin("mail".into()));
+}
+
+#[test]
+fn a_project_builtin_table_replaces_the_orchestrators_for_its_runs() {
+    let config = with_lines(&[
+        ("config.toml", "[builtin.worktree]\nagents = [\"implementer\"]"),
+        (
+            "shop/aae.toml",
+            "[builtin.worktree]\nenabled = false\n[builtin.default-policy]\nrapid_s = 5",
+        ),
+    ]);
+    let names = |b: &[crate::config::Bundled]| b.iter().map(|b| (b.name, b.params.to_string())).collect::<Vec<_>>();
+    assert_eq!(
+        names(&config.bundled),
+        [
+            ("default-policy", "{}".into()),
+            ("worktree", r#"{"agents":["implementer"]}"#.into())
+        ]
+    );
+    assert_eq!(
+        names(&config.projects[0].bundled),
+        [("default-policy", r#"{"rapid_s":5}"#.to_owned())]
+    );
+}

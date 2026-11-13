@@ -60,7 +60,7 @@ impl Loader {
         })
     }
 
-    fn text(&mut self, file: &Path, path: &Path) -> Option<String> {
+    pub(super) fn text(&mut self, file: &Path, path: &Path) -> Option<String> {
         fs::read_to_string(path)
             .map_err(|e| self.fail(file, format!("`{}`: {e}", path.display())))
             .ok()

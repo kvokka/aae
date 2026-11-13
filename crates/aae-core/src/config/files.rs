@@ -141,6 +141,9 @@ pub(super) struct ProjectFile {
     pub packs: Vec<PathBuf>,
     #[serde(default)]
     pub plugin: Vec<PluginDecl>,
+    /// `[builtin.<name>]` for the runs of this project: a table here replaces the orchestrator's whole.
+    #[serde(default)]
+    pub builtin: BTreeMap<String, Map<String, Value>>,
     #[serde(default)]
     pub settings: Settings,
     #[serde(default)]
@@ -241,6 +244,8 @@ pub(super) enum StepFile {
 pub(super) struct PluginFile {
     pub name: String,
     pub version: String,
+    /// A file whose text joins the system prompt of the agents that attach the plugin.
+    pub prompt: Option<PathBuf>,
     #[serde(default)]
     pub agent: Settings,
     #[serde(default)]
