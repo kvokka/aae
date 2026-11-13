@@ -326,8 +326,12 @@ fn fire_deadlines<H: Handler>(conn: &mut Connection, handler: &mut H, now_ms: i6
             Ok(()) => tx.tx.commit()?,
             // Its effects are rolled back and it fires again later: a dropped deadline would leave a run with no exit
             // or a schedule silent until the next start (invariant 14).
-            Err(_) => {
+            Err(e) => {
                 drop(tx);
+                eprintln!(
+                    "aae daemon: deadline {id} failed, retrying in {} s: {e}",
+                    DEADLINE_RETRY_MS / 1000
+                );
                 conn.execute(
                     "UPDATE deadlines SET at_ms = ?2 WHERE id = ?1",
                     params![id, now_ms + DEADLINE_RETRY_MS],
