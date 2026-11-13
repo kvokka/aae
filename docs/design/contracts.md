@@ -653,7 +653,7 @@ The built-in policy expressed in the decisions of 3.2, so that the schema provab
 §11.5. Thresholds are its config parameters (docs/design/config.md); "consecutive" counts are computed from
 `attempts` of the event, times from its `ts`, and the gate keys come from its `keys`. A `park` on a key the run does
 not have (an exec run has no agent key, a run whose harness reported no account has no account key) becomes a
-`resume` after the same wait, except a `park` with no `until` (`auth_required`, `billing`), which becomes `fail`; a
+`resume` after the same wait, except a `park` with no `until` (a lasting `auth_required`, `billing`), which becomes `fail`; a
 `fail` names no gate then. Implemented in `crates/aae-plugins`.
 
 | Event / kind | Decision |
@@ -661,7 +661,8 @@ not have (an exec run has no agent key, a run whose harness reported no account 
 | `quota_exhausted` | `park{gate: account, until: retry_at + 60 s, then: resume}`; no `retry_at` → `until` now + 30 min |
 | `rate_limited`, `overloaded` with `retried_by_harness` | `park{gate: model, until: now + 10 min, then: resume}` |
 | `rate_limited`, `overloaded` without | `resume{after: min(10 s · 2^(n−1), 5 min)}` over `n` consecutive such failures; from the 3rd — the `park` above |
-| `auth_required`, `billing` | `park{gate: account, until: null, then: resume}` |
+| `auth_required` | `park{gate: account, until: now + min(30 s · 2^(n−1), 15 min), then: resume}` over `n` consecutive such failures (postmortem 0001: a proxy or WAF error passes by itself; the attempt after the wait is the probe); once the first attempt of the streak started 2 h ago or more, `until: null` (an operator must act) |
+| `billing` | `park{gate: account, until: null, then: resume}` |
 | `context_overflow`, `transcript_divergence` | `new_session` |
 | `config_error` | `fail{gate: agent, until: null}` |
 | `harness_crash`, `adapter_crash` | `resume`; 5 consecutive attempts shorter than 30 s → `park{gate: agent, until: now + 5 min, then: resume}`; 3 consecutive failed resumes → `new_session` |

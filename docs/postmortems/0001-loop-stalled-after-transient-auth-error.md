@@ -1,6 +1,11 @@
 # Postmortem 0001: development loop stalled after a transient auth error
 
-Date: 2026-11-13. Status: open — describes the problem and the requirement; nothing is implemented yet.
+Date: 2026-11-13. Status: closed in `default-policy` (docs/design/contracts.md 10): `auth_required` parks the
+account for a bounded, re-armed wait whose next attempt is the probe, and needs an operator only after
+`auth_escalate_s`; the scenarios of "Acceptance" are `crates/aae-testkit/tests/auth.rs`. Liveness by
+observation is the watchdog of invariant 15 (a deadline to the first event, a silence budget, process health), and
+every wait of a run has a deadline, so a supervisor self-check has nothing left to catch: a run waits without one
+only on a gate with no `until` (this escalation or an operator pause), listed by `aae gate`.
 
 This is the first incident observed while building `aae` itself. The development loop that writes `aae`
 (an overseer session driving `coder` → `reviewer` subagents) is exactly the kind of unattended agent run `aae`

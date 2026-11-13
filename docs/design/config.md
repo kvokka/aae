@@ -108,7 +108,9 @@ Known limits:
 - not verified: what happens when an isolated claude's subscription token expires mid-session; a ChatGPT
   subscription login in a separate `CODEX_HOME` (the owner's host logs codex in by a provider key);
 - macOS keeps the claude login in the keychain, which is not read (the file only);
-- of a host provider, only `env_key` is passed from the environment (`env_http_headers` is not).
+- of a host provider, only `env_key` is passed from the environment (`env_http_headers` is not); an isolated codex
+  gets the provider without `http_headers` and `experimental_bearer_token`, so a provider whose login is only there
+  is not logged in under isolation (and `doctor` does not count it as a login).
 
 Checked by criterion 12 of the acceptance spec (`crates/aae-acceptance`), the unit tests of both adapters and
 `crates/aae/tests/doctor.rs`.
@@ -333,8 +335,8 @@ or for a project).
 - `default-policy` (on unless `enabled = false`) decides on `run.attempt_failed` and
   `run.turn_ended_without_outcome` as in contracts 10. Parameters, all integers: `quota_margin_s` (60),
   `quota_wait_s` (1800), `model_pause_s` (600), `backoff_base_s` (10), `backoff_cap_s` (300), `backoff_park_from`
-  (3), `rapid_s` (30), `crash_loop` (5), `crash_pause_s` (300), `resume_failures` (3), `unknown_after_s` (30),
-  `unknown_retries` (3).
+  (3), `auth_backoff_base_s` (30), `auth_backoff_cap_s` (900), `auth_escalate_s` (7200), `rapid_s` (30),
+  `crash_loop` (5), `crash_pause_s` (300), `resume_failures` (3), `unknown_after_s` (30), `unknown_retries` (3).
 - `worktree` (off) gives each run of the agents in `agents` and the formulas in `formulas` (bare or qualified names;
   both empty: every run) a git worktree of its rig on the branch `aae/<run>`, in `<git common dir>/aae/worktrees/<run>`,
   as its workdir. When the run ends the worktree is removed unless it has uncommitted changes or a HEAD no ref
