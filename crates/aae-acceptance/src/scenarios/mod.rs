@@ -3,6 +3,7 @@
 mod c02_prompt;
 mod c03_exec;
 mod c04_finisher;
+mod c04a_background;
 mod c05a_chain;
 mod c05b_schedule;
 mod c06_hop;
@@ -40,6 +41,12 @@ pub(crate) const ALL: &[Scenario] = &[
         title: "no pass without the finisher; a stale finisher is rejected; a remark passes on the second go",
         launch: Launch::Ci,
         run: |env| Box::pin(c04_finisher::run(env)),
+    },
+    Scenario {
+        criterion: "4a",
+        title: "a finisher called with a background claude subagent running passes the run only after the subagent",
+        launch: Launch::Request,
+        run: |env| Box::pin(c04a_background::run(env)),
     },
     Scenario {
         criterion: "5a",
