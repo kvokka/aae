@@ -3,7 +3,7 @@
 //! (`kill -9` cuts a step short wherever the writer is then, and takes the effects in flight with it) plays on the run
 //! machine with the managed clock. The invariants are checked on the state and the journal after every step; once
 //! the faults stop, every run must reach an end and every hooked event must have had its hooks run. Each full share
-//! of seeds must have killed the daemon with tracker, harness and hook calls recorded and not yet done.
+//! of seeds plays on until it has killed the daemon with tracker, harness and hook calls recorded and not yet done.
 //!
 //! Every run plays new seeds: each share starts from a random base seed and prints it. A failure names its seed:
 //! `AAE_CHAOS_SEED=<n> cargo nextest run -p aae-testkit --test chaos` replays it alone; `AAE_CHAOS_SEEDS=<n>` plays
@@ -209,21 +209,28 @@ fn seeds(nth: u64) {
     };
     // nextest shows the output of a failed test: the base says which seeds this share played.
     eprintln!("chaos share {nth}: {count} seeds from {base}");
-    // A share under 100 seeds (a replay, a short CI share) is too short to be sure to land every kind of kill.
-    let short = count < 100;
-    for seed in (0..count).map(|i| base.wrapping_add(i)) {
+    // The kills land between every kind of record and its call, not only between quiet transactions. A share
+    // under 100 seeds (a replay, a short share) is not asked to; a full one plays on past its count until every kind
+    // landed, so a rare kind missing from these random seeds is not a failure, and a kind that never lands is.
+    const KINDS: [&str; 3] = ["tracker", "harness", "hooks"];
+    let landed = || {
+        let kills = steps::KILLS.lock().unwrap();
+        KINDS.iter().all(|at| kills.contains_key(at))
+    };
+    let limit = if count < 100 { count } else { count * 5 };
+    for (i, seed) in (0..limit).map(|i| (i, base.wrapping_add(i))) {
+        if i >= count && landed() {
+            break;
+        }
         if let Err(why) = played(seed) {
             panic!("{why}");
         }
     }
-    // The kills landed between every kind of record and its call, not only between quiet transactions.
-    let kills = steps::KILLS.lock().unwrap();
-    for at in ["tracker", "harness", "hooks"] {
-        assert!(
-            short || kills.contains_key(at),
-            "no kill before a {at} call was done: {kills:?}"
-        );
-    }
+    assert!(
+        count < 100 || landed(),
+        "a kind of kill never landed in {limit} seeds: {:?}",
+        steps::KILLS.lock().unwrap()
+    );
 }
 
 /// `journal` with the instance ids, random by design, numbered in the order they first appear.
@@ -268,11 +275,13 @@ fn played(seed: u64) -> Result<Played, String> {
 }
 
 /// A seed plays the same steps and writes the same journal every time: what failed once fails again on replay.
-/// `AAE_CHAOS_REPLAYS=<n>` checks `n` new seeds instead of 3.
+/// `AAE_CHAOS_REPLAYS=<n>` checks `n` new seeds instead of 3, after a seed that once replayed differently: the writer
+/// took a finished effect and an inbox message in a random order (journal, cycle 44; 135 of 300 replays differed).
 #[test]
 fn a_seed_replays_the_same() {
     let n = std::env::var("AAE_CHAOS_REPLAYS").map_or(3, |n| n.parse().unwrap());
-    for seed in (0..n).map(|i| RandomState::new().hash_one(i)) {
+    let raced = std::iter::repeat_n(9_015_588_426_506_134_446, 8);
+    for seed in raced.chain((0..n).map(|i| RandomState::new().hash_one(i))) {
         let (once, twice) = (played(seed).unwrap(), played(seed).unwrap());
         assert_eq!(once.0, twice.0, "seed {seed}: the steps differ");
         let differ = once.1.lines().zip(twice.1.lines()).find(|(a, b)| a != b);

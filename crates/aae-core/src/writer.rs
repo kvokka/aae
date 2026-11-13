@@ -258,10 +258,9 @@ async fn run<H: Handler, E: Executor>(
             }
         };
         tokio::select! {
-            input = inbox.recv() => {
-                let Some(Input { key, msg, reply }) = input else { return Ok(()) };
-                let _ = reply.send(process(&mut conn, &mut handler, clock.now_ms(), key, msg));
-            }
+            // In this order, not at random: the same inputs take the same path, so a seed of the deterministic check
+            // replays. Finished effects go first: those in flight are bounded, a busy inbox is not.
+            biased;
             Some(done) = running.join_next_with_id() => {
                 let (task, ok) = match done {
                     Ok(done) => done,
@@ -273,6 +272,10 @@ async fn run<H: Handler, E: Executor>(
                 let (id, key) = tasks.remove(&task).expect("every task runs an effect");
                 in_flight.remove(&key);
                 effects::finish(&conn, id, ok, clock.now_ms())?;
+            }
+            input = inbox.recv() => {
+                let Some(Input { key, msg, reply }) = input else { return Ok(()) };
+                let _ = reply.send(process(&mut conn, &mut handler, clock.now_ms(), key, msg));
             }
             () = sleep => {}
         }
