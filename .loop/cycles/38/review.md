@@ -119,7 +119,9 @@ READINESS, и предлагаю владельцу/кодеру поднять 
 ## Проверено
 - `mise run ci` на `6695131` (HEAD кодера): **EXIT 0**. fmt и clippy `-D warnings` чисто; nextest **283/283** за
   53,4 с; deny (advisories, bans, licenses, sources), machete, `unused-pub`, `budget-selftest` — ok.
-- `mise run acceptance-ci` на `6695131`: ACCEPTANCE_RESULT
+- `mise run acceptance-ci` на `6695131`: **EXIT 0, 15/15** (3, 4, 5a, 5b, 6, 7, 8, 10, 12, 13, 14, 15, 16, 18,
+  19). Хоп p50 36 мс, p90 112 мс, максимум 261 мс; простой — CPU 0,073 %; c08 после выноса `kill()`/`settle()`:
+  20 убийств, 40 прогонов, самый медленный подъём 0,03 с.
 - GitHub CI: последние четыре прогона `main` — success (последний — коммит ревью 37).
 - Бюджеты (`scripts/budget.sh`, tokei): всего **12977/30000**, ядро 7906/12000; claude 874; codex 1008; трекер 275;
   фронтенды 1885/4000; плагины 256; запас 773; эксперименты 1461/1500.
