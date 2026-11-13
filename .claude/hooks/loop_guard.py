@@ -40,6 +40,8 @@ LOOPDIR = ROOT / ".loop"
 RUN = LOOPDIR / "run"
 
 MAIN = "<main>"
+# Политика только здесь: `tools: Agent(a, b)` у overseer (главный поток) сужает список типов для всей
+# сессии, и вложенные агенты перестают видеть expert/helper/subcoder (проверено на 2.1.323).
 SPAWN_POLICY = {
     MAIN: {"coder", "reviewer"},
     "coder": {"helper", "subcoder", "expert"},
