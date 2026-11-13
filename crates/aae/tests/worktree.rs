@@ -83,11 +83,11 @@ async fn a_claude_session_of_a_chosen_agent_works_in_its_worktree() {
         tree.to_str().unwrap(),
         "the session's cwd"
     );
-    // No commit and no change: the worktree goes, and its merged branch with it.
-    let deadline = Instant::now() + Duration::from_secs(10);
-    while tree.exists() {
-        assert!(Instant::now() < deadline, "{tree:?} stays");
+    // No commit and no change: the worktree goes, and its merged branch with it (two commands, so wait for both).
+    let branch = format!("aae/{run}");
+    let deadline = Instant::now() + Duration::from_secs(30);
+    while tree.exists() || !git(&rig, &["branch", "--list", &branch]).is_empty() {
+        assert!(Instant::now() < deadline, "{tree:?} or {branch} stays");
         tokio::time::sleep(Duration::from_millis(20)).await;
     }
-    assert_eq!(git(&rig, &["branch", "--list", &format!("aae/{run}")]), "");
 }

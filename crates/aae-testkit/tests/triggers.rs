@@ -117,7 +117,7 @@ fn by_trigger(events: &[Value], trigger: &str) -> Vec<Value> {
         .collect()
 }
 
-#[tokio::test]
+#[tokio::test(start_paused = true)]
 async fn an_event_chain_keeps_its_correlation_stops_at_the_depth_limit_and_survives_a_restart() {
     let dir = tempfile::tempdir().unwrap();
     write(dir.path(), CHAIN);
@@ -201,11 +201,12 @@ async fn a_schedule_fires_on_the_managed_clock_and_once_after_downtime() {
 
 /// A reload re-arms a schedule whose source changed, drops a removed one and arms a new one; the trigger listing
 /// shows each next firing; a reload that needs a restart is refused and changes nothing.
-#[tokio::test]
+#[tokio::test(start_paused = true)]
 async fn a_reload_rearms_changed_schedules_and_the_listing_shows_the_next_firings() {
     let dir = tempfile::tempdir().unwrap();
     write(dir.path(), SCHEDULES);
     let (core, _task) = daemon(dir.path(), T0);
+    // On the paused clock a sleep ends once every task is idle: the core has armed its schedules.
     tokio::time::sleep(Duration::from_millis(10)).await;
     let reader = run::Reader::open(&dir.path().join("state.db")).unwrap();
     let next = |config: &config::Config| {
@@ -235,8 +236,8 @@ async fn a_reload_rearms_changed_schedules_and_the_listing_shows_the_next_firing
     assert_eq!(reply["config_generation"], 2, "{reply}");
     let (nightly, hourly, weekly) = next(&after);
     assert_eq!((nightly, hourly), (Some("2026-11-13T04:00:00.000Z".into()), None));
-    // A week from the reload; the managed clock moved a few milliseconds since the start.
-    assert!(weekly.unwrap().as_str().unwrap().starts_with("2026-11-20T02:59:30"));
+    // A week from the reload, 10 ms of the managed clock after the start.
+    assert_eq!(weekly, Some("2026-11-20T02:59:30.010Z".into()));
 
     let mut other = (*after).clone();
     other.harnesses.insert("codex".into(), Default::default());
@@ -304,7 +305,7 @@ async fn a_trigger_switched_off_does_not_fire_until_it_is_on_again() {
 }
 
 /// An event trigger switched off does not fire on its events.
-#[tokio::test]
+#[tokio::test(start_paused = true)]
 async fn an_event_trigger_switched_off_does_not_fire() {
     let dir = tempfile::tempdir().unwrap();
     write(dir.path(), CHAIN);

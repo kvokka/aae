@@ -3,13 +3,13 @@
 mod common;
 
 use aae_front::client::{ClientError, SseEvent};
-use common::{Daemon, command, spawn};
+use common::{Daemon, WAIT, command, spawn};
 use serde_json::{Value, json};
 use std::os::unix::fs::PermissionsExt;
 use std::{fs, time::Duration};
 
 async fn next_event(events: &mut aae_front::client::Events) -> SseEvent {
-    let event = tokio::time::timeout(Duration::from_secs(10), events.next()).await;
+    let event = tokio::time::timeout(WAIT, events.next()).await;
     event.expect("an event in time").unwrap().expect("the stream goes on")
 }
 
@@ -49,7 +49,7 @@ async fn a_run_started_over_the_api_passes_and_its_events_stream_from_a_seq() {
         .stream(&format!("/v1/runs/{run}/live?from={after}"))
         .await
         .unwrap();
-    let end = tokio::time::timeout(Duration::from_secs(10), live.next()).await;
+    let end = tokio::time::timeout(WAIT, live.next()).await;
     assert!(end.expect("the view closes").unwrap().is_none());
 }
 
@@ -63,9 +63,14 @@ async fn an_operator_gate_holds_a_new_run_until_opened_by_hand() {
         (&gates[0]["key"], &gates[0]["closed_by"]),
         (&json!("project:shop"), &json!("operator"))
     );
+    // The run is queued for the gate in the transaction that creates it, so nothing starts it until the gate opens.
     let run = d.create("check", None).await;
-    tokio::time::sleep(Duration::from_millis(300)).await;
-    assert_eq!(d.get(&format!("/v1/runs/{run}")).await["state"], "queued");
+    let view = d.get(&format!("/v1/runs/{run}")).await;
+    assert_eq!(
+        (&view["state"], &view["waiting_for"]),
+        (&json!("queued"), &json!("gate")),
+        "{view}"
+    );
     let past = json!({ "key": "rig:shop/web", "until": "2000-01-01T00:00:00Z" });
     match d.post("/v1/gates", past, None).await {
         Err(ClientError::Api { status: 409, error }) => assert_eq!(error["code"], "rejected"),
@@ -201,7 +206,9 @@ async fn a_replayed_reload_keeps_the_config_it_applied() {
 /// The journal lines of `type` in the daemon's journal file.
 fn journal_lines(d: &Daemon, kind: &str) -> Vec<Value> {
     let text = fs::read_to_string(d.dir.path().join("state/aae/journal/events.jsonl")).unwrap();
-    let lines = text.lines().map(|l| serde_json::from_str::<Value>(l).unwrap());
+    // A line the daemon is still appending has no newline yet.
+    let whole = text.split_inclusive('\n').filter(|l| l.ends_with('\n'));
+    let lines = whole.map(|l| serde_json::from_str::<Value>(l).unwrap());
     lines.filter(|e| e["type"] == kind).collect()
 }
 
@@ -232,7 +239,7 @@ async fn a_drain_starts_no_run_and_stops_the_daemon_when_its_timeout_cuts_a_turn
     let view = d.until_state(&held, "queued").await;
     assert_eq!(view["waiting_for"], "daemon_stopping", "{view}");
 
-    let deadline = std::time::Instant::now() + Duration::from_secs(10);
+    let deadline = std::time::Instant::now() + WAIT;
     let exit = loop {
         if let Some(exit) = d.child.try_wait().unwrap() {
             break exit;
@@ -273,9 +280,7 @@ async fn a_restart_starts_the_daemon_again_in_the_same_process() {
         .unwrap();
     // Queued during the drain: the restarted daemon starts it with nothing else touching the queue.
     let held = d.create("check", None).await;
-    let view = d.until_state(&held, "queued").await;
-    assert_eq!(view["waiting_for"], "daemon_stopping", "{view}");
-    let deadline = std::time::Instant::now() + Duration::from_secs(10);
+    let deadline = std::time::Instant::now() + WAIT;
     let after = loop {
         if let Ok(after) = d.client.request("GET", "/v1/daemon", None, None).await
             && after["started_at"] != before["started_at"]
@@ -289,6 +294,10 @@ async fn a_restart_starts_the_daemon_again_in_the_same_process() {
     };
     assert_eq!(after["pid"], before["pid"], "{after}");
     assert_eq!(journal_lines(&d, "daemon.stopping")[0]["data"]["reason"], "restart");
+    // From the journal, not the live view: the restarted daemon may have started the run already.
+    let queued = journal_lines(&d, "run.queued");
+    let first = queued.iter().find(|e| e["run"] == held.as_str()).unwrap();
+    assert_eq!(first["data"]["waiting_for"], "daemon_stopping", "{first}");
     d.until_state(&held, "passed").await;
     d.until_state(&brief, "passed").await;
     assert_eq!(

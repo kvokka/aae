@@ -25,6 +25,9 @@ pub(crate) const FILES: &[(&str, &str)] = &[
     ),
 ];
 
+/// The upper bound of every wait on the daemon: generous, so that a loaded machine is slow rather than failing.
+pub(crate) const WAIT: Duration = Duration::from_secs(60);
+
 pub(crate) struct Daemon {
     pub(crate) child: Child,
     pub(crate) dir: tempfile::TempDir,
@@ -48,7 +51,7 @@ impl Daemon {
         let child = spawn(dir.path());
         let client = Client::new(dir.path().join("run/aae/aae.sock"));
         let daemon = Self { child, dir, client };
-        let deadline = Instant::now() + Duration::from_secs(10);
+        let deadline = Instant::now() + WAIT;
         while daemon.client.request("GET", "/v1/daemon", None, None).await.is_err() {
             assert!(Instant::now() < deadline, "the daemon did not come up");
             tokio::time::sleep(Duration::from_millis(20)).await;
@@ -72,7 +75,7 @@ impl Daemon {
 
     /// Waits until the run is in `state`.
     pub(crate) async fn until_state(&self, run: &str, state: &str) -> Value {
-        let deadline = Instant::now() + Duration::from_secs(30);
+        let deadline = Instant::now() + WAIT;
         loop {
             let view = self.get(&format!("/v1/runs/{run}")).await;
             if view["state"] == state {
