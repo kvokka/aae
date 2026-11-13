@@ -91,13 +91,13 @@ pub(crate) const ALL: &[Scenario] = &[
     },
     Scenario {
         criterion: "8",
-        title: "5 x kill -9 of the daemon mid-tool on the cheapest real claude model: each run resumes and passes once",
+        title: "5 x kill -9 of the daemon mid-tool on the cheapest real claude model: each run resumes and ends once, a passed one fires once",
         launch: Launch::Request,
         run: |env| Box::pin(c08_crash::on_live(env, Live::Claude)),
     },
     Scenario {
         criterion: "8",
-        title: "5 x kill -9 of the daemon mid-tool on the cheapest real codex model: each run resumes and passes once",
+        title: "5 x kill -9 of the daemon mid-tool on the cheapest real codex model: each run resumes and ends once, a passed one fires once",
         launch: Launch::Request,
         run: |env| Box::pin(c08_crash::on_live(env, Live::Codex)),
     },
