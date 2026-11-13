@@ -685,7 +685,8 @@ queued → preparing → starting → running ⇄ requires_action → finishing 
 `docs/design/config.md` («Trigger»), `docs/design/contracts.md` (§1.3, §2, §3.5, §5).
 
 Изменено владельцем 2026-11-14 (§2.1 п. 13): `cron` считается в часовом поясе системы; ключ `timezone` в конфиге
-оркестратора его переопределяет (IANA-имя). Не сделано: сейчас `cron` только в UTC.
+оркестратора его переопределяет (IANA-имя). Сделано в цикле 45 (WP-49): `aae-core/src/cron.rs`, `config/load.rs`;
+переходы часов и перевзвод при смене пояса — `docs/design/config.md` («Trigger»).
 Сжато: цикл 35, оригинал — git show ef08773:docs/init/AAE-SPEC.md
 
 ---
