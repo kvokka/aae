@@ -19,7 +19,7 @@ use std::{
     collections::{BTreeMap, BTreeSet},
     fs::{DirBuilder, File, Permissions, TryLockError},
     io,
-    os::unix::fs::{DirBuilderExt, PermissionsExt},
+    os::unix::fs::{DirBuilderExt, OpenOptionsExt, PermissionsExt},
     path::{Path, PathBuf},
     sync::{Arc, RwLock},
 };
@@ -76,8 +76,14 @@ pub(crate) async fn run(paths: Paths) -> Result<bool, String> {
             // A new token every start, for the owner's clients in `api.token` and for sessions through `${AAE_API}`.
             config.api_token = aae_core::run::new_token().ok_or("no randomness for the API token")?;
             let file = paths.state.join("api.token");
-            std::fs::write(&file, &config.api_token)
-                .and_then(|()| std::fs::set_permissions(&file, Permissions::from_mode(0o600)))
+            // Created 0600 so the token is never readable by others, not even until a chmod.
+            let _ = std::fs::remove_file(&file);
+            std::fs::OpenOptions::new()
+                .write(true)
+                .create_new(true)
+                .mode(0o600)
+                .open(&file)
+                .and_then(|mut f| std::io::Write::write_all(&mut f, config.api_token.as_bytes()))
                 .map_err(|e| format!("{}: {e}", file.display()))?;
             let tcp = tokio::net::TcpListener::bind(addr).await;
             Some(tcp.map_err(|e| format!("api_tcp {addr}: {e}"))?)
