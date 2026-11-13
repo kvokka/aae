@@ -80,6 +80,12 @@ pub(crate) const ALL: &[Scenario] = &[
         run: |env| Box::pin(c08_crash::run(env)),
     },
     Scenario {
+        criterion: "8",
+        title: "5 x kill -9 of the daemon mid-tool on the cheapest real claude model: each run resumes and passes once",
+        launch: Launch::Request,
+        run: |env| Box::pin(c08_crash::on_claude(env)),
+    },
+    Scenario {
         criterion: "10",
         title: "a codex quota with a reset time closes the account gate; both runs of the account pass after it",
         launch: Launch::Ci,

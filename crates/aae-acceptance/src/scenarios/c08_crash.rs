@@ -3,8 +3,8 @@
 //! exactly once, and the trigger on `run.passed` started exactly one run for each passed run, none lost or doubled.
 //!
 //! The step is an exec command: the real daemon has no scripted harness (contracts 9), and a harness turn resumed
-//! after `daemon_crash` is covered on the scripted driver (`aae-testkit/tests/recovery.rs`); five kills on real
-//! harnesses are the request part of the criterion.
+//! after `daemon_crash` is covered on the scripted driver (`aae-testkit/tests/recovery.rs`). The request part of the
+//! criterion, [`on_claude`], kills the daemon five times in the middle of a real claude turn, mid-tool.
 
 use super::exec_formula;
 use crate::{
@@ -21,6 +21,7 @@ use std::{
 };
 
 const KILLS: usize = 20;
+const HARNESS_KILLS: usize = 5;
 const UP_WITHIN: Duration = Duration::from_secs(30);
 const TERMINAL: [&str; 3] = ["run.passed", "run.failed", "run.cancelled"];
 
@@ -41,13 +42,13 @@ fn steps(root: &Path, daemon: u32) -> HashSet<u32> {
         .collect()
 }
 
-/// A pause of 50..850 ms, different for each kill: always within the 1 s step.
-fn jitter() -> Duration {
+/// A pause of `from..from + span` ms, different for each kill.
+fn jitter(from: u64, span: u32) -> Duration {
     let nanos = SystemTime::now()
         .duration_since(SystemTime::UNIX_EPOCH)
         .unwrap()
         .subsec_nanos();
-    Duration::from_millis(50 + u64::from(nanos % 800))
+    Duration::from_millis(from + u64::from(nanos % span))
 }
 
 async fn passed(d: &Daemon) -> usize {
@@ -80,35 +81,135 @@ pub(crate) async fn run(env: Arc<Env>) -> String {
             assert!(Instant::now() < deadline, "no step started");
             tokio::time::sleep(Duration::from_millis(20)).await;
         }
-        tokio::time::sleep(jitter()).await;
-        let before = steps(d.dir.path(), d.pid());
-        assert!(!before.is_empty(), "the step outlives the pause");
+        // Always within the 1 s step.
+        tokio::time::sleep(jitter(50, 800)).await;
         let done = passed(&d).await;
-        let at = Instant::now();
-        d.restart().await;
-        let took = at.elapsed();
-        slowest = slowest.max(took);
-        assert!(took <= UP_WITHIN, "the daemon answered after {took:?}");
+        slowest = slowest.max(kill(&mut d).await);
         let deadline = Instant::now() + Duration::from_secs(5);
-        loop {
-            let left: Vec<u32> = before
-                .iter()
-                .copied()
-                .filter(|p| Path::new(&format!("/proc/{p}")).exists())
-                .collect();
-            if left.is_empty() {
-                break;
-            }
-            assert!(Instant::now() < deadline, "orphans of the killed daemon: {left:?}");
-            tokio::time::sleep(Duration::from_millis(50)).await;
-        }
         // The resumed step finishes before the next kill, so every run gets through.
         while passed(&d).await <= done {
             assert!(Instant::now() < deadline + UP_WITHIN, "no run passed after the restart");
             tokio::time::sleep(Duration::from_millis(50)).await;
         }
     }
+    let attempts = settle(&d, &work).await;
+    format!(
+        "{KILLS} kills, {} runs, {attempts} attempts failed by the crashes; slowest restart to the first answer {:.2} s",
+        2 * work.len(),
+        slowest.as_secs_f64()
+    )
+}
 
+/// Kills the daemon mid-step and starts it again: it answers within 30 s, and the processes of the steps it ran are
+/// gone within 5 s of that. How long it took to answer.
+async fn kill(d: &mut Daemon) -> Duration {
+    let before = steps(d.dir.path(), d.pid());
+    assert!(!before.is_empty(), "the step outlives the pause");
+    let at = Instant::now();
+    d.restart().await;
+    let took = at.elapsed();
+    assert!(took <= UP_WITHIN, "the daemon answered after {took:?}");
+    let deadline = Instant::now() + Duration::from_secs(5);
+    loop {
+        let left: Vec<u32> = before
+            .iter()
+            .copied()
+            .filter(|p| Path::new(&format!("/proc/{p}")).exists())
+            .collect();
+        if left.is_empty() {
+            return took;
+        }
+        assert!(
+            Instant::now() < deadline,
+            "orphans of the killed daemon: {:?}",
+            described(&left)
+        );
+        tokio::time::sleep(Duration::from_millis(50)).await;
+    }
+}
+
+/// The state and command line of each process.
+fn described(pids: &[u32]) -> Vec<String> {
+    let read = |pid: u32, file: &str| fs::read_to_string(format!("/proc/{pid}/{file}")).unwrap_or_default();
+    pids.iter()
+        .map(|&pid| {
+            let state = read(pid, "status");
+            let state = state.lines().find(|l| l.starts_with("State:")).unwrap_or_default();
+            format!(
+                "{pid} {} {}",
+                state.trim_start_matches("State:").trim(),
+                read(pid, "cmdline").replace('\0', " ")
+            )
+        })
+        .collect()
+}
+
+/// The request part on the cheapest real claude model with the host login: five kills, each in the middle of a
+/// turn while its shell tool runs; every run resumes and passes by the finisher, and its follower fires once.
+pub(crate) async fn on_claude(env: Arc<Env>) -> String {
+    let aae = env.aae.display().to_string();
+    let mut d = Daemon::start_on_host(&env, |root| {
+        write(
+            root.join("config/aae/config.toml"),
+            "projects = [\"shop\"]\n[harness.claude]\n",
+        );
+        write(
+            root.join("config/aae/shop/aae.toml"),
+            format!("[rigs.web]\npath = \"web\"\n{TRIGGER}"),
+        );
+        write(
+            root.join("config/aae/shop/agents/dev/agent.toml"),
+            "harness = \"claude\"\nmodel = \"haiku\"\npermission_mode = \"bypassPermissions\"\n",
+        );
+        write(
+            root.join("config/aae/shop/formulas/work.toml"),
+            "name = \"work\"\n[step]\nkind = \"prompt\"\nagent = \"dev\"\nprompt = \"work.md\"\n",
+        );
+        write(
+            root.join("config/aae/shop/formulas/work.md"),
+            format!(
+                "Run this shell command once, in the foreground, and wait for it: `touch started && sleep 15`. \
+                 Then run this shell command once: `{aae} finish pass --summary done`. Then stop."
+            ),
+        );
+        exec_formula(
+            root,
+            "follow",
+            "of = { type = \"string\", required = true }",
+            "\"true\"",
+        );
+    })
+    .await;
+    let started = d.path("config/aae/shop/web/started");
+    let mut work = Vec::new();
+    let mut slowest = Duration::ZERO;
+    for _ in 0..HARNESS_KILLS {
+        let _ = fs::remove_file(&started);
+        let run = d.create("work").await;
+        // The model's shell tool is running.
+        let deadline = Instant::now() + Duration::from_secs(120);
+        while !started.exists() {
+            assert!(Instant::now() < deadline, "the model did not start the command");
+            tokio::time::sleep(Duration::from_millis(100)).await;
+        }
+        // Within the 15 s command, at a different point each time.
+        tokio::time::sleep(jitter(500, 10_000)).await;
+        slowest = slowest.max(kill(&mut d).await);
+        d.until_state(&run, "passed", Duration::from_secs(300)).await;
+        work.push(run);
+    }
+    let attempts = settle(&d, &work).await;
+    format!(
+        "claude, model haiku: {HARNESS_KILLS} kills mid-tool, {} runs, {attempts} attempts failed by the crashes; \
+         slowest restart to the first answer {:.2} s",
+        2 * work.len(),
+        slowest.as_secs_f64()
+    )
+}
+
+/// Waits for every run of `work` and its follower to pass; checks each ended once, each passed run fired exactly
+/// once and no step process is left. The number of attempts the crashes failed.
+async fn settle(d: &Daemon, work: &[String]) -> usize {
     let all = 2 * work.len();
     let deadline = Instant::now() + Duration::from_secs(120);
     loop {
@@ -142,7 +243,7 @@ pub(crate) async fn run(env: Arc<Env>) -> String {
     for (kind, e) in journal.iter().filter(|(k, _)| TERMINAL.contains(&k.as_str())) {
         terminal.entry(e["run"].as_str().unwrap()).or_default().push(kind);
     }
-    for run in &work {
+    for run in work {
         assert_eq!(
             terminal.get(run.as_str()),
             Some(&vec!["run.passed"]),
@@ -168,10 +269,5 @@ pub(crate) async fn run(env: Arc<Env>) -> String {
     assert_eq!(parents, work.iter().cloned().collect(), "every passed run fired once");
     let left = steps(d.dir.path(), d.pid());
     assert!(left.is_empty(), "no process left at the end: {left:?}");
-    let attempts = journal.iter().filter(|(k, _)| k == "run.attempt_failed").count();
-    format!(
-        "{KILLS} kills, {} runs, {attempts} attempts failed by the crashes; slowest restart to the first answer {:.2} s",
-        2 * work.len(),
-        slowest.as_secs_f64()
-    )
+    journal.iter().filter(|(k, _)| k == "run.attempt_failed").count()
 }
