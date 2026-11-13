@@ -44,7 +44,8 @@ process and never links, vendors or ships it.
 At start the daemon writes `.bv/workspace.yaml` next to the orchestrator config (by default
 `~/.config/aae/.bv/workspace.yaml`): one repository per project with a tracker, with br's id prefix. Run
 [bv](https://github.com/Dicklesworthstone/beads_viewer) there, or with `--workspace <that file>`, to see the beads of
-all projects at once (checked with bv 0.25.0).
+all projects at once (read by bv 0.25.0 on 2026-11-13 at `0e02fda`).
+<!-- MEASURE id=bv-workspace-read date=2026-11-13 ver=bv-0.25.0,0e02fda env=linux-arm64-orbstack src="by hand: bv --workspace <file> --robot-next" note="checked once by hand; not in CI; re-check when bv or the file format changes" -->
 
 **br is not plain MIT.** Its license is MIT with a rider that grants no rights to OpenAI, Anthropic, their affiliates
 or anyone acting on their behalf. Check whether that rider applies to you before you install br. Whether it applies to
@@ -52,18 +53,20 @@ Claude or Codex agents running `br` inside an aae session has not been assessed.
 
 ## Development
 
-- `mise run test` runs the unit and integration tests (about 30 s on 9 cores). The chaos stand among them plays 1000
-  new seeds each time and prints its base seeds; a failure names its seed and the command that replays it
-  (`AAE_CHAOS_SEED=<n> cargo nextest run -p aae-testkit --test chaos`).
-- `mise run ci` adds formatting, clippy, `cargo deny`, `cargo machete` and the line budgets; it stays about a minute.
-- `mise run acceptance-ci` runs the model-free acceptance scenarios (below) on real daemons; CI runs it on every
-  commit, locally it is optional.
+- `mise run test` runs the unit and integration tests: the local loop. The chaos stand among them plays 1000 new
+  seeds each time and prints its base seeds; a failure names its seed and the command that replays it.
+- `mise run ci` adds formatting, clippy, `cargo deny`, `cargo machete` and the line budgets.
+- `mise run acceptance-ci` runs the model-free acceptance scenarios on real daemons; CI runs it on every commit,
+  locally it is optional.
 
+Wall times and the replay of a seed: [docs/guide/development.md](docs/guide/development.md).
+
+## Acceptance spec
 
 The acceptance criteria of the first release are executable scenarios in `crates/aae-acceptance`, each on a real
 `aae daemon` in a temporary directory tree. `mise run acceptance-ci` runs the scenarios without a model, as CI does on
-every commit (about a minute: one of them watches an idle daemon for 30 s). `mise run acceptance` runs all of them,
-including those that call a real model: they use the cheapest model, cost money and need your harness login. Pass
-criterion numbers to run only those: `cargo build -p aae && cargo run -p aae-acceptance -- --ci 3 19`. The report,
-with the date and the versions of `aae` and the harnesses, goes to `target/acceptance/report.md`. The criteria
-checked by hand (the claude half of 10, 20, 21) are described in `docs/acceptance-manual.md`.
+every commit. `mise run acceptance` runs all of them, including those that call a real model: they use the cheapest
+model, cost money and need your harness login. Pass criterion numbers to run only those:
+`cargo build -p aae && cargo run -p aae-acceptance -- --ci 3 19`. The report, with the date and the versions of `aae`
+and the harnesses, goes to `target/acceptance/report.md`. What is checked by hand (the claude half of criterion 10)
+and the demo runs (criterion 20) are described in `docs/acceptance-manual.md`.
