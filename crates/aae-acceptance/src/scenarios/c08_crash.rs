@@ -62,7 +62,7 @@ pub(crate) async fn run(env: Arc<Env>) -> String {
             root.join("config/aae/shop/aae.toml"),
             format!("[rigs.web]\npath = \"web\"\n{TRIGGER}"),
         );
-        exec_formula(root, "work", "", "\"sleep\", \"1\"");
+        exec_formula(root, "work", "", "\"sleep\", \"2\"");
         exec_formula(
             root,
             "follow",
@@ -81,7 +81,7 @@ pub(crate) async fn run(env: Arc<Env>) -> String {
             assert!(Instant::now() < deadline, "no step started");
             tokio::time::sleep(Duration::from_millis(20)).await;
         }
-        // Always within the 1 s step.
+        // Always within the 2 s step, with room for a loaded host noticing the step late.
         tokio::time::sleep(jitter(50, 800)).await;
         let done = passed(&d).await;
         slowest = slowest.max(kill(&mut d).await);
