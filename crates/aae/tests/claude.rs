@@ -66,6 +66,36 @@ async fn a_claude_session_that_calls_the_finisher_passes_its_run() {
     assert!(result.contains("tool_result"), "{result}");
 }
 
+#[tokio::test(flavor = "multi_thread")]
+async fn the_live_view_of_a_run_relays_its_session_and_ends_with_the_run() {
+    // The command sleeps first, so the view taps the session before the tool result comes back.
+    let finish = format!("sleep 1 && {} finish pass --summary built", env!("CARGO_BIN_EXE_aae"));
+    let provider = Provider::start(vec![Reply::Bash(finish), Reply::Text("Done.".into())]).await;
+    let d = daemon(&provider).await;
+    let run = d.create("build", None).await;
+    let mut live = d.client.stream(&format!("/v1/runs/{run}/live")).await.unwrap();
+    let (mut events, mut harness) = (Vec::new(), Vec::new());
+    let watched = tokio::time::timeout(Duration::from_secs(60), async {
+        while let Some(event) = live.next().await.unwrap() {
+            let data: Value = serde_json::from_str(&event.data).unwrap();
+            match event.id {
+                Some(_) => events.push(data),
+                None => harness.push((event.event, data)),
+            }
+        }
+    });
+    watched.await.expect("the view ends with the run");
+    assert!(events.iter().all(|e| e["run"] == run.as_str()), "{events:?}");
+    assert_eq!(events[0]["type"], "run.queued");
+    assert_eq!(events.last().unwrap()["type"], "run.passed");
+    // The raw stream-json of the session: the tool result of the Bash call at least.
+    assert!(harness.iter().all(|(kind, _)| kind == "harness"), "{harness:?}");
+    assert!(harness.iter().any(|(_, m)| m["type"] == "user"), "{harness:?}");
+    let attempt = &d.until_state(&run, "passed").await["attempts"][0];
+    assert_eq!(attempt["harness"], "claude");
+    assert!(attempt["session"]["session_id"].is_string(), "{attempt}");
+}
+
 /// br by hand in the project, as `alice`; its trimmed stdout.
 fn br(project: &Path, args: &[&str]) -> String {
     let out = Command::new("br")

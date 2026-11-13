@@ -52,6 +52,10 @@ async fn runs_and_gates_by_hand_from_the_cli() {
     d.json(&["gate", "open", "project:shop"]);
     d.until_state(&run, "passed").await;
     assert_eq!(d.json(&["run", "list", "--state", "passed"])[0]["id"], run.as_str());
+    // The live view of a run that ended replays its events and ends too.
+    let out = d.cli(&["run", "watch", &run], &[]);
+    let watched = String::from_utf8(out.stdout).unwrap();
+    assert!(watched.trim_end().ends_with(&format!("run.passed  {run}")), "{watched}");
     assert_eq!(d.json(&["status"])["version"], env!("CARGO_PKG_VERSION"));
 }
 

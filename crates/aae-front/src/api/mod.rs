@@ -6,6 +6,7 @@ mod daemon;
 mod events;
 mod gates;
 mod instances;
+mod live;
 mod mcp;
 mod runs;
 mod triggers;
@@ -13,6 +14,7 @@ mod triggers;
 use aae_core::{
     CoreHandle, Journal,
     config::Config,
+    driver::Driver,
     run::{Msg, Reader},
 };
 use axum::{
@@ -48,6 +50,8 @@ pub struct Api {
     pub applied: tokio::sync::Mutex<u64>,
     /// Reads the daemon's config file with every check a start makes, or says what is wrong in it.
     pub load: Box<dyn Fn() -> Result<Config, Vec<String>> + Send + Sync>,
+    /// The harness drivers, whose session streams the live view of a run relays.
+    pub drivers: Vec<Arc<dyn Driver>>,
 }
 
 impl Api {
@@ -67,6 +71,7 @@ fn router() -> OpenApiRouter<Arc<Api>> {
     OpenApiRouter::with_openapi(Doc::openapi())
         .routes(routes!(runs::create, runs::list))
         .routes(routes!(runs::get))
+        .routes(routes!(live::live))
         .routes(routes!(runs::cancel))
         .routes(routes!(runs::answer))
         .routes(routes!(runs::finish))

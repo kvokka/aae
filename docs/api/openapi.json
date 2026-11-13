@@ -1027,6 +1027,75 @@
         }
       }
     },
+    "/v1/runs/{id}/live": {
+      "get": {
+        "summary": "The live view of a run as SSE: its events as on `/v1/events` (`id` the `seq`); the raw messages of its current\nsession as `event: harness` with no `id`; `event: lagged` with `{\"missed\": n}` when the reader fell behind the\nsession. The stream ends after the run's `run.passed`, `run.failed` or `run.cancelled`.",
+        "operationId": "live",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "description": "The first `seq` to send; absent: from the oldest event held (or after `Last-Event-ID`).",
+            "required": false,
+            "schema": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "int64"
+            }
+          },
+          {
+            "name": "Last-Event-ID",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "text/event-stream": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "410": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/triggers": {
       "get": {
         "summary": "Lists every trigger on every rig it runs on, with its source and next firing (`next_at`, null for an event\ntrigger) and whether it is `enabled`.",

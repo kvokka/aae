@@ -82,7 +82,7 @@ aae run answer run_2 <request> allow       # or: deny <message>; answer <text> f
 ```sh
 aae config reload
 aae run start hello main summarize --input file=README.md
-aae events                            # follow the run live
+aae run watch run_2                   # its events and the session's messages live; ends with the run
 aae run show run_2
 ```
 

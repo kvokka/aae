@@ -111,7 +111,7 @@ pub(crate) async fn run(paths: Paths) -> Result<bool, String> {
         conn,
         Clock::system(),
         config.clone(),
-        drivers,
+        drivers.clone(),
         trackers,
         Arc::new(ExecHooks {
             socket: Some(paths.socket.clone()),
@@ -155,6 +155,7 @@ pub(crate) async fn run(paths: Paths) -> Result<bool, String> {
         config: RwLock::new(config),
         applied: tokio::sync::Mutex::new(1),
         load: Box::new(move || load(&paths.config).inspect(crate::doctor::warn_per_session)),
+        drivers,
     };
     let stop = stop_signal().map_err(|e| format!("signals: {e}"))?;
     eprintln!("aae daemon listening on {}", paths.socket.display());

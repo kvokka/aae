@@ -72,7 +72,8 @@ aae run list                          # run_1  passed  hello/main  hello.check  
 aae run show run_1                    # the whole run: state, attempts, outcome
 ```
 
-`aae events` follows the event stream live (`--from <seq>` to replay from a point), and every command takes
+`aae events` follows the event stream live (`--from <seq>` to replay from a point), `aae run watch <run>` one run with
+the raw messages of its session, and every command takes
 `--json` to print the API's JSON as it is.
 
 ## 5. Change the config

@@ -1,6 +1,6 @@
 //! The command groups of the CLI: `run`, `gate`, `trigger` and `instance`, each with the API calls behind it.
 
-use super::{encode, print, run_path, text};
+use super::{encode, follow, print, run_path, text};
 use crate::client::{Client, ClientError};
 use clap::{Subcommand, ValueEnum};
 use serde_json::{Map, Value, json};
@@ -33,6 +33,13 @@ pub enum RunCommand {
     },
     /// Show a run.
     Show { id: String },
+    /// Follow a run live until it ends: its events from `--from` (default: the oldest held) and the raw messages of
+    /// its session from now on.
+    Watch {
+        id: String,
+        #[arg(long)]
+        from: Option<i64>,
+    },
     /// Cancel a run.
     Cancel {
         id: String,
@@ -161,6 +168,10 @@ pub(super) async fn run(client: &Client, json: bool, command: RunCommand) -> Res
             }
         }
         RunCommand::Show { id } => print(json, &client.request("GET", &run_path(&id, ""), None, None).await?),
+        RunCommand::Watch { id, from } => {
+            let query = from.map(|f| format!("?from={f}")).unwrap_or_default();
+            follow(client.stream(&run_path(&id, &format!("/live{query}"))).await?, json).await?;
+        }
         RunCommand::Cancel {
             id,
             reason,

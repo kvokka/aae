@@ -36,11 +36,10 @@ pub(crate) async fn stream(
     headers: HeaderMap,
     Query(query): Query<StreamQuery>,
 ) -> Result<Response, ApiError> {
-    let after_last = headers
-        .get("last-event-id")
-        .and_then(|v| v.to_str().ok()?.parse::<i64>().ok())
-        .map(|id| id + 1);
-    let from = query.from.or(after_last).unwrap_or_else(|| *state.written.borrow() + 1);
+    let from = query
+        .from
+        .or_else(|| after_last(&headers))
+        .unwrap_or_else(|| *state.written.borrow() + 1);
     // The gap is reported before the stream starts, while a status code can still say it.
     read(&state, from, 1).map_err(|e| gap(&e))?;
     let (tx, rx) = mpsc::channel(BATCH);
@@ -60,11 +59,7 @@ pub(crate) async fn stream(
                 Ok(events) => {
                     for envelope in events {
                         next = envelope["seq"].as_i64().unwrap_or(next) + 1;
-                        let event = Event::default()
-                            .id(envelope["seq"].to_string())
-                            .event(envelope["type"].as_str().unwrap_or("event"))
-                            .data(envelope.to_string());
-                        if tx.send(Ok(event)).await.is_err() {
+                        if tx.send(Ok(event(&envelope))).await.is_err() {
                             return;
                         }
                     }
@@ -81,12 +76,28 @@ pub(crate) async fn stream(
     Ok(Sse::new(stream).keep_alive(KeepAlive::default()).into_response())
 }
 
+/// An envelope as an SSE event: `id` the `seq`, `event` the type.
+pub(super) fn event(envelope: &Value) -> Event {
+    Event::default()
+        .id(envelope["seq"].to_string())
+        .event(envelope["type"].as_str().unwrap_or("event"))
+        .data(envelope.to_string())
+}
+
+/// The `seq` after the `Last-Event-ID` of a reconnecting client.
+pub(super) fn after_last(headers: &HeaderMap) -> Option<i64> {
+    headers
+        .get("last-event-id")
+        .and_then(|v| v.to_str().ok()?.parse::<i64>().ok())
+        .map(|id| id + 1)
+}
+
 // shortcut: every read scans the journal files from the oldest; index the files by first `seq` if streams lag.
-fn read(state: &super::Api, from: i64, limit: usize) -> Result<Vec<Value>, ReadError> {
+pub(super) fn read(state: &super::Api, from: i64, limit: usize) -> Result<Vec<Value>, ReadError> {
     state.journal.read_from(from, limit)
 }
 
-fn gap(e: &ReadError) -> ApiError {
+pub(super) fn gap(e: &ReadError) -> ApiError {
     match e {
         ReadError::Gap { oldest } => {
             let mut error = ApiError::new(

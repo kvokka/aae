@@ -5,7 +5,7 @@ mod commands;
 mod config;
 mod finish;
 
-use crate::client::{Client, ClientError};
+use crate::client::{Client, ClientError, Events};
 use clap::{CommandFactory, Parser, Subcommand, ValueEnum};
 pub use commands::{Decision, GateCommand, InstanceCommand, RunCommand, TriggerCommand};
 pub use config::{ConfigCommand, ListCommand};
@@ -18,6 +18,7 @@ pub const OPERATIONS: &[(&str, &str, &str)] = &[
     ("run start", "POST", "/v1/runs"),
     ("run list", "GET", "/v1/runs"),
     ("run show", "GET", "/v1/runs/{id}"),
+    ("run watch", "GET", "/v1/runs/{id}/live"),
     ("run cancel", "POST", "/v1/runs/{id}/cancel"),
     ("run answer", "POST", "/v1/runs/{id}/answer"),
     ("finish", "POST", "/v1/runs/{id}/finish"),
@@ -211,22 +212,7 @@ async fn execute(client: &Client, cli: Cli) -> Result<ExitCode, ClientError> {
         Command::Pack(command) => config::list(client, json, "packs", command).await?,
         Command::Plugin(command) => config::list(client, json, "plugins", command).await?,
         Command::Config(command) => return config::config(client, json, command).await,
-        Command::Events { from } => {
-            let mut events = client.events(from).await?;
-            while let Some(event) = events.next().await? {
-                let envelope: Value = serde_json::from_str(&event.data).unwrap_or(Value::String(event.data));
-                if json {
-                    println!("{envelope}");
-                } else {
-                    println!(
-                        "{}  {}  {}",
-                        text(&envelope["seq"]),
-                        event.event,
-                        text(&envelope["run"])
-                    );
-                }
-            }
-        }
+        Command::Events { from } => follow(client.events(from).await?, json).await?,
         Command::Finish { result, summary, data } => return finish(client, result, summary, data).await,
         Command::Status => print(json, &client.request("GET", "/v1/daemon", None, None).await?),
         Command::Drain { timeout, key } => print(
@@ -262,6 +248,23 @@ fn stop_path(what: &str, timeout: Option<u64>) -> String {
 
 pub(crate) fn run_path(id: &str, then: &str) -> String {
     format!("/v1/runs/{}{then}", encode(id))
+}
+
+/// Prints a stream until it ends: an event per line, or its data as it is with `--json`. An event with no `seq` (a
+/// harness message, `lagged`, `gap`) shows its `type` or `method`, or its data.
+async fn follow(mut events: Events, json: bool) -> Result<(), ClientError> {
+    while let Some(event) = events.next().await? {
+        let data: Value = serde_json::from_str(&event.data).unwrap_or(Value::String(event.data));
+        if json {
+            println!("{data}");
+        } else if event.id.is_some() {
+            println!("{}  {}  {}", text(&data["seq"]), event.event, text(&data["run"]));
+        } else {
+            let what = [&data["type"], &data["method"]].into_iter().find(|v| !v.is_null());
+            println!("-  {}  {}", event.event, text(what.unwrap_or(&data)));
+        }
+    }
+    Ok(())
 }
 
 fn text(value: &Value) -> String {

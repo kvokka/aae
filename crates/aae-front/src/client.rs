@@ -70,7 +70,12 @@ impl Client {
     /// Opens the event stream from `from` (absent: only new events).
     pub async fn events(&self, from: Option<i64>) -> Result<Events, ClientError> {
         let path = from.map_or_else(|| "/v1/events".to_owned(), |f| format!("/v1/events?from={f}"));
-        let response = self.send("GET", &path, None, None, Some("text/event-stream")).await?;
+        self.stream(&path).await
+    }
+
+    /// Opens an SSE stream at `path`.
+    pub async fn stream(&self, path: &str) -> Result<Events, ClientError> {
+        let response = self.send("GET", path, None, None, Some("text/event-stream")).await?;
         Ok(Events {
             body: response.into_body(),
             buf: String::new(),
