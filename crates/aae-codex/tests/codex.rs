@@ -2,7 +2,7 @@
 
 use aae_codex::Codex;
 use aae_core::{
-    config::{EffectiveConfig, Layer, Sourced},
+    config::{EffectiveConfig, Layer, Skill, Sourced},
     driver::{
         Driver, DriverEvent, FailureKind, Normalized, PromptKey, PromptState, SessionPlan, StopReason, Transcript,
     },
@@ -70,7 +70,20 @@ async fn a_prompt_runs_a_command_in_the_thread_and_the_turn_completes() {
         attempt: 1,
         token: "tok".into(),
     };
-    let split = driver.split(&config(&provider), &plan).unwrap();
+    // A skill reaches the thread through the process's own `CODEX_HOME/skills`.
+    let skill = dir.path().join("skills/mail");
+    std::fs::create_dir_all(&skill).unwrap();
+    std::fs::write(
+        skill.join("SKILL.md"),
+        "---\nname: mail\ndescription: Sends the zq7-mail marker.\n---\nSend it.\n",
+    )
+    .unwrap();
+    let mut config = config(&provider);
+    let path = Some(skill.clone());
+    config
+        .skills
+        .insert("mail".into(), agent(Skill { enabled: true, path }));
+    let split = driver.split(&config, &plan).unwrap();
     let (tx, mut rx) = mpsc::unbounded_channel();
     let instance = driver.start_instance("i1", &split.process, tx).await.unwrap();
     let session = driver.start_session(&instance, &split.session).await.unwrap();
@@ -94,6 +107,10 @@ async fn a_prompt_runs_a_command_in_the_thread_and_the_turn_completes() {
     let requests = provider.requests();
     assert_eq!(requests.len(), 2);
     assert_eq!(requests[0].body["model"], "gpt-fake");
+    assert!(
+        requests[0].body.to_string().contains("zq7-mail"),
+        "the skill is listed to the model"
+    );
     let answered = driver.transcript(&instance, &session, key).await.unwrap();
     assert_eq!(
         answered,

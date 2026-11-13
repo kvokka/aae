@@ -22,15 +22,11 @@ fn config_error(raw: String) -> Failure {
     failure
 }
 
-/// The process part: `{home, user_home, env, overrides}`. An isolated process gets its own `CODEX_HOME` and `HOME`
+/// The process part: `{home, user_home, env, overrides, skills}`. An isolated process gets its own `CODEX_HOME` and `HOME`
 /// under the state directory, keyed by the rest of the part, so equal parts share one app-server and its threads
 /// survive a daemon restart; `overrides` are the `-c key=value` flags of the native block.
 pub(crate) fn process(config: &EffectiveConfig, state: &Path) -> Result<Value, Failure> {
     // The contributions of attached plugins are already merged into the config (layer 5 of spec §6.3).
-    // shortcut: skills (WP-29b, `CODEX_HOME/skills`) are refused rather than run without them.
-    if config.skills.values().any(|s| s.value.enabled) {
-        return Err(config_error("the codex adapter does not deliver skills yet".into()));
-    }
     let overrides = match config.native.as_ref().map(|n| &n.value) {
         None => Vec::new(),
         Some(Value::Object(native)) => native
@@ -48,7 +44,20 @@ pub(crate) fn process(config: &EffectiveConfig, state: &Path) -> Result<Value, F
     };
     let env: BTreeMap<_, _> = config.env.iter().map(|(k, v)| (k.clone(), v.value.clone())).collect();
     let mut part = json!({ "env": env, "overrides": overrides });
+    // Skills are the process's: codex reads them from `CODEX_HOME/skills`, with no thread field for them.
+    let skills: BTreeMap<_, _> = (config.skills.iter())
+        .filter(|(_, s)| s.value.enabled)
+        .filter_map(|(name, s)| Some((name.clone(), s.value.path.clone()?)))
+        .collect();
+    if !skills.is_empty() {
+        part["skills"] = json!(skills);
+    }
     if config.inherits_host() {
+        if !skills.is_empty() {
+            return Err(config_error(
+                "codex skills need `inherit_host = false`: they go to the process's own CODEX_HOME".into(),
+            ));
+        }
         part["home"] = json!(host_home());
         return Ok(part);
     }
@@ -194,6 +203,14 @@ pub(crate) fn materialize(p: &Value) -> std::io::Result<()> {
     let home = Path::new(p["home"].as_str().unwrap_or_default());
     std::fs::create_dir_all(user_home)?;
     std::fs::create_dir_all(home)?;
+    // Links to the skill directories; the home is keyed by the part, so a link there is never another skill's.
+    for (name, path) in p["skills"].as_object().into_iter().flatten() {
+        let link = home.join("skills").join(name);
+        if link.symlink_metadata().is_err() {
+            std::fs::create_dir_all(home.join("skills"))?;
+            std::os::unix::fs::symlink(path.as_str().unwrap_or_default(), link)?;
+        }
+    }
     let auth = host_home().join("auth.json");
     let own = CREDENTIALS.iter().any(|k| !p["env"][k].is_null());
     let link = home.join("auth.json");

@@ -344,4 +344,14 @@ fn the_process_gets_the_native_block_and_the_thread_the_rest() {
     assert_eq!(driver.split(&config, &other).unwrap().fingerprint, split.fingerprint);
     config.native = Some(agent(json!("x")));
     assert_eq!(driver.split(&config, &plan).unwrap_err().kind, FailureKind::ConfigError);
+    // Skills go to the process's own home, which a process on the host's home does not have.
+    config.native = None;
+    let skill = aae_core::config::Skill {
+        enabled: true,
+        path: Some("/skills/mail".into()),
+    };
+    config.skills.insert("mail".into(), agent(skill));
+    config.inherit_host = Some(agent(true));
+    let refused = driver.split(&config, &plan).unwrap_err();
+    assert!(refused.raw.contains("inherit_host"), "{}", refused.raw);
 }

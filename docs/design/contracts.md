@@ -388,7 +388,7 @@ process part, never the credential itself.
 
 | Concern | claude | codex |
 |---|---|---|
-| Process and session | process per session; everything is in `ProcessPart`, so the fingerprint is unique per session; `start_session` and `resume_session` only bind the reference (the `--session-id`/`--resume` flag is part of the spawn) | one app-server per fingerprint over stdio; `ProcessPart` = `CODEX_HOME`, `HOME`, skill roots, provider and key variable, process environment; `SessionPart` = cwd, model, effort, instructions, MCP, hooks with `bypass_hook_trust`, command environment ([experiments](experiments.md#config-and-credential-delivery-experiments-4-and-5)) |
+| Process and session | process per session; everything is in `ProcessPart`, so the fingerprint is unique per session; `start_session` and `resume_session` only bind the reference (the `--session-id`/`--resume` flag is part of the spawn) | one app-server per fingerprint over stdio; `ProcessPart` = `CODEX_HOME`, `HOME`, skills (links in its own `CODEX_HOME/skills`; refused on the host's home), provider and key variable, process environment; `SessionPart` = cwd, model, effort, instructions, MCP, hooks with `bypass_hook_trust`, command environment ([experiments](experiments.md#config-and-credential-delivery-experiments-4-and-5)) |
 | Prompt key | user message `uuid` | `clientUserMessageId` |
 | `prompt.acked` | `command_lifecycle{queued}` with our uuid | `turn/start` response with a turn id |
 | Turn end | `result` of a turn, then "idle without background" by the three-condition rule ([experiments](experiments.md#idle-without-background-both-signals-in-one-run)) | `turn/completed` only; thread status `idle` does not end a turn (§7.5) |
