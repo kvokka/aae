@@ -19,6 +19,20 @@ account.
    `aae doctor` warn) and add a line to the log below.
 5. Optionally, one real turn on the cheapest model of the harness confirms the path end to end.
 
+## How the suite is built
+
+- Every harness adapter has the same 15 scenarios: 429 then success; endless 429; quota with a reset time; quota in
+  unknown words; 529/503; 401; `insufficient_quota`; context overflow; unknown model; `kill -9` in a command; EOF on
+  stdin in a turn; a silent provider; a permission request; a background task after the turn; a second writer in
+  the session. The tables below give the expected outcome per harness.
+- The scenarios run the real pinned binary against fake provider APIs written in this repository:
+  `crates/aae-testkit/src/anthropic.rs` (claude) and `crates/aae-testkit/src/openai.rs` (codex, Responses API).
+  They cost no model calls and need no account, so CI runs them on every commit (criterion 11 of the release).
+- The suite is rerun on every harness update (below). Beyond it, one real turn on the cheapest model of the harness
+  is the end-to-end confirmation.
+- Known limit: claude logged in with an API key gets no quota reset time from the provider, so its "quota with a
+  reset time" scenario expects `rate_limited` without `retry_at`, not `quota_exhausted`.
+
 ## What the claude suite covers
 
 `crates/aae-claude/tests/contract.rs`, one test per scenario of spec §7.8:
