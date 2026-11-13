@@ -19,6 +19,13 @@ todo = "deny"
 unimplemented = "deny"
 dbg_macro = "deny"
 
+# Line tables keep file:line in backtraces at half the target/ size and link time.
+[profile.dev]
+debug = "line-tables-only"
+
+[profile.dev.package."*"]
+debug = false
+
 [profile.release]
 lto = true
 codegen-units = 1
