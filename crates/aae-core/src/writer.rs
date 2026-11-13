@@ -220,21 +220,12 @@ async fn run<H: Handler, E: Executor>(
     }
     let (done_tx, mut done_rx) = mpsc::unbounded_channel::<(i64, String, bool)>();
     let mut in_flight = HashSet::new();
-    let mut journal_failures = 0;
     loop {
         let now = clock.now_ms();
         let deadline_wake = fire_deadlines(&mut conn, &mut handler, now)?;
         // A failed journal write leaves the events in the outbox and is retried with the effect backoff.
-        let journal_wake = match journal.drain(&mut conn) {
-            Ok(()) => {
-                journal_failures = 0;
-                None
-            }
-            Err(_) => {
-                journal_failures += 1;
-                Some(now + effects::backoff_ms(journal_failures - 1))
-            }
-        };
+        let journal_wake =
+            (journal.drain(&mut conn).is_err()).then(|| now + effects::backoff_ms(i64::from(journal.failures()) - 1));
         let (due, effect_wake) = effects::heads(&conn, &in_flight, now)?;
         for effect in due {
             in_flight.insert(effect.key.clone());

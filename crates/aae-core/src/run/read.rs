@@ -72,6 +72,24 @@ impl Reader {
         })
     }
 
+    /// `{outbox_depth, outbox_oldest_ms, active_runs}` for the daemon status (contracts 3.5): the outbox rows the
+    /// journal has not acknowledged, the time of the oldest one, and the runs a drain waits for (one in a turn,
+    /// a hook or a preparation).
+    pub fn status(&self) -> Result<Value, Error> {
+        let conn = self.conn();
+        let (depth, oldest): (i64, Option<i64>) =
+            conn.query_row("SELECT COUNT(*), MIN(ts_ms) FROM outbox", [], |r| {
+                Ok((r.get(0)?, r.get(1)?))
+            })?;
+        let active: i64 = conn.query_row(
+            "SELECT COUNT(*) FROM runs \
+             WHERE state IN ('preparing', 'starting', 'running', 'requires_action', 'finishing')",
+            [],
+            |r| r.get(0),
+        )?;
+        Ok(json!({ "outbox_depth": depth, "outbox_oldest_ms": oldest, "active_runs": active }))
+    }
+
     /// Every active gate closure at `now_ms` (contracts 7), oldest first.
     pub fn gates(&self, now_ms: i64) -> Result<Vec<Value>, Error> {
         closures(&self.conn(), now_ms, None)

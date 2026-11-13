@@ -16,7 +16,7 @@ mod version;
 mod writer;
 
 pub use clock::Clock;
-pub use journal::{Journal, ReadError, SCHEMA, parse_rfc3339_ms, rfc3339_ms};
+pub use journal::{Journal, JournalHealth, ReadError, SCHEMA, parse_rfc3339_ms, rfc3339_ms};
 pub use store::open;
 pub use version::untested;
 pub use writer::{BoxFuture, CoreHandle, Error, Event, Executor, Handler, Tx, start};

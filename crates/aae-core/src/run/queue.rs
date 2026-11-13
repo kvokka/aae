@@ -121,10 +121,13 @@ impl RunHandler {
         Ok(busy)
     }
 
-    /// Why a queued or parked run cannot start yet, `None` when it can: a gate of the run is closed (with the
+    /// Why a queued or parked run cannot start yet, `None` when it can: the daemon is stopping, a gate of the run is closed (with the
     /// closure), its workdir is busy, or the orchestrator or its agent has as many started runs as allowed (spec
     /// §9.3; a parked run has no process and holds no slot).
     fn blocker(&self, tx: &Tx<'_>, row: &Row) -> Result<Option<(&'static str, Value)>, Error> {
+        if self.stopping.is_some() {
+            return Ok(Some(("daemon_stopping", Value::Null)));
+        }
         if let Some(gate) = Self::closed_gate(tx, row)? {
             return Ok(Some(("gate", gate)));
         }

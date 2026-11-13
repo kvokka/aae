@@ -1,4 +1,5 @@
-//! Reloading the config (spec §6.5, contracts 2 `config.reloaded`): runs keep the snapshot they prepared with, new
+//! The daemon stopping holds every run that has not started (`daemon.stopping`); reloading the config (spec §6.5,
+//! contracts 2 `config.reloaded`): runs keep the snapshot they prepared with, new
 //! runs and the schedules take the new config, and an idle instance stops when no agent of the new config starts
 //! sessions on its fingerprint (a changed MCP restarts only the instances it is part of).
 
@@ -65,6 +66,21 @@ impl RunHandler {
             data: data.clone(),
         })?;
         Ok(data)
+    }
+
+    /// The daemon stops: the first call emits `daemon.stopping`, every call answers with its `seq`.
+    pub(super) fn stopping(&mut self, tx: &mut Tx<'_>, reason: String) -> Result<Value, Error> {
+        if self.stopping.is_none() {
+            self.stopping = Some(tx.emit(&Event {
+                kind: "daemon.stopping".to_owned(),
+                project: None,
+                rig: None,
+                run: None,
+                correlation: None,
+                data: json!({ "reason": reason }),
+            })?);
+        }
+        Ok(json!({ "seq": self.stopping }))
     }
 
     /// The instance fingerprints the agents of the config start new sessions with, on each rig and with none.

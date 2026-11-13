@@ -119,6 +119,11 @@ pub enum Msg {
     TrackerChanged(String),
     /// The config file was read again; the reply is `{config_generation, restarted_instances}`.
     Reload(std::sync::Arc<crate::config::Config>),
+    /// The daemon is going to stop (`reason`: `signal`, `drain` or `restart`): no run starts from now on, and
+    /// `daemon.stopping` is emitted once; the reply is `{"seq": <its seq>}` (the first one on a repeat).
+    Stopping {
+        reason: String,
+    },
     /// The finisher of an attempt; the reply is `{"answer": "accepted"|"stale_attempt"|"run_terminal"|"invalid"}`
     /// (contracts 6.3).
     Finish {

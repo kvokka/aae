@@ -36,6 +36,8 @@ pub const OPERATIONS: &[(&str, &str, &str)] = &[
     ("config reload", "POST", "/v1/config/reload"),
     ("events", "GET", "/v1/events"),
     ("status", "GET", "/v1/daemon"),
+    ("drain", "POST", "/v1/daemon/drain"),
+    ("restart", "POST", "/v1/daemon/restart"),
 ];
 
 #[derive(Parser)]
@@ -106,6 +108,18 @@ pub enum Command {
     },
     /// The daemon's state.
     Status,
+    /// Stop the daemon once the runs in a turn are done (no run starts meanwhile).
+    Drain {
+        /// Seconds the runs in a turn may go on; the daemon stops then anyway (default 300).
+        #[arg(long)]
+        timeout: Option<u64>,
+    },
+    /// Drain the daemon, then start it again in the same process.
+    Restart {
+        /// Seconds the runs in a turn may go on; the daemon restarts then anyway (default 300).
+        #[arg(long)]
+        timeout: Option<u64>,
+    },
 }
 
 #[derive(Clone, Copy, ValueEnum)]
@@ -184,6 +198,18 @@ async fn execute(client: &Client, cli: Cli) -> Result<ExitCode, ClientError> {
         }
         Command::Finish { result, summary, data } => return finish(client, result, summary, data).await,
         Command::Status => print(json, &client.request("GET", "/v1/daemon", None, None).await?),
+        Command::Drain { timeout } => print(
+            json,
+            &client.request("POST", &stop_path("drain", timeout), None, None).await?,
+        ),
+        Command::Restart { timeout } => {
+            print(
+                json,
+                &client
+                    .request("POST", &stop_path("restart", timeout), None, None)
+                    .await?,
+            );
+        }
     }
     Ok(ExitCode::SUCCESS)
 }
@@ -196,6 +222,11 @@ fn print(json: bool, value: &Value) {
         serde_json::to_string_pretty(value).unwrap_or_default()
     };
     println!("{text}");
+}
+
+fn stop_path(what: &str, timeout: Option<u64>) -> String {
+    let query = timeout.map_or_else(String::new, |t| format!("?timeout_s={t}"));
+    format!("/v1/daemon/{what}{query}")
 }
 
 pub(crate) fn run_path(id: &str, then: &str) -> String {

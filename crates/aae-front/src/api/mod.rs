@@ -2,6 +2,7 @@
 //! `Idempotency-Key` header: a repeated request with the same key returns the first reply and changes nothing.
 
 mod config;
+mod daemon;
 mod events;
 mod gates;
 mod mcp;
@@ -33,8 +34,12 @@ pub struct Api {
     pub journal: Journal,
     /// The last `seq` the daemon's journal wrote (`Journal::subscribe`).
     pub written: watch::Receiver<i64>,
+    /// How the journal writes go (`Journal::health`).
+    pub journal_health: watch::Receiver<aae_core::JournalHealth>,
     /// The daemon's own facts for `GET /v1/daemon`.
     pub daemon: Value,
+    /// Why the daemon stops (`drain` or `restart`) once a drain is over; `serve` returns then.
+    pub stop: watch::Sender<Option<&'static str>>,
     /// The config the daemon runs with; a reload replaces it.
     pub config: RwLock<Arc<Config>>,
     /// The generation `config` is (1 at start); held from reading the file to replacing `config`, so reloads apply
@@ -77,7 +82,9 @@ fn router() -> OpenApiRouter<Arc<Api>> {
         .routes(routes!(config::check))
         .routes(routes!(config::reload))
         .routes(routes!(events::stream))
-        .routes(routes!(daemon))
+        .routes(routes!(daemon::status))
+        .routes(routes!(daemon::drain))
+        .routes(routes!(daemon::restart))
 }
 
 /// The OpenAPI document of the API, generated from the handlers.
@@ -85,9 +92,15 @@ pub fn openapi() -> utoipa::openapi::OpenApi {
     router().split_for_parts().1
 }
 
-/// Serves the API on `listener` until `stop` resolves; open requests and event streams are cut then (a request
-/// cut after its commit is repeated safely with its idempotency key).
-pub async fn serve(listener: UnixListener, api: Api, stop: impl Future<Output = ()>) -> std::io::Result<()> {
+/// Serves the API on `listener` until `signal` resolves (the reason is `signal` then) or a drain is over (its
+/// reason); open requests and event streams are cut then (a request cut after its commit is repeated safely with
+/// its idempotency key).
+pub async fn serve(
+    listener: UnixListener,
+    api: Api,
+    signal: impl Future<Output = ()>,
+) -> std::io::Result<&'static str> {
+    let mut drained = api.stop.subscribe();
     // MCP is not a REST operation: it stays out of the OpenAPI document.
     let app = router()
         .split_for_parts()
@@ -95,17 +108,10 @@ pub async fn serve(listener: UnixListener, api: Api, stop: impl Future<Output = 
         .route("/mcp", axum::routing::post(mcp::post).get(mcp::get))
         .with_state(Arc::new(api));
     tokio::select! {
-        served = axum::serve(listener, app) => served,
-        () = stop => Ok(()),
+        served = axum::serve(listener, app) => served.map(|()| "signal"),
+        () = signal => Ok("signal"),
+        reason = drained.wait_for(Option::is_some) => Ok(reason.map_or("signal", |r| r.unwrap_or("signal"))),
     }
-}
-
-/// The daemon: its version, process and socket.
-#[utoipa::path(get, path = "/v1/daemon", responses((status = OK, body = Object)))]
-async fn daemon(state: State) -> Json<Value> {
-    let mut daemon = state.daemon.clone();
-    daemon["journal_seq"] = json!(*state.written.borrow());
-    Json(daemon)
 }
 
 /// An error reply: `{"error": {"code", "message"}}`.

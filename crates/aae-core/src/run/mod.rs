@@ -79,6 +79,7 @@ pub fn start(
         RunHandler {
             config,
             generation: 1,
+            stopping: None,
             drivers,
             trackers,
         },
@@ -109,6 +110,8 @@ struct RunHandler {
     config: Arc<Config>,
     /// The generation of `config` in this daemon: 1 at start, one more on every reload.
     generation: u64,
+    /// The `seq` of `daemon.stopping` once the daemon stops: queued and parked runs wait from then on.
+    stopping: Option<i64>,
     drivers: Drivers,
     trackers: beads::Trackers,
 }
@@ -156,6 +159,7 @@ impl Handler for RunHandler {
             } => Self::ready(tx, &project, &beads, &changes),
             Msg::TrackerChanged(project) => self.sync_trackers(tx, Some(&project), "changed"),
             Msg::Reload(config) => return self.reload(tx, config),
+            Msg::Stopping { reason } => return self.stopping(tx, reason),
         }?;
         Ok(Value::Null)
     }

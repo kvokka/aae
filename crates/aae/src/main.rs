@@ -16,7 +16,16 @@ fn main() -> ExitCode {
         runtime.block_on(daemon::run(paths))
     });
     match started {
-        Ok(()) => ExitCode::SUCCESS,
+        Ok(false) => ExitCode::SUCCESS,
+        // A planned restart: the same binary with the same arguments in this process, so a supervisor sees no exit.
+        Ok(true) => {
+            let exe = std::env::current_exe().unwrap_or_else(|_| "aae".into());
+            let mut again = std::process::Command::new(exe);
+            again.args(std::env::args_os().skip(1));
+            let e = std::os::unix::process::CommandExt::exec(&mut again);
+            eprintln!("aae daemon: restart: {e}");
+            ExitCode::FAILURE
+        }
         Err(e) => {
             eprintln!("aae daemon: {e}");
             ExitCode::FAILURE

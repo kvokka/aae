@@ -24,6 +24,15 @@ pub struct Journal {
     cursor: Option<(i64, i64)>,
     /// The last `seq` written to the files, for readers that wait for new events.
     written: watch::Sender<i64>,
+    health: watch::Sender<JournalHealth>,
+}
+
+/// How the journal writes go, for the daemon status: failed writes in a row (retried with the effect backoff) and
+/// the last error, kept after the writes recover.
+#[derive(Clone, Debug, Default, serde::Serialize)]
+pub struct JournalHealth {
+    pub failures: u32,
+    pub last_error: Option<String>,
 }
 
 #[derive(Debug)]
@@ -56,12 +65,18 @@ impl Journal {
             files,
             cursor: None,
             written: watch::channel(0).0,
+            health: watch::channel(JournalHealth::default()).0,
         }
     }
 
     /// The last `seq` this journal wrote; it changes after every drain that wrote something.
     pub fn subscribe(&self) -> watch::Receiver<i64> {
         self.written.subscribe()
+    }
+
+    /// How the writes of this journal go; it changes when a write fails and when the writes recover.
+    pub fn health(&self) -> watch::Receiver<JournalHealth> {
+        self.health.subscribe()
     }
 
     /// `events.jsonl` is the current file, `events.1.jsonl` the one before it, and so on.
@@ -77,10 +92,22 @@ impl Journal {
     /// are not written twice. With nothing new in the outbox it does no file I/O.
     pub(crate) fn drain(&mut self, conn: &mut Connection) -> io::Result<()> {
         let result = self.drain_inner(conn);
-        if result.is_err() {
-            self.cursor = None;
+        match &result {
+            Err(e) => {
+                self.cursor = None;
+                self.health.send_modify(|h| {
+                    h.failures += 1;
+                    h.last_error = Some(e.to_string());
+                });
+            }
+            Ok(()) => drop(self.health.send_if_modified(|h| std::mem::take(&mut h.failures) > 0)),
         }
         result
+    }
+
+    /// The failed writes in a row.
+    pub(crate) fn failures(&self) -> u32 {
+        self.health.borrow().failures
     }
 
     fn drain_inner(&mut self, conn: &mut Connection) -> io::Result<()> {

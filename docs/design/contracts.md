@@ -90,7 +90,7 @@ Observed events (§5.4):
 | `instance.starting`, `instance.ready`, `instance.stopped` | `{instance: {id, harness, fingerprint, pid, pgid}, reason}`; `pid`/`pgid` null before spawn, `reason` null except `stopped` (`idle`, `config`, `cancel`, `shutdown`, `recovery`) |
 | `instance.failed` | `{instance, failure: Failure}` |
 | `service.starting`, `service.ready`, `service.stopped`, `service.failed` | same as `instance.*` with `service: {id, name, scope, pid, pgid}` instead of `instance` |
-| `run.queued` | `{run: RunView, waiting_for: "concurrency"\|"gate"\|"workdir"\|null, gate}`; re-emitted when the reason changes |
+| `run.queued` | `{run: RunView, waiting_for: "concurrency"\|"gate"\|"workdir"\|"daemon_stopping"\|null, gate}`; re-emitted when the reason changes |
 | `run.started` | `{run}`; once per run, when it first leaves `queued` |
 | `run.state_changed` | `{from, to, attempt, generation, reason}` |
 | `run.parked` | `{gate: Gate, then: "resume"\|"new_session"}` |

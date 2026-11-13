@@ -55,8 +55,9 @@ impl Paths {
     }
 }
 
-/// Runs the daemon until a stop signal; an error is why it could not start.
-pub(crate) async fn run(paths: Paths) -> Result<(), String> {
+/// Runs the daemon until a stop signal or a drain; `true` when the drain was a restart. An error is why it could
+/// not start.
+pub(crate) async fn run(paths: Paths) -> Result<bool, String> {
     let config = load(&paths.config).map_err(|errors| format!("the config has errors:\n{}", errors.join("\n")))?;
     private_dir(&paths.state)?;
     // Held until the daemon exits: one writer per state directory (spec §5.1), whatever socket it serves.
@@ -66,6 +67,7 @@ pub(crate) async fn run(paths: Paths) -> Result<(), String> {
     let journal_dir = paths.state.join("journal");
     let journal = Journal::new(&journal_dir);
     let written = journal.subscribe();
+    let journal_health = journal.health();
     let listener = bind(&paths.socket).await?;
     // Descendants of instances that left their group are re-parented here and reaped (invariant 7).
     aae_core::orphans::adopt_orphans().map_err(|e| format!("cannot become the child subreaper: {e}"))?;
@@ -141,10 +143,12 @@ pub(crate) async fn run(paths: Paths) -> Result<(), String> {
         }
     });
     let api = Api {
-        core,
+        core: core.clone(),
         reader: Reader::open(&db).map_err(|e| format!("{}: {e}", db.display()))?,
         journal: Journal::new(&journal_dir),
-        written,
+        written: written.clone(),
+        journal_health,
+        stop: tokio::sync::watch::channel(None).0,
         daemon: json!({
             "version": env!("CARGO_PKG_VERSION"), "pid": std::process::id(),
             "socket": paths.socket, "started_at": aae_core::rfc3339_ms(Clock::system().now_ms()),
@@ -157,10 +161,22 @@ pub(crate) async fn run(paths: Paths) -> Result<(), String> {
     eprintln!("aae daemon listening on {}", paths.socket.display());
     let served = api::serve(listener, api, stop).await;
     let _ = std::fs::remove_file(&paths.socket);
-    // shortcut: the writer is left as a crash leaves it (the state is crash-safe); a drain that lets running
-    // attempts end first comes with the daemon operations of WP-22c.
+    // `daemon.stopping` goes to the journal before the exit; a drain emitted it when it began, so this repeat only
+    // reads its `seq`. The writer is then left as a crash leaves it: the state is crash-safe.
+    let reason = served.as_ref().map_or("signal", |r| r);
+    let stopping = Msg::Stopping {
+        reason: reason.to_owned(),
+    };
+    if let Ok(reply) = core.send(None, stopping).await {
+        let seq = reply["seq"].as_i64().unwrap_or_default();
+        let mut written = written;
+        let flushed = written.wait_for(|w| *w >= seq);
+        let _ = tokio::time::timeout(std::time::Duration::from_secs(5), flushed).await;
+    }
     drop((task, watchers));
-    served.map_err(|e| format!("serving the API: {e}"))
+    served
+        .map(|reason| reason == "restart")
+        .map_err(|e| format!("serving the API: {e}"))
 }
 
 /// The config in `file` with the parameters of the bundled plugins checked, or every error in it.

@@ -173,3 +173,73 @@ async fn a_replayed_reload_keeps_the_config_it_applied() {
     assert_eq!(fresh["config_generation"], 3);
     assert_eq!(d.get("/v1/triggers").await[0]["trigger"], "shop.sweep");
 }
+
+/// The journal lines of `type` in the daemon's journal file.
+fn journal_lines(d: &Daemon, kind: &str) -> Vec<Value> {
+    let text = fs::read_to_string(d.dir.path().join("state/aae/journal/events.jsonl")).unwrap();
+    let lines = text.lines().map(|l| serde_json::from_str::<Value>(l).unwrap());
+    lines.filter(|e| e["type"] == kind).collect()
+}
+
+#[tokio::test]
+async fn a_drain_starts_no_run_and_stops_the_daemon_when_its_timeout_cuts_a_turn() {
+    let mut d = Daemon::start(|_| {}).await;
+    let slow = d.create("slow", None).await;
+    d.until_state(&slow, "running").await;
+    let status = d.get("/v1/daemon").await;
+    assert_eq!(
+        (
+            &status["active_runs"],
+            &status["journal"]["failures"],
+            &status["stopping"]
+        ),
+        (&json!(1), &json!(0), &Value::Null),
+        "{status}"
+    );
+    assert!(status["outbox_depth"].is_i64(), "{status}");
+
+    let drained = d.post("/v1/daemon/drain?timeout_s=2", json!(null), None).await.unwrap();
+    assert_eq!(drained["active_runs"], 1, "{drained}");
+    let held = d.create("check", None).await;
+    let view = d.until_state(&held, "queued").await;
+    assert_eq!(view["waiting_for"], "daemon_stopping", "{view}");
+
+    let deadline = std::time::Instant::now() + Duration::from_secs(10);
+    let exit = loop {
+        if let Some(exit) = d.child.try_wait().unwrap() {
+            break exit;
+        }
+        assert!(
+            std::time::Instant::now() < deadline,
+            "the drain did not stop the daemon"
+        );
+        tokio::time::sleep(Duration::from_millis(50)).await;
+    };
+    assert!(exit.success() && !d.socket().exists());
+    let stopping = journal_lines(&d, "daemon.stopping");
+    assert_eq!(stopping.len(), 1, "{stopping:?}");
+    assert_eq!(stopping[0]["data"]["reason"], "drain");
+}
+
+#[tokio::test]
+async fn a_restart_starts_the_daemon_again_in_the_same_process() {
+    let d = Daemon::start(|_| {}).await;
+    let before = d.get("/v1/daemon").await;
+    d.post("/v1/daemon/restart", json!(null), None).await.unwrap();
+    let deadline = std::time::Instant::now() + Duration::from_secs(10);
+    let after = loop {
+        if let Ok(after) = d.client.request("GET", "/v1/daemon", None, None).await
+            && after["started_at"] != before["started_at"]
+            // The journal writes `daemon.started` after the API answers.
+            && journal_lines(&d, "daemon.started").len() == 2
+        {
+            break after;
+        }
+        assert!(std::time::Instant::now() < deadline, "the daemon did not come back");
+        tokio::time::sleep(Duration::from_millis(50)).await;
+    };
+    assert_eq!(after["pid"], before["pid"], "{after}");
+    assert_eq!(journal_lines(&d, "daemon.stopping")[0]["data"]["reason"], "restart");
+    let run = d.create("check", None).await;
+    d.until_state(&run, "passed").await;
+}
