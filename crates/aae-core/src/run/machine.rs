@@ -210,7 +210,7 @@ impl RunHandler {
                 token,
             },
         };
-        let (config, services) = Self::bind_services(tx, &row, config)?;
+        let (config, services) = Self::bind_services(tx, &row, config, &self.config)?;
         let split = driver.split(&config, &plan);
         // The account comes from the config before the start (spec §5.7): a closed account gate parks with no launch.
         if let Ok(split) = &split {

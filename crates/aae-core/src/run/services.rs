@@ -24,10 +24,12 @@ use tokio::{sync::Notify, task::JoinHandle};
 
 /// The placeholder of a service URL for the port the daemon picked.
 const PORT: &str = "${AAE_SERVICE_PORT}";
+/// The placeholder of an MCP URL for the daemon's own API on TCP (`api_tcp`), which brings its token.
+const API: &str = "${AAE_API}";
 /// How long a service with no consumer is kept.
 const IDLE_MS: i64 = 300_000;
 /// How long a service may take to accept connections, and a launch waits for that.
-const READY_WAIT: Duration = Duration::from_secs(30);
+pub(super) const READY_WAIT: Duration = Duration::from_secs(30);
 /// Bytes kept from the end of a service's stderr for its `service.failed`.
 const TAIL: usize = 4 * 1024;
 
@@ -37,19 +39,29 @@ type Entry = (Arc<Notify>, JoinHandle<()>);
 
 impl RunHandler {
     /// The config a session of `row` starts with: every service it names is acquired (started when none of its
-    /// definition runs in its scope) and becomes its URL with the token; every HTTP server gets the identity
-    /// headers. Also the service ids and ports, for [`Self::use_services`] and the launch.
+    /// definition runs in its scope) and becomes its URL with the token, `${AAE_API}` becomes the daemon's API on
+    /// TCP with its token; every HTTP server gets the identity headers. Also the service ids and ports, for
+    /// [`Self::use_services`] and the launch.
     pub(super) fn bind_services(
         tx: &mut Tx<'_>,
         row: &Row,
         mut config: EffectiveConfig,
+        daemon: &crate::config::Config,
     ) -> Result<(EffectiveConfig, Vec<(String, u16)>), Error> {
         let mut bound = Vec::new();
         let mut lost = Vec::new();
         for (name, server) in &mut config.mcp {
             let mcp = &mut server.value;
             let Some(url) = &mcp.url else { continue };
-            if let Some(command) = mcp.command.take() {
+            if url.contains(API) {
+                // With no TCP listener the daemon is out of the session's reach: a tool failure (§11.4).
+                let Some(addr) = daemon.api_tcp else {
+                    lost.push(name.clone());
+                    continue;
+                };
+                mcp.url = Some(url.replace(API, &format!("http://{addr}")));
+                (mcp.headers).insert("Authorization".to_owned(), format!("Bearer {}", daemon.api_token));
+            } else if let Some(command) = mcp.command.take() {
                 let scope = match mcp.scope {
                     Some(McpScope::Project) => format!("project:{}", row.project),
                     _ => "orchestrator".to_owned(),
@@ -343,7 +355,7 @@ pub(super) fn start(running: &Running, core: &CoreHandle<Msg>, p: &Value) {
         let ports = [port];
         let ended = tokio::select! {
             out = &mut out => Some(out),
-            up = wait_up(&ports) => {
+            up = super::exec::wait_up(&ports) => {
                 if up {
                     let _ = core.send(None, Msg::ServiceReady { id: task_id.clone() }).await;
                 } else {
@@ -376,20 +388,6 @@ pub(super) async fn stop(running: &Running, id: &str) {
     let id = id.to_owned();
     // Walking `/proc` is synchronous.
     let _ = tokio::task::spawn_blocking(move || crate::orphans::sweep(&id)).await;
-}
-
-/// Waits until every port on loopback accepts connections, up to [`READY_WAIT`]; `false` past it.
-pub(super) async fn wait_up(ports: &[u16]) -> bool {
-    let start = tokio::time::Instant::now();
-    for &port in ports {
-        while tokio::net::TcpStream::connect(("127.0.0.1", port)).await.is_err() {
-            if start.elapsed() > READY_WAIT {
-                return false;
-            }
-            tokio::time::sleep(Duration::from_millis(50)).await;
-        }
-    }
-    true
 }
 
 fn lock(running: &Running) -> std::sync::MutexGuard<'_, HashMap<String, Entry>> {

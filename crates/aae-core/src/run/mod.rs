@@ -241,8 +241,8 @@ pub fn answer_from(value: &Value) -> Option<Answer> {
     })
 }
 
-/// A fresh attempt token: 32 random bytes as hex (contracts 6.3).
-fn new_token() -> Option<String> {
+/// A fresh token: 32 random bytes as hex (contracts 6.3).
+pub fn new_token() -> Option<String> {
     let mut bytes = [0u8; 32];
     getrandom::fill(&mut bytes).ok()?;
     Some(hex(&bytes))

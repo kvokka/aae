@@ -15,20 +15,25 @@ use std::{
 
 /// A daemon whose `build` formula is a prompt run of a claude agent on the fake `provider`.
 async fn daemon(provider: &Provider) -> Daemon {
+    daemon_with(provider, "", "").await
+}
+
+/// The same with `orchestrator` before the orchestrator config and `agent` after the agent's.
+async fn daemon_with(provider: &Provider, orchestrator: &str, agent: &str) -> Daemon {
     let base_url = provider.base_url();
     Daemon::start(|dir| {
         let shop = dir.join("config/aae/shop");
         let files = [
             (
                 dir.join("config/aae/config.toml"),
-                "projects = [\"shop\"]\n[harness.claude]\n".to_owned(),
+                format!("{orchestrator}projects = [\"shop\"]\n[harness.claude]\n"),
             ),
             (
                 shop.join("agents/dev/agent.toml"),
                 format!(
                     "harness = \"claude\"\nmodel = \"claude-haiku-5-5\"\npermission_mode = \"bypassPermissions\"\n\
                      inherit_host = false\n[env]\nANTHROPIC_BASE_URL = \"{base_url}\"\nANTHROPIC_API_KEY = \"fake\"\n\
-                     CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC = \"1\"\nCLAUDE_CODE_MAX_RETRIES = \"0\"\n"
+                     CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC = \"1\"\nCLAUDE_CODE_MAX_RETRIES = \"0\"\n{agent}"
                 ),
             ),
             (
@@ -94,6 +99,59 @@ async fn the_live_view_of_a_run_relays_its_session_and_ends_with_the_run() {
     let attempt = &d.until_state(&run, "passed").await["attempts"][0];
     assert_eq!(attempt["harness"], "claude");
     assert!(attempt["session"]["session_id"].is_string(), "{attempt}");
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_session_calls_the_mcp_of_the_daemon_over_tcp_with_its_token() {
+    let port = std::net::TcpListener::bind("127.0.0.1:0")
+        .unwrap()
+        .local_addr()
+        .unwrap()
+        .port();
+    let finish = format!("{} finish pass --summary built", env!("CARGO_BIN_EXE_aae"));
+    let replies = vec![
+        Reply::Mcp("list_formulas".into()),
+        Reply::Bash(finish),
+        Reply::Text("Done.".into()),
+    ];
+    let provider = Provider::start(replies).await;
+    let orchestrator = format!("api_tcp = \"127.0.0.1:{port}\"\n");
+    // With tool search on, claude would defer the MCP tools and list none of them to the model.
+    let agent = "ENABLE_TOOL_SEARCH = \"false\"\n[mcp.aae]\nurl = \"${AAE_API}/mcp\"\n";
+    let d = daemon_with(&provider, &orchestrator, agent).await;
+    // Over TCP only with the token of this start.
+    let token = fs::read_to_string(d.dir.path().join("state/aae/api.token")).unwrap();
+    assert!(get(port, "").starts_with("HTTP/1.1 401"));
+    assert!(get(port, "Bearer nope").starts_with("HTTP/1.1 401"));
+    let reply = get(port, &format!("Bearer {token}"));
+    assert!(
+        reply.starts_with("HTTP/1.1 200") && reply.contains("\"pid\""),
+        "{reply}"
+    );
+    let run = d.create("build", None).await;
+    d.until_state(&run, "passed").await;
+    // The second model request carries the result of the session's `list_formulas` call: the daemon's formulas.
+    let result = provider.requests()[1].body["messages"].to_string();
+    assert!(result.contains("tool_result") && result.contains("fix"), "{result}");
+}
+
+/// `GET /v1/daemon` on the TCP listener with `authorization` (none when empty); the whole reply.
+fn get(port: u16, authorization: &str) -> String {
+    use std::io::{Read, Write};
+    let mut stream = std::net::TcpStream::connect(("127.0.0.1", port)).unwrap();
+    let header = if authorization.is_empty() {
+        String::new()
+    } else {
+        format!("authorization: {authorization}\r\n")
+    };
+    write!(
+        stream,
+        "GET /v1/daemon HTTP/1.1\r\nhost: aae\r\n{header}connection: close\r\n\r\n"
+    )
+    .unwrap();
+    let mut reply = String::new();
+    stream.read_to_string(&mut reply).unwrap();
+    reply
 }
 
 /// br by hand in the project, as `alice`; its trimmed stdout.

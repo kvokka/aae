@@ -28,6 +28,9 @@ impl RunHandler {
                 "restart the daemon to change the harnesses, their binaries or sessions per instance",
             ));
         }
+        if config.api_tcp != self.config.api_tcp {
+            return Err(super::rejected("restart the daemon to change `api_tcp`"));
+        }
         let untracked = config
             .projects
             .iter()

@@ -53,6 +53,9 @@ contribution of a plugin; the top level of `agent.toml`; and the overrides `[ove
   service that dies is started again on the same port (with the effect backoff) while sessions use it, so they
   reconnect; with none, it is dropped. A changed definition is a new service; the old one idles out. Events:
   `service.starting`, `service.ready`, `service.failed`, `service.stopped`; `aae instances` lists services too.
+- `url` with `${AAE_API}`: the daemon's own API on TCP, e.g. `url = "${AAE_API}/mcp"` for its MCP frontend. The
+  placeholder becomes `http://<api_tcp>` and the session gets `Authorization: Bearer <token>` with the token of the
+  daemon's start. With no `api_tcp` the session goes without the server, as with a service that is not up.
 
 ## Effective config and "explain config"
 
@@ -73,6 +76,7 @@ and a session part.
 projects = ["~/work/shop"]          # project directories, each with an aae.toml
 max_runs = 8                        # runs started at once across all projects (default 8, at least 1)
 bead_failures = 3                   # failed runs of a bead before the core closes its gate (default 3, at least 1)
+api_tcp = "127.0.0.1:7171"          # the API on TCP too (off by default; loopback only; a reload cannot change it)
 
 [harness.claude]                    # harnesses agents may choose (§6.1)
 model = "sonnet"                    # default model of the harness

@@ -100,6 +100,7 @@ pub(super) struct OrchestratorFile {
     pub projects: Vec<PathBuf>,
     pub max_runs: Option<NonZeroU32>,
     pub bead_failures: Option<NonZeroU32>,
+    pub api_tcp: Option<std::net::SocketAddr>,
     #[serde(default)]
     pub harness: BTreeMap<String, Harness>,
     #[serde(default)]

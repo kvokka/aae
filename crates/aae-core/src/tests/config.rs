@@ -343,3 +343,20 @@ fn codex_takes_max_sessions_and_refuses_zero_other_harnesses_refuse_it() {
         "only the codex harness",
     );
 }
+
+#[test]
+fn the_api_listens_on_tcp_only_on_a_loopback_address() {
+    let with = |addr: &str| {
+        BASE[0]
+            .1
+            .replace("projects", &format!("api_tcp = \"{addr}\"\nprojects"))
+    };
+    let config = load_with(&[("config.toml", with("127.0.0.1:7171").as_str())]).unwrap();
+    assert_eq!(config.api_tcp, Some("127.0.0.1:7171".parse().unwrap()));
+    assert!(load_with(&[("config.toml", with("[::1]:7171").as_str())]).is_ok());
+    fails(
+        &[("config.toml", with("0.0.0.0:7171").as_str())],
+        "`api_tcp` must be a loopback",
+    );
+    assert_eq!(load_with(BASE).unwrap().api_tcp, None);
+}

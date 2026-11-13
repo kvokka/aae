@@ -3,7 +3,7 @@
 use super::{
     Agent, Formula, Settings, Source, Step, Trigger, duration,
     files::{FormulaFile, InputType, StepFile, TriggerFile},
-    load::{Loader, parent, reference, resolve},
+    load::{Loader, reference},
     schema::{bead_path, event_path, run_path},
 };
 use crate::{
@@ -11,7 +11,11 @@ use crate::{
     template::{Filter, Inputs, Template},
 };
 use serde_json::Value;
-use std::{collections::BTreeMap, fs, path::Path};
+use std::{
+    collections::BTreeMap,
+    fs,
+    path::{Path, PathBuf},
+};
 
 /// The roots of a prompt template (contracts 2.3).
 const PROMPT_ROOTS: &[&str] = &["inputs", "bead", "rig", "run", "project"];
@@ -175,5 +179,17 @@ fn prompt_path(path: &str, inputs: &BTreeMap<String, super::Input>) -> bool {
         "project" => matches!(rest, "name" | "path"),
         // `name`, `path` or a variable of the rig, which is known only when the run starts.
         _ => !rest.is_empty() && !rest.contains('.'),
+    }
+}
+
+pub(super) fn parent(file: &Path) -> PathBuf {
+    file.parent().map(Path::to_path_buf).unwrap_or_default()
+}
+
+/// `path` relative to `base`, with a leading `~/` meaning the home directory.
+pub(super) fn resolve(base: &Path, path: &Path) -> PathBuf {
+    match (path.strip_prefix("~"), std::env::var_os("HOME")) {
+        (Ok(rest), Some(home)) => PathBuf::from(home).join(rest),
+        _ => base.join(path),
     }
 }

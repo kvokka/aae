@@ -169,7 +169,7 @@ impl RunExecutor {
         }
         // The session connects to its services as it starts; one that is not up by then is a tool failure.
         let ports: Vec<u16> = serde_json::from_value(p["services"].clone()).unwrap_or_default();
-        super::services::wait_up(&ports).await;
+        wait_up(&ports).await;
         let handle = match serde_json::from_value::<InstanceHandle>(p["handle"].clone()) {
             Ok(handle) => handle,
             Err(_) => self.start(core, driver, p).await?,
@@ -288,4 +288,18 @@ impl RunExecutor {
             }
         });
     }
+}
+
+/// Waits until every port on loopback accepts connections, up to [`super::services::READY_WAIT`]; `false` past it.
+pub(super) async fn wait_up(ports: &[u16]) -> bool {
+    let start = tokio::time::Instant::now();
+    for &port in ports {
+        while tokio::net::TcpStream::connect(("127.0.0.1", port)).await.is_err() {
+            if start.elapsed() > super::services::READY_WAIT {
+                return false;
+            }
+            tokio::time::sleep(Duration::from_millis(50)).await;
+        }
+    }
+    true
 }

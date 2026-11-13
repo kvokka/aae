@@ -4,6 +4,7 @@
 use super::{
     Config, ConfigError, Name, OrchestratorHook, Pack, Plugin, Project, Rig, Settings, Trigger, duration,
     files::{OrchestratorFile, PackFile, PluginDecl, PluginFile, ProjectFile, TriggerFile},
+    items::{parent, resolve},
     schema::event_path,
 };
 use serde::de::DeserializeOwned;
@@ -64,7 +65,12 @@ impl Loader {
         }
         super::check::orchestrator_overrides(&mut self, file, overrides.keys(), &projects);
         let bundled = super::check::bundled(&mut self, file, raw.builtin);
+        if raw.api_tcp.is_some_and(|a| !a.ip().is_loopback()) {
+            self.fail(file, "`api_tcp` must be a loopback address");
+        }
         let config = Config {
+            api_tcp: raw.api_tcp,
+            api_token: String::new(),
             max_runs: raw.max_runs.map_or(DEFAULT_MAX_RUNS, NonZeroU32::get),
             bead_failures: raw.bead_failures.map_or(DEFAULT_BEAD_FAILURES, NonZeroU32::get),
             harnesses: raw.harness,
@@ -385,16 +391,4 @@ pub(super) fn reference(text: &str) -> Name {
 
 fn version(text: &str) -> Option<Vec<u64>> {
     text.split('.').map(|n| n.parse().ok()).collect()
-}
-
-pub(super) fn parent(file: &Path) -> PathBuf {
-    file.parent().map(Path::to_path_buf).unwrap_or_default()
-}
-
-/// `path` relative to `base`, with a leading `~/` meaning the home directory.
-pub(super) fn resolve(base: &Path, path: &Path) -> PathBuf {
-    match (path.strip_prefix("~"), std::env::var_os("HOME")) {
-        (Ok(rest), Some(home)) => PathBuf::from(home).join(rest),
-        _ => base.join(path),
-    }
 }

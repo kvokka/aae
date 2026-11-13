@@ -21,6 +21,10 @@ pub struct Config {
     pub max_runs: u32,
     /// Failed runs of a bead before the core closes the bead's gate (spec §10.3).
     pub bead_failures: u32,
+    /// The loopback address the API also listens on with a token (spec §12); off when absent.
+    pub api_tcp: Option<std::net::SocketAddr>,
+    /// The token of `api_tcp` for this daemon start: not from a file, the daemon sets it.
+    pub api_token: String,
     pub harnesses: BTreeMap<String, Harness>,
     /// Layer 2 of spec §6.3.
     pub settings: Settings,

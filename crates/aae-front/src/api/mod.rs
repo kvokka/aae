@@ -21,11 +21,15 @@ use axum::{
     Json,
     extract::{FromRequest, Request, rejection::JsonRejection},
     http::{HeaderMap, StatusCode},
+    middleware::Next,
     response::{IntoResponse, Response},
 };
 use serde_json::{Value, json};
 use std::sync::{Arc, PoisonError, RwLock};
-use tokio::{net::UnixListener, sync::watch};
+use tokio::{
+    net::{TcpListener, UnixListener},
+    sync::watch,
+};
 use utoipa::OpenApi;
 use utoipa_axum::{router::OpenApiRouter, routes};
 
@@ -102,26 +106,54 @@ pub fn openapi() -> utoipa::openapi::OpenApi {
     router().split_for_parts().1
 }
 
-/// Serves the API on `listener` until `signal` resolves (the reason is `signal` then) or a drain is over (its
-/// reason); open requests and event streams are cut then (a request cut after its commit is repeated safely with
-/// its idempotency key).
+/// Serves the API on `listener`, and on `tcp` with `Authorization: Bearer <api_token>`, until `signal` resolves
+/// (the reason is `signal` then) or a drain is over (its reason); open requests and event streams are cut then (a
+/// request cut after its commit is repeated safely with its idempotency key).
 pub async fn serve(
     listener: UnixListener,
+    tcp: Option<TcpListener>,
     api: Api,
     signal: impl Future<Output = ()>,
 ) -> std::io::Result<&'static str> {
     let mut drained = api.stop.subscribe();
+    let bearer: Arc<str> = format!("Bearer {}", api.config().api_token).into();
     // MCP is not a REST operation: it stays out of the OpenAPI document.
     let app = router()
         .split_for_parts()
         .0
         .route("/mcp", axum::routing::post(mcp::post).get(mcp::get))
         .with_state(Arc::new(api));
+    let guarded = app
+        .clone()
+        .layer(axum::middleware::from_fn(move |request: Request, next: Next| {
+            let allowed =
+                (request.headers().get("authorization")).is_some_and(|v| same(v.as_bytes(), bearer.as_bytes()));
+            async move {
+                if allowed {
+                    next.run(request).await
+                } else {
+                    ApiError::new(StatusCode::UNAUTHORIZED, "unauthorized", "a bearer token is required")
+                        .into_response()
+                }
+            }
+        }));
+    let tcp = async {
+        match tcp {
+            Some(tcp) => axum::serve(tcp, guarded).await,
+            None => std::future::pending().await,
+        }
+    };
     tokio::select! {
         served = axum::serve(listener, app) => served.map(|()| "signal"),
+        served = tcp => served.map(|()| "signal"),
         () = signal => Ok("signal"),
         reason = drained.wait_for(Option::is_some) => Ok(reason.map_or("signal", |r| r.unwrap_or("signal"))),
     }
+}
+
+/// Compares in a time that does not depend on where the inputs differ.
+fn same(a: &[u8], b: &[u8]) -> bool {
+    a.len() == b.len() && a.iter().zip(b).fold(0, |acc, (x, y)| acc | (x ^ y)) == 0
 }
 
 /// An error reply: `{"error": {"code", "message"}}`.

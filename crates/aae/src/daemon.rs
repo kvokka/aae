@@ -58,7 +58,7 @@ impl Paths {
 /// Runs the daemon until a stop signal or a drain; `true` when the drain was a restart. An error is why it could
 /// not start.
 pub(crate) async fn run(paths: Paths) -> Result<bool, String> {
-    let config = load(&paths.config)
+    let mut config = load(&paths.config)
         .inspect(crate::doctor::warn_per_session)
         .map_err(|errors| format!("the config has errors:\n{}", errors.join("\n")))?;
     private_dir(&paths.state)?;
@@ -71,6 +71,19 @@ pub(crate) async fn run(paths: Paths) -> Result<bool, String> {
     let written = journal.subscribe();
     let journal_health = journal.health();
     let listener = bind(&paths.socket).await?;
+    let tcp = match config.api_tcp {
+        Some(addr) => {
+            // A new token every start, for the owner's clients in `api.token` and for sessions through `${AAE_API}`.
+            config.api_token = aae_core::run::new_token().ok_or("no randomness for the API token")?;
+            let file = paths.state.join("api.token");
+            std::fs::write(&file, &config.api_token)
+                .and_then(|()| std::fs::set_permissions(&file, Permissions::from_mode(0o600)))
+                .map_err(|e| format!("{}: {e}", file.display()))?;
+            let tcp = tokio::net::TcpListener::bind(addr).await;
+            Some(tcp.map_err(|e| format!("api_tcp {addr}: {e}"))?)
+        }
+        None => None,
+    };
     // Descendants of instances that left their group are re-parented here and reaped (invariant 7).
     aae_core::orphans::adopt_orphans().map_err(|e| format!("cannot become the child subreaper: {e}"))?;
     let mut drivers: Vec<Arc<dyn Driver>> = Vec::new();
@@ -141,6 +154,7 @@ pub(crate) async fn run(paths: Paths) -> Result<bool, String> {
             }
         }
     });
+    let token = config.api_token.clone();
     let api = Api {
         core: core.clone(),
         reader: Reader::open(&db).map_err(|e| format!("{}: {e}", db.display()))?,
@@ -154,12 +168,18 @@ pub(crate) async fn run(paths: Paths) -> Result<bool, String> {
         }),
         config: RwLock::new(config),
         applied: tokio::sync::Mutex::new(1),
-        load: Box::new(move || load(&paths.config).inspect(crate::doctor::warn_per_session)),
+        load: Box::new(move || {
+            let mut loaded = load(&paths.config).inspect(crate::doctor::warn_per_session);
+            if let Ok(config) = &mut loaded {
+                config.api_token.clone_from(&token);
+            }
+            loaded
+        }),
         drivers,
     };
     let stop = stop_signal().map_err(|e| format!("signals: {e}"))?;
     eprintln!("aae daemon listening on {}", paths.socket.display());
-    let served = api::serve(listener, api, stop).await;
+    let served = api::serve(listener, tcp, api, stop).await;
     let _ = std::fs::remove_file(&paths.socket);
     // `daemon.stopping` goes to the journal before the exit; a drain emitted it when it began, so this repeat only
     // reads its `seq`. The writer is then left as a crash leaves it: the state is crash-safe.

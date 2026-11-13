@@ -14,13 +14,18 @@ use std::{
 
 /// A daemon whose `build` formula is a prompt run of a codex agent on the fake `provider`.
 async fn daemon(provider: &Provider) -> Daemon {
+    daemon_with(provider, "", "").await
+}
+
+/// The same with `orchestrator` before the orchestrator config and `agent` after the agent's.
+async fn daemon_with(provider: &Provider, orchestrator: &str, agent: &str) -> Daemon {
     let base_url = provider.base_url();
     Daemon::start(|dir| {
         let shop = dir.join("config/aae/shop");
         let files = [
             (
                 dir.join("config/aae/config.toml"),
-                "projects = [\"shop\"]\n[harness.codex]\n".to_owned(),
+                format!("{orchestrator}projects = [\"shop\"]\n[harness.codex]\n"),
             ),
             (
                 shop.join("agents/dev/agent.toml"),
@@ -29,7 +34,7 @@ async fn daemon(provider: &Provider) -> Daemon {
                     "harness = \"codex\"\nmodel = \"gpt-fake\"\npermission_mode = \"never\"\ninherit_host = false\n\
                      [native.codex]\nmodel_provider = \"fake\"\nsandbox_mode = \"danger-full-access\"\n\
                      [native.codex.model_providers.fake]\nname = \"fake\"\nbase_url = \"{base_url}\"\n\
-                     wire_api = \"responses\"\n"
+                     wire_api = \"responses\"\n{agent}"
                 ),
             ),
             (
@@ -44,6 +49,32 @@ async fn daemon(provider: &Provider) -> Daemon {
         }
     })
     .await
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_codex_thread_calls_the_mcp_of_the_daemon_over_tcp() {
+    let port = std::net::TcpListener::bind("127.0.0.1:0")
+        .unwrap()
+        .local_addr()
+        .unwrap()
+        .port();
+    let finish = format!("{} finish pass --summary built", env!("CARGO_BIN_EXE_aae"));
+    let replies = vec![
+        Reply::Mcp("list_formulas".into()),
+        Reply::Command(finish),
+        Reply::Text("Done.".into()),
+    ];
+    let provider = Provider::start(replies).await;
+    let orchestrator = format!("api_tcp = \"127.0.0.1:{port}\"\n");
+    let d = daemon_with(&provider, &orchestrator, "[mcp.aae]\nurl = \"${AAE_API}/mcp\"\n").await;
+    let run = d.create("build", None).await;
+    d.until_state(&run, "passed").await;
+    // The second model request carries the output of the `list_formulas` call: the daemon's formulas.
+    let output = provider.requests()[1].body["input"].to_string();
+    assert!(
+        output.contains("function_call_output") && output.contains("slow"),
+        "{output}"
+    );
 }
 
 #[tokio::test(flavor = "multi_thread")]
