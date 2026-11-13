@@ -4,7 +4,13 @@
 use crate::{clock::Clock, effects, journal::Journal};
 use rusqlite::{Connection, OptionalExtension, params};
 use serde_json::{Value, json};
-use std::{collections::HashSet, fmt, future::Future, pin::Pin, sync::Arc};
+use std::{
+    collections::{HashMap, HashSet},
+    fmt,
+    future::Future,
+    pin::Pin,
+    sync::Arc,
+};
 use tokio::{
     sync::{mpsc, oneshot},
     task::{JoinHandle, JoinSet},
@@ -223,6 +229,8 @@ async fn run<H: Handler, E: Executor>(
     // The effects in flight die with the writer, as they would with the daemon process.
     let mut running = JoinSet::new();
     let mut in_flight = HashSet::new();
+    // The effect each task runs, so that a panicked one is retried like a failed one.
+    let mut tasks = HashMap::new();
     loop {
         let now = clock.now_ms();
         let deadline_wake = fire_deadlines(&mut conn, &mut handler, now)?;
@@ -233,10 +241,9 @@ async fn run<H: Handler, E: Executor>(
         for effect in due {
             in_flight.insert(effect.key.clone());
             let executor = executor.clone();
-            running.spawn(async move {
-                let ok = executor.execute(&effect.key, &effect.payload).await;
-                (effect.id, effect.key, ok)
-            });
+            let (id, key) = (effect.id, effect.key.clone());
+            let task = running.spawn(async move { executor.execute(&effect.key, &effect.payload).await });
+            tasks.insert(task.id(), (id, key));
         }
         // The sleep is monotonic and wakes late after the machine slept: the wall clock is read again this often.
         let recheck = Some(now + RECHECK_MS);
@@ -255,7 +262,15 @@ async fn run<H: Handler, E: Executor>(
                 let Some(Input { key, msg, reply }) = input else { return Ok(()) };
                 let _ = reply.send(process(&mut conn, &mut handler, clock.now_ms(), key, msg));
             }
-            Some(Ok((id, key, ok))) = running.join_next() => {
+            Some(done) = running.join_next_with_id() => {
+                let (task, ok) = match done {
+                    Ok(done) => done,
+                    Err(e) => {
+                        eprintln!("aae: an effect panicked, it is retried with backoff: {e}");
+                        (e.id(), false)
+                    }
+                };
+                let (id, key) = tasks.remove(&task).expect("every task runs an effect");
                 in_flight.remove(&key);
                 effects::finish(&conn, id, ok, clock.now_ms())?;
             }

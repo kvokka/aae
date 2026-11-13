@@ -82,7 +82,8 @@ impl Handler for TestHandler {
     }
 }
 
-/// Records every execution with its managed time; fails the first `fail_first` executions of each key, and
+/// Records every execution with its managed time; fails the first `fail_first` executions of each key (the first of
+/// the key `panics` panics), and
 /// checks that the event that caused the effect is already committed (visible to another connection).
 struct TestExecutor {
     clock: Clock,
@@ -109,6 +110,10 @@ impl Executor for TestExecutor {
                 .iter()
                 .filter(|(w, _)| *w == format!("{key}:fail"))
                 .count();
+            if key == "panics" && failed_before == 0 {
+                self.calls.push(format!("{key}:fail"), self.clock.now_ms());
+                panic!("the first execution of `panics` panics");
+            }
             if failed_before < self.fail_first {
                 self.calls.push(format!("{key}:fail"), self.clock.now_ms());
                 return false;
@@ -349,6 +354,28 @@ async fn effects_retry_with_backoff_one_at_a_time_per_key() {
     let b: Vec<i64> = starts.iter().filter(|(w, _)| w == "b:start").map(|(_, t)| *t).collect();
     assert_eq!(a, vec![0, 600, 1700, 3800, 3900]);
     assert_eq!(b, vec![0, 600, 1700, 3800]);
+    assert_eq!(count(&db, "effects"), 0);
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_panicked_effect_is_retried_like_a_failed_one() {
+    let dir = tempfile::tempdir().unwrap();
+    let db = dir.path().join("state.db");
+    let r = rig(&db, Clock::managed(T0), 0, Duration::from_millis(100));
+    let msg = Msg::Work {
+        effect_key: "panics",
+        dedupe: "1",
+    };
+    r.core.send(None, msg).await.unwrap();
+    tokio::time::sleep(Duration::from_secs(10)).await;
+    let starts: Vec<i64> = r
+        .calls
+        .take()
+        .into_iter()
+        .filter(|(w, _)| w == "panics:start")
+        .map(|(_, at)| at - T0)
+        .collect();
+    assert_eq!(starts, vec![0, 600]);
     assert_eq!(count(&db, "effects"), 0);
 }
 
