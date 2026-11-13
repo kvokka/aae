@@ -18,7 +18,7 @@ use std::{
     collections::{BTreeMap, HashMap},
     path::Path,
     sync::{Arc, Mutex, PoisonError},
-    time::{Duration, Instant},
+    time::Duration,
 };
 use tokio::{sync::Notify, task::JoinHandle};
 
@@ -380,7 +380,7 @@ pub(super) async fn stop(running: &Running, id: &str) {
 
 /// Waits until every port on loopback accepts connections, up to [`READY_WAIT`]; `false` past it.
 pub(super) async fn wait_up(ports: &[u16]) -> bool {
-    let start = Instant::now();
+    let start = tokio::time::Instant::now();
     for &port in ports {
         while tokio::net::TcpStream::connect(("127.0.0.1", port)).await.is_err() {
             if start.elapsed() > READY_WAIT {

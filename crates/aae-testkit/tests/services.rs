@@ -143,3 +143,58 @@ async fn one_service_serves_every_session_and_restarts_on_its_port() {
     w.until("service.stopped", 1).await;
     assert_ne!(call(&sa), 200, "the process is gone");
 }
+
+/// A process alive with `pid`.
+fn alive(pid: u64) -> bool {
+    let status = std::process::Command::new("kill")
+        .args(["-0", &pid.to_string()])
+        .status();
+    status.unwrap().success()
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_service_that_never_comes_up_fails_the_tool_not_the_run() {
+    let agent = "harness = \"scripted\"\n[mcp.probe]\ncommand = [\"false\"]\n\
+                 url = \"http://127.0.0.1:${AAE_SERVICE_PORT}/mcp\"\n";
+    let w = world_driven(&[("shop/agents/dev/agent.toml", agent)], ScriptedDriver::new(1));
+    let run = w.create().await;
+    w.until("service.failed", 1).await;
+    // The launch waits for the port at most 30 s, then the session starts with the URL all the same.
+    tokio::time::sleep(Duration::from_secs(31)).await;
+    let states = w.states(&run).await;
+    assert_eq!(states.last().unwrap(), "running", "{states:?}");
+    assert!(w.driver.mcp(&run, 1)["probe"]["url"].is_string());
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_daemon_crash_stops_the_service_it_left_and_the_next_session_gets_a_new_one() {
+    let dir = tempfile::tempdir().unwrap();
+    let log = dir.path().join("probe.jsonl");
+    let agent = format!(
+        "harness = \"scripted\"\n[mcp.probe]\ncommand = [\"{PROBE}\", \"{}\"]\n\
+         url = \"http://127.0.0.1:${{AAE_SERVICE_PORT}}/mcp\"\n",
+        log.display()
+    );
+    let driver = ScriptedDriver::new(1);
+    driver.stall_sessions();
+    let mut w = world_driven(&[("shop/agents/dev/agent.toml", agent.as_str())], driver);
+    let first = w.create().await;
+    w.until("service.ready", 1).await;
+    assert_eq!(call(&w.driver.mcp(&first, 1)["probe"]), 200);
+    let pid = pids(&log)[0];
+    w.restart().await;
+    let start = Instant::now();
+    while alive(pid) {
+        assert!(
+            start.elapsed() < Duration::from_secs(20),
+            "the service of the dead daemon lives on"
+        );
+        tokio::time::sleep(Duration::from_millis(20)).await;
+        std::thread::sleep(Duration::from_millis(20));
+    }
+    let run = w.create().await;
+    w.until("service.ready", 2).await;
+    let server = w.driver.mcp(&run, 1)["probe"].clone();
+    assert_eq!(call(&server), 200, "a new service for the new session");
+    assert_ne!(*pids(&log).last().unwrap(), pid);
+}
