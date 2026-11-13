@@ -76,8 +76,6 @@ pub struct PluginUse {
     pub name: String,
     #[serde(default = "yes")]
     pub enabled: bool,
-    #[serde(default)]
-    pub config: Map<String, Value>,
 }
 
 fn yes() -> bool {

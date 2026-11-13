@@ -236,6 +236,14 @@ fn files_reject_unknown_keys_and_undeclared_names() {
         &[(agent, "harness = \"claude\"\nmodle = \"opus\"\n")],
         "unknown field `modle`",
     );
+    // Plugin parameters live in the `[[plugin]]` declaration only: an attachment carries none.
+    fails(
+        &[(
+            agent,
+            "harness = \"claude\"\nplugins = [{ name = \"mail\", config = { level = 2 } }]\n",
+        )],
+        "unknown field `config`",
+    );
     fails(
         &[(agent, "harness = \"codex\"\n")],
         "harness `codex` is not in the orchestrator config",

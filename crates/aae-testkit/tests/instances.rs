@@ -200,6 +200,10 @@ async fn a_reload_stops_only_the_idle_instances_whose_fingerprint_changed() {
     binary.harnesses.get_mut("scripted").unwrap().binary = Some("/opt/other".into());
     let refused = w.core.send(None, Msg::Reload(Arc::new(binary))).await.unwrap_err();
     assert!(refused.to_string().contains("restart the daemon"), "{refused}");
+    let mut sessions = (*changed).clone();
+    sessions.harnesses.get_mut("scripted").unwrap().max_sessions = std::num::NonZeroU32::new(3);
+    let refused = w.core.send(None, Msg::Reload(Arc::new(sessions))).await.unwrap_err();
+    assert!(refused.to_string().contains("restart the daemon"), "{refused}");
     let after = w.core.send(None, Msg::Reload(changed)).await.unwrap();
     assert_eq!(
         after["config_generation"], 4,

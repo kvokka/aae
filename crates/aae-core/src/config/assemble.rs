@@ -138,7 +138,7 @@ impl EffectiveConfig {
             line(&format!("skills.{name}"), json(&s.value), &s.from);
         }
         for s in &self.plugins {
-            line(&format!("plugins.{}", s.value.name), json(&s.value.config), &s.from);
+            line(&format!("plugins.{}", s.value.name), "attached".to_owned(), &s.from);
         }
         if let Some(s) = &self.native {
             line(&format!("native.{}", self.harness), s.value.to_string(), &s.from);
