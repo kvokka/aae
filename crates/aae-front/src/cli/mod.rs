@@ -79,6 +79,15 @@ pub enum Command {
         #[arg(long)]
         config: Option<PathBuf>,
     },
+    /// Pin the git packs and plugins of the config to commits in `aae.lock` and check them out.
+    Fetch {
+        /// The orchestrator config (default: `$XDG_CONFIG_HOME/aae/config.toml`).
+        #[arg(long)]
+        config: Option<PathBuf>,
+        /// Resolve every revision again instead of keeping the commit the lock pins.
+        #[arg(long)]
+        update: bool,
+    },
     /// Runs of formulas.
     #[command(subcommand)]
     Run(RunCommand),
@@ -199,8 +208,10 @@ pub(crate) fn fail(message: &str) -> ExitCode {
 async fn execute(client: &Client, cli: Cli) -> Result<ExitCode, ClientError> {
     let json = cli.json;
     match cli.command {
-        Command::Daemon { .. } | Command::Doctor { .. } => {
-            return Ok(fail("`daemon` and `doctor` run without a daemon, not as its client"));
+        Command::Daemon { .. } | Command::Doctor { .. } | Command::Fetch { .. } => {
+            return Ok(fail(
+                "`daemon`, `doctor` and `fetch` run without a daemon, not as its client",
+            ));
         }
         Command::Run(command) => commands::run(client, json, command).await?,
         Command::Gate(command) => commands::gate(client, json, command).await?,

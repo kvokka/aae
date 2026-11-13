@@ -60,6 +60,23 @@ impl Loader {
         })
     }
 
+    /// The entries of a directory in name order; a missing directory has none.
+    pub(super) fn entries(&mut self, dir: &Path) -> Vec<PathBuf> {
+        if !dir.exists() {
+            return Vec::new();
+        }
+        match fs::read_dir(dir).and_then(|d| d.map(|e| e.map(|e| e.path())).collect::<Result<Vec<_>, _>>()) {
+            Ok(mut paths) => {
+                paths.sort();
+                paths
+            }
+            Err(e) => {
+                self.fail(dir, e.to_string());
+                Vec::new()
+            }
+        }
+    }
+
     pub(super) fn text(&mut self, file: &Path, path: &Path) -> Option<String> {
         fs::read_to_string(path)
             .map_err(|e| self.fail(file, format!("`{}`: {e}", path.display())))

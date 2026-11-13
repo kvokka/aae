@@ -24,6 +24,8 @@ the config instead (`[harness.claude] binary = "/path/to/claude"`).
   version and login, br and its license, the mode of the state and socket directories, the state and its outbox.
   It exits non-zero on an error; warnings (an untested version, no login file) do not fail it. `--json` prints
   the checks as JSON.
+- `aae fetch` pins the packs and plugins the config takes from git to commits in `aae.lock` and checks them out;
+  the daemon never fetches, and a pin moves only with `aae fetch --update` (docs/design/config.md).
 - `aae daemon --service systemd` prints a systemd user unit, `aae daemon --service launchd` a launchd agent, both
   running this binary with the given `--config` and the `PATH` of the shell that printed them. Install the file
   yourself; aae never starts a daemon on its own.

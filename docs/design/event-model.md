@@ -44,7 +44,9 @@ Resync is not a tick: it advances nothing in normal operation and only catches l
   and stopped, the trackers are read again.
 - Every 5 minutes (deadline `daemon:resync`, a constant): the trackers are read again whatever their watchers say
   (`sync_trackers`), and the driver is asked for the health of every instance record not `stopping` that has a
-  process (`check_instances`; pid + start time for claude and codex).
+  process (`check_instances`; pid + start time for claude and codex). The check is one effect per daemon: while
+  one still waits in the queue (backoff, a slow health call), a newer one is dropped with its newer list of
+  records; the next resync catches what that list would have, and a stale list is harmless (see below).
 - A process found dead whose record still holds that process and is not `stopping` is taken as its lost exit: the
   instance fails as `harness_crash` and so do the attempts on it. A gone process is not ambiguous, so this is a
   normal transition, not `resync.diverged`. A record that changed since the check is left alone.

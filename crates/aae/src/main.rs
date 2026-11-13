@@ -2,6 +2,7 @@
 
 mod daemon;
 mod doctor;
+mod fetch;
 
 use aae_front::cli::{self, Cli, Command};
 use clap::Parser;
@@ -19,6 +20,15 @@ fn main() -> ExitCode {
                 Ok(paths) => doctor::run(&paths, cli.json),
                 Err(e) => {
                     eprintln!("aae doctor: {e}");
+                    ExitCode::FAILURE
+                }
+            };
+        }
+        Command::Fetch { config, update } => {
+            return match daemon::Paths::resolve(config, cli.socket) {
+                Ok(paths) => fetch::run(&paths.config, update),
+                Err(e) => {
+                    eprintln!("aae fetch: {e}");
                     ExitCode::FAILURE
                 }
             };

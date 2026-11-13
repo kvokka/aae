@@ -102,7 +102,10 @@ agents = ["implementer"]
 
 ```toml
 name = "shop"                       # optional, defaults to the directory name; unique among projects
-packs = ["../packs/gascity"]        # local pack directories
+packs = [
+  "../packs/gascity",               # a local pack directory
+  { git = "https://github.com/acme/aae-pack-review", rev = "v1.2.0" },  # a pack from git: branch, tag or commit
+]
 
 [[plugin]]
 path = "plugins/aae-plugin-notes"
@@ -126,6 +129,29 @@ rig = "backend"
 
 The project root is itself a pack named after the project: `agents/` and `formulas/` next to `aae.toml` belong to
 it, and its triggers are the `[[trigger]]` of `aae.toml`.
+
+### Packs and plugins from git: `aae.lock` and `aae fetch` (spec §8.2, §11.6)
+
+A pack in `packs` and a `[[plugin]]` (in the orchestrator file or a project's) is a local directory, or a git
+repository with `pack.toml` / `plugin.toml` at its root: `{ git = "<url>", rev = "<branch|tag|commit>" }` for a pack,
+`git = ".."` and `rev = ".."` instead of `path` for a plugin (exactly one of `path` and `git`; `rev` goes with `git`).
+
+`aae fetch [--config <file>] [--update]` runs without a daemon. For every git source of the orchestrator file and
+its projects' `aae.toml` it pins the revision to a commit in `aae.lock`, next to the file that declares the source,
+and checks that commit out (detached) in `.aae/git/<commit>/` next to it:
+
+```toml
+[[source]]
+git = "https://github.com/acme/aae-pack-review"
+rev = "v1.2.0"                      # as written in the config
+commit = "4f1c…"                    # the full commit id it named when fetched
+```
+
+A pinned source keeps its commit; only `--update` resolves the revision again. Pins of sources no longer declared
+are dropped. It prints `<url> <rev> -> <commit> (fetched|kept|updated)` per source and exits non-zero when any
+source fails (that source keeps its old pin). Loading the config never runs git and never moves a pin, so there are
+no automatic updates: a git source with no pin in `aae.lock`, or with no checkout of its pin, is a config error that
+says to run `aae fetch`. Commit `aae.lock` with the project; `.aae/` is a cache to ignore.
 
 ## Pack: `<pack>/pack.toml`
 
@@ -241,7 +267,8 @@ timeout = "10s"                     # optional
 ```
 
 Plugin names are unique across the orchestrator and the project; an attachment in `plugins` must name a declared
-plugin. A declaration may carry parameters, `[[plugin]] path = ".." config = { .. }`: its orchestrator hooks get them
+plugin. A declaration (a `path`, or a `git` source as for packs above) may carry parameters,
+`[[plugin]] path = ".." config = { .. }`: its orchestrator hooks get them
 in `AAE_PLUGIN_PARAMS` (contracts 3.1). In the `[agent]` contribution, `${AAE_PLUGIN_DIR}` in a harness hook
 `command` or an MCP `command` is replaced with the plugin's directory at load, so they reach the plugin's own files;
 skill paths are relative to it. Beyond its `[agent]` layer a plugin gives its attached agents two things, in

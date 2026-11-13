@@ -38,6 +38,10 @@ path = "~/aae-plugins/aae-plugin-review"
 config = { require = "tested" }
 ```
 
+A plugin in a git repository of its own is declared with `git = "<url>"` and `rev = "<branch|tag|commit>"` instead
+of `path`. Run `aae fetch` to pin that revision to a commit in `aae.lock`, next to the declaring file, and check it
+out; the daemon only reads the pinned checkout, and the pin moves only with `aae fetch --update`.
+
 Declaring it turns its orchestrator side on. Its agent side reaches only the agents that **attach** it, in their
 `agent.toml` or in any `[settings]` layer:
 

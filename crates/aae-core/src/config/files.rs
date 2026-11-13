@@ -127,10 +127,21 @@ pub struct Harness {
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub(super) struct PluginDecl {
-    pub path: PathBuf,
+    /// Exactly one of `path` and `git`; `rev` goes with `git`.
+    pub path: Option<PathBuf>,
+    pub git: Option<String>,
+    pub rev: Option<String>,
     /// The parameters its orchestrator hooks get in `AAE_PLUGIN_PARAMS`.
     #[serde(default)]
     pub config: Map<String, Value>,
+}
+
+/// Where a pack or plugin lives: a directory, or a git repository at a revision pinned in `aae.lock`.
+#[derive(Debug, Deserialize)]
+#[serde(untagged)]
+pub(super) enum Source {
+    Path(PathBuf),
+    Git(super::GitSource),
 }
 
 #[derive(Debug, Deserialize)]
@@ -138,7 +149,7 @@ pub(super) struct PluginDecl {
 pub(super) struct ProjectFile {
     pub name: Option<String>,
     #[serde(default)]
-    pub packs: Vec<PathBuf>,
+    pub packs: Vec<Source>,
     #[serde(default)]
     pub plugin: Vec<PluginDecl>,
     /// `[builtin.<name>]` for the runs of this project: a table here replaces the orchestrator's whole.

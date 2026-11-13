@@ -12,7 +12,7 @@ use std::{
     collections::{BTreeMap, BTreeSet},
     fs,
     num::NonZeroU32,
-    path::{Path, PathBuf},
+    path::Path,
 };
 
 /// Runs started at once when the orchestrator config does not say (spec §9.3).
@@ -116,7 +116,9 @@ impl Loader {
     fn plugins(&mut self, file: &Path, base: &Path, decls: Vec<PluginDecl>, outer: &[Plugin]) -> Vec<Plugin> {
         let mut plugins: Vec<Plugin> = Vec::new();
         for decl in decls {
-            let root = resolve(base, &decl.path);
+            let Some(root) = self.plugin_source(file, &decl).and_then(|s| self.root(file, base, &s)) else {
+                continue;
+            };
             let manifest = root.join("plugin.toml");
             let Some(raw) = self.read::<PluginFile>(&manifest) else {
                 continue;
@@ -277,8 +279,10 @@ impl Loader {
             );
         }
         let mut packs = vec![self.pack(dir, &file, name.clone(), raw.trigger, true, &names)];
-        for pack_dir in &raw.packs {
-            let root = resolve(dir, pack_dir);
+        for source in &raw.packs {
+            let Some(root) = self.root(&file, dir, source) else {
+                continue;
+            };
             let manifest = root.join("pack.toml");
             let Some(raw) = self.read::<PackFile>(&manifest) else {
                 continue;
@@ -364,23 +368,6 @@ impl Loader {
             agents,
             formulas,
             triggers: loaded,
-        }
-    }
-
-    /// The entries of a directory in name order; a missing directory has none.
-    fn entries(&mut self, dir: &Path) -> Vec<PathBuf> {
-        if !dir.exists() {
-            return Vec::new();
-        }
-        match fs::read_dir(dir).and_then(|d| d.map(|e| e.map(|e| e.path())).collect::<Result<Vec<_>, _>>()) {
-            Ok(mut paths) => {
-                paths.sort();
-                paths
-            }
-            Err(e) => {
-                self.fail(dir, e.to_string());
-                Vec::new()
-            }
         }
     }
 }
