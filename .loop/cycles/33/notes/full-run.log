@@ -1,0 +1,16 @@
+   Compiling aae-core v0.1.0 (/home/ubuntu/proj/work/aae/crates/aae-core)
+   Compiling aae-testkit v0.1.0 (/home/ubuntu/proj/work/aae/crates/aae-testkit)
+   Compiling aae-plugins v0.1.0 (/home/ubuntu/proj/work/aae/crates/aae-plugins)
+   Compiling aae-codex v0.1.0 (/home/ubuntu/proj/work/aae/crates/aae-codex)
+   Compiling aae-claude v0.1.0 (/home/ubuntu/proj/work/aae/crates/aae-claude)
+   Compiling aae-front v0.1.0 (/home/ubuntu/proj/work/aae/crates/aae-front)
+   Compiling aae-br v0.1.0 (/home/ubuntu/proj/work/aae/crates/aae-br)
+   Compiling aae v0.1.0 (/home/ubuntu/proj/work/aae/crates/aae)
+   Compiling aae-acceptance v0.1.0 (/home/ubuntu/proj/work/aae/crates/aae-acceptance)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 13.21s
+────────────
+ Nextest run ID b72265e8-7833-4df2-995a-909054db0145 with nextest profile: default
+    Starting 258 tests across 39 binaries
+────────────
+     Summary [  86.676s] 258 tests run: 258 passed (7 slow), 0 skipped
+done
