@@ -1,6 +1,7 @@
 //! The HTTP API (spec §12): JSON over a unix socket, the event stream as SSE. Mutating operations take an
 //! `Idempotency-Key` header: a repeated request with the same key returns the first reply and changes nothing.
 
+mod config;
 mod events;
 mod gates;
 mod mcp;
@@ -9,6 +10,7 @@ mod triggers;
 
 use aae_core::{
     CoreHandle, Journal,
+    config::Config,
     run::{Msg, Reader},
 };
 use axum::{
@@ -18,7 +20,7 @@ use axum::{
     response::{IntoResponse, Response},
 };
 use serde_json::{Value, json};
-use std::sync::Arc;
+use std::sync::{Arc, PoisonError, RwLock};
 use tokio::{net::UnixListener, sync::watch};
 use utoipa::OpenApi;
 use utoipa_axum::{router::OpenApiRouter, routes};
@@ -33,8 +35,17 @@ pub struct Api {
     pub written: watch::Receiver<i64>,
     /// The daemon's own facts for `GET /v1/daemon`.
     pub daemon: Value,
-    /// The config the daemon runs with (the MCP tool `list_formulas`).
-    pub config: Arc<aae_core::config::Config>,
+    /// The config the daemon runs with; a reload replaces it.
+    pub config: RwLock<Arc<Config>>,
+    /// Reads the daemon's config file with every check a start makes, or says what is wrong in it.
+    pub load: Box<dyn Fn() -> Result<Config, Vec<String>> + Send + Sync>,
+}
+
+impl Api {
+    /// The config the daemon runs with now.
+    fn config(&self) -> Arc<Config> {
+        self.config.read().unwrap_or_else(PoisonError::into_inner).clone()
+    }
 }
 
 type State = axum::extract::State<Arc<Api>>;
@@ -53,6 +64,15 @@ fn router() -> OpenApiRouter<Arc<Api>> {
         .routes(routes!(gates::list, gates::close))
         .routes(routes!(gates::open))
         .routes(routes!(triggers::fire))
+        .routes(routes!(triggers::list))
+        .routes(routes!(config::list_projects))
+        .routes(routes!(config::list_agents))
+        .routes(routes!(config::list_formulas))
+        .routes(routes!(config::list_packs))
+        .routes(routes!(config::list_plugins))
+        .routes(routes!(config::explain))
+        .routes(routes!(config::check))
+        .routes(routes!(config::reload))
         .routes(routes!(events::stream))
         .routes(routes!(daemon))
 }
@@ -90,6 +110,7 @@ pub(crate) struct ApiError {
     status: StatusCode,
     code: &'static str,
     message: String,
+    /// More fields of the error object.
     extra: Value,
 }
 

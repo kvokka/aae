@@ -1,4 +1,4 @@
-//! Triggers by hand (spec §9.5): fire one on a rig as its schedule would.
+//! Triggers (spec §9.5): the list with the next firings, and firing one on a rig by hand as its schedule would.
 
 use super::{Body, Reply, State, key};
 use aae_core::run::Msg;
@@ -26,4 +26,11 @@ pub(crate) async fn fire(state: State, headers: HeaderMap, Body(body): Body<Fire
         trigger: body.trigger,
     };
     Ok(Json(state.core.send(key(&headers), msg).await?))
+}
+
+/// Lists every trigger on every rig it runs on, with its source and next firing (`next_at`, null for an event
+/// trigger).
+#[utoipa::path(get, path = "/v1/triggers", responses((status = OK, body = [Object])))]
+pub(crate) async fn list(state: State) -> Reply {
+    Ok(Json(state.reader.triggers(&state.config())?.into()))
 }

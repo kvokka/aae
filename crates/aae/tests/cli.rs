@@ -4,7 +4,10 @@ mod common;
 
 use common::Daemon;
 use serde_json::Value;
-use std::process::{Command, Output};
+use std::{
+    fs,
+    process::{Command, Output},
+};
 
 impl Daemon {
     /// `aae <args>` on this daemon's socket.
@@ -83,4 +86,62 @@ async fn the_finisher_gives_up_on_an_unreachable_daemon_with_tempfail() {
     let out = d.cli(&["finish", "pass", "--summary", "done"], &env);
     assert_eq!(out.status.code(), Some(75));
     assert!(String::from_utf8_lossy(&out.stderr).contains("unreachable for 1 s"));
+}
+
+/// The config by hand (spec §12): lists, the effective config of an agent with the layer of every value, a check
+/// and a reload that a broken file does not pass, and the triggers of the reloaded config with their next firing.
+#[tokio::test]
+async fn the_config_from_the_cli_lists_explains_checks_and_reloads() {
+    const CONFIG: &str =
+        "projects = [\"shop\"]\n[harness.claude]\nbinary = \"true\"\n[settings]\nenv = { LANG = \"C\" }\n";
+    let d = Daemon::start(|dir| {
+        let aae = dir.join("config/aae");
+        fs::write(aae.join("config.toml"), CONFIG).unwrap();
+        fs::create_dir_all(aae.join("shop/agents/dev")).unwrap();
+        fs::write(
+            aae.join("shop/agents/dev/agent.toml"),
+            "harness = \"claude\"\neffort = \"high\"\n",
+        )
+        .unwrap();
+    })
+    .await;
+    assert_eq!(d.json(&["project", "list"])[0]["rigs"][0]["name"], "web");
+    assert_eq!(d.json(&["agent", "list", "--project", "shop"])[0]["agent"], "shop.dev");
+    assert_eq!(d.json(&["formula", "list"]).as_array().unwrap().len(), 2);
+    assert_eq!(d.json(&["pack", "list"])[0]["name"], "shop");
+    assert_eq!(d.json(&["plugin", "list"])[0]["name"], "default-policy");
+    assert!(!d.cli(&["agent", "list", "--project", "nope"], &[]).status.success());
+    let out = d.cli(&["config", "explain", "--project", "shop", "--agent", "dev"], &[]);
+    let text = String::from_utf8_lossy(&out.stdout);
+    assert!(text.contains("effort = \"high\"  # agent\n"), "{text}");
+    assert!(text.contains("env.LANG = \"C\"  # orchestrator\n"), "{text}");
+    assert!(
+        text.ends_with("host: inherited by the harness, its content is not visible to aae\n"),
+        "{text}"
+    );
+
+    let file = d.dir.path().join("config/aae/config.toml");
+    fs::write(&file, "projects = [\"shop\"\n").unwrap();
+    let out = d.cli(&["config", "check"], &[]);
+    assert!(!out.status.success());
+    assert!(String::from_utf8_lossy(&out.stderr).contains("config.toml"));
+    assert!(!d.cli(&["config", "reload"], &[]).status.success());
+    assert_eq!(
+        d.json(&["agent", "list"])[0]["agent"],
+        "shop.dev",
+        "the daemon keeps its config"
+    );
+
+    fs::write(&file, CONFIG).unwrap();
+    let trigger = "[[trigger]]\nname = \"tick\"\nevery = \"1h\"\nrun = \"check\"\nrig = \"web\"\n";
+    let project = d.dir.path().join("config/aae/shop/aae.toml");
+    fs::write(&project, format!("[rigs.web]\npath = \"web\"\n{trigger}")).unwrap();
+    assert!(d.json(&["trigger", "list"]).as_array().unwrap().is_empty());
+    assert_eq!(d.json(&["config", "reload"])["config_generation"], 2);
+    let triggers = d.json(&["trigger", "list"]);
+    assert_eq!(
+        (&triggers[0]["trigger"], &triggers[0]["schedule"]),
+        (&"shop.tick".into(), &"3600s".into())
+    );
+    assert!(triggers[0]["next_at"].is_string(), "{triggers}");
 }

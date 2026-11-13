@@ -11,7 +11,12 @@ error in every file.
 - The daemon loads everything at once from the orchestrator file: the projects it lists, their packs, agents,
   formulas, triggers and the plugins they declare. A missing orchestrator file is an empty config.
 - Load is all or nothing: every error found is reported with its file, and an invalid config is never applied.
-  The daemon re-reads only on an explicit command (§6.5); on error the previous config stays in force.
+  The daemon re-reads only on an explicit command (§6.5): `aae config reload` (`POST /v1/config/reload`); on
+  error the previous config stays in force, and `aae config check` reports the errors without applying anything.
+- A reload is taken by new runs and by the schedules (a schedule whose `cron`/`every` changed is set again from the
+  reload; a removed one is dropped); running runs keep the snapshot they prepared with; idle instances stop with
+  reason `config`. It emits `config.reloaded` with the generation (1 at daemon start). A change of the harnesses or
+  of which projects have a `.beads` tracker is refused: drivers and trackers are made at daemon start.
 
 ## Settings (any layer)
 
@@ -36,7 +41,8 @@ orchestrator, project and rig settings, then the contributions of the attached p
 agent, and the overrides of the orchestrator, the project and the rig. Plugins attach first (the `plugins` key of
 every layer), so a stronger layer can detach a plugin and its whole contribution. An override applies when its key
 resolves (see Names) to the agent. Every value keeps its layer; `explain()` prints one line per value with its
-layer and one line for the host: inherited by the harness and invisible to aae, or off. The effective config
+layer and one line for the host: inherited by the harness and invisible to aae, or off (`aae config explain
+--project <p> --agent <a> [--rig <r>]`, `GET /v1/config/explain`). The effective config
 serializes to JSON: a run keeps it as its snapshot, and `env` is the whole session environment besides what the
 adapter adds (§6.5). The adapter's `split` turns it into a process part, keyed by its fingerprint (contracts 8),
 and a session part.

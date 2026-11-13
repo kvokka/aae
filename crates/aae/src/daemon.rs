@@ -21,7 +21,7 @@ use std::{
     io,
     os::unix::fs::{DirBuilderExt, PermissionsExt},
     path::{Path, PathBuf},
-    sync::Arc,
+    sync::{Arc, RwLock},
 };
 use tokio::{
     net::{UnixListener, UnixStream},
@@ -57,13 +57,7 @@ impl Paths {
 
 /// Runs the daemon until a stop signal; an error is why it could not start.
 pub(crate) async fn run(paths: Paths) -> Result<(), String> {
-    let config = config::load(&paths.config).map_err(|errors| {
-        let lines: Vec<String> = errors.iter().map(ToString::to_string).collect();
-        format!("the config has errors:\n{}", lines.join("\n"))
-    })?;
-    for bundled in &config.bundled {
-        aae_plugins::check(bundled.name, &bundled.params).map_err(|e| format!("the config has errors:\n{e}"))?;
-    }
+    let config = load(&paths.config).map_err(|errors| format!("the config has errors:\n{}", errors.join("\n")))?;
     private_dir(&paths.state)?;
     // Held until the daemon exits: one writer per state directory (spec §5.1), whatever socket it serves.
     let _lock = lock(&paths.state)?;
@@ -155,7 +149,8 @@ pub(crate) async fn run(paths: Paths) -> Result<(), String> {
             "version": env!("CARGO_PKG_VERSION"), "pid": std::process::id(),
             "socket": paths.socket, "started_at": aae_core::rfc3339_ms(Clock::system().now_ms()),
         }),
-        config,
+        config: RwLock::new(config),
+        load: Box::new(move || load(&paths.config)),
     };
     let stop = stop_signal().map_err(|e| format!("signals: {e}"))?;
     eprintln!("aae daemon listening on {}", paths.socket.display());
@@ -165,6 +160,19 @@ pub(crate) async fn run(paths: Paths) -> Result<(), String> {
     // attempts end first comes with the daemon operations of WP-22b.
     drop((task, watchers));
     served.map_err(|e| format!("serving the API: {e}"))
+}
+
+/// The config in `file` with the parameters of the bundled plugins checked, or every error in it.
+fn load(file: &Path) -> Result<config::Config, Vec<String>> {
+    let config = config::load(file).map_err(|errors| errors.iter().map(ToString::to_string).collect::<Vec<_>>())?;
+    let errors: Vec<String> = (config.bundled.iter())
+        .filter_map(|b| aae_plugins::check(b.name, &b.params).err())
+        .map(|e| e.to_string())
+        .collect();
+    match errors.is_empty() {
+        true => Ok(config),
+        false => Err(errors),
+    }
 }
 
 /// An exclusive lock on the state directory; the OS drops it with the process, so a crash leaves none behind.

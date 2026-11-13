@@ -10,6 +10,171 @@
     "version": "0.1.0"
   },
   "paths": {
+    "/v1/agents": {
+      "get": {
+        "summary": "Lists the agents, as `<pack>.<name>` with their harness.",
+        "operationId": "list_agents",
+        "parameters": [
+          {
+            "name": "project",
+            "in": "query",
+            "description": "Only this project.",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object"
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/config/check": {
+      "post": {
+        "summary": "Loads the config file as a reload would and reports its errors; changes nothing.",
+        "operationId": "check",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/config/explain": {
+      "get": {
+        "summary": "The effective config of an agent: one line per value with its layer, and the host layer in one line (spec §6.3).",
+        "operationId": "explain",
+        "parameters": [
+          {
+            "name": "project",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "agent",
+            "in": "query",
+            "description": "`<pack>.<name>`, or a bare name of the project's own pack.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "rig",
+            "in": "query",
+            "description": "The rig of the run; its layer counts when given.",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/config/reload": {
+      "post": {
+        "summary": "Reads the config file again: new runs and the schedules take it, running runs keep their snapshot, idle\ninstances stop. A file with errors changes nothing (400 with the errors); a change of the harnesses or the\ntrackers needs a daemon restart (409).",
+        "operationId": "reload",
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/daemon": {
       "get": {
         "summary": "The daemon: its version, process and socket.",
@@ -68,6 +233,49 @@
             }
           },
           "410": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/formulas": {
+      "get": {
+        "summary": "Lists the formulas, named as a run start takes them, with their inputs.",
+        "operationId": "list_formulas",
+        "parameters": [
+          {
+            "name": "project",
+            "in": "query",
+            "description": "Only this project.",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object"
+                  }
+                }
+              }
+            }
+          },
+          "404": {
             "content": {
               "application/json": {
                 "schema": {
@@ -193,6 +401,135 @@
             }
           },
           "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/packs": {
+      "get": {
+        "summary": "Lists the packs of the projects; the project's own pack has no version.",
+        "operationId": "list_packs",
+        "parameters": [
+          {
+            "name": "project",
+            "in": "query",
+            "description": "Only this project.",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object"
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/plugins": {
+      "get": {
+        "summary": "Lists the declared plugins (of the orchestrator, or of a project with `project`) and the enabled bundled ones.",
+        "operationId": "list_plugins",
+        "parameters": [
+          {
+            "name": "project",
+            "in": "query",
+            "description": "Only this project.",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object"
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/projects": {
+      "get": {
+        "summary": "Lists the projects with their rigs.",
+        "operationId": "list_projects",
+        "parameters": [
+          {
+            "name": "project",
+            "in": "query",
+            "description": "Only this project.",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object"
+                  }
+                }
+              }
+            }
+          },
+          "404": {
             "content": {
               "application/json": {
                 "schema": {
@@ -510,6 +847,26 @@
               "application/json": {
                 "schema": {
                   "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/triggers": {
+      "get": {
+        "summary": "Lists every trigger on every rig it runs on, with its source and next firing (`next_at`, null for an event\ntrigger).",
+        "operationId": "list",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object"
+                  }
                 }
               }
             }

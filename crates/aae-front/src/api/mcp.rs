@@ -118,7 +118,7 @@ async fn call(state: State, params: &Value) -> Option<Value> {
             .ok_or_else(|| ApiError::new(StatusCode::BAD_REQUEST, "bad_request", "`id` is required"))
     };
     let reply = match params["name"].as_str()? {
-        "list_formulas" => Ok(Json(formulas(&state.config, args["project"].as_str()))),
+        "list_formulas" => Ok(Json(formulas(&state.config(), args["project"].as_str()))),
         "start_run" => match serde_json::from_value::<CreateRun>(args.clone()) {
             Ok(body) => runs::create(state, HeaderMap::new(), Body(body)).await,
             Err(e) => Err(parse(e)),
@@ -148,7 +148,7 @@ async fn call(state: State, params: &Value) -> Option<Value> {
 }
 
 /// Every formula of every project (or of `project`), named as a run start takes it.
-fn formulas(config: &Config, project: Option<&str>) -> Value {
+pub(super) fn formulas(config: &Config, project: Option<&str>) -> Value {
     let mut out = Vec::new();
     for p in config.projects.iter().filter(|p| project.is_none_or(|n| n == p.name)) {
         for pack in &p.packs {

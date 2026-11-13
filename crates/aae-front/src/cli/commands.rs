@@ -89,6 +89,8 @@ pub enum GateCommand {
 
 #[derive(Subcommand)]
 pub enum TriggerCommand {
+    /// List the triggers on their rigs with their next firing.
+    List,
     /// Fire a trigger on a rig as its schedule would: prints the run it started, or why it skipped.
     Fire {
         /// `<pack>.<name>`, or the name of a project trigger.
@@ -236,7 +238,11 @@ pub(super) async fn trigger(client: &Client, json: bool, command: TriggerCommand
         project,
         rig,
         idempotency,
-    } = command;
+    } = command
+    else {
+        print(json, &client.request("GET", "/v1/triggers", None, None).await?);
+        return Ok(());
+    };
     let body = json!({ "project": project, "rig": rig, "trigger": trigger });
     let reply = client
         .request("POST", "/v1/triggers/fire", Some(&body), idempotency.as_deref())

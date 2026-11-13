@@ -2,11 +2,13 @@
 //! Without a daemon only `aae daemon`, `aae doctor` and `aae --version` work.
 
 mod commands;
+mod config;
 mod finish;
 
 use crate::client::{Client, ClientError};
 use clap::{CommandFactory, Parser, Subcommand, ValueEnum};
 pub use commands::{Decision, GateCommand, RunCommand, TriggerCommand};
+pub use config::{ConfigCommand, ListCommand};
 use finish::finish;
 use serde_json::Value;
 use std::{path::PathBuf, process::ExitCode};
@@ -23,6 +25,15 @@ pub const OPERATIONS: &[(&str, &str, &str)] = &[
     ("gate close", "POST", "/v1/gates"),
     ("gate open", "POST", "/v1/gates/open"),
     ("trigger fire", "POST", "/v1/triggers/fire"),
+    ("trigger list", "GET", "/v1/triggers"),
+    ("project list", "GET", "/v1/projects"),
+    ("agent list", "GET", "/v1/agents"),
+    ("formula list", "GET", "/v1/formulas"),
+    ("pack list", "GET", "/v1/packs"),
+    ("plugin list", "GET", "/v1/plugins"),
+    ("config explain", "GET", "/v1/config/explain"),
+    ("config check", "POST", "/v1/config/check"),
+    ("config reload", "POST", "/v1/config/reload"),
     ("events", "GET", "/v1/events"),
     ("status", "GET", "/v1/daemon"),
 ];
@@ -58,9 +69,27 @@ pub enum Command {
     /// Issue gates: pause and resume what starts.
     #[command(subcommand)]
     Gate(GateCommand),
-    /// Triggers: fire one by hand.
+    /// Triggers: list them, fire one by hand.
     #[command(subcommand)]
     Trigger(TriggerCommand),
+    /// Projects and their rigs.
+    #[command(subcommand)]
+    Project(ListCommand),
+    /// Agents.
+    #[command(subcommand)]
+    Agent(ListCommand),
+    /// Formulas.
+    #[command(subcommand)]
+    Formula(ListCommand),
+    /// Packs.
+    #[command(subcommand)]
+    Pack(ListCommand),
+    /// Plugins: declared and bundled.
+    #[command(subcommand)]
+    Plugin(ListCommand),
+    /// The config: check, explain, reload.
+    #[command(subcommand)]
+    Config(ConfigCommand),
     /// Follow the events, from `--from` or from now on.
     Events {
         #[arg(long)]
@@ -131,6 +160,12 @@ async fn execute(client: &Client, cli: Cli) -> Result<ExitCode, ClientError> {
         Command::Run(command) => commands::run(client, json, command).await?,
         Command::Gate(command) => commands::gate(client, json, command).await?,
         Command::Trigger(command) => commands::trigger(client, json, command).await?,
+        Command::Project(command) => config::list(client, json, "projects", command).await?,
+        Command::Agent(command) => config::list(client, json, "agents", command).await?,
+        Command::Formula(command) => config::list(client, json, "formulas", command).await?,
+        Command::Pack(command) => config::list(client, json, "packs", command).await?,
+        Command::Plugin(command) => config::list(client, json, "plugins", command).await?,
+        Command::Config(command) => return config::config(client, json, command).await,
         Command::Events { from } => {
             let mut events = client.events(from).await?;
             while let Some(event) = events.next().await? {
