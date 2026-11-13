@@ -128,9 +128,11 @@ async fn kill(d: &mut Daemon) -> Duration {
     }
 }
 
-/// `pid` is a descendant of `ancestor`.
-fn descends(mut pid: u32, ancestor: u32) -> bool {
+/// `pid` runs under a codex app-server (itself included) that descends from `ancestor`.
+fn under_app_server(mut pid: u32, ancestor: u32) -> bool {
+    let mut app_server = false;
     while pid > 1 {
+        app_server |= fs::read_to_string(format!("/proc/{pid}/cmdline")).is_ok_and(|c| c.contains("app-server"));
         let stat = fs::read_to_string(format!("/proc/{pid}/stat")).unwrap_or_default();
         // The parent is the second field after the command name, which may hold spaces and parentheses.
         let after = stat.rsplit_once(')').map_or("", |(_, rest)| rest);
@@ -140,7 +142,7 @@ fn descends(mut pid: u32, ancestor: u32) -> bool {
             .and_then(|p| p.parse().ok())
             .unwrap_or(0);
         if pid == ancestor {
-            return true;
+            return app_server;
         }
     }
     false
@@ -282,12 +284,9 @@ async fn settle(d: &Daemon, work: &[String]) -> usize {
         );
     }
     assert_eq!(parents, work.iter().cloned().collect(), "every passed run fired once");
-    // An app-server the live daemon keeps for reuse until it idles out is its own, not an orphan.
+    // An app-server the live daemon keeps for reuse until it idles out, with its helpers, is its own, not an orphan.
     let mut left = steps(d.dir.path(), d.pid());
-    left.retain(|&pid| {
-        let app_server = fs::read_to_string(format!("/proc/{pid}/cmdline")).is_ok_and(|c| c.contains("app-server"));
-        !(app_server && descends(pid, d.pid()))
-    });
+    left.retain(|&pid| !under_app_server(pid, d.pid()));
     assert!(
         left.is_empty(),
         "no process left at the end: {:?}",
