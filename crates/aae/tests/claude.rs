@@ -102,6 +102,42 @@ async fn the_live_view_of_a_run_relays_its_session_and_ends_with_the_run() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
+async fn run_watch_on_a_going_run_prints_its_session_and_exits_with_the_run() {
+    // The command sleeps first, so `run watch` attaches while the turn is still going.
+    let finish = format!("sleep 4 && {} finish pass --summary built", env!("CARGO_BIN_EXE_aae"));
+    let provider = Provider::start(vec![Reply::Bash(finish), Reply::Text("Done.".into())]).await;
+    let d = daemon(&provider).await;
+    let run = d.create("build", None).await;
+    let deadline = Instant::now() + Duration::from_secs(30);
+    while provider.requests().is_empty() {
+        assert!(Instant::now() < deadline, "the session did not start");
+        tokio::time::sleep(Duration::from_millis(20)).await;
+    }
+    let mut watch = Command::new(env!("CARGO_BIN_EXE_aae"))
+        .args(["run", "watch", &run])
+        .env("AAE_SOCKET", d.socket())
+        .stdout(std::process::Stdio::piped())
+        .spawn()
+        .unwrap();
+    assert_eq!(d.get(&format!("/v1/runs/{run}")).await["state"], "running");
+    d.until_state(&run, "passed").await;
+    let deadline = Instant::now() + Duration::from_secs(5);
+    while watch.try_wait().unwrap().is_none() {
+        if Instant::now() > deadline {
+            let _ = watch.kill();
+            panic!("`run watch` outlives its run");
+        }
+        tokio::time::sleep(Duration::from_millis(20)).await;
+    }
+    let out = watch.wait_with_output().unwrap();
+    assert!(out.status.success(), "{:?}", out.status);
+    let watched = String::from_utf8(out.stdout).unwrap();
+    assert!(watched.trim_end().ends_with(&format!("run.passed  {run}")), "{watched}");
+    // A harness message has no seq: `-  harness  <type>`, the tool result of the Bash call at least.
+    assert!(watched.lines().any(|l| l == "-  harness  user"), "{watched}");
+}
+
+#[tokio::test(flavor = "multi_thread")]
 async fn a_session_calls_the_mcp_of_the_daemon_over_tcp_with_its_token() {
     let port = std::net::TcpListener::bind("127.0.0.1:0")
         .unwrap()
