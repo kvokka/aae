@@ -1,0 +1,317 @@
+[ci] $ cargo fmt --all --check
+[ci] $ cargo clippy --all-targets --locked -q -- -D warnings
+[ci] $ AAE_CHAOS_SEEDS=400 cargo nextest run --locked --no-tests=warn
+    Blocking waiting for file lock on build directory
+   Compiling aae-codex v0.1.0 (/home/ubuntu/proj/work/aae/crates/aae-codex)
+   Compiling aae-acceptance v0.1.0 (/home/ubuntu/proj/work/aae/crates/aae-acceptance)
+   Compiling aae v0.1.0 (/home/ubuntu/proj/work/aae/crates/aae)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 13.13s
+────────────
+ Nextest run ID ae7f6cc3-8013-46e8-b172-8a2d5c8bd363 with nextest profile: default
+    Starting 284 tests across 42 binaries
+        PASS [   0.284s] (  1/284) aae::api one_daemon_per_socket_and_a_stop_signal_removes_the_socket
+        PASS [   0.312s] (  2/284) aae::api a_rotated_away_seq_is_an_explicit_gap
+        PASS [   0.351s] (  3/284) aae::api a_replayed_reload_keeps_the_config_it_applied
+        PASS [   0.375s] (  4/284) aae::api a_run_is_cancelled_and_bad_requests_get_json_errors
+        PASS [   0.396s] (  5/284) aae::api a_trigger_fired_by_hand_starts_a_run_skips_while_it_lives_and_switches_off
+        PASS [   0.396s] (  6/284) aae::api a_run_started_over_the_api_passes_and_its_events_stream_from_a_seq
+        PASS [   0.149s] (  7/284) aae::api one_daemon_per_state_directory_whatever_its_socket
+        PASS [   0.770s] (  8/284) aae::api an_operator_gate_holds_a_new_run_until_opened_by_hand
+        PASS [   0.390s] (  9/284) aae::cli runs_and_gates_by_hand_from_the_cli
+        PASS [   0.117s] ( 10/284) aae::cli the_config_from_the_cli_lists_explains_checks_and_reloads
+        PASS [   1.527s] ( 11/284) aae::api a_restart_starts_the_daemon_again_in_the_same_process
+        PASS [   1.193s] ( 12/284) aae::claude a_claude_session_that_calls_the_finisher_passes_its_run
+        PASS [   0.045s] ( 13/284) aae::cli the_finisher_reports_the_answer_and_needs_the_session_environment
+        PASS [   0.037s] ( 14/284) aae::cli without_a_daemon_a_client_command_fails_and_names_the_daemon
+        PASS [   1.227s] ( 15/284) aae::claude a_session_calls_the_mcp_of_the_daemon_over_tcp_with_its_token
+        PASS [   0.390s] ( 16/284) aae::codex a_codex_thread_calls_the_mcp_of_the_daemon_over_tcp
+        PASS [   0.828s] ( 17/284) aae::cli the_finisher_gives_up_on_an_unreachable_daemon_with_tempfail
+        PASS [   0.009s] ( 18/284) aae::doctor a_directory_others_can_read_and_a_broken_config_are_errors
+        PASS [   0.009s] ( 19/284) aae::doctor a_tracker_project_gets_the_br_version_and_its_license_warning
+        PASS [   0.554s] ( 20/284) aae::codex a_codex_killed_in_a_command_is_resumed_and_its_run_passes
+        PASS [   0.006s] ( 21/284) aae::doctor service_files_run_this_binary_with_the_config
+        PASS [   0.013s] ( 22/284) aae::doctor harnesses_resolve_from_the_config_and_from_mise_and_a_missing_one_fails
+        PASS [   0.033s] ( 23/284) aae::doctor stdio_mcp_servers_of_the_host_and_of_the_config_are_warned_about
+        PASS [   0.554s] ( 24/284) aae::codex a_codex_thread_is_resumed_after_a_daemon_restart_and_its_run_passes
+        PASS [   0.036s] ( 25/284) aae::mcp both_epochs_serve_the_same_five_tools
+        PASS [   0.059s] ( 26/284) aae::mcp a_run_started_over_mcp_is_followed_listed_and_cancelled_there
+        PASS [   0.106s] ( 27/284) aae::fetch fetch_pins_checks_out_and_updates_only_when_asked
+        PASS [   0.381s] ( 28/284) aae::codex a_codex_thread_that_calls_the_finisher_passes_its_run
+        PASS [   2.418s] ( 29/284) aae::api a_drain_starts_no_run_and_stops_the_daemon_when_its_timeout_cuts_a_turn
+        PASS [   2.092s] ( 30/284) aae::claude the_live_view_of_a_run_relays_its_session_and_ends_with_the_run
+        PASS [   0.265s] ( 31/284) aae-br::contract each_command_is_one_change_with_its_actor_and_the_watcher_signals_it
+        PASS [   0.003s] ( 32/284) aae-claude stream::tests::a_permission_request_and_an_interrupted_turn
+        PASS [   0.003s] ( 33/284) aae-claude stream::tests::a_rejected_limit_is_a_quota_with_its_reset_and_a_401_fails_at_once
+        PASS [   0.003s] ( 34/284) aae-claude stream::tests::a_reply_is_acked_started_and_completed
+        PASS [   0.003s] ( 35/284) aae-claude stream::tests::activity_is_coalesced_to_one_a_second
+        PASS [   0.003s] ( 36/284) aae-claude stream::tests::an_exit_in_an_open_turn_is_a_crash_even_with_code_zero
+        PASS [   0.003s] ( 37/284) aae-claude stream::tests::failed_turns_are_classified
+        PASS [   0.003s] ( 38/284) aae-claude stream::tests::idle_counts_only_without_background_work_and_late_notifications
+        PASS [   0.004s] ( 39/284) aae-claude tests::a_config_the_adapter_cannot_deliver_is_a_config_error
+        PASS [   0.003s] ( 40/284) aae-claude tests::a_process_that_dies_in_a_turn_reports_its_stderr_and_is_forgotten
+        PASS [   0.057s] ( 41/284) aae-claude tests::an_instance_of_a_dead_daemon_is_signalled_at_once
+        PASS [   0.008s] ( 42/284) aae-claude tests::an_isolated_session_without_a_credential_gets_the_host_login
+        PASS [   0.007s] ( 43/284) aae-claude tests::every_flag_goes_again_on_a_resume_and_isolation_cuts_the_host
+        PASS [   0.009s] ( 44/284) aae-claude tests::hooks_join_the_native_settings_and_mcp_servers_take_claude_form
+        PASS [   0.003s] ( 45/284) aae-claude tests::the_transcript_tells_where_the_prompt_stands
+        PASS [   0.531s] ( 46/284) aae::tracker a_bead_written_by_hand_is_seen_and_a_run_on_it_claims_and_closes_it_in_br
+        PASS [   0.524s] ( 47/284) aae::worktree a_claude_session_of_a_chosen_agent_works_in_its_worktree
+        PASS [   0.540s] ( 48/284) aae-br::contract concurrent_claims_have_one_winner_and_the_rest_see_it_as_the_holder
+        PASS [   0.260s] ( 49/284) aae-br::contract the_ready_set_carries_the_epic_rig_labels_and_description
+        PASS [   0.405s] ( 50/284) aae-br::contract release_and_close_change_only_a_bead_their_owner_holds
+        PASS [   0.366s] ( 51/284) aae-claude::claude a_reply_is_acked_and_completed_and_is_in_the_transcript
+        PASS [   0.361s] ( 52/284) aae-claude::claude an_isolated_session_reads_the_rig_but_not_the_host
+        PASS [   0.381s] ( 53/284) aae-claude::claude hooks_skills_and_mcp_servers_reach_the_session
+        PASS [   0.331s] ( 54/284) aae-claude::contract s03_a_quota_with_a_reset_time_is_a_rate_limit_without_a_time
+        PASS [   0.319s] ( 55/284) aae-claude::contract s05_an_overload_is_overloaded
+        PASS [   0.332s] ( 56/284) aae-claude::contract s04_a_quota_in_unknown_words_is_a_rate_limit_by_its_status
+        PASS [   0.330s] ( 57/284) aae-claude::contract s06_a_401_is_auth_required
+        PASS [   0.313s] ( 58/284) aae-claude::contract s07_no_credit_is_billing
+        PASS [   0.271s] ( 59/284) aae-claude::contract s10_kill_9_in_a_command_is_a_harness_crash_within_a_second
+        PASS [   0.334s] ( 60/284) aae-claude::contract s08_a_prompt_too_long_is_a_context_overflow
+        PASS [   0.338s] ( 61/284) aae-claude::contract s09_a_missing_model_is_a_config_error
+        PASS [   1.375s] ( 62/284) aae-claude::contract s02_endless_rate_limits_are_rate_limited_and_already_retried
+        PASS [   0.752s] ( 63/284) aae-claude::contract s13_a_permission_request_is_answered_and_the_command_runs
+        PASS [   0.007s] ( 64/284) aae-codex tests::a_401_retry_reports_the_logout_once_and_an_interrupt_cancels
+        PASS [   0.003s] ( 65/284) aae-codex tests::a_process_without_a_key_of_its_own_logs_in_by_the_host_provider
+        PASS [   0.002s] ( 66/284) aae-codex tests::a_text_answers_every_question_of_a_user_input_request_by_its_id
+        PASS [   0.003s] ( 67/284) aae-codex tests::a_turn_runs_a_command_and_ends_only_on_turn_completed
+        PASS [   0.002s] ( 68/284) aae-codex tests::a_usage_limit_is_a_quota_with_the_reset_of_the_exhausted_window
+        PASS [   0.002s] ( 69/284) aae-codex tests::an_approval_is_a_permission_request_and_an_exit_crashes_open_turns
+        PASS [   0.002s] ( 70/284) aae-codex tests::an_interrupt_after_the_turn_ended_does_not_cancel_the_next_turn
+        PASS [   0.003s] ( 71/284) aae-codex tests::every_final_error_has_its_kind
+        PASS [   0.002s] ( 72/284) aae-codex tests::the_process_gets_the_native_block_and_the_thread_the_rest
+        PASS [   4.212s] ( 73/284) aae::claude a_finisher_called_with_a_background_command_running_waits_for_it
+        PASS [   0.282s] ( 74/284) aae-codex::codex a_usage_limit_ends_the_turn_with_a_quota_and_its_reset
+        PASS [   0.348s] ( 75/284) aae-codex::codex a_prompt_runs_a_command_in_the_thread_and_the_turn_completes
+        PASS [   4.887s] ( 76/284) aae::claude a_claude_killed_in_a_command_is_resumed_and_its_run_passes
+        PASS [   2.520s] ( 77/284) aae-claude::contract s01_rate_limits_then_an_answer_complete_the_turn_after_claude_retries
+        PASS [   0.267s] ( 78/284) aae-codex::contract s03_a_usage_limit_is_a_quota_with_its_reset_time
+        PASS [   5.097s] ( 79/284) aae::claude run_watch_on_a_going_run_prints_its_session_and_exits_with_the_run
+        PASS [   0.269s] ( 80/284) aae-codex::contract s04_a_quota_in_unknown_words_is_a_rate_limit_by_its_status
+        PASS [   0.273s] ( 81/284) aae-codex::contract s05_an_overload_is_overloaded
+        PASS [   0.277s] ( 82/284) aae-codex::contract s06_a_401_is_auth_required
+        PASS [   0.296s] ( 83/284) aae-codex::contract s07_insufficient_quota_is_billing
+        PASS [   0.312s] ( 84/284) aae-codex::contract s08_a_context_too_long_is_a_context_overflow
+        PASS [   0.305s] ( 85/284) aae-codex::contract s09_a_missing_model_is_a_config_error
+        PASS [   2.652s] ( 86/284) aae-claude::contract s11_eof_on_stdin_in_a_turn_lets_the_turn_finish_then_exit
+        PASS [   1.295s] ( 87/284) aae-codex::contract s02_endless_rate_limits_are_rate_limited
+        PASS [   0.421s] ( 88/284) aae-codex::contract s10_kill_9_in_a_command_is_a_harness_crash_within_a_second
+        PASS [   0.438s] ( 89/284) aae-codex::contract s13_a_permission_request_is_answered_and_the_command_runs
+        PASS [   0.534s] ( 90/284) aae-codex::contract s11_eof_on_stdin_in_a_turn_is_a_harness_crash
+        PASS [   0.220s] ( 91/284) aae-core orphans::tests::the_sweep_kills_every_descendant_with_the_marker
+        PASS [   2.727s] ( 92/284) aae-claude::contract s15_a_second_writer_is_not_refused_by_claude
+        PASS [   0.003s] ( 93/284) aae-core process::tests::a_missing_program_is_a_spawn_failure
+        PASS [   0.644s] ( 94/284) aae-codex::contract s15_a_second_writer_is_refused_as_a_divergence
+        PASS [   0.260s] ( 95/284) aae-core process::tests::a_process_is_alive_by_pid_and_start_time_until_it_is_reaped
+        PASS [   0.005s] ( 96/284) aae-core process::tests::exit_code_stdin_and_a_clean_environment
+        PASS [   0.003s] ( 97/284) aae-core process::tests::only_the_tail_is_kept_and_every_byte_counted
+        PASS [   0.609s] ( 98/284) aae-core orphans::tests::adopted_orphans_are_reaped_and_own_children_are_not
+        PASS [   2.322s] ( 99/284) aae-codex::contract s01_rate_limits_then_an_answer_complete_the_turn
+        PASS [   0.135s] (100/284) aae-core tests::a_deadline_that_fails_is_rolled_back_and_fires_again_a_minute_later
+        PASS [   0.002s] (101/284) aae-core tests::backoff_doubles_from_half_a_second_to_five_minutes
+        PASS [   0.109s] (102/284) aae-core tests::a_pending_effect_absorbs_its_duplicate
+        PASS [   0.004s] (103/284) aae-core tests::config::a_bare_name_prefers_the_own_pack
+        PASS [   0.134s] (104/284) aae-core tests::a_panicked_effect_is_retried_like_a_failed_one
+        PASS [   0.007s] (105/284) aae-core tests::config::a_valid_config_loads_with_every_reference_resolved
+        PASS [   0.010s] (106/284) aae-core tests::config::a_name_shared_by_two_packs_must_be_qualified
+        PASS [   0.011s] (107/284) aae-core tests::config::a_prompt_template_may_use_only_values_its_runs_have
+        PASS [   0.005s] (108/284) aae-core tests::config::codex_takes_max_sessions_and_refuses_zero_other_harnesses_refuse_it
+        PASS [   0.004s] (109/284) aae-core tests::config::every_error_is_reported_with_its_file
+        PASS [   0.009s] (110/284) aae-core tests::config::names_are_unique_within_a_pack_and_a_project
+        PASS [   0.016s] (111/284) aae-core tests::config::the_api_listens_on_tcp_only_on_a_loopback_address
+        PASS [   0.008s] (112/284) aae-core tests::config_builtin::builtin_tables_turn_bundled_plugins_on_and_off
+        PASS [   0.003s] (113/284) aae-core tests::config_builtin::no_orchestrator_file_is_an_empty_config
+        PASS [   0.003s] (114/284) aae-core tests::config_layers::a_fingerprint_depends_on_the_process_part_not_on_key_order
+        PASS [   0.004s] (115/284) aae-core tests::config_layers::a_stronger_layer_wins_and_every_value_keeps_its_layer
+        PASS [   0.007s] (116/284) aae-core tests::config_layers::a_project_builtin_table_replaces_the_orchestrators_for_its_runs
+        PASS [   0.007s] (117/284) aae-core tests::config_layers::an_attached_plugin_contributes_and_a_stronger_layer_can_switch_it_off
+        PASS [   0.006s] (118/284) aae-core tests::config_layers::an_attached_plugin_puts_its_bin_ahead_of_path_and_its_prompt_after_the_system_prompt
+        PASS [   0.004s] (119/284) aae-core tests::config_layers::the_effective_config_serializes_as_the_run_snapshot
+        PASS [   0.007s] (120/284) aae-core tests::config_layers::explain_names_the_layer_of_every_value_and_the_host_in_one_line
+        PASS [   0.043s] (121/284) aae-core tests::config::files_reject_unknown_keys_and_undeclared_names
+        PASS [   0.004s] (122/284) aae-core tests::config_layers::unknown_project_rig_or_agent_is_an_error
+        PASS [   0.005s] (123/284) aae-core tests::config_sources::a_pin_without_its_checkout_or_a_bad_lock_is_an_error
+        PASS [   0.006s] (124/284) aae-core tests::config_sources::a_pack_with_an_unknown_key_says_what_a_pack_is
+        PASS [   0.008s] (125/284) aae-core tests::config_sources::a_git_source_loads_from_its_pinned_checkout
+        PASS [   0.003s] (126/284) aae-core tests::cron::days_of_month_and_week_follow_vixie_cron
+        PASS [   0.005s] (127/284) aae-core tests::config_sources::a_plugin_has_a_path_or_a_git_source
+        PASS [   0.003s] (128/284) aae-core tests::cron::malformed_fields_are_rejected
+        PASS [   0.003s] (129/284) aae-core tests::cron::the_next_minute_is_strictly_after_the_given_time
+        PASS [   0.018s] (130/284) aae-core tests::config_triggers::triggers_are_checked_against_events_and_formulas
+        PASS [   0.103s] (131/284) aae-core tests::deadline_fires_at_its_exact_time_without_polling
+        PASS [   0.105s] (132/284) aae-core tests::effects_retry_with_backoff_one_at_a_time_per_key
+        PASS [   0.124s] (133/284) aae-core tests::deadline_and_seq_survive_a_restart
+        PASS [   0.027s] (134/284) aae-core tests::idempotency::repeated_message_does_not_repeat_the_effect
+        PASS [   0.024s] (135/284) aae-core tests::journal::a_crash_between_rotation_and_write_does_not_repeat_the_rotated_lines
+        PASS [   3.760s] (136/284) aae-claude::contract s14_a_background_command_keeps_the_session_busy_after_the_turn
+        PASS [   0.042s] (137/284) aae-core tests::journal::a_damaged_last_line_does_not_make_the_journal_repeat_lines
+        PASS [   0.052s] (138/284) aae-core tests::journal::a_drain_with_nothing_new_does_no_file_io
+        PASS [   0.049s] (139/284) aae-core tests::journal::a_torn_last_line_is_cut_off_before_the_next_write
+        PASS [   0.003s] (140/284) aae-core tests::journal::timestamps_are_rfc3339_utc_with_milliseconds
+        PASS [   0.044s] (141/284) aae-core tests::journal::journal_does_not_repeat_lines_written_before_a_crash_and_keeps_rows_for_lagging_consumers
+        PASS [   0.026s] (142/284) aae-core tests::nothing_of_a_rejected_message_is_committed_or_executed
+        PASS [   0.005s] (143/284) aae-core tests::template::a_loaded_where_on_the_run_view_matches_a_journal_envelope
+        PASS [   0.003s] (144/284) aae-core tests::template::a_prompt_template_substitutes_scalars_and_fails_on_missing_values
+        PASS [   0.003s] (145/284) aae-core tests::template::event_paths_follow_the_payload_schemas
+        PASS [   0.003s] (146/284) aae-core tests::template::inputs_keep_json_types_map_recursively_and_report_unresolved_paths
+        PASS [   0.003s] (147/284) aae-core tests::template::schedule_inputs_have_no_placeholders
+        PASS [   0.003s] (148/284) aae-core tests::template::template_syntax_is_checked_at_load
+        PASS [   0.003s] (149/284) aae-core tests::template::the_event_view_is_flat
+        PASS [   0.142s] (150/284) aae-core tests::idempotency::a_key_is_forgotten_a_day_after_its_message
+        PASS [   0.002s] (151/284) aae-core tests::template::where_rejects_what_it_cannot_match
+        PASS [   0.003s] (152/284) aae-core tests::template::where_matches_scalars_arrays_and_requires_every_entry
+        PASS [   0.003s] (153/284) aae-core tests::the_system_clock_reads_the_system_time
+        PASS [   0.003s] (154/284) aae-core version::a_version_is_read_from_the_version_output
+        PASS [   0.004s] (155/284) aae-front api::live::tests::a_reader_behind_the_session_gets_lagged_with_the_missed_count_then_the_rest
+        PASS [   0.004s] (156/284) aae-plugins tests::default_policy_follows_contracts_10
+        PASS [   0.003s] (157/284) aae-plugins tests::default_policy_reminds_once
+        PASS [   0.008s] (158/284) aae-front::openapi the_committed_openapi_document_matches_the_code
+        PASS [   0.011s] (159/284) aae-front::openapi every_api_operation_has_a_cli_command
+        PASS [   0.003s] (160/284) aae-plugins tests::every_policy_threshold_comes_from_the_config
+        PASS [   0.003s] (161/284) aae-testkit tests::a_delayed_turn_ends_without_an_outcome_after_its_delay
+        PASS [   0.003s] (162/284) aae-testkit tests::a_hang_sends_nothing_after_the_ack_until_cancelled
+        PASS [   0.003s] (163/284) aae-testkit tests::a_permission_request_continues_after_the_answer
+        PASS [   0.003s] (164/284) aae-testkit tests::a_provider_error_fails_the_turn
+        PASS [   0.003s] (165/284) aae-testkit tests::cancelling_an_idle_session_ends_no_turn
+        PASS [   0.003s] (166/284) aae-testkit tests::background_work_and_events_outside_a_turn
+        PASS [   0.002s] (167/284) aae-testkit tests::failures_take_the_default_scope_of_their_kind
+        PASS [   0.002s] (168/284) aae-testkit tests::prompt_keys_are_stable_and_distinct
+        PASS [   0.003s] (169/284) aae-testkit tests::unknown_sessions_have_no_transcript_and_closed_ones_resume
+        PASS [   0.003s] (170/284) aae-testkit tests::the_process_dies_mid_turn_and_later_calls_fail
+        PASS [   0.004s] (171/284) aae-testkit::anthropic a_bash_reply_is_a_tool_use
+        PASS [   0.003s] (172/284) aae-testkit::anthropic a_request_without_stream_gets_a_json_message
+        PASS [   0.084s] (173/284) aae-core tests::journal::journal_rotates_continues_from_seq_and_reports_a_gap
+        PASS [   0.005s] (174/284) aae-testkit::anthropic every_error_has_its_status_type_and_headers
+        PASS [   0.003s] (175/284) aae-testkit::anthropic the_plan_goes_in_order_and_its_last_reply_repeats
+        PASS [   0.067s] (176/284) aae-plugins tests::worktree_on_real_git
+        PASS [   0.087s] (177/284) aae-testkit::beads a_bead_someone_else_holds_fails_the_run_as_bead_claimed_and_stays_theirs
+        PASS [   1.005s] (178/284) aae-core process::tests::a_descendant_holding_the_pipes_does_not_hold_the_result
+        PASS [   0.190s] (179/284) aae-testkit::beads a_bead_taken_over_by_hand_mid_run_is_a_divergence_and_stays_untouched
+        PASS [   0.155s] (180/284) aae-testkit::beads a_cancelled_run_releases_its_bead_without_counting_a_failure
+        PASS [   0.031s] (181/284) aae-testkit::beads a_write_whose_signal_is_lost_is_read_by_the_periodic_resync
+        PASS [   0.141s] (182/284) aae-testkit::beads a_run_claims_its_bead_shows_it_to_the_agent_and_closes_it_when_it_passes
+        PASS [   0.090s] (183/284) aae-testkit::beads a_trigger_on_the_next_ready_bead_takes_each_bead_once_then_skips_with_nothing_ready
+        PASS [   0.076s] (184/284) aae-testkit::beads an_agent_failure_whose_summary_starts_with_bead_still_releases_the_bead
+        PASS [   0.058s] (185/284) aae-testkit::beads an_unavailable_tracker_is_reported_and_the_claim_retried_until_it_answers
+        PASS [   0.054s] (186/284) aae-testkit::beads the_next_ready_bead_in_an_epic_skips_beads_of_other_epics
+        PASS [   0.076s] (187/284) aae-testkit::beads five_requests_for_the_next_ready_bead_take_five_beads_and_the_sixth_finds_nothing
+        PASS [   0.130s] (188/284) aae-testkit::beads claims_that_answer_after_their_runs_failed_neither_count_nor_reach_the_next_run
+        PASS [   0.003s] (189/284) aae-testkit::chaos instance_ids_are_numbered_in_order
+        PASS [   0.065s] (190/284) aae-testkit::beads tracker_writes_become_bead_events_and_a_write_by_a_run_carries_its_chain
+        PASS [   0.202s] (191/284) aae-testkit::beads failed_runs_release_the_bead_and_the_third_closes_its_gate_until_the_operator_opens_it
+        PASS [   5.067s] (192/284) aae-claude::contract s12_a_silent_provider_ends_nothing_until_an_interrupt_cancels_the_turn
+        PASS [   2.208s] (193/284) aae-core process::tests::a_timeout_ends_the_group_even_when_term_is_ignored
+        PASS [   2.008s] (194/284) aae-testkit::anthropic a_hang_starts_the_stream_and_a_silence_sends_nothing
+        PASS [   5.389s] (195/284) aae-codex::contract s12_a_silent_provider_ends_nothing_until_an_interrupt_cancels_the_turn
+        PASS [   5.524s] (196/284) aae-codex::contract s14_a_command_sent_to_the_background_ends_nothing_later
+        PASS [   7.952s] (197/284) aae-testkit::chaos a_seed_replays_the_same
+        PASS [   2.074s] (198/284) aae-testkit::exec a_command_past_its_timeout_is_a_runaway
+        PASS [   0.062s] (199/284) aae-testkit::exec another_code_fails_the_run
+        PASS [   0.129s] (200/284) aae-testkit::exec cancelling_the_run_stops_the_command
+        PASS [   0.065s] (201/284) aae-testkit::exec exit_0_passes_with_the_output_tail_in_the_outcome
+        PASS [   0.067s] (202/284) aae-testkit::exec exit_75_is_an_attempt_failure_not_an_outcome
+        PASS [   0.093s] (203/284) aae-testkit::finisher a_remark_sends_the_next_prompt_and_clears_the_outcome_the_token_stays_valid
+        PASS [   0.078s] (204/284) aae-testkit::finisher a_token_of_an_earlier_attempt_is_stale
+        PASS [   0.158s] (205/284) aae-testkit::finisher a_veto_fails_a_pass_with_class_check_and_a_fail_with_class_agent
+        PASS [   0.141s] (206/284) aae-testkit::finisher continue_after_a_hollow_turn_counts_toward_the_remarks_ceiling
+        PASS [   0.092s] (207/284) aae-testkit::finisher the_last_outcome_declared_during_the_turn_passes_after_idle_without_background
+        PASS [   0.105s] (208/284) aae-testkit::gates a_closed_account_gate_keeps_a_new_run_from_launching
+        PASS [   0.117s] (209/284) aae-testkit::gates a_parked_run_resumes_when_the_gate_opens_by_its_timer
+        PASS [   2.148s] (210/284) aae-testkit::gates a_retry_under_an_operator_pause_parks_and_times_out
+        PASS [   0.024s] (211/284) aae-testkit::gates an_operator_closure_that_has_already_ended_is_rejected
+        PASS [   0.092s] (212/284) aae-testkit::gates an_operator_pause_keeps_a_new_run_queued_with_the_reason_until_opened
+        PASS [   0.094s] (213/284) aae-testkit::gates gates_survive_a_restart_and_a_closure_with_until_still_opens_by_its_timer
+        PASS [   0.126s] (214/284) aae-testkit::gates the_policy_timer_does_not_reopen_an_operator_pause
+        PASS [   0.101s] (215/284) aae-testkit::hooks a_failing_hook_is_reported_and_counts_as_no_decision
+        PASS [   0.074s] (216/284) aae-testkit::hooks a_hook_answers_a_permission_request
+        PASS [   0.083s] (217/284) aae-testkit::hooks a_hook_parks_a_run_on_a_gate_it_closes
+        PASS [   2.081s] (218/284) aae-testkit::hooks a_remark_brings_a_second_pass_in_the_same_attempt
+        PASS [   0.072s] (219/284) aae-testkit::hooks a_slow_observer_does_not_hold_a_deciding_hook
+        PASS [   1.049s] (220/284) aae-testkit::hooks a_veto_hook_that_times_out_blocks_the_start
+        PASS [   1.091s] (221/284) aae-testkit::hooks exit_2_on_finishing_is_a_veto_with_the_stderr_reason
+        PASS [   1.086s] (222/284) aae-testkit::hooks one_veto_among_accepts_blocks_on_finishing
+        PASS [   0.113s] (223/284) aae-testkit::hooks preparing_hooks_chain_their_changes
+        PASS [   0.142s] (224/284) aae-testkit::hooks the_bundled_default_policy_resumes_a_crash_and_reminds_once
+        PASS [   0.090s] (225/284) aae-testkit::hooks the_first_decision_in_connection_order_wins_on_attempt_failed
+        PASS [   0.207s] (226/284) aae-testkit::instances a_full_instance_or_another_fingerprint_gets_an_instance_of_its_own
+        PASS [   0.075s] (227/284) aae-testkit::instances a_late_event_of_another_session_leaves_the_live_attempt_alone
+        PASS [   0.114s] (228/284) aae-testkit::instances a_reload_stops_only_the_idle_instances_whose_fingerprint_changed
+        PASS [   0.075s] (229/284) aae-testkit::instances a_resync_report_on_another_process_of_the_instance_is_ignored
+        PASS [   0.121s] (230/284) aae-testkit::instances a_shared_instance_that_dies_fails_every_attempt_on_it
+        PASS [   0.074s] (231/284) aae-testkit::instances an_event_before_the_session_is_known_reaches_the_only_attempt
+        PASS [   0.110s] (232/284) aae-testkit::instances an_instance_found_dead_by_its_health_fails_every_attempt_on_it
+        PASS [   0.082s] (233/284) aae-testkit::instances an_instance_whose_exit_was_lost_is_failed_by_the_resync
+        PASS [   0.127s] (234/284) aae-testkit::instances one_fingerprint_shares_an_instance_that_stops_after_its_idle_time
+        PASS [   0.059s] (235/284) aae-testkit::instances the_operator_stops_an_idle_instance_and_no_busy_one
+        PASS [   0.021s] (236/284) aae-testkit::mcp both_epochs_a_wrong_token_and_the_log
+        PASS [   0.390s] (237/284) aae-testkit::mcp the_real_claude_calls_the_tool_with_the_headers
+        PASS [   0.564s] (238/284) aae-testkit::mcp the_real_codex_calls_the_tool_with_the_headers
+        PASS [   2.021s] (239/284) aae-testkit::openai a_hang_starts_the_stream_and_a_silence_sends_nothing
+        PASS [   0.005s] (240/284) aae-testkit::openai every_error_has_its_status_code_and_headers
+        PASS [   0.004s] (241/284) aae-testkit::openai the_plan_goes_in_order_and_its_last_reply_repeats
+        PASS [   0.762s] (242/284) aae-testkit::openai the_real_codex_runs_the_command_and_ends_on_the_text
+        PASS [   0.820s] (243/284) aae-testkit::recovery a_prompt_the_harness_got_brings_the_reconcile_prompt_with_a_new_key_after_a_restart
+        PASS [   0.470s] (244/284) aae-testkit::recovery a_prompt_the_harness_never_got_goes_again_with_its_key_after_a_restart
+        PASS [   0.261s] (245/284) aae-testkit::recovery a_prompt_whose_turn_ended_is_settled
+        PASS [   0.975s] (246/284) aae-testkit::recovery a_restart_interrupts_the_running_attempt_stops_its_instance_and_the_run_goes_on
+        PASS [   0.206s] (247/284) aae-testkit::recovery a_restart_kills_the_command_of_an_exec_step_the_dead_daemon_left
+        PASS [   0.338s] (248/284) aae-testkit::recovery a_restart_with_nothing_running_changes_no_run
+        PASS [   0.180s] (249/284) aae-testkit::requests a_failure_before_the_ack_or_in_requires_action_ends_the_attempt_at_once
+        PASS [   0.085s] (250/284) aae-testkit::requests a_permission_request_waits_for_its_answer
+        PASS [   0.078s] (251/284) aae-testkit::requests a_request_nobody_answers_is_denied_after_the_human_timeout
+        PASS [   0.168s] (252/284) aae-testkit::runs a_run_continues_the_session_of_a_finished_run_only_when_asked
+        PASS [   0.033s] (253/284) aae-testkit::runs a_run_must_name_a_runnable_formula_with_its_inputs
+        PASS [   0.042s] (254/284) aae-testkit::runs a_run_whose_workdir_is_gone_fails_with_the_reason_and_no_launch
+        PASS [   0.077s] (255/284) aae-testkit::runs a_turn_that_ends_without_an_outcome_is_hollow_done
+        PASS [   0.077s] (256/284) aae-testkit::runs a_veto_event_blocks_at_its_deadline_and_proceeds_on_abstain
+        PASS [   0.071s] (257/284) aae-testkit::runs an_attempt_failure_without_a_policy_fails_the_run
+        PASS [   0.087s] (258/284) aae-testkit::runs background_work_after_the_turn_keeps_the_run_running_until_idle
+        PASS [   0.748s] (259/284) aae-testkit::runs decisions_start_new_attempts_until_the_ceiling
+        PASS [   0.092s] (260/284) aae-testkit::runs one_workdir_holds_one_live_run_and_cancel_frees_it
+        PASS [   0.078s] (261/284) aae-testkit::runs silence_after_the_prompt_is_a_stall_at_its_budget
+        PASS [   0.185s] (262/284) aae-testkit::runs the_orchestrator_and_the_agent_limit_started_runs
+        PASS [   0.071s] (263/284) aae-testkit::runs without_a_decision_the_policy_deadline_fails_the_run
+        PASS [   0.291s] (264/284) aae-testkit::services a_daemon_crash_stops_the_service_it_left_and_the_next_session_gets_a_new_one
+        PASS [   0.166s] (265/284) aae-testkit::services a_service_that_never_comes_up_fails_the_tool_not_the_run
+        PASS [   0.816s] (266/284) aae-testkit::services one_service_serves_every_session_and_restarts_on_its_port
+        PASS [   0.143s] (267/284) aae-testkit::triggers a_reload_rearms_changed_schedules_and_the_listing_shows_the_next_firings
+        PASS [   0.177s] (268/284) aae-testkit::triggers a_schedule_fires_on_the_managed_clock_and_once_after_downtime
+        PASS [   0.190s] (269/284) aae-testkit::triggers a_trigger_switched_off_does_not_fire_until_it_is_on_again
+        PASS [   0.743s] (270/284) aae-testkit::triggers an_event_chain_keeps_its_correlation_stops_at_the_depth_limit_and_survives_a_restart
+        PASS [   0.370s] (271/284) aae-testkit::triggers an_event_trigger_switched_off_does_not_fire
+        PASS [   0.093s] (272/284) aae-testkit::watchdog a_turn_past_the_step_timeout_is_a_runaway
+        PASS [   0.089s] (273/284) aae-testkit::watchdog the_step_timeout_pauses_between_turns
+        PASS [   0.103s] (274/284) aae-testkit::watchdog the_step_timeout_pauses_while_a_request_waits_for_its_answer
+        PASS [  31.646s] (275/284) aae-testkit::chaos seeds_4
+        PASS [   0.191s] (276/284) aae-testkit::worktree a_run_continuing_a_session_works_in_the_worktree_of_that_session
+        PASS [   1.512s] (277/284) aae-testkit::worktree two_runs_of_one_rig_work_at_once_each_in_its_worktree
+        PASS [  31.030s] (278/284) aae-testkit::chaos seeds_6
+        PASS [  35.007s] (279/284) aae-testkit::chaos seeds_1
+        PASS [  39.306s] (280/284) aae-testkit::chaos seeds_2
+        PASS [  39.868s] (281/284) aae-testkit::chaos seeds_3
+        PASS [  42.121s] (282/284) aae-testkit::chaos seeds_0
+        PASS [  42.556s] (283/284) aae-testkit::chaos seeds_5
+        PASS [  43.934s] (284/284) aae-testkit::chaos seeds_7
+────────────
+     Summary [  55.644s] 284 tests run: 284 passed, 0 skipped
+[ci] $ cargo deny check
+advisories ok, bans ok, licenses ok, sources ok
+[ci] $ cargo machete
+Analyzing dependencies of crates in this directory...
+cargo-machete didn't find any unused dependencies in this directory. Good job!
+Done!
+[ci] $ scripts/unused-pub.sh
+[ci] $ scripts/budget-selftest.sh
+budget-selftest: ok
+[ci] $ scripts/budget.sh
+budget: core        7906 / 12000
+budget: claude       874 / 3500
+budget: codex       1045 / 3500
+budget: tracker      275 / 1200
+budget: frontends   1885 / 4000
+budget: plugins      256 / 1500
+budget: reserve      777 / 4300
+budget: total      13018 / 30000 (hard stop 35000)
+budget: experiments   1461 / 1500
+EXIT 0
