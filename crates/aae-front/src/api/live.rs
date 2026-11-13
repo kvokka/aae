@@ -90,18 +90,9 @@ async fn relay(state: Arc<Api>, run: String, mut next: i64, tx: mpsc::Sender<Res
                     }
                     caught_up = false;
                 }
-                message = recv(&mut tap) => {
-                    let event = match message {
-                        Ok(message) => Event::default().event("harness").data(message.to_string()),
-                        Err(broadcast::error::RecvError::Lagged(n)) => {
-                            Event::default().event("lagged").data(json!({ "missed": n }).to_string())
-                        }
-                        // The session ended; a later attempt's session is looked up below.
-                        Err(broadcast::error::RecvError::Closed) => {
-                            tap = None;
-                            continue;
-                        }
-                    };
+                event = tapped(&mut tap) => {
+                    // `None`: the session ended; a later attempt's session is looked up below.
+                    let Some(event) = event else { continue };
                     if tx.send(Ok(event)).await.is_err() {
                         return;
                     }
@@ -175,9 +166,51 @@ fn look(
     }
 }
 
-async fn recv(tap: &mut Option<broadcast::Receiver<Value>>) -> Result<Value, broadcast::error::RecvError> {
-    match tap {
-        Some(tap) => tap.recv().await,
-        None => std::future::pending().await,
+/// The next message of the tapped session as an event: `harness`, or `lagged` with `{"missed": n}` when the reader
+/// fell behind; `None` once the session ended, and the tap is dropped then. Pending while nothing is tapped.
+async fn tapped(tap: &mut Option<broadcast::Receiver<Value>>) -> Option<Event> {
+    let Some(receiver) = tap else {
+        return std::future::pending().await;
+    };
+    match receiver.recv().await {
+        Ok(message) => Some(Event::default().event("harness").data(message.to_string())),
+        Err(broadcast::error::RecvError::Lagged(n)) => Some(
+            Event::default()
+                .event("lagged")
+                .data(json!({ "missed": n }).to_string()),
+        ),
+        Err(broadcast::error::RecvError::Closed) => {
+            *tap = None;
+            None
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use http_body_util::BodyExt;
+
+    #[tokio::test]
+    async fn a_reader_behind_the_session_gets_lagged_with_the_missed_count_then_the_rest() {
+        let (sender, receiver) = broadcast::channel(2);
+        for n in 0..5 {
+            sender.send(json!({ "n": n })).unwrap();
+        }
+        drop(sender);
+        let mut tap = Some(receiver);
+        let mut events = Vec::new();
+        while let Some(event) = tapped(&mut tap).await {
+            events.push(Ok::<_, Infallible>(event));
+        }
+        assert!(tap.is_none(), "the ended session is no longer tapped");
+        let body = Sse::new(tokio_stream::iter(events)).into_response().into_body();
+        let text = String::from_utf8(body.collect().await.unwrap().to_bytes().to_vec()).unwrap();
+        assert_eq!(
+            text,
+            "event: lagged\ndata: {\"missed\":3}\n\n\
+             event: harness\ndata: {\"n\":3}\n\n\
+             event: harness\ndata: {\"n\":4}\n\n"
+        );
     }
 }
