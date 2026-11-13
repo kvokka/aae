@@ -164,6 +164,18 @@ fn hooks_join_the_native_settings_and_mcp_servers_take_claude_form() {
     );
     assert!(args.iter().any(|a| a == "--mcp-config"));
     assert!(!args.iter().any(|a| a == "--plugin-dir"), "no skills, no plugin");
+    // The session id is a function of run and attempt, and the core numbers every launch as a new attempt: a second
+    // `New` never meets the id of the first, which `claude --session-id` would refuse as taken.
+    let again = part::process(&config, &plan, Path::new("/state")).unwrap();
+    assert_eq!(again["session_id"], p["session_id"]);
+    let next = SessionPlan::New {
+        workdir: "/w".into(),
+        run: "r".into(),
+        attempt: 2,
+        token: "t".into(),
+    };
+    let next = part::process(&config, &next, Path::new("/state")).unwrap();
+    assert_ne!(next["session_id"], p["session_id"]);
     // A native `hooks` of a foreign shape is refused, neither a panic in the core's writer nor a silent overwrite.
     for native in [json!({ "hooks": "x" }), json!({ "hooks": { "Stop": {} } })] {
         config.native = Some(agent(native));

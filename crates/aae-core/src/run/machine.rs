@@ -158,6 +158,11 @@ impl RunHandler {
             let reason = format!("no driver for harness `{}`", config.harness);
             return self.terminal(tx, row, "failed", Some("infrastructure"), &reason);
         };
+        // E.g. the worktree of a continued run, removed when `worktree` no longer restores it.
+        if !std::path::Path::new(&row.workdir).is_dir() {
+            let reason = format!("the workdir `{}` does not exist", row.workdir);
+            return self.terminal(tx, row, "failed", Some("infrastructure"), &reason);
+        }
         let last_session = |tx: &Tx<'_>, run: &str| {
             tx.sql()
                 .query_row(

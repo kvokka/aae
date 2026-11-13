@@ -68,6 +68,9 @@ fn pin(dir: &Path, source: &GitSource, pinned: Option<&str>, update: bool) -> Re
     }
     let root = dir.join(".aae/git");
     fs::create_dir_all(&root).map_err(|e| format!("{}: {e}", root.display()))?;
+    // The checkouts are whole repositories: keep them out of the project's own git.
+    let ignore = dir.join(".aae/.gitignore");
+    fs::write(&ignore, "*\n").map_err(|e| format!("{}: {e}", ignore.display()))?;
     let temp = root.join(format!(".clone-{}", std::process::id()));
     let result = clone(&temp, source, pinned.filter(|_| !update));
     let placed = result.as_ref().is_ok_and(|commit| !checkout(dir, commit).exists());

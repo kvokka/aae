@@ -281,3 +281,18 @@ async fn a_run_must_name_a_runnable_formula_with_its_inputs() {
         assert!(matches!(sent, Err(Error::Rejected(_))), "{formula}");
     }
 }
+
+#[tokio::test(start_paused = true)]
+async fn a_run_whose_workdir_is_gone_fails_with_the_reason_and_no_launch() {
+    let w = world(&[]);
+    std::fs::remove_dir_all(w.dir.path().join("shop/web")).unwrap();
+    let run = w.create().await;
+    let events = w.events(&run, Duration::from_millis(200)).await;
+    let failed = last(&events, "run.failed");
+    assert_eq!(failed["class"], "infrastructure");
+    assert!(
+        failed["reason"].as_str().unwrap().contains("does not exist"),
+        "{failed}"
+    );
+    assert_eq!(failed["run"]["attempt"], 0, "no launch: {failed}");
+}

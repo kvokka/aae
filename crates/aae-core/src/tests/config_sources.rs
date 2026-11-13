@@ -95,3 +95,12 @@ fn a_plugin_has_a_path_or_a_git_source() {
         either,
     );
 }
+
+#[test]
+fn a_pack_with_an_unknown_key_says_what_a_pack_is() {
+    let project = BASE[3].1.replace(
+        r#"packs = ["../gascity"]"#,
+        r#"packs = [{ git = "x", rev = "main", extra = 1 }]"#,
+    );
+    fails(&[("shop/aae.toml", &project)], "a pack is a path or `{ git, rev }`");
+}

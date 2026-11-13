@@ -109,6 +109,7 @@ fn fetch_pins_checks_out_and_updates_only_when_asked() {
     assert!(out.contains(&format!("main -> {plugin} (fetched)")), "{out}");
     assert!(lock(&shop).contains(&format!("commit = \"{pack}\"")));
     assert!(lock(&config_dir).contains(&format!("commit = \"{plugin}\"")));
+    assert_eq!(fs::read_to_string(shop.join(".aae/.gitignore")).unwrap(), "*\n");
     let loaded = aae_core::config::load(&config_dir.join("config.toml")).unwrap();
     assert_eq!(loaded.plugins[0].name, "mailer");
     assert!(loaded.plugins[0].root.ends_with(format!(".aae/git/{plugin}")));

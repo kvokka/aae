@@ -138,7 +138,7 @@ pub(super) struct PluginDecl {
 
 /// Where a pack or plugin lives: a directory, or a git repository at a revision pinned in `aae.lock`.
 #[derive(Debug, Deserialize)]
-#[serde(untagged)]
+#[serde(untagged, expecting = "a pack is a path or `{ git, rev }`")]
 pub(super) enum Source {
     Path(PathBuf),
     Git(super::GitSource),

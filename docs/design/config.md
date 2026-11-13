@@ -274,6 +274,8 @@ in `AAE_PLUGIN_PARAMS` (contracts 3.1). In the `[agent]` contribution, `${AAE_PL
 skill paths are relative to it. Beyond its `[agent]` layer a plugin gives its attached agents two things, in
 attachment order: the text of its `prompt` file, after the system prompt the layers give (each fragment after a blank
 line); and its `bin/` directory, when it has one, ahead of `PATH` (the `PATH` a layer sets, or else the daemon's).
+The daemon's `PATH` taken this way becomes part of the effective config: it is in the run's snapshot and in the
+instance fingerprint, so after a daemon restart with another `PATH` these agents get new instances.
 The example `examples/aae-plugin-review` shows both sides.
 
 ## Bundled plugins: `[builtin.<name>]`
