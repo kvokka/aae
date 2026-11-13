@@ -22,6 +22,12 @@ pub(crate) struct Params {
     backoff_cap_s: i64,
     /// From this many consecutive rate limits on, the model gate closes instead of a backoff.
     backoff_park_from: usize,
+    /// The bounded wait on `auth_required` (postmortem 0001): the account gate closes for
+    /// `min(base · 2^(n−1), cap)` after `n` consecutive such failures; the attempt after it probes the cause.
+    auth_backoff_base_s: i64,
+    auth_backoff_cap_s: i64,
+    /// Once `auth_required` has lasted this long, the account gate stays closed until an operator opens it.
+    auth_escalate_s: i64,
     /// An attempt shorter than this that crashed is a rapid crash.
     rapid_s: i64,
     /// This many consecutive rapid crashes close the agent gate for `crash_pause_s`.
@@ -43,6 +49,9 @@ impl Default for Params {
             backoff_base_s: 10,
             backoff_cap_s: 5 * 60,
             backoff_park_from: 3,
+            auth_backoff_base_s: 30,
+            auth_backoff_cap_s: 15 * 60,
+            auth_escalate_s: 2 * 60 * 60,
             rapid_s: 30,
             crash_loop: 5,
             crash_pause_s: 5 * 60,
@@ -117,14 +126,27 @@ fn attempt_failed(event: &Value, p: &Params) -> Value {
             if data["failure"]["retried_by_harness"] == true || n >= p.backoff_park_from {
                 park(key("model:"), Some(now + p.model_pause_s * 1000))
             } else {
-                let exp = u32::try_from(n.saturating_sub(1)).unwrap_or(u32::MAX).min(20);
-                resume(p.backoff_base_s.saturating_mul(1 << exp).min(p.backoff_cap_s))
+                resume(backoff(p.backoff_base_s, p.backoff_cap_s, n))
             }
         }
-        "auth_required" | "billing" => match key("account:") {
-            Some(account) => park(Some(account), None),
-            None => fail(kind),
-        },
+        // An auth failure may be a passing proxy or WAF error (postmortem 0001): a bounded wait, re-armed on every
+        // failure, until it has lasted `auth_escalate_s` since the first attempt of the streak started.
+        "auth_required" | "billing" => {
+            let n = streak(&[kind]);
+            let since = attempts
+                .len()
+                .checked_sub(n)
+                .and_then(|i| time(&attempts.get(i)?["started_at"]));
+            let lasting = kind == "billing" || now - since.unwrap_or(now) >= p.auth_escalate_s * 1000;
+            match key("account:") {
+                account if !lasting => park(
+                    account,
+                    Some(now + backoff(p.auth_backoff_base_s, p.auth_backoff_cap_s, n) * 1000),
+                ),
+                Some(account) => park(Some(account), None),
+                None => fail(kind),
+            }
+        }
         "context_overflow" | "transcript_divergence" => json!({ "decision": "new_session" }),
         "config_error" => fail_closing(kind, key("agent:")),
         "workspace_failure" => fail_closing(kind, key("rig:")),
@@ -156,6 +178,12 @@ fn attempt_failed(event: &Value, p: &Params) -> Value {
         _ if streak(&[kind]) <= p.unknown_retries => resume(p.unknown_after_s),
         _ => fail(kind),
     }
+}
+
+/// `min(base · 2^(n−1), cap)` seconds.
+fn backoff(base: i64, cap: i64, n: usize) -> i64 {
+    let exp = u32::try_from(n.saturating_sub(1)).unwrap_or(u32::MAX).min(20);
+    base.saturating_mul(1 << exp).min(cap)
 }
 
 fn resume(after_s: i64) -> Value {

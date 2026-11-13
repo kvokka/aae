@@ -84,6 +84,22 @@ fn default_policy_follows_contracts_10() {
             failed("unknown", none.clone(), &[("resume", "unknown", 9); 4], json!([])),
             json!({"decision": "fail", "reason": "unknown"}),
         ),
+        // Postmortem 0001: a bounded wait on the account, longer with every failure in a row.
+        (
+            failed(
+                "auth_required",
+                none.clone(),
+                &[("resume", "auth_required", 9); 3],
+                json!([]),
+            ),
+            json!({"decision": "park", "then": "resume", "gate": {"key": "account:claude/a1",
+                "until": "2026-11-13T12:02:00.000Z", "reason": "auth_required"}}),
+        ),
+        (
+            failed("billing", none.clone(), &[("resume", "billing", 9)], json!([])),
+            json!({"decision": "park", "then": "resume", "gate": {"key": "account:claude/a1",
+                "until": null, "reason": "billing"}}),
+        ),
         // A gate that closed while the attempt ran answers its failure: park on it, no new closure.
         (
             failed(
@@ -160,6 +176,24 @@ fn every_policy_threshold_comes_from_the_config() {
     assert_eq!(
         policy(&resumed, json!({"resume_failures": 1}))["decision"],
         "new_session"
+    );
+
+    // The streak of `auth_required` began an hour ago, when its first attempt started.
+    let auth = failed(
+        "auth_required",
+        none.clone(),
+        &[("resume", "auth_required", 9); 2],
+        json!([]),
+    );
+    assert_eq!(until(&policy(&auth, json!({}))), "2026-11-13T12:01:00.000Z");
+    let based = policy(&auth, json!({"auth_backoff_base_s": 1}));
+    assert_eq!(until(&based), "2026-11-13T12:00:02.000Z");
+    let capped = policy(&auth, json!({"auth_backoff_cap_s": 5}));
+    assert_eq!(until(&capped), "2026-11-13T12:00:05.000Z");
+    let escalated = policy(&auth, json!({"auth_escalate_s": 3600}));
+    assert_eq!(
+        escalated["gate"],
+        json!({"key": "account:claude/a1", "until": null, "reason": "auth_required"})
     );
 
     let unknown = failed("unknown", none, &[("resume", "unknown", 9); 2], json!([]));
