@@ -384,14 +384,22 @@ fn every_error_is_reported_with_its_file() {
 }
 
 #[test]
-fn a_harness_takes_max_sessions_and_refuses_zero() {
-    let with = |n: &str| {
-        BASE[0].1.replace(
+fn codex_takes_max_sessions_and_refuses_zero_other_harnesses_refuse_it() {
+    // `[harness.claude]` already opens the fixture: its key goes after its model, a codex table goes before plugins.
+    let with = |harness: &str, n: &str| match harness {
+        "claude" => BASE[0]
+            .1
+            .replace("\"sonnet\"\n", &format!("\"sonnet\"\nmax_sessions = {n}\n")),
+        _ => BASE[0].1.replace(
             "[[plugin]]",
-            &format!("[harness.codex]\nmax_sessions = {n}\n[[plugin]]"),
-        )
+            &format!("[harness.{harness}]\nmax_sessions = {n}\n[[plugin]]"),
+        ),
     };
-    let config = load_with(&[("config.toml", with("3").as_str())]).unwrap();
+    let config = load_with(&[("config.toml", with("codex", "3").as_str())]).unwrap();
     assert_eq!(config.harnesses["codex"].max_sessions.map(|n| n.get()), Some(3));
-    fails(&[("config.toml", with("0").as_str())], "max_sessions");
+    fails(&[("config.toml", with("codex", "0").as_str())], "max_sessions");
+    fails(
+        &[("config.toml", with("claude", "3").as_str())],
+        "only the codex harness",
+    );
 }

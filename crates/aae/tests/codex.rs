@@ -60,8 +60,8 @@ async fn a_codex_thread_that_calls_the_finisher_passes_its_run() {
     assert!(output.contains("function_call_output"), "{output}");
 }
 
-/// The `codex app-server` processes whose environment holds a path under `dir`.
-fn app_servers(dir: &Path) -> Vec<i32> {
+/// The processes whose environment holds a path under `dir` and whose command line contains `needle`.
+fn processes(dir: &Path, needle: &str) -> Vec<i32> {
     let dir = dir.to_string_lossy();
     let entries = fs::read_dir("/proc").unwrap().flatten();
     entries
@@ -69,7 +69,7 @@ fn app_servers(dir: &Path) -> Vec<i32> {
             let pid: i32 = e.file_name().to_str()?.parse().ok()?;
             let cmd = String::from_utf8_lossy(&fs::read(e.path().join("cmdline")).ok()?).replace('\0', " ");
             let env = String::from_utf8_lossy(&fs::read(e.path().join("environ")).ok()?).into_owned();
-            (cmd.contains("app-server") && env.contains(&*dir)).then_some(pid)
+            (cmd.contains(needle) && env.contains(&*dir)).then_some(pid)
         })
         .collect()
 }
@@ -86,9 +86,9 @@ async fn a_codex_killed_in_a_command_is_resumed_and_its_run_passes() {
     let run = d.create("build", None).await;
     let started = Instant::now();
     let server = loop {
-        let servers = app_servers(d.dir.path());
+        let servers = processes(d.dir.path(), "app-server");
         if let [server] = servers[..]
-            && provider.requests().len() == 1
+            && !processes(d.dir.path(), "sleep 20").is_empty()
         {
             break server;
         }
@@ -98,8 +98,6 @@ async fn a_codex_killed_in_a_command_is_resumed_and_its_run_passes() {
         );
         tokio::time::sleep(Duration::from_millis(50)).await;
     };
-    // The command itself is running once the first model request has been answered and a moment has passed.
-    tokio::time::sleep(Duration::from_millis(500)).await;
     let killed = Instant::now();
     let status = std::process::Command::new("kill")
         .args(["-9", &server.to_string()])

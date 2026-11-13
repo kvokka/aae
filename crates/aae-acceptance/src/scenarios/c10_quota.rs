@@ -45,6 +45,10 @@ pub(crate) async fn run(env: Arc<Env>) -> String {
         "the second run of the account waits for the gate: {view}"
     );
     assert_eq!(
+        view["waiting_for"], "gate",
+        "the gate holds it, not the workdir: {view}"
+    );
+    assert_eq!(
         provider.requests().len(),
         1,
         "nothing reached the provider while the gate was closed"

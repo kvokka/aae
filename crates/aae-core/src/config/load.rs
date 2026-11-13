@@ -33,6 +33,16 @@ impl Loader {
             false => OrchestratorFile::default(),
         };
         self.harnesses = raw.harness.keys().cloned().collect();
+        for (name, _) in raw
+            .harness
+            .iter()
+            .filter(|(n, h)| *n != "codex" && h.max_sessions.is_some())
+        {
+            self.fail(
+                file,
+                format!("`harness.{name}.max_sessions`: only the codex harness takes it"),
+            );
+        }
         let plugins = self.plugins(file, &base, raw.plugin, &[]);
         let names: Vec<&str> = plugins.iter().map(|p| p.name.as_str()).collect();
         let settings = self.settings(file, &base, raw.settings, &names);
