@@ -147,6 +147,11 @@ impl World {
         );
     }
 
+    /// Kills the daemon's writer from any task: `kill -9` lands wherever the daemon is. [`Self::restart`] follows.
+    pub(crate) fn killer(&self) -> tokio::task::AbortHandle {
+        self.task.abort_handle()
+    }
+
     pub(crate) async fn create(&self) -> String {
         self.create_on("web").await
     }

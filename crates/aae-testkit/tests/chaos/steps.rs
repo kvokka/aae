@@ -2,7 +2,7 @@
 
 use crate::{
     Rng, TERMINAL,
-    check::runs,
+    check::{runs, state},
     common::{World, hollow_turn},
 };
 use aae_core::{
@@ -11,7 +11,42 @@ use aae_core::{
     run::{Create, Decision, GateSpec, Msg, Outcome, Verdict},
 };
 use aae_testkit::Step;
-use std::{collections::BTreeMap, collections::BTreeSet, time::Duration};
+use std::{collections::BTreeMap, collections::BTreeSet, sync::Mutex, time::Duration};
+
+/// Where the kills of this test landed, by what the state had recorded and the dead daemon had not done yet.
+pub(crate) static KILLS: Mutex<BTreeMap<&str, u64>> = Mutex::new(BTreeMap::new());
+
+/// What the state recorded and the daemon had not done yet: tracker calls, harness calls, hooks, journal lines.
+fn undone(w: &World) -> Vec<&'static str> {
+    let conn = state(w);
+    let ops: Vec<String> = conn
+        .prepare("SELECT DISTINCT json_extract(payload, '$.op') FROM effects")
+        .unwrap()
+        .query_map([], |r| r.get(0))
+        .unwrap()
+        .map(Result::unwrap)
+        .collect();
+    let behind: bool = conn
+        .query_row(
+            "SELECT COALESCE((SELECT MAX(seq) FROM outbox), 0) > (SELECT seq FROM consumers WHERE name = 'journal')",
+            [],
+            |r| r.get(0),
+        )
+        .unwrap();
+    let mut undone: BTreeSet<_> = ops
+        .iter()
+        .map(|op| match op.as_str() {
+            "tracker" => "tracker",
+            "hooks" => "hooks",
+            "launch" | "prompt" | "respond" | "stop" | "stop_instance" => "harness",
+            _ => "other",
+        })
+        .collect();
+    if behind {
+        undone.insert("journal");
+    }
+    undone.into_iter().collect()
+}
 
 /// What a test step did, for the replay of a failure.
 #[derive(Default)]
@@ -152,6 +187,55 @@ pub(crate) async fn step(w: &mut World, rng: &mut Rng, play: &mut Play, calm: bo
         (true, _) => 10,
         (false, _) => rng.below(24),
     };
+    // kill -9 cuts a step short that sets work going: a killer task among the writer's and the effects' dies after
+    // a few turns of the scheduler, wherever the writer is then.
+    let kill = matches!(op, 19 | 22);
+    let op = if kill {
+        *rng.pick(&[0, 7, 7, 10, 10, 16, 17]).unwrap()
+    } else {
+        op
+    };
+    let killer = kill.then(|| {
+        let (writer, turns) = (w.killer(), rng.below(8));
+        tokio::spawn(async move {
+            // `yield_now` would wait until every other task is idle: a self-wake goes to the back of the queue.
+            for _ in 0..turns {
+                let mut woke = false;
+                std::future::poll_fn(|cx| {
+                    if std::mem::replace(&mut woke, true) {
+                        return std::task::Poll::Ready(());
+                    }
+                    cx.waker().wake_by_ref();
+                    std::task::Poll::Pending
+                })
+                .await;
+            }
+            writer.abort();
+        })
+    });
+    act(w, rng, play, op, natural, &live).await;
+    let Some(killer) = killer else {
+        return;
+    };
+    killer.await.unwrap();
+    let undone = undone(w);
+    for at in &undone {
+        *KILLS.lock().unwrap().entry(at).or_default() += 1;
+    }
+    w.restart().await;
+    // Some crashes take the transcripts of the dead sessions with them: a resume must find out (invariant 17).
+    let lost = rng.below(3) == 0;
+    if lost {
+        w.driver.lose_transcripts();
+    }
+    play.log
+        .push(format!("crash before {undone:?} done, transcripts lost: {lost}"));
+}
+
+type Run = (String, String, u32, Option<i64>);
+
+/// Step `op`, one of [`step`]'s.
+async fn act(w: &mut World, rng: &mut Rng, play: &mut Play, op: u64, natural: bool, live: &[Run]) {
     match op {
         20 => {
             let down = rng.below(2) == 0;
@@ -188,7 +272,7 @@ pub(crate) async fn step(w: &mut World, rng: &mut Rng, play: &mut Play, calm: bo
         }
         7..=9 => {
             let running: Vec<_> = live.iter().filter(|r| r.1 == "running").cloned().collect();
-            let pool = if running.is_empty() { &live } else { &running };
+            let pool = if running.is_empty() { live } else { &running };
             let Some((run, _, attempt, _)) = rng.pick(pool).cloned() else {
                 return;
             };
@@ -235,6 +319,9 @@ pub(crate) async fn step(w: &mut World, rng: &mut Rng, play: &mut Play, calm: bo
             } else {
                 1 + rng.below(2)
             };
+            // The harness may drop the prompt a remark or a `continue` sends: only the watchdog moves on (invariant 15).
+            let lost = !natural && rng.below(2) == 0;
+            w.driver.lose_prompts(lost);
             for _ in 0..times {
                 let msg = Msg::Decide {
                     run: run.clone(),
@@ -243,23 +330,27 @@ pub(crate) async fn step(w: &mut World, rng: &mut Rng, play: &mut Play, calm: bo
                 };
                 let _ = w.core.send(None, msg).await;
             }
-            play.log.push(format!("decide {run}@{seq} {decision:?} x{times}"));
+            w.driver.lose_prompts(false);
+            play.log
+                .push(format!("decide {run}@{seq} {decision:?} x{times}, prompt lost: {lost}"));
         }
         16 => {
-            let Some((run, ..)) = rng.pick(&live).cloned() else {
+            let Some((run, ..)) = rng.pick(live).cloned() else {
                 return;
             };
+            let mut answered = false;
             for _ in 0..1 + rng.below(2) {
                 let msg = Msg::Cancel {
                     run: run.clone(),
                     reason: "chaos".into(),
                 };
-                let _ = w.core.send(None, msg).await;
+                answered |= w.core.send(None, msg).await.is_ok();
             }
             play.log.push(format!("cancel {run}"));
-            // The operator's cancel ends the run in its transaction, whatever automation had going (invariant 18).
+            // The operator's cancel ends the run in its transaction, whatever automation had going (invariant 18); a
+            // kill may come first.
             let state = runs(w).into_iter().find(|r| r.0 == run).unwrap().1;
-            if !TERMINAL.contains(&state.as_str()) {
+            if answered && !TERMINAL.contains(&state.as_str()) {
                 play.broken = Some(format!("{run} is {state} after its cancel (invariant 18)"));
             }
         }
@@ -279,19 +370,6 @@ pub(crate) async fn step(w: &mut World, rng: &mut Rng, play: &mut Play, calm: bo
             };
             let _ = w.core.send(None, msg).await;
             play.log.push("open gate".into());
-        }
-        19 => {
-            // kill -9: the writer stops between two transactions, wherever the yields leave it.
-            for _ in 0..rng.below(30) {
-                tokio::task::yield_now().await;
-            }
-            w.restart().await;
-            // Some crashes take the transcripts of the dead sessions with them: a resume must find out (invariant 17).
-            let lost = rng.below(3) == 0;
-            if lost {
-                w.driver.lose_transcripts();
-            }
-            play.log.push(format!("crash, transcripts lost: {lost}"));
         }
         _ => {
             let ms = [10, 500, 5_000, 60_000, 600_000][usize::try_from(rng.below(5)).unwrap()];

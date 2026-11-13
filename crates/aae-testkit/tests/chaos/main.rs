@@ -1,10 +1,12 @@
 //! The deterministic check of the core invariants (spec §5.5, §14; criterion 8 in CI): for each seed a sequence of
 //! commands, harness behaviour, policy hooks, operator actions, repeated and lost deliveries and daemon crashes
-//! (`kill -9` lands between two transactions of the writer and takes the effects in flight with it) plays on the run
+//! (`kill -9` cuts a step short wherever the writer is then, and takes the effects in flight with it) plays on the run
 //! machine with the managed clock. The invariants are checked on the state and the journal after every step; once
-//! the faults stop, every run must reach an end and every hooked event must have had its hooks run.
+//! the faults stop, every run must reach an end and every hooked event must have had its hooks run. Each full share
+//! of seeds must have killed the daemon with tracker, harness and hook calls recorded and not yet done.
 //!
-//! A failure names its seed: `AAE_CHAOS_SEED=<n> cargo nextest run -p aae-testkit --test chaos` replays it alone.
+//! A failure names its seed: `AAE_CHAOS_SEED=<n> cargo nextest run -p aae-testkit --test chaos` replays it alone;
+//! `AAE_CHAOS_SEEDS=<n>` plays `n` seeds instead of 1000.
 
 mod check;
 #[path = "../common/mod.rs"]
@@ -50,8 +52,10 @@ const FIX: &[(&str, &str)] = &[
     ("shop/formulas/fix.md", "Fix {{ bead.title }}."),
 ];
 
-/// Seeds per test; the tests split the range so that nextest runs them side by side.
-const SEEDS: u64 = 125;
+/// Seeds in all, unless `AAE_CHAOS_SEEDS` says otherwise (CI runs a share, `acceptance-ci` all of them); the tests
+/// split the range so that nextest runs them side by side.
+const SEEDS: u64 = 1_000;
+const TESTS: u64 = 8;
 /// Steps per seed.
 const STEPS: usize = 40;
 const TERMINAL: [&str; 3] = ["passed", "failed", "cancelled"];
@@ -177,21 +181,33 @@ async fn play(seed: u64) -> Result<Played, String> {
     ))
 }
 
-fn seeds(from: u64) {
-    let range = match std::env::var("AAE_CHAOS_SEED") {
-        Ok(seed) => {
-            let seed: u64 = seed.parse().unwrap();
-            if !(from..from + SEEDS).contains(&seed) {
-                return;
-            }
-            seed..seed + 1
+/// Plays the `nth` share of the seeds; a replayed seed plays in the first share alone.
+fn seeds(nth: u64) {
+    let range = if let Ok(seed) = std::env::var("AAE_CHAOS_SEED") {
+        let seed: u64 = seed.parse().unwrap();
+        if nth > 0 {
+            return;
         }
-        Err(_) => from..from + SEEDS,
+        seed..seed + 1
+    } else {
+        let all = std::env::var("AAE_CHAOS_SEEDS").map_or(SEEDS, |n| n.parse().unwrap());
+        let share = all.div_ceil(TESTS);
+        (nth * share).min(all)..((nth + 1) * share).min(all)
     };
+    // A share under 100 seeds (a replay, the CI share) is too short to be sure to land every kind of kill.
+    let short = range.end - range.start < 100;
     for seed in range {
         if let Err(why) = played(seed) {
             panic!("{why}");
         }
+    }
+    // The kills landed between every kind of record and its call, not only between quiet transactions.
+    let kills = steps::KILLS.lock().unwrap();
+    for at in ["tracker", "harness", "hooks"] {
+        assert!(
+            short || kills.contains_key(at),
+            "no kill before a {at} call was done: {kills:?}"
+        );
     }
 }
 
@@ -259,35 +275,35 @@ fn seeds_0() {
 
 #[test]
 fn seeds_1() {
-    seeds(SEEDS);
+    seeds(1);
 }
 
 #[test]
 fn seeds_2() {
-    seeds(2 * SEEDS);
+    seeds(2);
 }
 
 #[test]
 fn seeds_3() {
-    seeds(3 * SEEDS);
+    seeds(3);
 }
 
 #[test]
 fn seeds_4() {
-    seeds(4 * SEEDS);
+    seeds(4);
 }
 
 #[test]
 fn seeds_5() {
-    seeds(5 * SEEDS);
+    seeds(5);
 }
 
 #[test]
 fn seeds_6() {
-    seeds(6 * SEEDS);
+    seeds(6);
 }
 
 #[test]
 fn seeds_7() {
-    seeds(7 * SEEDS);
+    seeds(7);
 }

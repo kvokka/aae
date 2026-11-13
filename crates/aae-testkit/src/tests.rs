@@ -328,12 +328,14 @@ async fn unknown_sessions_have_no_transcript_and_closed_ones_resume() {
     let unknown = SessionRef(json!({ "session": 99 }));
     let transcript = driver.transcript(&s.instance, &unknown, key(1)).await.unwrap();
     assert_eq!(transcript, Transcript::Missing);
-    let err = s
-        .driver
+    // A harness may resume what it does not know as an empty session: only the transcript tells.
+    driver
         .resume_session(&s.instance, &unknown, &SessionPart(Value::Null))
         .await
-        .unwrap_err();
-    assert_eq!(err.kind, FailureKind::TranscriptDivergence);
+        .unwrap();
+    let transcript = driver.transcript(&s.instance, &unknown, key(1)).await.unwrap();
+    assert_eq!(transcript, Transcript::Missing);
+    assert!(!s.driver.has_transcript(&unknown.0));
     driver.close_session(&s.instance, &s.session).await;
     let closed = s.transcript(1).await;
     assert_eq!(

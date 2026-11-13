@@ -72,6 +72,8 @@ struct Session {
     playing: Option<JoinHandle<()>>,
     /// A turn is in flight: from a prompt or a response until `turn.ended`.
     in_turn: bool,
+    /// The resume of a lost transcript made this session: it is empty, whatever the core asked for.
+    empty: bool,
 }
 
 /// No process has this pid (it is above every `pid_max`), so nothing real is ever signalled through it.
@@ -127,6 +129,7 @@ impl ScriptedDriver {
                 prompts: s.prompts.clone(),
                 playing: None,
                 in_turn: false,
+                empty: s.empty,
             };
             (*id, session)
         });
@@ -143,8 +146,8 @@ impl ScriptedDriver {
         }
     }
 
-    /// The transcripts no live process holds are gone, as when the harness's files are lost: a resume of one is
-    /// refused (invariant 17).
+    /// The transcripts no live process holds are gone, as when the harness's files are lost: a resume of one quietly
+    /// gives an empty session, and only the transcript tells (invariant 17).
     pub fn lose_transcripts(&self) {
         self.lock().sessions.retain(|_, s| !s.instance.is_empty());
     }
@@ -153,7 +156,7 @@ impl ScriptedDriver {
     pub fn has_transcript(&self, session: &Value) -> bool {
         session["session"]
             .as_u64()
-            .is_some_and(|id| self.lock().sessions.contains_key(&id))
+            .is_some_and(|id| self.lock().sessions.get(&id).is_some_and(|s| !s.empty))
     }
 
     /// The token of attempt `attempt` of `run`, as the agent of the attempt would find it in its environment.
@@ -289,6 +292,7 @@ impl Driver for ScriptedDriver {
                 prompts: Vec::new(),
                 playing: None,
                 in_turn: false,
+                empty: false,
             },
         );
         drop(state);
@@ -297,7 +301,8 @@ impl Driver for ScriptedDriver {
         ready(Ok(session))
     }
 
-    /// Moves a known session onto `instance`; its transcript survives the old process, like a harness's does.
+    /// Moves a session onto `instance`; its transcript survives the old process, like a harness's does. A session
+    /// with no transcript resumes too, empty, as the worst harness would have it.
     fn resume_session<'a>(
         &'a self,
         instance: &'a InstanceHandle,
@@ -308,14 +313,19 @@ impl Driver for ScriptedDriver {
         if !state.instances.get(&instance.id).is_some_and(|i| i.alive) {
             return ready(Err(Failure::new(FailureKind::HarnessCrash, Source::Adapter)));
         }
-        let found = session_id(session).map(|id| state.sessions.get_mut(&id));
-        ready(match found {
-            Ok(Some(s)) => {
-                s.instance = instance.id.clone();
-                Ok(())
-            }
-            _ => Err(Failure::new(FailureKind::TranscriptDivergence, Source::Adapter)),
-        })
+        let id = match session_id(session) {
+            Ok(id) => id,
+            Err(e) => return ready(Err(e)),
+        };
+        let s = state.sessions.entry(id).or_insert_with(|| Session {
+            instance: String::new(),
+            prompts: Vec::new(),
+            playing: None,
+            in_turn: false,
+            empty: true,
+        });
+        s.instance = instance.id.clone();
+        ready(Ok(()))
     }
 
     fn send_prompt<'a>(
@@ -387,7 +397,10 @@ impl Driver for ScriptedDriver {
         key: PromptKey,
     ) -> BoxFuture<'a, Result<Transcript, Failure>> {
         let state = self.lock();
-        let found = session_id(session).ok().and_then(|id| state.sessions.get(&id));
+        let found = session_id(session)
+            .ok()
+            .and_then(|id| state.sessions.get(&id))
+            .filter(|s| !s.empty);
         ready(Ok(match found {
             None => Transcript::Missing,
             Some(s) => Transcript::Present {
