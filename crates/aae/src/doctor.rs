@@ -53,7 +53,7 @@ fn findings(paths: &Paths) -> Vec<Value> {
                     found.push(host_mcp(name));
                 }
             }
-            found.extend(per_session(&config));
+            found.extend(per_session(&config).map(|why| check("mcp per session", "warning", why)));
             if config.projects.iter().any(|p| p.root.join(".beads").is_dir()) {
                 let (path, source) = binary("br", None);
                 found.push(binary_check("br", &path, source, aae_br::TESTED));
@@ -132,7 +132,7 @@ fn host_mcp(harness: &str) -> Value {
 
 /// The stdio MCP servers of the config that are not of scope `session`: with no stdio→HTTP bridge in this release
 /// they start per session all the same (spec §11.4).
-fn per_session(config: &aae_core::config::Config) -> Option<Value> {
+fn per_session(config: &aae_core::config::Config) -> Option<String> {
     let mut names = std::collections::BTreeSet::new();
     for p in &config.projects {
         for pack in &p.packs {
@@ -155,8 +155,15 @@ fn per_session(config: &aae_core::config::Config) -> Option<Value> {
     (!names.is_empty()).then(|| {
         let why = "stdio MCP servers start per session (no stdio→HTTP bridge in this release); give them \
                    scope = \"session\", or run them as a service with a `url`";
-        check("mcp per session", "warning", format!("{}: {why}", names.join(", ")))
+        format!("{}: {why}", names.join(", "))
     })
+}
+
+/// The daemon's visible warning for [`per_session`], at start and on every reload (spec §11.4).
+pub(crate) fn warn_per_session(config: &aae_core::config::Config) {
+    if let Some(why) = per_session(config) {
+        eprintln!("aae daemon: warning: {why}");
+    }
 }
 
 /// The user file of claude: in `$CLAUDE_CONFIG_DIR` when set, else `~/.claude.json`.

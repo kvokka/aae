@@ -58,7 +58,9 @@ impl Paths {
 /// Runs the daemon until a stop signal or a drain; `true` when the drain was a restart. An error is why it could
 /// not start.
 pub(crate) async fn run(paths: Paths) -> Result<bool, String> {
-    let config = load(&paths.config).map_err(|errors| format!("the config has errors:\n{}", errors.join("\n")))?;
+    let config = load(&paths.config)
+        .inspect(crate::doctor::warn_per_session)
+        .map_err(|errors| format!("the config has errors:\n{}", errors.join("\n")))?;
     private_dir(&paths.state)?;
     // Held until the daemon exits: one writer per state directory (spec §5.1), whatever socket it serves.
     let _lock = lock(&paths.state)?;
@@ -152,7 +154,7 @@ pub(crate) async fn run(paths: Paths) -> Result<bool, String> {
         }),
         config: RwLock::new(config),
         applied: tokio::sync::Mutex::new(1),
-        load: Box::new(move || load(&paths.config)),
+        load: Box::new(move || load(&paths.config).inspect(crate::doctor::warn_per_session)),
     };
     let stop = stop_signal().map_err(|e| format!("signals: {e}"))?;
     eprintln!("aae daemon listening on {}", paths.socket.display());
