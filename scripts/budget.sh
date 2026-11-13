@@ -70,5 +70,15 @@ done <<<"$markers"
 
 [[ -f docs/READINESS.md ]] || err "docs/READINESS.md is missing (spec §14)"
 grep -q 'MEASURE id=' docs/READINESS.md 2>/dev/null || err "docs/READINESS.md has no MEASURE marker"
+# Criterion 22 of spec §15: every component of the readiness table scores at least 8.
+rows=$(awk -F'|' '/^\| / && $3 !~ /Score/ {print $2 "|" $3}' docs/READINESS.md 2>/dev/null || true)
+if [[ -z "$rows" ]]; then
+  err "docs/READINESS.md has no component table"
+else
+  while IFS='|' read -r name score; do
+    [[ "$score" =~ ^\ *([0-9]+(\.[0-9]+)?)\ *$ ]] && awk "BEGIN { exit !(${BASH_REMATCH[1]} >= 8) }" ||
+      err "readiness of${name% } is${score% }, criterion 22 needs at least 8"
+  done <<<"$rows"
+fi
 
 exit "$fail"

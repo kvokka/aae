@@ -9,6 +9,7 @@ fresh() {
   rm -rf "$tmp/r" && mkdir -p "$tmp/r/crates/aae/src" "$tmp/r/docs" && cd "$tmp/r" && git init -q
   echo 'fn main() {}' >crates/aae/src/main.rs
   echo '<!-- MEASURE id=x date=2026-11-12 ver=0.1.0 env=linux note="n" -->' >docs/READINESS.md
+  printf '| Component | Score |\n|---|---|\n| Core | 8 |\n| CLI | 9.5 |\n' >>docs/READINESS.md
 }
 expect() { # expect pass|fail <label>
   if "$script" "$tmp/r" >/dev/null 2>&1; then got=pass; else got=fail; fi
@@ -23,4 +24,7 @@ fresh; echo '// MEASURE id=y date=2026-11-12 env=linux note="see ver=1"' >crates
 fresh; mkdir -p crates/other/src && echo 'fn f() {}' >crates/other/src/lib.rs; expect fail "unbudgeted crate"
 fresh; mkdir -p experiments/x/src && seq 1501 | sed 's/.*/const _: u8 = 0;/' >experiments/x/src/main.rs; expect fail "experiments over 1500 lines"
 fresh; rm docs/READINESS.md; expect fail "missing readiness file"
+fresh; echo '| Gates | 7.5 |' >>docs/READINESS.md; expect fail "component below 8"
+fresh; echo '| Gates | n/a |' >>docs/READINESS.md; expect fail "component without a score"
+fresh; grep -v '^|' docs/READINESS.md >r.md; mv r.md docs/READINESS.md; expect fail "no component table"
 echo "budget-selftest: ok"
