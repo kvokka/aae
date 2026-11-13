@@ -4,7 +4,7 @@
 mod common;
 
 use aae_core::{
-    Journal,
+    Journal, config,
     driver::{DriverEvent, Failure, FailureKind, Normalized, SessionRef, Source},
     run::{Create, Msg},
 };
@@ -13,6 +13,7 @@ use common::{World, world_driven};
 use serde_json::{Value, json};
 use std::{
     process::{Child, Command},
+    sync::Arc,
     time::Duration,
 };
 
@@ -164,6 +165,46 @@ async fn a_full_instance_or_another_fingerprint_gets_an_instance_of_its_own() {
     w.cancel(&two).await;
     tokio::time::sleep(Duration::from_secs(1)).await;
     assert_eq!(w.count("instance.stopped"), 2, "no idle time: stopped at once");
+}
+
+/// A reload stops the idle instances whose fingerprint no agent of the new config gives, and only those (spec §6.5);
+/// a harness binary change is refused, since the drivers are made at start.
+#[tokio::test(start_paused = true)]
+async fn a_reload_stops_only_the_idle_instances_whose_fingerprint_changed() {
+    let w = world_driven(FILES, ScriptedDriver::new(4).idle(Duration::from_secs(60)));
+    let (one, two) = two_running(&w, "other").await;
+    w.cancel(&one).await;
+    w.cancel(&two).await;
+    tokio::time::sleep(Duration::from_secs(1)).await;
+    let other = (w.instance_events().into_iter())
+        .filter(|(t, _)| t == "instance.starting")
+        .map(|(_, id)| id)
+        .nth(1)
+        .unwrap();
+    let reload = |text: Option<&str>| {
+        let path = w.dir.path().join("shop/agents/other/agent.toml");
+        if let Some(text) = text {
+            std::fs::write(&path, text).unwrap();
+        }
+        Arc::new(config::load(&w.dir.path().join("config.toml")).unwrap())
+    };
+
+    let same = w.core.send(None, Msg::Reload(reload(None))).await.unwrap();
+    assert_eq!(same["restarted_instances"], json!([]), "nothing changed: {same}");
+    let changed = reload(Some("harness = \"scripted\"\n[native.scripted]\naccount = \"c\"\n"));
+    let reply = w.core.send(None, Msg::Reload(changed.clone())).await.unwrap();
+    assert_eq!(reply["restarted_instances"], json!([other]), "{reply}");
+    assert_eq!(w.count("instance.stopped"), 1, "{:?}", w.instance_events());
+
+    let mut binary = (*changed).clone();
+    binary.harnesses.get_mut("scripted").unwrap().binary = Some("/opt/other".into());
+    let refused = w.core.send(None, Msg::Reload(Arc::new(binary))).await.unwrap_err();
+    assert!(refused.to_string().contains("restart the daemon"), "{refused}");
+    let after = w.core.send(None, Msg::Reload(changed)).await.unwrap();
+    assert_eq!(
+        after["config_generation"], 4,
+        "the refused reload changed nothing: {after}"
+    );
 }
 
 #[cfg(target_os = "linux")] // the sweep reads `/proc`

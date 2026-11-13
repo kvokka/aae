@@ -157,7 +157,7 @@ pub(crate) async fn run(paths: Paths) -> Result<(), String> {
     let served = api::serve(listener, api, stop).await;
     let _ = std::fs::remove_file(&paths.socket);
     // shortcut: the writer is left as a crash leaves it (the state is crash-safe); a drain that lets running
-    // attempts end first comes with the daemon operations of WP-22b.
+    // attempts end first comes with the daemon operations of WP-22c.
     drop((task, watchers));
     served.map_err(|e| format!("serving the API: {e}"))
 }

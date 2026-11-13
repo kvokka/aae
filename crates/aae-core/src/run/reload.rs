@@ -1,21 +1,31 @@
 //! Reloading the config (spec §6.5, contracts 2 `config.reloaded`): runs keep the snapshot they prepared with, new
-//! runs and the schedules take the new config, and idle instances stop so their next session starts on it.
+//! runs and the schedules take the new config, and an idle instance stops when no agent of the new config starts
+//! sessions on its fingerprint (a changed MCP restarts only the instances it is part of).
 
 use super::RunHandler;
 use crate::{
-    config::Config,
+    config::{Config, Name},
+    driver::SessionPlan,
     writer::{Error, Event, Tx},
 };
 use serde_json::{Value, json};
-use std::sync::Arc;
+use std::{collections::HashSet, path::PathBuf, sync::Arc};
 
 impl RunHandler {
     /// Takes `config` in place of the current one; refused when the change needs a daemon restart (drivers and
     /// trackers are made at start). The reply is `{config_generation, restarted_instances}`.
     pub(super) fn reload(&mut self, tx: &mut Tx<'_>, config: Arc<Config>) -> Result<Value, Error> {
-        let harnesses = |c: &Config| c.harnesses.keys().cloned().collect::<Vec<_>>();
+        // The drivers are made at start with the binary and the sessions per instance; the model goes into the
+        // effective config of each session.
+        let harnesses = |c: &Config| {
+            (c.harnesses.iter())
+                .map(|(name, h)| (name.clone(), h.binary.clone(), h.max_sessions))
+                .collect::<Vec<_>>()
+        };
         if harnesses(&config) != harnesses(&self.config) {
-            return Err(super::rejected("restart the daemon to change the set of harnesses"));
+            return Err(super::rejected(
+                "restart the daemon to change the harnesses, their binaries or sessions per instance",
+            ));
         }
         let untracked = config
             .projects
@@ -29,11 +39,17 @@ impl RunHandler {
         }
         let old = std::mem::replace(&mut self.config, config);
         self.arm_schedules_after(tx, Some(&old))?;
+        let kept = self.fingerprints();
         let idle: Vec<String> = {
             let mut stmt = tx
                 .sql()
-                .prepare("SELECT id FROM instances WHERE state = 'ready' AND sessions = 0 ORDER BY id")?;
-            stmt.query_map([], |r| r.get(0))?.collect::<Result<_, _>>()?
+                .prepare("SELECT id, fingerprint FROM instances WHERE state = 'ready' AND sessions = 0 ORDER BY id")?;
+            let rows = stmt.query_map([], |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?)))?;
+            let rows = rows.collect::<Result<Vec<_>, _>>()?;
+            rows.into_iter()
+                .filter(|(_, f)| !kept.contains(f))
+                .map(|(id, _)| id)
+                .collect()
         };
         for id in &idle {
             Self::stop_instance(tx, id, "config")?;
@@ -49,5 +65,37 @@ impl RunHandler {
             data: data.clone(),
         })?;
         Ok(data)
+    }
+
+    /// The instance fingerprints the agents of the config start new sessions with, on each rig and with none.
+    fn fingerprints(&self) -> HashSet<String> {
+        let plan = SessionPlan::New {
+            workdir: PathBuf::new(),
+            run: String::new(),
+            attempt: 1,
+            token: String::new(),
+        };
+        let mut out = HashSet::new();
+        for p in &self.config.projects {
+            let rigs = p.rigs.keys().map(|r| Some(r.as_str())).chain([None]);
+            for rig in rigs {
+                for pack in &p.packs {
+                    for name in pack.agents.keys() {
+                        let agent = Name {
+                            pack: pack.name.clone(),
+                            name: name.clone(),
+                        };
+                        let Ok(config) = self.config.effective(&p.name, rig, &agent) else {
+                            continue;
+                        };
+                        let split = (self.drivers.get(&config.harness)).map(|d| d.split(&config, &plan));
+                        if let Some(Ok(split)) = split {
+                            out.insert(split.fingerprint.0);
+                        }
+                    }
+                }
+            }
+        }
+        out
     }
 }

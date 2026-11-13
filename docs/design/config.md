@@ -14,9 +14,11 @@ error in every file.
   The daemon re-reads only on an explicit command (§6.5): `aae config reload` (`POST /v1/config/reload`); on
   error the previous config stays in force, and `aae config check` reports the errors without applying anything.
 - A reload is taken by new runs and by the schedules (a schedule whose `cron`/`every` changed is set again from the
-  reload; a removed one is dropped); running runs keep the snapshot they prepared with; idle instances stop with
-  reason `config`. It emits `config.reloaded` with the generation (1 at daemon start). A change of the harnesses or
-  of which projects have a `.beads` tracker is refused: drivers and trackers are made at daemon start.
+  reload; a removed one is dropped); running runs keep the snapshot they prepared with; an idle instance stops with
+  reason `config` only when no agent of the new config, on any rig, starts sessions on its fingerprint (a changed MCP
+  restarts only the instances it is part of). It emits `config.reloaded` with the generation (1 at daemon start).
+  A change of the set of harnesses, a harness `binary` or `max_sessions` (a harness `model` is fine), or of which
+  projects have a `.beads` tracker is refused: drivers and trackers are made at daemon start.
 
 ## Settings (any layer)
 
