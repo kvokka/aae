@@ -4,9 +4,9 @@
 //!
 //! The step is an exec command: the real daemon has no scripted harness (contracts 9), and a harness turn resumed
 //! after `daemon_crash` is covered on the scripted driver (`aae-testkit/tests/recovery.rs`). The request part of the
-//! criterion, [`on_claude`], kills the daemon five times in the middle of a real claude turn, mid-tool.
+//! criterion, [`on_live`], kills the daemon five times in the middle of a real claude or codex turn, mid-tool.
 
-use super::exec_formula;
+use super::{Live, exec_formula};
 use crate::{
     Env,
     daemon::{Daemon, write},
@@ -128,6 +128,24 @@ async fn kill(d: &mut Daemon) -> Duration {
     }
 }
 
+/// `pid` is a descendant of `ancestor`.
+fn descends(mut pid: u32, ancestor: u32) -> bool {
+    while pid > 1 {
+        let stat = fs::read_to_string(format!("/proc/{pid}/stat")).unwrap_or_default();
+        // The parent is the second field after the command name, which may hold spaces and parentheses.
+        let after = stat.rsplit_once(')').map_or("", |(_, rest)| rest);
+        pid = after
+            .split_whitespace()
+            .nth(1)
+            .and_then(|p| p.parse().ok())
+            .unwrap_or(0);
+        if pid == ancestor {
+            return true;
+        }
+    }
+    false
+}
+
 /// The state and command line of each process.
 fn described(pids: &[u32]) -> Vec<String> {
     let read = |pid: u32, file: &str| fs::read_to_string(format!("/proc/{pid}/{file}")).unwrap_or_default();
@@ -144,22 +162,15 @@ fn described(pids: &[u32]) -> Vec<String> {
         .collect()
 }
 
-/// The request part on the cheapest real claude model with the host login: five kills, each in the middle of a
+/// The request part on the cheapest real model of `live` with the host login: five kills, each in the middle of a
 /// turn while its shell tool runs; every run resumes and passes by the finisher, and its follower fires once.
-pub(crate) async fn on_claude(env: Arc<Env>) -> String {
+pub(crate) async fn on_live(env: Arc<Env>, live: Live) -> String {
     let aae = env.aae.display().to_string();
     let mut d = Daemon::start_on_host(&env, |root| {
-        write(
-            root.join("config/aae/config.toml"),
-            "projects = [\"shop\"]\n[harness.claude]\n",
-        );
+        live.agent(root);
         write(
             root.join("config/aae/shop/aae.toml"),
             format!("[rigs.web]\npath = \"web\"\n{TRIGGER}"),
-        );
-        write(
-            root.join("config/aae/shop/agents/dev/agent.toml"),
-            "harness = \"claude\"\nmodel = \"haiku\"\npermission_mode = \"bypassPermissions\"\n",
         );
         write(
             root.join("config/aae/shop/formulas/work.toml"),
@@ -180,6 +191,7 @@ pub(crate) async fn on_claude(env: Arc<Env>) -> String {
         );
     })
     .await;
+    live.logged_in(&d);
     let started = d.path("config/aae/shop/web/started");
     let mut work = Vec::new();
     let mut slowest = Duration::ZERO;
@@ -200,8 +212,9 @@ pub(crate) async fn on_claude(env: Arc<Env>) -> String {
     }
     let attempts = settle(&d, &work).await;
     format!(
-        "claude, model haiku: {HARNESS_KILLS} kills mid-tool, {} runs, {attempts} attempts failed by the crashes; \
+        "{}: {HARNESS_KILLS} kills mid-tool, {} runs, {attempts} attempts failed by the crashes; \
          slowest restart to the first answer {:.2} s",
+        live.describe(),
         2 * work.len(),
         slowest.as_secs_f64()
     )
@@ -267,7 +280,13 @@ async fn settle(d: &Daemon, work: &[String]) -> usize {
         );
     }
     assert_eq!(parents, work.iter().cloned().collect(), "every passed run fired once");
-    let left = steps(d.dir.path(), d.pid());
-    assert!(left.is_empty(), "no process left at the end: {left:?}");
+    // An app-server the live daemon keeps for reuse until it idles out is its own, not an orphan.
+    let mut left = steps(d.dir.path(), d.pid());
+    left.retain(|&pid| !descends(pid, d.pid()));
+    assert!(
+        left.is_empty(),
+        "no process left at the end: {:?}",
+        described(&Vec::from_iter(left))
+    );
     journal.iter().filter(|(k, _)| k == "run.attempt_failed").count()
 }

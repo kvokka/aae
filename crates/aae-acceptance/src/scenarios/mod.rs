@@ -19,7 +19,10 @@ mod c17_mcp;
 mod c18_journal;
 mod c19_gates;
 
-use crate::{Launch, Scenario, daemon::write};
+use crate::{
+    Launch, Scenario,
+    daemon::{Daemon, write},
+};
 use std::{path::Path, process::Command};
 
 /// Kept apart from the marker text, so the marker check of CI does not take the template for a marker.
@@ -30,7 +33,13 @@ pub(crate) const ALL: &[Scenario] = &[
         criterion: "2",
         title: "a prompt step passes on the cheapest real claude model by the finisher",
         launch: Launch::Request,
-        run: |env| Box::pin(c02_prompt::run(env)),
+        run: |env| Box::pin(c02_prompt::run(env, Live::Claude)),
+    },
+    Scenario {
+        criterion: "2",
+        title: "a prompt step passes on the cheapest real codex model by the finisher",
+        launch: Launch::Request,
+        run: |env| Box::pin(c02_prompt::run(env, Live::Codex)),
     },
     Scenario {
         criterion: "3",
@@ -84,7 +93,13 @@ pub(crate) const ALL: &[Scenario] = &[
         criterion: "8",
         title: "5 x kill -9 of the daemon mid-tool on the cheapest real claude model: each run resumes and passes once",
         launch: Launch::Request,
-        run: |env| Box::pin(c08_crash::on_claude(env)),
+        run: |env| Box::pin(c08_crash::on_live(env, Live::Claude)),
+    },
+    Scenario {
+        criterion: "8",
+        title: "5 x kill -9 of the daemon mid-tool on the cheapest real codex model: each run resumes and passes once",
+        launch: Launch::Request,
+        run: |env| Box::pin(c08_crash::on_live(env, Live::Codex)),
     },
     Scenario {
         criterion: "10",
@@ -141,6 +156,75 @@ pub(crate) const ALL: &[Scenario] = &[
         run: |env| Box::pin(c19_gates::run(env)),
     },
 ];
+
+/// A harness on its cheapest real model with the host login: the request scenarios run on each.
+#[derive(Clone, Copy)]
+pub(crate) enum Live {
+    Claude,
+    Codex,
+}
+
+impl Live {
+    fn name(self) -> &'static str {
+        match self {
+            Live::Claude => "claude",
+            Live::Codex => "codex",
+        }
+    }
+
+    /// The model: haiku for claude; for codex `AAE_CODEX_MODEL`, else the cheapest one on the owner's host.
+    fn model(self) -> String {
+        match self {
+            Live::Claude => "haiku".to_owned(),
+            Live::Codex => std::env::var("AAE_CODEX_MODEL").unwrap_or_else(|_| "gpt-5.6-luna".to_owned()),
+        }
+    }
+
+    /// "<harness>, model <model>", for the measured line.
+    pub(crate) fn describe(self) -> String {
+        format!("{}, model {}", self.name(), self.model())
+    }
+
+    /// The orchestrator config with project `shop` and this harness, and agent `dev` of `shop` on it.
+    pub(crate) fn agent(self, root: &Path) {
+        let name = self.name();
+        write(
+            root.join("config/aae/config.toml"),
+            format!("projects = [\"shop\"]\n[harness.{name}]\n"),
+        );
+        // The host forbids user namespaces, so the codex sandbox cannot run here (docs/design/experiments.md).
+        let rest = match self {
+            Live::Claude => "permission_mode = \"bypassPermissions\"\n",
+            Live::Codex => {
+                "permission_mode = \"never\"\neffort = \"low\"\n[native.codex]\nsandbox_mode = \"danger-full-access\"\n"
+            }
+        };
+        write(
+            root.join("config/aae/shop/agents/dev/agent.toml"),
+            format!("harness = \"{name}\"\nmodel = \"{}\"\n{rest}", self.model()),
+        );
+    }
+
+    /// Fails at once, with the reason, when `aae doctor` finds no host login of the harness.
+    pub(crate) fn logged_in(self, d: &Daemon) {
+        let out = d.cli(&["--json", "doctor"]);
+        let found: serde_json::Value = serde_json::from_slice(&out.stdout).expect("doctor --json");
+        let check = format!("{} login", self.name());
+        let login = found
+            .as_array()
+            .into_iter()
+            .flatten()
+            .find(|f| f["check"] == check.as_str());
+        let login = login.unwrap_or_else(|| panic!("no `{check}` in doctor: {found}"));
+        assert!(
+            login["level"] == "ok",
+            "{} has no login: run `{} login` ({})",
+            self.name(),
+            self.name(),
+            login["detail"]
+        );
+    }
+}
 
 /// Writes an exec formula `name` of `command` (TOML array items) into project `shop` under `root`.
 pub(crate) fn exec_formula(root: &Path, name: &str, inputs: &str, command: &str) {

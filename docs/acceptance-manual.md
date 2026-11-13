@@ -7,13 +7,10 @@ and what to record. The platform of acceptance is the owner's host, Linux arm64.
 Record every check as a line in the table at the end, with the date and the versions (`aae --version`,
 `claude --version`, `codex --version`, `br --version`).
 
-## Criterion 2, the codex half (when codex has a login)
+## Criteria 2 and 8 on codex are scenarios, not manual checks
 
-The claude half is the request scenario `c02_prompt`. The codex half needs `codex login` for the user who runs the
-spec. Run the codex contract suite once against the real binary (`cargo nextest run -p aae-codex`), then a one-step
-prompt formula on the cheapest codex model through the daemon, as `c02_prompt` does for claude: an agent with
-`harness = "codex"` and that model, a prompt asking to run `aae finish pass --summary done` once. Pass: the run ends
-`passed` with one attempt (`aae run show <run>`).
+Run `cargo run -p aae-acceptance -- 2 8` with a codex login. The model is `AAE_CODEX_MODEL`, else `gpt-5.6-luna`.
+Without a login, each scenario fails within a second with the reason from `aae doctor`.
 
 ## Criterion 10, the claude half: a quota with a reset time
 

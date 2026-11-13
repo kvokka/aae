@@ -128,6 +128,8 @@ impl Daemon {
             if view["state"] == state {
                 return view;
             }
+            let ended = ["passed", "failed", "cancelled"].iter().any(|s| view["state"] == *s);
+            assert!(!ended, "{run} ended, not {state}: {view}");
             assert!(Instant::now() < deadline, "{run} stays {}, not {state}", view["state"]);
             tokio::time::sleep(Duration::from_millis(20)).await;
         }
