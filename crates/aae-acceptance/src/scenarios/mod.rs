@@ -9,6 +9,7 @@ mod c06_hop;
 mod c07_idle;
 mod c08_crash;
 mod c10_quota;
+mod c12_explain;
 mod c13_instances;
 mod c16_beads;
 mod c18_journal;
@@ -74,6 +75,12 @@ pub(crate) const ALL: &[Scenario] = &[
         title: "a codex quota with a reset time closes the account gate; both runs of the account pass after it",
         launch: Launch::Ci,
         run: |env| Box::pin(c10_quota::run(env)),
+    },
+    Scenario {
+        criterion: "12",
+        title: "explain config shows every layer and the host in one line; host inheritance shows in the session",
+        launch: Launch::Ci,
+        run: |env| Box::pin(c12_explain::run(env)),
     },
     Scenario {
         criterion: "13",

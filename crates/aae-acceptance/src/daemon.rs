@@ -64,6 +64,14 @@ impl Daemon {
         daemon
     }
 
+    /// `aae <args>` as a client of this daemon.
+    pub(crate) fn cli(&self, args: &[&str]) -> std::process::Output {
+        command(&self.env, self.dir.path(), &self.home)
+            .args(args)
+            .output()
+            .unwrap()
+    }
+
     pub(crate) fn path(&self, rel: &str) -> PathBuf {
         self.dir.path().join(rel)
     }
