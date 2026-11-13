@@ -164,10 +164,10 @@ impl Loader {
     /// Checks one layer of settings and makes its paths absolute; `plugins` are the names it may attach.
     pub(super) fn settings(&mut self, file: &Path, base: &Path, mut settings: Settings, plugins: &[&str]) -> Settings {
         for (name, mcp) in &settings.mcp {
-            if mcp.command.as_ref().is_some_and(Vec::is_empty) || mcp.command.is_some() == mcp.url.is_some() {
+            if !mcp.well_formed() {
                 self.fail(
                     file,
-                    format!("mcp `{name}` needs exactly one of a non-empty `command` or `url`"),
+                    format!("mcp `{name}` needs a `command`, a `url`, or both (a shared service)"),
                 );
             }
         }

@@ -186,6 +186,7 @@ pub fn open(path: &Path) -> rusqlite::Result<Connection> {
         (8, SCHEMA_V8),
         (9, SCHEMA_V9),
         (10, SCHEMA_V10),
+        (11, "ALTER TABLE attempts ADD COLUMN services TEXT;"),
     ]
     .into_iter()
     .filter(|(to, _)| *to > version)

@@ -50,8 +50,10 @@ fn findings(paths: &Paths) -> Vec<Value> {
                 if let Some((driver, path, source)) = driver(name, harness, paths) {
                     found.push(binary_check(name, &path, source, tested(&driver)));
                     found.push(login(name));
+                    found.push(host_mcp(name));
                 }
             }
+            found.extend(per_session(&config));
             if config.projects.iter().any(|p| p.root.join(".beads").is_dir()) {
                 let (path, source) = binary("br", None);
                 found.push(binary_check("br", &path, source, aae_br::TESTED));
@@ -72,6 +74,105 @@ fn findings(paths: &Paths) -> Vec<Value> {
     }
     found.push(state(&paths.state.join("state.db")));
     found
+}
+
+/// The stdio MCP servers of the host's own settings (spec §6.4): with host inheritance on, each starts in every
+/// session, and the shared MCP of `aae` does not cover them.
+fn host_mcp(harness: &str) -> Value {
+    let read = |path: PathBuf| std::fs::read_to_string(path).unwrap_or_default();
+    let mut names: Vec<String> = match harness {
+        "claude" => {
+            let user: Value = serde_json::from_str(&read(claude_json())).unwrap_or_default();
+            let projects = user["projects"]
+                .as_object()
+                .into_iter()
+                .flatten()
+                .map(|(_, p)| &p["mcpServers"]);
+            std::iter::once(&user["mcpServers"])
+                .chain(projects)
+                .filter_map(Value::as_object)
+                .flatten()
+                .filter(|(_, s)| !s["command"].is_null())
+                .map(|(n, _)| n.clone())
+                .collect()
+        }
+        _ => {
+            let codex: toml::Table =
+                toml::from_str(&read(home("CODEX_HOME", ".codex").join("config.toml"))).unwrap_or_default();
+            let servers = codex
+                .get("mcp_servers")
+                .and_then(toml::Value::as_table)
+                .into_iter()
+                .flatten();
+            servers
+                .filter(|(_, s)| s.get("command").is_some())
+                .map(|(n, _)| n.clone())
+                .collect()
+        }
+    };
+    names.sort();
+    names.dedup();
+    match names.is_empty() {
+        true => check(
+            format!("{harness} host mcp"),
+            "ok",
+            "no stdio MCP server in the host settings",
+        ),
+        false => check(
+            format!("{harness} host mcp"),
+            "warning",
+            format!(
+                "stdio MCP servers of the host settings start in every session that inherits the host: {}; \
+                 declare them in aae (a `url` or a service) to share them, or set inherit_host = false",
+                names.join(", ")
+            ),
+        ),
+    }
+}
+
+/// The stdio MCP servers of the config that are not of scope `session`: with no stdio→HTTP bridge in this release
+/// they start per session all the same (spec §11.4).
+fn per_session(config: &aae_core::config::Config) -> Option<Value> {
+    let mut names = std::collections::BTreeSet::new();
+    for p in &config.projects {
+        for pack in &p.packs {
+            for agent in pack.agents.keys() {
+                let name = aae_core::config::Name {
+                    pack: pack.name.clone(),
+                    name: agent.clone(),
+                };
+                let Ok(effective) = config.effective(&p.name, None, &name) else {
+                    continue;
+                };
+                let stdio = effective.mcp.into_iter().filter(|(_, m)| {
+                    m.value.url.is_none() && m.value.scope != Some(aae_core::config::McpScope::Session)
+                });
+                names.extend(stdio.map(|(n, _)| n));
+            }
+        }
+    }
+    let names: Vec<String> = names.into_iter().collect();
+    (!names.is_empty()).then(|| {
+        let why = "stdio MCP servers start per session (no stdio→HTTP bridge in this release); give them \
+                   scope = \"session\", or run them as a service with a `url`";
+        check("mcp per session", "warning", format!("{}: {why}", names.join(", ")))
+    })
+}
+
+/// The user file of claude: in `$CLAUDE_CONFIG_DIR` when set, else `~/.claude.json`.
+fn claude_json() -> PathBuf {
+    env::var_os("CLAUDE_CONFIG_DIR").map_or_else(
+        || PathBuf::from(env::var_os("HOME").unwrap_or_default()).join(".claude.json"),
+        |d| PathBuf::from(d).join(".claude.json"),
+    )
+}
+
+/// `$<var>`, else `~/<dir>`.
+fn home(var: &str, dir: &str) -> PathBuf {
+    env::var_os(var).map_or_else(
+        || PathBuf::from(env::var_os("HOME").unwrap_or_default()).join(dir),
+        PathBuf::from,
+    )
 }
 
 /// The binary exists and its version is one the adapter was tested on.
@@ -96,12 +197,6 @@ fn on_disk(path: &Path) -> bool {
 
 /// The host login a harness process starts with, unless its agent's env carries a key of its own.
 fn login(harness: &str) -> Value {
-    let home = |var: &str, dir: &str| {
-        env::var_os(var).map_or_else(
-            || PathBuf::from(env::var_os("HOME").unwrap_or_default()).join(dir),
-            PathBuf::from,
-        )
-    };
     let (file, key) = match harness {
         "claude" => (
             home("CLAUDE_CONFIG_DIR", ".claude").join(".credentials.json"),

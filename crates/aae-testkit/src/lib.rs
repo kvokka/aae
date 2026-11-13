@@ -1,7 +1,7 @@
 //! The scripted driver (spec §14): a fake harness for core tests that plays prepared scenarios — delays, a turn
 //! that ends without an outcome, provider errors, hangs, a process dying mid-turn, permission requests, events
-//! outside a turn, background work; and fake providers for the real harnesses ([`anthropic`], [`openai`]). Nothing of it runs in
-//! the product.
+//! outside a turn, background work; fake providers for the real harnesses ([`anthropic`], [`openai`]) and a test
+//! MCP service ([`mcp`]). Nothing of it runs in the product.
 
 use aae_core::{
     BoxFuture,
@@ -21,6 +21,7 @@ use std::{
 use tokio::{sync::broadcast, task::JoinHandle};
 
 pub mod anthropic;
+pub mod mcp;
 pub mod openai;
 mod play;
 mod step;
@@ -47,6 +48,8 @@ struct State {
     started: u64,
     /// The attempt token the core handed over and the session environment, by `(run, attempt)`.
     tokens: HashMap<(String, u32), (String, BTreeMap<String, String>)>,
+    /// The MCP servers of each attempt's effective config, as the core gave them.
+    mcp: HashMap<(String, u32), Value>,
     texts: Vec<String>,
     /// Set by [`ScriptedDriver::stall_sessions`].
     stalled: bool,
@@ -145,6 +148,15 @@ impl ScriptedDriver {
         self.lock().tokens.get(&(run.to_owned(), attempt)).map(|t| t.0.clone())
     }
 
+    /// The MCP servers the session of attempt `attempt` of `run` gets, by name.
+    pub fn mcp(&self, run: &str, attempt: u32) -> Value {
+        self.lock()
+            .mcp
+            .get(&(run.to_owned(), attempt))
+            .cloned()
+            .unwrap_or_default()
+    }
+
     /// The environment the session of attempt `attempt` of `run` gets from the effective config, and every prompt
     /// text sent so far, in order.
     pub fn sent(&self, run: &str, attempt: u32) -> (Option<BTreeMap<String, String>>, Vec<String>) {
@@ -187,7 +199,19 @@ impl Driver for ScriptedDriver {
             ..
         }) = plan;
         let env = config.env.iter().map(|(k, v)| (k.clone(), v.value.clone())).collect();
-        self.lock().tokens.insert((run.clone(), *attempt), (token.clone(), env));
+        let mut state = self.lock();
+        state.tokens.insert((run.clone(), *attempt), (token.clone(), env));
+        state.mcp.insert(
+            (run.clone(), *attempt),
+            json!(
+                config
+                    .mcp
+                    .iter()
+                    .map(|(n, m)| (n, &m.value))
+                    .collect::<BTreeMap<_, _>>()
+            ),
+        );
+        drop(state);
         let process = ProcessPart(json!({ "native": config.native.as_ref().map(|n| &n.value) }));
         let model = config.model.as_ref().map(|m| &m.value);
         let session = SessionPart(json!({ "model": model, "workdir": workdir }));

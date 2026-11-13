@@ -36,6 +36,7 @@ pub(super) struct RunExecutor {
     pub hooks: Arc<dyn super::HookRunner>,
     pub running: super::exec_step::Running,
     pub starts: Starts,
+    pub services: super::services::Running,
 }
 
 impl Executor for RunExecutor {
@@ -50,6 +51,14 @@ impl Executor for RunExecutor {
                     let msg = super::exec_step::run(&self.running, payload).await;
                     // A stopped writer drops the message; recovery (WP-20) finds the attempt on restart.
                     let _ = core.send(None, msg).await;
+                }
+                Some("start_service") => super::services::start(&self.services, core, payload),
+                Some("stop_service") => {
+                    let id = payload["service"].as_str().unwrap_or_default().to_owned();
+                    super::services::stop(&self.services, &id).await;
+                    let reason = payload["reason"].as_str().unwrap_or("idle").to_owned();
+                    // A stopped writer drops the message; recovery (WP-20) finds the record on restart.
+                    let _ = core.send(None, Msg::ServiceStopped { id, reason }).await;
                 }
                 Some("stop_exec") => super::exec_step::stop(&self.running, payload["run"].as_str().unwrap_or_default()),
                 Some("sweep") => {
@@ -158,6 +167,9 @@ impl RunExecutor {
                 return Err(Failure::new(FailureKind::Unknown, Source::Core));
             }
         }
+        // The session connects to its services as it starts; one that is not up by then is a tool failure.
+        let ports: Vec<u16> = serde_json::from_value(p["services"].clone()).unwrap_or_default();
+        super::services::wait_up(&ports).await;
         let handle = match serde_json::from_value::<InstanceHandle>(p["handle"].clone()) {
             Ok(handle) => handle,
             Err(_) => self.start(core, driver, p).await?,

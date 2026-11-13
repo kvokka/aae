@@ -26,6 +26,12 @@ pub enum Reply {
     Bash(String),
     /// The same with `run_in_background`: the turn may end while the command still runs.
     Background(String),
+    /// A `tool_use` without input of the request's tool whose name ends with this (an MCP tool is
+    /// `mcp__<server>__<tool>`); a text answer if the request has no such tool.
+    Mcp(String),
+    /// One turn: the reply at the number of tool results in the request, the last one repeating — the same plan
+    /// serves any number of sessions at once.
+    Turn(Vec<Reply>),
     /// 429 `rate_limit_error` with `retry-after: 1`.
     RateLimited,
     /// The account quota: 429 with `retry-after: 3600` and the `anthropic-ratelimit-unified-*` headers of a
@@ -138,6 +144,22 @@ async fn answer(n: usize, reply: Reply, body: &Value) -> Response {
             let block = json!({ "type": "tool_use", "id": format!("toolu_fake_{n}"), "name": "Bash", "input": input });
             let delta = json!({ "type": "input_json_delta", "partial_json": input.to_string() });
             message(n, model, stream, block, delta, "tool_use")
+        }
+        Reply::Mcp(suffix) => {
+            let tools = body["tools"].as_array().into_iter().flatten();
+            let Some(name) = tools.filter_map(|t| t["name"].as_str()).find(|t| t.ends_with(&suffix)) else {
+                return Box::pin(answer(n, Reply::Text(format!("No tool *{suffix}.")), body)).await;
+            };
+            let block = json!({ "type": "tool_use", "id": format!("toolu_fake_{n}"), "name": name, "input": {} });
+            let delta = json!({ "type": "input_json_delta", "partial_json": "{}" });
+            message(n, model, stream, block, delta, "tool_use")
+        }
+        Reply::Turn(replies) => {
+            let messages = body["messages"].as_array().into_iter().flatten();
+            let blocks = messages.filter_map(|m| m["content"].as_array()).flatten();
+            let done = blocks.filter(|b| b["type"] == "tool_result").count();
+            let reply = replies[done.min(replies.len() - 1)].clone();
+            Box::pin(answer(n, reply, body)).await
         }
         Reply::RateLimited => error(
             StatusCode::TOO_MANY_REQUESTS,

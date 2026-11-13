@@ -199,6 +199,12 @@ impl RunHandler {
     }
 
     pub(super) fn stop_instance(tx: &mut Tx<'_>, id: &str, reason: &str) -> Result<(), Error> {
+        let kind: String = tx
+            .sql()
+            .query_row("SELECT kind FROM instances WHERE id = ?1", [id], |r| r.get(0))?;
+        if kind == "service" {
+            return Self::stop_service(tx, id, reason);
+        }
         let (harness, handle): (String, Option<String>) =
             tx.sql()
                 .query_row("SELECT harness, handle FROM instances WHERE id = ?1", [id], |r| {

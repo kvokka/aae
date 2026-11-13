@@ -87,7 +87,11 @@ fn a_config_the_adapter_cannot_deliver_is_a_config_error() {
         scope: Some(aae_core::config::McpScope::Project),
     };
     config.mcp.insert("shared".into(), agent(shared));
-    assert_eq!(driver.split(&config, &plan).unwrap_err().kind, FailureKind::ConfigError);
+    let split = driver.split(&config, &plan).unwrap();
+    assert_eq!(
+        split.process.0["mcp"]["mcpServers"]["shared"]["type"], "stdio",
+        "no bridge: per session"
+    );
 }
 
 #[test]

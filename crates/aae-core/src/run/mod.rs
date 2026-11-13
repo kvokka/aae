@@ -19,6 +19,7 @@ mod recover;
 mod registry;
 mod reload;
 mod row;
+mod services;
 mod triggers;
 
 use crate::{
@@ -71,6 +72,7 @@ pub fn start(
         sink,
         hooks,
         running: exec_step::Running::default(),
+        services: services::Running::default(),
         starts: starts.clone(),
     };
     let (handle, task) = writer::start(
@@ -133,6 +135,9 @@ impl Handler for RunHandler {
             Msg::InstanceReady { id, harness, handle } => Self::instance_ready(tx, &id, &harness, &handle),
             Msg::InstanceFailed { id, failure } => Self::instance_failed(tx, &id, &failure),
             Msg::InstanceStopped { id, reason } => Self::instance_stopped(tx, &id, &reason),
+            Msg::ServiceReady { id } => Self::service_ready(tx, &id),
+            Msg::ServiceFailed { id, stderr } => Self::service_failed(tx, &id, &stderr),
+            Msg::ServiceStopped { id, reason } => Self::service_stopped(tx, &id, &reason),
             Msg::Session { run, attempt, session } => self.session(tx, &run, attempt, &session),
             Msg::PromptReplayed {
                 run,

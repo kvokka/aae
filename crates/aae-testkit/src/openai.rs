@@ -28,6 +28,12 @@ pub enum Reply {
     /// A turn of one command: `Command` while the request carries no command output, then `Text` "Done." —
     /// the same plan serves any number of threads at once.
     Task(String),
+    /// A call without arguments of the request's function tool whose name ends with this (an MCP tool); a text
+    /// answer if the request has no such tool.
+    Mcp(String),
+    /// One turn: the reply at the number of tool outputs in the request's input, the last one repeating — the same
+    /// plan serves any number of threads at once.
+    Turn(Vec<Reply>),
     /// 429 `rate_limit_exceeded` with `retry-after: 1`.
     RateLimited,
     /// The plan's usage limit: 429 `usage_limit_reached` with `resets_at` that many seconds ahead and the `x-codex-*`
@@ -146,6 +152,28 @@ async fn answer(n: usize, reply: Reply, body: &Value) -> Response {
             let item = json!({ "type": "function_call", "id": format!("fc_fake_{n}"), "status": "completed",
                 "call_id": format!("call_fake_{n}"), "name": "exec_command", "arguments": arguments });
             stream(n, model, item, None)
+        }
+        Reply::Mcp(suffix) => {
+            // codex puts the tools of MCP server `s` in a namespace `mcp__s`: a call names both.
+            let tools = body["tools"].as_array().into_iter().flatten();
+            let named = |t: &Value| t["name"].as_str().is_some_and(|name| name.ends_with(&suffix));
+            let mut found = tools.flat_map(|t| match t["tools"].as_array() {
+                Some(inner) => inner.iter().map(|i| (i, t["name"].clone())).collect(),
+                None => vec![(t, Value::Null)],
+            });
+            let Some((tool, namespace)) = found.find(|(t, _)| named(t)) else {
+                return Box::pin(answer(n, Reply::Text(format!("No tool *{suffix}.")), body)).await;
+            };
+            let item = json!({ "type": "function_call", "id": format!("fc_fake_{n}"), "status": "completed",
+                "call_id": format!("call_fake_{n}"), "name": tool["name"], "namespace": namespace,
+                "arguments": "{}" });
+            stream(n, model, item, None)
+        }
+        Reply::Turn(replies) => {
+            let input = body["input"].as_array().into_iter().flatten();
+            let done = input.filter(|i| i["type"] == "function_call_output").count();
+            let reply = replies[done.min(replies.len() - 1)].clone();
+            Box::pin(answer(n, reply, body)).await
         }
         Reply::RateLimited => error(
             StatusCode::TOO_MANY_REQUESTS,

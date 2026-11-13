@@ -264,9 +264,9 @@ fn files_reject_unknown_keys_and_undeclared_names() {
     fails(
         &[(
             agent,
-            "harness = \"claude\"\n[mcp.web]\ncommand = [\"srv\"]\nurl = \"http://x\"\n",
+            "harness = \"claude\"\n[mcp.web]\ncommand = [\"srv\"]\nurl = \"http://x\"\nscope = \"session\"\n",
         )],
-        "mcp `web` needs exactly one",
+        "mcp `web` needs a `command`, a `url`, or both",
     );
     fails(
         &[(agent, "harness = \"claude\"\n[hooks.lint]\nevent = \"Stop\"\n")],

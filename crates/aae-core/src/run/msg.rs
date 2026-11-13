@@ -58,6 +58,20 @@ pub enum Msg {
         id: String,
         reason: String,
     },
+    /// The service `id` accepts connections.
+    ServiceReady {
+        id: String,
+    },
+    /// The process of the service `id` ended, or never accepted connections; the end of its stderr.
+    ServiceFailed {
+        id: String,
+        stderr: String,
+    },
+    /// The stop of the service `id` is done.
+    ServiceStopped {
+        id: String,
+        reason: String,
+    },
     /// The instance of an attempt runs.
     Instance {
         run: String,

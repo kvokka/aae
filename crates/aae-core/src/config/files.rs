@@ -36,7 +36,7 @@ pub enum McpScope {
     Session,
 }
 
-/// An MCP server: a command (stdio) or a URL (HTTP), exactly one of them.
+/// An MCP server: a command (stdio), a URL (HTTP), or both (a service the daemon runs, spec §11.4).
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct Mcp {
@@ -47,6 +47,17 @@ pub struct Mcp {
     #[serde(default)]
     pub headers: BTreeMap<String, String>,
     pub scope: Option<McpScope>,
+}
+
+impl Mcp {
+    /// A stdio `command`, a `url`, or both: a service the daemon runs and shares (spec §11.4), never per session.
+    pub(super) fn well_formed(&self) -> bool {
+        match (&self.command, &self.url) {
+            (Some(command), url) if !command.is_empty() => url.is_none() || self.scope != Some(McpScope::Session),
+            (None, Some(_)) => true,
+            _ => false,
+        }
+    }
 }
 
 /// A harness hook in the Claude dialect (spec §11.2); `enabled = false` alone switches off a lower layer's hook.

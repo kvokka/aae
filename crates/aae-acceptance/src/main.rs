@@ -3,7 +3,8 @@
 //! which CI runs on every commit. The result is a report with the date, the version of `aae` and the versions of
 //! the harnesses.
 //!
-//! Usage: `aae-acceptance [--ci] [--aae <binary>] [--report <file>] [<criterion>...]`.
+//! Usage: `aae-acceptance [--ci] [--aae <binary>] [--report <file>] [<criterion>...]`; `aae-acceptance --mcp-probe
+//! <log>` is the test MCP service of criterion 14, as aae starts a service.
 
 mod daemon;
 mod scenarios;
@@ -12,7 +13,7 @@ use std::{
     fmt::Write as _,
     fs,
     future::Future,
-    path::PathBuf,
+    path::{Path, PathBuf},
     pin::Pin,
     process::{Command, ExitCode},
     sync::Arc,
@@ -54,6 +55,7 @@ struct Args {
     aae: PathBuf,
     report: PathBuf,
     only: Vec<String>,
+    probe: Option<PathBuf>,
 }
 
 fn args() -> Result<Args, String> {
@@ -64,6 +66,7 @@ fn args() -> Result<Args, String> {
         aae: dir.join("aae"),
         report: dir.parent().unwrap_or(dir).join("acceptance/report.md"),
         only: Vec::new(),
+        probe: None,
     };
     let mut it = std::env::args().skip(1);
     while let Some(arg) = it.next() {
@@ -71,6 +74,7 @@ fn args() -> Result<Args, String> {
             "--ci" => args.ci = true,
             "--aae" => args.aae = it.next().ok_or("--aae needs a path")?.into(),
             "--report" => args.report = it.next().ok_or("--report needs a path")?.into(),
+            "--mcp-probe" => args.probe = Some(it.next().ok_or("--mcp-probe needs a path")?.into()),
             flag if flag.starts_with('-') => return Err(format!("unknown flag {flag}")),
             criterion => args.only.push(criterion.to_owned()),
         }
@@ -94,6 +98,17 @@ fn shell(command: &str) -> String {
         .unwrap_or_default()
 }
 
+/// The test MCP service on `AAE_SERVICE_PORT` of 127.0.0.1 with `AAE_SERVICE_TOKEN`, logging to `log`.
+async fn probe(log: &Path) -> ExitCode {
+    match aae_testkit::mcp::serve_service(log).await {
+        Ok(()) => ExitCode::SUCCESS,
+        Err(e) => {
+            eprintln!("aae-acceptance --mcp-probe: {e}");
+            ExitCode::FAILURE
+        }
+    }
+}
+
 fn panic_text(error: tokio::task::JoinError) -> String {
     match error.try_into_panic() {
         Ok(payload) => payload
@@ -114,6 +129,9 @@ async fn main() -> ExitCode {
             return ExitCode::from(2);
         }
     };
+    if let Some(log) = &args.probe {
+        return probe(log).await;
+    }
     let aae = args.aae.to_string_lossy().into_owned();
     let env = Arc::new(Env {
         version: version_of(&aae),

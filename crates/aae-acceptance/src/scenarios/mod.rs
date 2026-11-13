@@ -12,6 +12,7 @@ mod c08_crash;
 mod c10_quota;
 mod c12_explain;
 mod c13_instances;
+mod c14_shared_mcp;
 mod c15_plugin;
 mod c16_beads;
 mod c18_journal;
@@ -95,6 +96,12 @@ pub(crate) const ALL: &[Scenario] = &[
         title: "codex agents of one process part share an app-server, of two get two; lazy start, idle stop",
         launch: Launch::Ci,
         run: |env| Box::pin(c13_instances::run(env)),
+    },
+    Scenario {
+        criterion: "14",
+        title: "one HTTP MCP service serves concurrent claude and codex sessions with identity headers in one process",
+        launch: Launch::Ci,
+        run: |env| Box::pin(c14_shared_mcp::run(env)),
     },
     Scenario {
         criterion: "15",

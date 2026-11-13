@@ -4,7 +4,7 @@
 //! thread's.
 
 use aae_core::{
-    config::{EffectiveConfig, McpScope},
+    config::EffectiveConfig,
     driver::{Failure, FailureKind, Fingerprint, ProcessPart, SessionPlan, Source},
 };
 use serde_json::{Map, Value, json};
@@ -115,13 +115,7 @@ fn mcp(config: &EffectiveConfig) -> Result<Map<String, Value>, Failure> {
     let mut servers = Map::new();
     for (name, server) in &config.mcp {
         let server = &server.value;
-        // shortcut: shared servers (scope orchestrator or project) come with the shared MCP of WP-34; until then
-        // they are refused rather than started per session.
-        if matches!(server.scope, Some(McpScope::Orchestrator | McpScope::Project)) {
-            return Err(config_error(format!(
-                "MCP server `{name}`: shared scopes are not delivered yet"
-            )));
-        }
+        // A service is a URL by now (the core binds it); a stdio server runs per session whatever its scope.
         let entry = match (&server.command, &server.url) {
             (Some(command), None) if !command.is_empty() => {
                 json!({ "command": command[0], "args": command[1..], "env": server.env })

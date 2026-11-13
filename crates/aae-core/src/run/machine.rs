@@ -210,6 +210,7 @@ impl RunHandler {
                 token,
             },
         };
+        let (config, services) = Self::bind_services(tx, &row, config)?;
         let split = driver.split(&config, &plan);
         // The account comes from the config before the start (spec §5.7): a closed account gate parks with no launch.
         if let Ok(split) = &split {
@@ -251,6 +252,7 @@ impl RunHandler {
             "UPDATE attempts SET instance = ?3 WHERE run = ?1 AND n = ?2",
             params![row.id, row.attempt, instance],
         )?;
+        Self::use_services(tx, &row.id, row.attempt, &services)?;
         let after = Self::stopping_for(tx, &row.id, continued.as_deref())?;
         let prompt = match resume {
             Some(_) if row.attempt > 1 => RECONCILE.to_owned(),
@@ -265,7 +267,7 @@ impl RunHandler {
         let payload = json!({
             "op": "launch", "run": row.id, "attempt": row.attempt, "harness": config.harness,
             "instance": instance, "handle": handle, "after": after, "process": split.process.0, "session": split.session.0, "resume": resume.map(|s| s.0),
-            "prompt": prompt, "key": key.0.to_string(), "retry": retry.map(|(key, text)| json!({ "key": key, "text": text })),
+            "prompt": prompt, "key": key.0.to_string(), "services": services.iter().map(|(_, port)| port).collect::<Vec<_>>(), "retry": retry.map(|(key, text)| json!({ "key": key, "text": text })),
         });
         tx.effect(&row.id, &format!("launch:{}", row.attempt), &payload)?;
         tx.set_deadline(&row.deadline("state"), tx.now_ms() + START_TIMEOUT_MS)
@@ -343,6 +345,7 @@ impl RunHandler {
             let payload = json!({ "op": "stop", "harness": harness, "handle": handle, "session": session });
             tx.effect(&row.id, &format!("stop:{}", row.attempt), &payload)?;
         }
+        Self::release_services(tx, &row.id, row.attempt)?;
         match instance {
             Some(id) => Self::release(tx, &id),
             None => Ok(()),

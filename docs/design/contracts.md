@@ -620,8 +620,15 @@ of their own. The adapter reports the account id (4.5, `Driver::account`).
   orphans that exited, never a child it spawned itself (those are reaped by their own `wait`).
 - Health: every 30 s the daemon asks the driver for the health of each instance it started; `Dead` counts as an
   `exited` event of the instance (above).
-- Services (§11.4) use the same record: scope key `orchestrator`, `project:<p>` or `session:<id>`, a consumer
-  count instead of sessions, a health command, restart with the effect backoff.
+- Services (§11.4, [config](config.md#mcp-servers-and-services-spec-114)) use the same record with kind
+  `service`: the MCP name, the key `<scope>#<sha256 of the definition>` (scope `orchestrator` or `project:<p>`), the
+  port and the token in the process column, the consumer count in `sessions` (an attempt's services are in
+  `attempts.services`). The launch transaction acquires them (a new record emits `service.starting` and the
+  `start_service` effect) and rewrites the session's config before the split. Health is the port accepting
+  connections: `service.ready`; a process that ends or is not up within 30 s gives `service.failed`, then a restart
+  on the same port after the effect backoff of its restarts while it has consumers, else the record goes. Idle,
+  operator and recovery stops go through `stop_service`, which ends the process group and sweeps the
+  marker; a reload leaves services alone. pid and pgid of the view are null: the process is tracked by its task and marker, not by pid.
 
 ## 9. Fakes in the real daemon
 

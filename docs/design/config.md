@@ -30,11 +30,29 @@ contribution of a plugin; the top level of `agent.toml`; and the overrides `[ove
 | `model`, `effort`, `system_prompt`, `permission_mode` | string; `permission_mode` is the harness's own: claude's `--permission-mode`, codex's approval policy (`untrusted`, `on-request`, `never`) | scalar |
 | `inherit_host` | boolean | scalar |
 | `env` | table of strings | by key |
-| `mcp.<name>` | `{command = [..], env}` or `{url, headers}`; optional `scope = "orchestrator" \| "project" \| "session"` | by key, entry replaced whole |
+| `mcp.<name>` | `{command = [..], env}` (stdio), `{url, headers}` (HTTP), or both: a service (below); optional `scope = "orchestrator" \| "project" \| "session"` | by key, entry replaced whole |
 | `hooks.<name>` | `{event, matcher, command, timeout}` (harness hooks, Claude dialect, §11.2) or `{enabled = false}` | named list |
 | `skills.<name>` | `{path}` (must exist) or `{enabled = false}` | named list |
 | `plugins` | array of `{name, enabled = true}`, in attachment order; parameters belong to the `[[plugin]]` declaration | named list |
 | `native.<harness>` | any table, passed to the adapter as is; `native.claude` is a table of claude settings keys, delivered with `--settings` together with the hooks; `native.codex` is a table of codex `config.toml` keys, delivered to the app-server as `-c key=value` flags (so it is part of the process fingerprint) | by key |
+
+### MCP servers and services (spec §11.4)
+
+- `url` alone: an HTTP server someone else runs. Every session gets it with its own `headers` and the identity
+  headers `X-Aae-Project`, `X-Aae-Rig`, `X-Aae-Agent` and `X-Aae-Run`.
+- `command` alone: a stdio server, started by the harness in each session. There is no stdio→HTTP bridge in this
+  release, so a stdio server is per session whatever its `scope`; `aae doctor` warns about those not of scope
+  `session`.
+- `command` and `url`: a **service**. The daemon runs `command` once per scope (`orchestrator`, the default, or
+  `project`; `session` is an error), lazily, when the first session that names it starts, and stops it 5 minutes
+  after its last session ended. The process gets a clean environment with `env`, `AAE_SERVICE_PORT` (a free port
+  on 127.0.0.1 picked by the daemon) and `AAE_SERVICE_TOKEN`; it must listen on that port and refuse requests
+  without `Authorization: Bearer <token>`. `${AAE_SERVICE_PORT}` in `url` is replaced with the port, and sessions
+  get the URL with the token and the identity headers. The service is up once its port accepts connections; a
+  session start waits for that up to 30 s, and a server that is not up is a tool failure, not a failed run. A
+  service that dies is started again on the same port (with the effect backoff) while sessions use it, so they
+  reconnect; with none, it is dropped. A changed definition is a new service; the old one idles out. Events:
+  `service.starting`, `service.ready`, `service.failed`, `service.stopped`; `aae instances` lists services too.
 
 ## Effective config and "explain config"
 

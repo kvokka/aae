@@ -153,3 +153,38 @@ fn service_files_run_this_binary_with_the_config() {
     );
     assert!(!dir.path().join("run/aae/aae.sock").exists(), "no daemon starts");
 }
+
+#[test]
+fn stdio_mcp_servers_of_the_host_and_of_the_config_are_warned_about() {
+    let dir = tree(
+        "[settings.mcp.lint]\ncommand = [\"lint\"]\n[settings.mcp.solo]\ncommand = [\"solo\"]\nscope = \"session\"\n",
+    );
+    let agent = dir.path().join("config/aae/shop/agents/dev/agent.toml");
+    fs::create_dir_all(agent.parent().unwrap()).unwrap();
+    fs::write(agent, "harness = \"claude\"\n").unwrap();
+    let (passed, found) = doctor(dir.path());
+    assert!(passed, "{found:?}");
+    assert_eq!(level(&found, "claude host mcp").0, "ok");
+    assert_eq!(level(&found, "codex host mcp").0, "ok");
+    let (per_session, why) = level(&found, "mcp per session");
+    assert!(
+        per_session == "warning" && why.starts_with("lint:"),
+        "scope session is said: {found:?}"
+    );
+
+    let host = r#"{"mcpServers": {"deja": {"command": "deja"}, "web": {"type": "http", "url": "http://x"}},
+        "projects": {"/p": {"mcpServers": {"local": {"type": "stdio", "command": "l"}}}}}"#;
+    fs::write(dir.path().join(".claude.json"), host).unwrap();
+    fs::create_dir_all(dir.path().join(".codex")).unwrap();
+    fs::write(
+        dir.path().join(".codex/config.toml"),
+        "[mcp_servers.notes]\ncommand = \"n\"\n",
+    )
+    .unwrap();
+    let (passed, found) = doctor(dir.path());
+    assert!(passed, "warnings do not fail: {found:?}");
+    let (claude, why) = level(&found, "claude host mcp");
+    assert!(claude == "warning" && why.contains("deja, local;"), "{found:?}");
+    let (codex, why) = level(&found, "codex host mcp");
+    assert!(codex == "warning" && why.contains(": notes;"), "{found:?}");
+}
