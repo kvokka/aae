@@ -376,3 +376,16 @@ async fn tracker_writes_become_bead_events_and_a_write_by_a_run_carries_its_chai
     );
     assert_eq!(claimed["data"]["changed"], json!(["status", "assignee"]));
 }
+
+#[tokio::test(start_paused = true)]
+async fn a_write_whose_signal_is_lost_is_read_by_the_periodic_resync() {
+    let w = world(FIX);
+    w.changed().await;
+    let lost = w.tracker.add(&[], None);
+    tokio::time::sleep(Duration::from_secs(4 * 60)).await;
+    assert!(w.all("bead.created").is_empty(), "no signal, no read yet");
+    tokio::time::sleep(Duration::from_secs(61)).await;
+    let created = w.all("bead.created");
+    assert_eq!(created.len(), 1, "{created:?}");
+    assert_eq!(created[0]["bead"]["id"], json!(lost));
+}

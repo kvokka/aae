@@ -160,6 +160,7 @@ impl Handler for RunHandler {
             (gate, "gate") => self.gate_timer(tx, gate),
             (instance, "idle") => Self::instance_idle(tx, instance),
             (_, "trigger") => self.scheduled(tx, id),
+            (_, "resync") => self.resync(tx),
             (run, what) => self.on_deadline(tx, run, what),
         }
     }
@@ -172,7 +173,20 @@ impl Handler for RunHandler {
     fn started(&mut self, tx: &mut Tx<'_>) -> Result<(), Error> {
         self.recover(tx)?;
         self.sync_trackers(tx, None, "start")?;
+        tx.set_deadline(RESYNC, tx.now_ms() + RESYNC_MS)?;
         self.arm_schedules(tx)
+    }
+}
+
+/// The deadline of the periodic resync: the trackers are read again this often whatever their watchers say, so a
+/// lost signal costs at most this much (spec §5.1).
+const RESYNC: &str = "daemon:resync";
+const RESYNC_MS: i64 = 5 * 60 * 1000;
+
+impl RunHandler {
+    fn resync(&mut self, tx: &mut Tx<'_>) -> Result<(), Error> {
+        self.sync_trackers(tx, None, "resync")?;
+        tx.set_deadline(RESYNC, tx.now_ms() + RESYNC_MS)
     }
 }
 
