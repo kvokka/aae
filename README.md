@@ -39,6 +39,11 @@ A project with a `<project>/.beads` directory uses [br](https://github.com/Dickl
 tracker. br is a separate binary you install yourself (this repository pins 0.7.6 in `mise.toml`); aae runs it as a
 process and never links, vendors or ships it.
 
+At start the daemon writes `.bv/workspace.yaml` next to the orchestrator config (by default
+`~/.config/aae/.bv/workspace.yaml`): one repository per project with a tracker, with br's id prefix. Run
+[bv](https://github.com/Dicklesworthstone/beads_viewer) there, or with `--workspace <that file>`, to see the beads of
+all projects at once (checked with bv 0.25.0).
+
 **br is not plain MIT.** Its license is MIT with a rider that grants no rights to OpenAI, Anthropic, their affiliates
 or anyone acting on their behalf. Check whether that rider applies to you before you install br. Whether it applies to
 Claude or Codex agents running `br` inside an aae session has not been assessed.

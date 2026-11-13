@@ -125,6 +125,9 @@ pub(crate) async fn run(paths: Paths) -> Result<bool, String> {
     {
         eprintln!("aae daemon: warning: {why}");
     }
+    if let Err(e) = bv_workspace(&paths.config, &br, &beads) {
+        eprintln!("aae daemon: warning: the bv workspace file: {e}");
+    }
     let config = Arc::new(config);
     let (core, task) = run::start(
         conn,
@@ -313,4 +316,36 @@ fn stop_signal() -> io::Result<impl Future<Output = ()> + Send + 'static> {
             _ = int.recv() => {}
         }
     })
+}
+
+/// Writes `.bv/workspace.yaml` next to the orchestrator config: one repository per project with a tracker, so `bv`
+/// run there (or with `--workspace`) shows every project's beads (spec §10.2). The trackers are fixed for the
+/// daemon's life (a reload changing them is refused), so the file is written at start only.
+fn bv_workspace(config: &Path, br: &Path, beads: &[(String, PathBuf)]) -> Result<(), String> {
+    if beads.is_empty() {
+        return Ok(());
+    }
+    let mut yaml =
+        "# Written by aae at daemon start from the project configs; edits are lost.\nname: aae\nrepos:\n".to_owned();
+    for (name, dir) in beads {
+        let root = dir.parent().unwrap_or(dir);
+        // JSON strings are YAML double-quoted scalars.
+        yaml.push_str(&format!("  - name: {}\n    path: {}\n", json!(name), json!(root)));
+        // The id prefix br was initialized with; without it bv assumes `<name>-`.
+        let prefix = std::process::Command::new(br)
+            .args(["config", "get", "issue_prefix"])
+            .env("BEADS_DIR", dir)
+            .output();
+        match prefix {
+            Ok(out) if out.status.success() && !out.stdout.trim_ascii().is_empty() => {
+                let prefix = String::from_utf8_lossy(out.stdout.trim_ascii());
+                yaml.push_str(&format!("    prefix: {}\n", json!(format!("{prefix}-"))));
+            }
+            _ => eprintln!("aae daemon: warning: no br id prefix of `{name}`; bv assumes `{name}-`"),
+        }
+    }
+    let dir = config.parent().unwrap_or(Path::new(".")).join(".bv");
+    std::fs::create_dir_all(&dir).map_err(|e| format!("{}: {e}", dir.display()))?;
+    let file = dir.join("workspace.yaml");
+    std::fs::write(&file, yaml).map_err(|e| format!("{}: {e}", file.display()))
 }

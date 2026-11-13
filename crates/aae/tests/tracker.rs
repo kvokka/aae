@@ -57,6 +57,10 @@ async fn a_bead_written_by_hand_is_seen_and_a_run_on_it_claims_and_closes_it_in_
     })
     .await;
     let project = d.dir.path().join("config/aae/shop");
+    // The bv workspace next to the orchestrator config lists the project's tracker with br's id prefix.
+    let workspace = std::fs::read_to_string(d.dir.path().join("config/aae/.bv/workspace.yaml")).unwrap();
+    let repo = format!("  - name: \"shop\"\n    path: {}\n    prefix: \"t-\"\n", json!(project));
+    assert!(workspace.contains(&repo), "{workspace}");
     let mut events = d.client.events(Some(1)).await.unwrap();
     // The first read of a tracker is its history, not news: write by hand only after it (the seed turns ready).
     until_event(&mut events, "bead.ready", &seed.into_inner()).await;
