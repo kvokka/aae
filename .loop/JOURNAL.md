@@ -1060,3 +1060,24 @@ WP-22c закрыт: живой просмотр, TCP с токеном, MCP и�
 ухода клиента. Задача опрашивает состояние раз в 500 мс до конца прогона, а если конец уже прочитан или
 вытеснен — до выхода демона. `shortcut:` это описывает неверно. Сжата §9.5 → docs/design/config.md (`bd5a745`).
 Ревью: .loop/cycles/35/review.md, оценка 8.3.
+
+## 2026-11-13T12:00 · цикл 36 · coder · РЕШЕНИЕ
+
+Resync экземпляров (WP-20c, §5.1, инв. 20): процесс, пропавший по pid + start time при живой записи не в `stopping`,
+считается потерянным `exited` — штатный instance.failed и падение попыток, без `resync.diverged`. Пропажа однозначна,
+а контракт `resync.diverged` — «эффектов не следует». Сервисы на resync не сверяются (в записи нет pid, процесс ведёт
+задача). `crates/aae-core/src/run/registry.rs` (`check_instances`, `instance_gone`), `docs/design/contracts.md` §8.
+
+## 2026-11-13T12:40 · цикл 36 · coder · РЕШЕНИЕ [Д]
+
+Skills codex (WP-29b): ссылки в собственный `CODEX_HOME/skills` процесса (опыт: experiments.md, «Skills:
+`$CODEX_HOME/skills`»; симлинк codex читает — тест `aae-codex/tests/codex.rs`). При `inherit_host = true` агент со
+skills получает `config_error`: писать в домашний `~/.codex` владельца нельзя, а `skills/extraRoots/set` без формы
+параметров в доках не проверен. Если владельцу нужно — extraRoots отдельным опытом.
+
+## 2026-11-13T16:30 · цикл 36 · reviewer · НАХОДКА
+
+Ревью 36: обязательных пунктов нет. Обяз. 1 ревью 35 (утечка живого просмотра) закрыт; WP-20c и WP-29b закрыты.
+Форма ответа codex `requestUserInput` сверена со схемой, которую генерирует закреплённый codex, — совпадает.
+`mise run ci` и `acceptance-ci` на `e686139` зелёные (268/268, 15/15). §5.1 сжат в `docs/design/event-model.md`
+(`49e194c`). Дальше — WP-32b, WP-36, затем WP-39; для codex-половины критерия 2 по-прежнему нужен логин codex.

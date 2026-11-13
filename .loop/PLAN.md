@@ -355,7 +355,7 @@ todo | doing | done | blocked | split (разбит, работа — в доч�
   иначе reconcile с новым ключом; тесты в `aae-testkit/tests/recovery.rs`), `608a78a` (бид перехвачен вручную →
   `resync.diverged`, трекер не тронут). Resync при старте был с WP-19/WP-31. Периодический resync — WP-20c.
 
-### WP-20c · Периодический resync · размер S · статус: doing
+### WP-20c · Периодический resync · размер S · статус: done
 - Спека: §5.1 («Resync — не тик»: при старте и раз в несколько минут), инв. 20
 - Зависит от: WP-20b
 - Результат: дедлайн resync раз в N минут (конфиг, по умолчанию 5): перечитать трекеры (`sync_trackers`),
@@ -366,6 +366,11 @@ todo | doing | done | blocked | split (разбит, работа — в доч�
 - Сделано в цикле 25 (часть трекера): дедлайн `daemon:resync` раз в 5 минут (константа, без настройки) →
   `sync_trackers(…, "resync")`; тест `beads.rs::a_write_whose_signal_is_lost_is_read_by_the_periodic_resync`.
   Осталось: сверка записей экземпляров с таблицей процессов (pid + start time) на том же дедлайне.
+- Цикл 36 (d29decb): на дедлайне `daemon:resync` — эффект `check_instances` (health драйвера = pid + start time у
+  claude/codex) по записям `kind='instance'` не в `stopping`; пропавший процесс → `Msg::InstanceGone` → штатный
+  `exited` (instance.failed, попытки падают); устаревший отчёт (запись сменила процесс или в `stopping`) — ничего.
+  `resync.diverged` не шлётся: пропажа по pid + start time однозначна, а контракт `diverged` — «без эффектов».
+  Сервисы (`kind='service'`) не сверяются: у них нет pid в записи, их ведёт задача процесса.
 
 ### WP-21 · Детерминированная проверка инвариантов и инъекция сбоев · размер M · статус: split (цикл 33, ревью 32 обяз. 2) → остаток в WP-21b
 - Спека: §5.5, §14 (правила проверки); шпаргалки: aae-context/06 §4
@@ -627,7 +632,7 @@ todo | doing | done | blocked | split (разбит, работа — в доч�
   через настоящий демон до `passed` (`crates/aae/tests/codex.rs`). Типы из схемы (`generated/`) не делались —
   решение в журнале. Остаток — WP-29b.
 
-### WP-29b · Адаптер codex: остаток · размер S · статус: doing
+### WP-29b · Адаптер codex: остаток · размер S · статус: done
 - Спека: §6.4, §6.5, §7.3, §7.5; шпаргалки: aae-context/02 §3.5, §7
 - Зависит от: WP-29
 - Результат: skills в `CODEX_HOME/skills` (сейчас `config_error`), `max_sessions` из `[harness.codex]` (сейчас 8),
@@ -642,6 +647,12 @@ todo | doing | done | blocked | split (разбит, работа — в доч�
   (`stream.rs::completed` переносит `model`); resume треда в новом app-server после kill -9 — зелёный тест
   `crates/aae/tests/codex.rs`. Осталось: skills в `CODEX_HOME/skills`, resume после рестарта демона (проверка
   `clientId`), форма ответа `item/tool/requestUserInput`.
+- Цикл 36: skills — ссылки в собственный `CODEX_HOME/skills` (0341a2c; с `inherit_host` — `config_error`, журнал);
+  resume после `kill -9` демона — тест `crates/aae/tests/codex.rs::a_codex_thread_is_resumed_after_a_daemon_restart…`
+  (тот же тред, reconcile-промпт, прогон проходит; 1937c5e); ответ `requestUserInput` — по сгенерированной схеме
+  закреплённого codex: `answers.<question id>.answers = [text]` (было `answers.answer = [text]`, неверно). Живьём
+  `requestUserInput` не вызвать (инструмент экспериментальный) — `shortcut:` в `aae-codex/src/lib.rs`; живая
+  проверка — в WP-39, если codex начнёт его предлагать.
 
 ### WP-30 · Контрактные тесты codex · размер M · статус: done
 - Спека: §7.8, §15 (9, 10, 11, 13); шпаргалки: aae-context/05 §4

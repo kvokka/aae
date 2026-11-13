@@ -1,0 +1,85 @@
+[acceptance-ci] $ cargo build -q --locked -p aae
+[acceptance-ci] $ cargo run -q --locked -p aae-acceptance -- --ci
+aae daemon listening on /tmp/.tmpzOqn69/run/aae/aae.sock
+aae daemon listening on /tmp/.tmpMoqY7n/run/aae/aae.sock
+aae daemon listening on /tmp/.tmpt0hx3H/run/aae/aae.sock
+aae daemon listening on /tmp/.tmpYahyyg/run/aae/aae.sock
+aae daemon listening on /tmp/.tmpPW8CAB/run/aae/aae.sock
+aae daemon listening on /tmp/.tmpkPxRoi/run/aae/aae.sock
+aae daemon listening on /tmp/.tmplb1klr/run/aae/aae.sock
+aae daemon listening on /tmp/.tmp0sF2HA/run/aae/aae.sock
+aae daemon listening on /tmp/.tmpLhyvz3/run/aae/aae.sock
+aae daemon listening on /tmp/.tmpucMC42/run/aae/aae.sock
+aae daemon listening on /tmp/.tmp3UYu9b/run/aae/aae.sock
+aae daemon listening on /tmp/.tmpbO7DIQ/run/aae/aae.sock
+aae daemon listening on /tmp/.tmpRkCYwz/run/aae/aae.sock
+aae daemon listening on /tmp/.tmp6PMgcD/run/aae/aae.sock
+aae daemon listening on /tmp/.tmp7Bwf9h/run/aae/aae.sock
+aae daemon listening on /tmp/.tmpMoqY7n/run/aae/aae.sock
+aae daemon listening on /tmp/.tmpaiVD0c/run/aae/aae.sock
+aae daemon listening on /tmp/.tmp7Bwf9h/run/aae/aae.sock
+aae daemon listening on /tmp/.tmpjkeGEi/run/aae/aae.sock
+aae daemon listening on /tmp/.tmpjkeGEi/run/aae/aae.sock
+| 3 | an exec step passes; exit 75 fails the attempt, not the formula | pass | 2.2 s |  |
+| 4 | no pass without the finisher; a stale finisher is rejected; a remark passes on the second go | pass | 2.1 s |  |
+aae daemon listening on /tmp/.tmpMoqY7n/run/aae/aae.sock
+| 5a | an exec planner creates three beads of an epic; a subscription closes each; one correlation | pass | 2.8 s | 4 runs in one correlation "cor_1" |
+aae daemon listening on /tmp/.tmpMoqY7n/run/aae/aae.sock
+aae daemon listening on /tmp/.tmpMoqY7n/run/aae/aae.sock
+aae daemon listening on /tmp/.tmpMoqY7n/run/aae/aae.sock
+aae daemon listening on /tmp/.tmpMoqY7n/run/aae/aae.sock
+aae daemon listening on /tmp/.tmpMoqY7n/run/aae/aae.sock
+aae daemon listening on /tmp/.tmpMoqY7n/run/aae/aae.sock
+aae daemon listening on /tmp/.tmpMoqY7n/run/aae/aae.sock
+aae daemon listening on /tmp/.tmpMoqY7n/run/aae/aae.sock
+aae daemon listening on /tmp/.tmpMoqY7n/run/aae/aae.sock
+aae daemon listening on /tmp/.tmpMoqY7n/run/aae/aae.sock
+aae daemon listening on /tmp/.tmpMoqY7n/run/aae/aae.sock
+aae daemon listening on /tmp/.tmpMoqY7n/run/aae/aae.sock
+aae daemon listening on /tmp/.tmpMoqY7n/run/aae/aae.sock
+aae daemon listening on /tmp/.tmpzOqn69/run/aae/aae.sock
+aae daemon listening on /tmp/.tmpMoqY7n/run/aae/aae.sock
+aae daemon listening on /tmp/.tmpMoqY7n/run/aae/aae.sock
+aae daemon listening on /tmp/.tmpMoqY7n/run/aae/aae.sock
+| 5b | a schedule fires on time; the firings missed while the daemon is down fire once | pass | 30.6 s | every 4 s; 2 firings, 3 missed while down, 1 at start, 1 after |
+| 6 | 30 hops from run.passed of A to the harness launch of B by a subscription: p50 <= 1 s, p90 <= 3 s | pass | 13.5 s | 30 hops: p50 31 ms, p90 73 ms, max 611 ms <!-- MEASURE id=hop date=2026-11-13 ver=aae-0.1.0 env=Linux-aarch64 src=aae-acceptance note="run.passed ts of A to instance.ready ts of B; claude on a fake API" --> |
+aae daemon listening on /tmp/.tmpMoqY7n/run/aae/aae.sock
+aae daemon listening on /tmp/.tmpMoqY7n/run/aae/aae.sock
+| 7 | the idle daemon with one project: RSS <= 50 MB, CPU <= 1 % over 10 minutes | pass | 610.9 s | RSS max 36.1 MB, CPU 0.078 % over 10 min (2026-11-13, aae 0.1.0) <!-- MEASURE id=idle-daemon date=2026-11-13 ver=aae-0.1.0 env=Linux-aarch64 src=aae-acceptance note="one project, no runs; RSS sampled every 10 s, CPU from /proc stat" --> |
+| 8 | 20 x kill -9 of the daemon mid-step: up within 30 s, each run ends once, no firing lost or doubled | pass | 34.9 s | 20 kills, 40 runs, 20 attempts failed by the crashes; slowest restart to the first answer 0.03 s |
+| 10 | a codex quota with a reset time closes the account gate; both runs of the account pass after it | pass | 71.6 s | gate "account:codex/d87db252ac00ddc4" until "2026-11-13T15:01:39.000Z"; both runs passed 69.9 s after the limit |
+| 12 | explain config shows every layer and the host in one line; host inheritance shows in the session | pass | 2.1 s | explain: 10 and 10 lines, one host line each; the host CLAUDE.md reached the agent only while it inherited |
+| 13 | codex agents of one process part share an app-server, of two get two; lazy start, idle stop | pass | 62.9 s | 3 runs on 2 app-servers (i-caa43a9ec22d4b64, i-76347ba82944fc0a); both stopped as idle |
+| 14 | one HTTP MCP service serves concurrent claude and codex sessions with identity headers in one process | pass | 2.7 s | 2 claude and 2 codex runs passed on one service process (pid 2470027); 14 requests, all with the token and each run's identity headers |
+| 15 | an external plugin gives its skill and hook to one of two agents, vetoes a pass; its failure is contained | pass | 2.6 s | veto: the summary of a pass must say the work is tested; skill and hook only in the attaching agent's session; a failed hook: the review plugin needs its require parameter |
+| 16 | a bead: claim held through a crash, returned on failure, closed on pass, one run per bead | pass | 8.3 s | claim held through a crash; 5 requests for an epic of 3: 3 runs, 2 nothing_ready; out after 2 failures |
+| 18 | the journal rotates at 10 MiB x 5; a reader continues by seq; a rotated-away seq is a gap | pass | 3.8 s | rotated after 6 runs |
+| 19 | operator gates stop dispatch, survive a restart and stay until opened by hand | pass | 2.2 s |  |
+15 of 15 scenarios passed in 611 s.
+report: /home/ubuntu/proj/work/aae/target/acceptance/report.md
+[acceptance-ci] $ cargo nextest run --locked -p aae-testkit --test chaos
+   Compiling aae-testkit v0.1.0 (/home/ubuntu/proj/work/aae/crates/aae-testkit)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 2.74s
+────────────
+ Nextest run ID 855ca93d-5df0-42dd-b9e8-bc30e1c2060b with nextest profile: default
+    Starting 10 tests across 1 binary
+        PASS [   0.004s] ( 1/10) aae-testkit::chaos instance_ids_are_numbered_in_order
+        PASS [   7.098s] ( 2/10) aae-testkit::chaos a_seed_replays_the_same
+        SLOW [> 60.000s] (─────) aae-testkit::chaos seeds_1
+        SLOW [> 60.000s] (─────) aae-testkit::chaos seeds_5
+        SLOW [> 60.000s] (─────) aae-testkit::chaos seeds_0
+        SLOW [> 60.000s] (─────) aae-testkit::chaos seeds_2
+        SLOW [> 60.000s] (─────) aae-testkit::chaos seeds_6
+        SLOW [> 60.000s] (─────) aae-testkit::chaos seeds_4
+        SLOW [> 60.000s] (─────) aae-testkit::chaos seeds_3
+        SLOW [> 60.000s] (─────) aae-testkit::chaos seeds_7
+        PASS [  78.285s] ( 3/10) aae-testkit::chaos seeds_5
+        PASS [  80.152s] ( 4/10) aae-testkit::chaos seeds_4
+        PASS [  87.167s] ( 5/10) aae-testkit::chaos seeds_7
+        PASS [  89.980s] ( 6/10) aae-testkit::chaos seeds_2
+        PASS [  90.221s] ( 7/10) aae-testkit::chaos seeds_3
+        PASS [  92.159s] ( 8/10) aae-testkit::chaos seeds_1
+        PASS [  95.613s] ( 9/10) aae-testkit::chaos seeds_6
+        PASS [  96.818s] (10/10) aae-testkit::chaos seeds_0
+────────────
+     Summary [  96.820s] 10 tests run: 10 passed (8 slow), 0 skipped
