@@ -35,11 +35,15 @@ pub(crate) async fn run(env: Arc<Env>) -> String {
     })
     .await;
     let first = d.create("dev").await;
-    let failed = d
-        .journal_until(WITHIN, |seen| seen.iter().any(|(k, _)| k == "run.attempt_failed"))
+    // The policy closes the gate after the failure, by a hook: wait for both.
+    let seen = d
+        .journal_until(WITHIN, |seen| {
+            seen.iter().any(|(k, _)| k == "run.attempt_failed") && seen.iter().any(|(k, _)| k == "gate.closed")
+        })
         .await;
     let limited = Instant::now();
-    let failure = &failed.last().unwrap().1["data"]["failure"];
+    let failed = seen.iter().find(|(k, _)| k == "run.attempt_failed").unwrap();
+    let failure = &failed.1["data"]["failure"];
     assert_eq!(failure["kind"], "quota_exhausted", "{failure}");
     let gates = d.get("/v1/gates").await;
     let gate = gates
