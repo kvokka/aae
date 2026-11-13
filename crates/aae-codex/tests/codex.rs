@@ -63,7 +63,7 @@ async fn a_prompt_runs_a_command_in_the_thread_and_the_turn_completes() {
     let dir = tempfile::tempdir().unwrap();
     let work = dir.path().join("work");
     std::fs::create_dir_all(&work).unwrap();
-    let driver = Codex::new("codex".into(), dir.path().join("state"), None);
+    let driver = Codex::new("codex".into(), dir.path().join("state"), None, 8);
     let plan = SessionPlan::New {
         workdir: work.clone(),
         run: "run-1".into(),
@@ -119,7 +119,7 @@ async fn a_prompt_runs_a_command_in_the_thread_and_the_turn_completes() {
 async fn a_usage_limit_ends_the_turn_with_a_quota_and_its_reset() {
     let provider = Provider::start(vec![Reply::UsageLimit(3600)]).await;
     let dir = tempfile::tempdir().unwrap();
-    let driver = Codex::new("codex".into(), dir.path().join("state"), None);
+    let driver = Codex::new("codex".into(), dir.path().join("state"), None, 8);
     let plan = SessionPlan::New {
         workdir: dir.path().into(),
         run: "r".into(),

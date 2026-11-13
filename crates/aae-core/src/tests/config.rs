@@ -382,3 +382,16 @@ fn every_error_is_reported_with_its_file() {
     assert!(errors[0].file.ends_with("gascity/agents/implementer/agent.toml"));
     assert!(errors[1].file.ends_with("gascity/formulas/implement.md"));
 }
+
+#[test]
+fn a_harness_takes_max_sessions_and_refuses_zero() {
+    let with = |n: &str| {
+        BASE[0].1.replace(
+            "[[plugin]]",
+            &format!("[harness.codex]\nmax_sessions = {n}\n[[plugin]]"),
+        )
+    };
+    let config = load_with(&[("config.toml", with("3").as_str())]).unwrap();
+    assert_eq!(config.harnesses["codex"].max_sessions.map(|n| n.get()), Some(3));
+    fails(&[("config.toml", with("0").as_str())], "max_sessions");
+}

@@ -82,7 +82,10 @@ pub(crate) async fn run(paths: Paths) -> Result<(), String> {
         let (state, socket) = (paths.state.clone(), Some(paths.socket.clone()));
         let driver: Arc<dyn Driver> = match name.as_str() {
             "claude" => Arc::new(Claude::new(binary.clone(), state, socket)),
-            "codex" => Arc::new(Codex::new(binary.clone(), state, socket)),
+            "codex" => {
+                let max_sessions = harness.max_sessions.map_or(8, |n| n.get() as usize);
+                Arc::new(Codex::new(binary.clone(), state, socket, max_sessions))
+            }
             _ => continue,
         };
         let tested = driver.capabilities(&ProcessPart(json!(null))).versions;

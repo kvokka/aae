@@ -303,7 +303,7 @@ fn the_process_gets_the_native_block_and_the_thread_the_rest() {
         attempt: 1,
         token: "tok".into(),
     };
-    let driver = Codex::new("codex".into(), "/state".into(), None);
+    let driver = Codex::new("codex".into(), "/state".into(), None, 8);
     let split = driver.split(&config, &plan).unwrap();
     let p = &split.process.0;
     let args = part::args(p);

@@ -54,7 +54,7 @@ impl Live {
         resume: Option<SessionRef>,
     ) -> Result<Self, Failure> {
         let id = if resume.is_some() { "i2" } else { "i1" };
-        let driver = Codex::new("codex".into(), dir.join("state"), None);
+        let driver = Codex::new("codex".into(), dir.join("state"), None, 8);
         let rig = dir.join("rig");
         std::fs::create_dir_all(&rig).unwrap();
         let (run, attempt, token) = ("r1".to_owned(), 1, "t".to_owned());

@@ -38,6 +38,7 @@ pub struct Codex {
     binary: PathBuf,
     state: PathBuf,
     socket: Option<PathBuf>,
+    max_sessions: usize,
     instances: Arc<Mutex<HashMap<String, Arc<Instance>>>>,
 }
 
@@ -46,11 +47,13 @@ fn thread_id(session: &SessionRef) -> &str {
 }
 
 impl Codex {
-    pub fn new(binary: PathBuf, state: PathBuf, socket: Option<PathBuf>) -> Self {
+    /// `max_sessions`: `[harness.codex] max_sessions`, 8 by default (contracts 4.5).
+    pub fn new(binary: PathBuf, state: PathBuf, socket: Option<PathBuf>, max_sessions: usize) -> Self {
         Self {
             binary,
             state,
             socket,
+            max_sessions,
             instances: Arc::default(),
         }
     }
@@ -143,8 +146,7 @@ impl Driver for Codex {
 
     fn capabilities(&self, _process: &ProcessPart) -> Capabilities {
         Capabilities {
-            // shortcut: the contract's `max_sessions` config value (default 8) is not read yet; WP-29b.
-            sessions_per_instance: 8,
+            sessions_per_instance: self.max_sessions,
             instance_idle: Duration::from_secs(60),
             retries_429: false,
             reset_time: true,

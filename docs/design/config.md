@@ -52,6 +52,9 @@ bead_failures = 3                   # failed runs of a bead before the core clos
 model = "sonnet"                    # default model of the harness
 binary = "/opt/claude/bin/claude"   # optional explicit path; otherwise resolved through mise (§6.5)
 
+[harness.codex]
+max_sessions = 8                    # codex only: threads per app-server before a second one starts (default 8)
+
 [[plugin]]                          # an installed plugin; its orchestrator side is enabled
 path = "~/aae-plugins/aae-plugin-mail"
 

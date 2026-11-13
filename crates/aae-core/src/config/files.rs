@@ -110,6 +110,8 @@ pub(super) struct OrchestratorFile {
 pub struct Harness {
     pub model: Option<String>,
     pub binary: Option<PathBuf>,
+    /// Threads one codex app-server holds before a second one starts (contracts 4.5); codex only.
+    pub max_sessions: Option<NonZeroU32>,
 }
 
 #[derive(Debug, Deserialize)]
