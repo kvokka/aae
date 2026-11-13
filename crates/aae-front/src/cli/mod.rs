@@ -54,7 +54,7 @@ pub struct Cli {
     pub socket: Option<PathBuf>,
     /// Print the API's JSON as it is.
     #[arg(long, global = true)]
-    json: bool,
+    pub json: bool,
     #[command(subcommand)]
     pub command: Command,
 }
@@ -63,6 +63,15 @@ pub struct Cli {
 pub enum Command {
     /// Run the daemon in the foreground.
     Daemon {
+        /// The orchestrator config (default: `$XDG_CONFIG_HOME/aae/config.toml`).
+        #[arg(long)]
+        config: Option<PathBuf>,
+        /// Print a service file that runs this daemon (a systemd user unit or a launchd agent) and exit.
+        #[arg(long)]
+        service: Option<Service>,
+    },
+    /// Check what the daemon needs: harness and br binaries, versions and logins, directories, the state.
+    Doctor {
         /// The orchestrator config (default: `$XDG_CONFIG_HOME/aae/config.toml`).
         #[arg(long)]
         config: Option<PathBuf>,
@@ -128,6 +137,12 @@ pub enum Command {
 }
 
 #[derive(Clone, Copy, ValueEnum)]
+pub enum Service {
+    Systemd,
+    Launchd,
+}
+
+#[derive(Clone, Copy, ValueEnum)]
 pub enum Verdict {
     Pass,
     Fail,
@@ -175,7 +190,9 @@ pub(crate) fn fail(message: &str) -> ExitCode {
 async fn execute(client: &Client, cli: Cli) -> Result<ExitCode, ClientError> {
     let json = cli.json;
     match cli.command {
-        Command::Daemon { .. } => return Ok(fail("the daemon runs in its own process, not from a client")),
+        Command::Daemon { .. } | Command::Doctor { .. } => {
+            return Ok(fail("`daemon` and `doctor` run without a daemon, not as its client"));
+        }
         Command::Run(command) => commands::run(client, json, command).await?,
         Command::Gate(command) => commands::gate(client, json, command).await?,
         Command::Instance(command) => commands::instance(client, json, command).await?,

@@ -224,7 +224,11 @@ async fn a_drain_starts_no_run_and_stops_the_daemon_when_its_timeout_cuts_a_turn
 #[tokio::test]
 async fn a_restart_starts_the_daemon_again_in_the_same_process() {
     let d = Daemon::start(|_| {}).await;
-    assert_eq!(d.get("/v1/instances").await, json!([]), "exec formulas start no instance");
+    assert_eq!(
+        d.get("/v1/instances").await,
+        json!([]),
+        "exec formulas start no instance"
+    );
     match d.post("/v1/instances/nope/stop", json!(null), None).await {
         Err(ClientError::Api { status: 409, .. }) => {}
         other => panic!("{other:?}"),

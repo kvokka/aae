@@ -1,6 +1,7 @@
 //! `aae` binary entry point: the daemon and the CLI.
 
 mod daemon;
+mod doctor;
 
 use aae_front::cli::{self, Cli, Command};
 use clap::Parser;
@@ -8,8 +9,22 @@ use std::process::ExitCode;
 
 fn main() -> ExitCode {
     let cli = Cli::parse();
-    let Command::Daemon { config } = cli.command else {
-        return cli::run(cli);
+    let config = match cli.command {
+        Command::Daemon {
+            config,
+            service: Some(kind),
+        } => return doctor::service(kind, config),
+        Command::Doctor { config } => {
+            return match daemon::Paths::resolve(config, cli.socket) {
+                Ok(paths) => doctor::run(&paths, cli.json),
+                Err(e) => {
+                    eprintln!("aae doctor: {e}");
+                    ExitCode::FAILURE
+                }
+            };
+        }
+        Command::Daemon { config, service: None } => config,
+        _ => return cli::run(cli),
     };
     let started = daemon::Paths::resolve(config, cli.socket).and_then(|paths| {
         let runtime = tokio::runtime::Runtime::new().map_err(|e| format!("runtime: {e}"))?;

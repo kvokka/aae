@@ -73,19 +73,10 @@ pub(crate) async fn run(paths: Paths) -> Result<bool, String> {
     aae_core::orphans::adopt_orphans().map_err(|e| format!("cannot become the child subreaper: {e}"))?;
     let mut drivers: Vec<Arc<dyn Driver>> = Vec::new();
     for (name, harness) in &config.harnesses {
-        // shortcut: without `binary` the harness on PATH runs, not the mise-pinned one (§6.5); `aae doctor` (WP-35).
-        let binary = harness.binary.clone().unwrap_or_else(|| name.into());
-        let (state, socket) = (paths.state.clone(), Some(paths.socket.clone()));
-        let driver: Arc<dyn Driver> = match name.as_str() {
-            "claude" => Arc::new(Claude::new(binary.clone(), state, socket)),
-            "codex" => {
-                let max_sessions = harness.max_sessions.map_or(8, |n| n.get() as usize);
-                Arc::new(Codex::new(binary.clone(), state, socket, max_sessions))
-            }
-            _ => continue,
+        let Some((driver, binary, _)) = driver(name, harness, &paths) else {
+            continue;
         };
-        let tested = driver.capabilities(&ProcessPart(json!(null))).versions;
-        if let Some(why) = aae_core::untested(&binary, tested) {
+        if let Some(why) = aae_core::untested(&binary, tested(&driver)) {
             eprintln!("aae daemon: warning: {why}");
         }
         drivers.push(driver);
@@ -97,12 +88,18 @@ pub(crate) async fn run(paths: Paths) -> Result<bool, String> {
         .map(|p| (p.name.clone(), p.root.join(".beads")))
         .filter(|(_, dir)| dir.is_dir())
         .collect();
+    let br = binary("br", None).0;
     let trackers: BTreeMap<String, Arc<dyn Tracker>> = beads
         .iter()
-        .map(|(name, dir)| (name.clone(), Arc::new(Br::new(dir.clone())) as Arc<dyn Tracker>))
+        .map(|(name, dir)| {
+            (
+                name.clone(),
+                Arc::new(Br::new(br.clone(), dir.clone())) as Arc<dyn Tracker>,
+            )
+        })
         .collect();
     if let Some(why) = (!beads.is_empty())
-        .then(|| aae_core::untested(Path::new("br"), aae_br::TESTED))
+        .then(|| aae_core::untested(&br, aae_br::TESTED))
         .flatten()
     {
         eprintln!("aae daemon: warning: {why}");
@@ -179,8 +176,49 @@ pub(crate) async fn run(paths: Paths) -> Result<bool, String> {
         .map_err(|e| format!("serving the API: {e}"))
 }
 
+/// Where the binary `name` is and who said so (spec §6.5): the config's `explicit` path, else mise (a daemon under
+/// systemd or launchd has no mise shims on its `PATH`), else the bare name, looked up on `PATH` at each spawn.
+pub(crate) fn binary(name: &str, explicit: Option<&Path>) -> (PathBuf, &'static str) {
+    if let Some(path) = explicit {
+        return (path.to_owned(), "config");
+    }
+    let mise = std::process::Command::new("mise").args(["which", name]).output();
+    match mise {
+        Ok(out) if out.status.success() => {
+            let path = String::from_utf8_lossy(&out.stdout).trim().to_owned();
+            (path.into(), "mise")
+        }
+        _ => (name.into(), "PATH"),
+    }
+}
+
+/// The driver of harness `name` on its resolved binary, with the binary and its source; `None` for a harness aae
+/// has no adapter for.
+pub(crate) fn driver(
+    name: &str,
+    harness: &config::Harness,
+    paths: &Paths,
+) -> Option<(Arc<dyn Driver>, PathBuf, &'static str)> {
+    let (binary, source) = binary(name, harness.binary.as_deref());
+    let (state, socket) = (paths.state.clone(), Some(paths.socket.clone()));
+    let driver: Arc<dyn Driver> = match name {
+        "claude" => Arc::new(Claude::new(binary.clone(), state, socket)),
+        "codex" => {
+            let max_sessions = harness.max_sessions.map_or(8, |n| n.get() as usize);
+            Arc::new(Codex::new(binary.clone(), state, socket, max_sessions))
+        }
+        _ => return None,
+    };
+    Some((driver, binary, source))
+}
+
+/// The harness versions the adapter of `driver` was tested on.
+pub(crate) fn tested(driver: &Arc<dyn Driver>) -> [(u32, u32, u32); 2] {
+    driver.capabilities(&ProcessPart(json!(null))).versions
+}
+
 /// The config in `file` with the parameters of the bundled plugins checked, or every error in it.
-fn load(file: &Path) -> Result<config::Config, Vec<String>> {
+pub(crate) fn load(file: &Path) -> Result<config::Config, Vec<String>> {
     let config = config::load(file).map_err(|errors| errors.iter().map(ToString::to_string).collect::<Vec<_>>())?;
     let errors: Vec<String> = (config.bundled.iter())
         .filter_map(|b| aae_plugins::check(b.name, &b.params).err())

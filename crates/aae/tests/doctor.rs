@@ -1,0 +1,155 @@
+//! `aae doctor` and the service files on fake harness, mise and br binaries (spec §6.5, §13).
+
+mod common;
+
+use common::FILES;
+use serde_json::Value;
+use std::{
+    fs,
+    os::unix::fs::PermissionsExt,
+    path::Path,
+    process::{Command, Output},
+};
+
+/// An executable script at `path`.
+fn script(path: &Path, body: &str) {
+    fs::create_dir_all(path.parent().unwrap()).unwrap();
+    fs::write(path, format!("#!/bin/sh\n{body}\n")).unwrap();
+    fs::set_permissions(path, fs::Permissions::from_mode(0o755)).unwrap();
+}
+
+/// The XDG tree of the daemon tests with claude at an explicit path and codex where a fake mise says it is.
+fn tree(extra: &str) -> tempfile::TempDir {
+    let dir = tempfile::tempdir().unwrap();
+    let d = dir.path();
+    for (path, text) in FILES {
+        fs::create_dir_all(d.join(path).parent().unwrap()).unwrap();
+        fs::write(d.join(path), text).unwrap();
+    }
+    let config = format!(
+        "projects = [\"shop\"]\n[harness.claude]\nbinary = \"{}\"\n[harness.codex]\n{extra}",
+        d.join("tools/claude").display()
+    );
+    fs::write(d.join("config/aae/config.toml"), config).unwrap();
+    script(&d.join("tools/claude"), "echo '2.1.322 (Claude Code)'");
+    script(&d.join("tools/codex"), "echo 'codex-cli 0.167.2'");
+    let codex = d.join("tools/codex").display().to_string();
+    script(
+        &d.join("bin/mise"),
+        &format!("[ \"$1 $2\" = 'which codex' ] && echo {codex} && exit 0\nexit 1"),
+    );
+    dir
+}
+
+fn aae(dir: &Path, args: &[&str]) -> Output {
+    Command::new(env!("CARGO_BIN_EXE_aae"))
+        .args(args)
+        .env("HOME", dir)
+        .env("XDG_CONFIG_HOME", dir.join("config"))
+        .env("XDG_STATE_HOME", dir.join("state"))
+        .env("XDG_RUNTIME_DIR", dir.join("run"))
+        .env("PATH", format!("{}:/usr/bin:/bin", dir.join("bin").display()))
+        .env_remove("ANTHROPIC_API_KEY")
+        .env_remove("OPENAI_API_KEY")
+        .env_remove("CLAUDE_CONFIG_DIR")
+        .env_remove("CODEX_HOME")
+        .output()
+        .unwrap()
+}
+
+/// `aae doctor --json`: whether it passed, and the level and detail of each check by name.
+fn doctor(dir: &Path) -> (bool, Vec<(String, String, String)>) {
+    let out = aae(dir, &["doctor", "--json"]);
+    let found: Value = serde_json::from_slice(&out.stdout).unwrap();
+    let found = found.as_array().unwrap().iter().map(|f| {
+        let s = |k: &str| f[k].as_str().unwrap().to_owned();
+        (s("check"), s("level"), s("detail"))
+    });
+    (out.status.success(), found.collect())
+}
+
+fn level<'a>(found: &'a [(String, String, String)], check: &str) -> (&'a str, &'a str) {
+    let f = found
+        .iter()
+        .find(|f| f.0 == check)
+        .unwrap_or_else(|| panic!("no `{check}` in {found:?}"));
+    (f.1.as_str(), f.2.as_str())
+}
+
+#[test]
+fn harnesses_resolve_from_the_config_and_from_mise_and_a_missing_one_fails() {
+    let dir = tree("");
+    let (passed, found) = doctor(dir.path());
+    assert!(passed, "{found:?}");
+    let (claude, path) = level(&found, "claude");
+    assert!(
+        claude == "ok" && path.ends_with("tools/claude (from config)"),
+        "{found:?}"
+    );
+    let (codex, path) = level(&found, "codex");
+    assert!(codex == "ok" && path.ends_with("tools/codex (from mise)"), "{found:?}");
+    assert_eq!(level(&found, "claude login").0, "warning", "no login in the fake home");
+    assert_eq!(level(&found, "state").0, "ok");
+
+    script(&dir.path().join(".claude/.credentials.json"), "{}");
+    fs::remove_file(dir.path().join("tools/codex")).unwrap();
+    let (passed, found) = doctor(dir.path());
+    assert!(!passed, "a missing harness binary is an error");
+    assert_eq!(level(&found, "codex"), ("error", level(&found, "codex").1));
+    assert!(level(&found, "codex").1.ends_with("not found"), "{found:?}");
+    assert_eq!(level(&found, "claude login").0, "ok");
+}
+
+#[test]
+fn a_tracker_project_gets_the_br_version_and_its_license_warning() {
+    let dir = tree("");
+    fs::create_dir_all(dir.path().join("config/aae/shop/.beads")).unwrap();
+    script(&dir.path().join("bin/br"), "echo 'br 0.7.5'");
+    let (passed, found) = doctor(dir.path());
+    assert!(passed, "warnings do not fail: {found:?}");
+    let (br, why) = level(&found, "br");
+    assert!(br == "warning" && why.contains("tested: 0.7.6"), "{found:?}");
+    assert!(level(&found, "br license").1.contains("rider"));
+}
+
+#[test]
+fn a_directory_others_can_read_and_a_broken_config_are_errors() {
+    let dir = tree("");
+    let state = dir.path().join("state/aae");
+    fs::create_dir_all(&state).unwrap();
+    fs::set_permissions(&state, fs::Permissions::from_mode(0o755)).unwrap();
+    let (passed, found) = doctor(dir.path());
+    assert!(!passed);
+    let (level, why) = level(&found, &format!("dir {}", state.display()));
+    assert!(level == "error" && why.contains("chmod 700"), "{found:?}");
+
+    let dir = tree("modle = \"x\"\n");
+    let (passed, found) = doctor(dir.path());
+    assert!(
+        !passed && found.iter().any(|f| f.0 == "config" && f.1 == "error"),
+        "{found:?}"
+    );
+}
+
+#[test]
+fn service_files_run_this_binary_with_the_config() {
+    let dir = tree("");
+    let config = dir.path().join("config/aae/config.toml");
+    let config = config.to_str().unwrap();
+    let exe = env!("CARGO_BIN_EXE_aae");
+    let systemd = aae(dir.path(), &["daemon", "--config", config, "--service", "systemd"]);
+    let unit = String::from_utf8(systemd.stdout).unwrap();
+    assert!(systemd.status.success());
+    assert!(
+        unit.contains(&format!("ExecStart=\"{exe}\" \"daemon\" \"--config\" \"{config}\"")),
+        "{unit}"
+    );
+    assert!(unit.contains("Environment=\"PATH="), "{unit}");
+    let launchd = aae(dir.path(), &["daemon", "--service", "launchd"]);
+    let plist = String::from_utf8(launchd.stdout).unwrap();
+    assert!(
+        plist.contains(&format!("<string>{exe}</string>\n    <string>daemon</string>")),
+        "{plist}"
+    );
+    assert!(!dir.path().join("run/aae/aae.sock").exists(), "no daemon starts");
+}

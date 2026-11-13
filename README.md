@@ -1,5 +1,21 @@
 # aae
 
+## Running the daemon
+
+`aae daemon` runs in the foreground. It finds the `claude`, `codex` and `br` binaries through mise (`mise which
+<name>`), since a daemon under systemd or launchd has no mise shims on its `PATH`; a harness may name its binary in
+the config instead (`[harness.claude] binary = "/path/to/claude"`).
+
+- `aae doctor` checks, without a daemon, what the daemon needs: the config, each harness binary with its source,
+  version and login, br and its license, the mode of the state and socket directories, the state and its outbox.
+  It exits non-zero on an error; warnings (an untested version, no login file) do not fail it. `--json` prints
+  the checks as JSON.
+- `aae daemon --service systemd` prints a systemd user unit, `aae daemon --service launchd` a launchd agent, both
+  running this binary with the given `--config` and the `PATH` of the shell that printed them. Install the file
+  yourself; aae never starts a daemon on its own.
+- `aae drain` stops the daemon once no run is in a turn (no run starts meanwhile; `--timeout` seconds, 300 by
+  default); `aae restart` does the same, then starts the daemon again in the same process.
+
 ## The br tracker and its license
 
 A project with a `<project>/.beads` directory uses [br](https://github.com/Dicklesworthstone/beads_rust) as its

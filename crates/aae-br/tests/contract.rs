@@ -15,7 +15,7 @@ fn tracker() -> (tempfile::TempDir, Br) {
     assert!(git.unwrap().success());
     br(dir.path(), &["init", "--prefix", "t", "-q"]);
     let beads = dir.path().join(".beads");
-    (dir, Br::new(beads))
+    (dir, Br::new("br".into(), beads))
 }
 
 /// Runs br by hand, as a human (`alice`) would; its trimmed stdout.

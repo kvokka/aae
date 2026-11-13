@@ -18,17 +18,19 @@ const READER: &str = "aae";
 
 /// The tracker of one project: its `.beads` directory.
 pub struct Br {
+    binary: PathBuf,
     dir: PathBuf,
 }
 
 impl Br {
-    pub fn new(dir: PathBuf) -> Self {
-        Self { dir }
+    /// br at `binary` on the `.beads` directory `dir`.
+    pub fn new(binary: PathBuf, dir: PathBuf) -> Self {
+        Self { binary, dir }
     }
 
     /// Runs `br <args> --json` as `actor`; the parsed stdout, or the failure with br's exit code.
     async fn br(&self, actor: &str, args: &[&str]) -> Result<Value, Fail> {
-        let out = tokio::process::Command::new("br")
+        let out = tokio::process::Command::new(&self.binary)
             .args(args)
             .args([
                 "--json",
