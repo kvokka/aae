@@ -22,9 +22,12 @@ dbg_macro = "deny"
 # Line tables keep file:line in backtraces at half the target/ size and link time.
 [profile.dev]
 debug = "line-tables-only"
+# The invariant stand and the scenarios run a lot of code; unoptimised they are several times slower.
+opt-level = 1
 
 [profile.dev.package."*"]
 debug = false
+opt-level = 2
 
 [profile.release]
 lto = true

@@ -19,8 +19,8 @@ description = "Checks that CI runs on every commit"
 run = [
   "cargo fmt --all --check",
   "cargo clippy --all-targets --locked -q -- -D warnings",
-  # A share of the invariant stand's seeds keeps the job short; `acceptance-ci` plays all of them.
-  "AAE_CHAOS_SEEDS=400 cargo nextest run --locked --no-tests=warn",
+  # Plays 1000 new chaos seeds each time (spec §2.1 item 20).
+  "cargo nextest run --locked --no-tests=warn",
   "cargo deny check",
   "cargo machete",
   "scripts/unused-pub.sh",
@@ -45,5 +45,4 @@ description = "The acceptance scenarios without a model, as CI runs them"
 run = [
   "cargo build -q --locked -p aae",
   "cargo run -q --locked -p aae-acceptance -- --ci",
-  "cargo nextest run --locked -p aae-testkit --test chaos",
 ]
