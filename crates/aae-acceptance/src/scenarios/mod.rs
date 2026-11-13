@@ -8,6 +8,8 @@ mod c05b_schedule;
 mod c06_hop;
 mod c07_idle;
 mod c08_crash;
+mod c10_quota;
+mod c13_instances;
 mod c16_beads;
 mod c18_journal;
 mod c19_gates;
@@ -68,6 +70,18 @@ pub(crate) const ALL: &[Scenario] = &[
         run: |env| Box::pin(c08_crash::run(env)),
     },
     Scenario {
+        criterion: "10",
+        title: "a codex quota with a reset time closes the account gate; both runs of the account pass after it",
+        launch: Launch::Ci,
+        run: |env| Box::pin(c10_quota::run(env)),
+    },
+    Scenario {
+        criterion: "13",
+        title: "codex agents of one process part share an app-server, of two get two; lazy start, idle stop",
+        launch: Launch::Ci,
+        run: |env| Box::pin(c13_instances::run(env)),
+    },
+    Scenario {
         criterion: "16",
         title: "a bead: claim held through a crash, returned on failure, closed on pass, one run per bead",
         launch: Launch::Ci,
@@ -108,6 +122,33 @@ pub(crate) fn claude_agent(root: &Path, name: &str, base_url: &str) {
             "harness = \"claude\"\nmodel = \"claude-haiku-5-5\"\npermission_mode = \"bypassPermissions\"\n\
              inherit_host = false\n[env]\nANTHROPIC_BASE_URL = \"{base_url}\"\nANTHROPIC_API_KEY = \"fake\"\n\
              CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC = \"1\"\nCLAUDE_CODE_MAX_RETRIES = \"0\"\n"
+        ),
+    );
+    write(
+        root.join(format!("config/aae/shop/formulas/{name}.toml")),
+        format!("name = \"{name}\"\n[step]\nkind = \"prompt\"\nagent = \"{name}\"\nprompt = \"{name}.md\"\n"),
+    );
+    write(
+        root.join(format!("config/aae/shop/formulas/{name}.md")),
+        "Do the work on {{ rig.name }}.",
+    );
+}
+
+/// Agent `name` of project `shop` on the real `codex` against a fake Responses API at `base_url`, without the host
+/// layer, and the prompt formula `name` that runs it; `[harness.codex]` in the orchestrator config.
+pub(crate) fn codex_agent(root: &Path, name: &str, base_url: &str) {
+    write(
+        root.join("config/aae/config.toml"),
+        "projects = [\"shop\"]\n[harness.codex]\n",
+    );
+    // The host forbids user namespaces, so the codex sandbox cannot run here (docs/design/experiments.md).
+    write(
+        root.join(format!("config/aae/shop/agents/{name}/agent.toml")),
+        format!(
+            "harness = \"codex\"\nmodel = \"gpt-fake\"\npermission_mode = \"never\"\ninherit_host = false\n\
+             [native.codex]\nmodel_provider = \"fake\"\nsandbox_mode = \"danger-full-access\"\n\
+             [native.codex.model_providers.fake]\nname = \"fake\"\nbase_url = \"{base_url}\"\n\
+             wire_api = \"responses\"\nrequest_max_retries = 0\nstream_max_retries = 0\n"
         ),
     );
     write(

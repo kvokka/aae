@@ -198,7 +198,7 @@ async fn s02_endless_rate_limits_are_rate_limited() {
 
 #[tokio::test]
 async fn s03_a_usage_limit_is_a_quota_with_its_reset_time() {
-    let (failure, seen) = failure_of(Reply::UsageLimit, 0).await;
+    let (failure, seen) = failure_of(Reply::UsageLimit(3600), 0).await;
     assert_eq!(failure.kind, FailureKind::QuotaExhausted, "{seen:?}");
     assert!(failure.retry_at_ms.is_some(), "{}", failure.raw);
 }

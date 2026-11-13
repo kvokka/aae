@@ -64,7 +64,7 @@ async fn the_plan_goes_in_order_and_its_last_reply_repeats() {
 async fn every_error_has_its_status_code_and_headers() {
     let cases = [
         (
-            Reply::UsageLimit,
+            Reply::UsageLimit(3600),
             "429",
             "usage_limit_reached",
             "x-codex-primary-reset-at: ",

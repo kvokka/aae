@@ -25,11 +25,14 @@ pub enum Reply {
     /// A call of codex's `exec_command` tool running the command (an approval request, a long or a background
     /// command).
     Command(String),
+    /// A turn of one command: `Command` while the request carries no command output, then `Text` "Done." —
+    /// the same plan serves any number of threads at once.
+    Task(String),
     /// 429 `rate_limit_exceeded` with `retry-after: 1`.
     RateLimited,
-    /// The plan's usage limit: 429 `usage_limit_reached` with `resets_at` an hour ahead and the `x-codex-*`
+    /// The plan's usage limit: 429 `usage_limit_reached` with `resets_at` that many seconds ahead and the `x-codex-*`
     /// headers, as the lab saw it.
-    UsageLimit,
+    UsageLimit(u64),
     /// A 429 worded unlike any known limit, without `retry-after` or `x-codex-*` headers.
     StrangeQuota,
     /// 429 `insufficient_quota`: the API account is out of credit.
@@ -118,11 +121,10 @@ impl Drop for Provider {
 
 async fn answer(n: usize, reply: Reply, body: &Value) -> Response {
     let model = body["model"].as_str().unwrap_or_default();
-    let reset = SystemTime::now()
+    let now = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .unwrap_or_default()
-        .as_secs()
-        + 3600;
+        .as_secs();
     match reply {
         Reply::Text(text) => {
             let item = json!({ "type": "message", "id": format!("msg_fake_{n}"), "role": "assistant",
@@ -130,6 +132,14 @@ async fn answer(n: usize, reply: Reply, body: &Value) -> Response {
             let delta = json!({ "type": "response.output_text.delta", "item_id": format!("msg_fake_{n}"),
                 "output_index": 0, "content_index": 0, "delta": text });
             stream(n, model, item, Some(delta))
+        }
+        Reply::Task(command) => {
+            let ran = body["input"].as_array().and_then(|i| i.last()).map(|i| &i["type"]);
+            let reply = match ran {
+                Some(kind) if kind == "function_call_output" => Reply::Text("Done.".into()),
+                _ => Reply::Command(command),
+            };
+            Box::pin(answer(n, reply, body)).await
         }
         Reply::Command(command) => {
             let arguments = json!({ "cmd": command }).to_string();
@@ -143,7 +153,8 @@ async fn answer(n: usize, reply: Reply, body: &Value) -> Response {
                 "message": "Rate limit reached. Please try again in 1s." }),
             &[("retry-after", "1")],
         ),
-        Reply::UsageLimit => {
+        Reply::UsageLimit(after) => {
+            let reset = now + after;
             let (primary, week) = (reset.to_string(), (reset + 400_000).to_string());
             error(
                 StatusCode::TOO_MANY_REQUESTS,
