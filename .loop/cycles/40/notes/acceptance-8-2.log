@@ -1,0 +1,50 @@
+aae daemon listening on /tmp/.tmptcWAVy/run/aae/aae.sock
+aae daemon listening on /tmp/.tmpqnilyh/run/aae/aae.sock
+aae daemon listening on /tmp/.tmpJFiV5L/run/aae/aae.sock
+aae daemon listening on /tmp/.tmptcWAVy/run/aae/aae.sock
+aae daemon listening on /tmp/.tmptcWAVy/run/aae/aae.sock
+aae daemon listening on /tmp/.tmptcWAVy/run/aae/aae.sock
+aae daemon listening on /tmp/.tmptcWAVy/run/aae/aae.sock
+aae daemon listening on /tmp/.tmptcWAVy/run/aae/aae.sock
+aae daemon listening on /tmp/.tmptcWAVy/run/aae/aae.sock
+aae daemon listening on /tmp/.tmptcWAVy/run/aae/aae.sock
+aae daemon listening on /tmp/.tmpqnilyh/run/aae/aae.sock
+aae daemon listening on /tmp/.tmptcWAVy/run/aae/aae.sock
+aae daemon listening on /tmp/.tmpJFiV5L/run/aae/aae.sock
+aae daemon listening on /tmp/.tmptcWAVy/run/aae/aae.sock
+aae daemon listening on /tmp/.tmptcWAVy/run/aae/aae.sock
+aae daemon listening on /tmp/.tmptcWAVy/run/aae/aae.sock
+aae daemon listening on /tmp/.tmptcWAVy/run/aae/aae.sock
+aae daemon listening on /tmp/.tmptcWAVy/run/aae/aae.sock
+aae daemon listening on /tmp/.tmptcWAVy/run/aae/aae.sock
+aae daemon listening on /tmp/.tmptcWAVy/run/aae/aae.sock
+aae daemon listening on /tmp/.tmptcWAVy/run/aae/aae.sock
+aae daemon listening on /tmp/.tmptcWAVy/run/aae/aae.sock
+aae daemon listening on /tmp/.tmptcWAVy/run/aae/aae.sock
+aae daemon listening on /tmp/.tmptcWAVy/run/aae/aae.sock
+aae daemon listening on /tmp/.tmptcWAVy/run/aae/aae.sock
+| 8 | 20 x kill -9 of the daemon mid-step: up within 30 s, each run ends once, no firing lost or doubled | pass | 34.3 s | 20 kills, 40 runs, 20 attempts failed by the crashes; slowest restart to the first answer 0.03 s |
+aae daemon listening on /tmp/.tmpJFiV5L/run/aae/aae.sock
+aae daemon listening on /tmp/.tmpqnilyh/run/aae/aae.sock
+aae daemon listening on /tmp/.tmpJFiV5L/run/aae/aae.sock
+aae daemon listening on /tmp/.tmpJFiV5L/run/aae/aae.sock
+aae daemon listening on /tmp/.tmpqnilyh/run/aae/aae.sock
+aae daemon listening on /tmp/.tmpJFiV5L/run/aae/aae.sock
+| 8 | 5 x kill -9 of the daemon mid-tool on the cheapest real claude model: each run resumes and passes once | pass | 133.5 s | claude, model haiku: 5 kills mid-tool, 10 runs, 5 attempts failed by the crashes; slowest restart to the first answer 0.05 s |
+aae daemon listening on /tmp/.tmpqnilyh/run/aae/aae.sock
+aae daemon listening on /tmp/.tmpqnilyh/run/aae/aae.sock
+
+thread 'tokio-rt-worker' (2827676) panicked at crates/aae-acceptance/src/scenarios/c08_crash.rs:291:5:
+no process left at the end: ["2838734 S (sleeping) /home/ubuntu/.local/share/mise/installs/codex/0.168.0/bin/codex-code-mode-host "]
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+| 8 | 5 x kill -9 of the daemon mid-tool on the cheapest real codex model: each run resumes and passes once | FAIL | 219.7 s | no process left at the end: ["2838734 S (sleeping) /home/ubuntu/.local/share/mise/installs/codex/0.168.0/bin/codex-code-mode-host "] |
+2 of 3 scenarios passed in 220 s.
+report: /home/ubuntu/proj/work/aae/target/acceptance/report.md
+EXIT8=1
+aae daemon listening on /tmp/.tmpaj4saQ/run/aae/aae.sock
+aae daemon listening on /tmp/.tmpLFimAz/run/aae/aae.sock
+| 2 | a prompt step passes on the cheapest real claude model by the finisher | pass | 4.0 s | claude, model haiku |
+| 2 | a prompt step passes on the cheapest real codex model by the finisher | pass | 6.6 s | codex, model gpt-5.6-luna |
+2 of 2 scenarios passed in 7 s.
+report: /home/ubuntu/proj/work/aae/target/acceptance/report.md
+EXIT2=0

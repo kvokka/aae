@@ -1,0 +1,86 @@
+[acceptance] $ cargo build -q --locked -p aae
+[acceptance] $ cargo run -q --locked -p aae-acceptance
+aae daemon listening on /tmp/.tmpxTBMmJ/run/aae/aae.sock
+aae daemon listening on /tmp/.tmp5C7c9n/run/aae/aae.sock
+aae daemon listening on /tmp/.tmpaFJngf/run/aae/aae.sock
+aae daemon listening on /tmp/.tmpUulxbm/run/aae/aae.sock
+aae daemon listening on /tmp/.tmpSKZ1zP/run/aae/aae.sock
+aae daemon listening on /tmp/.tmpISsYbQ/run/aae/aae.sock
+aae daemon listening on /tmp/.tmp7h7u0E/run/aae/aae.sock
+aae daemon listening on /tmp/.tmpWS3lRF/run/aae/aae.sock
+aae daemon listening on /tmp/.tmpOLH0bI/run/aae/aae.sock
+aae daemon listening on /tmp/.tmp0Z6UI5/run/aae/aae.sock
+aae daemon listening on /tmp/.tmpY2lR6Z/run/aae/aae.sock
+aae daemon listening on /tmp/.tmpqKu7mR/run/aae/aae.sock
+aae daemon listening on /tmp/.tmpgTHPJz/run/aae/aae.sock
+aae daemon listening on /tmp/.tmp1h6TzX/run/aae/aae.sock
+aae daemon listening on /tmp/.tmpqGxcqx/run/aae/aae.sock
+aae daemon listening on /tmp/.tmpU5qTKa/run/aae/aae.sock
+aae daemon listening on /tmp/.tmpPk0Jdc/run/aae/aae.sock
+aae daemon listening on /tmp/.tmpJL0T8c/run/aae/aae.sock
+aae daemon listening on /tmp/.tmpN7rvCG/run/aae/aae.sock
+aae daemon listening on /tmp/.tmpIOv7pa/run/aae/aae.sock
+aae daemon listening on /tmp/.tmpZyODec/run/aae/aae.sock
+aae daemon listening on /tmp/.tmpxTBMmJ/run/aae/aae.sock
+aae daemon listening on /tmp/.tmpMxvBgy/run/aae/aae.sock
+aae daemon listening on /tmp/.tmpZyODec/run/aae/aae.sock
+aae daemon listening on /tmp/.tmpxTBMmJ/run/aae/aae.sock
+aae daemon listening on /tmp/.tmpUVYy4x/run/aae/aae.sock
+aae daemon listening on /tmp/.tmpUVYy4x/run/aae/aae.sock
+aae daemon listening on /tmp/.tmpxTBMmJ/run/aae/aae.sock
+| 2 | a prompt step passes on the cheapest real claude model by the finisher | pass | 6.1 s | claude, model haiku |
+aae daemon listening on /tmp/.tmpxTBMmJ/run/aae/aae.sock
+| 2 | a prompt step passes on the cheapest real codex model by the finisher | pass | 7.2 s | codex, model gpt-5.6-luna |
+| 3 | an exec step passes; exit 75 fails the attempt, not the formula | pass | 1.7 s |  |
+| 4 | no pass without the finisher; a stale finisher is rejected; a remark passes on the second go | pass | 3.6 s |  |
+aae daemon listening on /tmp/.tmpxTBMmJ/run/aae/aae.sock
+aae daemon listening on /tmp/.tmpxTBMmJ/run/aae/aae.sock
+aae daemon listening on /tmp/.tmpU5qTKa/run/aae/aae.sock
+aae daemon listening on /tmp/.tmpxTBMmJ/run/aae/aae.sock
+aae daemon listening on /tmp/.tmpY2lR6Z/run/aae/aae.sock
+aae daemon listening on /tmp/.tmpxTBMmJ/run/aae/aae.sock
+aae daemon listening on /tmp/.tmpxTBMmJ/run/aae/aae.sock
+aae daemon listening on /tmp/.tmpxTBMmJ/run/aae/aae.sock
+aae daemon listening on /tmp/.tmpxTBMmJ/run/aae/aae.sock
+aae daemon listening on /tmp/.tmpxTBMmJ/run/aae/aae.sock
+aae daemon listening on /tmp/.tmpxTBMmJ/run/aae/aae.sock
+aae daemon listening on /tmp/.tmpxTBMmJ/run/aae/aae.sock
+aae daemon listening on /tmp/.tmpaFJngf/run/aae/aae.sock
+aae daemon listening on /tmp/.tmpxTBMmJ/run/aae/aae.sock
+aae daemon listening on /tmp/.tmpxTBMmJ/run/aae/aae.sock
+aae daemon listening on /tmp/.tmpxTBMmJ/run/aae/aae.sock
+aae daemon listening on /tmp/.tmpxTBMmJ/run/aae/aae.sock
+aae daemon listening on /tmp/.tmpxTBMmJ/run/aae/aae.sock
+aae daemon listening on /tmp/.tmpxTBMmJ/run/aae/aae.sock
+aae daemon listening on /tmp/.tmpY2lR6Z/run/aae/aae.sock
+| 4a | a finisher called with a background claude subagent running passes the run only after the subagent | pass | 38.4 s | claude, model haiku: the finisher came 30 s before the background subagent ended; the run passed after it |
+| 5a | an exec planner creates three beads of an epic; a subscription closes each; one correlation | pass | 5.2 s | 4 runs in one correlation "cor_1" |
+| 5b | a schedule fires on time; the firings missed while the daemon is down fire once | pass | 30.2 s | every 4 s; 2 firings, 3 missed while down, 1 at start, 1 after |
+| 6 | 30 hops from run.passed of A to the harness launch of B by a subscription: p50 <= 1 s, p90 <= 3 s | pass | 15.9 s | 30 hops: p50 38 ms, p90 110 ms, max 428 ms <!-- MEASURE id=hop date=2026-11-13 ver=aae-0.1.0 env=Linux-aarch64 src=aae-acceptance note="run.passed ts of A to instance.ready ts of B; claude on a fake API" --> |
+aae daemon listening on /tmp/.tmpU5qTKa/run/aae/aae.sock
+aae daemon listening on /tmp/.tmpY2lR6Z/run/aae/aae.sock
+aae daemon listening on /tmp/.tmpY2lR6Z/run/aae/aae.sock
+
+thread 'tokio-rt-worker' (2865613) panicked at crates/aae-acceptance/src/daemon.rs:132:13:
+run_7 ended, not passed: {"agent":"shop.dev","attempt":2,"attempts":[{"ended_at":"2026-11-13T17:40:56.937Z","failure_kind":"daemon_crash","generation":1,"harness":"claude","kind":"new_session","n":1,"session":{"config_dir":null,"session_id":"f2930b55-7ed5-5c25-a2c8-7673744931a7","workdir":"/tmp/.tmpY2lR6Z/config/aae/shop/web"},"started_at":"2026-11-13T17:40:52.813Z"},{"ended_at":"2026-11-13T17:41:13.183Z","failure_kind":null,"generation":2,"harness":"claude","kind":"resume","n":2,"session":{"config_dir":null,"session_id":"f2930b55-7ed5-5c25-a2c8-7673744931a7","workdir":"/tmp/.tmpY2lR6Z/config/aae/shop/web"},"started_at":"2026-11-13T17:40:56.969Z"}],"bead":null,"class":"agent","correlation":"cor_7","created_at":"2026-11-13T17:40:52.809Z","depth":0,"formula":"shop.work","generation":2,"id":"run_7","inputs":{},"parent_run":null,"project":"shop","rig":"web","started_at":"2026-11-13T17:40:52.813Z","state":"failed","step_kind":"prompt","waiting_for":"workdir","workdir":"/tmp/.tmpY2lR6Z/config/aae/shop/web"}
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+aae daemon listening on /tmp/.tmpU5qTKa/run/aae/aae.sock
+aae daemon listening on /tmp/.tmpU5qTKa/run/aae/aae.sock
+aae daemon listening on /tmp/.tmpU5qTKa/run/aae/aae.sock
+| 7 | the idle daemon with one project: RSS <= 50 MB, CPU <= 1 % over 10 minutes | pass | 610.4 s | RSS max 36.8 MB, CPU 0.062 % over 10 min (2026-11-13, aae 0.1.0) <!-- MEASURE id=idle-daemon date=2026-11-13 ver=aae-0.1.0 env=Linux-aarch64 src=aae-acceptance note="one project, no runs; RSS sampled every 10 s, CPU from /proc stat" --> |
+| 8 | 20 x kill -9 of the daemon mid-step: up within 30 s, each run ends once, no firing lost or doubled | pass | 35.2 s | 20 kills, 40 runs, 20 attempts failed by the crashes; slowest restart to the first answer 0.05 s |
+| 8 | 5 x kill -9 of the daemon mid-tool on the cheapest real claude model: each run resumes and passes once | FAIL | 83.9 s | run_7 ended, not passed: {"agent":"shop.dev","attempt":2,"attempts":[{"ended_at":"2026-11-13T17:40:56.937Z","failure_kind":"daemon_crash","generation":1,"harness":"claude","kind":"new_session","n":1,"session":{"config_dir":null,"session_id":"f2930b55-7ed5-5c25-a2c8-7673744931a7","workdir":"/tmp/.tmpY2lR6Z/config/aae/shop/web"},"started_at":"2026-11-13T17:40:52.813Z"},{"ended_at":"2026-11-13T17:41:13.183Z","failure_kind":null,"generation":2,"harness":"claude","kind":"resume","n":2,"session":{"config_dir":null,"session_id":"f2930b55-7ed5-5c25-a2c8-7673744931a7","workdir":"/tmp/.tmpY2lR6Z/config/aae/shop/web"},"started_at":"2026-11-13T17:40:56.969Z"}],"bead":null,"class":"agent","correlation":"cor_7","created_at":"2026-11-13T17:40:52.809Z","depth":0,"formula":"shop.work","generation":2,"id":"run_7","inputs":{},"parent_run":null,"project":"shop","rig":"web","started_at":"2026-11-13T17:40:52.813Z","state":"failed","step_kind":"prompt","waiting_for":"workdir","workdir":"/tmp/.tmpY2lR6Z/config/aae/shop/web"} |
+| 8 | 5 x kill -9 of the daemon mid-tool on the cheapest real codex model: each run resumes and passes once | pass | 208.8 s | codex, model gpt-5.6-luna: 5 kills mid-tool, 10 runs, 5 attempts failed by the crashes; slowest restart to the first answer 0.05 s |
+| 10 | a codex quota with a reset time closes the account gate; both runs of the account pass after it | pass | 72.0 s | gate "account:codex/f8faa1025621cf22" until "2026-11-13T17:41:01.000Z"; both runs passed 69.4 s after the limit |
+| 12 | explain config shows every layer and the host in one line; host inheritance shows in the session | pass | 3.3 s | explain: 10 and 10 lines, one host line each; the host CLAUDE.md reached the agent only while it inherited |
+| 13 | codex agents of one process part share an app-server, of two get two; lazy start, idle stop | pass | 64.6 s | 3 runs on 2 app-servers (i-693ab64f1fd1eb12, i-45655a7946af0cb1); both stopped as idle |
+| 14 | one HTTP MCP service serves concurrent claude and codex sessions with identity headers in one process | pass | 4.5 s | 2 claude and 2 codex runs passed on one service process (pid 2866424); 14 requests, all with the token and each run's identity headers |
+| 15 | an external plugin gives its skill and hook to one of two agents, vetoes a pass; its failure is contained | pass | 4.3 s | veto: the summary of a pass must say the work is tested; skill, hook, prompt fragment and bin/ only in the attaching agent's session; a failed hook: the review plugin needs its require parameter |
+| 16 | a bead: claim held through a crash, returned on failure, closed on pass, one run per bead | pass | 9.8 s | claim held through a crash; 5 requests for an epic of 3: 3 runs, 2 nothing_ready; out after 2 failures |
+| 17 | a session of the cheapest real claude model calls list_formulas on the daemon's MCP and reports it | pass | 7.4 s | claude, model haiku: the session listed the formulas over MCP and reported "dev,zebra-audit" |
+| 18 | the journal rotates at 10 MiB x 5; a reader continues by seq; a rotated-away seq is a gap | pass | 4.7 s | rotated after 6 runs |
+| 19 | operator gates stop dispatch, survive a restart and stay until opened by hand | pass | 3.6 s |  |
+20 of 21 scenarios passed in 610 s.
+report: /home/ubuntu/proj/work/aae/target/acceptance/report.md
+[acceptance] ERROR task failed
+EXIT 1
