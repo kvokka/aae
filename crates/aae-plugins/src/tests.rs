@@ -106,6 +106,67 @@ fn default_policy_follows_contracts_10() {
     assert!(check("default-policy", &json!({"no_such": 1})).is_err());
 }
 
+/// Every threshold of `[builtin.default-policy]` moves its decision away from the default one.
+#[test]
+fn every_policy_threshold_comes_from_the_config() {
+    let none = json!({});
+    let until = |v: &Value| v["gate"]["until"].clone();
+    let quota = |retry: Value| failed("quota_exhausted", retry, &[], json!([]));
+    let reset = quota(json!({"retry_at": "2026-11-13T15:00:00.000Z"}));
+    assert_eq!(
+        until(&policy(&reset, json!({"quota_margin_s": 0}))),
+        "2026-11-13T15:00:00.000Z"
+    );
+    let no_reset = quota(none.clone());
+    assert_eq!(
+        until(&policy(&no_reset, json!({"quota_wait_s": 60}))),
+        "2026-11-13T12:01:00.000Z"
+    );
+    let overloaded = failed("overloaded", json!({"retried_by_harness": true}), &[], json!([]));
+    assert_eq!(
+        until(&policy(&overloaded, json!({"model_pause_s": 60}))),
+        "2026-11-13T12:01:00.000Z"
+    );
+
+    let limited = failed(
+        "rate_limited",
+        none.clone(),
+        &[("resume", "rate_limited", 1); 2],
+        json!([]),
+    );
+    assert_eq!(policy(&limited, json!({"backoff_base_s": 1}))["after"], "2s");
+    assert_eq!(policy(&limited, json!({"backoff_cap_s": 5}))["after"], "5s");
+    assert_eq!(policy(&limited, json!({"backoff_park_from": 2}))["decision"], "park");
+
+    let rapid = failed(
+        "harness_crash",
+        none.clone(),
+        &[("new_session", "harness_crash", 5); 2],
+        json!([]),
+    );
+    assert_eq!(policy(&rapid, json!({}))["decision"], "resume");
+    let looped = policy(&rapid, json!({"crash_loop": 2, "crash_pause_s": 60}));
+    assert_eq!(until(&looped), "2026-11-13T12:01:00.000Z");
+    assert_eq!(
+        policy(&rapid, json!({"crash_loop": 2, "rapid_s": 5}))["decision"],
+        "resume"
+    );
+    let resumed = failed(
+        "harness_crash",
+        none.clone(),
+        &[("resume", "harness_crash", 600)],
+        json!([]),
+    );
+    assert_eq!(
+        policy(&resumed, json!({"resume_failures": 1}))["decision"],
+        "new_session"
+    );
+
+    let unknown = failed("unknown", none, &[("resume", "unknown", 9); 2], json!([]));
+    assert_eq!(policy(&unknown, json!({}))["decision"], "resume");
+    assert_eq!(policy(&unknown, json!({"unknown_retries": 1}))["decision"], "fail");
+}
+
 #[test]
 fn default_policy_reminds_once() {
     let turn = |remarks| json!({ "type": "run.turn_ended_without_outcome", "data": { "remarks": remarks } });
