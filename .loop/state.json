@@ -1,6 +1,6 @@
 {
   "max_cycles": 30,
-  "status": "running",
+  "status": "halted",
   "cycle": 30,
   "phase": null,
   "attempt": 0,
@@ -278,5 +278,6 @@
     }
   ],
   "started": "2026-11-13T09:36:39+0700",
-  "coder_status": "partial"
+  "coder_status": "partial",
+  "halt_reason": "исчерпан лимит циклов (30)"
 }
