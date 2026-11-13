@@ -3,3 +3,4 @@ docs/init/aae-context/lab
 .loop/run/
 /experiments/target/
 .loop/cycles/*/notes/*.log
+__pycache__/
