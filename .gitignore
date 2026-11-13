@@ -2,3 +2,4 @@ docs/init/aae-context/lab
 /target/
 .loop/run/
 /experiments/target/
+.loop/cycles/*/notes/*.log

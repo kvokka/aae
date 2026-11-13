@@ -1,11 +1,14 @@
 {
-  "max_cycles": 60,
-  "status": "done",
+  "max_cycles": 83,
+  "status": "running",
   "cycle": 43,
   "phase": null,
   "attempt": 0,
   "base": "34509c0ae57cc9b7c7b11831696e897242ab57f7",
-  "history": [
+  "started": "2026-11-14T02:19:08+0700",
+  "coder_status": "done",
+  "halt_reason": null,
+  "history_round1": [
     {
       "cycle": 1,
       "base": "46c71c26cc9caa2aeeb61d09101e1b429cf28c51",
@@ -394,7 +397,5 @@
       "ended": "2026-11-14T02:36:51+0700"
     }
   ],
-  "started": "2026-11-14T02:19:08+0700",
-  "coder_status": "done",
-  "halt_reason": "ревьюер: complete, оценка 9.4/10"
+  "history": []
 }
