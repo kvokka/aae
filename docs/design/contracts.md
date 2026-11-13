@@ -661,7 +661,7 @@ not have (an exec run has no agent key, a run whose harness reported no account 
 | `quota_exhausted` | `park{gate: account, until: retry_at + 60 s, then: resume}`; no `retry_at` → `until` now + 30 min |
 | `rate_limited`, `overloaded` with `retried_by_harness` | `park{gate: model, until: now + 10 min, then: resume}` |
 | `rate_limited`, `overloaded` without | `resume{after: min(10 s · 2^(n−1), 5 min)}` over `n` consecutive such failures; from the 3rd — the `park` above |
-| `auth_required` | `park{gate: account, until: now + min(30 s · 2^(n−1), 15 min), then: resume}` over `n` consecutive such failures (postmortem 0001: a proxy or WAF error passes by itself; the attempt after the wait is the probe); once the first attempt of the streak started 2 h ago or more, `until: null` (an operator must act) |
+| `auth_required` | `park{gate: account, until: now + min(30 s · 2^(n−1), 30 min), then: resume}` over `n` consecutive such failures (postmortem 0001: a proxy or WAF error passes by itself; the attempt after the wait is the probe); `until: null` (an operator must act) once the first attempt of the streak started 4 h ago or more, or when the next attempt would be the last under the core's ceiling of 20 attempts per run, so the escalation never gives way to `failed{attempts_ceiling}` and a blind retry by new runs |
 | `billing` | `park{gate: account, until: null, then: resume}` |
 | `context_overflow`, `transcript_divergence` | `new_session` |
 | `config_error` | `fail{gate: agent, until: null}` |
@@ -672,6 +672,6 @@ not have (an exec run has no agent key, a run whose harness reported no account 
 | `workspace_failure` | `fail{gate: rig, until: null}` |
 | `tool_failure` | `resume` |
 | `unknown` | `resume{after: 30 s}` up to 3 consecutive, then `fail` |
-| a gate of the run already closed after its attempt started | `park` on that gate, no new closure (absorb) |
+| a gate of the run already closed after its attempt started | `park` on that gate, no new closure (absorb); an absorbed failure decides no escalation, the run whose failure closed the gate does, and the attempts ceiling bounds the rest |
 | `run.turn_ended_without_outcome` | 1st `continue` with a reminder to call the finisher, 2nd `fail` |
 | `run.requires_action`, `run.finishing`, `run.preparing` | no decision |

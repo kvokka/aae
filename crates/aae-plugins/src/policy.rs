@@ -2,7 +2,7 @@
 //! count comes from the event (`attempts`, `gates`, `keys`), so the policy keeps no state and the same event always
 //! gets the same decision: a hook run again after a daemon crash decides the same.
 
-use aae_core::{parse_rfc3339_ms, rfc3339_ms};
+use aae_core::{parse_rfc3339_ms, rfc3339_ms, run::MAX_ATTEMPTS};
 use serde::Deserialize;
 use serde_json::{Value, json};
 
@@ -26,7 +26,8 @@ pub(crate) struct Params {
     /// `min(base · 2^(n−1), cap)` after `n` consecutive such failures; the attempt after it probes the cause.
     auth_backoff_base_s: i64,
     auth_backoff_cap_s: i64,
-    /// Once `auth_required` has lasted this long, the account gate stays closed until an operator opens it.
+    /// Once `auth_required` has lasted this long, or the next attempt would be the last under the core's attempts
+    /// ceiling, the account gate stays closed until an operator opens it.
     auth_escalate_s: i64,
     /// An attempt shorter than this that crashed is a rapid crash.
     rapid_s: i64,
@@ -50,8 +51,8 @@ impl Default for Params {
             backoff_cap_s: 5 * 60,
             backoff_park_from: 3,
             auth_backoff_base_s: 30,
-            auth_backoff_cap_s: 15 * 60,
-            auth_escalate_s: 2 * 60 * 60,
+            auth_backoff_cap_s: 30 * 60,
+            auth_escalate_s: 4 * 60 * 60,
             rapid_s: 30,
             crash_loop: 5,
             crash_pause_s: 5 * 60,
@@ -137,7 +138,10 @@ fn attempt_failed(event: &Value, p: &Params) -> Value {
                 .len()
                 .checked_sub(n)
                 .and_then(|i| time(&attempts.get(i)?["started_at"]));
-            let lasting = kind == "billing" || now - since.unwrap_or(now) >= p.auth_escalate_s * 1000;
+            // Also escalate when the next attempt is the last the core allows: past the attempts ceiling the run
+            // fails, the account gate is gone and new runs start a fresh streak, a blind retry forever.
+            let ceiling = attempts.len() + 1 >= usize::try_from(MAX_ATTEMPTS).unwrap_or(usize::MAX);
+            let lasting = kind == "billing" || ceiling || now - since.unwrap_or(now) >= p.auth_escalate_s * 1000;
             match key("account:") {
                 account if !lasting => park(
                     account,

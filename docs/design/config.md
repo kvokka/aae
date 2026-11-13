@@ -335,7 +335,7 @@ or for a project).
 - `default-policy` (on unless `enabled = false`) decides on `run.attempt_failed` and
   `run.turn_ended_without_outcome` as in contracts 10. Parameters, all integers: `quota_margin_s` (60),
   `quota_wait_s` (1800), `model_pause_s` (600), `backoff_base_s` (10), `backoff_cap_s` (300), `backoff_park_from`
-  (3), `auth_backoff_base_s` (30), `auth_backoff_cap_s` (900), `auth_escalate_s` (7200), `rapid_s` (30),
+  (3), `auth_backoff_base_s` (30), `auth_backoff_cap_s` (1800), `auth_escalate_s` (14400), `rapid_s` (30),
   `crash_loop` (5), `crash_pause_s` (300), `resume_failures` (3), `unknown_after_s` (30), `unknown_retries` (3).
 - `worktree` (off) gives each run of the agents in `agents` and the formulas in `formulas` (bare or qualified names;
   both empty: every run) a git worktree of its rig on the branch `aae/<run>`, in `<git common dir>/aae/worktrees/<run>`,

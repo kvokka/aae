@@ -195,6 +195,12 @@ fn every_policy_threshold_comes_from_the_config() {
         escalated["gate"],
         json!({"key": "account:claude/a1", "until": null, "reason": "auth_required"})
     );
+    // Younger than `auth_escalate_s`, but the next attempt is the last under the core's ceiling: escalate now.
+    let near_ceiling = &[("resume", "auth_required", 9); aae_core::run::MAX_ATTEMPTS as usize - 1];
+    let ceiling = failed("auth_required", none.clone(), near_ceiling, json!([]));
+    assert_eq!(policy(&ceiling, json!({}))["gate"]["until"], Value::Null);
+    let below = failed("auth_required", none.clone(), &near_ceiling[1..], json!([]));
+    assert_eq!(until(&policy(&below, json!({}))), "2026-11-13T12:30:00.000Z");
 
     let unknown = failed("unknown", none, &[("resume", "unknown", 9); 2], json!([]));
     assert_eq!(policy(&unknown, json!({}))["decision"], "resume");
