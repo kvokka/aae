@@ -160,6 +160,7 @@ impl Handler for RunHandler {
             Msg::TrackerChanged(project) => self.sync_trackers(tx, Some(&project), "changed"),
             Msg::Reload(config) => return self.reload(tx, config),
             Msg::Stopping { reason } => return self.stopping(tx, reason),
+            Msg::StopInstance { id } => Self::stop_by_operator(tx, &id),
         }?;
         Ok(Value::Null)
     }

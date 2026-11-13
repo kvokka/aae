@@ -1,4 +1,4 @@
-//! The command groups of the CLI: `run`, `gate` and `trigger`, each with the API calls behind it.
+//! The command groups of the CLI: `run`, `gate`, `trigger` and `instance`, each with the API calls behind it.
 
 use super::{encode, print, run_path, text};
 use crate::client::{Client, ClientError};
@@ -247,6 +247,31 @@ pub(super) async fn trigger(client: &Client, json: bool, command: TriggerCommand
     let reply = client
         .request("POST", "/v1/triggers/fire", Some(&body), idempotency.as_deref())
         .await?;
+    print(json, &reply);
+    Ok(())
+}
+
+#[derive(Subcommand)]
+pub enum InstanceCommand {
+    /// List the harness instances.
+    List,
+    /// Stop an idle instance.
+    Stop {
+        id: String,
+        /// The idempotency key: a repeat with the same key changes nothing.
+        #[arg(long = "key")]
+        idempotency: Option<String>,
+    },
+}
+
+pub(super) async fn instance(client: &Client, json: bool, command: InstanceCommand) -> Result<(), ClientError> {
+    let reply = match command {
+        InstanceCommand::List => client.request("GET", "/v1/instances", None, None).await?,
+        InstanceCommand::Stop { id, idempotency } => {
+            let path = format!("/v1/instances/{}/stop", encode(&id));
+            client.request("POST", &path, None, idempotency.as_deref()).await?
+        }
+    };
     print(json, &reply);
     Ok(())
 }

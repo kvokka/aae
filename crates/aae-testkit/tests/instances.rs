@@ -279,3 +279,32 @@ async fn an_instance_found_dead_by_its_health_fails_every_attempt_on_it() {
     assert_eq!(w.count("instance.failed"), 1);
     assert!(killed(orphan).await, "its marked descendants are swept");
 }
+
+/// The operator stops an idle instance only: one with a session or an unknown id is refused (contracts 8).
+#[tokio::test(start_paused = true)]
+async fn the_operator_stops_an_idle_instance_and_no_busy_one() {
+    let w = world_driven(FILES, ScriptedDriver::new(2).idle(Duration::from_secs(600)));
+    let run = w.start("web", "build").await;
+    w.events(&run, Duration::from_secs(1)).await;
+    let reader = aae_core::run::Reader::open(&w.dir.path().join("state.db")).unwrap();
+    let listed = reader.instances().unwrap();
+    assert_eq!((listed.len(), &listed[0]["sessions"]), (1, &json!(1)), "{listed:?}");
+    let id = listed[0]["id"].as_str().unwrap().to_owned();
+    let stop = |id: &str| Msg::StopInstance { id: id.into() };
+
+    let busy = w.core.send(None, stop(&id)).await.unwrap_err();
+    assert!(busy.to_string().contains("1 session(s)"), "{busy}");
+    let unknown = w.core.send(None, stop("nope")).await.unwrap_err();
+    assert!(unknown.to_string().contains("no instance `nope`"), "{unknown}");
+
+    w.cancel(&run).await;
+    tokio::time::sleep(Duration::from_secs(1)).await;
+    assert_eq!(w.count("instance.stopped"), 0, "it idles for 600 s");
+    w.core.send(None, stop(&id)).await.unwrap();
+    tokio::time::sleep(Duration::from_secs(1)).await;
+    let all = Journal::new(&w.journal).read_from(1, 100_000).unwrap();
+    let stopped: Vec<_> = all.iter().filter(|e| e["type"] == "instance.stopped").collect();
+    assert_eq!(stopped.len(), 1, "{stopped:?}");
+    assert_eq!(stopped[0]["data"]["reason"], "operator");
+    assert!(reader.instances().unwrap().is_empty(), "the record goes");
+}

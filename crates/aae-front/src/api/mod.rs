@@ -5,6 +5,7 @@ mod config;
 mod daemon;
 mod events;
 mod gates;
+mod instances;
 mod mcp;
 mod runs;
 mod triggers;
@@ -85,6 +86,8 @@ fn router() -> OpenApiRouter<Arc<Api>> {
         .routes(routes!(daemon::status))
         .routes(routes!(daemon::drain))
         .routes(routes!(daemon::restart))
+        .routes(routes!(instances::list))
+        .routes(routes!(instances::stop))
 }
 
 /// The OpenAPI document of the API, generated from the handlers.

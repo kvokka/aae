@@ -87,7 +87,7 @@ Observed events (§5.4):
 | `daemon.started` | `{version, pid, interrupted_runs}`; `interrupted_runs` is how many runs recovery moved to `interrupted` |
 | `daemon.stopping` | `{reason: "signal"\|"drain"\|"restart"}` |
 | `config.reloaded` | `{config_generation, restarted_instances: [id]}` |
-| `instance.starting`, `instance.ready`, `instance.stopped` | `{instance: {id, harness, fingerprint, pid, pgid}, reason}`; `pid`/`pgid` null before spawn, `reason` null except `stopped` (`idle`, `config`, `cancel`, `shutdown`, `recovery`) |
+| `instance.starting`, `instance.ready`, `instance.stopped` | `{instance: {id, harness, fingerprint, pid, pgid}, reason}`; `pid`/`pgid` null before spawn, `reason` null except `stopped` (`idle`, `config`, `cancel`, `shutdown`, `recovery`, `operator`) |
 | `instance.failed` | `{instance, failure: Failure}` |
 | `service.starting`, `service.ready`, `service.stopped`, `service.failed` | same as `instance.*` with `service: {id, name, scope, pid, pgid}` instead of `instance` |
 | `run.queued` | `{run: RunView, waiting_for: "concurrency"\|"gate"\|"workdir"\|"daemon_stopping"\|null, gate}`; re-emitted when the reason changes |

@@ -90,6 +90,28 @@ impl Reader {
         Ok(json!({ "outbox_depth": depth, "outbox_oldest_ms": oldest, "active_runs": active }))
     }
 
+    /// Every instance of the registry (contracts 8), oldest first.
+    pub fn instances(&self) -> Result<Vec<Value>, Error> {
+        let conn = self.conn();
+        let mut stmt = conn.prepare(
+            "SELECT id, kind, harness, fingerprint, state, sessions, capacity, handle, idle_since_ms \
+             FROM instances ORDER BY rowid",
+        )?;
+        let rows = stmt.query_map([], |r| {
+            let handle: Option<String> = r.get(7)?;
+            let handle: Value = handle.and_then(|h| serde_json::from_str(&h).ok()).unwrap_or_default();
+            let idle_since: Option<i64> = r.get(8)?;
+            Ok(json!({
+                "id": r.get::<_, String>(0)?, "kind": r.get::<_, String>(1)?, "harness": r.get::<_, String>(2)?,
+                "fingerprint": r.get::<_, String>(3)?, "state": r.get::<_, String>(4)?,
+                "sessions": r.get::<_, i64>(5)?, "capacity": r.get::<_, i64>(6)?,
+                "pid": handle["pid"], "pgid": handle["pgid"],
+                "idle_since": idle_since.map(crate::journal::rfc3339_ms),
+            }))
+        })?;
+        Ok(rows.collect::<Result<_, _>>()?)
+    }
+
     /// Every active gate closure at `now_ms` (contracts 7), oldest first.
     pub fn gates(&self, now_ms: i64) -> Result<Vec<Value>, Error> {
         closures(&self.conn(), now_ms, None)

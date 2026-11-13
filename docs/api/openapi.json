@@ -500,6 +500,73 @@
         }
       }
     },
+    "/v1/instances": {
+      "get": {
+        "summary": "Lists every harness instance: `{id, kind, harness, fingerprint, state, sessions, capacity, pid, pgid,\nidle_since}`.",
+        "operationId": "list",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/instances/{id}/stop": {
+      "post": {
+        "summary": "Stops an idle instance (`instance.stopped{reason: \"operator\"}`); one that starts or has sessions is refused\n(409), so no attempt loses its process.",
+        "operationId": "stop",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/packs": {
       "get": {
         "summary": "Lists the packs of the projects; the project's own pack has no version.",

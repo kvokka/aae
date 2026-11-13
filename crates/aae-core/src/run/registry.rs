@@ -107,6 +107,25 @@ impl RunHandler {
         }
     }
 
+    /// The operator's stop: only an idle instance goes, so no attempt loses its process to it.
+    pub(super) fn stop_by_operator(tx: &mut Tx<'_>, id: &str) -> Result<(), Error> {
+        let found: Option<(String, i64)> = tx
+            .sql()
+            .query_row("SELECT state, sessions FROM instances WHERE id = ?1", [id], |r| {
+                Ok((r.get(0)?, r.get(1)?))
+            })
+            .optional()?;
+        match found {
+            None => Err(super::rejected(format!("no instance `{id}`"))),
+            Some((state, _)) if state == "stopping" => Ok(()),
+            Some((state, _)) if state == "starting" => Err(super::rejected(format!("instance `{id}` is starting"))),
+            Some((_, 0)) => Self::stop_instance(tx, id, "operator"),
+            Some((_, n)) => Err(super::rejected(format!(
+                "instance `{id}` has {n} session(s); cancel their runs or drain the daemon first"
+            ))),
+        }
+    }
+
     /// The instance `id` runs as `handle`.
     pub(super) fn instance_ready(
         tx: &mut Tx<'_>,

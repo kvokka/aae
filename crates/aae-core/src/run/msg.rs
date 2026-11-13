@@ -124,6 +124,11 @@ pub enum Msg {
     Stopping {
         reason: String,
     },
+    /// The operator stops the idle instance `id` (`instance.stopped{reason: "operator"}`); refused while it starts
+    /// or has sessions.
+    StopInstance {
+        id: String,
+    },
     /// The finisher of an attempt; the reply is `{"answer": "accepted"|"stale_attempt"|"run_terminal"|"invalid"}`
     /// (contracts 6.3).
     Finish {

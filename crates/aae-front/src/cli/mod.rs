@@ -7,7 +7,7 @@ mod finish;
 
 use crate::client::{Client, ClientError};
 use clap::{CommandFactory, Parser, Subcommand, ValueEnum};
-pub use commands::{Decision, GateCommand, RunCommand, TriggerCommand};
+pub use commands::{Decision, GateCommand, InstanceCommand, RunCommand, TriggerCommand};
 pub use config::{ConfigCommand, ListCommand};
 use finish::finish;
 use serde_json::Value;
@@ -38,6 +38,8 @@ pub const OPERATIONS: &[(&str, &str, &str)] = &[
     ("status", "GET", "/v1/daemon"),
     ("drain", "POST", "/v1/daemon/drain"),
     ("restart", "POST", "/v1/daemon/restart"),
+    ("instance list", "GET", "/v1/instances"),
+    ("instance stop", "POST", "/v1/instances/{id}/stop"),
 ];
 
 #[derive(Parser)]
@@ -71,6 +73,9 @@ pub enum Command {
     /// Issue gates: pause and resume what starts.
     #[command(subcommand)]
     Gate(GateCommand),
+    /// Harness instances: list them, stop an idle one.
+    #[command(subcommand)]
+    Instance(InstanceCommand),
     /// Triggers: list them, fire one by hand.
     #[command(subcommand)]
     Trigger(TriggerCommand),
@@ -173,6 +178,7 @@ async fn execute(client: &Client, cli: Cli) -> Result<ExitCode, ClientError> {
         Command::Daemon { .. } => return Ok(fail("the daemon runs in its own process, not from a client")),
         Command::Run(command) => commands::run(client, json, command).await?,
         Command::Gate(command) => commands::gate(client, json, command).await?,
+        Command::Instance(command) => commands::instance(client, json, command).await?,
         Command::Trigger(command) => commands::trigger(client, json, command).await?,
         Command::Project(command) => config::list(client, json, "projects", command).await?,
         Command::Agent(command) => config::list(client, json, "agents", command).await?,
