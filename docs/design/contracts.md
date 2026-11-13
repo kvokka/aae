@@ -394,7 +394,7 @@ process part, never the credential itself.
 | `prompt.acked` | `command_lifecycle{queued}` with our uuid | `turn/start` response with a turn id |
 | Turn end | `result` of a turn, then "idle without background" by the three-condition rule ([experiments](experiments.md#idle-without-background-both-signals-in-one-run)) | `turn/completed` only; thread status `idle` does not end a turn (§7.5) |
 | Cancel | `control_request{interrupt}`; the following `aborted_tools` result is `turn.ended{cancelled}` | `turn/interrupt` |
-| Resume | full flag set again on every `--resume` | full thread config again on every `thread/resume` |
+| Resume | full flag set again on every `--resume` | full thread config again on every `thread/resume`, after app-server closed the thread (`thread/unsubscribe` until `notLoaded`, at most 10 s, else `transcript_divergence`): a thread it still holds keeps the old config |
 | Attempt environment | process environment | `shell_environment_policy.set` of the thread; hooks get per-session values on their command line |
 | Transcript check | the session file under `config_dir`: user record with `key`, answer after it | `thread/read` with turns: `userMessage` with `clientId == key`, completed turn after it |
 

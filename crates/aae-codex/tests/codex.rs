@@ -172,3 +172,45 @@ async fn a_usage_limit_ends_the_turn_with_a_quota_and_its_reset() {
     );
     driver.stop_instance(&instance, Duration::from_secs(4)).await;
 }
+
+/// A thread whose turn failed stays loaded past its unsubscribe; resumed on the same app-server, its commands
+/// still get the new attempt's environment.
+#[tokio::test]
+async fn a_thread_resumed_on_its_live_app_server_gets_the_new_attempt_token() {
+    let command = Reply::Command("echo \"$AAE_ATTEMPT_TOKEN\" > marker".into());
+    let provider = Provider::start(vec![Reply::UsageLimit(3600), command, Reply::Text("DONE".into())]).await;
+    let dir = tempfile::tempdir().unwrap();
+    let driver = Codex::new("codex".into(), dir.path().join("state"), None, 8);
+    let (workdir, run) = (dir.path().to_path_buf(), "r".to_owned());
+    let plan = SessionPlan::New {
+        workdir: workdir.clone(),
+        run: run.clone(),
+        attempt: 1,
+        token: "one".into(),
+    };
+    let split = driver.split(&config(&provider), &plan).unwrap();
+    let (tx, mut rx) = mpsc::unbounded_channel();
+    let instance = driver.start_instance("i1", &split.process, tx).await.unwrap();
+    let session = driver.start_session(&instance, &split.session).await.unwrap();
+    let prompt = driver.send_prompt(&instance, &session, "run it", PromptKey::new("r", 1, 1));
+    prompt.await.unwrap();
+    until(&mut rx, |e| matches!(e, Normalized::TurnEnded { .. })).await;
+    driver.close_session(&instance, &session).await;
+
+    let plan = SessionPlan::Resume {
+        session: session.clone(),
+        workdir,
+        run,
+        attempt: 2,
+        token: "two".into(),
+    };
+    let split = driver.split(&config(&provider), &plan).unwrap();
+    let resumed = driver.resume_session(&instance, &session, &split.session);
+    resumed.await.unwrap();
+    let prompt = driver.send_prompt(&instance, &session, "again", PromptKey::new("r", 2, 1));
+    prompt.await.unwrap();
+    let events = until(&mut rx, |e| matches!(e, Normalized::TurnEnded { .. })).await;
+    let marker = std::fs::read_to_string(dir.path().join("marker"));
+    assert_eq!(marker.unwrap_or_default().trim(), "two", "{events:?}");
+    driver.stop_instance(&instance, Duration::from_secs(4)).await;
+}

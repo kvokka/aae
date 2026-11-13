@@ -166,11 +166,16 @@ fn hooks(config: &EffectiveConfig) -> Result<Map<String, Value>, Failure> {
 
 /// The arguments of `codex` for the process part `p`.
 pub(crate) fn args(p: &Value) -> Vec<String> {
-    let mut args = vec![
-        "app-server".to_owned(),
-        "-c".to_owned(),
-        "analytics.enabled=false".to_owned(),
-    ];
+    // Without the delay a thread nobody subscribes to is closed at once: a resume then loads it with its config.
+    let mut args: Vec<String> = [
+        "app-server",
+        "-c",
+        "analytics.enabled=false",
+        "-c",
+        "thread_unload_delay_secs=0",
+    ]
+    .map(str::to_owned)
+    .into();
     for o in p["overrides"].as_array().into_iter().flatten() {
         args.extend(["-c".to_owned(), o.as_str().unwrap_or_default().to_owned()]);
     }

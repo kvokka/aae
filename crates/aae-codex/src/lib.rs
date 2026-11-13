@@ -45,6 +45,9 @@ pub struct Codex {
     instances: Arc<Mutex<HashMap<String, Arc<Instance>>>>,
 }
 
+/// How long a resume waits for app-server to close the thread it still holds.
+const UNLOAD_WAIT: Duration = Duration::from_secs(10);
+
 fn thread_id(session: &SessionRef) -> &str {
     session.0["thread_id"].as_str().unwrap_or_default()
 }
@@ -234,7 +237,8 @@ impl Driver for Codex {
         })
     }
 
-    /// The whole thread config goes again: whether app-server keeps it across a restart is not known.
+    /// The whole thread config goes again, and only a load takes it: a thread this app-server still holds would
+    /// rejoin with the last attempt's token, so it is closed first (docs/design/experiments.md).
     fn resume_session<'a>(
         &'a self,
         instance: &'a InstanceHandle,
@@ -243,6 +247,16 @@ impl Driver for Codex {
     ) -> BoxFuture<'a, Result<(), Failure>> {
         Box::pin(async move {
             let known = self.instance(&instance.id)?;
+            let thread = json!({ "threadId": thread_id(session) });
+            let until = Instant::now() + UNLOAD_WAIT;
+            while known.call("thread/unsubscribe", thread.clone(), None).await?["status"] != "notLoaded" {
+                if Instant::now() >= until {
+                    let mut failure = Failure::new(FailureKind::TranscriptDivergence, Source::Adapter);
+                    failure.raw = format!("app-server did not close thread {} to resume it", thread_id(session));
+                    return Err(failure);
+                }
+                tokio::time::sleep(Duration::from_millis(20)).await;
+            }
             let mut params = part.0.clone();
             params["threadId"] = json!(thread_id(session));
             params["excludeTurns"] = json!(true);
