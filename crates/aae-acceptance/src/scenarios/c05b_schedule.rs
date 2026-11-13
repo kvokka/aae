@@ -11,7 +11,7 @@ use crate::{
 };
 use std::{sync::Arc, time::Duration};
 
-const EVERY: Duration = Duration::from_secs(4);
+const EVERY: Duration = Duration::from_secs(1);
 
 /// The runs of the scheduled formula so far.
 async fn fired(d: &Daemon) -> usize {

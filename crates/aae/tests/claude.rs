@@ -104,7 +104,7 @@ async fn the_live_view_of_a_run_relays_its_session_and_ends_with_the_run() {
 #[tokio::test(flavor = "multi_thread")]
 async fn run_watch_on_a_going_run_prints_its_session_and_exits_with_the_run() {
     // The command sleeps first, so `run watch` attaches while the turn is still going.
-    let finish = format!("sleep 4 && {} finish pass --summary built", env!("CARGO_BIN_EXE_aae"));
+    let finish = format!("sleep 2 && {} finish pass --summary built", env!("CARGO_BIN_EXE_aae"));
     let provider = Provider::start(vec![Reply::Bash(finish), Reply::Text("Done.".into())]).await;
     let d = daemon(&provider).await;
     let run = d.create("build", None).await;
@@ -252,7 +252,7 @@ async fn a_claude_killed_in_a_command_is_resumed_and_its_run_passes() {
     // The resumed session sleeps a while first: time to look at the claim between the death and the outcome.
     let plan = vec![
         Reply::Bash("sleep 20".into()),
-        Reply::Bash("sleep 3".into()),
+        Reply::Bash("sleep 1".into()),
         Reply::Bash(finish),
         Reply::Text("Done.".into()),
     ];
@@ -307,7 +307,7 @@ async fn a_claude_killed_in_a_command_is_resumed_and_its_run_passes() {
 async fn a_finisher_called_with_a_background_command_running_waits_for_it() {
     let finish = format!("{} finish pass --summary built", env!("CARGO_BIN_EXE_aae"));
     let plan = vec![
-        Reply::Background("sleep 3 && touch background-done".into()),
+        Reply::Background("sleep 2 && touch background-done".into()),
         Reply::Bash(finish),
         Reply::Text("Done.".into()),
     ];

@@ -304,7 +304,7 @@ async fn s12_a_silent_provider_ends_nothing_until_an_interrupt_cancels_the_turn(
     let dir = tempfile::tempdir().unwrap();
     let mut live = Live::start(vec![Reply::Silent], dir.path(), 0, "never").await;
     let ended = live
-        .until(Duration::from_secs(5), |e| matches!(e, Normalized::TurnEnded { .. }))
+        .until(Duration::from_secs(2), |e| matches!(e, Normalized::TurnEnded { .. }))
         .await;
     assert_eq!(ended, None);
     assert!(live.failures().is_empty(), "{:?}", live.seen);
@@ -343,7 +343,7 @@ async fn s13_a_permission_request_is_answered_and_the_command_runs() {
 async fn s14_a_command_sent_to_the_background_ends_nothing_later() {
     let dir = tempfile::tempdir().unwrap();
     let plan = vec![
-        Reply::Command("(sleep 3 && touch bg) > /dev/null 2>&1 &".into()),
+        Reply::Command("(sleep 1 && touch bg) > /dev/null 2>&1 &".into()),
         Reply::Text("Started.".into()),
     ];
     let mut live = Live::start(plan, dir.path(), 0, "never").await;
@@ -354,8 +354,9 @@ async fn s14_a_command_sent_to_the_background_ends_nothing_later() {
     };
     let after = live.until(Duration::from_secs(5), |e| *e == idle).await;
     assert_eq!(after, Some(idle), "{:?}", live.seen);
+    // Past the end of the background command.
     let more = live
-        .until(Duration::from_secs(5), |e| *e == Normalized::TurnStarted)
+        .until(Duration::from_secs(2), |e| *e == Normalized::TurnStarted)
         .await;
     assert_eq!(more, None, "{:?}", live.seen);
     assert_eq!(live.provider.requests().len(), 2);

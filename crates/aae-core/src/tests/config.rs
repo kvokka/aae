@@ -324,7 +324,7 @@ fn every_error_is_reported_with_its_file() {
 }
 
 #[test]
-fn codex_takes_max_sessions_and_refuses_zero_other_harnesses_refuse_it() {
+fn codex_takes_max_sessions_and_instance_idle_other_harnesses_refuse_them() {
     // `[harness.claude]` already opens the fixture: its key goes after its model, a codex table goes before plugins.
     let with = |harness: &str, n: &str| match harness {
         "claude" => BASE[0]
@@ -341,6 +341,13 @@ fn codex_takes_max_sessions_and_refuses_zero_other_harnesses_refuse_it() {
     fails(
         &[("config.toml", with("claude", "3").as_str())],
         "only the codex harness",
+    );
+    let idle = |harness: &str| with(harness, "3").replace("max_sessions", "instance_idle_s");
+    let config = load_with(&[("config.toml", idle("codex").as_str())]).unwrap();
+    assert_eq!(config.harnesses["codex"].instance_idle_s, Some(3));
+    fails(
+        &[("config.toml", idle("claude").as_str())],
+        "harness.claude.instance_idle_s",
     );
 }
 

@@ -41,6 +41,7 @@ pub struct Codex {
     state: PathBuf,
     socket: Option<PathBuf>,
     max_sessions: usize,
+    instance_idle: Duration,
     instances: Arc<Mutex<HashMap<String, Arc<Instance>>>>,
 }
 
@@ -56,8 +57,16 @@ impl Codex {
             state,
             socket,
             max_sessions,
+            instance_idle: Duration::from_secs(60),
             instances: Arc::default(),
         }
+    }
+
+    /// How long an app-server without threads lives on: `[harness.codex] instance_idle_s`, 60 s by default
+    /// (contracts 4.5).
+    pub fn instance_idle(mut self, idle: Duration) -> Self {
+        self.instance_idle = idle;
+        self
     }
 
     fn instance(&self, id: &str) -> Result<Arc<Instance>, Failure> {
@@ -149,7 +158,7 @@ impl Driver for Codex {
     fn capabilities(&self, _process: &ProcessPart) -> Capabilities {
         Capabilities {
             sessions_per_instance: self.max_sessions,
-            instance_idle: Duration::from_secs(60),
+            instance_idle: self.instance_idle,
             retries_429: false,
             reset_time: true,
             versions: [(0, 167, 2), (0, 168, 0)],

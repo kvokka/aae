@@ -374,7 +374,8 @@ Success traps (§7.2) are the adapter's: claude `subtype:"success"` with `is_err
 
 - `sessions_per_instance`: claude 1 (a process per session, §7.3); codex the config value `max_sessions`
   (default 8).
-- `instance_idle`: how long an instance without sessions lives on (8): claude 0, codex 60 s.
+- `instance_idle`: how long an instance without sessions lives on (8): claude 0, codex the config value
+  `instance_idle_s` (default 60 s).
 - `retries_429`: claude true, codex false (§7.2); copied into `Failure.retried_by_harness` for rate limits.
 - `reset_time`: whether a quota failure can carry `retry_at` for this process part (claude: subscription login
   only; codex: yes, from the rate-limit update).

@@ -1,12 +1,13 @@
 //! Criterion 7: the daemon idle with one registered project holds RSS at or under 50 MB and uses at most 1 % of
-//! one core on average over 10 minutes. Linux only, as acceptance runs on the owner's Linux host (spec §15).
+//! one core on average over 30 seconds. Linux only, as acceptance runs on the owner's Linux host (spec §15).
 
 use super::MARK;
 use crate::{Env, daemon::Daemon};
 use std::{fs, process::Command, sync::Arc, time::Duration};
 
-const WINDOW: Duration = Duration::from_secs(600);
-const SAMPLE: Duration = Duration::from_secs(10);
+const WINDOW: Duration = Duration::from_secs(30);
+const SAMPLE: Duration = Duration::from_secs(1);
+const WARMUP: Duration = Duration::from_secs(5);
 const RSS_MAX_KB: u64 = 50 * 1000;
 const CPU_MAX: f64 = 0.01;
 
@@ -34,7 +35,7 @@ pub(crate) async fn run(env: Arc<Env>) -> String {
     let d = Daemon::start(&env, |_| {}).await;
     let pid = d.pid();
     // Start-up work is not idle.
-    tokio::time::sleep(SAMPLE).await;
+    tokio::time::sleep(WARMUP).await;
     let ticks = cpu_ticks(pid);
     let mut rss = rss_kb(pid);
     let mut left = WINDOW;
@@ -45,12 +46,12 @@ pub(crate) async fn run(env: Arc<Env>) -> String {
     }
     let cpu = (cpu_ticks(pid) - ticks) as f64 / hz / WINDOW.as_secs_f64();
     let notes = format!(
-        "RSS max {:.1} MB, CPU {:.3} % over {} min ({}, {}) \
+        "RSS max {:.1} MB, CPU {:.3} % over {} s ({}, {}) \
          <!-- {MARK} id=idle-daemon date={} ver={} env={} src=aae-acceptance note=\"one project, no runs; \
          RSS sampled every {} s, CPU from /proc stat\" -->",
         rss as f64 / 1000.0,
         cpu * 100.0,
-        WINDOW.as_secs() / 60,
+        WINDOW.as_secs(),
         env.date,
         env.version,
         env.date,

@@ -314,7 +314,7 @@ async fn s12_a_silent_provider_ends_nothing_until_an_interrupt_cancels_the_turn(
     let dir = tempfile::tempdir().unwrap();
     let mut live = Live::start(vec![Reply::Silent], dir.path(), 0, None).await;
     let ended = live
-        .until(Duration::from_secs(5), |e| matches!(e, Normalized::TurnEnded { .. }))
+        .until(Duration::from_secs(2), |e| matches!(e, Normalized::TurnEnded { .. }))
         .await;
     assert_eq!(ended, None);
     assert!(live.failures().is_empty(), "{:?}", live.seen);

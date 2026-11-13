@@ -16,16 +16,16 @@ impl RunHandler {
     /// Takes `config` in place of the current one; refused when the change needs a daemon restart (drivers and
     /// trackers are made at start). The reply is `{config_generation, restarted_instances}`.
     pub(super) fn reload(&mut self, tx: &mut Tx<'_>, config: Arc<Config>) -> Result<Value, Error> {
-        // The drivers are made at start with the binary and the sessions per instance; the model goes into the
-        // effective config of each session.
+        // The drivers are made at start with the binary, the sessions per instance and the idle time; the model
+        // goes into the effective config of each session.
         let harnesses = |c: &Config| {
             (c.harnesses.iter())
-                .map(|(name, h)| (name.clone(), h.binary.clone(), h.max_sessions))
+                .map(|(name, h)| (name.clone(), h.binary.clone(), h.max_sessions, h.instance_idle_s))
                 .collect::<Vec<_>>()
         };
         if harnesses(&config) != harnesses(&self.config) {
             return Err(super::rejected(
-                "restart the daemon to change the harnesses, their binaries or sessions per instance",
+                "restart the daemon to change the harnesses, their binaries, sessions per instance or idle time",
             ));
         }
         if config.api_tcp != self.config.api_tcp {

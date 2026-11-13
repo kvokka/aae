@@ -9,6 +9,7 @@ use crate::{
 use aae_testkit::openai::{Provider, Reply};
 use serde_json::json;
 use std::{
+    fs,
     sync::Arc,
     time::{Duration, Instant},
 };
@@ -16,8 +17,8 @@ use std::{
 /// When the fake's quota resets after the first request.
 const RESET: Duration = Duration::from_secs(10);
 const WITHIN: Duration = Duration::from_secs(60);
-/// `default-policy` keeps the account gate a minute past the reset (`quota_margin_s`).
-const MARGIN: Duration = Duration::from_secs(60);
+/// `default-policy` keeps the account gate this long past the reset (`quota_margin_s`, set below; default 60).
+const MARGIN: Duration = Duration::from_secs(1);
 
 pub(crate) async fn run(env: Arc<Env>) -> String {
     let finish = format!("{} finish pass --summary built", env.aae.display());
@@ -29,9 +30,17 @@ pub(crate) async fn run(env: Arc<Env>) -> String {
         let shop = root.join("config/aae/shop");
         write(
             shop.join("aae.toml"),
-            "[rigs.web]\npath = \"web\"\n[rigs.api]\npath = \"api\"\n",
+            format!(
+                "[rigs.web]\npath = \"web\"\n[rigs.api]\npath = \"api\"\n\
+                 [builtin.default-policy]\nquota_margin_s = {}\n",
+                MARGIN.as_secs()
+            ),
         );
         write(shop.join("api/.keep"), "");
+        // The app-server stops before the resume, as it did under the default 60 s margin: a resume on the live
+        // app-server ends hollow (journal, cycle 44).
+        let config = root.join("config/aae/config.toml");
+        write(&config, fs::read_to_string(&config).unwrap() + "instance_idle_s = 1\n");
     })
     .await;
     let first = d.create("dev").await;

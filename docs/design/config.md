@@ -17,8 +17,8 @@ error in every file.
   reload; a removed one is dropped); running runs keep the snapshot they prepared with; an idle instance stops with
   reason `config` only when no agent of the new config, on any rig, starts sessions on its fingerprint (a changed MCP
   restarts only the instances it is part of). It emits `config.reloaded` with the generation (1 at daemon start).
-  A change of the set of harnesses, a harness `binary` or `max_sessions` (a harness `model` is fine), or of which
-  projects have a `.beads` tracker is refused: drivers and trackers are made at daemon start.
+  A change of the set of harnesses, a harness `binary`, `max_sessions` or `instance_idle_s` (a harness `model` is
+  fine), or of which projects have a `.beads` tracker is refused: drivers and trackers are made at daemon start.
 
 ## Settings (any layer)
 
@@ -129,6 +129,7 @@ binary = "/opt/claude/bin/claude"   # optional explicit path; otherwise resolved
 
 [harness.codex]
 max_sessions = 8                    # codex only: threads per app-server before a second one starts (default 8)
+instance_idle_s = 60                # codex only: seconds an app-server without threads lives on (default 60)
 
 [[plugin]]                          # an installed plugin; its orchestrator side is enabled
 path = "~/aae-plugins/aae-plugin-mail"

@@ -237,7 +237,8 @@ pub(crate) fn driver(
         "claude" => Arc::new(Claude::new(binary.clone(), state, socket)),
         "codex" => {
             let max_sessions = harness.max_sessions.map_or(8, |n| n.get() as usize);
-            Arc::new(Codex::new(binary.clone(), state, socket, max_sessions))
+            let idle = std::time::Duration::from_secs(harness.instance_idle_s.map_or(60, u64::from));
+            Arc::new(Codex::new(binary.clone(), state, socket, max_sessions).instance_idle(idle))
         }
         _ => return None,
     };

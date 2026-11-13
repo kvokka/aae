@@ -122,6 +122,8 @@ pub struct Harness {
     pub binary: Option<PathBuf>,
     /// Threads one codex app-server holds before a second one starts (contracts 4.5); codex only.
     pub max_sessions: Option<NonZeroU32>,
+    /// Seconds an app-server without threads lives on before it stops (contracts 4.5); codex only.
+    pub instance_idle_s: Option<u32>,
 }
 
 #[derive(Debug, Deserialize)]

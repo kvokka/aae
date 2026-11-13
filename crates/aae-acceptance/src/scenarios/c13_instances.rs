@@ -2,14 +2,17 @@
 //! second; no instance before the first run needs one, and each stops after its idle time without sessions.
 
 use super::codex_agent;
-use crate::{Env, daemon::Daemon};
+use crate::{
+    Env,
+    daemon::{Daemon, write},
+};
 use aae_testkit::openai::{Provider, Reply};
 use serde_json::Value;
-use std::{sync::Arc, time::Duration};
+use std::{fs, sync::Arc, time::Duration};
 
 const WITHIN: Duration = Duration::from_secs(60);
-/// codex's `instance_idle` (contracts 4.5) and the slack to see the stop.
-const IDLE: Duration = Duration::from_secs(60);
+/// codex's `instance_idle` (contracts 4.5, `[harness.codex] instance_idle_s`, default 60 s), set short here.
+const IDLE: Duration = Duration::from_secs(2);
 
 pub(crate) async fn run(env: Arc<Env>) -> String {
     let finish = format!("{} finish pass --summary built", env.aae.display());
@@ -20,6 +23,9 @@ pub(crate) async fn run(env: Arc<Env>) -> String {
         codex_agent(root, "ops", &shared.base_url());
         // Another provider is another process part of codex (contracts 4.6).
         codex_agent(root, "qa", &other.base_url());
+        let idle = format!("instance_idle_s = {}\n", IDLE.as_secs());
+        let config = root.join("config/aae/config.toml");
+        write(&config, fs::read_to_string(&config).unwrap() + &idle);
     })
     .await;
     let instances = |seen: &[(String, Value)], kind: &str| -> Vec<String> {

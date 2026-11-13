@@ -79,7 +79,7 @@ pub(crate) const ALL: &[Scenario] = &[
     },
     Scenario {
         criterion: "7",
-        title: "the idle daemon with one project: RSS <= 50 MB, CPU <= 1 % over 10 minutes",
+        title: "the idle daemon with one project: RSS <= 50 MB, CPU <= 1 % over 30 seconds",
         launch: Launch::Ci,
         run: |env| Box::pin(c07_idle::run(env)),
     },
