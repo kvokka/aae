@@ -182,15 +182,19 @@ impl Driver for Codex {
         })
     }
 
-    /// EOF on stdin first (app-server exits on it at once), then the group is terminated, then killed.
+    /// EOF on stdin first (app-server exits on it at once) when this daemon started it, then the group is terminated,
+    /// then killed.
     fn stop_instance<'a>(&'a self, instance: &'a InstanceHandle, grace: Duration) -> BoxFuture<'a, ()> {
         Box::pin(async move {
             let known = lock(&self.instances).remove(&instance.id);
+            // An instance of a dead daemon (recovery) has no stdin here to close: straight to the signals.
+            let eof = known.is_some();
             if let Some(known) = known {
                 known.stdin.lock().await.take();
             }
             let alive = || orphans::start_time(instance.pid) == Some(instance.start_time);
-            for signal in [None, Some(Signal::TERM), Some(Signal::KILL)] {
+            let signals = [None, Some(Signal::TERM), Some(Signal::KILL)];
+            for signal in signals.into_iter().skip(usize::from(!eof)) {
                 if let (Some(signal), Some(group)) = (signal, Pid::from_raw(instance.pgid)) {
                     let _ = kill_process_group(group, signal);
                 }

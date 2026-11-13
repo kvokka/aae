@@ -261,3 +261,27 @@ async fn a_process_that_dies_in_a_turn_reports_its_stderr_and_is_forgotten() {
             .is_err()
     );
 }
+
+/// Recovery stops an instance a dead daemon started: there is no stdin to close, so no grace is spent waiting on it.
+#[tokio::test]
+async fn an_instance_of_a_dead_daemon_is_signalled_at_once() {
+    use std::os::unix::process::CommandExt;
+    let mut child = std::process::Command::new("sleep")
+        .arg("30")
+        .process_group(0)
+        .spawn()
+        .unwrap();
+    let pid = i32::try_from(child.id()).unwrap();
+    let handle = InstanceHandle {
+        id: "i-dead".into(),
+        pid,
+        start_time: orphans::start_time(pid).unwrap(),
+        pgid: pid,
+    };
+    let reaper = std::thread::spawn(move || child.wait());
+    let driver = Claude::new("claude".into(), "/state".into(), None);
+    let at = std::time::Instant::now();
+    driver.stop_instance(&handle, Duration::from_secs(10)).await;
+    assert!(at.elapsed() < Duration::from_secs(2), "{:?}", at.elapsed());
+    assert!(!reaper.join().unwrap().unwrap().success());
+}
