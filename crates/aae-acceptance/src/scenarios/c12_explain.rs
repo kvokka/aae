@@ -1,6 +1,6 @@
 //! Criterion 12: "explain config" shows the layer of every value and the host layer in one line, through the API and
-//! the CLI alike; on a stand-in harness home, the same agent with the host layer and without it differs in the
-//! session: only the inheriting one gets the host's `CLAUDE.md`.
+//! the CLI alike; on a stand-in harness home, one agent with the host layer and then, after a config reload, without
+//! it differs in the session: only while it inherits does it get the host's `CLAUDE.md`.
 
 use super::claude_agent;
 use crate::{
@@ -8,10 +8,22 @@ use crate::{
     daemon::{Daemon, write},
 };
 use aae_testkit::anthropic::{Provider, Reply};
-use std::{sync::Arc, time::Duration};
+use serde_json::json;
+use std::{path::Path, sync::Arc, time::Duration};
 
 const WITHIN: Duration = Duration::from_secs(60);
 const HOST_MARK: &str = "host-memory-mark-12";
+
+/// Agent `dev` on `provider`, with the host layer or without it.
+fn dev(root: &Path, provider: &Provider, inherit: bool) {
+    claude_agent(root, "dev", &provider.base_url());
+    let agent = root.join("config/aae/shop/agents/dev/agent.toml");
+    let text = std::fs::read_to_string(&agent).unwrap();
+    write(
+        &agent,
+        text.replace("inherit_host = false", &format!("inherit_host = {inherit}")),
+    );
+}
 
 pub(crate) async fn run(env: Arc<Env>) -> String {
     let finish = || {
@@ -22,26 +34,28 @@ pub(crate) async fn run(env: Arc<Env>) -> String {
     // `HOME` of the daemon is the root of its tree: the stand-in harness home.
     // The rig lies under it, as rigs under a home do: claude reads `CLAUDE.md` up the rig's ancestors too.
     let d = Daemon::start(&env, |root| {
-        claude_agent(root, "bare", &bare.base_url());
-        claude_agent(root, "host", &host.base_url());
-        let agent = root.join("config/aae/shop/agents/host/agent.toml");
-        let text = std::fs::read_to_string(&agent).unwrap();
-        write(&agent, text.replace("inherit_host = false", "inherit_host = true"));
+        dev(root, &host, true);
         write(root.join(".claude/CLAUDE.md"), format!("Always mention {HOST_MARK}.\n"));
     })
     .await;
 
+    // The same agent with the host layer, then switched off by a config reload.
     let mut shown = Vec::new();
-    for (agent, host_line) in [
+    for (provider, inherit, host_line) in [
         (
-            "host",
+            &host,
+            true,
             "host: inherited by the harness, its content is not visible to aae\n",
         ),
-        ("bare", "host: off\n"),
+        (&bare, false, "host: off\n"),
     ] {
-        let api = d.get(&format!("/v1/config/explain?project=shop&agent={agent}")).await;
+        if !inherit {
+            dev(d.dir.path(), provider, false);
+            d.post("/v1/config/reload", json!({})).await.unwrap();
+        }
+        let api = d.get("/v1/config/explain?project=shop&agent=dev").await;
         let text = api["text"].as_str().unwrap().to_owned();
-        let cli = d.cli(&["config", "explain", "--project", "shop", "--agent", agent]);
+        let cli = d.cli(&["config", "explain", "--project", "shop", "--agent", "dev"]);
         assert!(cli.status.success(), "{}", String::from_utf8_lossy(&cli.stderr));
         assert_eq!(
             String::from_utf8_lossy(&cli.stdout),
@@ -55,17 +69,14 @@ pub(crate) async fn run(env: Arc<Env>) -> String {
         assert_eq!(text.lines().filter(|l| l.starts_with("host:")).count(), 1, "{text}");
         assert!(text.ends_with(host_line), "{text}");
         shown.push(text.lines().count());
-    }
-
-    for agent in ["host", "bare"] {
-        let run = d.create(agent).await;
+        let run = d.create("dev").await;
         d.until_state(&run, "passed", WITHIN).await;
     }
     let seen = |p: &Provider| p.requests().iter().any(|r| r.body.to_string().contains(HOST_MARK));
     assert!(seen(&host), "the inheriting session got the host's CLAUDE.md");
     assert!(!seen(&bare), "the isolated session did not");
     format!(
-        "explain: {} and {} lines, one host line each; the host CLAUDE.md reached only the inheriting session",
+        "explain: {} and {} lines, one host line each; the host CLAUDE.md reached the agent only while it inherited",
         shown[0], shown[1]
     )
 }
