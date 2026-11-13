@@ -150,7 +150,7 @@ impl Driver for Codex {
             instance_idle: Duration::from_secs(60),
             retries_429: false,
             reset_time: true,
-            versions: [(0, 167, 2), (0, 167, 2)],
+            versions: [(0, 167, 2), (0, 168, 0)],
         }
     }
 

@@ -192,7 +192,7 @@ impl Driver for Claude {
             // Only a subscription login reports when its limit resets.
             reset_time: process.0["env"]["ANTHROPIC_API_KEY"].is_null(),
             // The versions the contract tests and experiments ran on, inclusive.
-            versions: [(2, 1, 322), (2, 1, 322)],
+            versions: [(2, 1, 322), (2, 1, 323)],
         }
     }
 
