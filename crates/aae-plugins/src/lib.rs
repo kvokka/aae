@@ -20,7 +20,9 @@ pub fn run(name: &str, event: &Value, params: &Value) -> Result<Option<Value>, S
 /// Checks the parameters of bundled plugin `name`.
 pub fn check(name: &str, params: &Value) -> Result<(), String> {
     match name {
-        "default-policy" => parse::<policy::Params>(name, params).map(drop),
+        "default-policy" => parse::<policy::Params>(name, params)
+            .and_then(|p| p.check().map_err(|e| format!("[builtin.{name}]: {e}")))
+            .map(drop),
         "worktree" => parse::<worktree::Params>(name, params).map(drop),
         _ => Err(format!("`{name}` is not a bundled plugin")),
     }

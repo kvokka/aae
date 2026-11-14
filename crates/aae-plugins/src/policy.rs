@@ -60,6 +60,35 @@ impl Default for Params {
     }
 }
 
+impl Params {
+    /// What the types do not say: no negative duration, and no zero where it makes a hot loop (a retry or a gate
+    /// that waits nothing) or closes the agent gate on any crash.
+    pub(crate) fn check(self) -> Result<Self, String> {
+        let positive = [
+            ("quota_wait_s", self.quota_wait_s),
+            ("model_pause_s", self.model_pause_s),
+            ("backoff_base_s", self.backoff_base_s),
+            ("backoff_cap_s", self.backoff_cap_s),
+            ("auth_backoff_base_s", self.auth_backoff_base_s),
+            ("auth_backoff_cap_s", self.auth_backoff_cap_s),
+            ("crash_pause_s", self.crash_pause_s),
+            ("crash_loop", i64::try_from(self.crash_loop).unwrap_or(i64::MAX)),
+        ];
+        let others = [
+            ("quota_margin_s", self.quota_margin_s),
+            ("rapid_s", self.rapid_s),
+            ("unknown_after_s", self.unknown_after_s),
+        ];
+        if let Some((key, _)) = positive.iter().find(|(_, v)| *v < 1) {
+            return Err(format!("`{key}` must be at least 1"));
+        }
+        match others.iter().find(|(_, v)| *v < 0) {
+            Some((key, _)) => Err(format!("`{key}` must not be negative")),
+            None => Ok(self),
+        }
+    }
+}
+
 /// The decision on `run.attempt_failed` or `run.turn_ended_without_outcome`; `None` for any other event.
 pub(crate) fn decide(event: &Value, p: &Params) -> Option<Value> {
     let data = &event["data"];

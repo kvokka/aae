@@ -191,6 +191,16 @@ fn every_policy_threshold_comes_from_the_config() {
     let capped = policy(&auth, json!({"auth_backoff_cap_s": 5}));
     assert_eq!(until(&capped), "2026-11-13T12:00:05.000Z");
     assert!(check("default-policy", &json!({"auth_escalate_s": 3600})).is_err());
+    for (key, value, error) in [
+        ("crash_loop", 0, "`crash_loop` must be at least 1"),
+        ("auth_backoff_base_s", 0, "`auth_backoff_base_s` must be at least 1"),
+        ("backoff_cap_s", -5, "`backoff_cap_s` must be at least 1"),
+        ("rapid_s", -1, "`rapid_s` must not be negative"),
+    ] {
+        let refused = check("default-policy", &json!({ key: value })).unwrap_err();
+        assert_eq!(refused, format!("[builtin.default-policy]: {error}"));
+    }
+    assert!(check("default-policy", &json!({"rapid_s": 0, "unknown_retries": 0})).is_ok());
     // However long it lasts, the wait grows to an hour and never goes to an operator.
     let long = failed(
         "auth_required",

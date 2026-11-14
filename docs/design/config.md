@@ -489,6 +489,9 @@ or for a project).
 - `worktree` has no table: it is on for the runs of the formulas with `worktree = true` (a formula setting, spec
   §2.1 item 11), and a `[builtin.worktree]` table is a config error that says so. Each such run gets a git worktree
   of its rig on the branch `aae/<run>`, in `<git common dir>/aae/worktrees/<run>`, as its workdir. When the run
+  The waits and caps that a zero would turn into a hot loop (`quota_wait_s`, `model_pause_s`, both bases and both
+  caps, `crash_pause_s`) and `crash_loop` must be at least 1; `quota_margin_s`, `rapid_s` and `unknown_after_s` must
+  not be negative.
   ends the worktree is removed unless it has uncommitted changes or a HEAD no ref reaches (then `plugin.hook_failed`
   says why); the branch is deleted only when it is merged. A run with `continue_from` starts in the workdir of the
   run it continues (a session resumes where it ran); when that is a worktree of this plugin, it is brought back on
