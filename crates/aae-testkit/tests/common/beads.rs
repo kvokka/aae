@@ -17,9 +17,14 @@ pub(crate) const FIX: &[(&str, &str)] = &[
 
 impl World {
     pub(crate) async fn fix(&self, bead: Value) -> Result<Value, aae_core::Error> {
+        self.fix_on(Some("web"), bead).await
+    }
+
+    /// A start of `fix` on `bead` on `rig`; `None` names no rig.
+    pub(crate) async fn fix_on(&self, rig: Option<&str>, bead: Value) -> Result<Value, aae_core::Error> {
         let create = Create {
             project: "shop".into(),
-            rig: "web".into(),
+            rig: rig.map(Into::into),
             formula: "fix".into(),
             inputs: [("bead".to_owned(), bead)].into_iter().collect(),
             correlation: None,

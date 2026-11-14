@@ -31,7 +31,7 @@ fn check_with(inputs: &str, script: &str) -> (World, Create) {
     );
     let create = Create {
         project: "shop".into(),
-        rig: "web".into(),
+        rig: Some("web".into()),
         formula: "check".into(),
         inputs: serde_json::Map::new(),
         correlation: None,
@@ -99,7 +99,7 @@ async fn the_command_gets_the_run_and_its_inputs_in_the_environment_and_inputs_a
     );
     let with = |inputs: Value| Create {
         project: "shop".into(),
-        rig: "web".into(),
+        rig: Some("web".into()),
         formula: "check".into(),
         inputs: inputs.as_object().unwrap().clone(),
         correlation: None,

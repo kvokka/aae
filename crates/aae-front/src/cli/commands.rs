@@ -9,10 +9,12 @@ use std::process::ExitCode;
 #[derive(Subcommand)]
 pub enum RunCommand {
     /// Start a run of a formula; prints its id. Inside an agent session (`AAE_RUN`, `AAE_ATTEMPT_TOKEN`) the run is
-    /// a child of the session's run: same correlation, one level deeper.
+    /// a child of the session's run: same correlation, one level deeper. Options go after the positionals.
+    #[command(allow_missing_positional = true)]
     Start {
         project: String,
-        rig: String,
+        /// Optional when an input names a bead with one `rig:` label: the run is on that rig.
+        rig: Option<String>,
         formula: String,
         /// An input as `name=value`: text, which an integer or a boolean input takes as its number or `true`/`false`;
         /// a JSON object or array (a bead input's `{"next_ready": true}`) is taken as JSON.

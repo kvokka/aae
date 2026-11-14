@@ -190,7 +190,8 @@ pub enum Verdict {
 /// (`parent_run` and its attempt `token`: the core takes the correlation and the depth from the parent).
 pub struct Create {
     pub project: String,
-    pub rig: String,
+    /// `None`: the rig of the one `rig:` label of the bead an input names (spec §9.3).
+    pub rig: Option<String>,
     /// A formula reference as a project writes it: `name` or `<pack>.<name>`.
     pub formula: String,
     pub inputs: serde_json::Map<String, Value>,

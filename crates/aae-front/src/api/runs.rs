@@ -26,7 +26,8 @@ const RUN_VIEWS: &str = "Run views as `GET /v1/runs/{id}` gives them";
 #[derive(Deserialize, ToSchema)]
 pub(crate) struct CreateRun {
     project: String,
-    rig: String,
+    /// Absent: the rig of the one `rig:` label of the bead an input names, if the ready list has it.
+    rig: Option<String>,
     /// `name` or `<pack>.<name>`, as the project writes it.
     formula: String,
     #[serde(default)]

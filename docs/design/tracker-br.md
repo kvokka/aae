@@ -36,7 +36,8 @@ tracker interface and its errors are in [contracts.md](contracts.md) §5; the be
   [contracts.md 6.2](contracts.md#62-transitions).
 - A bead has at most one live owner run; a second request for it is refused with the reason.
 - A bead named by id that carries a `rig:` label of another rig is refused: at the start when the ready set knows the
-  bead, else at its claim (`failed{infrastructure, bead_of_another_rig}`, the claim released).
+  bead, else at its claim (`failed{infrastructure, bead_of_another_rig}`, the claim released). A start with no rig
+  takes the rig of the bead's one `rig:` label, if the ready set knows the bead ([contracts.md 6.1](contracts.md#61-states)).
 - Instead of an id the input may ask for the next ready bead, optionally in an epic: `{ next_ready = true, epic }`.
   The ready list comes from the adapter; the daemon picks and records the owner in one transaction, taking the first
   bead in the tracker's order that is in the epic, of the run's rig or of no rig, without an owner and without a

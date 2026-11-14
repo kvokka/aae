@@ -16,14 +16,23 @@ impl RunHandler {
         }
         let project = self.config.projects.iter().find(|p| p.name == c.project);
         let project = project.ok_or_else(|| rejected(format!("no project `{}`", c.project)))?;
-        let rig = project.rigs.get(&c.rig);
-        let rig = rig.ok_or_else(|| rejected(format!("no rig `{}` in `{}`", c.rig, c.project)))?;
         let (name, formula) = project.formula(&c.formula).map_err(rejected)?;
+        let rig_name = match c.rig.take() {
+            Some(rig) => rig,
+            None => {
+                let beads = formula.inputs.iter().filter(|(_, i)| i.kind == InputType::Bead);
+                let named = beads.filter_map(|(k, _)| c.inputs.get(k)?.as_str()).next();
+                Self::rig_of_bead(tx, &c.project, named)?
+            }
+        };
+        let rig = project.rigs.get(&rig_name);
+        let rig = rig.ok_or_else(|| rejected(format!("no rig `{rig_name}` in `{}`", c.project)))?;
         // An exec step has no agent; the runs table keeps it as an empty name. The agent of a prompt step is the one
         // the rig runs for it (a variant by its name), and the model key of its config is known before it starts.
         let (agent, model) = match &formula.step {
             Step::Prompt { .. } => {
-                let (agent, config) = (self.config.for_run(&c.project, &c.rig, &name.to_string())).map_err(rejected)?;
+                let (agent, config) =
+                    (self.config.for_run(&c.project, &rig_name, &name.to_string())).map_err(rejected)?;
                 (agent, config.model_key())
             }
             Step::Exec { .. } if c.continue_from.is_some() => {
@@ -76,7 +85,7 @@ impl RunHandler {
             Some(_) if !self.trackers.contains_key(&c.project) => {
                 return Err(rejected(format!("`{}` has no tracker", c.project)));
             }
-            Some((key, _)) => match Self::pick_bead(tx, &c.project, &c.rig, &c.inputs[key])? {
+            Some((key, _)) => match Self::pick_bead(tx, &c.project, &rig_name, &c.inputs[key])? {
                 Some(id) => {
                     c.inputs.insert(key.clone(), json!(id));
                     Some(id)
@@ -122,7 +131,7 @@ impl RunHandler {
                 n,
                 id,
                 c.project,
-                c.rig,
+                rig_name,
                 name.to_string(),
                 agent,
                 Value::Object(c.inputs).to_string(),

@@ -60,6 +60,13 @@ async fn runs_and_gates_by_hand_from_the_cli() {
         out.status.code() == Some(2) && text.contains("`n` is not NAME=VALUE"),
         "{text}"
     );
+    // The rig is optional: with none and no bead input, the core refuses the start.
+    let out = d.cli(&["run", "start", "shop", "check"], &[]);
+    let text = String::from_utf8_lossy(&out.stderr);
+    assert!(
+        out.status.code() == Some(1) && text.contains("aae: rejected: no rig: name one"),
+        "{text}"
+    );
     let view = d.json(&["run", "show", &run]);
     assert_eq!((&view["state"], &view["inputs"]["n"]), (&"queued".into(), &2.into()));
     assert_eq!(

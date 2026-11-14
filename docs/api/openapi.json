@@ -2468,7 +2468,6 @@
         "type": "object",
         "required": [
           "project",
-          "rig",
           "formula"
         ],
         "properties": {
@@ -2505,7 +2504,11 @@
             "type": "string"
           },
           "rig": {
-            "type": "string"
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Absent: the rig of the one `rig:` label of the bead an input names, if the ready list has it."
           }
         }
       },

@@ -246,7 +246,7 @@ impl World {
     pub(crate) async fn create_in(&self, project: &str, rig: &str) -> String {
         let create = Create {
             project: project.into(),
-            rig: rig.into(),
+            rig: Some(rig.into()),
             formula: "build".into(),
             inputs: serde_json::Map::new(),
             correlation: None,

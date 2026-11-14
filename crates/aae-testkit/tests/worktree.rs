@@ -99,7 +99,7 @@ async fn a_run_continuing_a_session_works_in_the_worktree_of_that_session() {
     w.driver.script(hollow_turn());
     let create = Create {
         project: "shop".into(),
-        rig: "web".into(),
+        rig: Some("web".into()),
         formula: "build".into(),
         inputs: serde_json::Map::new(),
         correlation: None,

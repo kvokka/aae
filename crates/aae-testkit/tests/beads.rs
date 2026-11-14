@@ -293,3 +293,46 @@ async fn claims_that_answer_after_their_runs_failed_neither_count_nor_reach_the_
     );
     assert_eq!(w.driver.sent(&run, 1).1, [format!("Fix Task {bead}.")]);
 }
+
+#[tokio::test(start_paused = true)]
+async fn a_start_without_a_rig_takes_it_from_the_label_of_the_bead() {
+    let w = world(FIX);
+    let [web, none, api, both] = [
+        w.tracker.add(&["rig:web"], None),
+        w.tracker.add(&[], None),
+        w.tracker.add(&["rig:api"], None),
+        w.tracker.add(&["rig:web", "rig:api"], None),
+    ];
+    let refused = async |bead: &str| w.fix_on(None, json!(bead)).await.unwrap_err().to_string();
+    // Before the ready list is read, no bead has known labels.
+    assert!(
+        refused(&web)
+            .await
+            .contains("not in the ready list of `shop`: name the rig")
+    );
+    w.changed().await;
+    let run = w.fix_on(None, json!(web)).await.unwrap()["run"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+    let events = w.events(&run, Duration::ZERO).await;
+    let workdir = last(&events, "run.queued")["run"]["workdir"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+    assert!(workdir.ends_with("/shop/web"), "{workdir}");
+    assert!(refused(&none).await.contains("has no `rig:` label: name the rig"));
+    assert!(refused(&both).await.contains("is labelled for several rigs: name one"));
+    assert!(refused(&api).await.contains("no rig `api` in `shop`"));
+    let no_bead = w
+        .fix_on(None, json!({ "next_ready": true }))
+        .await
+        .unwrap_err()
+        .to_string();
+    assert!(
+        no_bead.contains("no rig: name one, or a bead with a `rig:` label"),
+        "{no_bead}"
+    );
+    // A refused start leaves the bead free: named with a rig, it is taken.
+    w.fix(json!(none)).await.unwrap();
+}

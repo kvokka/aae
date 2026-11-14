@@ -316,7 +316,7 @@ impl RunHandler {
         }
         let create = Create {
             project: a.project.to_owned(),
-            rig: a.rig.to_owned(),
+            rig: Some(a.rig.to_owned()),
             formula: a.trigger.run.to_string(),
             inputs: inputs.clone(),
             correlation: text("correlation"),

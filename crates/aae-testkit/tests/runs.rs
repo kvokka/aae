@@ -236,7 +236,7 @@ async fn a_run_continues_the_session_of_a_finished_run_only_when_asked() {
     let first = w.create().await;
     let create = |from: &str| Create {
         project: "shop".into(),
-        rig: "web".into(),
+        rig: Some("web".into()),
         formula: "build".into(),
         inputs: serde_json::Map::new(),
         correlation: None,
@@ -269,7 +269,7 @@ async fn a_run_must_name_a_runnable_formula_with_its_inputs() {
     let w = world(&[]);
     let create = |formula: &str, inputs: Value| Create {
         project: "shop".into(),
-        rig: "web".into(),
+        rig: Some("web".into()),
         formula: formula.into(),
         inputs: inputs.as_object().unwrap().clone(),
         correlation: None,
@@ -309,7 +309,7 @@ async fn a_prompt_empty_after_substitution_fails_the_run_before_a_launch() {
     ]);
     let create = Create {
         project: "shop".into(),
-        rig: "web".into(),
+        rig: Some("web".into()),
         formula: "build".into(),
         inputs: json!({ "goal": " " }).as_object().unwrap().clone(),
         correlation: None,

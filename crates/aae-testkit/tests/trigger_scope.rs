@@ -39,7 +39,7 @@ inputs = { from = "{{ event.run.id }}" }
     for rig in ["api", "web"] {
         let create = Create {
             project: "shop".into(),
-            rig: rig.into(),
+            rig: Some(rig.into()),
             formula: "build".into(),
             inputs: serde_json::Map::new(),
             correlation: None,
@@ -105,7 +105,7 @@ inputs = { from = "{{ event.run.id }}" }
     let (core, _task) = daemon(dir.path(), 0);
     let create = Create {
         project: "shop".into(),
-        rig: "web".into(),
+        rig: Some("web".into()),
         formula: "build".into(),
         inputs: serde_json::Map::new(),
         correlation: None,

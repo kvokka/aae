@@ -73,7 +73,7 @@ fn create(bead: Option<&str>) -> Create {
     let inputs = bead.map(|b| ("bead".to_owned(), serde_json::json!(b)));
     Create {
         project: "shop".into(),
-        rig: "web".into(),
+        rig: Some("web".into()),
         formula: if bead.is_some() { "fix" } else { "build" }.into(),
         inputs: inputs.into_iter().collect(),
         correlation: None,

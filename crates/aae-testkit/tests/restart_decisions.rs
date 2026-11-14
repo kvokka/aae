@@ -167,7 +167,7 @@ async fn an_exec_step_in_finishing_passes_after_a_restart_with_its_command_run_o
     let mut w = hooked_in("run.finishing", hooks.clone(), &[("shop/formulas/check.toml", formula)]);
     let create = Create {
         project: "shop".into(),
-        rig: "web".into(),
+        rig: Some("web".into()),
         formula: "check".into(),
         inputs: serde_json::Map::new(),
         correlation: None,

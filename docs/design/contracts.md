@@ -577,7 +577,9 @@ so that the state machine has one place where `run.attempt_failed` is decided.
 - `queued` has not started: it waits for a concurrency slot, a free workdir or an open gate. `parked` has started and
   waits for a gate with no harness process.
 - A run belongs to a project and a rig, named when it is created (API, CLI, MCP) or by the trigger that fires on the
-  rig; an unknown rig is refused before the run exists. Its workdir is the rig's directory, or a worktree of it with
+  rig. A start that names no rig takes it from the one `rig:` label of the bead an input names by id; only a bead of
+  the ready list has known labels, so for any other the start is refused with "name the rig". No rig, an unknown rig,
+  or a bead with no or several `rig:` labels is refused before the run exists. Its workdir is the rig's directory, or a worktree of it with
   `worktree = true` in the formula (config.md). One live run holds a workdir: a second run in the same directory
   waits in `queued` (`waiting_for: workdir`); parallel work in one rig is the worktree's job.
 - Concurrency is bounded per orchestrator (`max_runs`, default 8) and per agent (`max_runs` in `agent.toml`).

@@ -40,7 +40,7 @@ impl World {
     async fn start(&self, rig: &str, formula: &str) -> String {
         let create = Create {
             project: "shop".into(),
-            rig: rig.into(),
+            rig: Some(rig.into()),
             formula: formula.into(),
             inputs: serde_json::Map::new(),
             correlation: None,

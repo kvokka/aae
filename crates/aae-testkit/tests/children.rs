@@ -16,7 +16,7 @@ use std::time::Duration;
 fn child(parent: Option<&str>, token: Option<&str>, depth: u32) -> Msg {
     Msg::Create(Create {
         project: "shop".into(),
-        rig: "web".into(),
+        rig: Some("web".into()),
         formula: "build".into(),
         inputs: serde_json::Map::new(),
         correlation: None,

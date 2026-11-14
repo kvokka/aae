@@ -39,7 +39,7 @@ async fn an_event_chain_keeps_its_correlation_stops_at_the_depth_limit_and_survi
     let (core, task) = daemon(dir.path(), 0);
     let create = Create {
         project: "shop".into(),
-        rig: "web".into(),
+        rig: Some("web".into()),
         formula: "build".into(),
         inputs: serde_json::Map::new(),
         correlation: None,
@@ -240,7 +240,7 @@ async fn an_event_trigger_switched_off_does_not_fire() {
     core.send(None, switch("after-build", false)).await.unwrap();
     let create = Create {
         project: "shop".into(),
-        rig: "web".into(),
+        rig: Some("web".into()),
         formula: "build".into(),
         inputs: serde_json::Map::new(),
         correlation: None,

@@ -59,6 +59,24 @@ impl RunHandler {
         Ok(None)
     }
 
+    /// The rig of a start that names none: the one `rig:` label of the bead `id` an input names. Only a bead of the
+    /// ready list has known labels; for any other the start is refused before a run exists (spec §9.3).
+    pub(super) fn rig_of_bead(tx: &Tx<'_>, project: &str, id: Option<&str>) -> Result<String, Error> {
+        let id = id.ok_or_else(|| rejected("no rig: name one, or a bead with a `rig:` label"))?;
+        let sql = "SELECT body FROM ready_beads WHERE project = ?1 AND id = ?2";
+        let body: Option<Value> = tx.sql().query_row(sql, [project, id], |r| r.get(0)).optional()?;
+        let body = body.ok_or_else(|| {
+            rejected(format!(
+                "bead `{id}` is not in the ready list of `{project}`: name the rig"
+            ))
+        })?;
+        match rigs(&body)[..] {
+            [rig] => Ok(rig.to_owned()),
+            [] => Err(rejected(format!("bead `{id}` has no `rig:` label: name the rig"))),
+            _ => Err(rejected(format!("bead `{id}` is labelled for several rigs: name one"))),
+        }
+    }
+
     /// Records `run` as the one live owner of `bead` with a new generation (invariants 2, 3); a held bead refuses.
     pub(super) fn own_bead(tx: &Tx<'_>, project: &str, bead: &str, run: &str) -> Result<(), Error> {
         let owner: Option<Option<String>> = tx
@@ -329,8 +347,13 @@ pub(super) async fn execute(trackers: &Trackers, core: &CoreHandle<Msg>, payload
 
 /// A bead (as JSON) with a `rig:` label, none of them `rig:<rig>`, belongs to another rig (spec §2, decision 52).
 fn other_rig(bead: &Value, rig: &str) -> bool {
-    let rigs: Vec<&str> = (bead["labels"].as_array().into_iter().flatten())
-        .filter_map(|l| l.as_str()?.strip_prefix("rig:"))
-        .collect();
+    let rigs = rigs(bead);
     !rigs.is_empty() && !rigs.contains(&rig)
+}
+
+/// The rigs of the `rig:` labels of a bead (as JSON).
+fn rigs(bead: &Value) -> Vec<&str> {
+    (bead["labels"].as_array().into_iter().flatten())
+        .filter_map(|l| l.as_str()?.strip_prefix("rig:"))
+        .collect()
 }

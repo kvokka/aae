@@ -104,7 +104,7 @@ async fn a_restart_kills_the_command_of_an_exec_step_the_dead_daemon_left() {
     let mut w = world_with(&[("shop/formulas/check.toml", formula)], Arc::new(ExecHooks::default()));
     let create = aae_core::run::Create {
         project: "shop".into(),
-        rig: "web".into(),
+        rig: Some("web".into()),
         formula: "check".into(),
         inputs: serde_json::Map::new(),
         correlation: None,

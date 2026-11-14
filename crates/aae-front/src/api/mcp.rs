@@ -30,9 +30,11 @@ fn tools() -> Value {
     json!([
         { "name": "list_formulas", "description": "The formulas a run can start, by project, with their inputs.",
           "inputSchema": { "type": "object", "properties": { "project": text } } },
-        { "name": "start_run", "description": "Starts a run of a formula on a rig; returns its id.",
-          "inputSchema": { "type": "object", "required": ["project", "rig", "formula"], "properties": {
-              "project": text, "rig": text,
+        { "name": "start_run",
+          "description": "Starts a run of a formula on a rig (named, or that of the bead it names); returns its id.",
+          "inputSchema": { "type": "object", "required": ["project", "formula"], "properties": {
+              "project": text,
+              "rig": { "type": "string", "description": "Optional when an input names a bead with one `rig:` label." },
               "formula": { "type": "string", "description": "`name`, or `<pack>.<name>`, as list_formulas gives it." },
               "inputs": { "type": "object" },
               "continue_from": { "type": "string", "description": "A terminal run whose last session to continue." },

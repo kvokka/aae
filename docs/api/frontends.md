@@ -45,11 +45,12 @@ Code: `crates/aae-front/src/cli/`. The CLI is a thin client of the HTTP API in t
 - An error exits 1 with `aae: <message>` on stderr; under `--json`, stderr is `{"error": {"code", "message", ...}}`:
   the API's error object, or for a local error the code `no_daemon`, `usage`, `config_error`, `not_found` or
   `internal`. Arguments that do not parse exit 2 with the usage text.
-- `aae run start` prints the run id; when a bead input finds nothing ready it says so on stderr and exits 3. Inside
-  an agent session (`AAE_RUN` and `AAE_ATTEMPT_TOKEN` set, as for `aae finish`) it sends them as `parent` of
-  `POST /v1/runs`: the run is a child of the session's run, with its correlation and one level deeper, at most 10
-  ([contracts](../design/contracts.md#61-states)); a token that is not that of the parent's live current
-  attempt is `rejected` ("stale attempt"). From a shell of its own the run starts a new correlation at depth 0.
+- `aae run start <project> [<rig>] <formula>` (options after the positionals) prints the run id; the rig may be
+  left out when a bead input names a bead with one `rig:` label. When a bead input finds nothing ready it says so on
+  stderr and exits 3. Inside an agent session (`AAE_RUN` and `AAE_ATTEMPT_TOKEN` set, as for `aae finish`) it sends
+  them as `parent` of `POST /v1/runs`: the run is a child of the session's run, with its correlation and one level
+  deeper, at most 10 ([contracts](../design/contracts.md#61-states)); a token that is not that of the parent's live
+  current attempt is `rejected` ("stale attempt"). From a shell of its own the run starts a new correlation at depth 0.
   `aae run list --parent <run>` lists a run's children; cancelling a run cancels the live runs its sessions
   started (reason `parent_cancelled`), while its pass or failure leaves them alone.
 - `aae run watch <run>` prints the live view (a line per event, `-  harness  <type>` per session message) and exits
