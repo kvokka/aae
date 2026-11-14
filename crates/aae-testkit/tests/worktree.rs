@@ -4,7 +4,7 @@ mod common;
 
 use aae_core::run::{Create, ExecHooks, Msg};
 use aae_testkit::ScriptedDriver;
-use common::{FILES, World, hollow_turn, world_on};
+use common::{World, hollow_turn, world_on};
 use std::{
     path::{Path, PathBuf},
     sync::Arc,
@@ -35,7 +35,13 @@ fn git(dir: &Path, args: &[&str]) -> String {
     String::from_utf8_lossy(&out.stdout).trim().to_owned()
 }
 
-/// The world with `worktree` on as `config.toml` and `shop/aae.toml` of `files` say, its rig a git repository.
+/// The formula `build` with `worktree = true`.
+const BUILD: (&str, &str) = (
+    "shop/formulas/build.toml",
+    "name = \"build\"\nworktree = true\n[step]\nkind = \"prompt\"\nagent = \"dev\"\nprompt = \"build.md\"\n",
+);
+
+/// The world with `files` over the common ones, its rig a git repository.
 fn world(files: &[(&str, &str)]) -> World {
     let hooks = ExecHooks {
         socket: None,
@@ -60,12 +66,7 @@ async fn gone(tree: &Path) {
 
 #[tokio::test]
 async fn two_runs_of_one_rig_work_at_once_each_in_its_worktree() {
-    let config = (
-        "config.toml",
-        "projects = [\"shop\"]\nbuiltin = { default-policy = { enabled = false }, worktree = { agents = [\"dev\"] } }\n\
-         [harness.scripted]\n",
-    );
-    let w = world(&[config]);
+    let w = world(&[BUILD]);
     let rig = w.dir.path().join("shop/web");
     w.driver.script(slow_turn());
     w.driver.script(slow_turn());
@@ -87,10 +88,7 @@ async fn two_runs_of_one_rig_work_at_once_each_in_its_worktree() {
 
 #[tokio::test]
 async fn a_run_continuing_a_session_works_in_the_worktree_of_that_session() {
-    // Turned on by the project: the orchestrator config of the world leaves it off.
-    let project = FILES.iter().find(|(p, _)| *p == "shop/aae.toml").unwrap().1;
-    let project = format!("{project}[builtin.worktree]\nagents = [\"dev\"]\n");
-    let w = world(&[("shop/aae.toml", project.as_str())]);
+    let w = world(&[BUILD]);
     w.driver.script(hollow_turn());
     let first = w.create().await;
     let failed = w.until(Some(&first), "run.failed", 0).await;
@@ -119,4 +117,17 @@ async fn a_run_continuing_a_session_works_in_the_worktree_of_that_session() {
     );
     w.until(Some(second), "run.failed", 0).await;
     gone(&tree).await;
+}
+
+#[tokio::test]
+async fn a_formula_without_the_key_runs_in_the_rig() {
+    let w = world(&[]);
+    w.driver.script(hollow_turn());
+    let run = w.create().await;
+    let failed = w.until(Some(&run), "run.failed", 0).await;
+    assert_eq!(
+        Path::new(failed["run"]["workdir"].as_str().unwrap()),
+        w.dir.path().join("shop/web")
+    );
+    assert!(!w.dir.path().join("shop/web/.git/aae/worktrees").exists());
 }

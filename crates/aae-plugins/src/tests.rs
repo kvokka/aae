@@ -241,43 +241,43 @@ fn worktree_on_real_git() {
         git(&repo, &["config", config[0], config[1]]);
     }
     git(&repo, &["commit", "-q", "--allow-empty", "-m", "base"]);
-    let event = |kind: &str, id: &str, workdir: &Path, agent: &str| {
-        let run = json!({ "id": id, "agent": agent, "formula": "shop.fix", "workdir": workdir });
+    let event = |kind: &str, id: &str, workdir: &Path, formula: &str| {
+        let run = json!({ "id": id, "agent": "shop.dev", "formula": formula, "workdir": workdir });
         json!({ "type": kind, "data": { "run": run } })
     };
-    let params = json!({ "agents": ["dev"] });
+    let params = json!({ "formulas": ["shop.fix"] });
     assert_eq!(
         run("worktree", &event("run.preparing", "r0", &repo, "shop.other"), &params),
         Ok(None)
     );
 
     // Created on the run's branch, and the same again when the hook runs twice.
-    let decision = run("worktree", &event("run.preparing", "r1", &repo, "shop.dev"), &params)
+    let decision = run("worktree", &event("run.preparing", "r1", &repo, "shop.fix"), &params)
         .unwrap()
         .unwrap();
     assert_eq!(decision["decision"], "proceed");
     let tree = Path::new(decision["workdir"].as_str().unwrap()).to_owned();
     assert_eq!(git(&tree, &["branch", "--show-current"]), "aae/r1");
-    let again = run("worktree", &event("run.preparing", "r1", &repo, "shop.dev"), &params);
+    let again = run("worktree", &event("run.preparing", "r1", &repo, "shop.fix"), &params);
     assert_eq!(again, Ok(Some(decision)));
 
     // Uncommitted work keeps the worktree.
     std::fs::write(tree.join("work.txt"), "x").unwrap();
-    assert!(run("worktree", &event("run.failed", "r1", &tree, "shop.dev"), &params).is_err());
+    assert!(run("worktree", &event("run.failed", "r1", &tree, "shop.fix"), &params).is_err());
     assert!(tree.exists());
 
     // Committed work: the worktree goes, the unmerged branch with the commit stays.
     git(&tree, &["add", "work.txt"]);
     git(&tree, &["commit", "-q", "-m", "work"]);
     assert_eq!(
-        run("worktree", &event("run.passed", "r1", &tree, "shop.dev"), &params),
+        run("worktree", &event("run.passed", "r1", &tree, "shop.fix"), &params),
         Ok(None)
     );
     assert!(!tree.exists());
     assert_eq!(git(&repo, &["log", "-1", "--format=%s", "aae/r1"]), "work");
 
-    // A run continuing r1's session got r1's workdir: the worktree comes back there on r1's branch, chosen or not,
-    // and goes again when that run ends.
+    // A run continuing r1's session got r1's workdir: the worktree comes back there on r1's branch, whatever its
+    // formula, and goes again when that run ends.
     let decision = run("worktree", &event("run.preparing", "r3", &tree, "shop.other"), &params)
         .unwrap()
         .unwrap();
@@ -290,7 +290,7 @@ fn worktree_on_real_git() {
     assert!(!tree.exists());
 
     // Prepared again with the branch left: the branch is checked out as it is, its commit kept.
-    let decision = run("worktree", &event("run.preparing", "r1", &repo, "shop.dev"), &params)
+    let decision = run("worktree", &event("run.preparing", "r1", &repo, "shop.fix"), &params)
         .unwrap()
         .unwrap();
     let tree = Path::new(decision["workdir"].as_str().unwrap()).to_owned();
@@ -298,13 +298,13 @@ fn worktree_on_real_git() {
     std::fs::remove_dir_all(&tree).unwrap();
 
     // A detached HEAD whose commit no ref reaches is left in place.
-    let decision = run("worktree", &event("run.preparing", "r2", &repo, "shop.dev"), &params)
+    let decision = run("worktree", &event("run.preparing", "r2", &repo, "shop.fix"), &params)
         .unwrap()
         .unwrap();
     let tree = Path::new(decision["workdir"].as_str().unwrap()).to_owned();
     git(&tree, &["checkout", "-q", "--detach"]);
     git(&tree, &["commit", "-q", "--allow-empty", "-m", "lost"]);
     git(&repo, &["branch", "-D", "aae/r2"]);
-    assert!(run("worktree", &event("run.passed", "r2", &tree, "shop.dev"), &params).is_err());
+    assert!(run("worktree", &event("run.passed", "r2", &tree, "shop.fix"), &params).is_err());
     assert!(tree.exists());
 }

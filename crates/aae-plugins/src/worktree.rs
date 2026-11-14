@@ -1,5 +1,5 @@
-//! `worktree` (spec §11.5): on `run.preparing` a run of a chosen agent or formula gets its own git worktree on the
-//! branch `aae/<run>` as its workdir; once the run ends the worktree goes, only when it has no uncommitted change and
+//! `worktree` (spec §11.5): on `run.preparing` a run of a formula with `worktree = true` gets its own git worktree on
+//! the branch `aae/<run>` as its workdir; once the run ends the worktree goes, only when it has no uncommitted change and
 //! its commits are reachable from a ref. The branch stays unless it is merged. A run continuing the session of a run
 //! that had a worktree works in that same worktree, recreated on its branch if it was removed.
 
@@ -10,12 +10,10 @@ use std::{
     process::Command,
 };
 
-/// The `[builtin.worktree]` table: the agents and formulas whose runs get a worktree, by name or qualified name;
-/// both empty means every run.
+/// Set by the loader, not by a table: the qualified names of the formulas with `worktree = true`.
 #[derive(Debug, Default, Deserialize)]
 #[serde(deny_unknown_fields, default)]
 pub(crate) struct Params {
-    agents: Vec<String>,
     formulas: Vec<String>,
 }
 
@@ -29,7 +27,7 @@ pub(crate) fn hook(event: &Value, p: &Params) -> Result<Option<Value>, String> {
     match (event["type"].as_str(), worktree(workdir)) {
         // A run continuing another's session got that run's workdir: its worktree, brought back if removed.
         (Some("run.preparing"), Some((common, of))) => create(&common, of).map(Some),
-        (Some("run.preparing"), None) if chosen(run, p) => {
+        (Some("run.preparing"), None) if p.formulas.iter().any(|f| run["formula"] == f.as_str()) => {
             let common = git(workdir, &["rev-parse", "--path-format=absolute", "--git-common-dir"])?;
             create(Path::new(&common), id).map(Some)
         }
@@ -38,17 +36,6 @@ pub(crate) fn hook(event: &Value, p: &Params) -> Result<Option<Value>, String> {
         }
         _ => Ok(None),
     }
-}
-
-fn chosen(run: &Value, p: &Params) -> bool {
-    let named = |list: &[String], name: &Value| {
-        let name = name.as_str().unwrap_or_default();
-        let bare = name.rsplit('.').next().unwrap_or(name);
-        list.iter().any(|n| n == name || n == bare)
-    };
-    (p.agents.is_empty() && p.formulas.is_empty())
-        || named(&p.agents, &run["agent"])
-        || named(&p.formulas, &run["formula"])
 }
 
 /// The git common dir and the run of a worktree this plugin made: `<common>/aae/worktrees/<run>`.

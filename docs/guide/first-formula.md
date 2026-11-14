@@ -89,6 +89,13 @@ aae run show run_2
 The run goes `queued` → `preparing` → `running` → `finishing` → `passed`. While it runs, `aae instance list` shows
 the harness process serving it. `aae run cancel <run>` stops it.
 
+## A worktree per run
+
+With `worktree = true` next to `name` in the formula, each run works in its own git worktree of the rig, on the
+branch `aae/<run>`, so runs of one rig do not step on each other. aae makes it before the run starts and removes it
+when the run ends, unless it holds uncommitted changes or commits no ref reaches; the branch goes only once merged.
+The rig must be a git repository. Without the key a run works in the rig itself.
+
 ## Runs over a tracker
 
 A project with a `.beads` directory uses [br](../../README.md#the-br-tracker-and-its-license) as its task

@@ -157,6 +157,12 @@ pub(super) fn bundled(
     file: &Path,
     mut tables: BTreeMap<String, Map<String, Value>>,
 ) -> Vec<Bundled> {
+    if tables.remove("worktree").is_some() {
+        loader.fail(
+            file,
+            "`[builtin.worktree]` is gone: set `worktree = true` in the formulas whose runs need a worktree",
+        );
+    }
     let mut on = Vec::new();
     for (name, events, by_default) in BUNDLED {
         let mut params = tables.remove(name).unwrap_or_default();
@@ -182,17 +188,31 @@ pub(super) fn bundled(
     on
 }
 
-/// The bundled plugins on for a project: the orchestrator's `on`, except those the project's `tables` decide.
+/// The bundled plugins on for a project: the orchestrator's `on`, except those the project's `tables` decide, and
+/// `worktree` for the formulas of its `packs` with `worktree = true`, named in its parameters.
 pub(super) fn project_bundled(
     loader: &mut Loader,
     file: &Path,
     on: &[Bundled],
     tables: BTreeMap<String, Map<String, Value>>,
+    packs: &[Pack],
 ) -> Vec<Bundled> {
     let own: Vec<String> = tables.keys().cloned().collect();
     let decides = |b: &Bundled| own.iter().any(|n| n == b.name);
     let mine = bundled(loader, file, tables).into_iter().filter(decides);
     let mut all: Vec<Bundled> = on.iter().filter(|b| !decides(b)).cloned().chain(mine).collect();
+    let worktree: Vec<String> = (packs.iter())
+        .flat_map(|p| {
+            p.formulas
+                .iter()
+                .filter(|(_, f)| f.worktree)
+                .map(|(n, _)| format!("{}.{n}", p.name))
+        })
+        .collect();
+    if let Some(&(name, on, _)) = BUNDLED.iter().find(|b| b.0 == "worktree" && !worktree.is_empty()) {
+        let params = serde_json::json!({ "formulas": worktree });
+        all.push(Bundled { name, on, params });
+    }
     all.sort_by_key(|b| BUNDLED.iter().position(|(n, ..)| *n == b.name));
     all
 }

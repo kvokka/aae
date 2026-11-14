@@ -308,7 +308,7 @@ impl Loader {
             (pack.version, pack.requires_plugins) = (Some(raw.version), raw.requires_plugins);
             packs.push(pack);
         }
-        let bundled = super::check::project_bundled(self, &file, bundled, raw.builtin);
+        let bundled = super::check::project_bundled(self, &file, bundled, raw.builtin, &packs);
         Some(Project {
             name,
             root: dir.to_owned(),

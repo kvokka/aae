@@ -212,19 +212,13 @@ fn native_tables_merge_by_key_across_the_layers() {
 #[test]
 fn a_project_builtin_table_replaces_the_orchestrators_for_its_runs() {
     let config = with_lines(&[
-        ("config.toml", "[builtin.worktree]\nagents = [\"implementer\"]"),
-        (
-            "shop/aae.toml",
-            "[builtin.worktree]\nenabled = false\n[builtin.default-policy]\nrapid_s = 5",
-        ),
+        ("config.toml", "[builtin.default-policy]\nrapid_s = 9\nrapid_n = 2"),
+        ("shop/aae.toml", "[builtin.default-policy]\nrapid_s = 5"),
     ]);
     let names = |b: &[crate::config::Bundled]| b.iter().map(|b| (b.name, b.params.to_string())).collect::<Vec<_>>();
     assert_eq!(
         names(&config.bundled),
-        [
-            ("default-policy", "{}".into()),
-            ("worktree", r#"{"agents":["implementer"]}"#.into())
-        ]
+        [("default-policy", r#"{"rapid_n":2,"rapid_s":9}"#.to_owned())]
     );
     assert_eq!(
         names(&config.projects[0].bundled),

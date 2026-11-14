@@ -176,9 +176,6 @@ path = "~/aae-plugins/aae-plugin-mail"
 [builtin.default-policy]            # a bundled plugin (see below); on with no table
 backoff_cap_s = 300
 
-[builtin.worktree]                  # off with no table; a table with parameters turns it on
-agents = ["implementer"]
-
 [settings]                          # layer 2
 [overrides.implementer]             # layer 7, for an agent of any project
 ```
@@ -278,6 +275,7 @@ A run over a limit waits in `queued` with `waiting_for = "concurrency"`; a busy 
 ```toml
 name = "implement"
 description = "Implement the task of a bead"
+worktree = true                     # optional (default false): each run works in a git worktree of its own
 
 [inputs]
 bead = { type = "bead", required = true }   # bead | string | integer | boolean
@@ -290,6 +288,8 @@ timeout = "45m"                     # optional
 ```
 
 An `exec` step has `command = ["prog", "arg", ..]` (non-empty) and `timeout` instead of `agent` and `prompt`.
+`worktree = true` gives each run of the formula, of either step kind, a git worktree that aae makes and removes (the
+bundled `worktree`, see below).
 
 A prompt template is checked at load (contracts 2.3): `inputs.<name>` must be a declared input; `bead.<field>` needs
 a `bead` input and a field of `Bead` (contracts 5.2); `run.<field>` a field of `RunView` (1.3); `project.name`,
@@ -379,12 +379,12 @@ or for a project).
   `quota_wait_s` (1800), `model_pause_s` (600), `backoff_base_s` (10), `backoff_cap_s` (300), `backoff_park_from`
   (3), `auth_backoff_base_s` (30), `auth_backoff_cap_s` (3600), `rapid_s` (30),
   `crash_loop` (5), `crash_pause_s` (300), `resume_failures` (3), `unknown_after_s` (30), `unknown_retries` (3).
-- `worktree` (off) gives each run of the agents in `agents` and the formulas in `formulas` (bare or qualified names;
-  both empty: every run) a git worktree of its rig on the branch `aae/<run>`, in `<git common dir>/aae/worktrees/<run>`,
-  as its workdir. When the run ends the worktree is removed unless it has uncommitted changes or a HEAD no ref
+- `worktree` has no table: it is on for the runs of the formulas with `worktree = true` (a formula setting, spec
+  §2.1 item 11), and a `[builtin.worktree]` table is a config error that says so. Each such run gets a git worktree
+  of its rig on the branch `aae/<run>`, in `<git common dir>/aae/worktrees/<run>`, as its workdir. When the run ends the worktree is removed unless it has uncommitted changes or a HEAD no ref
   reaches (then `plugin.hook_failed` says why); the branch is deleted only when it is merged. A run with
   `continue_from` starts in the workdir of the run it continues (a session resumes where it ran); when that is a
-  worktree of this plugin, it is brought back on its branch if it was removed, whether or not the run is chosen.
+  worktree of this plugin, it is brought back on its branch if it was removed, whatever the run's formula says.
 
 ### Where the bundled plugins end and the core begins
 

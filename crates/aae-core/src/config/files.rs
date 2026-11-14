@@ -224,6 +224,9 @@ pub(super) struct FormulaFile {
     pub description: String,
     #[serde(default)]
     pub inputs: BTreeMap<String, Input>,
+    /// Each run works in a git worktree of its own that aae makes and removes (spec §11.5).
+    #[serde(default)]
+    pub worktree: bool,
     pub step: StepFile,
 }
 

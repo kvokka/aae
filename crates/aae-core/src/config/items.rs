@@ -121,6 +121,7 @@ impl Loader {
             Formula {
                 description: raw.description,
                 inputs: raw.inputs,
+                worktree: raw.worktree,
                 step,
             },
         ))

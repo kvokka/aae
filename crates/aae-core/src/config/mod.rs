@@ -47,7 +47,7 @@ pub struct Config {
 }
 
 /// The plugins bundled with aae (spec §11.5): name, the events they hook, and whether they are on with no
-/// `[builtin.<name>]` table. `worktree` acts only where it is turned on.
+/// `[builtin.<name>]` table. `worktree` has no table: it is on in a project with a formula of `worktree = true`.
 pub const BUNDLED: [(&str, &[&str], bool); 2] = [
     (
         "default-policy",
@@ -136,6 +136,8 @@ pub struct Agent {
 pub struct Formula {
     pub description: String,
     pub inputs: BTreeMap<String, Input>,
+    /// `worktree = true`: each run gets a git worktree of its own (spec §11.5).
+    pub worktree: bool,
     pub step: Step,
 }
 

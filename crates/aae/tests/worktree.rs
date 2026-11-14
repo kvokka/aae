@@ -1,5 +1,5 @@
 //! The bundled `worktree` plugin through a real `aae daemon` and the real `claude` on the fake Anthropic API
-//! (spec §11.5): the session of a chosen agent works in its own git worktree, which goes once the run passes.
+//! (spec §11.5): the session of a formula with `worktree = true` works in its own git worktree, which goes once the run passes.
 
 mod common;
 
@@ -31,7 +31,7 @@ fn git(dir: &Path, args: &[&str]) -> String {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn a_claude_session_of_a_chosen_agent_works_in_its_worktree() {
+async fn a_claude_session_of_a_worktree_formula_works_in_its_worktree() {
     let out = tempfile::tempdir().unwrap();
     let cwd = out.path().join("cwd");
     let finish = format!(
@@ -46,7 +46,7 @@ async fn a_claude_session_of_a_chosen_agent_works_in_its_worktree() {
         let files = [
             (
                 dir.join("config/aae/config.toml"),
-                "projects = [\"shop\"]\n[harness.claude]\n[builtin.worktree]\nagents = [\"dev\"]\n".to_owned(),
+                "projects = [\"shop\"]\n[harness.claude]\n".to_owned(),
             ),
             (
                 shop.join("agents/dev/agent.toml"),
@@ -58,7 +58,8 @@ async fn a_claude_session_of_a_chosen_agent_works_in_its_worktree() {
             ),
             (
                 shop.join("formulas/build.toml"),
-                "name = \"build\"\n[step]\nkind = \"prompt\"\nagent = \"dev\"\nprompt = \"build.md\"\n".to_owned(),
+                "name = \"build\"\nworktree = true\n[step]\nkind = \"prompt\"\nagent = \"dev\"\nprompt = \"build.md\"\n"
+                    .to_owned(),
             ),
             (shop.join("formulas/build.md"), "Build {{ rig.name }}.".to_owned()),
         ];
