@@ -1,3 +1,0 @@
-harness = "codex"
-model = "gpt-5.6-luna"
-permission_mode = "never"             # codex's approval policy: the demo runs unattended

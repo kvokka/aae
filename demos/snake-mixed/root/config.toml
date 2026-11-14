@@ -1,0 +1,5 @@
+# The orchestrator config of the demo: its one project, this directory, and the harnesses it runs on.
+projects = ["."]
+
+[harness.claude]
+[harness.codex]

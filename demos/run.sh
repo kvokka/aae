@@ -1,19 +1,21 @@
 #!/bin/sh
-# Runs one demo from two empty rigs to its smoke test with a daemon of its own; on a pass it keeps the rigs and
-# RESULT.md in demos/<demo>/ as the snapshot. Usage: run.sh snake-claude|snake-mixed; AAE names the aae binary.
+# Runs one demo from its request to the user's smoke test with a daemon of its own, on copies of the pack, the root
+# and two empty rigs; on a pass it keeps the rigs and RESULT.md in demos/<demo>/ as the snapshot.
+# Usage: run.sh snake-claude|snake-mixed; AAE names the aae binary.
 set -eu
 demo=$1
 here=$(cd "$(dirname "$0")" && pwd)
 aae=$(command -v "${AAE:-aae}") || { echo "no aae: install it or set AAE"; exit 1; }
 work=$(mktemp -d)
-cp -R "$here/snake" "$work/snake"
+cp -R "$here/dev-pack" "$work/dev-pack"
 mkdir -p "$work/$demo/backend" "$work/$demo/frontend"
-cp -R "$here/$demo/aae.toml" "$here/$demo/agents" "$work/$demo/"
-printf 'projects = ["%s"]\n[harness.claude]\n[harness.codex]\n' "$demo" >"$work/config.toml"
+cp -R "$here/$demo/root" "$work/$demo/root"
+root=$work/$demo/root
 
-export XDG_STATE_HOME="$work/state" AAE_SOCKET="$work/aae.sock"
-# The agents call `aae finish`: the binary goes first on the PATH the daemon hands them.
-PATH="$(dirname "$aae"):$PATH" "$aae" daemon --config "$work/config.toml" 2>"$work/daemon.log" &
+export XDG_STATE_HOME="$work/state" XDG_CONFIG_HOME="$work/config" XDG_CACHE_HOME="$work/cache"
+export AAE_SOCKET="$work/aae.sock"
+# The agents call `aae`: the binary goes first on the PATH the daemon hands them.
+PATH="$(dirname "$aae"):$PATH" "$aae" daemon --config "$root/config.toml" 2>"$work/daemon.log" &
 daemon=$!
 trap 'kill $daemon 2>/dev/null || true' EXIT
 until "$aae" status >/dev/null 2>&1; do
@@ -21,40 +23,43 @@ until "$aae" status >/dev/null 2>&1; do
   sleep 0.2
 done
 started=$(date +%s)
-"$aae" run start "$demo" backend snake.backend
+plan=$("$aae" run start "$demo" root dev.plan --input request="$(cat "$root/REQUEST.md")")
 
-# Each trigger fires in the transaction of the run it follows, so once every run is terminal the chain is over.
-result=timeout
-while [ $(($(date +%s) - started)) -lt 1080 ]; do
-  runs=$("$aae" --json run list --project "$demo")
-  if printf "%s" "$runs" | jq -e 'any(.[]; .formula == "snake.smoke" and .state == "passed")' >/dev/null; then
-    result=passed
-    break
-  fi
-  if printf "%s" "$runs" | jq -e 'all(.[]; .state == "passed" or .state == "failed" or .state == "cancelled")' >/dev/null; then
-    result=stopped
-    break
-  fi
-  sleep 5
-done
+# The planner's pass starts the smoke run in the same transaction, so once the plan is over the smoke run exists.
+result=passed
+"$aae" run wait "$plan" --timeout 40m >"$work/plan.txt" || result=plan-$?
+if [ "$result" = passed ]; then
+  smoke=$("$aae" --json run list --project "$demo" | jq -r 'map(select(.formula | endswith(".smoke")))[0].id')
+  "$aae" run wait "$smoke" --timeout 3m >"$work/smoke.txt" || result=smoke-$?
+fi
 seconds=$(($(date +%s) - started))
 sha=$(git -C "$here" describe --always --dirty 2>/dev/null || echo unknown)
 versions="aae-$("$aae" --version | cut -d' ' -f2)@$sha"
 for harness in claude codex; do
   versions="$versions,$harness-$("$harness" --version 2>/dev/null | grep -Eo '[0-9]+\.[0-9]+\.[0-9]+' | head -1)"
 done
+runs=$("$aae" --json run list --project "$demo")
+children=$(printf "%s" "$runs" | jq --arg plan "$plan" '[.[] | select(.parent_run == $plan)] | length')
 {
   echo "# $demo: $result"
   echo
   # Split so that scripts/budget.sh does not take this template for a marker.
-  echo "<!-- MEASURE" "id=demo-$demo date=$(date -u +%Y-%m-%d) ver=$versions env=$(uname -sm | tr ' ' '-') src=demos/run.sh note=\"$result in $seconds s from the backend start, n=1\" -->"
+  echo "<!-- MEASURE" "id=demo-$demo date=$(date -u +%Y-%m-%d) ver=$versions env=$(uname -sm | tr ' ' '-')" \
+    "src=demos/run.sh note=\"$result in $seconds s from the request, $children runs started by the planner, n=1\" -->"
   echo
-  echo "Run on $(date -u +%Y-%m-%d) with $versions (\`$(uname -sm)\`): $result in $seconds s from the backend start."
+  echo "Run on $(date -u +%Y-%m-%d) with $versions (\`$(uname -sm)\`): $result in $seconds s from the request."
   echo
-  echo "The runs of the chain, newest first (\`aae run list\`):"
+  echo "The runs, oldest first, with the run that started each:"
+  echo
+  echo '| run | formula | rig | agent | state | parent |'
+  echo '|---|---|---|---|---|---|'
+  printf "%s" "$runs" | jq -r 'sort_by(.created_at) | .[] |
+    "| \(.id) | \(.formula) | \(.workdir | split("/") | last) | \(.agent // "") | \(.state) | \(.parent_run // "") |"'
+  echo
+  echo "The planner's outcome (\`aae run wait\`):"
   echo
   echo '```'
-  "$aae" run list --project "$demo"
+  cat "$work/plan.txt"
   echo '```'
 } >"$work/RESULT.md"
 "$aae" drain >/dev/null 2>&1 || true

@@ -1,0 +1,35 @@
+name = "snake-mixed"
+packs = ["../../dev-pack"]            # the agents and the process; the task is in REQUEST.md
+
+# The user's settings: what the agents of the pack run on here, and how.
+[settings]
+inherit_host = false                  # only what this config sets reaches the agents; the logins come from the host
+permission_mode = "bypassPermissions" # the demo runs unattended, each agent in a directory of its own
+
+[overrides.planner]                   # over the pack's defaults: the cheapest model
+model = "haiku"
+[overrides.coder]
+model = "haiku"
+
+[rigs.root]
+path = "."                            # the planner works here and leaves the other rigs to the workers
+# A variant of the pack's coder on another provider; aae picks the harness that serves it (codex for openai).
+[agents.codex-coder]
+base = "dev.coder"
+provider = "openai"
+model = "luna"                        # the adapter expands it to the latest luna
+permission_mode = "never"             # codex's approval policy: the demo runs unattended
+
+[rigs.backend]
+path = "../backend"
+agents = { coder = "codex-coder" }    # on this rig, where a formula names `coder`, the variant runs
+[rigs.frontend]
+path = "../frontend"
+
+# The user's own check, once the planner says the request is done: an exec formula of this project's own pack.
+[[trigger]]
+name = "smoke-after-plan"
+on = "run.passed"
+where = { "run.formula" = "dev.plan" }
+run = "smoke"
+rig = "root"

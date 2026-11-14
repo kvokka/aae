@@ -4,13 +4,13 @@
 python = "3.15.0"                     # the backend and the smoke test
 
 [tasks.check]
-description = "The demo pack and projects load"
-run = "aae config check --config config.toml"
+description = "Both demos load: the pack, the projects and the user's settings"
+run = "aae config check --config snake-claude/root/config.toml && aae config check --config snake-mixed/root/config.toml"
 
 [tasks.snake-claude]
-description = "Demo 1: snake on claude haiku, from empty rigs to a green smoke test"
+description = "Demo 1: a planner and its workers on claude haiku, from the request to a green smoke test"
 run = "./run.sh snake-claude"
 
 [tasks.snake-mixed]
-description = "Demo 2: the same with the backend on codex"
+description = "Demo 2: the same with the backend worker on codex"
 run = "./run.sh snake-mixed"

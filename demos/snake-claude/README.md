@@ -1,8 +1,14 @@
-# Demo 1: snake on claude
+# Demo 1: a planner and its workers on claude
 
-The project of the [`snake`](../snake) pack with both agents on claude haiku. `agents/backend/agent.toml` is its only
-agent; the frontend agent and the formulas come from the pack.
+The pack [`dev`](../dev-pack) with every agent on claude haiku. [`root/aae.toml`](root/aae.toml) is all the user
+configures: the rigs `root`, `backend`, `frontend`, and the cheapest model for both agents of the pack as an
+override (`[overrides.planner]`, `[overrides.coder]`) over the pack's defaults. The harness is not named anywhere: it
+follows from the pack's provider, `anthropic`.
 
-The snapshot of the last green run: [`backend/`](backend) (`server.py`; the `scores.txt` the smoke test wrote is left out),
-[`frontend/`](frontend) (`index.html`; open it in a browser while `PORT=8765 python3 backend/server.py` runs) and
-[`RESULT.md`](RESULT.md) with the runs of the chain. Run it again with `mise run snake-claude` in `demos/`.
+- [`root/REQUEST.md`](root/REQUEST.md): what the user wants, in their words.
+- [`root/smoke.sh`](root/smoke.sh): how the user checks it; [`root/formulas/smoke.toml`](root/formulas/smoke.toml)
+  runs it when the planner passes.
+- [`backend/`](backend), [`frontend/`](frontend): the snapshot of the last green run (`server.py`, `index.html`), and
+  [`RESULT.md`](RESULT.md) with the runs.
+
+Run it with `mise run snake-claude` in `demos/`.

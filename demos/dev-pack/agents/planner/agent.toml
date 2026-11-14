@@ -1,0 +1,4 @@
+# The defaults of the role; the user's config may run it on another provider, model or effort.
+provider = "anthropic"
+model = "sonnet"
+effort = "medium"

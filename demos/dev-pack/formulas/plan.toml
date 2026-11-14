@@ -1,0 +1,11 @@
+name = "plan"
+description = "Split a request into tasks per rig, run them with `code` and see them through"
+
+[inputs]
+request = { type = "string", required = true }   # what the user wants, in their words
+
+[step]
+kind = "prompt"
+agent = "planner"
+prompt = "plan.md"
+timeout = "45m"

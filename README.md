@@ -11,7 +11,7 @@ finisher and by plugins.
 - [Your first project](docs/guide/first-project.md)
 - [Your first formula with an agent](docs/guide/first-formula.md)
 - [Writing a plugin](docs/guide/plugin.md)
-- [Demos](demos/README.md): a snake game made by a claude agent and a codex one, chained by triggers
+- [Demos](demos/README.md): a planner agent splits a request into tasks and runs worker agents on claude and codex
 - Reference: [configuration files](docs/design/config.md), [contracts](docs/design/contracts.md) (events, hooks,
   run states), [HTTP API](docs/api/openapi.json)
 

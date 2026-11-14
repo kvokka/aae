@@ -1,3 +1,0 @@
-harness = "claude"
-model = "haiku"
-permission_mode = "bypassPermissions"   # the demo runs unattended in a directory of its own

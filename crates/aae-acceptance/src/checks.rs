@@ -54,19 +54,19 @@ pub(crate) const ALL: &[Scenario] = &[
     },
     Scenario {
         criterion: "20",
-        title: "the pack and both projects of demos/ load",
+        title: "the pack and both demo projects of demos/ load",
         launch: Launch::Ci,
         run: |env| Box::pin(demos_load(env)),
     },
     Scenario {
         criterion: "20",
-        title: "demo 1, snake on claude, passes from empty rigs to a green smoke test without intervention",
+        title: "demo 1, a planner and its workers on claude, passes from a request to a green smoke test unattended",
         launch: Launch::Request,
         run: |env| Box::pin(demo(env, "snake-claude")),
     },
     Scenario {
         criterion: "20",
-        title: "demo 2, snake on claude and codex, passes from empty rigs to a green smoke test without intervention",
+        title: "demo 2, the backend worker on codex, passes from a request to a green smoke test unattended",
         launch: Launch::Request,
         run: |env| Box::pin(demo(env, "snake-mixed")),
     },
@@ -165,8 +165,11 @@ async fn tests(env: Arc<Env>, filter: &str, want: u32) -> String {
 
 async fn demos_load(env: Arc<Env>) -> String {
     let aae = env.aae.to_string_lossy().into_owned();
-    command(&env, &aae, &["config", "check", "--config", "demos/config.toml"]).await;
-    "`aae config check` of demos/config.toml is clean".into()
+    for demo in ["snake-claude", "snake-mixed"] {
+        let config = format!("demos/{demo}/root/config.toml");
+        command(&env, &aae, &["config", "check", "--config", &config]).await;
+    }
+    "`aae config check` of both demos' demos/<demo>/root/config.toml is clean".into()
 }
 
 /// One demo on real models (spec §15 "Demo"); `demos/run.sh` keeps its rigs as the snapshot in `demos/<demo>/`.
