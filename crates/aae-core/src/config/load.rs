@@ -18,7 +18,7 @@ use std::{
 /// Runs started at once when the orchestrator config does not say (spec §9.3).
 const DEFAULT_MAX_RUNS: u32 = 8;
 /// What the harness hooks and MCP commands of a plugin's contribution say for the plugin's directory.
-const PLUGIN_DIR: &str = "${AAE_PLUGIN_DIR}";
+pub(super) const PLUGIN_DIR: &str = "${AAE_PLUGIN_DIR}";
 /// Failed runs of a bead before the core closes its gate (spec §10.3).
 const DEFAULT_BEAD_FAILURES: u32 = 3;
 
@@ -38,7 +38,8 @@ impl Loader {
         self.harnesses = raw.harness.keys().cloned().collect();
         let plugins = self.plugins(file, &base, raw.plugin, &[]);
         let names: Vec<&str> = plugins.iter().map(|p| p.name.as_str()).collect();
-        let settings = self.settings(file, &base, raw.settings, &names);
+        let mut settings = self.settings(file, &base, raw.settings, &names);
+        settings.services = self.services(file, raw.service, None);
         let overrides = self.overrides(file, &base, raw.overrides, &names);
         let bundled = super::check::bundled(&mut self, file, raw.builtin);
         let mut projects: Vec<Project> = Vec::new();
@@ -147,6 +148,7 @@ impl Loader {
             let mut agent = self.settings(&manifest, &root, raw.agent, &[]);
             // Its harness hooks and MCP servers reach its own files as `${AAE_PLUGIN_DIR}`.
             let dir = root.to_string_lossy();
+            agent.services = self.services(&manifest, raw.service, Some(&dir));
             let at = |text: &mut String| *text = text.replace(PLUGIN_DIR, &dir);
             agent.hooks.values_mut().filter_map(|h| h.command.as_mut()).for_each(at);
             agent
@@ -176,7 +178,7 @@ impl Loader {
             if !mcp.well_formed() {
                 self.fail(
                     file,
-                    format!("mcp `{name}` needs a `command`, a `url`, or both (a shared service)"),
+                    format!("mcp `{name}` needs a `command` or a `url`; with both it is a `[[service]]` with `mcp`"),
                 );
             }
         }
@@ -246,7 +248,8 @@ impl Loader {
         let plugins = self.plugins(&file, dir, raw.plugin, outer);
         let all: Vec<&Plugin> = outer.iter().chain(&plugins).collect();
         let names: Vec<&str> = all.iter().map(|p| p.name.as_str()).collect();
-        let settings = self.settings(&file, dir, raw.settings, &names);
+        let mut settings = self.settings(&file, dir, raw.settings, &names);
+        settings.services = self.services(&file, raw.service, None);
         let overrides = self.overrides(&file, dir, raw.overrides, &names);
         let mut rigs = BTreeMap::new();
         for (rig, r) in raw.rigs {

@@ -11,6 +11,7 @@ fn agent<T>(value: T) -> aae_core::config::Sourced<T> {
 
 fn config() -> EffectiveConfig {
     EffectiveConfig {
+        services: Default::default(),
         harness: "codex".into(),
         model: Some(agent("gpt-fake".into())),
         effort: Some(agent("low".into())),

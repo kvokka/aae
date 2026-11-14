@@ -1,54 +1,79 @@
-//! Services (spec §11.4, docs/design/contracts.md 8): an MCP server declared with both `command` and `url` is run by
-//! the daemon once per scope and shared by the sessions of that scope. It lives in the instance registry as a record
+//! Services (spec §11.4, docs/design/contracts.md 8): a `[[service]]` is run by the daemon once per scope and shared
+//! by the sessions of that scope. It lives in the instance registry as a record
 //! of kind `service`: a consumer count instead of sessions, stopped once idle, restarted with the effect backoff
-//! when it dies. It listens on loopback with a token: the daemon picks the port and the token, the sessions get
-//! the URL with `Authorization: Bearer <token>`; every HTTP server also gets the identity headers of the session.
+//! when it dies. It listens on loopback with a token: the daemon picks the port and the token; the sessions get its
+//! MCP endpoint with `Authorization: Bearer <token>`, or, with none, its URL and token in their environment. Every
+//! HTTP MCP server also gets the identity headers of the session.
 
-use super::{Msg, RunHandler, row::Row};
+use super::{RunHandler, row::Row};
 use crate::{
-    config::{EffectiveConfig, McpScope},
+    config::{EffectiveConfig, Mcp, ServiceScope, Sourced},
     driver::{Failure, FailureKind, Source},
-    orphans::INSTANCE_ENV,
-    process::{self, Spec},
-    writer::{CoreHandle, Error, Event, Tx},
+    writer::{Error, Event, Tx},
 };
 use rusqlite::{OptionalExtension, params};
 use serde_json::{Value, json};
-use std::{
-    collections::{BTreeMap, HashMap},
-    path::Path,
-    sync::{Arc, Mutex, PoisonError},
-    time::Duration,
-};
-use tokio::{sync::Notify, task::JoinHandle};
+use std::collections::BTreeMap;
 
-/// The placeholder of a service URL for the port the daemon picked.
-const PORT: &str = "${AAE_SERVICE_PORT}";
 /// The placeholder of an MCP URL for the daemon's own API on TCP (`api_tcp`), which brings its token.
 const API: &str = "${AAE_API}";
 /// How long a service with no consumer is kept.
 const IDLE_MS: i64 = 300_000;
-/// How long a service may take to accept connections, and a launch waits for that.
-pub(super) const READY_WAIT: Duration = Duration::from_secs(30);
-/// Bytes kept from the end of a service's stderr for its `service.failed`.
-const TAIL: usize = 4 * 1024;
 
-/// The services this daemon runs: the stop and the task of each.
-pub(super) type Running = Arc<Mutex<HashMap<String, Entry>>>;
-type Entry = (Arc<Notify>, JoinHandle<()>);
+/// A service a session uses: its id, and the port its launch waits for when it serves MCP.
+pub(super) type Bound = (String, Option<u16>);
 
 impl RunHandler {
-    /// The config a session of `row` starts with: every service it names is acquired (started when none of its
-    /// definition runs in its scope) and becomes its URL with the token, `${AAE_API}` becomes the daemon's API on
-    /// TCP with its token; every HTTP server gets the identity headers. Also the service ids and ports, for
-    /// [`Self::use_services`] and the launch.
+    /// The config a session of `row` starts with: every service it uses is acquired (started when none of its
+    /// definition runs in its scope) and becomes an MCP server with its URL and token, or `AAE_SERVICE_<NAME>_URL`
+    /// and `_TOKEN` in its environment; `${AAE_API}` becomes the daemon's API on TCP with its token; every HTTP
+    /// server gets the identity headers. Also the service ids, with the port a launch waits for when it is MCP.
     pub(super) fn bind_services(
         tx: &mut Tx<'_>,
         row: &Row,
         mut config: EffectiveConfig,
         daemon: &crate::config::Config,
-    ) -> Result<(EffectiveConfig, Vec<(String, u16)>), Error> {
+    ) -> Result<(EffectiveConfig, Vec<Bound>), Error> {
         let mut bound = Vec::new();
+        for (name, Sourced { value: service, from }) in std::mem::take(&mut config.services) {
+            let scope = match service.scope {
+                ServiceScope::Project => format!("project:{}", row.project),
+                ServiceScope::Orchestrator => "orchestrator".to_owned(),
+            };
+            // The MCP path is not part of it: a new path restarts no process.
+            let definition = json!({ "command": service.command, "env": service.env, "health": service.health });
+            let Some((id, port, token)) = Self::service(tx, &name, &scope, &definition)? else {
+                // No port or no randomness: the session goes without the service, a tool failure (§11.4).
+                config.mcp.remove(&name);
+                continue;
+            };
+            let url = format!("http://127.0.0.1:{port}");
+            let Some(path) = service.mcp else {
+                let var = name
+                    .to_ascii_uppercase()
+                    .replace(|c: char| !c.is_ascii_alphanumeric(), "_");
+                for (key, value) in [("URL", url), ("TOKEN", token)] {
+                    let value = Sourced {
+                        value,
+                        from: from.clone(),
+                    };
+                    config.env.insert(format!("AAE_SERVICE_{var}_{key}"), value);
+                }
+                // It may listen on no port: the launch does not wait for one.
+                bound.push((id, None));
+                continue;
+            };
+            let headers = BTreeMap::from([("Authorization".to_owned(), format!("Bearer {token}"))]);
+            let mcp = Mcp {
+                command: None,
+                env: BTreeMap::new(),
+                url: Some(format!("{url}{path}")),
+                headers,
+                scope: None,
+            };
+            config.mcp.insert(name, Sourced { value: mcp, from });
+            bound.push((id, Some(port)));
+        }
         let mut lost = Vec::new();
         for (name, server) in &mut config.mcp {
             let mcp = &mut server.value;
@@ -61,22 +86,6 @@ impl RunHandler {
                 };
                 mcp.url = Some(url.replace(API, &format!("http://{addr}")));
                 (mcp.headers).insert("Authorization".to_owned(), format!("Bearer {}", daemon.api_token));
-            } else if let Some(command) = mcp.command.take() {
-                let scope = match mcp.scope {
-                    Some(McpScope::Project) => format!("project:{}", row.project),
-                    _ => "orchestrator".to_owned(),
-                };
-                let definition = json!({ "command": command, "env": mcp.env, "url": url });
-                let Some((id, port, token)) = Self::service(tx, name, &scope, &definition)? else {
-                    // No port or no randomness: the session goes without the server, a tool failure (§11.4).
-                    lost.push(name.clone());
-                    continue;
-                };
-                mcp.url = Some(url.replace(PORT, &port.to_string()));
-                mcp.headers
-                    .insert("Authorization".to_owned(), format!("Bearer {token}"));
-                (mcp.env, mcp.scope) = (BTreeMap::new(), None);
-                bound.push((id, port));
             }
             for (key, value) in [
                 ("X-Aae-Project", &row.project),
@@ -155,12 +164,7 @@ impl RunHandler {
     }
 
     /// The attempt `run`/`attempt` consumes `services` until it ends.
-    pub(super) fn use_services(
-        tx: &mut Tx<'_>,
-        run: &str,
-        attempt: u32,
-        services: &[(String, u16)],
-    ) -> Result<(), Error> {
+    pub(super) fn use_services(tx: &mut Tx<'_>, run: &str, attempt: u32, services: &[Bound]) -> Result<(), Error> {
         if services.is_empty() {
             return Ok(());
         }
@@ -310,86 +314,4 @@ impl RunHandler {
         })
         .map(drop)
     }
-}
-
-/// Runs the service of a `start_service` effect in a task of its own: `ServiceReady` once its port accepts
-/// connections, `ServiceFailed` once it ends unless the registry stopped it.
-pub(super) fn start(running: &Running, core: &CoreHandle<Msg>, p: &Value) {
-    let id = p["service"].as_str().unwrap_or_default().to_owned();
-    let command: Vec<String> = serde_json::from_value(p["command"].clone()).unwrap_or_default();
-    let port = p["port"]
-        .as_u64()
-        .and_then(|p| u16::try_from(p).ok())
-        .unwrap_or_default();
-    let pairs: BTreeMap<String, String> = serde_json::from_value(p["env"].clone()).unwrap_or_default();
-    let mut env = process::base_env();
-    env.retain(|(k, _)| !pairs.contains_key(k));
-    env.extend(pairs);
-    env.extend([
-        ("AAE_SERVICE_PORT".to_owned(), port.to_string()),
-        (
-            "AAE_SERVICE_TOKEN".to_owned(),
-            p["token"].as_str().unwrap_or_default().to_owned(),
-        ),
-        (INSTANCE_ENV.to_owned(), id.clone()),
-    ]);
-    let delay = Duration::from_millis(p["delay_ms"].as_u64().unwrap_or_default());
-    let stop = Arc::new(Notify::new());
-    let (core, own) = (core.clone(), stop.clone());
-    let task_id = id.clone();
-    let task = tokio::spawn(async move {
-        tokio::select! {
-            () = tokio::time::sleep(delay) => {}
-            () = own.notified() => return,
-        }
-        let out = process::run(Spec {
-            command: &command,
-            cwd: Path::new("/"),
-            env: &env,
-            stdin: b"",
-            timeout: Duration::MAX,
-            keep: TAIL,
-            stop: Some(&own),
-        });
-        tokio::pin!(out);
-        let ports = [port];
-        let ended = tokio::select! {
-            out = &mut out => Some(out),
-            up = super::exec::wait_up(&ports) => {
-                if up {
-                    let _ = core.send(None, Msg::ServiceReady { id: task_id.clone() }).await;
-                } else {
-                    own.notify_one();
-                }
-                None
-            }
-        };
-        let out = match ended {
-            Some(out) => out,
-            None => out.await,
-        };
-        let stderr = String::from_utf8_lossy(&out.stderr).into_owned();
-        // After a stop of the registry's the core drops it: the service is `stopping`.
-        let _ = core.send(None, Msg::ServiceFailed { id: task_id, stderr }).await;
-    });
-    let old = lock(running).insert(id, (stop, task));
-    if let Some((old, _)) = old {
-        old.notify_one();
-    }
-}
-
-/// Ends the service of a `stop_service` effect and every process that carries its marker.
-pub(super) async fn stop(running: &Running, id: &str) {
-    let entry = lock(running).remove(id);
-    if let Some((stop, task)) = entry {
-        stop.notify_one();
-        let _ = task.await;
-    }
-    let id = id.to_owned();
-    // Walking `/proc` is synchronous.
-    let _ = tokio::task::spawn_blocking(move || crate::orphans::sweep(&id)).await;
-}
-
-fn lock(running: &Running) -> std::sync::MutexGuard<'_, HashMap<String, Entry>> {
-    running.lock().unwrap_or_else(PoisonError::into_inner)
 }

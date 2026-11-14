@@ -19,6 +19,7 @@ mod recover;
 mod registry;
 mod reload;
 mod row;
+mod service_proc;
 mod services;
 mod triggers;
 
@@ -72,7 +73,7 @@ pub fn start(
         sink,
         hooks,
         running: exec_step::Running::default(),
-        services: services::Running::default(),
+        services: service_proc::Running::default(),
         starts: starts.clone(),
     };
     let (handle, task) = writer::start(

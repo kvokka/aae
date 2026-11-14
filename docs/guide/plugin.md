@@ -62,15 +62,15 @@ rig settings and the agent's own `agent.toml`, so an agent can still override wh
 - **Skills**: `skills.<name> = { path = "..." }`, a directory relative to the plugin with a `SKILL.md`.
 - **Harness hooks** use the Claude Code dialect (`event`, `matcher`, `command`, `timeout`); aae delivers them to
   claude as they are and translates them for codex. What `remind.sh` prints on `UserPromptSubmit` joins the prompt.
-- `${AAE_PLUGIN_DIR}` in a hook or MCP `command` is replaced with the plugin's directory when the config loads, so
+- `${AAE_PLUGIN_DIR}` in a hook, MCP or service `command` is replaced with the plugin's directory when the config loads, so
   a command can reach the plugin's own files.
 - **Scripts**: the plugin's `bin/` directory comes first on the `PATH` of the attached agents' sessions.
 - **A prompt fragment**: the top-level key `prompt = "prompt.md"` names a file whose text is appended to the
   attached agents' system prompt.
-- **A shared MCP server**: give an MCP entry both a `command` and a `url` with `${AAE_SERVICE_PORT}`, for example
-  `mcp.notes = { command = ["${AAE_PLUGIN_DIR}/bin/notes-mcp"], url = "http://127.0.0.1:${AAE_SERVICE_PORT}/mcp" }`.
-  The daemon runs one process for all sessions instead of one per session; the server listens on
-  `$AAE_SERVICE_PORT` and checks `Authorization: Bearer $AAE_SERVICE_TOKEN`
+- **A service**: a `[[service]]` table runs one process for all sessions instead of one per session, for example
+  `[[service]]` with `name = "notes"`, `command = ["${AAE_PLUGIN_DIR}/bin/notes-mcp"]` and `mcp = true`. The process
+  listens on `$AAE_SERVICE_PORT` and checks `Authorization: Bearer $AAE_SERVICE_TOKEN`; the sessions get its MCP
+  endpoint `/mcp` (or, without `mcp`, its URL and token in `AAE_SERVICE_<NAME>_URL` and `_TOKEN`)
   ([details](../design/config.md#mcp-servers-and-services-spec-114)).
 
 ## The orchestrator side

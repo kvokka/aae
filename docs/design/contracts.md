@@ -626,11 +626,11 @@ of their own. The adapter reports the account id (4.5, `Driver::account`).
   that process and is not `stopping` counts as its `exited` event, as above: a gone process is not ambiguous, so no
   `resync.diverged`. A record that moved on since the check is left alone.
 - Services (§11.4, [config](config.md#mcp-servers-and-services-spec-114)) use the same record with kind
-  `service`: the MCP name, the key `<scope>#<sha256 of the definition>` (scope `orchestrator` or `project:<p>`), the
-  port and the token in the process column, the consumer count in `sessions` (an attempt's services are in
+  `service`: the service name, the key `<scope>#<sha256 of the definition>` (the definition is `command`, `env`,
+  `health`; scope `orchestrator` or `project:<p>`), the definition, the port and the token in the process column, the consumer count in `sessions` (an attempt's services are in
   `attempts.services`). The launch transaction acquires them (a new record emits `service.starting` and the
-  `start_service` effect) and rewrites the session's config before the split. Health is the port accepting
-  connections: `service.ready`; a process that ends or is not up within 30 s gives `service.failed`, then a restart
+  `start_service` effect) and rewrites the session's config before the split. Its health check (the port
+  accepting connections, an HTTP `GET` or a command) passing gives `service.ready`; a process that ends or is not up within 30 s gives `service.failed`, then a restart
   on the same port after the effect backoff of its restarts while it has consumers, else the record goes. Idle,
   operator and recovery stops go through `stop_service`, which ends the process group and sweeps the
   marker; a reload leaves services alone. pid and pgid of the view are null: the process is tracked by its task and marker, not by pid.

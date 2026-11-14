@@ -7,11 +7,13 @@ mod files;
 mod items;
 mod load;
 pub(crate) mod schema;
+mod service;
 mod sources;
 
 use crate::template::{Filter, Inputs, Template};
 pub use assemble::{EffectiveConfig, Layer, Sourced};
 pub use files::{Harness, Hook, Input, InputType, Mcp, McpScope, PluginUse, Settings, Skill};
+pub use service::{Health, Service, ServiceScope};
 pub use sources::{GitSource, Lock, Pinned, checkout, commit_id, git_sources};
 use std::{collections::BTreeMap, fmt, path::PathBuf, time::Duration};
 

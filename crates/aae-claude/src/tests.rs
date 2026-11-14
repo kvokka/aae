@@ -50,6 +50,7 @@ fn the_transcript_tells_where_the_prompt_stands() {
 #[test]
 fn a_config_the_adapter_cannot_deliver_is_a_config_error() {
     let mut config = EffectiveConfig {
+        services: Default::default(),
         harness: "claude".into(),
         model: None,
         effort: None,
@@ -105,6 +106,7 @@ fn hooks_join_the_native_settings_and_mcp_servers_take_claude_form() {
         timeout: Some("90s".into()),
     };
     let mut config = EffectiveConfig {
+        services: Default::default(),
         harness: "claude".into(),
         model: None,
         effort: None,

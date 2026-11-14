@@ -31,7 +31,7 @@ contribution of a plugin; the top level of `agent.toml`; and the overrides `[ove
 | `model`, `effort`, `system_prompt`, `permission_mode` | string; `permission_mode` is the harness's own: claude's `--permission-mode`, codex's approval policy (`untrusted`, `on-request`, `never`) | scalar |
 | `inherit_host` | boolean | scalar |
 | `env` | table of strings | by key |
-| `mcp.<name>` | `{command = [..], env}` (stdio), `{url, headers}` (HTTP), or both: a service (below); optional `scope = "orchestrator" \| "project" \| "session"` | by key, entry replaced whole |
+| `mcp.<name>` | `{command = [..], env}` (stdio) or `{url, headers}` (HTTP), not both (a server the daemon runs is a `[[service]]`, below); optional `scope = "orchestrator" \| "project" \| "session"` | by key, entry replaced whole |
 | `hooks.<name>` | `{event, matcher, command, timeout}` (harness hooks, Claude dialect, §11.2) or `{enabled = false}` | named list |
 | `skills.<name>` | `{path}` (must exist) or `{enabled = false}` | named list |
 | `plugins` | array of `{name, enabled = true}`, in attachment order; parameters belong to the `[[plugin]]` declaration | named list |
@@ -44,17 +44,43 @@ contribution of a plugin; the top level of `agent.toml`; and the overrides `[ove
 - `command` alone: a stdio server, started by the harness in each session. There is no stdio→HTTP bridge in this
   release, so a stdio server is per session whatever its `scope`; `aae doctor` warns about those not of scope
   `session`.
-- `command` and `url`: a **service**. The daemon runs `command` once per scope (`orchestrator`, the default, or
-  `project`; `session` is an error), lazily, when the first session that names it starts, and stops it 5 minutes
-  after its last session ended. The process gets a clean environment with `env`, `AAE_SERVICE_PORT` (a free port
-  on 127.0.0.1 picked by the daemon) and `AAE_SERVICE_TOKEN`; it must listen on that port and refuse requests
-  without `Authorization: Bearer <token>`. `${AAE_SERVICE_PORT}` in `url` is replaced with the port, and sessions
-  get the URL with the token and the identity headers. The service is up once its port accepts connections (that is
-  the whole health check: no health command is declared, and a live service is one whose process lives); a
-  session start waits for that up to 30 s, and a server that is not up is a tool failure, not a failed run. A
-  service that dies is started again on the same port (with the effect backoff) while sessions use it, so they
-  reconnect; with none, it is dropped. A changed definition is a new service; the old one idles out. Events:
-  `service.starting`, `service.ready`, `service.failed`, `service.stopped`; `aae instances` lists services too.
+- `command` and `url` together: an error; a server the daemon runs is a `[[service]]` with `mcp` (below).
+
+A **service** is a `[[service]]` table at the top level of the orchestrator config, a project's `aae.toml` or a
+`plugin.toml` (not of `[settings]`): a long-lived process the daemon supervises, with MCP optional.
+
+```toml
+[[service]]
+name = "mail"                                  # required; no `.`; unique in its file
+command = ["mail-d", "--port", "${AAE_SERVICE_PORT}"]  # required, non-empty
+env = { MAIL_DIR = "/srv/mail" }               # optional, added to its clean environment
+scope = "orchestrator"                         # | "project"; `session` is an error
+health = { http = "/health" }                  # | "http" (= /health) | { command = [...] }; none: the port accepts
+mcp = { url = "/mcp" }                         # | true (= /mcp); none: no MCP endpoint
+```
+
+- Layers: services merge by name like `mcp` entries; a stronger layer replaces a service whole. An orchestrator or
+  project service is used by every session of its level; a plugin's by the sessions of the agents that attach the
+  plugin. `${AAE_PLUGIN_DIR}` in a plugin's service `command` is the plugin directory. `explain` prints
+  `service.<name>` with its layer.
+- The daemon runs `command` once per scope (`orchestrator`, the default, or `project`), lazily, when the first
+  session that uses it starts, and stops it 5 minutes after its last session ended. The process starts in `/` with a
+  clean environment with `env`, `AAE_SERVICE_PORT` (a free port on 127.0.0.1 picked by the daemon; also replaces
+  `${AAE_SERVICE_PORT}` in `command`) and `AAE_SERVICE_TOKEN`; it must refuse requests without
+  `Authorization: Bearer <token>`.
+- With `mcp`, sessions get `http://127.0.0.1:<port><path>` as an MCP server of the service's name (it replaces an
+  `mcp` entry of that name) with the token and the identity headers; a session start waits up to 30 s for the port.
+  Without `mcp`, sessions get `AAE_SERVICE_<NAME>_URL` (`http://127.0.0.1:<port>`) and `AAE_SERVICE_<NAME>_TOKEN`
+  in their environment (`<NAME>`: the name in upper case, other characters than letters and digits as `_`), and a
+  session start does not wait.
+- Health decides readiness only: the service is `ready` once its check passes (checked every 100 ms, each check
+  up to 5 s; `http` is a `GET` with the token answering 2xx; `command` runs with the service's environment and
+  passes on exit 0). Not ready within 30 s, it is stopped and fails. Once ready, a live service is one whose
+  process lives: there is no periodic check. A server that is not up is a tool failure, not a failed run.
+- A service that dies is started again on the same port (with the effect backoff) while sessions use it, so they
+  reconnect; with none, it is dropped. A changed `command`, `env` or `health` is a new service; the old one idles
+  out. Events: `service.starting`, `service.ready`, `service.failed`, `service.stopped`; `aae instances` lists
+  services too.
 - `url` with `${AAE_API}`: the daemon's own API on TCP, e.g. `url = "${AAE_API}/mcp"` for its MCP frontend. The
   placeholder becomes `http://<api_tcp>` and the session gets `Authorization: Bearer <token>` with the token of the
   daemon's start. With no `api_tcp` the session goes without the server, as with a service that is not up.

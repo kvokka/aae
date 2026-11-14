@@ -1,7 +1,7 @@
 //! The effective config of one (project, rig, agent): the layers of spec §6.3 merged, every value with the layer it
 //! came from, so that "explain config" can show it.
 
-use super::{Config, Hook, Mcp, Name, PluginUse, Settings, Skill, check::resolve};
+use super::{Config, Hook, Mcp, Name, PluginUse, Service, Settings, Skill, check::resolve};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::{collections::BTreeMap, fmt, fmt::Write as _, path::PathBuf};
@@ -65,6 +65,9 @@ pub struct EffectiveConfig {
     pub plugins: Vec<Sourced<PluginUse>>,
     /// The native block of this harness.
     pub native: Option<Sourced<Value>>,
+    /// The services its session uses; the core binds them to MCP servers or environment before the adapter.
+    #[serde(default)]
+    pub services: BTreeMap<String, Sourced<Service>>,
 }
 
 impl EffectiveConfig {
@@ -103,6 +106,7 @@ impl EffectiveConfig {
         by_key(&mut self.mcp, &settings.mcp, from, |_| true);
         by_key(&mut self.hooks, &settings.hooks, from, |h| h.enabled);
         by_key(&mut self.skills, &settings.skills, from, |s| s.enabled);
+        by_key(&mut self.services, &settings.services, from, |_| true);
     }
 
     /// What attached plugins add beyond a settings layer (spec §11.2): their prompt fragments after the system
@@ -159,6 +163,9 @@ impl EffectiveConfig {
         }
         for (name, s) in &self.mcp {
             line(&format!("mcp.{name}"), json(&s.value), &s.from);
+        }
+        for (name, s) in &self.services {
+            line(&format!("service.{name}"), json(&s.value), &s.from);
         }
         for (name, s) in &self.hooks {
             line(&format!("hooks.{name}"), json(&s.value), &s.from);
@@ -321,6 +328,7 @@ impl Config {
             skills: BTreeMap::new(),
             plugins,
             native: None,
+            services: BTreeMap::new(),
         };
         for (layer, settings) in layers.iter().chain(&stronger) {
             config.apply(settings, layer);

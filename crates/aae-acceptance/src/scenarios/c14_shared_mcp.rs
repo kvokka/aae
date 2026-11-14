@@ -45,8 +45,8 @@ pub(crate) async fn run(env: Arc<Env>) -> String {
         write(
             root.join("config/aae/config.toml"),
             format!(
-                "projects = [\"shop\"]\n[harness.claude]\n[harness.codex]\n[settings.mcp.probe]\ncommand = {command}\n\
-                 url = \"http://127.0.0.1:${{AAE_SERVICE_PORT}}/mcp\"\nscope = \"orchestrator\"\n"
+                "projects = [\"shop\"]\n[harness.claude]\n[harness.codex]\n[[service]]\nname = \"probe\"\n\
+                 command = {command}\nmcp = true\n"
             ),
         );
     })

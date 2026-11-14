@@ -75,6 +75,7 @@ impl Live {
             ("CLAUDE_CODE_MAX_RETRIES", retries.to_string()),
         ];
         let config = EffectiveConfig {
+            services: Default::default(),
             harness: "claude".into(),
             model: Some(sourced("claude-haiku-5-5".to_owned())),
             effort: None,

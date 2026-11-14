@@ -22,6 +22,7 @@ fn config(provider: &Provider) -> EffectiveConfig {
         ("CLAUDE_CODE_MAX_RETRIES", "0".to_owned()),
     ];
     EffectiveConfig {
+        services: Default::default(),
         harness: "claude".into(),
         model: Some(sourced("claude-haiku-5-5")),
         effort: None,

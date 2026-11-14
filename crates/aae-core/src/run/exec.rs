@@ -36,7 +36,7 @@ pub(super) struct RunExecutor {
     pub hooks: Arc<dyn super::HookRunner>,
     pub running: super::exec_step::Running,
     pub starts: Starts,
-    pub services: super::services::Running,
+    pub services: super::service_proc::Running,
 }
 
 impl Executor for RunExecutor {
@@ -52,10 +52,10 @@ impl Executor for RunExecutor {
                     // A stopped writer drops the message; recovery (WP-20) finds the attempt on restart.
                     let _ = core.send(None, msg).await;
                 }
-                Some("start_service") => super::services::start(&self.services, core, payload),
+                Some("start_service") => super::service_proc::start(&self.services, core, payload),
                 Some("stop_service") => {
                     let id = payload["service"].as_str().unwrap_or_default().to_owned();
-                    super::services::stop(&self.services, &id).await;
+                    super::service_proc::stop(&self.services, &id).await;
                     let reason = payload["reason"].as_str().unwrap_or("idle").to_owned();
                     // A stopped writer drops the message; recovery (WP-20) finds the record on restart.
                     let _ = core.send(None, Msg::ServiceStopped { id, reason }).await;
@@ -302,12 +302,12 @@ impl RunExecutor {
     }
 }
 
-/// Waits until every port on loopback accepts connections, up to [`super::services::READY_WAIT`]; `false` past it.
+/// Waits until every port on loopback accepts connections, up to [`super::service_proc::READY_WAIT`]; `false` past it.
 pub(super) async fn wait_up(ports: &[u16]) -> bool {
     let start = tokio::time::Instant::now();
     for &port in ports {
         while tokio::net::TcpStream::connect(("127.0.0.1", port)).await.is_err() {
-            if start.elapsed() > super::services::READY_WAIT {
+            if start.elapsed() > super::service_proc::READY_WAIT {
                 return false;
             }
             tokio::time::sleep(Duration::from_millis(50)).await;

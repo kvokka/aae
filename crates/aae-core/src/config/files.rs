@@ -26,6 +26,9 @@ pub struct Settings {
     /// Harness-native blocks, by harness name; the core passes them to the adapter as they are.
     #[serde(default)]
     pub native: BTreeMap<String, Value>,
+    /// The `[[service]]` tables of the file of this layer: not a key of `[settings]`.
+    #[serde(skip)]
+    pub services: BTreeMap<String, super::Service>,
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq, Serialize)]
@@ -36,7 +39,7 @@ pub enum McpScope {
     Session,
 }
 
-/// An MCP server: a command (stdio), a URL (HTTP), or both (a service the daemon runs, spec §11.4).
+/// An MCP server: a command (stdio) or a URL (HTTP); a server the daemon runs is a `[[service]]` (spec §11.4).
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct Mcp {
@@ -50,12 +53,12 @@ pub struct Mcp {
 }
 
 impl Mcp {
-    /// A stdio `command`, a `url`, or both: a service the daemon runs and shares (spec §11.4), never per session.
+    /// A non-empty stdio `command` or a `url`, not both.
     pub(super) fn well_formed(&self) -> bool {
         match (&self.command, &self.url) {
-            (Some(command), url) if !command.is_empty() => url.is_none() || self.scope != Some(McpScope::Session),
-            (None, Some(_)) => true,
-            _ => false,
+            (Some(command), None) => !command.is_empty(),
+            (None, url) => url.is_some(),
+            (Some(_), Some(_)) => false,
         }
     }
 }
@@ -114,6 +117,8 @@ pub(super) struct OrchestratorFile {
     pub settings: Settings,
     #[serde(default)]
     pub overrides: BTreeMap<String, Settings>,
+    #[serde(default)]
+    pub service: Vec<super::service::ServiceFile>,
 }
 
 /// A harness agents may choose and its defaults (spec §6.1).
@@ -166,6 +171,8 @@ pub(super) struct ProjectFile {
     pub rigs: BTreeMap<String, RigFile>,
     #[serde(default)]
     pub trigger: Vec<TriggerFile>,
+    #[serde(default)]
+    pub service: Vec<super::service::ServiceFile>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -264,6 +271,8 @@ pub(super) struct PluginFile {
     pub agent: Settings,
     #[serde(default)]
     pub hook: Vec<OrchestratorHookFile>,
+    #[serde(default)]
+    pub service: Vec<super::service::ServiceFile>,
 }
 
 #[derive(Debug, Deserialize)]

@@ -1,6 +1,7 @@
-//! Services (spec §11.4, docs/design/contracts.md 8) in the core: one process per scope shared by the sessions that
-//! name it, its URL with the token and the identity headers in each session, a restart on the same port after it
-//! dies, a stop by the operator once it is idle.
+//! Services (spec §11.4, docs/design/contracts.md 8) in the core: one `[[service]]` process per scope shared by the
+//! sessions, its MCP URL with the token and the identity headers in each session (or its URL and token in their
+//! environment), ready once its health check passes, a restart on the same port after it dies, a stop by the
+//! operator once it is idle.
 
 mod common;
 
@@ -14,6 +15,23 @@ use serde_json::Value;
 use std::time::{Duration, Instant};
 
 const PROBE: &str = env!("CARGO_BIN_EXE_mcp-probe");
+
+/// `shop/aae.toml` with rig `web` and `service`, a `[[service]]` table's keys.
+fn project(service: &str) -> (&'static str, String) {
+    (
+        "shop/aae.toml",
+        format!("[rigs.web]\npath = \"web\"\n[[service]]\n{service}\n"),
+    )
+}
+
+/// The probe as a service named `probe` serving MCP, logging to `log`.
+fn probe(log: &std::path::Path, more: &str) -> (&'static str, String) {
+    let command = format!(
+        "name = \"probe\"\ncommand = [\"{PROBE}\", \"{}\"]\nmcp = true",
+        log.display()
+    );
+    project(&format!("{command}\n{more}"))
+}
 
 impl World {
     fn service_events(&self) -> Vec<(String, Value)> {
@@ -80,19 +98,10 @@ fn call(server: &Value) -> u16 {
 async fn one_service_serves_every_session_and_restarts_on_its_port() {
     let dir = tempfile::tempdir().unwrap();
     let log = dir.path().join("probe.jsonl");
-    let agent = format!(
-        "harness = \"scripted\"\n[mcp.probe]\ncommand = [\"{PROBE}\", \"{}\"]\n\
-         url = \"http://127.0.0.1:${{AAE_SERVICE_PORT}}/mcp\"\n",
-        log.display()
-    );
     let driver = ScriptedDriver::new(4);
     driver.stall_sessions();
-    let rigs = "[rigs.web]\npath = \"web\"\n[rigs.api]\npath = \"api\"\n";
-    let files = [
-        ("shop/agents/dev/agent.toml", agent.as_str()),
-        ("shop/aae.toml", rigs),
-        ("shop/api/.keep", ""),
-    ];
+    let (path, text) = probe(&log, "[rigs.api]\npath = \"api\"");
+    let files = [(path, text.as_str()), ("shop/api/.keep", "")];
     let w = world_driven(&files, driver);
     let (a, b) = (w.create().await, w.create_on("api").await);
     w.until_count("service.ready", 1).await;
@@ -154,9 +163,8 @@ fn alive(pid: u64) -> bool {
 
 #[tokio::test(start_paused = true)]
 async fn a_service_that_never_comes_up_fails_the_tool_not_the_run() {
-    let agent = "harness = \"scripted\"\n[mcp.probe]\ncommand = [\"false\"]\n\
-                 url = \"http://127.0.0.1:${AAE_SERVICE_PORT}/mcp\"\n";
-    let w = world_driven(&[("shop/agents/dev/agent.toml", agent)], ScriptedDriver::new(1));
+    let (path, text) = project("name = \"probe\"\ncommand = [\"false\"]\nmcp = true");
+    let w = world_driven(&[(path, text.as_str())], ScriptedDriver::new(1));
     let run = w.create().await;
     w.until_count("service.failed", 1).await;
     // The launch waits for the port at most 30 s, then the session starts with the URL all the same.
@@ -170,14 +178,10 @@ async fn a_service_that_never_comes_up_fails_the_tool_not_the_run() {
 async fn a_daemon_crash_stops_the_service_it_left_and_the_next_session_gets_a_new_one() {
     let dir = tempfile::tempdir().unwrap();
     let log = dir.path().join("probe.jsonl");
-    let agent = format!(
-        "harness = \"scripted\"\n[mcp.probe]\ncommand = [\"{PROBE}\", \"{}\"]\n\
-         url = \"http://127.0.0.1:${{AAE_SERVICE_PORT}}/mcp\"\n",
-        log.display()
-    );
     let driver = ScriptedDriver::new(1);
     driver.stall_sessions();
-    let mut w = world_driven(&[("shop/agents/dev/agent.toml", agent.as_str())], driver);
+    let (path, text) = probe(&log, "");
+    let mut w = world_driven(&[(path, text.as_str())], driver);
     let first = w.create().await;
     w.until_count("service.ready", 1).await;
     assert_eq!(call(&w.driver.mcp(&first, 1)["probe"]), 200);
@@ -197,4 +201,85 @@ async fn a_daemon_crash_stops_the_service_it_left_and_the_next_session_gets_a_ne
     let server = w.driver.mcp(&run, 1)["probe"].clone();
     assert_eq!(call(&server), 200, "a new service for the new session");
     assert_ne!(*pids(&log).last().unwrap(), pid);
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_service_is_ready_only_once_its_health_check_passes() {
+    let dir = tempfile::tempdir().unwrap();
+    let (log, flag) = (dir.path().join("probe.jsonl"), dir.path().join("up"));
+    let health = format!("health = {{ command = [\"test\", \"-e\", \"{}\"] }}", flag.display());
+    let driver = ScriptedDriver::new(1);
+    driver.stall_sessions();
+    let (path, text) = probe(&log, &health);
+    let w = world_driven(&[(path, text.as_str())], driver);
+    let run = w.create().await;
+    let server = w.driver.mcp(&run, 1)["probe"].clone();
+    w.until_count("service.starting", 1).await;
+    // The port answers, the check does not pass yet.
+    let start = Instant::now();
+    while call(&server) != 200 {
+        assert!(start.elapsed() < Duration::from_secs(20), "the probe does not answer");
+        std::thread::sleep(Duration::from_millis(20));
+    }
+    tokio::time::sleep(Duration::from_millis(500)).await;
+    assert_eq!(w.count("service.ready"), 0);
+    std::fs::write(&flag, "").unwrap();
+    w.until_count("service.ready", 1).await;
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_service_whose_health_check_never_passes_fails() {
+    for health in ["health = { http = \"/nope\" }", "health = { command = [\"false\"] }"] {
+        let dir = tempfile::tempdir().unwrap();
+        let (path, text) = probe(&dir.path().join("probe.jsonl"), health);
+        let w = world_driven(&[(path, text.as_str())], ScriptedDriver::new(1));
+        w.create().await;
+        w.until_count("service.starting", 1).await;
+        tokio::time::sleep(Duration::from_secs(31)).await;
+        assert_eq!(w.count("service.ready"), 0, "{health}");
+        w.until_count("service.failed", 1).await;
+    }
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_service_without_mcp_reaches_the_session_as_its_url_and_token() {
+    let dir = tempfile::tempdir().unwrap();
+    // `$0` holds the port only if aae put it there: sh does not expand its arguments.
+    let service = format!(
+        "name = \"mail-db\"\ncommand = [\"sh\", \"-c\", \"touch \\\"$0\\\"; exec sleep 60\", \"{}/port-${{AAE_SERVICE_PORT}}\"]\n\
+         health = {{ command = [\"true\"] }}",
+        dir.path().display()
+    );
+    let driver = ScriptedDriver::new(2);
+    let (path, text) = project(&format!("{service}\n[rigs.api]\npath = \"api\""));
+    let w = world_driven(&[(path, text.as_str()), ("shop/api/.keep", "")], driver);
+    let (a, b) = (w.create().await, w.create_on("api").await);
+    w.until_count("service.ready", 1).await;
+    w.events(&b, Duration::from_millis(500)).await;
+    assert_eq!(w.count("service.starting"), 1, "one process for both sessions");
+    let env = w.driver.sent(&a, 1).0.unwrap();
+    let url = &env["AAE_SERVICE_MAIL_DB_URL"];
+    let port = url.strip_prefix("http://127.0.0.1:").unwrap();
+    // The check `true` may pass before the command ran.
+    let start = Instant::now();
+    while !dir.path().join(format!("port-{port}")).exists() {
+        assert!(start.elapsed() < Duration::from_secs(20), "no port in its command");
+        std::thread::sleep(Duration::from_millis(20));
+    }
+    assert!(!env["AAE_SERVICE_MAIL_DB_TOKEN"].is_empty());
+    assert_eq!(w.driver.sent(&b, 1).0.unwrap()["AAE_SERVICE_MAIL_DB_URL"], *url);
+    assert!(w.driver.mcp(&a, 1).get("mail-db").is_none(), "no MCP server");
+    // It listens on no port: the launch did not wait for one.
+    let states = w.states(&a).await;
+    assert!(states.iter().any(|s| s == "running"), "{states:?}");
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_service_with_an_http_check_is_ready_once_it_answers() {
+    let dir = tempfile::tempdir().unwrap();
+    let (path, text) = probe(&dir.path().join("probe.jsonl"), "health = \"http\"");
+    let w = world_driven(&[(path, text.as_str())], ScriptedDriver::new(1));
+    w.create().await;
+    w.until_count("service.ready", 1).await;
+    assert_eq!(w.count("service.failed"), 0);
 }

@@ -21,6 +21,7 @@ fn agent<T>(value: T) -> Sourced<T> {
 
 fn config(provider: &Provider) -> EffectiveConfig {
     EffectiveConfig {
+        services: Default::default(),
         harness: "codex".into(),
         model: Some(agent("gpt-fake".into())),
         effort: None,

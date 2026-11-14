@@ -76,6 +76,7 @@ impl Live {
         let provider_config = json!({ "name": "fake", "base_url": provider.base_url(), "wire_api": "responses",
             "request_max_retries": retries, "stream_max_retries": retries });
         let config = EffectiveConfig {
+            services: Default::default(),
             harness: "codex".into(),
             model: Some(sourced("gpt-fake".to_owned())),
             effort: None,

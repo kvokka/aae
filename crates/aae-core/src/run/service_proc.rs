@@ -1,0 +1,168 @@
+//! The process of a service (spec §11.4): started by a `start_service` effect, ready once its health check passes,
+//! ended by a `stop_service` effect along with every process that carries its marker.
+
+use super::Msg;
+use crate::{
+    config::Health,
+    orphans::INSTANCE_ENV,
+    process::{self, Exit, Spec},
+    writer::CoreHandle,
+};
+use serde_json::Value;
+use std::{
+    collections::{BTreeMap, HashMap},
+    path::Path,
+    sync::{Arc, Mutex, PoisonError},
+    time::Duration,
+};
+use tokio::{
+    io::{AsyncReadExt, AsyncWriteExt},
+    net::TcpStream,
+    sync::Notify,
+    task::JoinHandle,
+};
+
+/// The placeholder for the port the daemon picked, in a service's `command`.
+pub(super) const PORT: &str = "${AAE_SERVICE_PORT}";
+/// How long a service may take to pass its health check, and a launch waits for its port.
+pub(super) const READY_WAIT: Duration = Duration::from_secs(30);
+/// How long one health check may take.
+const CHECK_WAIT: Duration = Duration::from_secs(5);
+/// Between two health checks of a starting service.
+const CHECK_EVERY: Duration = Duration::from_millis(100);
+/// Bytes kept from the end of a service's stderr for its `service.failed`.
+const TAIL: usize = 4 * 1024;
+
+/// The services this daemon runs: the stop and the task of each.
+pub(super) type Running = Arc<Mutex<HashMap<String, Entry>>>;
+type Entry = (Arc<Notify>, JoinHandle<()>);
+
+/// Runs the service of a `start_service` effect in a task of its own: `ServiceReady` once it is healthy,
+/// `ServiceFailed` once it ends unless the registry stopped it.
+pub(super) fn start(running: &Running, core: &CoreHandle<Msg>, p: &Value) {
+    let id = p["service"].as_str().unwrap_or_default().to_owned();
+    let port = p["port"]
+        .as_u64()
+        .and_then(|p| u16::try_from(p).ok())
+        .unwrap_or_default();
+    let command: Vec<String> = serde_json::from_value(p["command"].clone()).unwrap_or_default();
+    let command: Vec<String> = command.iter().map(|a| a.replace(PORT, &port.to_string())).collect();
+    let health: Health = serde_json::from_value(p["health"].clone()).unwrap_or(Health::Port);
+    let token = p["token"].as_str().unwrap_or_default().to_owned();
+    let pairs: BTreeMap<String, String> = serde_json::from_value(p["env"].clone()).unwrap_or_default();
+    let mut env = process::base_env();
+    env.retain(|(k, _)| !pairs.contains_key(k));
+    env.extend(pairs);
+    env.extend([
+        ("AAE_SERVICE_PORT".to_owned(), port.to_string()),
+        ("AAE_SERVICE_TOKEN".to_owned(), token.clone()),
+        (INSTANCE_ENV.to_owned(), id.clone()),
+    ]);
+    let delay = Duration::from_millis(p["delay_ms"].as_u64().unwrap_or_default());
+    let stop = Arc::new(Notify::new());
+    let (core, own) = (core.clone(), stop.clone());
+    let task_id = id.clone();
+    let task = tokio::spawn(async move {
+        tokio::select! {
+            () = tokio::time::sleep(delay) => {}
+            () = own.notified() => return,
+        }
+        let out = process::run(Spec {
+            command: &command,
+            cwd: Path::new("/"),
+            env: &env,
+            stdin: b"",
+            timeout: Duration::MAX,
+            keep: TAIL,
+            stop: Some(&own),
+        });
+        tokio::pin!(out);
+        let ended = tokio::select! {
+            out = &mut out => Some(out),
+            up = ready(&health, port, &token, &env) => {
+                if up {
+                    let _ = core.send(None, Msg::ServiceReady { id: task_id.clone() }).await;
+                } else {
+                    own.notify_one();
+                }
+                None
+            }
+        };
+        let out = match ended {
+            Some(out) => out,
+            None => out.await,
+        };
+        let stderr = String::from_utf8_lossy(&out.stderr).into_owned();
+        // After a stop of the registry's the core drops it: the service is `stopping`.
+        let _ = core.send(None, Msg::ServiceFailed { id: task_id, stderr }).await;
+    });
+    let old = lock(running).insert(id, (stop, task));
+    if let Some((old, _)) = old {
+        old.notify_one();
+    }
+}
+
+/// Checks `health` until it passes, up to [`READY_WAIT`]; `false` past it.
+async fn ready(health: &Health, port: u16, token: &str, env: &[(String, String)]) -> bool {
+    let start = tokio::time::Instant::now();
+    while !healthy(health, port, token, env).await {
+        if start.elapsed() > READY_WAIT {
+            return false;
+        }
+        tokio::time::sleep(CHECK_EVERY).await;
+    }
+    true
+}
+
+async fn healthy(health: &Health, port: u16, token: &str, env: &[(String, String)]) -> bool {
+    match health {
+        Health::Port => TcpStream::connect(("127.0.0.1", port)).await.is_ok(),
+        Health::Http(path) => tokio::time::timeout(CHECK_WAIT, http_ok(port, path, token))
+            .await
+            .unwrap_or(false),
+        Health::Command(command) => {
+            let out = process::run(Spec {
+                command,
+                cwd: Path::new("/"),
+                env,
+                stdin: b"",
+                timeout: CHECK_WAIT,
+                keep: 0,
+                stop: None,
+            })
+            .await;
+            out.exit == Exit::Code(0)
+        }
+    }
+}
+
+/// `GET path` on loopback `port` with the service token answers 2xx; HTTP by hand, no client crate for one line.
+async fn http_ok(port: u16, path: &str, token: &str) -> bool {
+    let Ok(mut stream) = TcpStream::connect(("127.0.0.1", port)).await else {
+        return false;
+    };
+    let request = format!(
+        "GET {path} HTTP/1.1\r\nHost: 127.0.0.1:{port}\r\nAuthorization: Bearer {token}\r\nConnection: close\r\n\r\n"
+    );
+    let mut status = [0u8; 12];
+    stream.write_all(request.as_bytes()).await.is_ok()
+        && stream.read_exact(&mut status).await.is_ok()
+        && status.starts_with(b"HTTP/1.")
+        && status[9] == b'2'
+}
+
+/// Ends the service of a `stop_service` effect and every process that carries its marker.
+pub(super) async fn stop(running: &Running, id: &str) {
+    let entry = lock(running).remove(id);
+    if let Some((stop, task)) = entry {
+        stop.notify_one();
+        let _ = task.await;
+    }
+    let id = id.to_owned();
+    // Walking `/proc` is synchronous.
+    let _ = tokio::task::spawn_blocking(move || crate::orphans::sweep(&id)).await;
+}
+
+fn lock(running: &Running) -> std::sync::MutexGuard<'_, HashMap<String, Entry>> {
+    running.lock().unwrap_or_else(PoisonError::into_inner)
+}
