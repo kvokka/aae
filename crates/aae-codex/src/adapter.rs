@@ -21,8 +21,8 @@ pub const ADAPTER: Adapter = Adapter {
 const MODELS: &[(&str, &str)] = &[
     ("astra", "gpt-6-astra"),
     ("luna", "gpt-6-luna"),
-    ("terra", "gpt-6-1-terra"),
-    ("sol", "gpt-6-1-sol"),
+    ("terra", "gpt-6.1-terra"),
+    ("sol", "gpt-6.1-sol"),
 ];
 
 /// The settings of `[harness.codex]` beyond `model` and `binary` (contracts 4.5).
