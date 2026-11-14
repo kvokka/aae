@@ -71,7 +71,24 @@ async fn one_service_serves_every_session_and_restarts_on_its_port() {
     w.until_count("service.ready", 2).await;
     // More than one if another process held the port for a moment.
     assert!(w.service_count("service.failed") > failed);
-    assert_eq!(call(&sa), 200, "the same URL works again");
+    // Another process may take the port while the service restarts (parallel tests): it moves on then.
+    let port = sa["url"]
+        .as_str()
+        .unwrap()
+        .rsplit(':')
+        .next()
+        .unwrap()
+        .split('/')
+        .next()
+        .unwrap();
+    let taken = format!("port {port} is taken");
+    let events = w.service_events();
+    if !events
+        .iter()
+        .any(|(_, d)| d["failure"]["raw"].as_str().is_some_and(|r| r.contains(&taken)))
+    {
+        assert_eq!(call(&sa), 200, "the same URL works again: {events:?}");
+    }
     assert_ne!(*pids(&log).last().unwrap(), pid);
 
     // The operator stops it only once no session uses it.
@@ -236,10 +253,15 @@ async fn a_service_with_an_http_check_is_ready_once_it_answers() {
     let w = world_driven(&[(path, text.as_str())], ScriptedDriver::new(1));
     w.create().await;
     w.until_count("service.ready", 1).await;
-    // A start may fail before, on a port another process took: the check is what makes it ready.
+    // A start may fail before, on a port another process took (before the start or before the service's bind): the
+    // check is what makes it ready.
     let failed = w.service_events().into_iter().filter(|(t, _)| t == "service.failed");
     for (_, data) in failed {
-        assert!(data["failure"]["raw"].as_str().unwrap().contains("is taken"), "{data}");
+        let raw = data["failure"]["raw"].as_str().unwrap();
+        assert!(
+            raw.contains("is taken") || raw.contains("Address already in use"),
+            "{data}"
+        );
     }
 }
 
