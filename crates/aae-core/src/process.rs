@@ -202,7 +202,7 @@ pub(crate) async fn wait_gone(id: &str, leader: Option<(i32, u64)>, limit: Durat
         return false;
     }
     // A killed process loses its environment, so its marker, before it is dead: what was killed is awaited by pid.
-    let (mut killed, mut empty_before) = (Vec::new(), false);
+    let (mut killed, mut walks) = (Vec::new(), Walks::default());
     loop {
         let marker = id.to_owned();
         // Walking `/proc` is synchronous.
@@ -210,22 +210,26 @@ pub(crate) async fn wait_gone(id: &str, leader: Option<(i32, u64)>, limit: Durat
         killed.extend(found.unwrap_or_default());
         killed.retain(|&(pid, start)| crate::orphans::start_time(pid) == Some(start));
         let (left, past) = (!killed.is_empty(), tokio::time::Instant::now() >= deadline);
-        if let Some(gone) = after_walk(left, empty_before, past) {
+        if let Some(gone) = walks.after(left, past) {
             return gone;
         }
-        empty_before = !left;
-        tokio::time::sleep(Duration::from_millis(if empty_before { 20 } else { 50 })).await;
+        tokio::time::sleep(Duration::from_millis(if walks.0 { 20 } else { 50 })).await;
     }
 }
 
-/// What [`wait_gone`] makes of a walk of `/proc` that `left` killed processes alive: `Some(gone)` ends the wait,
-/// `None` walks again. A process inside `execve` shows no environment yet: a walk that found nothing ends it only
-/// after the walk before found nothing too.
-fn after_walk(left: bool, empty_before: bool, past_deadline: bool) -> Option<bool> {
-    match (left, empty_before) {
-        (false, true) => Some(true),
-        (false, false) => None,
-        (true, _) => past_deadline.then_some(false),
+/// The walks of `/proc` in [`wait_gone`], holding whether the last one found nothing. A process inside `execve`
+/// shows no environment yet: a walk that found nothing ends the wait only after the walk before found nothing too.
+#[derive(Default)]
+struct Walks(bool);
+
+impl Walks {
+    /// After a walk that `left` killed processes alive: `Some(gone)` ends the wait, `None` walks again.
+    fn after(&mut self, left: bool, past_deadline: bool) -> Option<bool> {
+        match (left, std::mem::replace(&mut self.0, !left)) {
+            (false, true) => Some(true),
+            (false, false) => None,
+            (true, _) => past_deadline.then_some(false),
+        }
     }
 }
 
@@ -381,13 +385,15 @@ mod tests {
         }
     }
 
-    /// An empty walk is confirmed by another, past the deadline too; one with killed processes alive walks again
-    /// until the deadline.
     #[test]
     fn an_empty_walk_ends_the_wait_only_once_confirmed() {
-        assert_eq!(after_walk(false, false, true), None);
-        assert_eq!(after_walk(false, true, false), Some(true));
-        assert_eq!(after_walk(true, true, false), None);
-        assert_eq!(after_walk(true, false, true), Some(false));
+        let mut walks = Walks::default();
+        assert_eq!(walks.after(false, true), None, "the first walk is never confirmed");
+        assert_eq!(walks.after(false, false), Some(true));
+        let mut walks = Walks::default();
+        assert_eq!(walks.after(true, false), None);
+        assert_eq!(walks.after(false, true), None, "the walk before found processes");
+        assert_eq!(walks.after(true, false), None);
+        assert_eq!(walks.after(true, true), Some(false));
     }
 }
