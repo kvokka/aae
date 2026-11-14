@@ -15,9 +15,12 @@ account.
 3. A red scenario is a change of the harness protocol or of its failure wording. Fix the adapter (the failure
    classification tables live in `crates/aae-claude/src/stream.rs` and `crates/aae-codex/src/`), never the
    scenario's expectation, unless the harness now reports more than before.
-4. When all is green, widen the tested range in the adapter's `capabilities().versions` (outside it the daemon and
-   `aae doctor` warn) and add a line to the log below.
-5. Optionally, one real turn on the cheapest model of the harness confirms the path end to end.
+4. When all is green, run one real turn on the cheapest model of the harness: the request row of criterion 2,
+   `cargo build -p aae && cargo run -p aae-acceptance -- 2`, does it on both harnesses (it costs model calls and
+   needs a login). The suite runs against fake providers; this turn is the only check against the real one, so it
+   is not skipped.
+5. Then widen the tested range in the adapter's `capabilities().versions` (outside it the daemon and `aae doctor`
+   warn) and add a line to the log below, naming the real turn.
 
 ## How the suite is built
 
@@ -28,8 +31,8 @@ account.
 - The scenarios run the real pinned binary against fake provider APIs written in this repository:
   `crates/aae-testkit/src/anthropic.rs` (claude) and `crates/aae-testkit/src/openai.rs` (codex, Responses API).
   They cost no model calls and need no account, so CI runs them on every commit (criterion 11 of the release).
-- The suite is rerun on every harness update (below). Beyond it, one real turn on the cheapest model of the harness
-  is the end-to-end confirmation.
+- The suite is rerun on every harness update (above), and beyond it one real turn on the cheapest model of the
+  harness confirms the path end to end.
 - Known limit: claude logged in with an API key gets no quota reset time from the provider, so its "quota with a
   reset time" scenario expects `rate_limited` without `retry_at`, not `quota_exhausted`.
 
