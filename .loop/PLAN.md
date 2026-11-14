@@ -974,6 +974,12 @@ README; READINESS `ver` — короткий sha; дубль `tail`; `experiment
 ### WP-56 · Честная готовность · размер S · статус: doing — цикл 59 переписал файл по букве (495f0e6); дальше — в конце каждого пакета
 Спека §2.1 п. 16: READINESS по букве шкалы §14; открытый критерий — потолок балла компонента.
 
+### WP-51d · `GET /v1/doctor`: проверки `doctor` из процесса демона · размер S · статус: done — цикл 67
+- Спека: §12 (полная поверхность API: `doctor`), §13
+- Зависит от: WP-51b
+- Результат: `crates/aae-front/src/api/daemon.rs` (`doctor`), `Api.doctor`, `crates/aae/src/doctor.rs` (`findings`), OpenAPI, `OPERATIONS`
+- Готово, когда: `GET /v1/doctor` отдаёт те же проверки, что `aae doctor --json`; CLI `doctor` работает без демона; тест в `crates/aae/tests/doctor.rs` (обяз. 2 ревью 66)
+
 ## Покрытие §15
 
 | Критерий | Пакеты |

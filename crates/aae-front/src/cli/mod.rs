@@ -14,8 +14,8 @@ use finish::finish;
 use serde_json::{Value, json};
 use std::{path::PathBuf, process::ExitCode};
 
-/// Every API operation and the command that does it: `(command, method, path)`. `config check` and `config explain`
-/// do it locally, without a daemon.
+/// Every API operation and the command that does it: `(command, method, path)`. `config check`, `config explain` and
+/// `doctor` do it locally, without a daemon.
 pub const OPERATIONS: &[(&str, &str, &str)] = &[
     ("run start", "POST", "/v1/runs"),
     ("run list", "GET", "/v1/runs"),
@@ -43,6 +43,7 @@ pub const OPERATIONS: &[(&str, &str, &str)] = &[
     ("status", "GET", "/v1/daemon"),
     ("drain", "POST", "/v1/daemon/drain"),
     ("restart", "POST", "/v1/daemon/restart"),
+    ("doctor", "GET", "/v1/doctor"),
     ("instance list", "GET", "/v1/instances"),
     ("instance stop", "POST", "/v1/instances/{id}/stop"),
 ];

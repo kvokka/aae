@@ -189,6 +189,10 @@ pub(crate) async fn run(paths: Paths) -> Result<bool, String> {
             }
         }),
         drivers,
+        doctor: Box::new({
+            let paths = paths.clone();
+            move || crate::doctor::findings(&paths)
+        }),
     };
     let stop = stop_signal().map_err(|e| format!("signals: {e}"))?;
     eprintln!("aae daemon listening on {}", paths.socket.display());

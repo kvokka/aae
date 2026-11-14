@@ -444,6 +444,36 @@
         }
       }
     },
+    "/v1/doctor": {
+      "get": {
+        "summary": "The checks of `aae doctor` (spec §13) as the daemon's process sees them: its config, the harness and br binaries\nit would run with their versions and logins, its private directories and its state. A check failing is an\n`error` level in the reply, not an error reply.",
+        "operationId": "doctor",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Finding"
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "`storage` or `journal`: the daemon could not read its state",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorReply"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/events": {
       "get": {
         "summary": "The events as SSE: `id` is the `seq`, `event` the type, `data` the envelope (contracts 1.1). A `seq` rotated\naway is `410` with `oldest`, the first `seq` still held; it rotated away while streaming: an event `gap`.",
@@ -2248,6 +2278,28 @@
           "text": {
             "type": "string",
             "description": "One line per value with its layer."
+          }
+        }
+      },
+      "Finding": {
+        "type": "object",
+        "description": "One check of `aae doctor`.",
+        "required": [
+          "check",
+          "level",
+          "detail"
+        ],
+        "properties": {
+          "check": {
+            "type": "string",
+            "description": "What is checked: `config`, a harness name, `<harness> login`, `dir <path>`, `state`, ..."
+          },
+          "detail": {
+            "type": "string"
+          },
+          "level": {
+            "type": "string",
+            "description": "`ok`, `warning` or `error`."
           }
         }
       },

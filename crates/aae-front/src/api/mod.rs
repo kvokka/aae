@@ -58,6 +58,8 @@ pub struct Api {
     pub load: Box<dyn Fn() -> Result<Config, Vec<String>> + Send + Sync>,
     /// The harness drivers, whose session streams the live view of a run relays.
     pub drivers: Vec<Arc<dyn Driver>>,
+    /// The checks of `aae doctor`, made from the daemon's process: one `{check, level, detail}` object each.
+    pub doctor: Box<dyn Fn() -> Vec<Value> + Send + Sync>,
 }
 
 impl Api {
@@ -106,6 +108,7 @@ fn router() -> OpenApiRouter<Arc<Api>> {
         .routes(routes!(daemon::status))
         .routes(routes!(daemon::drain))
         .routes(routes!(daemon::restart))
+        .routes(routes!(daemon::doctor))
         .routes(routes!(instances::list))
         .routes(routes!(instances::stop))
 }

@@ -243,3 +243,19 @@ fn the_sandbox_warning_names_each_codex_agent_that_sets_no_sandbox_mode() {
         "the native block sets it"
     );
 }
+
+#[tokio::test(flavor = "multi_thread")]
+async fn the_daemon_answers_the_same_checks_over_the_api() {
+    let d = common::Daemon::start(|_| {}).await;
+    let names = |found: &Value| -> Vec<String> {
+        let found = found.as_array().unwrap().iter();
+        found.map(|f| f["check"].as_str().unwrap().to_owned()).collect()
+    };
+    let api = d.get("/v1/doctor").await;
+    let local = aae(d.dir.path(), &["doctor", "--json"]);
+    let local: Value = serde_json::from_slice(&local.stdout).unwrap();
+    assert_eq!(names(&api), names(&local), "{api}");
+    let state = api.as_array().unwrap().iter().find(|f| f["check"] == "state").unwrap();
+    assert_eq!(state["level"], "ok", "the state the daemon holds open: {state}");
+    assert!(state["detail"].as_str().unwrap().starts_with("outbox: "), "{state}");
+}

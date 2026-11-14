@@ -174,6 +174,16 @@ pub(crate) struct Daemon {
     stopping: Option<String>,
 }
 
+/// One check of `aae doctor`.
+#[derive(ToSchema)]
+pub(crate) struct Finding {
+    /// What is checked: `config`, a harness name, `<harness> login`, `dir <path>`, `state`, ...
+    check: String,
+    /// `ok`, `warning` or `error`.
+    level: String,
+    detail: String,
+}
+
 /// Failed journal writes in a row and the last error.
 #[derive(ToSchema)]
 pub(crate) struct JournalHealth {

@@ -1,4 +1,4 @@
-//! `aae doctor` (spec §13), without a daemon: the harness and br binaries with their versions and logins, the
+//! `aae doctor` (spec §13), without a daemon or from it (`GET /v1/doctor`): the harness and br binaries with their versions and logins, the
 //! private directories, the state and its outbox; and `aae daemon --service`, the service file that runs the daemon.
 
 use crate::{
@@ -44,7 +44,8 @@ fn text(v: &Value) -> &str {
     v.as_str().unwrap_or_default()
 }
 
-fn findings(paths: &Paths) -> Vec<Value> {
+/// Every check, in the order `aae doctor` prints them; `GET /v1/doctor` makes them from the daemon.
+pub(crate) fn findings(paths: &Paths) -> Vec<Value> {
     let mut found = Vec::new();
     match load(paths) {
         Err(errors) => found.extend(errors.into_iter().map(|e| check("config", "error", e))),

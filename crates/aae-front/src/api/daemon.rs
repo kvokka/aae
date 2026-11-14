@@ -3,7 +3,7 @@
 
 use super::{
     ErrorReply, Param, Reply, State, key,
-    replies::{Daemon, Failed, Keyed, Stopping},
+    replies::{Daemon, Failed, Finding, Keyed, Stopping},
     runs::REJECTED,
 };
 use aae_core::{Clock, run::Msg};
@@ -27,6 +27,15 @@ pub(crate) async fn status(state: State) -> Reply {
     daemon["active_runs"] = status["active_runs"].take();
     daemon["stopping"] = json!(*state.stop.borrow());
     Ok(Json(daemon))
+}
+
+/// The checks of `aae doctor` (spec §13) as the daemon's process sees them: its config, the harness and br binaries
+/// it would run with their versions and logins, its private directories and its state. A check failing is an
+/// `error` level in the reply, not an error reply.
+#[utoipa::path(get, path = "/v1/doctor", responses((status = OK, body = [Finding]), Failed))]
+pub(crate) async fn doctor(state: State) -> Reply {
+    // The checks run the binaries for their versions: the worker hands its other tasks over meanwhile.
+    Ok(Json(tokio::task::block_in_place(|| (state.doctor)()).into()))
 }
 
 #[derive(Deserialize, IntoParams)]
