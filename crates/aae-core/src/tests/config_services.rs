@@ -121,3 +121,37 @@ fn a_bad_service_is_a_config_error() {
         fails(&[("config.toml", service(rest).as_str())], needle);
     }
 }
+
+#[test]
+fn a_plugin_names_its_own_files_in_every_value_of_its_agent_layer() {
+    let config = with(&[(
+        "plugins/mail/plugin.toml",
+        "[agent.env]\nMAIL_HOME = \"${AAE_PLUGIN_DIR}/data\"\n\
+         [agent.mcp.m]\ncommand = [\"${AAE_PLUGIN_DIR}/bin/m\"]\nenv = { X = \"${AAE_PLUGIN_DIR}/x\" }\n\
+         [agent.hooks.h]\nevent = \"Stop\"\ncommand = \"${AAE_PLUGIN_DIR}/bin/h\"\n\
+         [agent.native.claude]\nstatusLine = { command = \"${AAE_PLUGIN_DIR}/bin/s\" }",
+    )])
+    .unwrap();
+    let e = config.effective("shop", None, &agent("implementer")).unwrap();
+    let dir = config
+        .plugins
+        .iter()
+        .find(|p| p.name == "mail")
+        .unwrap()
+        .root
+        .display()
+        .to_string();
+    let mcp = &e.mcp["m"].value;
+    let native = &e.native.as_ref().unwrap().value;
+    let values = [
+        e.env["MAIL_HOME"].value.as_str(),
+        mcp.command.as_ref().unwrap()[0].as_str(),
+        mcp.env["X"].as_str(),
+        e.hooks["h"].value.command.as_deref().unwrap(),
+        native["statusLine"]["command"].as_str().unwrap(),
+    ];
+    assert!(
+        values.iter().all(|v| v.starts_with(&dir) && !v.contains('$')),
+        "{values:?}"
+    );
+}

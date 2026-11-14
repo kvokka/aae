@@ -151,17 +151,9 @@ impl Loader {
                 self.fail(&manifest, "a plugin attaches no plugins: no `plugins` in `[agent]`");
             }
             let mut agent = self.settings(&manifest, &root, raw.agent, &[]);
-            // Its harness hooks and MCP servers reach its own files as `${AAE_PLUGIN_DIR}`.
             let dir = root.to_string_lossy();
             agent.services = self.services(&manifest, raw.service, Some(&dir));
-            let at = |text: &mut String| *text = text.replace(PLUGIN_DIR, &dir);
-            agent.hooks.values_mut().filter_map(|h| h.command.as_mut()).for_each(at);
-            agent
-                .mcp
-                .values_mut()
-                .filter_map(|m| m.command.as_mut())
-                .flatten()
-                .for_each(at);
+            agent.in_plugin(&dir);
             let prompt = raw.prompt.and_then(|p| self.text(&manifest, &root.join(p)));
             plugins.push(Plugin {
                 name: raw.name,

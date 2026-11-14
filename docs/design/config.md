@@ -459,8 +459,10 @@ plugin, and the `[agent]` of a plugin has no `plugins` (a plugin attaches no plu
 or a `git` source as for packs above) may carry parameters,
 `[[plugin]] path = ".." config = { .. }`: its orchestrator hooks get them
 in `AAE_PLUGIN_PARAMS` (contracts 3.1). In the `[agent]` contribution, `${AAE_PLUGIN_DIR}` in a harness hook
-`command` or an MCP `command` is replaced with the plugin's directory at load, so they reach the plugin's own files;
-skill paths are relative to it. Beyond its `[agent]` layer a plugin gives its attached agents two things, in
+`command`, an `env` value, an MCP `command` or `env` value and any string of a `native` table is replaced with the
+plugin's directory at load, so they reach the plugin's own files; skill paths are relative to it. A Claude Code
+plugin directory (`--plugin-dir`) cannot be handed over: the adapter takes that flag for skills, so a plugin gives
+its skills, hooks and MCP servers through `[agent]`. Beyond its `[agent]` layer a plugin gives its attached agents two things, in
 attachment order: the text of its `prompt` file, after the system prompt the layers give (each fragment after a blank
 line); and its `bin/` directory, when it has one, ahead of `PATH` (the `PATH` a layer sets, or else the daemon's).
 The daemon's `PATH` taken this way becomes part of the effective config: it is in the run's snapshot and in the

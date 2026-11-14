@@ -31,6 +31,33 @@ pub struct Settings {
     pub services: BTreeMap<String, super::Service>,
 }
 
+impl Settings {
+    /// `${AAE_PLUGIN_DIR}` becomes `dir` wherever a plugin's `[agent]` may name its own files: harness hook
+    /// commands, `env`, MCP commands and their `env`, and every string of the `native` tables.
+    pub(super) fn in_plugin(&mut self, dir: &str) {
+        let at = |text: &mut String| *text = text.replace(super::load::PLUGIN_DIR, dir);
+        self.hooks.values_mut().filter_map(|h| h.command.as_mut()).for_each(at);
+        self.env.values_mut().for_each(at);
+        for mcp in self.mcp.values_mut() {
+            mcp.command
+                .iter_mut()
+                .flatten()
+                .chain(mcp.env.values_mut())
+                .for_each(at);
+        }
+        self.native.values_mut().for_each(|v| strings(v, &at));
+    }
+}
+
+fn strings(value: &mut Value, at: &impl Fn(&mut String)) {
+    match value {
+        Value::String(text) => at(text),
+        Value::Array(list) => list.iter_mut().for_each(|v| strings(v, at)),
+        Value::Object(table) => table.values_mut().for_each(|v| strings(v, at)),
+        _ => {}
+    }
+}
+
 #[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "lowercase")]
 pub enum McpScope {
@@ -63,7 +90,9 @@ impl Mcp {
             }
             (Some(_), None) | (None, Some(_)) => None,
             (None, None) => Some("needs a `command` or a `url`"),
-            (Some(_), Some(_)) => Some("has both `command` and `url`: a server the daemon runs is a `[[service]]` with `mcp`"),
+            (Some(_), Some(_)) => {
+                Some("has both `command` and `url`: a server the daemon runs is a `[[service]]` with `mcp`")
+            }
         }
     }
 }
