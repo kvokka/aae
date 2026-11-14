@@ -383,3 +383,19 @@ async fn s15_a_second_writer_is_refused_as_a_divergence() {
     assert!(refused.raw.contains("active writer"), "{}", refused.raw);
     first.stop().await;
 }
+
+/// A `thread/read` the app-server never answers (stopped, then killed) says nothing about the transcript: the
+/// attempt fails and the session is kept, it is not reported missing.
+#[tokio::test]
+async fn an_unanswered_thread_read_fails_the_attempt() {
+    let dir = tempfile::tempdir().unwrap();
+    let live = Live::start(vec![Reply::Text("OK".into())], dir.path(), 0, "never").await;
+    let pid = rustix::process::Pid::from_raw(live.instance.pid).unwrap();
+    rustix::process::kill_process(pid, rustix::process::Signal::STOP).unwrap();
+    let key = PromptKey::new("r1", 1, 1);
+    let (read, ()) = tokio::join!(live.driver.transcript(&live.instance, &live.session, key), async {
+        tokio::time::sleep(Duration::from_millis(300)).await;
+        rustix::process::kill_process(pid, rustix::process::Signal::KILL).unwrap();
+    });
+    assert_eq!(read.err().map(|f| f.kind), Some(FailureKind::HarnessCrash));
+}
