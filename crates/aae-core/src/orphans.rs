@@ -131,6 +131,38 @@ pub(crate) fn sweep_all(ids: &BTreeSet<String>) -> Vec<(i32, u64)> {
         .collect()
 }
 
+/// Kills every descendant of this process. On the daemon's stop this ends what its steps, hooks and instances
+/// started, which would otherwise run unwatched until the next start sweeps it (invariant 7); as the child
+/// subreaper, the daemon still has the ones that left their group or their parent. A walk repeats until it finds
+/// none alive, as a dying process may fork meanwhile.
+pub fn kill_descendants() {
+    let me = getpid().as_raw_nonzero().get();
+    for _ in 0..10 {
+        let all: Vec<_> = processes().collect();
+        let mut ours = BTreeSet::from([me]);
+        loop {
+            let more = all
+                .iter()
+                .filter(|(pid, _, ppid)| ours.contains(ppid) && !ours.contains(pid));
+            let more: Vec<i32> = more.map(|(pid, ..)| *pid).collect();
+            if more.is_empty() {
+                break;
+            }
+            ours.extend(more);
+        }
+        let live = all
+            .iter()
+            .filter(|(pid, state, _)| *pid != me && state != "Z" && ours.contains(pid));
+        let live: Vec<Pid> = live.filter_map(|(pid, ..)| Pid::from_raw(*pid)).collect();
+        if live.is_empty() {
+            return;
+        }
+        for pid in live {
+            let _ = kill_process(pid, Signal::KILL);
+        }
+    }
+}
+
 /// `port` on loopback is listened on, and only by processes marked `id`: a port check passed by anyone else would
 /// hand them the sessions' token (spec §11.4). Only listeners a connection to `127.0.0.1` may reach count.
 #[cfg(target_os = "linux")]

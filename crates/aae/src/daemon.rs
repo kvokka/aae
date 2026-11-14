@@ -224,7 +224,12 @@ pub(crate) async fn run(paths: Paths) -> Result<bool, String> {
         let flushed = written.wait_for(|w| *w >= seq);
         let _ = tokio::time::timeout(std::time::Duration::from_secs(5), flushed).await;
     }
-    drop((task, watchers));
+    // The core goes first, so no effect records the end of a process killed below, and none is cancelled under the
+    // writer as the runtime shuts down. Then what the daemon started goes with it, as the next start would end it.
+    task.abort();
+    let _ = task.await;
+    drop(watchers);
+    aae_core::orphans::kill_descendants();
     served
         .map(|reason| reason == "restart")
         .map_err(|e| format!("serving the API: {e}"))
