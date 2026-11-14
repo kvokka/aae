@@ -150,22 +150,23 @@ fn home(var: &str, dir: &str) -> PathBuf {
 
 /// The binary exists and its version is one the adapter was tested on.
 fn binary_check(name: &str, path: &Path, source: &str, versions: [(u32, u32, u32); 2]) -> Value {
-    let shown = format!("{} (from {source})", path.display());
-    if !on_disk(path) {
-        return check(name, "error", format!("{shown}: not found"));
-    }
-    match aae_core::untested(path, versions) {
-        None => check(name, "ok", shown),
-        Some(why) => check(name, "warning", why),
+    let Some(path) = on_disk(path) else {
+        return check(name, "error", format!("{} (from {source}): not found", path.display()));
+    };
+    match aae_core::tested_version(&path, versions) {
+        Ok(version) => check(name, "ok", format!("{} `{version}` (from {source})", path.display())),
+        Err(why) => check(name, "warning", why),
     }
 }
 
-/// `path` is a file, or a bare name found on `PATH`.
-fn on_disk(path: &Path) -> bool {
+/// `path` if it is a file, or where a bare name is found on `PATH`.
+fn on_disk(path: &Path) -> Option<PathBuf> {
     if path.components().count() > 1 {
-        return path.is_file();
+        return path.is_file().then(|| path.to_owned());
     }
-    env::var_os("PATH").is_some_and(|dirs| env::split_paths(&dirs).any(|d| d.join(path).is_file()))
+    env::split_paths(&env::var_os("PATH")?)
+        .map(|dir| dir.join(path))
+        .find(|p| p.is_file())
 }
 
 /// The host login a harness process starts with, unless its agent's env carries a key of its own.

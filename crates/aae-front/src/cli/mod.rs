@@ -11,7 +11,7 @@ use clap::{CommandFactory, Parser, Subcommand, ValueEnum};
 pub use commands::{Decision, GateCommand, InstanceCommand, RunCommand, TriggerCommand};
 pub use config::{ConfigCommand, ListCommand, local as config_local};
 use finish::finish;
-use serde_json::Value;
+use serde_json::{Value, json};
 use std::{path::PathBuf, process::ExitCode};
 
 /// Every API operation and the command that does it: `(command, method, path)`. `config check` and `config explain`
@@ -198,15 +198,21 @@ pub fn run(cli: Cli) -> ExitCode {
         Ok(runtime) => runtime,
         Err(e) => return fail(&format!("runtime: {e}")),
     };
-    let client = Client::new(socket.clone());
-    match runtime.block_on(execute(&client, cli)) {
-        Ok(code) => code,
-        Err(ClientError::Io(e)) => fail(&format!(
-            "no daemon on {} ({e}); start it with `aae daemon`",
-            socket.display()
-        )),
-        Err(e) => fail(&e.to_string()),
+    let (client, json) = (Client::new(socket.clone()), cli.json);
+    let error = match runtime.block_on(execute(&client, cli)) {
+        Ok(code) => return code,
+        Err(ClientError::Io(e)) => {
+            let message = format!("no daemon on {} ({e}); start it with `aae daemon`", socket.display());
+            json!({ "code": "no_daemon", "message": message })
+        }
+        Err(e @ ClientError::Api { .. }) if !json => return fail(&e.to_string()),
+        Err(ClientError::Api { error, .. }) => error,
+    };
+    if !json {
+        return fail(error["message"].as_str().unwrap_or_default());
     }
+    eprintln!("{}", json!({ "error": error }));
+    ExitCode::FAILURE
 }
 
 pub(crate) fn fail(message: &str) -> ExitCode {
@@ -227,7 +233,7 @@ async fn execute(client: &Client, cli: Cli) -> Result<ExitCode, ClientError> {
                  client",
             ));
         }
-        Command::Run(command) => commands::run(client, json, command).await?,
+        Command::Run(command) => return commands::run(client, json, command).await,
         Command::Gate(command) => commands::gate(client, json, command).await?,
         Command::Instance(command) => commands::instance(client, json, command).await?,
         Command::Trigger(command) => commands::trigger(client, json, command).await?,
@@ -256,8 +262,11 @@ async fn execute(client: &Client, cli: Cli) -> Result<ExitCode, ClientError> {
     Ok(ExitCode::SUCCESS)
 }
 
-/// Prints the API's JSON: as it is with `--json`, else pretty.
+/// Prints the API's JSON: as it is with `--json`, else pretty (and nothing for `null`).
 fn print(json: bool, value: &Value) {
+    if !json && value.is_null() {
+        return;
+    }
     let text = if json {
         value.to_string()
     } else {

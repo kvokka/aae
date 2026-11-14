@@ -45,13 +45,22 @@ async fn runs_and_gates_by_hand_from_the_cli() {
     );
     assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
     let run = String::from_utf8(out.stdout).unwrap().trim().to_owned();
+    let again = ["run", "start", "shop", "web", "check", "--key", "k1", "--input", "n=2"];
+    assert_eq!(d.json(&again)["run"], run.as_str());
+    // An API error under `--json` is the API's JSON error object, on stderr.
+    let out = d.cli(&["run", "start", "shop", "web", "check", "--key", "k1", "--json"], &[]);
+    let error: Value = serde_json::from_slice(&out.stderr).unwrap();
     assert_eq!(
-        d.json(&["run", "start", "shop", "web", "check", "--key", "k1"])["run"],
-        run.as_str()
+        (out.status.code(), &error["error"]["code"]),
+        (Some(1), &"idempotency_key_reused".into())
     );
     let view = d.json(&["run", "show", &run]);
     assert_eq!((&view["state"], &view["inputs"]["n"]), (&"queued".into(), &2.into()));
-    d.json(&["gate", "open", "project:shop"]);
+    let out = d.cli(&["gate", "open", "project:shop"], &[]);
+    assert!(
+        out.status.success() && out.stdout.is_empty(),
+        "nothing to print, not `null`"
+    );
     d.until_state(&run, "passed").await;
     assert_eq!(d.json(&["run", "list", "--state", "passed"])[0]["id"], run.as_str());
     // The live view of a run that ended replays its events and ends too.
@@ -78,6 +87,12 @@ async fn without_a_daemon_a_client_command_fails_and_names_the_daemon() {
     let out = d.cli(&["status"], &[("AAE_SOCKET", "/nonexistent/aae.sock")]);
     assert_eq!(out.status.code(), Some(1));
     assert!(String::from_utf8_lossy(&out.stderr).contains("aae daemon"));
+    let out = d.cli(&["status", "--json"], &[("AAE_SOCKET", "/nonexistent/aae.sock")]);
+    let error: Value = serde_json::from_slice(&out.stderr).unwrap();
+    assert_eq!(
+        (out.status.code(), &error["error"]["code"]),
+        (Some(1), &"no_daemon".into())
+    );
 }
 
 #[tokio::test]

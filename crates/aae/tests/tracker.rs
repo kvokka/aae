@@ -89,4 +89,25 @@ async fn a_bead_written_by_hand_is_seen_and_a_run_on_it_claims_and_closes_it_in_
         (&shown[0]["status"], &shown[0]["assignee"]),
         (&json!("closed"), &json!(format!("aae:{run}")))
     );
+    // Nothing is ready now: the CLI says so and exits 3.
+    let out = Command::new(env!("CARGO_BIN_EXE_aae"))
+        .args([
+            "run",
+            "start",
+            "shop",
+            "web",
+            "fix",
+            "--input",
+            r#"bead={"next_ready":true}"#,
+        ])
+        .env("AAE_SOCKET", d.socket())
+        .output()
+        .unwrap();
+    let said = String::from_utf8_lossy(&out.stderr);
+    assert_eq!(
+        (out.status.code(), out.stdout.as_slice()),
+        (Some(3), &b""[..]),
+        "{said}"
+    );
+    assert!(said.contains("nothing ready"), "{said}");
 }

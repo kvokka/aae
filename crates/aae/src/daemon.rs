@@ -98,7 +98,7 @@ pub(crate) async fn run(paths: Paths) -> Result<bool, String> {
         let Some((driver, binary, _)) = driver(name, harness, &paths) else {
             continue;
         };
-        if let Some(why) = aae_core::untested(&binary, tested(&driver)) {
+        if let Err(why) = aae_core::tested_version(&binary, tested(&driver)) {
             eprintln!("aae daemon: warning: {why}");
         }
         drivers.push(driver);
@@ -121,7 +121,7 @@ pub(crate) async fn run(paths: Paths) -> Result<bool, String> {
         })
         .collect();
     if let Some(why) = (!beads.is_empty())
-        .then(|| aae_core::untested(&br, aae_br::TESTED))
+        .then(|| aae_core::tested_version(&br, aae_br::TESTED).err())
         .flatten()
     {
         eprintln!("aae daemon: warning: {why}");

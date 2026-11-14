@@ -4,6 +4,7 @@ use super::{encode, follow, print, run_path, text};
 use crate::client::{Client, ClientError};
 use clap::{Subcommand, ValueEnum};
 use serde_json::{Map, Value, json};
+use std::process::ExitCode;
 
 #[derive(Subcommand)]
 pub enum RunCommand {
@@ -120,7 +121,8 @@ pub struct OnRig {
     idempotency: Option<String>,
 }
 
-pub(super) async fn run(client: &Client, json: bool, command: RunCommand) -> Result<(), ClientError> {
+/// Runs a `run` command; exits 3 when a run start found nothing ready to take.
+pub(super) async fn run(client: &Client, json: bool, command: RunCommand) -> Result<ExitCode, ClientError> {
     match command {
         RunCommand::Start {
             project,
@@ -134,10 +136,13 @@ pub(super) async fn run(client: &Client, json: bool, command: RunCommand) -> Res
             let body = json!({ "project": project, "rig": rig, "formula": formula, "inputs": inputs,
                 "continue_from": continue_from });
             let reply = client.request("POST", "/v1/runs", Some(&body), key.as_deref()).await?;
-            if json {
-                print(json, &reply)
-            } else {
-                println!("{}", reply["run"].as_str().unwrap_or_default())
+            match reply["run"].as_str() {
+                _ if json => print(json, &reply),
+                Some(run) => println!("{run}"),
+                None => eprintln!("aae: nothing ready: no ready bead to take, no run started"),
+            }
+            if reply["nothing_ready"] == true {
+                return Ok(ExitCode::from(3));
             }
         }
         RunCommand::List { project, state, limit } => {
@@ -208,7 +213,7 @@ pub(super) async fn run(client: &Client, json: bool, command: RunCommand) -> Res
             );
         }
     }
-    Ok(())
+    Ok(ExitCode::SUCCESS)
 }
 
 pub(super) async fn gate(client: &Client, json: bool, command: GateCommand) -> Result<(), ClientError> {

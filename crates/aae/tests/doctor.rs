@@ -83,11 +83,14 @@ fn harnesses_resolve_from_the_config_and_from_mise_and_a_missing_one_fails() {
     assert!(passed, "{found:?}");
     let (claude, path) = level(&found, "claude");
     assert!(
-        claude == "ok" && path.ends_with("tools/claude (from config)"),
+        claude == "ok" && path.contains("tools/claude `") && path.ends_with("` (from config)"),
         "{found:?}"
     );
     let (codex, path) = level(&found, "codex");
-    assert!(codex == "ok" && path.ends_with("tools/codex (from mise)"), "{found:?}");
+    assert!(
+        codex == "ok" && path.ends_with("tools/codex `codex-cli 0.167.2` (from mise)"),
+        "{found:?}"
+    );
     assert_eq!(level(&found, "claude login").0, "warning", "no login in the fake home");
     assert_eq!(level(&found, "codex login").0, "warning", "no login in the fake home");
     assert_eq!(level(&found, "state").0, "ok");
@@ -118,6 +121,10 @@ fn a_tracker_project_gets_the_br_version_and_its_license_warning() {
     assert!(passed, "warnings do not fail: {found:?}");
     let (br, why) = level(&found, "br");
     assert!(br == "warning" && why.contains("tested: 0.7.6"), "{found:?}");
+    assert!(
+        why.starts_with(&dir.path().join("bin/br").display().to_string()),
+        "found on PATH: {why}"
+    );
     assert!(level(&found, "br license").1.contains("rider"));
 }
 
