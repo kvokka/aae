@@ -11,18 +11,16 @@ use aae_core::{
     BoxFuture,
     config::EffectiveConfig,
     driver::{
-        Answer, Capabilities, Driver, DriverEvent, EventSink, Failure, FailureKind, Health, InstanceHandle, Normalized,
-        ProcessPart, PromptKey, PromptState, SessionPart, SessionPlan, SessionRef, Source, Split, Transcript,
+        Answer, Capabilities, Driver, EventSink, Failure, FailureKind, Health, InstanceHandle, Normalized, ProcessPart,
+        PromptKey, PromptState, SessionPart, SessionPlan, SessionRef, Source, Split, Transcript, child,
     },
     orphans,
 };
-use rustix::process::{Pid, Signal, kill_process_group};
 use serde_json::{Value, json};
 use std::{
     collections::HashMap,
     os::unix::process::ExitStatusExt,
     path::{Path, PathBuf},
-    process::Stdio,
     sync::{Arc, Mutex, PoisonError},
     time::{Duration, Instant},
 };
@@ -89,25 +87,14 @@ impl Claude {
             .args(part::args(p))
             .env_clear()
             .envs(part::env(p, id, self.socket.as_deref(), &part::host_dir()))
-            .current_dir(p["workdir"].as_str().unwrap_or("."))
-            .stdin(Stdio::piped())
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
-            .process_group(0);
-        let config_error = |what: &Path, e: std::io::Error| {
-            let mut failure = Failure::new(FailureKind::ConfigError, Source::Adapter);
-            failure.raw = format!("{}: {e}", what.display());
-            failure
-        };
+            .current_dir(p["workdir"].as_str().unwrap_or("."));
+        let config_error = |what: &Path, e: std::io::Error| child::config_error(format!("{}: {e}", what.display()));
         let files = Path::new(p["files"].as_str().unwrap_or_default());
         part::materialize(p).map_err(|e| config_error(files, e))?;
         if let Some(dir) = p["config_dir"].as_str() {
             std::fs::create_dir_all(dir).map_err(|e| config_error(Path::new(dir), e))?;
         }
-        let mut child = orphans::spawn(&mut command).map_err(|e| config_error(&self.binary, e))?;
-        let pid = child.id().and_then(|p| i32::try_from(p).ok()).unwrap_or_default();
-        let crashed = Failure::new(FailureKind::HarnessCrash, Source::Adapter);
-        let start_time = orphans::start_time(pid).ok_or(crashed)?;
+        let (mut child, pid, start_time) = child::spawn(&mut command, &self.binary)?;
         let session = SessionRef(json!({
             "session_id": p["session_id"], "config_dir": p["config_dir"], "workdir": p["workdir"],
         }));
@@ -140,17 +127,9 @@ impl Claude {
             start_time,
             pgid: pid,
         };
+        let events = child::Events::new(&id, sink);
         tokio::spawn(async move {
-            let mut seq = 0;
-            let mut send = |session: Option<&SessionRef>, event: Normalized| {
-                seq += 1;
-                let _ = sink.send(DriverEvent {
-                    instance: id.clone(),
-                    session: session.cloned(),
-                    seq,
-                    event,
-                });
-            };
+            let send = |session: Option<&SessionRef>, event| events.send(session.cloned(), event);
             while let Ok(Some(line)) = lines.next_line().await {
                 let Ok(msg) = serde_json::from_str::<Value>(&line) else {
                     continue;
@@ -219,12 +198,7 @@ impl Driver for Claude {
     }
 
     fn health<'a>(&'a self, instance: &'a InstanceHandle) -> BoxFuture<'a, Health> {
-        Box::pin(async move {
-            match orphans::start_time(instance.pid) == Some(instance.start_time) {
-                true => Health::Ok,
-                false => Health::Dead,
-            }
-        })
+        Box::pin(async move { child::health(instance) })
     }
 
     /// EOF on stdin first (an idle claude exits within a second) when this daemon started it, then the group is
@@ -241,20 +215,7 @@ impl Driver for Claude {
             if let Some(known) = known {
                 known.stdin.lock().await.take();
             }
-            let alive = || orphans::start_time(instance.pid) == Some(instance.start_time);
-            let signals = [None, Some(Signal::TERM), Some(Signal::KILL)];
-            for signal in signals.into_iter().skip(usize::from(!eof)) {
-                if let (Some(signal), Some(group)) = (signal, Pid::from_raw(instance.pgid)) {
-                    let _ = kill_process_group(group, signal);
-                }
-                let until = Instant::now() + grace / 2;
-                while alive() && Instant::now() < until {
-                    tokio::time::sleep(Duration::from_millis(50)).await;
-                }
-                if !alive() {
-                    return;
-                }
-            }
+            child::stop(instance, grace, eof).await;
         })
     }
 

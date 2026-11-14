@@ -13,18 +13,16 @@ use aae_core::{
     config::EffectiveConfig,
     driver::{
         Answer, Capabilities, Driver, EventSink, Failure, FailureKind, Health, InstanceHandle, ProcessPart, PromptKey,
-        PromptState, SessionPart, SessionPlan, SessionRef, Source, Split, Transcript,
+        PromptState, SessionPart, SessionPlan, SessionRef, Source, Split, Transcript, child,
     },
     orphans,
 };
 use rpc::{Instance, crashed, lock, unread};
-use rustix::process::{Pid, Signal, kill_process_group};
 use serde_json::{Value, json};
 use std::{
     collections::HashMap,
     os::unix::process::ExitStatusExt,
     path::PathBuf,
-    process::Stdio,
     sync::{Arc, Mutex, atomic::AtomicU64},
     time::{Duration, Instant},
 };
@@ -81,25 +79,13 @@ impl Codex {
     }
 
     async fn start(&self, id: &str, p: &Value, sink: EventSink) -> Result<InstanceHandle, Failure> {
-        let config_error = |what: String| {
-            let mut failure = Failure::new(FailureKind::ConfigError, Source::Adapter);
-            failure.raw = what;
-            failure
-        };
-        part::materialize(p).map_err(|e| config_error(format!("{}: {e}", p["home"])))?;
+        part::materialize(p).map_err(|e| child::config_error(format!("{}: {e}", p["home"])))?;
         let mut command = Command::new(&self.binary);
         command
             .args(part::args(p))
             .env_clear()
-            .envs(part::env(p, id, self.socket.as_deref()))
-            .stdin(Stdio::piped())
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
-            .process_group(0);
-        let mut child =
-            orphans::spawn(&mut command).map_err(|e| config_error(format!("{}: {e}", self.binary.display())))?;
-        let pid = child.id().and_then(|p| i32::try_from(p).ok()).unwrap_or_default();
-        let start_time = orphans::start_time(pid).ok_or_else(crashed)?;
+            .envs(part::env(p, id, self.socket.as_deref()));
+        let (mut child, pid, start_time) = child::spawn(&mut command, &self.binary)?;
         let instance = Arc::new(Instance {
             home: p["home"].clone(),
             stdin: tokio::sync::Mutex::new(child.stdin.take()),
@@ -125,7 +111,7 @@ impl Codex {
         let (instances, id) = (self.instances.clone(), id.to_owned());
         let reader = instance.clone();
         tokio::spawn(async move {
-            let mut send = rpc::sender(id.clone(), reader.home.clone(), sink);
+            let mut send = rpc::sender(child::Events::new(&id, sink), reader.home.clone());
             rpc::read(&reader, lines, &mut send).await;
             let status = child.wait().await.ok();
             orphans::waited(u32::try_from(pid).ok());
@@ -192,12 +178,7 @@ impl Driver for Codex {
     }
 
     fn health<'a>(&'a self, instance: &'a InstanceHandle) -> BoxFuture<'a, Health> {
-        Box::pin(async move {
-            match orphans::start_time(instance.pid) == Some(instance.start_time) {
-                true => Health::Ok,
-                false => Health::Dead,
-            }
-        })
+        Box::pin(async move { child::health(instance) })
     }
 
     /// EOF on stdin first (app-server exits on it at once) when this daemon started it, then the group is terminated,
@@ -210,20 +191,7 @@ impl Driver for Codex {
             if let Some(known) = known {
                 known.stdin.lock().await.take();
             }
-            let alive = || orphans::start_time(instance.pid) == Some(instance.start_time);
-            let signals = [None, Some(Signal::TERM), Some(Signal::KILL)];
-            for signal in signals.into_iter().skip(usize::from(!eof)) {
-                if let (Some(signal), Some(group)) = (signal, Pid::from_raw(instance.pgid)) {
-                    let _ = kill_process_group(group, signal);
-                }
-                let until = Instant::now() + grace / 2;
-                while alive() && Instant::now() < until {
-                    tokio::time::sleep(Duration::from_millis(50)).await;
-                }
-                if !alive() {
-                    return;
-                }
-            }
+            child::stop(instance, grace, eof).await;
         })
     }
 

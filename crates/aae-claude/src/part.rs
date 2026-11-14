@@ -3,7 +3,7 @@
 
 use aae_core::{
     config::EffectiveConfig,
-    driver::{Failure, FailureKind, Fingerprint, ProcessPart, SessionPlan, Source},
+    driver::{Failure, Fingerprint, ProcessPart, SessionPlan, child::config_error},
 };
 use serde_json::{Value, json};
 use std::{
@@ -76,12 +76,6 @@ pub(crate) fn process(config: &EffectiveConfig, plan: &SessionPlan, state: &Path
         "mcp": mcp,
         "skills": skills,
     }))
-}
-
-fn config_error(raw: String) -> Failure {
-    let mut failure = Failure::new(FailureKind::ConfigError, Source::Adapter);
-    failure.raw = raw;
-    failure
 }
 
 /// The `--settings` JSON: the native block (claude's own settings keys) with the enabled hooks added to its own.
@@ -236,22 +230,12 @@ pub(crate) fn materialize(p: &Value) -> std::io::Result<()> {
 /// `host` is the host's claude config directory: an isolated session without a credential of its own gets the
 /// host's login from there (§6.4).
 pub(crate) fn env(p: &Value, id: &str, socket: Option<&Path>, host: &Path) -> Vec<(String, String)> {
-    let mut env: Vec<(String, String)> = daemon_vars(p)
-        .filter_map(|k| std::env::var(k).ok().map(|v| (k.to_owned(), v)))
-        .collect();
+    let mut env = aae_core::driver::child::base_env(daemon_vars(p), &p["env"], id, socket);
     let text = |v: &Value| v.as_str().map(str::to_owned).unwrap_or_else(|| v.to_string());
-    env.extend(
-        p["env"]
-            .as_object()
-            .into_iter()
-            .flatten()
-            .map(|(k, v)| (k.clone(), text(v))),
-    );
     env.extend([
         ("CLAUDE_CODE_EMIT_SESSION_STATE_EVENTS".to_owned(), "1".to_owned()),
         ("AAE_RUN".to_owned(), text(&p["run"])),
         ("AAE_ATTEMPT_TOKEN".to_owned(), text(&p["token"])),
-        (aae_core::orphans::INSTANCE_ENV.to_owned(), id.to_owned()),
     ]);
     // The tracker actor of the attempt, as the core planned it (contracts 5.1).
     env.extend(serde_json::from_value::<(String, String)>(p["actor"].clone()).ok());
@@ -260,7 +244,6 @@ pub(crate) fn env(p: &Value, id: &str, socket: Option<&Path>, host: &Path) -> Ve
             .as_str()
             .map(|d| ("CLAUDE_CONFIG_DIR".to_owned(), d.to_owned())),
     );
-    env.extend(socket.map(|s| ("AAE_SOCKET".to_owned(), s.to_string_lossy().into_owned())));
     let own = CREDENTIALS.iter().any(|k| !p["env"][k].is_null());
     if !p["config_dir"].is_null() && !own {
         env.extend(host_token(host).map(|t| ("CLAUDE_CODE_OAUTH_TOKEN".to_owned(), t)));

@@ -10,6 +10,7 @@ use tokio::sync::{broadcast, mpsc};
 use uuid::Uuid;
 
 mod adapter;
+pub mod child;
 mod failure;
 pub use adapter::{Adapter, Check, DoctorAgents, Setup, host_mcp_check, login_check};
 pub use failure::{Failure, FailureKind, Scope, Source};

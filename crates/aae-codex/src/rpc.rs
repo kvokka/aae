@@ -2,9 +2,7 @@
 //! the rest into events.
 
 use crate::stream::Stream;
-use aae_core::driver::{
-    DriverEvent, EventSink, Failure, FailureKind, Normalized, PromptKey, SessionRef, Source, Transcript,
-};
+use aae_core::driver::{Failure, FailureKind, Normalized, PromptKey, SessionRef, Source, Transcript, child::Events};
 use serde_json::{Value, json};
 use std::{
     collections::HashMap,
@@ -117,19 +115,9 @@ pub(crate) fn session(thread: &str, home: &Value) -> SessionRef {
     SessionRef(json!({ "thread_id": thread, "codex_home": home }))
 }
 
-/// The event sender of an instance: `seq` counts from 1.
-pub(crate) fn sender(instance: String, home: Value, sink: EventSink) -> impl FnMut(Option<String>, Normalized) {
-    let mut seq = 0;
-    move |thread, event| {
-        seq += 1;
-        let session = thread.map(|t| session(&t, &home));
-        let _ = sink.send(DriverEvent {
-            instance: instance.clone(),
-            session,
-            seq,
-            event,
-        });
-    }
+/// The event sender of an instance by thread.
+pub(crate) fn sender(events: Events, home: Value) -> impl FnMut(Option<String>, Normalized) {
+    move |thread, event| events.send(thread.map(|t| session(&t, &home)), event)
 }
 
 /// Reads app-server's stdout to its end: answers go to their callers, the rest through the stream.

@@ -5,7 +5,7 @@
 
 use aae_core::{
     config::EffectiveConfig,
-    driver::{Failure, FailureKind, Fingerprint, ProcessPart, SessionPlan, Source},
+    driver::{Failure, Fingerprint, ProcessPart, SessionPlan, child::config_error},
 };
 use serde_json::{Map, Value, json};
 use std::{
@@ -18,12 +18,6 @@ pub(crate) const CREDENTIALS: [&str; 2] = ["OPENAI_API_KEY", "CODEX_API_KEY"];
 
 /// The sandbox a process runs in when no config sets one (spec §2.1 item 1); `doctor` warns about it.
 pub(crate) const DEFAULT_SANDBOX: &str = "danger-full-access";
-
-fn config_error(raw: String) -> Failure {
-    let mut failure = Failure::new(FailureKind::ConfigError, Source::Adapter);
-    failure.raw = raw;
-    failure
-}
 
 /// The process part: `{home, user_home, host, env, overrides, skills}`. An isolated process gets its own `CODEX_HOME`
 /// and `HOME` under the state directory, keyed by the rest of the part, so equal parts share one app-server and its
@@ -197,18 +191,11 @@ pub(crate) fn args(p: &Value) -> Vec<String> {
 /// inherits the host), the agent's variables, the homes, and the instance id the orphan sweep looks for. The attempt
 /// variables go to each thread instead.
 pub(crate) fn env(p: &Value, id: &str, socket: Option<&Path>) -> Vec<(String, String)> {
-    let mut env: Vec<(String, String)> = daemon_vars(p)
-        .filter_map(|k| std::env::var(k).ok().map(|v| (k.to_owned(), v)))
-        .collect();
-    let text = |v: &Value| v.as_str().map(str::to_owned).unwrap_or_else(|| v.to_string());
-    env.extend(
-        p["env"]
-            .as_object()
-            .into_iter()
-            .flatten()
-            .map(|(k, v)| (k.clone(), text(v))),
-    );
-    env.push(("CODEX_HOME".to_owned(), text(&p["home"])));
+    let mut env = aae_core::driver::child::base_env(daemon_vars(p), &p["env"], id, socket);
+    env.push((
+        "CODEX_HOME".to_owned(),
+        p["home"].as_str().unwrap_or_default().to_owned(),
+    ));
     env.extend(p["user_home"].as_str().map(|h| ("HOME".to_owned(), h.to_owned())));
     // The host's login (§6.4) may be a provider whose key is a variable of the daemon's environment.
     env.extend(
@@ -216,8 +203,6 @@ pub(crate) fn env(p: &Value, id: &str, socket: Option<&Path>) -> Vec<(String, St
             .as_str()
             .and_then(|k| Some((k.to_owned(), std::env::var(k).ok()?))),
     );
-    env.push((aae_core::orphans::INSTANCE_ENV.to_owned(), id.to_owned()));
-    env.extend(socket.map(|s| ("AAE_SOCKET".to_owned(), s.to_string_lossy().into_owned())));
     env
 }
 
