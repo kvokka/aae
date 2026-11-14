@@ -489,14 +489,14 @@ project's `aae.toml` may have `[builtin.<name>]` tables too: for the runs of tha
 orchestrator's table of that plugin whole (spec §11.3: orchestrator-side plugins are turned on for the orchestrator
 or for a project).
 
-- `default-policy` (on unless `enabled = false`) decides on `run.attempt_failed` and
-  `run.turn_ended_without_outcome` as in contracts 10. Parameters, all integers: `quota_margin_s` (60),
-  `quota_wait_s` (1800), `model_pause_s` (600), `backoff_base_s` (10), `backoff_cap_s` (300), `backoff_park_from`
-  (3), `auth_backoff_base_s` (30), `auth_backoff_cap_s` (3600), `rapid_s` (30),
-  `crash_loop` (5), `crash_pause_s` (300), `resume_failures` (3), `unknown_after_s` (30), `unknown_retries` (3).
-  The waits and caps that a zero would turn into a hot loop (`quota_wait_s`, `model_pause_s`, both bases and both
-  caps, `crash_pause_s`) and `crash_loop` must be at least 1; `quota_margin_s`, `rapid_s` and `unknown_after_s` must
-  not be negative.
+- `default-policy` (on unless `enabled = false`) decides on `run.attempt_failed` and `run.turn_ended_without_outcome` as
+  in contracts 10. Parameters, all integers: `quota_margin_s` (60), `quota_wait_s` (1800; the wait of `quota_exhausted`
+  when neither `retry_at` nor the account's `resets_at` is known; an account is used up when `rate_limit.utilization >=
+  1.0` and `resets_at` is in the future), `model_pause_s` (600), `backoff_base_s` (10), `backoff_cap_s` (300),
+  `backoff_park_from` (3), `auth_backoff_base_s` (30), `auth_backoff_cap_s` (3600), `rapid_s` (30), `crash_loop` (5),
+  `crash_pause_s` (300), `resume_failures` (3), `unknown_after_s` (30), `unknown_retries` (3). The waits and caps that a
+  zero would turn into a hot loop (`quota_wait_s`, `model_pause_s`, both bases and both caps, `crash_pause_s`) and
+  `crash_loop` must be at least 1; `quota_margin_s`, `rapid_s` and `unknown_after_s` must not be negative.
 - `worktree` has no table: it is on for the runs of the formulas with `worktree = true` (a formula setting, spec §2.1
   item 11), and a `[builtin.worktree]` table is a config error that says so. Each such run gets a git worktree of its
   rig on the branch `aae/<run>`, in `<git common dir>/aae/worktrees/<run>`, as its workdir. When the run ends the

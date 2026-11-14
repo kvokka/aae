@@ -32,8 +32,9 @@ there is no adapter protocol between processes (spec §4).
 
 ## What the core expects of a driver
 
-The trait and its types are in [contracts 4](contracts.md#4-driver-interface). Beyond the signatures the core
-relies on these, and a driver that misses one fails runs by the watchdog, not by an error:
+The trait and its types are in [contracts 4](contracts.md#4-driver-interface); what the core does with each event
+and each `Health` value is the table of [contracts 4.3](contracts.md#43-normalized-events). Beyond the signatures
+the core relies on these, and a driver that misses one fails runs by the watchdog, not by an error:
 
 - **`PromptAcked{key}`** for every prompt, with the prompt's own key. It is the only way an attempt leaves
   `starting`. A harness with no acknowledgement of its own needs one made from the first sign it took the prompt.
@@ -45,6 +46,9 @@ relies on these, and a driver that misses one fails runs by the watchdog, not by
   kinds in contracts 4.4. `retried_by_harness` is true when the harness already retried a 429 or a 5xx itself:
   the policy never retries on top of it. Wording → kind tables belong to the adapter. A success that carries an
   error is a failure; an exit in an open turn is `harness_crash` whatever the exit code.
+- **`Usage`** carries increments, not running totals; `Retrying{delay}` is in real units (the core adds it to the
+  silence limit); the events of one instance are sent in `seq` order by one sender at a time (a repeat is dropped, a
+  gap is told as `resync.diverged`).
 - **`Exited{code, signal}`**, instance-wide, once the process is gone, after the failure of a turn it left open.
 - **`Activity`** at most once a second per session; any event moves the silence deadline.
 - **Session events carry the `SessionRef` the adapter returned**, byte for byte: the core finds the attempt by

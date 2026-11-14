@@ -70,9 +70,9 @@ Shared objects:
   parent_run, created_at, started_at}`. `agent` is null for `exec` steps, `class` is null until `failed`, `bead` is the
   bead id or null, `depth` is the trigger depth of §9.5 (0 for a run started by hand). The read API (`GET
   /v1/runs/{id}`, `aae run show`) gives the `RunView` with `project`, `rig`, `correlation`, `inputs`, `waiting_for`,
-  `outcome`, `attempts` and: `reason` (the veto text, the cancel reason, `pass`, or the failure reason), `request` (the
-  open request while in `requires_action`, else null) and `gate` (the oldest closure of the run's keys while it waits on
-  a gate or is `parked`, else null).
+  `outcome`, `attempts`, `usage` (`{input_tokens, output_tokens}`, summed over every attempt) and: `reason` (the veto
+  text, the cancel reason, `pass`, or the failure reason), `request` (the open request while in `requires_action`, else
+  null) and `gate` (the oldest closure of the run's keys while it waits on a gate or is `parked`, else null).
 - `Failure`: `{kind, text, scope, retry_at, retried_by_harness, source, raw, account, provider_model}`: `kind` from
   see 4.4, `text` set only for `unknown`, `scope` one of `session | instance | account | provider_model | run | rig`,
   `retry_at` time or null, `source` one of `harness | adapter | core`, `raw` the harness text cut to 4 KiB,
@@ -80,8 +80,8 @@ Shared objects:
 - `Bead`: see 5.2.
 - `Gate`: `{key, until, reason, closed_by: "policy"|"operator"|"core", closed_at}`, `until` null = until removed
   by hand.
-- `Attempts`: list of `{n, generation, kind: "new_session"|"resume", started_at, ended_at, failure_kind}` of the
-  run, newest last, at most 20 entries.
+- `Attempts`: list of `{n, generation, kind: "new_session"|"resume", started_at, ended_at, failure_kind, input_tokens,
+  output_tokens}` of the run, newest last, at most 20 entries; the tokens are the sums of the attempt's `usage` events.
 - `Outcome`: `{result: "pass"|"fail", summary, data}`; `summary` ≤ 4 KiB, `data` any JSON ≤ 64 KiB.
 
 Observed events (plugins and clients read them and cannot change what happens):
@@ -91,7 +91,7 @@ Observed events (plugins and clients read them and cannot change what happens):
 | `daemon.started` | `{version, pid, interrupted_runs}`; `interrupted_runs` is how many runs recovery moved to `interrupted` |
 | `daemon.stopping` | `{reason: "signal"\|"drain"\|"restart"}` |
 | `config.reloaded` | `{config_generation, restarted_instances: [id]}` |
-| `instance.starting`, `instance.ready`, `instance.stopped` | `{instance: {id, harness, fingerprint, pid, pgid}, reason}`; `pid`/`pgid` null before spawn, `reason` null except `stopped` (`idle`, `config`, `cancel`, `shutdown`, `recovery`, `operator`) |
+| `instance.starting`, `instance.ready`, `instance.degraded`, `instance.stopped` | `{instance: {id, harness, fingerprint, pid, pgid}, reason}`; `pid`/`pgid` null before spawn, `reason` null except `stopped` (`idle`, `config`, `cancel`, `shutdown`, `recovery`, `operator`) and `degraded` (the health text); `instance.ready` with `reason: null` comes again when a degraded instance is well |
 | `instance.failed` | `{instance, failure: Failure}` |
 | `service.starting`, `service.ready`, `service.stopped`, `service.failed` | same as `instance.*` with `service: {id, name, scope, pid, pgid}` instead of `instance` |
 | `run.queued` | `{run: RunView, waiting_for: "concurrency"\|"gate"\|"workdir"\|"daemon_stopping"\|null, gate}`; re-emitted when the reason changes |
@@ -99,9 +99,10 @@ Observed events (plugins and clients read them and cannot change what happens):
 | `run.state_changed` | `{from, to, attempt, generation, reason}` |
 | `run.parked` | `{gate: Gate\|null, then: "resume"\|"new_session"}` (`null`: the daemon is stopping) |
 | `run.resumed` | `{gate_key}` (`"daemon_stopping"` after a park for a stopping daemon) |
-| `run.passed` | `{run, outcome: Outcome}` |
-| `run.failed` | `{run, class: "agent"\|"check"\|"hollow_done"\|"infrastructure", reason, outcome}`; `outcome` null unless the agent declared one |
-| `run.cancelled` | `{run, reason}` |
+| `run.passed` | `{run, outcome: Outcome, usage}` |
+| `run.failed` | `{run, class: "agent"\|"check"\|"hollow_done"\|"infrastructure", reason, outcome, usage}`; `outcome` null unless the agent declared one |
+| `run.cancelled` | `{run, reason, usage}` |
+| `run.retrying` | `{run, retry, next_retry_at, text}`; the harness retries by itself (`retry` is its own number, 4.3) |
 | `trigger.fired` | `{trigger, cause_seq, new_run, inputs}`; `cause_seq` null for schedules |
 | `trigger.skipped` | `{trigger, cause_seq, reason: "overlap"\|"input_unresolved"\|"depth"\|"nothing_ready"\|"rejected", detail}` |
 | `trigger.switched` | `{trigger, enabled}`; the operator switched a trigger on a rig off or back on (`POST /v1/triggers/disable`, `/enable`): off, neither its schedule nor its events fire it, a hand firing still does, and the switch outlives restarts and reloads |
@@ -110,7 +111,7 @@ Observed events (plugins and clients read them and cannot change what happens):
 | `bead.created`, `bead.updated`, `bead.closed`, `bead.ready` | `{bead: Bead, actor, changed: [field]}`; `changed` empty except `updated` |
 | `tracker.sync_failed` | `{op, bead, error, next_retry_at}` |
 | `plugin.hook_failed` | `{plugin, hook_type, event_seq, error: "spawn"\|"timeout"\|"exit"\|"output", exit_code, stderr_tail}` |
-| `resync.diverged` | `{subject: "process"\|"instance"\|"run"\|"bead"\|"gate", id, expected, observed}` (no automatic effect follows, invariant 20) |
+| `resync.diverged` | `{subject: "process"\|"instance"\|"run"\|"bead"\|"gate", id, expected, observed}` (no automatic effect follows, invariant 20); `instance` also tells an event `seq` that is not the last + 1 (4.3) |
 
 Deciding events (an exec hook of a plugin may change what happens; decisions: see 3). The last column is what the
 core does when no plugin decides, `default-policy` switched off included:
@@ -129,12 +130,14 @@ Each of them carries `deadline`, the time after which the core applies the "no p
 |---|---|
 | `run.preparing` | `{run, workdir, env_keys: [name], prompt_append, deadline}`; `env_keys` lists names only, never values |
 | `run.requires_action` | `{run, request: {id, kind: "permission"\|"question", tool, input, text}, deadline}` |
-| `run.attempt_failed` | `{run, failure: Failure, attempts: Attempts, gates: [Gate], keys: [string], agent_failures_1h: [{run, kind, at}], deadline}` |
+| `run.attempt_failed` | `{run, failure: Failure, rate_limit: {utilization, resets_at}\|null, attempts: Attempts, gates: [Gate], keys: [string], agent_failures_1h: [{run, kind, at}], deadline}` |
 | `run.turn_ended_without_outcome` | `{run, stop_reason, remarks, attempts: Attempts, deadline}` |
 | `run.finishing` | `{run, outcome: Outcome, remarks, deadline}` |
 
-`remarks` is the number of remarks already returned in this attempt. `gates` lists every closed gate whose key
-applies to the run; `keys` lists the gate keys of the run (7), so a policy can name the account, model, agent or rig
+`usage` is `{input_tokens, output_tokens}` summed over every attempt of the run; `rate_limit` is the last limit known
+for the run's account. `stop_reason` of `run.turn_ended_without_outcome` is the reported one (`completed`, `cancelled`,
+`failed`). `remarks` is the number of remarks already returned in this attempt. `gates` lists every closed gate whose
+key applies to the run; `keys` lists the gate keys of the run (7), so a policy can name the account, model, agent or rig
 gate in its decision. Credentials and environment values never enter an event: the journal is not a secret store.
 
 Every refusal of the core to act on its own writes an event with its reason (`run.queued` with `waiting_for`,
@@ -349,26 +352,29 @@ trait Driver: Send + Sync {
 | `SessionRef` | opaque JSON the adapter fills with everything resume needs; the core stores and returns it. claude: `{session_id, config_dir, workdir}` (`config_dir` null: the session inherits the host, and its transcript is under the daemon's `CLAUDE_CONFIG_DIR`, else `~/.claude`); codex: `{thread_id, codex_home}` (the transcript lives in `CODEX_HOME`; `codex_home` is not read yet: a resume takes the home of the process part) |
 | `PromptKey` | UUID v5 of `"aae:prompt:<run>/<attempt n>/<prompt n>"` in the URL namespace; the idempotency key of one prompt (see 6.4) |
 | `Answer` | `Allow { updated_input }`, `Deny { message }`, `Text { text }` (decisions of `run.requires_action`) |
-| `Transcript` | `Missing` or `Present { prompt: Absent \| Unanswered \| Answered }` — whether the session exists and where the prompt with `key` stands in it |
-| `Health` | `Ok`, `Degraded { text }`, `Dead` |
+| `Transcript` | `Missing` or `Present { delivered: bool }` — whether the session exists and whether the prompt with `key` is in it; answered or not is not told apart: a resumed session never has a turn in flight (the old process is always stopped before the resume), so a delivered prompt is reconciled either way |
+| `Health` | `Ok`, `Degraded { text }` (the instance stays `ready` and keeps its sessions; `instance.degraded`, 8), `Dead` |
 
 The live tap (`live`) is the direct relay of the live view ([event model](event-model.md#journal)): raw harness
 messages of a session, up to 256 buffered, a slow reader loses messages; nothing of it enters the state or the journal.
 
 ### 4.3 Normalized events
 
-Every event carries `instance`, `session` (null for instance-wide events) and `seq`, monotonic per instance from 1.
+Every event carries `instance`, `session` (null for instance-wide events) and `seq`, monotonic per instance from 1;
+`seq` 0 is an event the core makes itself (the `exited` of an instance the health check found dead), outside the
+numbering. The core takes an instance's events in `seq` order: one with `seq` ≤ the last
+taken is dropped with no effect, and one that is not last + 1 (a repeat or a gap) is told with `resync.diverged`.
 They are input messages of the core, not journal events; the core turns some of them into the run events of §1.3.
 
 | Event | Fields | Core use |
 |---|---|---|
 | `prompt.acked` | `key` | prompt delivery `sent → acked`; ends `starting` |
 | `turn.started` | — | watchdog: first event seen |
-| `turn.ended` | `stop_reason: completed \| cancelled \| failed` | candidate end of the attempt's work; `failed` follows a `failure` event |
+| `turn.ended` | `stop_reason: completed \| cancelled \| failed` | candidate end of the attempt's work; `failed` follows a `failure` event; `stop_reason` goes to `run.turn_ended_without_outcome` |
 | `state` | `state: running \| idle \| requires_action`, `background: bool` | "idle without background" = `idle` and `background == false`; the adapter applies the harness rule |
 | `permission.requested` | `request_id, kind: permission \| question, tool, input, text` | `requires_action`, `run.requires_action` |
-| `usage` | `input_tokens, output_tokens, rate_limit: {utilization, resets_at} \| null` | watchdog: activity; nothing else reads it |
-| `retrying` | `attempt, delay, text` | watchdog: activity; the harness is retrying by itself |
+| `usage` | `input_tokens, output_tokens, rate_limit: {utilization, resets_at} \| null` | the core adds the tokens (increments) to the attempt; keeps the last `rate_limit` per account key (`account:<harness>/<id>`, one row, replaced by each report); still activity for the watchdog |
+| `retrying` | `attempt, delay, text` | in `running`: journals `run.retrying` (`next_retry_at` = now + `delay`) and sets the silence deadline to silence + `delay` (an announced pause is not silence) |
 | `activity` | `tool_running: bool` | watchdog only: moves the silence deadline, kept in memory, no transaction; the adapter coalesces it to at most one per second per session |
 | `failure` | `Failure` (see 1.3) | ends the attempt with `run.attempt_failed`; a failed single tool call is never sent (the harness hands it back to the model), `tool_failure` means a tool is gone for the whole session (4.4) |
 | `exited` | `code, signal` | the instance process is gone: every session on it gets `harness_crash` unless a failure was already reported |
@@ -552,7 +558,7 @@ core sets the actor of an exec step and hands that of a session to the adapter i
 | `queued` | not started: waits for a concurrency slot, a free workdir or an open gate; the reason is visible (`run.queued`) | `queue_timeout` 7 d | `failed{infrastructure, queue_timeout}` |
 | `preparing` | the bead claim confirmed, `run.preparing` hooks running, workdir and environment being fixed, snapshot of the effective config written | `start_timeout` for the claim, then the hook deadline (see 3.3) | the hooks count as failed → deny → `failed{check, hook_deadline}` |
 | `starting` | an attempt: instance acquired, session started or resumed, first prompt sent, waiting for `prompt.acked` | `start_timeout` 120 s | attempt failure `stall` |
-| `running` | the agent works (or the `exec` command runs) | step `timeout` of the formula (default 45 m) per attempt → `runaway_turn`; silence budgets: first event after ack 5 min, model thinking 5 min, tool running 10 min, background work after the turn 30 min → `stall` | attempt failure |
+| `running` | the agent works (or the `exec` command runs) | step `timeout` of the formula (default 45 m) per attempt → `runaway_turn`; silence budgets (an announced `retrying` pause adds to the limit): first event after ack 5 min, model thinking 5 min, tool running 10 min, background work after the turn 30 min → `stall` | attempt failure |
 | `requires_action` | waits for an answer to a permission request or question; not silence; the step `timeout` of `running` pauses here and resumes with the time it had left | `human_timeout` 1 h | answer `deny`, back to `running` |
 | `finishing` | outcome declared and the session idle without background; `run.finishing` hooks running | hook deadline | the hooks count as failed → veto → `failed{check, hook_deadline}` (a declared `fail` stays `failed{agent}`) |
 | `interrupted` | the current attempt ended with a failure (or by a daemon restart); `run.attempt_failed` is deciding | hook deadline, then the decision's `after` | no decision → `failed{infrastructure}` |
@@ -687,8 +693,8 @@ for it is not.
   the machine slept fires late by at most that.
 - Daemon stop (a signal, the end of a drain, `restart`): the core stops first, then the daemon, a child subreaper, kills
   every descendant it still has — sessions, hooks, exec commands — before it exits.
-- A resumed attempt after `daemon_crash` checks the transcript for the last unsettled key: `Absent` → send the
-  same prompt with the same key; `Unanswered` or `Answered` → send the reconcile prompt (config text, default
+- A resumed attempt after `daemon_crash` checks the transcript for the last unsettled key: not delivered → send the
+  same prompt with the same key; delivered → send the reconcile prompt (config text, default
   "Your previous turn was interrupted. Check the current state of the work and continue toward the goal.") with a
   new key.
 
@@ -758,7 +764,10 @@ of their own. The adapter reports the account id (4.5, `Driver::account`).
   subreaper ([experiments](experiments.md#descendants-after-kill--9-invariant-7)): every 5 s it reaps the adopted
   orphans that exited, never a child it spawned itself (those are reaped by their own `wait`).
 - Health: every 30 s the daemon asks the driver for the health of each instance it started; `Dead` counts as an
-  `exited` event of the instance (above).
+  `exited` event of the instance (above). A `ready` instance that turns `Degraded` gets `instance.degraded`
+  `{instance, reason: text}` and `degraded: <text>` in the instance view (`GET /v1/instances`, `aae instance list`;
+  null otherwise); it keeps the state `ready` and its sessions. When it is well, `instance.ready` with `reason: null`
+  is emitted again.
 - Resync (§5.1): every 5 minutes, with the trackers, the driver is asked for the health of every instance not `stopping`
   that has a process (pid + start time for claude and codex). One found `Dead` whose record still holds that process and
   is not `stopping` counts as its `exited` event, as above: a gone process is not ambiguous, so no `resync.diverged`. A
@@ -801,7 +810,8 @@ then. Implemented in `crates/aae-plugins`.
 
 | Event / kind | Decision |
 |---|---|
-| `quota_exhausted` | `park{gate: account, until: retry_at + 60 s, then: resume}`; no `retry_at` → `until` now + 30 min |
+| `rate_limited` while the run's account is used up (`rate_limit.utilization >= 1.0`, `resets_at` in the future; the run has an `account:` key) | `park{gate: account, until: resets_at + quota_margin_s, then: resume}`; takes precedence over the other `rate_limited` rows |
+| `quota_exhausted` | `park{gate: account, until: T + quota_margin_s (60 s), then: resume}`, `T` = `retry_at` of the failure, else `resets_at` of the used-up account; neither → `until` now + `quota_wait_s` (30 min) |
 | `rate_limited`, `overloaded` with `retried_by_harness` | `park{gate: model, until: now + 10 min, then: resume}` |
 | `rate_limited`, `overloaded` without | `resume{after: min(10 s · 2^(n−1), 5 min)}` over `n` consecutive such failures; from the 3rd — the `park` above |
 | `auth_required`, `billing` | `park{gate: account, until: now + min(30 s · 2^(n−1), 1 h), then: resume}` over `n` consecutive failures of that kind (postmortem 0001: a proxy or WAF error passes by itself; the attempt after the wait is the probe); never escalated to an operator, and these attempts do not count against the core's ceiling (spec §2.1 item 12); no account key: `fail` |
