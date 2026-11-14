@@ -1,8 +1,0 @@
-[package]
-name = "claude-protocol"
-version = "0.1.0"
-edition.workspace = true
-publish.workspace = true
-
-[dependencies]
-serde_json = "1.0.154"

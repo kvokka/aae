@@ -22,7 +22,7 @@ fresh; seq 401 | sed 's/.*/const _: u8 = 0;/' >crates/aae/src/tests.rs; expect p
 fresh; echo '// MEASURE id=y date=2026-11-12 env=linux' >crates/aae/src/m.rs; expect fail "marker without ver"
 fresh; echo '// MEASURE id=y date=2026-11-12 env=linux note="see ver=1"' >crates/aae/src/m.rs; expect fail "ver only inside note"
 fresh; mkdir -p crates/other/src && echo 'fn f() {}' >crates/other/src/lib.rs; expect fail "unbudgeted crate"
-fresh; mkdir -p experiments/x/src && seq 1501 | sed 's/.*/const _: u8 = 0;/' >experiments/x/src/main.rs; expect fail "experiments over 1500 lines"
+fresh; mkdir -p experiments/x/src && seq 5001 | sed 's/.*/const _: u8 = 0;/' >experiments/x/src/main.rs; expect fail "experiments over 5000 lines"
 fresh; rm docs/READINESS.md; expect fail "missing readiness file"
 fresh; echo '| Gates | 7.5 |' >>docs/READINESS.md; expect fail "component below 8"
 fresh; echo '| Gates | n/a |' >>docs/READINESS.md; expect fail "component without a score"

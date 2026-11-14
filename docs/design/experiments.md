@@ -1,11 +1,11 @@
 # Experiments (spec §16)
 
-Results of the throwaway experiments that precede the core. Code lives in `experiments/` (a separate Cargo
-workspace outside the product budgets, ≤ 1 500 lines in total, checked by `scripts/budget.sh`). Every number carries
-a `MEASURE` marker. Logs are sanitized samples (`<home>`, `<work>` placeholders; long `tools`/`skills` arrays are
-replaced by their length) and serve as fixtures for the scripted harness. Once an experiment is recorded, its
-scenario code may leave the tree to free the line limit; the section then names the commit that still holds it
-(`git show <commit>:<path>`), and the logs stay.
+Results of the throwaway experiments that precede the core. Every number carries a `MEASURE` marker. The
+experiments are recorded here and their code has left the tree (spec §2.1 item 17); each section names the commit
+that still holds it (`git show <commit>:<path>`). Their logs stay in `experiments/`: sanitized samples (`<home>`,
+`<work>` placeholders; long `tools`/`skills` arrays are replaced by their length) that serve as fixtures for the
+scripted harness. A new experiment goes to `experiments/` as a separate Cargo workspace outside the product
+budgets, ≤ 5 000 lines in total, checked by `scripts/budget.sh`.
 
 Common setup for the claude experiments: `claude -p --input-format stream-json --output-format stream-json
 --verbose --setting-sources "" --strict-mcp-config --model haiku`, clean environment (only `PATH`, `HOME`, `LANG`,
@@ -15,7 +15,8 @@ process in its own process group, a fresh empty work directory.
 ## claude protocol (experiment 1a)
 
 Code: `experiments/01-claude-protocol` (`src/lib.rs` is the hand-written client, `src/main.rs` the scenarios
-`basic`, `resume`, `permission`, `interrupt`). Logs: `experiments/01-claude-protocol/logs/`.
+`basic`, `resume`, `permission`, `interrupt`), removed from the tree after recording; last in commit `3f59356`.
+Logs: `experiments/01-claude-protocol/logs/`.
 
 <!-- MEASURE id=claude-protocol-1a date=2026-11-12 ver=claude-2.1.322 env=linux-arm64-orbstack src=experiments/01-claude-protocol/logs note="haiku, subscription login, n=1 per scenario" -->
 
@@ -157,7 +158,8 @@ Code: `experiments/05-br-events` (one scenario, fresh workspace with an isolated
 
 Code: `experiments/03-codex-appserver` (`src/lib.rs`: client over stdio or a WebSocket on a unix socket and a fake
 Responses API provider, kept for experiments 4–5; `src/main.rs`: scenarios `threads stdio|unix` and `reconnect`,
-removed from the tree after recording, last in commit `1629c3a`; `src/bin/gen.rs`: type generator). Output:
+removed from the tree after recording, last in commit `1629c3a`; `src/bin/gen.rs`: type generator; the rest
+last in commit `3f59356`). Output:
 `experiments/03-codex-appserver/logs/run.txt`, message logs next to it. No live model: every
 turn goes to the fake provider, `HOME` and `CODEX_HOME` are fresh directories, the process environment holds only
 `PATH`, `HOME`, `CODEX_HOME`, `SHELL`.
@@ -211,8 +213,9 @@ Consequences for the codex adapter (WP-29) and the instance registry (WP-18):
 
 Code: `experiments/06-finisher` (`src/bin/finish.rs` stands in for the finisher CLI: it connects to the unix socket
 named in `AAE_SOCKET` and reports `AAE_ATTEMPT_TOKEN`, `AAE_PROC_TOKEN` and its arguments; `src/main.rs` plays the
-daemon side). codex runs on the fake provider of experiment 2, which answers `RUN:<cmd>` with an `exec_command`
-call; claude runs on haiku with `--permission-mode bypassPermissions`. Output: `experiments/06-finisher/logs/`.
+daemon side; last in commit `3f59356`). codex runs on the fake provider of experiment 2, which answers `RUN:<cmd>`
+with an `exec_command` call; claude runs on haiku with `--permission-mode bypassPermissions`. Output:
+`experiments/06-finisher/logs/`.
 
 <!-- MEASURE id=finisher-exp6 date=2026-11-12 ver=claude-2.1.322,codex-0.167.2 env=linux-arm64-orbstack src=experiments/06-finisher/logs/run.txt note="n=1 per round; codex without a live model, claude haiku with a subscription login; codex sandbox not exercised (see below)" -->
 
@@ -232,8 +235,9 @@ the per-thread value (experiment 2), so a hook that must call the finisher gets 
 
 Code: `experiments/04-config-delivery` (`src/bin/claude.rs`: scenarios `flags`, `sources`, `auth`;
 `src/bin/codex.rs`: scenarios `mcp`, `rig`, `process`, and `codex mcp TAG ROOT` — a stdio MCP server with one tool
-`tag_<TAG>` that records its pid, used by both harnesses). Output: `logs/claude/run.txt`, `logs/codex/run.txt`,
-message logs next to them. claude: haiku, clean environment as above, a fresh rig per run; the run that inherits
+`tag_<TAG>` that records its pid, used by both harnesses; last in commit `3f59356`). Output: `logs/claude/run.txt`,
+`logs/codex/run.txt`, message
+logs next to them. claude: haiku, clean environment as above, a fresh rig per run; the run that inherits
 the host keeps no log (it reads the operator's own config), only counts. codex: the fake provider of experiment 2,
 fresh `HOME` and `CODEX_HOME`, no live model; the "host" is an imitation `CODEX_HOME`, the real `~/.codex` is not
 touched.
