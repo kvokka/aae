@@ -11,7 +11,7 @@ the pinned claude, codex and br. Every check below is a mise task (`mise.toml`).
 | `mise run ci` | the above plus formatting, clippy, `cargo deny`, `cargo machete`, the unused-`pub` check and the line budgets | locally before a commit; CI on every commit | 62 s (2026-11-14, `75a5ee0`) |
 | `mise run acceptance-ci` | the acceptance scenarios without a model, each on a real `aae daemon`, then the checks of criteria 9, 11, 17, 22 and 23 | CI on every commit (job `acceptance`); locally optional | 71 s warm (2026-11-14, `75a5ee0`) |
 | `mise run acceptance-release` | criterion 1: `cargo zigbuild --release` for the four targets, then this host's binary runs | CI on a `v*` tag (workflow `release`) | 169 s cold (2026-11-14, `a070cd6`+WP-52) |
-| `mise run acceptance` | all acceptance scenarios, including those on a real model | by hand: they cost money and need a harness login | not measured |
+| `mise run acceptance` | all acceptance scenarios, including those on a real model; on a pass, the rows of criterion 20 rewrite the demo snapshots in `demos/` (commit them or `git checkout demos`) | by hand: they cost money and need a harness login | not measured |
 
 <!-- MEASURE id=dev-test-wall date=2026-11-14 ver=1a732a4 env=linux-arm64-orbstack-9-cores src="mise run test" note="warm build; nextest summary 28.8 s for 286 tests; another build ran beside it" -->
 <!-- MEASURE id=dev-ci-wall date=2026-11-14 ver=75a5ee0 env=linux-arm64-orbstack-9-cores src="mise run ci" note="warm build, wall time of the whole task; nextest summary 36.9 s for 331 tests" -->

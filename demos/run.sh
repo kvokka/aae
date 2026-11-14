@@ -38,7 +38,8 @@ while [ $(($(date +%s) - started)) -lt 1080 ]; do
   sleep 5
 done
 seconds=$(($(date +%s) - started))
-versions="aae-$("$aae" --version | cut -d' ' -f2)"
+sha=$(git -C "$here" rev-parse --short HEAD 2>/dev/null || echo unknown)
+versions="aae-$("$aae" --version | cut -d' ' -f2)@$sha"
 for harness in claude codex; do
   versions="$versions,$harness-$("$harness" --version 2>/dev/null | grep -Eo '[0-9]+\.[0-9]+\.[0-9]+' | head -1)"
 done
@@ -47,6 +48,8 @@ done
   echo
   # Split so that scripts/budget.sh does not take this template for a marker.
   echo "<!-- MEASURE" "id=demo-$demo date=$(date -u +%Y-%m-%d) ver=$versions env=$(uname -sm | tr ' ' '-') src=demos/run.sh note=\"$result in $seconds s from the backend start, n=1\" -->"
+  echo
+  echo "Run on $(date -u +%Y-%m-%d) with $versions (\`$(uname -sm)\`): $result in $seconds s from the backend start."
   echo
   echo "The runs of the chain, newest first (\`aae run list\`):"
   echo
