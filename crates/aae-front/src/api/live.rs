@@ -18,15 +18,13 @@ use axum::{
 };
 use serde::Deserialize;
 use serde_json::{Value, json};
-use std::{convert::Infallible, sync::Arc, time::Duration};
+use std::{convert::Infallible, sync::Arc};
 use tokio::sync::{broadcast, mpsc};
 use tokio_stream::wrappers::ReceiverStream;
 use utoipa::IntoParams;
 
 /// Events read from the journal at a time.
 const BATCH: usize = 256;
-/// How often the view looks for a new session of the run while nothing else happens.
-const LOOK: Duration = Duration::from_millis(500);
 
 #[derive(Deserialize, IntoParams)]
 pub(crate) struct LiveQuery {
@@ -101,12 +99,11 @@ async fn relay(state: Arc<Api>, run: String, mut next: i64, tx: mpsc::Sender<Res
                     }
                     continue;
                 }
-                () = tokio::time::sleep(LOOK) => {}
             }
-            look(&state, &run, &mut session, &mut tap, &mut end);
             continue;
         }
-        // Marked seen before the read: a write after it wakes the wait above.
+        // Marked seen before the read: a write after it wakes the wait above. Every write is looked at, so a new
+        // session is tapped by the event of its first prompt acknowledged (`starting` -> `running`), with no timer.
         written.borrow_and_update();
         match read(&state, next, BATCH) {
             Ok(events) if events.is_empty() => {
