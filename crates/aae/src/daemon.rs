@@ -188,7 +188,16 @@ pub(crate) async fn run(paths: Paths) -> Result<bool, String> {
     };
     let stop = stop_signal().map_err(|e| format!("signals: {e}"))?;
     eprintln!("aae daemon listening on {}", paths.socket.display());
-    let served = api::serve(listener, tcp, api, stop).await;
+    // A core that stopped leaves an API that can only fail: the daemon exits with an error, for a supervisor to see.
+    let mut task = task;
+    let served = tokio::select! {
+        served = api::serve(listener, tcp, api, stop) => served,
+        died = &mut task => {
+            let _ = std::fs::remove_file(&paths.socket);
+            let why = died.map_or_else(|e| e.to_string(), |r| r.err().map_or("no error".into(), |e| e.to_string()));
+            return Err(format!("the core stopped: {why}"));
+        }
+    };
     let _ = std::fs::remove_file(&paths.socket);
     // `daemon.stopping` goes to the journal before the exit; a drain emitted it when it began, so this repeat only
     // reads its `seq`. The writer is then left as a crash leaves it: the state is crash-safe.

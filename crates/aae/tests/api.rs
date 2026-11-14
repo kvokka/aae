@@ -320,3 +320,29 @@ async fn a_restart_starts_the_daemon_again_in_the_same_process() {
     let run = d.create("check", None).await;
     d.until_state(&run, "passed").await;
 }
+
+#[tokio::test]
+async fn the_daemon_exits_with_an_error_once_its_core_stops() {
+    let mut d = Daemon::start(|dir| {
+        let long = "name = \"long\"\n[step]\nkind = \"exec\"\ncommand = [\"sleep\", \"30\"]\ntimeout = \"1s\"\n";
+        fs::write(dir.join("config/aae/shop/formulas/long.toml"), long).unwrap();
+    })
+    .await;
+    let run = d.create("long", None).await;
+    d.until_state(&run, "running").await;
+    // Another writer holds the database: the step's deadline cannot be written, and the core stops on the error.
+    let db = rusqlite::Connection::open(d.dir.path().join("state/aae/state.db")).unwrap();
+    db.execute_batch("BEGIN EXCLUSIVE").unwrap();
+    let deadline = std::time::Instant::now() + WAIT;
+    let status = loop {
+        if let Some(status) = d.child.try_wait().unwrap() {
+            break status;
+        }
+        assert!(
+            std::time::Instant::now() < deadline,
+            "the daemon lives on without its core"
+        );
+        tokio::time::sleep(Duration::from_millis(50)).await;
+    };
+    assert!(!status.success(), "{status}");
+}

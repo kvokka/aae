@@ -25,4 +25,5 @@ toml = "1.2.1"
 
 [dev-dependencies]
 aae-testkit = { version = "0.1.0", path = "../aae-testkit" }
+rusqlite = "0.42.0"
 tempfile = "3.27.0"
