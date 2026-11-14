@@ -122,6 +122,7 @@ fn payload(event_type: &str) -> Option<&'static [(&'static str, Shape)]> {
             ("outcome", OUTCOME),
             ("usage", USAGE),
         ],
+        "run.retrying" => &[("run", RUN), ("retry", Leaf), ("next_retry_at", Leaf), ("text", Leaf)],
         "run.cancelled" => &[("run", RUN), ("reason", Leaf), ("usage", USAGE)],
         "trigger.fired" => &[
             ("trigger", Leaf),
@@ -164,10 +165,7 @@ fn payload(event_type: &str) -> Option<&'static [(&'static str, Shape)]> {
             ("failure", FAILURE),
             ("attempts", Leaf),
             ("gates", Leaf),
-            (
-                "rate_limit",
-                Obj(&[("utilization", Leaf), ("resets_at", Leaf)]),
-            ),
+            ("rate_limit", Obj(&[("utilization", Leaf), ("resets_at", Leaf)])),
             ("keys", Leaf),
             ("agent_failures_1h", Leaf),
             ("deadline", Leaf),

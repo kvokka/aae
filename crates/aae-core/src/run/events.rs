@@ -125,7 +125,7 @@ impl RunHandler {
             if waits {
                 return Ok(());
             }
-            tx.set_deadline(&row.deadline("silence"), tx.now_ms() + ms)
+            tx.set_deadline(&row.deadline("silence"), tx.now_ms().saturating_add(ms))
         };
         if let Normalized::PromptAcked { key } = &event {
             super::prompts::advance(tx, &row.id, attempt, Some(*key), "acked")?;
@@ -155,6 +155,18 @@ impl RunHandler {
             }
             _ if row.state != "running" => Ok(()),
             Normalized::Activity { tool_running: true } => silence(tx, &row, w.tool_silence_ms),
+            // The harness retries a request by itself: its announced pause is not silence (spec §7.2).
+            Normalized::Retrying {
+                attempt: retry,
+                delay,
+                text,
+            } => {
+                let delay = i64::try_from(delay.as_millis()).unwrap_or(i64::MAX);
+                let next = rfc3339_ms(tx.now_ms().saturating_add(delay));
+                let data = json!({ "run": row.view(), "retry": retry, "next_retry_at": next, "text": text });
+                row.emit(tx, "run.retrying", data)?;
+                silence(tx, &row, w.silence_ms.saturating_add(delay))
+            }
             Normalized::TurnEnded { .. } => {
                 super::prompts::advance(tx, &row.id, attempt, None, "settled")?;
                 tx.sql().execute(

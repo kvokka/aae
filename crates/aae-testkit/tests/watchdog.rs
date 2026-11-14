@@ -214,3 +214,22 @@ async fn the_step_timeout_pauses_between_turns() {
         ("1970-01-01T00:45:10.200Z".into(), "runaway_turn".into())
     );
 }
+
+#[tokio::test(start_paused = true)]
+async fn a_retry_the_harness_announces_adds_its_pause_to_the_silence_limit() {
+    let retrying = Normalized::Retrying {
+        attempt: 1,
+        delay: Duration::from_secs(90),
+        text: "overloaded".into(),
+    };
+    let scenario = vec![Step::Emit(Normalized::TurnStarted), Step::Emit(retrying)];
+    assert_eq!(stall_at(scenario.clone()).await, "1970-01-01T00:02:30.000Z");
+    let w = watched(FILES);
+    w.driver.script(scenario);
+    let run = w.create().await;
+    let retry = w.until(Some(&run), "run.retrying", 0).await;
+    assert_eq!(
+        (&retry["retry"], &retry["next_retry_at"], &retry["text"]),
+        (&1.into(), &"1970-01-01T00:01:30.000Z".into(), &"overloaded".into())
+    );
+}
