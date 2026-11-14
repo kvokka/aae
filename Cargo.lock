@@ -16,7 +16,6 @@ dependencies = [
  "axum",
  "clap",
  "rusqlite",
- "serde",
  "serde_json",
  "tempfile",
  "tokio",
