@@ -304,8 +304,7 @@ fn process<H: Handler>(
         let sql = "SELECT reply, request FROM idempotency WHERE key = ?1";
         let stored: Option<(Value, String)> = tx.query_row(sql, [key], |r| Ok((r.get(0)?, r.get(1)?))).optional()?;
         if let Some((stored, first)) = stored {
-            // An empty request is a key stored before requests were (migration 14): it matches any.
-            return if first.is_empty() || first == *request {
+            return if first == *request {
                 Ok(stored)
             } else {
                 Err(Error::KeyReused)

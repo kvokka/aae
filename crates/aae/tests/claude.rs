@@ -245,13 +245,13 @@ fn of_run(run: &str, dir: &Path) -> Vec<(i32, String)> {
 
 /// Criterion 9: `kill -9` of claude while its Bash tool runs is typed within a second, the session is resumed
 /// and the run reaches its outcome. Criterion 16: the claim on the run's bead holds through the death of the session
-/// and the resumed session closes it.
+/// and the resumed session closes it; the session has the path of the tracker's database.
 #[tokio::test(flavor = "multi_thread")]
 async fn a_claude_killed_in_a_command_is_resumed_and_its_run_passes() {
     let finish = format!("{} finish pass --summary built", env!("CARGO_BIN_EXE_aae"));
     // The resumed session sleeps a while first: time to look at the claim between the death and the outcome.
     let plan = vec![
-        Reply::Bash("sleep 20".into()),
+        Reply::Bash("printf %s \"$BEADS_DIR\" > beads-dir; sleep 20".into()),
         Reply::Bash("sleep 1".into()),
         Reply::Bash(finish),
         Reply::Text("Done.".into()),
@@ -304,6 +304,8 @@ async fn a_claude_killed_in_a_command_is_resumed_and_its_run_passes() {
     next(&mut events, "bead.closed").await;
     assert_eq!(bead(&project, &id), (json!("closed"), owner));
     assert!(provider.requests().len() >= 3, "the resumed session went on");
+    let beads = fs::read_to_string(project.join("web/beads-dir")).unwrap();
+    assert_eq!(Path::new(&beads), project.join(".beads"));
 }
 
 /// Criterion 4a on the fake: the finisher is called while a background command of the session runs; the run

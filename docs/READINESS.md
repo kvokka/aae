@@ -22,7 +22,7 @@ such a criterion stay at 6, and none reaches 10 while a row of criterion 20 has 
 |---|---|---|---|
 | Event loop and state | 6, 7, 8, 18 | 6 | 8: the live rows of criterion 8 (`kill -9` mid-turn of claude and codex) on this code |
 | Runs and finisher | 2, 3, 4, 4a | 6 | 8: rows 2 and 4a with a real model on this code |
-| Triggers and schedules | 5a, 5b, 6 | 8 | 10: criterion 20; 5b runs on the wall clock, not a managed one |
+| Triggers and schedules | 5a, 5b, 6 | 8 | 10: criterion 20 |
 | Issue gates | 10, 19 | 8 | 10: criterion 20 |
 | Recovery | 8, 9 | 6 | 8: the live rows of criterion 8 on this code (recovery changed in this session) |
 | Config assembly | 12, 13 | 8 | 10: criterion 20 |

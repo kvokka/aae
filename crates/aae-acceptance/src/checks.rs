@@ -27,6 +27,30 @@ pub(crate) const ALL: &[Scenario] = &[
         run: |env| Box::pin(tests(env, "-p aae -E test(/killed_in_a_command_is_resumed/)", 2)),
     },
     Scenario {
+        criterion: "16",
+        title: "the claim holds through the death of a claude session and its resume; the session has the tracker's path",
+        launch: Launch::Ci,
+        run: |env| {
+            Box::pin(tests(
+                env,
+                "-p aae -E test(a_claude_killed_in_a_command_is_resumed_and_its_run_passes)",
+                1,
+            ))
+        },
+    },
+    Scenario {
+        criterion: "5b",
+        title: "a cron and an hourly schedule fire on the managed clock, and once after downtime",
+        launch: Launch::Ci,
+        run: |env| {
+            Box::pin(tests(
+                env,
+                "-p aae-testkit -E test(a_schedule_fires_on_the_managed_clock_and_once_after_downtime)",
+                1,
+            ))
+        },
+    },
+    Scenario {
         criterion: "11",
         title: "the contract tests of claude and codex (§7.8), codex's model list, and of the br tracker (§10.2) pass",
         launch: Launch::Ci,
@@ -157,7 +181,7 @@ async fn tests(env: Arc<Env>, filter: &str, want: u32) -> String {
     args.extend(filter.split(' '));
     let summary = line_with(&command(&env, "cargo", &args).await, "Summary");
     assert!(
-        summary.contains(&format!(" {want} tests run")),
+        summary.contains(&format!(" {want} test")) && summary.contains(" run:"),
         "{want} tests expected: {summary}"
     );
     summary
