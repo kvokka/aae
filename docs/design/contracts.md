@@ -68,7 +68,11 @@ Shared objects:
 
 - `RunView`: `{id, formula, agent, step_kind: "prompt"|"exec", state, class, attempt, generation, bead, workdir,
   depth, parent_run, created_at, started_at}`. `agent` is null for `exec` steps, `class` is null until `failed`,
-  `bead` is the bead id or null, `depth` is the trigger depth of §9.5 (0 for a run started by hand).
+  `bead` is the bead id or null, `depth` is the trigger depth of §9.5 (0 for a run started by hand). The read API
+  (`GET /v1/runs/{id}`, `aae run show`) gives the `RunView` with `project`, `rig`, `correlation`, `inputs`,
+  `waiting_for`, `outcome`, `attempts` and: `reason` (the veto text, the cancel reason, `pass`, or the failure
+  reason), `request` (the open request while in `requires_action`, else null) and `gate` (the oldest closure of the
+  run's keys while it waits on a gate or is `parked`, else null).
 - `Failure`: `{kind, text, scope, retry_at, retried_by_harness, source, raw, account, provider_model}`: `kind` from
   see 4.4, `text` set only for `unknown`, `scope` one of `session | instance | account | provider_model | run | rig`,
   `retry_at` time or null, `source` one of `harness | adapter | core`, `raw` the harness text cut to 4 KiB,
@@ -240,7 +244,7 @@ order); the bundled plugins come after all of them (docs/design/config.md, `[bui
 - `run.requires_action`, `run.attempt_failed`, `run.turn_ended_without_outcome`: the first decision in plugin order
   wins; later hooks are not started once a decision exists.
 - Every hook done and no decision: the hook runner sends an explicit "no decision" message, and the "no plugin
-  decision" column of §5.4 applies at once — start as is; wait for a human answer through the API until
+  decision" column of the table in 1.3 applies at once — start as is; wait for a human answer through the API until
   `human_timeout` (default 1 h), then answer `deny`; `failed{class: infrastructure}`; `failed{class: hollow_done}`;
   accept. A hook that timed out is a hook failure (3.2), not "no decision": on `run.preparing` and
   `run.finishing` it blocks.
@@ -292,7 +296,7 @@ they judge the lost attempt, and that attempt's `attempt_failed` queues its own 
   Both are bounded in time (hook timeouts, journal write errors retried with the effect backoff), so the outbox
   drains. The depth and the age of the oldest row are part
   of the daemon status (API) and of `aae doctor`.
-- API event streams are not outbox consumers: they read the journal from a `seq` (§5.3) and get the "gap" error
+- API event streams are not outbox consumers: they read the journal from a `seq` (1.1, [event model](event-model.md) "Journal") and get the "gap" error
   when it is rotated away.
 
 ## 4. Driver interface
@@ -501,7 +505,8 @@ trait Tracker: Send + Sync {
 ```
 
 `release` and `close` carry no generation (invariant 4): the condition `assignee == aae:<run id>` is the same check,
-because a run id is never reused and a run owns at most one bead once. A claim answer carries the generation it was
+because a run id is not reused within one state directory (it is a counter there: a fresh state directory counts
+from `run_1` again) and a run owns at most one bead once. A claim answer carries the generation it was
 made for and is dropped unless the run still owns the bead in that generation and still waits for it in `preparing`.
 
 `changes` is pull-only; the adapter also owns a watcher that sends a "changed" message to the core, and the core
@@ -573,6 +578,8 @@ Ceilings of the core (invariant 16): 20 attempts per run, not counting the attem
 and `remark` after `run.finishing` both count). The eleventh fails the run with reason `remarks_ceiling` and the class
 the event would give: `hollow_done` for `continue`, `check` for `remark`. Between turns (from idle without background
 to the next prompt) the step `timeout` pauses like in `requires_action`. Trigger depth (§9.5): a trigger does not start a run deeper than 10 (`trigger.skipped{depth}`); the limit is fixed, with no setting.
+A run started on `bead.ready` keeps the depth of the run that caused it, with no level added: a bead made ready is
+the next work of the tracker, not a run the parent started, so a long epic stays legal.
 
 ### 6.2 Transitions
 
@@ -670,6 +677,8 @@ for it is not.
   (a missed one fires at most once), the `after` of a retry, `queue_timeout`, `park_timeout` — stay. Then resync.
   Deadlines are wall-clock times: the writer reads the wall clock at least every 30 s, so a deadline passed while
   the machine slept fires late by at most that.
+- Daemon stop (a signal, the end of a drain, `restart`): the core stops first, then the daemon, a child subreaper,
+  kills every descendant it still has — sessions, hooks, exec commands — before it exits.
 - A resumed attempt after `daemon_crash` checks the transcript for the last unsettled key: `Absent` → send the
   same prompt with the same key; `Unanswered` or `Answered` → send the reconcile prompt (config text, default
   "Your previous turn was interrupted. Check the current state of the work and continue toward the goal.") with a

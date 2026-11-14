@@ -60,6 +60,8 @@ The `[agent]` table takes the same keys as any settings layer (see [the config r
 rig settings and the agent's own `agent.toml`, so an agent can still override what the plugin sets.
 
 - **Skills**: `skills.<name> = { path = "..." }`, a directory relative to the plugin with a `SKILL.md`.
+- An aae plugin is not handed to claude as a Claude Code plugin directory (`--plugin-dir`): its skills, harness hooks
+  and MCP servers reach the session only through `[agent]`.
 - **Harness hooks** use the Claude Code dialect (`event`, `matcher`, `command`, `timeout`); aae delivers them to
   claude as they are and translates them for codex. What `remind.sh` prints on `UserPromptSubmit` joins the prompt.
 - `${AAE_PLUGIN_DIR}` in a hook, MCP or service `command`, and in a service's `env` and `health.command`, is replaced

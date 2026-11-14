@@ -90,6 +90,9 @@ aae run watch run_2                   # its events and the session's messages li
 aae run show run_2
 ```
 
+An `--input name=value` value is text, read by the type the formula gives the input: `version=1.10` stays the
+string `1.10` for a `string` input, and becomes a number or a boolean only for an `integer` or `boolean` one.
+
 The run goes `queued` → `preparing` → `running` → `finishing` → `passed`. While it runs, `aae instance list` shows
 the harness process serving it. `aae run cancel <run>` stops it.
 

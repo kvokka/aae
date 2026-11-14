@@ -381,8 +381,9 @@ a bead) and `AAE_INPUT_<NAME>` per input (the name upper-cased, other characters
 string as it is, any other value as JSON). Two inputs that give one variable (`note-text` and `note_text`) are a
 config error.
 
-A run start checks the inputs: no undeclared one, every `required` one present, an `integer` input a JSON integer, a
-`boolean` one a JSON boolean. A `bead` input is a bead id or `{ next_ready = true, epic = <id> }`; a bead named by id
+A run start checks the inputs: no undeclared one, every `required` one present (`null` is no value), an `integer`
+input a JSON integer or its text, a `boolean` one a JSON boolean or `true`/`false` as text, a `string` one a string
+(the CLI sends `--input` values as text). A `bead` input is a bead id or `{ next_ready = true, epic = <id> }`; a bead named by id
 that carries a `rig:` label of another rig is refused, at the start when the ready set knows the bead, else at its
 claim (the run fails with `bead_of_another_rig` and the claim is released).
 `worktree = true` gives each run of the formula, of either step kind, a git worktree that aae makes and removes (the
