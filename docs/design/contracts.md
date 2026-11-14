@@ -3,7 +3,8 @@
 The interfaces that later code may not change without a break: the event and its version, the trigger filter and
 input mapping, the decisions of orchestrator hooks and their timeouts, the outbox, the driver and tracker
 interfaces, the run state machine, the issue gates and the instance registry. Spec references are by section
-number (`§9.5`); references inside this document read "see 3.5". Experiment results are cited from [`experiments.md`](experiments.md), not repeated.
+number (`§9.5`); references inside this document read "see 3.5". Experiment results are cited from
+[`experiments.md`](experiments.md), not repeated.
 
 Conventions used below:
 
@@ -146,7 +147,8 @@ request is answered with an error instead.
 ### 2.1 Paths
 
 A path is a dotted chain of object keys into the event view (see 1.2) or into the run context of a prompt template:
-`bead.epic`, `project`; the word `data` never appears in a path. No indexing, no wildcards. A path that a payload of the event type
+`bead.epic`, `project`; the word `data` never appears in a path. No indexing, no wildcards. A path that a payload of the
+event type
 cannot have is a config error at load time (the payload schemas of 1.3 are known to the loader); so is a `where` path
 that ends on an object, which no matcher can equal.
 
@@ -259,14 +261,16 @@ hold a run longer than its own timeout; the runner reports before it unless it i
 run run in order: when hooks of an earlier deciding event of the run are still queued, the sum counts their
 timeouts too. `run.requires_action` keeps waiting for a human after that deadline, until `human_timeout`. While a
 run in `running` waits for the decision on `run.turn_ended_without_outcome`, no clock of the attempt runs: late
-session events do not re-arm the silence deadline. After a daemon restart the deadline of a deciding event still pending counts again from the
+session events do not re-arm the silence deadline. After a daemon restart the deadline of a deciding event still pending
+counts again from the
 start of the new daemon, as the sum of the timeouts of the hooks queued on the run's deciding queue + 5 s: the
 hooks run again from their start, and the time the daemon was down is not theirs (the `deadline` in the event
 envelope keeps its first value).
 
 ### 3.4 Decisions and restarts
 
-The hook effect of a deciding event stays queued until its decision is committed (see 3.5). A decision message names the event
+The hook effect of a deciding event stays queued until its decision is committed (see 3.5). A decision message names the
+event
 `seq` and the run generation of the event; the core applies it only if the run is still in the state that emitted
 that event with that generation, else it is dropped as stale and nothing changes. After a restart the dispatcher
 runs the hooks of every deciding event still pending — on `run.preparing`, `run.finishing`, `run.attempt_failed`
@@ -298,7 +302,8 @@ they judge the lost attempt, and that attempt's `attempt_failed` queues its own 
   Both are bounded in time (hook timeouts, journal write errors retried with the effect backoff), so the outbox
   drains. The depth and the age of the oldest row are part
   of the daemon status (API) and of `aae doctor`.
-- API event streams are not outbox consumers: they read the journal from a `seq` (1.1, [event model](event-model.md) "Journal") and get the "gap" error
+- API event streams are not outbox consumers: they read the journal from a `seq` (1.1, [event model](event-model.md)
+  "Journal") and get the "gap" error
   when it is rotated away.
 
 ## 4. Driver interface
@@ -306,7 +311,8 @@ they judge the lost attempt, and that attempt's `attempt_failed` queues its own 
 ### 4.1 Shape
 
 The core owns one driver per harness, behind one object-safe trait; the binary lists one `Adapter` per harness
-and knows no harness by name ([adapters](adapters.md)), tests wire the scripted driver in (`crates/aae-testkit`). Futures are boxed; events go to the core through a
+and knows no harness by name ([adapters](adapters.md)), tests wire the scripted driver in (`crates/aae-testkit`).
+Futures are boxed; events go to the core through a
 sink handed to `start_instance`. The adapter translates and executes; it never retries a turn, parks or decides
 an outcome (§4; adapter duties in 4.4–4.6). The interface has no steer in the middle of a turn, no model change
 inside a live session and no way for a human to join a live session
@@ -476,7 +482,8 @@ codex (`crates/aae-codex`):
   `thread/status/changed`, `account/rateLimits/updated` with the reset time.
 - Thread status `idle` comes before `turn/completed`, and a command that outlives its turn (`exec_command` yields
   while it runs) runs while the status is `idle`: the turn ends `idle` with `background`, and its late
-  `item/completed` makes the thread idle without background (contract scenario 14). While the provider is silent before its response headers there is no notification at all and codex has no
+  `item/completed` makes the thread idle without background (contract scenario 14). While the provider is silent before
+  its response headers there is no notification at all and codex has no
   timeout of its own: the core's watchdog owns it.
 - Two `turn/start` on one thread are not queued but merged: the second becomes a steer of the first. The core sends
   a session's next prompt only after its turn ended (6.2), so this never happens.
@@ -529,7 +536,8 @@ core sets the actor of an exec step and hands that of a session to the adapter i
   assignee, epic, created_at, updated_at, closed_at}`. `epic` is computed by the adapter (br has no such field,
   §10.2). The rig of a bead is its `rig:<name>` label.
 - `Change`: `{seq, kind: "created"|"updated"|"closed", actor, changed: [field], bead: Bead}`; `seq` orders the
-  writes and is the cursor of `changes(after)`, `bead` is the bead when the change is read; the core maps it to `bead.created`,
+  writes and is the cursor of `changes(after)`, `bead` is the bead when the change is read; the core maps it to
+  `bead.created`,
   `bead.updated`, `bead.closed`, and derives `bead.ready` by diffing `ready()` with the last ready set it keeps
   in the state (a bead is "ready" the first time it enters the set, §9.5).
 - `TrackerError`: `NotFound`; `Claimed { holder }` (claim of a bead someone else holds — told by the state of the
@@ -576,10 +584,14 @@ so that the state machine has one place where `run.attempt_failed` is decided.
 - Concurrency is bounded per orchestrator (`max_runs`, default 8) and per agent (`max_runs` in `agent.toml`).
 - An attempt starts a new session or resumes the previous one, and has its own generation.
 
-Ceilings of the core (invariant 16): 20 attempts per run, not counting the attempts whose `auth_required`, `billing` or `quota_exhausted` failure the decision parked on the run's own `account:` gate, closed by it (spec §2.1 item 12: a wait on the account does not spend the ceiling; the attempt is marked `waited` in the state; a park on a gate that does not close, `until` passed, or any other park counts), 10 remarks per attempt (`continue` after a hollow turn
+Ceilings of the core (invariant 16): 20 attempts per run, not counting the attempts whose `auth_required`, `billing` or
+`quota_exhausted` failure the decision parked on the run's own `account:` gate, closed by it (spec §2.1 item 12: a wait
+on the account does not spend the ceiling; the attempt is marked `waited` in the state; a park on a gate that does not
+close, `until` passed, or any other park counts), 10 remarks per attempt (`continue` after a hollow turn
 and `remark` after `run.finishing` both count). The eleventh fails the run with reason `remarks_ceiling` and the class
 the event would give: `hollow_done` for `continue`, `check` for `remark`. Between turns (from idle without background
-to the next prompt) the step `timeout` pauses like in `requires_action`. Trigger depth (§9.5): a trigger does not start a run deeper than 10 (`trigger.skipped{depth}`); the limit is fixed, with no setting.
+to the next prompt) the step `timeout` pauses like in `requires_action`. Trigger depth (§9.5): a trigger does not start
+a run deeper than 10 (`trigger.skipped{depth}`); the limit is fixed, with no setting.
 A run started on `bead.ready` keeps the depth of the run that caused it, with no level added: a bead made ready is
 the next work of the tracker, not a run the parent started, so a long epic stays legal.
 
@@ -631,7 +643,10 @@ of a run whose gate the operator closed parks it instead (invariant 18).
   token. Answers: accepted; `stale_attempt` (an older or ended attempt — nothing changes); `run_terminal`;
   `invalid` (unknown token or run, `summary` over 4 KiB, `data` over 64 KiB, a call while the run is
   `finishing`: the declared outcome is under check, or a call while the run waits for the decision on
-  `run.turn_ended_without_outcome`: the turn is over, and an outcome now would decide nothing). With the daemon unreachable the command retries with backoff for 60 s (`AAE_FINISH_RETRY` seconds overrides it), then exits with code 75; every try carries the same idempotency key, a hash of the request, so a retry after a lost reply gets the first answer.
+  `run.turn_ended_without_outcome`: the turn is over, and an outcome now would decide nothing). With the daemon
+  unreachable the command retries with backoff for 60 s (`AAE_FINISH_RETRY` seconds overrides it), then exits with code
+  75; every try carries the same idempotency key, a hash of the request, so a retry after a lost reply gets the first
+  answer.
 - The finisher is the agent's word on the outcome: `pass` or `fail`, a short summary, optional data. A failure of
   the infrastructure is not an outcome: it raises `run.attempt_failed`. The outcome is kept in the run's result
   and reaches triggers as `outcome` of `run.passed` and `run.failed` (`outcome.data.<key>` in `where` and `inputs`).
@@ -757,10 +772,12 @@ of their own. The adapter reports the account id (4.5, `Driver::account`).
   `stopping` that has a process (pid + start time for claude and codex). One found `Dead` whose record still holds
   that process and is not `stopping` counts as its `exited` event, as above: a gone process is not ambiguous, so no
   `resync.diverged`. A record that moved on since the check is left alone. Every process still carrying the marker of
-  an instance an attempt used (live or ended within the hour) and no record holds is swept again; at a start too ([event model](event-model.md)).
+  an instance an attempt used (live or ended within the hour) and no record holds is swept again; at a start too ([event
+  model](event-model.md)).
 - Services ([config](config.md#mcp-servers-and-services-spec-114)) use the same record with kind
   `service`: the service name, the key `<scope>#<sha256 of the definition>` (the definition is `command`, `env`,
-  `health`; scope `orchestrator` or `project:<p>`), the definition, the port and the token in the process column, the consumer count in `sessions` (an attempt's services are in
+  `health`; scope `orchestrator` or `project:<p>`), the definition, the port and the token in the process column, the
+  consumer count in `sessions` (an attempt's services are in
   `attempts.services`). The launch transaction acquires them (a new record emits `service.starting` and the
   `start_service` effect) and rewrites the session's config before the split, with `${AAE_SERVICE_PORT:<id>}` for
   the port: the launch waits for the service's own health check and puts in the port it passed on. A start finds
@@ -769,7 +786,8 @@ of their own. The adapter reports the account id (4.5, `Driver::account`).
   within 30 s gives `service.failed`, then a restart after the effect backoff of its restarts while it has
   consumers (on a new port until `ready`, then on the same one), else the record goes. Idle,
   operator and recovery stops go through `stop_service`, which ends the process group and sweeps the
-  marker; a reload leaves services alone. pid and pgid of the view are null: the process is tracked by its task and marker, not by pid.
+  marker; a reload leaves services alone. pid and pgid of the view are null: the process is tracked by its task and
+  marker, not by pid.
 
 ## 9. Fakes in the real daemon
 
@@ -789,7 +807,8 @@ The built-in policy expressed in the decisions of 3.2, so that the schema provab
 §11.5. Thresholds are its config parameters (docs/design/config.md); "consecutive" counts are computed from
 `attempts` of the event, times from its `ts`, and the gate keys come from its `keys`. A `park` on a key the run does
 not have (an exec run has no agent key, a run whose harness reported no account has no account key) becomes a
-`resume` after the same wait, except a `park` with no `until` (a lasting `auth_required`, `billing`), which becomes `fail`; a
+`resume` after the same wait, except a `park` with no `until` (a lasting `auth_required`, `billing`), which becomes
+`fail`; a
 `fail` names no gate then. Implemented in `crates/aae-plugins`.
 
 | Event / kind | Decision |
