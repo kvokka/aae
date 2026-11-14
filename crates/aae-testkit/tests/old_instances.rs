@@ -6,10 +6,10 @@ mod common;
 
 use aae_core::{
     driver::{Failure, FailureKind, Normalized, Source},
-    run::Decision,
+    run::{Decision, Msg},
 };
 use aae_testkit::{ScriptedDriver, Step};
-use common::{POLICY, World, marked, world_driven};
+use common::{POLICY, World, killed, marked, world_driven};
 use std::time::{Duration, Instant};
 
 /// The decision hook of [`POLICY`] and a second rig.
@@ -92,4 +92,31 @@ async fn a_new_attempt_on_a_shared_instance_leaves_its_processes_alone() {
     );
     let _ = orphan.kill();
     let _ = orphan.wait();
+}
+
+/// A descendant that outran the sweep of its stopped instance (invariants 7, 20): the periodic resync and the resync
+/// at a start kill it; a marker this daemon never gave is another daemon's and stays.
+#[tokio::test(start_paused = true)]
+async fn the_resync_sweeps_what_carries_the_marker_of_a_gone_instance() {
+    let mut w = world_driven(&files(), ScriptedDriver::new(1));
+    let run = w.create().await;
+    let started = w.until(None, "instance.starting", 0).await;
+    let id = started["instance"]["id"].as_str().unwrap().to_owned();
+    let cancel = Msg::Cancel {
+        run: run.clone(),
+        reason: "done".into(),
+    };
+    w.core.send(None, cancel).await.unwrap();
+    w.until(None, "instance.stopped", 0).await;
+    let late = marked(&id);
+    let mut foreign = marked(&format!("foreign-{}", std::process::id()));
+    tokio::time::sleep(Duration::from_secs(300)).await;
+    assert!(killed(late).await, "the periodic resync sweeps it");
+    assert!(foreign.try_wait().unwrap().is_none(), "another daemon's process");
+    let _ = foreign.kill();
+    let _ = foreign.wait();
+
+    let late = marked(&id);
+    w.restart().await;
+    assert!(killed(late).await, "the resync at the start sweeps it");
 }

@@ -9,6 +9,9 @@ use crate::{
 use rusqlite::{OptionalExtension, params};
 use serde_json::{Value, json};
 
+/// How long after its last attempt a gone instance's marker is still looked for.
+const LOST_MS: i64 = 3_600_000;
+
 impl RunHandler {
     /// An instance for one more session of `split`: a live one of the fingerprint with room, else a new one.
     /// Returns its id and its handle (null while it starts).
@@ -194,13 +197,24 @@ impl RunHandler {
                 })
                 .collect()
         };
-        if instances.is_empty() {
+        // An instance of this state used within the hour and no longer recorded: whatever still carries its marker
+        // outran its sweep (invariants 7, 20). A marker this state never gave is another daemon's and is left.
+        // shortcut: older ones are not looked for, so the walk of `/proc` stays rare; a full history if one is missed.
+        let lost: Vec<String> = {
+            let mut stmt = tx.sql().prepare(
+                "SELECT DISTINCT instance FROM attempts WHERE instance IS NOT NULL \
+                 AND (ended_ms IS NULL OR ended_ms > ?1) AND instance NOT IN (SELECT id FROM instances)",
+            )?;
+            let rows = stmt.query_map([tx.now_ms() - LOST_MS], |r| r.get(0))?;
+            rows.collect::<Result<_, _>>()?
+        };
+        if instances.is_empty() && lost.is_empty() {
             return Ok(());
         }
         tx.effect(
             "daemon",
             "check_instances",
-            &json!({ "op": "check_instances", "instances": instances }),
+            &json!({ "op": "check_instances", "instances": instances, "lost": lost }),
         )
     }
 

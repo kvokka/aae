@@ -95,18 +95,35 @@ pub(crate) fn reap() -> usize {
         .count()
 }
 
+/// The `AAE_INSTANCE` value in the environment of process `pid`.
+fn marker(pid: i32) -> Option<String> {
+    let environ = std::fs::read(format!("/proc/{pid}/environ")).ok()?;
+    let prefix = format!("{INSTANCE_ENV}=");
+    let var = environ
+        .split(|b| *b == 0)
+        .find_map(|var| var.strip_prefix(prefix.as_bytes()))?;
+    String::from_utf8(var.to_vec()).ok()
+}
+
+/// Live processes but this one, with their marker.
+fn marked() -> impl Iterator<Item = (i32, String)> {
+    let me = getpid().as_raw_nonzero().get();
+    processes()
+        .filter(move |(pid, state, _)| *pid != me && state != "Z")
+        .filter_map(|(pid, ..)| Some((pid, marker(pid)?)))
+}
+
 /// Kills every process but this one whose environment carries `AAE_INSTANCE=<id>`; how many it found, so one it
 /// could not kill does not pass for dead.
 pub(crate) fn sweep(id: &str) -> usize {
-    let marker = format!("{INSTANCE_ENV}={id}");
-    let me = getpid().as_raw_nonzero().get();
-    processes()
-        .filter(|(pid, state, _)| *pid != me && state != "Z")
-        .filter(|(pid, ..)| {
-            let environ = std::fs::read(format!("/proc/{pid}/environ")).unwrap_or_default();
-            environ.split(|b| *b == 0).any(|var| var == marker.as_bytes())
-        })
-        .filter_map(|(pid, ..)| Pid::from_raw(pid))
+    sweep_all(&BTreeSet::from([id.to_owned()]))
+}
+
+/// [`sweep`] for every id of `ids` in one walk of `/proc`.
+pub(crate) fn sweep_all(ids: &BTreeSet<String>) -> usize {
+    marked()
+        .filter(|(_, marker)| ids.contains(marker))
+        .filter_map(|(pid, _)| Pid::from_raw(pid))
         .inspect(|pid| {
             let _ = kill_process(*pid, Signal::KILL);
         })
@@ -119,15 +136,7 @@ mod tests {
     use std::process::Stdio;
 
     fn marked(id: &str) -> usize {
-        let marker = format!("{INSTANCE_ENV}={id}");
-        processes()
-            .filter(|(pid, state, _)| {
-                state != "Z" && {
-                    let environ = std::fs::read(format!("/proc/{pid}/environ")).unwrap_or_default();
-                    environ.split(|b| *b == 0).any(|var| var == marker.as_bytes())
-                }
-            })
-            .count()
+        super::marked().filter(|(_, marker)| marker == id).count()
     }
 
     fn children(state: &str) -> usize {

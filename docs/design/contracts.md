@@ -625,7 +625,8 @@ of their own. The adapter reports the account id (4.5, `Driver::account`).
 - Resync (§5.1): every 5 minutes, with the trackers, the driver is asked for the health of every instance not
   `stopping` that has a process (pid + start time for claude and codex). One found `Dead` whose record still holds
   that process and is not `stopping` counts as its `exited` event, as above: a gone process is not ambiguous, so no
-  `resync.diverged`. A record that moved on since the check is left alone.
+  `resync.diverged`. A record that moved on since the check is left alone. Every process still carrying the marker of
+  an instance an attempt used (live or ended within the hour) and no record holds is swept again; at a start too ([event model](event-model.md)).
 - Services (§11.4, [config](config.md#mcp-servers-and-services-spec-114)) use the same record with kind
   `service`: the service name, the key `<scope>#<sha256 of the definition>` (the definition is `command`, `env`,
   `health`; scope `orchestrator` or `project:<p>`), the definition, the port and the token in the process column, the consumer count in `sessions` (an attempt's services are in

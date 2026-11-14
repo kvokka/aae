@@ -195,6 +195,8 @@ impl Handler for RunHandler {
 
     fn started(&mut self, tx: &mut Tx<'_>) -> Result<(), Error> {
         self.recover(tx)?;
+        // The resync at the start (§5.6): what the last daemon left behind is checked at once.
+        Self::check_instances(tx)?;
         self.sync_trackers(tx, None, "start")?;
         tx.set_deadline(RESYNC, tx.now_ms() + RESYNC_MS)?;
         self.arm_schedules(tx)?;

@@ -40,8 +40,8 @@ all of them share.
 
 Resync is not a tick: it advances nothing in normal operation and only catches lost signals.
 
-- At daemon start, as part of recovery (`run/recover.rs`): every recorded instance is checked by pid + start time
-  and stopped, the trackers are read again.
+- At daemon start, after recovery (`run/recover.rs`): every recorded instance is checked by pid + start time
+  and stopped, the trackers are read again, and the process table is checked for markers (below).
 - Every 5 minutes (deadline `daemon:resync`, a constant): the trackers are read again whatever their watchers say
   (`sync_trackers`), and the driver is asked for the health of every instance record not `stopping` that has a
   process (`check_instances`; pid + start time for claude and codex). The check is one effect per daemon: while
@@ -50,6 +50,11 @@ Resync is not a tick: it advances nothing in normal operation and only catches l
 - A process found dead whose record still holds that process and is not `stopping` is taken as its lost exit: the
   instance fails as `harness_crash` and so do the attempts on it. A gone process is not ambiguous, so this is a
   normal transition, not `resync.diverged`. A record that changed since the check is left alone.
+- With the health check, every process still carrying the marker (`AAE_INSTANCE`) of an instance this state ran
+  (an attempt names it, live or ended within the hour) and no longer records is a sweep a descendant outran: it is
+  swept again (invariants 7, 20), a normal transition with no event. A recorded instance and a marker this state
+  never gave (another daemon's) are left alone. `/proc` is walked only when there is such an instance. Markers of
+  services and exec steps are not checked: the state keeps no history of their ids.
 - An ambiguous difference (for example a bead whose owner changed outside the daemon) is reported as
   `resync.diverged` and no automatic effect follows (invariant 20).
 - Services (`kind = 'service'`) are not checked on resync: their process is supervised by its own task, which sees

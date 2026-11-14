@@ -54,7 +54,8 @@ At daemon start ([contracts](contracts.md) 6.4 has the exact state rules):
    `daemon_crash`; the policy decides what follows. A run in `preparing`, `finishing` or `interrupted` keeps its
    state and its hooks run again: a finished exec command does not run twice, a claimed outcome is not lost
    (contracts 6.4); a remark after the restart reaches a dead session and fails the attempt.
-4. Re-arm deadlines and schedules (a missed schedule fires at most once) and resync.
+4. Re-arm deadlines and schedules (a missed schedule fires at most once) and resync, the process table included: what
+   carries the marker of an instance this state no longer records is swept.
 
 A planned restart drains first (`POST /v1/daemon/drain`, `POST /v1/daemon/restart`, `aae drain`, `aae restart`):
 no new run starts and no new attempt either (a retry decided meanwhile parks with `run.parked{gate: null}` and the

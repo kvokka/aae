@@ -11,7 +11,7 @@ use crate::{
 };
 use serde_json::Value;
 use std::{
-    collections::HashMap,
+    collections::{BTreeSet, HashMap},
     sync::{Arc, Mutex, OnceLock, PoisonError},
     time::Duration,
 };
@@ -71,6 +71,11 @@ impl Executor for RunExecutor {
                             // A stopped writer drops the message; recovery kills every instance on restart.
                             let _ = core.send(None, Msg::InstanceGone { handle }).await;
                         }
+                    }
+                    let lost: BTreeSet<String> = serde_json::from_value(payload["lost"].clone()).unwrap_or_default();
+                    if !lost.is_empty() {
+                        // Walking `/proc` is synchronous.
+                        let _ = tokio::task::spawn_blocking(move || crate::orphans::sweep_all(&lost)).await;
                     }
                 }
                 Some("sweep") => {
