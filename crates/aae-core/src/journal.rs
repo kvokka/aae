@@ -5,9 +5,9 @@ use crate::store;
 use rusqlite::Connection;
 use serde_json::{Value, json};
 use std::{
-    fs::{self, File, OpenOptions},
+    fs::{self, DirBuilder, File, OpenOptions},
     io::{self, BufRead, BufReader, Write},
-    os::unix::fs::OpenOptionsExt,
+    os::unix::fs::{DirBuilderExt, OpenOptionsExt},
     path::{Path, PathBuf},
 };
 use tokio::sync::watch;
@@ -159,7 +159,7 @@ impl Journal {
     /// Appends `lines` with one sync for the whole batch: a sync per line held the writer, and so the delivery of
     /// every event behind it, for as many syncs as a transaction has events.
     fn append(&self, lines: impl Iterator<Item = String>) -> io::Result<()> {
-        fs::create_dir_all(&self.dir)?;
+        DirBuilder::new().recursive(true).mode(0o700).create(&self.dir)?;
         let current = self.path(0);
         let mut size = fs::metadata(&current).map(|m| m.len()).unwrap_or(0);
         let mut file: Option<File> = None;

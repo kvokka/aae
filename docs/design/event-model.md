@@ -16,6 +16,9 @@ all of them share.
 - Consumers of committed events: the JSONL journal writer (the one durable outbox consumer), trigger matching and
   plugin exec hooks (both tied to the transaction that commits the event), and API event streams (which read the
   journal from a `seq`). See [contracts.md §3.5](contracts.md#35-outbox-lifetime).
+- The journal writer appends each drain as one batch with one `sync_data` at its end (and one before a file is
+  rotated away), and acknowledges the batch in the outbox only after that sync: an unsynced line is never acked, so
+  a power loss can cost journal lines but the next drain writes them again from the outbox.
 
 ## Effects
 

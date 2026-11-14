@@ -202,10 +202,27 @@ fn one_drain_rotates_inside_its_batch() {
     let journal_dir = dir.path().join("journal");
     let mut journal = Journal::with_limits(&journal_dir, 200, 10);
     journal.drain(&mut conn).unwrap();
+    let mode = std::os::unix::fs::PermissionsExt::mode(&journal_dir.metadata().unwrap().permissions());
+    assert_eq!(
+        mode & 0o777,
+        0o700,
+        "the journal directory is the owner's only, whatever the umask"
+    );
     let files = std::fs::read_dir(&journal_dir).unwrap().count();
     assert!(files > 2, "{files} files");
     for file in std::fs::read_dir(&journal_dir).unwrap() {
         assert!(file.unwrap().metadata().unwrap().len() <= 200);
     }
     assert_eq!(seqs(&journal), (1..=12).collect::<Vec<_>>());
+    // Files are packed: a file was rotated only when the first line of the next newer one did not fit in it.
+    let name = |n: usize| match n {
+        0 => journal_dir.join("events.jsonl"),
+        n => journal_dir.join(format!("events.{n}.jsonl")),
+    };
+    for n in 1..files {
+        let older = std::fs::read_to_string(name(n)).unwrap();
+        let newer = std::fs::read_to_string(name(n - 1)).unwrap();
+        let next = newer.lines().next().unwrap().len() + 1;
+        assert!(older.len() + next > 200, "events.{n}.jsonl has room for the next line");
+    }
 }
