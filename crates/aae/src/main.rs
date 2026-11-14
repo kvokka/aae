@@ -3,6 +3,7 @@
 mod daemon;
 mod doctor;
 mod fetch;
+mod harness;
 
 use aae_front::cli::{self, Cli, Command};
 use clap::Parser;

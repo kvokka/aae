@@ -140,7 +140,10 @@ async fn the_config_from_the_cli_lists_explains_checks_and_reloads() {
     let codex = |extra: &str| format!("{CONFIG}[harness.codex]\n{extra}");
     for (text, error) in [
         (claude, Some("`harness.claude`: unknown key `max_sessions`")),
-        (codex("max_sessions = 0\n"), Some("`harness.codex`")),
+        (
+            codex("max_sessions = 0\n"),
+            Some("`harness.codex`: `max_sessions`: invalid value"),
+        ),
         (codex("idle = 3\n"), Some("`harness.codex`")),
         (codex("max_sessions = 3\ninstance_idle_s = 0\n"), None),
     ] {

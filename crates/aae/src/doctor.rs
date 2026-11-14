@@ -1,7 +1,10 @@
 //! `aae doctor` (spec §13), without a daemon: the harness and br binaries with their versions and logins, the
 //! private directories, the state and its outbox; and `aae daemon --service`, the service file that runs the daemon.
 
-use crate::daemon::{self, Paths, binary, driver, tested};
+use crate::{
+    daemon::Paths,
+    harness::{binary, driver, load, tested},
+};
 use aae_front::cli::Service;
 use serde_json::{Value, json};
 use std::{
@@ -42,7 +45,7 @@ fn text(v: &Value) -> &str {
 
 fn findings(paths: &Paths) -> Vec<Value> {
     let mut found = Vec::new();
-    match daemon::load(&paths.config) {
+    match load(&paths.config) {
         Err(errors) => found.extend(errors.into_iter().map(|e| check("config", "error", e))),
         Ok(config) => {
             found.push(check("config", "ok", paths.config.display().to_string()));

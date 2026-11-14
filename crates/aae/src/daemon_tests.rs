@@ -1,4 +1,5 @@
-use super::{Paths, driver};
+use super::Paths;
+use crate::harness::driver;
 use aae_core::{config::Harness, driver::ProcessPart};
 use serde_json::json;
 use std::time::Duration;
