@@ -1,12 +1,15 @@
 //! The steps of a scripted scenario.
 
 use aae_core::driver::Normalized;
-use std::time::Duration;
+use std::{sync::Arc, time::Duration};
+use tokio::sync::Notify;
 
 /// One step of a scenario.
 #[derive(Clone, Debug)]
 pub enum Step {
     Wait(Duration),
+    /// Waits for the test to notify: a moment set by the test, not by virtual time racing real I/O.
+    Await(Arc<Notify>),
     Emit(Normalized),
     /// As the first step: the prompt is not acknowledged, the scenario plays before `prompt.acked`.
     NoAck,

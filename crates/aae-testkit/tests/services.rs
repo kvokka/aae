@@ -48,6 +48,17 @@ impl World {
         self.service_events().iter().filter(|(t, _)| t == kind).count()
     }
 
+    /// The services started, restarts aside: another process may take a port between its pick and the service's
+    /// bind, and the service restarts on it (`Address already in use` under parallel tests).
+    fn services(&self) -> usize {
+        let starts = self
+            .service_events()
+            .into_iter()
+            .filter(|(t, _)| t == "service.starting");
+        let ids: std::collections::HashSet<_> = starts.map(|(_, d)| d["service"]["id"].clone()).collect();
+        ids.len()
+    }
+
     /// Waits in real time (the service is a real process) until `kind` was emitted `n` times.
     async fn until_count(&self, kind: &str, n: usize) {
         let start = Instant::now();
@@ -107,7 +118,7 @@ async fn one_service_serves_every_session_and_restarts_on_its_port() {
     w.until_count("service.ready", 1).await;
     // Both sessions are running before the service is counted.
     w.events(&a, Duration::from_millis(500)).await;
-    assert_eq!(w.count("service.starting"), 1, "one process for both sessions");
+    assert_eq!(w.services(), 1, "one process for both sessions");
     let (sa, sb) = (
         w.driver.mcp(&a, 1)["probe"].clone(),
         w.driver.mcp(&b, 1)["probe"].clone(),
@@ -256,7 +267,7 @@ async fn a_service_without_mcp_reaches_the_session_as_its_url_and_token() {
     let (a, b) = (w.create().await, w.create_on("api").await);
     w.until_count("service.ready", 1).await;
     w.events(&b, Duration::from_millis(500)).await;
-    assert_eq!(w.count("service.starting"), 1, "one process for both sessions");
+    assert_eq!(w.services(), 1, "one process for both sessions");
     let env = w.driver.sent(&a, 1).0.unwrap();
     let url = &env["AAE_SERVICE_MAIL_DB_URL"];
     let port = url.strip_prefix("http://127.0.0.1:").unwrap();
@@ -307,7 +318,7 @@ async fn a_stdio_server_is_shared_behind_the_bridge_unless_it_is_per_session() {
     let (a, b) = (w.create().await, w.create_on("api").await);
     w.until_count("service.ready", 1).await;
     w.events(&b, Duration::from_millis(500)).await;
-    assert_eq!(w.count("service.starting"), 1, "one bridge for both sessions");
+    assert_eq!(w.services(), 1, "one bridge for both sessions");
     let (na, nb) = (
         w.driver.mcp(&a, 1)["notes"].clone(),
         w.driver.mcp(&b, 1)["notes"].clone(),
@@ -323,8 +334,8 @@ async fn a_stdio_server_is_shared_behind_the_bridge_unless_it_is_per_session() {
     );
 }
 
-/// Two projects with a `[[service]]` and a stdio server behind the bridge, both of `scope`: the starts of a process
-/// and whether the projects share each.
+/// Two projects with a `[[service]]` and a stdio server behind the bridge, both of `scope`: the services started and
+/// whether the projects share each.
 async fn two_projects(scope: &str) -> (usize, [bool; 2]) {
     let dir = tempfile::tempdir().unwrap();
     let (svc, notes) = (dir.path().join("svc.jsonl"), dir.path().join("notes.jsonl"));
@@ -356,7 +367,7 @@ async fn two_projects(scope: &str) -> (usize, [bool; 2]) {
     w.until_count("service.ready", processes).await;
     w.events(&b, Duration::from_millis(500)).await;
     let shared = ["probe", "notes"].map(|name| w.driver.mcp(&a, 1)[name]["url"] == w.driver.mcp(&b, 1)[name]["url"]);
-    (w.count("service.starting"), shared)
+    (w.services(), shared)
 }
 
 #[tokio::test(start_paused = true)]

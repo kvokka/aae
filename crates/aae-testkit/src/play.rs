@@ -47,6 +47,7 @@ impl ScriptedDriver {
                 match step {
                     Step::NoAck => {}
                     Step::Wait(d) => tokio::time::sleep(d).await,
+                    Step::Await(signal) => signal.notified().await,
                     Step::Emit(event) => driver.emit(&instance, Some(&session), event),
                     Step::Exit { code, signal } => {
                         driver.exit(&instance, code, signal);

@@ -12,6 +12,7 @@ use aae_testkit::{ScriptedDriver, Step};
 use common::{World, killed, world_driven};
 use serde_json::{Value, json};
 use std::{process::Child, sync::Arc, time::Duration};
+use tokio::sync::Notify;
 
 /// Two rigs and two agents: `dev` and `same` share a process part, `other` has its own.
 const FILES: &[(&str, &str)] = &[
@@ -194,11 +195,12 @@ async fn a_reload_stops_only_the_idle_instances_whose_fingerprint_changed() {
 #[tokio::test(start_paused = true)]
 async fn a_shared_instance_that_dies_fails_every_attempt_on_it() {
     let w = world_driven(FILES, ScriptedDriver::new(2));
-    // The second prompt plays the death of the process.
+    // The second prompt plays the death of the process, once the orphan runs.
+    let death = Arc::new(Notify::new());
     w.driver
         .script(vec![Step::Emit(Normalized::Activity { tool_running: false })]);
     w.driver.script(vec![
-        Step::Wait(Duration::from_secs(5)),
+        Step::Await(death.clone()),
         Step::Exit {
             code: Some(1),
             signal: None,
@@ -206,6 +208,7 @@ async fn a_shared_instance_that_dies_fails_every_attempt_on_it() {
     ]);
     let (one, two) = two_running(&w, "same").await;
     let orphan = marked(&w);
+    death.notify_one();
     for run in [&one, &two] {
         let events = w.events(run, Duration::from_secs(10)).await;
         let failed = common::last(&events, "run.attempt_failed");
