@@ -1,11 +1,57 @@
 //! The schemas of the replies the OpenAPI document shows: the core and the handlers build them as JSON, so these
-//! types only describe them. A run view is left an object: its fields are `RunView` of docs/design/contracts.md
-//! §1.3 with `project`, `rig`, `correlation`, `inputs`, `waiting_for` and `attempts`.
+//! types only describe them.
 #![expect(dead_code, reason = "schemas of replies built as JSON; never constructed")]
 
 use super::ErrorReply;
+use serde_json::{Map, Value};
 use std::collections::BTreeMap;
 use utoipa::{IntoResponses, ToSchema};
+
+/// A run: `RunView` of docs/design/contracts.md §1.3 with where it is and its attempts.
+#[derive(ToSchema)]
+pub(crate) struct Run {
+    id: String,
+    project: String,
+    rig: String,
+    formula: String,
+    /// Absent for an exec step.
+    agent: Option<String>,
+    /// `prompt` or `exec`.
+    step_kind: String,
+    state: String,
+    /// Set once `failed`: `agent`, `check`, `hollow_done` or `infrastructure`.
+    class: Option<String>,
+    attempt: u32,
+    generation: u32,
+    bead: Option<String>,
+    workdir: String,
+    depth: i64,
+    parent_run: Option<String>,
+    correlation: String,
+    created_at: String,
+    started_at: Option<String>,
+    #[schema(value_type = Object)]
+    inputs: Map<String, Value>,
+    /// What a queued run waits for: `concurrency`, `gate`, `workdir` or `daemon_stopping`.
+    waiting_for: Option<String>,
+    /// The last 20, newest last.
+    attempts: Vec<Attempt>,
+}
+
+#[derive(ToSchema)]
+pub(crate) struct Attempt {
+    n: u32,
+    generation: u32,
+    /// `new_session` or `resume`.
+    kind: String,
+    started_at: String,
+    ended_at: Option<String>,
+    failure_kind: Option<String>,
+    harness: String,
+    /// The harness's own session reference (spec §7.7).
+    #[schema(value_type = Option<Object>)]
+    session: Option<Value>,
+}
 
 /// The errors of an operation that takes an `Idempotency-Key`: the core carries it out.
 #[derive(IntoResponses)]

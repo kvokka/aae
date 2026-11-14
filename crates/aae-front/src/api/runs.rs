@@ -2,7 +2,7 @@
 
 use super::{
     ApiError, Body, ErrorReply, Param, Reply, State, key,
-    replies::{Failed, Finished, Keyed, Started},
+    replies::{Failed, Finished, Keyed, Run, Started},
 };
 use aae_core::run::{Create, Msg, Outcome, RunFilter, answer_from};
 use axum::{
@@ -64,7 +64,7 @@ pub(crate) struct ListQuery {
 
 /// Lists runs, newest first.
 #[utoipa::path(get, path = "/v1/runs", params(ListQuery),
-    responses((status = OK, description = RUN_VIEWS, body = [Object]), (status = BAD_REQUEST, description = BAD_QUERY,
+    responses((status = OK, description = RUN_VIEWS, body = [Run]), (status = BAD_REQUEST, description = BAD_QUERY,
         body = ErrorReply), Failed))]
 pub(crate) async fn list(state: State, Param(Query(query)): Param<Query<ListQuery>>) -> Reply {
     let filter = RunFilter {
@@ -77,7 +77,7 @@ pub(crate) async fn list(state: State, Param(Query(query)): Param<Query<ListQuer
 
 /// The state of a run: its view, where it waits and its attempts.
 #[utoipa::path(get, path = "/v1/runs/{id}", params(("id" = String, Path)),
-    responses((status = OK, description = RUN_VIEW, body = Object), (status = BAD_REQUEST, description = BAD_PATH,
+    responses((status = OK, description = RUN_VIEW, body = Run), (status = BAD_REQUEST, description = BAD_PATH,
         body = ErrorReply), (status = NOT_FOUND, description = "`not_found`: no such run", body = ErrorReply), Failed))]
 pub(crate) async fn get(state: State, Param(Path(id)): Param<Path<String>>) -> Reply {
     let run = state.reader.run(&id)?;

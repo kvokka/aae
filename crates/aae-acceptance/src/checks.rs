@@ -47,13 +47,14 @@ pub(crate) const ALL: &[Scenario] = &[
     },
     Scenario {
         criterion: "17",
-        title: "a CLI command per API operation, the committed OpenAPI matches the code, MCP serves its five tools",
+        title: "a CLI command per API operation, the committed OpenAPI matches the code and real replies fit it, \
+            MCP serves its five tools",
         launch: Launch::Ci,
         run: |env| {
             Box::pin(tests(
                 env,
-                "-p aae-front -p aae -E binary(openapi)|test(both_epochs_serve_the_same_five_tools)",
-                4,
+                "-p aae-front -p aae -E binary(openapi)|binary(replies)|test(both_epochs_serve_the_same_five_tools)",
+                5,
             ))
         },
     },

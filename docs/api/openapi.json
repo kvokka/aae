@@ -1111,7 +1111,7 @@
                 "schema": {
                   "type": "array",
                   "items": {
-                    "type": "object"
+                    "$ref": "#/components/schemas/Run"
                   }
                 }
               }
@@ -1249,7 +1249,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "$ref": "#/components/schemas/Run"
                 }
               }
             }
@@ -2009,6 +2009,57 @@
           }
         }
       },
+      "Attempt": {
+        "type": "object",
+        "required": [
+          "n",
+          "generation",
+          "kind",
+          "started_at",
+          "harness"
+        ],
+        "properties": {
+          "ended_at": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "failure_kind": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "generation": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "harness": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string",
+            "description": "`new_session` or `resume`."
+          },
+          "n": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "session": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "description": "The harness's own session reference (spec §7.7)."
+          },
+          "started_at": {
+            "type": "string"
+          }
+        }
+      },
       "CancelRun": {
         "type": "object",
         "properties": {
@@ -2581,6 +2632,119 @@
             "propertyNames": {
               "type": "string"
             }
+          }
+        }
+      },
+      "Run": {
+        "type": "object",
+        "description": "A run: `RunView` of docs/design/contracts.md §1.3 with where it is and its attempts.",
+        "required": [
+          "id",
+          "project",
+          "rig",
+          "formula",
+          "step_kind",
+          "state",
+          "attempt",
+          "generation",
+          "workdir",
+          "depth",
+          "correlation",
+          "created_at",
+          "inputs",
+          "attempts"
+        ],
+        "properties": {
+          "agent": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Absent for an exec step."
+          },
+          "attempt": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "attempts": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Attempt"
+            },
+            "description": "The last 20, newest last."
+          },
+          "bead": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "class": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Set once `failed`: `agent`, `check`, `hollow_done` or `infrastructure`."
+          },
+          "correlation": {
+            "type": "string"
+          },
+          "created_at": {
+            "type": "string"
+          },
+          "depth": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "formula": {
+            "type": "string"
+          },
+          "generation": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "id": {
+            "type": "string"
+          },
+          "inputs": {
+            "type": "object"
+          },
+          "parent_run": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "project": {
+            "type": "string"
+          },
+          "rig": {
+            "type": "string"
+          },
+          "started_at": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "state": {
+            "type": "string"
+          },
+          "step_kind": {
+            "type": "string",
+            "description": "`prompt` or `exec`."
+          },
+          "waiting_for": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "What a queued run waits for: `concurrency`, `gate`, `workdir` or `daemon_stopping`."
+          },
+          "workdir": {
+            "type": "string"
           }
         }
       },

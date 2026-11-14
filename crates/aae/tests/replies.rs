@@ -63,6 +63,12 @@ async fn the_replies_fit_their_schemas() {
         fits(&doc, &reply_schema(&doc, method, path), reply, &at);
     };
 
+    // A run that ends before `slow` holds the rig.
+    let passed = d.create("check", None).await;
+    let view = d.until_state(&passed, "passed").await;
+    assert!(!view["attempts"].as_array().unwrap().is_empty(), "{view}");
+    check("get", "/v1/runs/{id}", &view);
+    check("get", "/v1/runs", &d.get("/v1/runs").await);
     let run = d.post(
         "/v1/runs",
         json!({ "project": "shop", "rig": "web", "formula": "slow" }),
