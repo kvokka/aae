@@ -54,9 +54,25 @@ pub(crate) async fn create(state: State, headers: HeaderMap, Body(body): Body<Cr
     Ok(Json(state.core.send_request(key(&headers), Msg::Create(create)).await?))
 }
 
+/// The states of a run (docs/design/contracts.md 6.2).
+const STATES: [&str; 11] = [
+    "queued",
+    "preparing",
+    "starting",
+    "running",
+    "requires_action",
+    "finishing",
+    "interrupted",
+    "parked",
+    "passed",
+    "failed",
+    "cancelled",
+];
+
 #[derive(Deserialize, IntoParams)]
 pub(crate) struct ListQuery {
     project: Option<String>,
+    /// One of the run states; another is a bad request.
     state: Option<String>,
     /// At most this many, newest first (default 100).
     limit: Option<u32>,
@@ -67,6 +83,10 @@ pub(crate) struct ListQuery {
     responses((status = OK, description = RUN_VIEWS, body = [Run]), (status = BAD_REQUEST, description = BAD_QUERY,
         body = ErrorReply), Failed))]
 pub(crate) async fn list(state: State, Param(Query(query)): Param<Query<ListQuery>>) -> Reply {
+    if let Some(s) = query.state.as_deref().filter(|s| !STATES.contains(s)) {
+        let why = format!("no run state `{s}`; one of {}", STATES.join(", "));
+        return Err(ApiError::new(StatusCode::BAD_REQUEST, "bad_request", why));
+    }
     let filter = RunFilter {
         project: query.project,
         state: query.state,

@@ -1110,6 +1110,7 @@
           {
             "name": "state",
             "in": "path",
+            "description": "One of the run states; another is a bad request.",
             "required": true,
             "schema": {
               "type": [

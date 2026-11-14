@@ -69,11 +69,27 @@ async fn runs_and_gates_by_hand_from_the_cli() {
     );
     d.until_state(&run, "passed").await;
     assert_eq!(d.json(&["run", "list", "--state", "passed"])[0]["id"], run.as_str());
+    let out = d.cli(&["run", "list", "--state", "bogus"], &[]);
+    assert!(
+        !out.status.success() && out.stdout.is_empty(),
+        "an unknown state is an error, not an empty list"
+    );
     // The live view of a run that ended replays its events and ends too.
     let out = d.cli(&["run", "watch", &run], &[]);
     let watched = String::from_utf8(out.stdout).unwrap();
     assert!(watched.trim_end().ends_with(&format!("run.passed  {run}")), "{watched}");
+    assert!(
+        watched.contains(&format!("run.state_changed  {run}  preparing -> running")),
+        "{watched}"
+    );
     assert_eq!(d.json(&["status"])["version"], env!("CARGO_PKG_VERSION"));
+    // Without `--json` a reply is `key: value` lines, nulls left out.
+    let status = String::from_utf8(d.cli(&["status"], &[]).stdout).unwrap();
+    let version = format!("version: {}\n", env!("CARGO_PKG_VERSION"));
+    assert!(
+        status.contains(&version) && !status.contains("null") && !status.contains('{'),
+        "{status}"
+    );
 }
 
 #[tokio::test]

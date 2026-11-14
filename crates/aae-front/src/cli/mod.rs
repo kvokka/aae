@@ -269,17 +269,45 @@ async fn execute(client: &Client, cli: Cli) -> Result<ExitCode, ClientError> {
     Ok(ExitCode::SUCCESS)
 }
 
-/// Prints the API's JSON: as it is with `--json`, else pretty (and nothing for `null`).
+/// Prints the API's JSON: as it is with `--json`; else a `key: value` line per value, nested keys dotted and nulls
+/// left out, with a blank line between the items of a list.
 fn print(json: bool, value: &Value) {
-    if !json && value.is_null() {
+    if json {
+        println!("{value}");
         return;
     }
-    let text = if json {
-        value.to_string()
-    } else {
-        serde_json::to_string_pretty(value).unwrap_or_default()
+    let items = value
+        .as_array()
+        .map_or_else(|| vec![value], |items| items.iter().collect());
+    let blocks: Vec<String> = items.into_iter().map(|item| lines("", item).join("\n")).collect();
+    let text = blocks.join("\n\n");
+    if !text.is_empty() {
+        println!("{text}");
+    }
+}
+
+/// The `key: value` lines of `value` under the dotted key `at`.
+fn lines(at: &str, value: &Value) -> Vec<String> {
+    let under = |key: &dyn std::fmt::Display| match at {
+        "" => key.to_string(),
+        _ => format!("{at}.{key}"),
     };
-    println!("{text}");
+    match value {
+        Value::Null => vec![],
+        Value::Object(map) => map.iter().flat_map(|(k, v)| lines(&under(k), v)).collect(),
+        Value::Array(items) if items.is_empty() => vec![],
+        Value::Array(items) if items.iter().any(|i| i.is_object() || i.is_array()) => items
+            .iter()
+            .enumerate()
+            .flat_map(|(i, v)| lines(&under(&i), v))
+            .collect(),
+        Value::Array(items) => vec![format!(
+            "{at}: {}",
+            items.iter().map(text).collect::<Vec<_>>().join(", ")
+        )],
+        _ if at.is_empty() => vec![text(value)],
+        _ => vec![format!("{at}: {}", text(value))],
+    }
 }
 
 fn stop_path(what: &str, timeout: Option<u64>) -> String {
@@ -299,7 +327,15 @@ async fn follow(mut events: Events, json: bool) -> Result<(), ClientError> {
         if json {
             println!("{data}");
         } else if event.id.is_some() {
-            println!("{}  {}  {}", text(&data["seq"]), event.event, text(&data["run"]));
+            // A state change shows its move and why; an event of no run leaves the run out.
+            let inner = &data["data"];
+            let mut line = vec![text(&data["seq"]), event.event];
+            line.extend(data["run"].as_str().map(str::to_owned));
+            if let (Some(from), Some(to)) = (inner["from"].as_str(), inner["to"].as_str()) {
+                line.push(format!("{from} -> {to}"));
+            }
+            line.extend(inner["reason"].as_str().map(|r| format!("reason={r}")));
+            println!("{}", line.join("  "));
         } else {
             let what = [&data["type"], &data["method"]].into_iter().find(|v| !v.is_null());
             println!("-  {}  {}", event.event, text(what.unwrap_or(&data)));
