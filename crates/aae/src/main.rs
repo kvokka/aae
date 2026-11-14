@@ -34,7 +34,9 @@ fn main() -> ExitCode {
                 Err(e) => cli::fail(cli.json, "config_error", &format!("fetch: {e}")),
             };
         }
-        Command::McpBridge { command } => return bridge::run(command),
+        Command::McpBridge { command, timeout } => {
+            return bridge::run(command, std::time::Duration::from_secs(timeout));
+        }
         // Loaded here as the daemon loads it, so a check or an explain needs no daemon.
         Command::Config(command @ (ConfigCommand::Check { .. } | ConfigCommand::Explain { .. })) => {
             return cli::config_local(cli.json, command, |config| {

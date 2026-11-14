@@ -29,6 +29,11 @@ impl Drop for Bridge {
 
 /// The bridge in front of `command`, or of the stdio probe logging to `<dir>/log`.
 fn start(command: Option<&[&str]>) -> Bridge {
+    start_with(&[], command)
+}
+
+/// As [`start`], with `options` of `aae mcp-bridge`.
+fn start_with(options: &[&str], command: Option<&[&str]>) -> Bridge {
     let dir = tempfile::tempdir().unwrap();
     let log = dir.path().join("log");
     let probe = Path::new(env!("CARGO_BIN_EXE_aae")).with_file_name("mcp-probe");
@@ -40,7 +45,9 @@ fn start(command: Option<&[&str]>) -> Bridge {
     let own = [probe.to_str().unwrap(), "--stdio", log.to_str().unwrap()];
     let port = TcpListener::bind("127.0.0.1:0").unwrap().local_addr().unwrap().port();
     let child = Command::new(env!("CARGO_BIN_EXE_aae"))
-        .args(["mcp-bridge", "--"])
+        .arg("mcp-bridge")
+        .args(options)
+        .arg("--")
         .args(command.unwrap_or(&own))
         .env("AAE_SERVICE_PORT", port.to_string())
         .env("AAE_SERVICE_TOKEN", TOKEN)
@@ -183,6 +190,24 @@ fn both_epochs_are_answered_from_the_one_handshake() {
         .filter(|line| line["method"] == "initialize")
         .count();
     assert_eq!(initializes, 1, "a client's `initialize` reached the server");
+}
+
+#[test]
+fn a_call_the_server_does_not_answer_in_time_is_an_error() {
+    let bridge = start_with(&["--timeout", "1"], None).ready();
+    let at = Instant::now();
+    let (status, reply) = bridge.post(&call(7, 5000), "run-1", false);
+    assert!(
+        at.elapsed() < Duration::from_secs(4),
+        "the bridge waited {:?}",
+        at.elapsed()
+    );
+    assert_eq!((status, &reply["id"]), (200, &json!(7)), "{reply}");
+    let message = reply["error"]["message"].as_str().unwrap_or_default();
+    assert!(message.contains("no answer within 1 s"), "{reply}");
+    // The server still sleeps on the call: it ends with the test, not seconds later.
+    let pid = bridge.log()[0]["pid"].to_string();
+    assert!(Command::new("kill").arg(pid).status().unwrap().success());
 }
 
 #[test]

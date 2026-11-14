@@ -158,6 +158,9 @@ pub enum Command {
     /// Serve a stdio MCP server over HTTP on `AAE_SERVICE_PORT` behind `AAE_SERVICE_TOKEN`: how the daemon shares one.
     #[command(hide = true)]
     McpBridge {
+        /// How long a request may wait for the server's answer, in seconds; then the caller gets an error.
+        #[arg(long, default_value_t = 600)]
+        timeout: u64,
         /// The command of the stdio MCP server.
         #[arg(last = true, required = true)]
         command: Vec<String>,

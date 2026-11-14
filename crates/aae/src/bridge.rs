@@ -51,10 +51,12 @@ struct Bridge {
     bearer: String,
     /// The server's `initialize` result.
     init: Value,
+    /// How long a request waits for the server's answer.
+    wait: Duration,
 }
 
 /// Runs the bridge until the server or the listener fails.
-pub(crate) fn run(command: Vec<String>) -> ExitCode {
+pub(crate) fn run(command: Vec<String>, wait: Duration) -> ExitCode {
     let var = |name| std::env::var(name).map_err(|e| format!("{name}: {e}"));
     let served = var("AAE_SERVICE_PORT")
         .and_then(|port| port.parse::<u16>().map_err(|e| format!("AAE_SERVICE_PORT: {e}")))
@@ -63,14 +65,14 @@ pub(crate) fn run(command: Vec<String>) -> ExitCode {
             let runtime = tokio::runtime::Builder::new_current_thread().enable_all().build();
             runtime
                 .map_err(|e| format!("runtime: {e}"))?
-                .block_on(serve(&command, port, &token))
+                .block_on(serve(&command, port, &token, wait))
         });
     let Err(e) = served;
     eprintln!("aae mcp-bridge: {e}");
     ExitCode::FAILURE
 }
 
-async fn serve(command: &[String], port: u16, token: &str) -> Result<std::convert::Infallible, String> {
+async fn serve(command: &[String], port: u16, token: &str, wait: Duration) -> Result<std::convert::Infallible, String> {
     let (program, args) = command.split_first().ok_or("no command")?;
     // The environment goes to the child whole: its `AAE_INSTANCE` marker lets a sweep find it as well.
     let mut child = tokio::process::Command::new(program)
@@ -91,6 +93,7 @@ async fn serve(command: &[String], port: u16, token: &str) -> Result<std::conver
         next: AtomicU64::new(0),
         bearer: format!("Bearer {token}"),
         init: Value::Null,
+        wait,
     };
     let params = json!({ "protocolVersion": SUPPORTED[0], "capabilities": {},
         "clientInfo": { "name": "aae-mcp-bridge", "version": env!("CARGO_PKG_VERSION") } });
@@ -178,7 +181,18 @@ impl Bridge {
             lock(&self.pending).remove(&id);
             return Err(e);
         }
-        rx.await.map_err(|_| "the server is gone".to_owned())
+        match tokio::time::timeout(self.wait, rx).await {
+            Ok(answer) => answer.map_err(|_| "the server is gone".to_owned()),
+            // The caller gets an error, not a hang, and the server is told to drop the request.
+            Err(_) => {
+                lock(&self.pending).remove(&id);
+                let reason = format!("no answer within {} s", self.wait.as_secs());
+                let cancel = json!({ "jsonrpc": "2.0", "method": "notifications/cancelled",
+                    "params": { "requestId": id, "reason": reason } });
+                let _ = self.send(&cancel).await;
+                Err(format!("the server gave {reason} to `{method}`"))
+            }
+        }
     }
 }
 
