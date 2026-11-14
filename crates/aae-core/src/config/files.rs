@@ -97,7 +97,7 @@ impl Mcp {
     }
 }
 
-/// A harness hook in the Claude dialect (spec §11.2); `enabled = false` alone switches off a lower layer's hook.
+/// A harness hook in the one hook dialect (spec §11.2); `enabled = false` alone switches off a lower layer's hook.
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct Hook {
@@ -109,7 +109,7 @@ pub struct Hook {
     pub timeout: Option<String>,
 }
 
-/// The hook events of the Claude dialect (claude 2.1) and the ones codex adds (`docs/design/config.md`).
+/// The hook events of the hook dialect, those of all the adapters together (`docs/design/config.md`).
 const HOOK_EVENTS: &[&str] = &[
     "SessionStart",
     "Setup",
