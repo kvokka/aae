@@ -19,6 +19,11 @@ the pinned claude, codex and br. Every check below is a mise task (`mise.toml`).
 
 The times are for a warm build on 9 cores. A cold build comes on top, once.
 
+CI has no access to a model by design: it builds, tests and checks with scripted and fake providers only. The
+scenarios on a real model and the demos run only on a developer's machine, on the cheapest model. Acceptance runs on
+Linux arm64; the other three targets are built (criterion 1) but not exercised. Dependencies must have MIT-compatible
+licenses (`cargo deny` checks them); no code of br or bv enters the tree.
+
 Run `mise run test` and `mise run acceptance-ci` one after the other, not side by side: the first builds
 `target/debug/aae` with the features of the test dependencies, the second without them, and each rewrites the binary
 the other's daemons are running.
