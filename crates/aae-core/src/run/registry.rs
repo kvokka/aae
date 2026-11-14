@@ -242,16 +242,23 @@ impl RunHandler {
         Ok(())
     }
 
-    /// The handles of instances still stopping that served `run` or the run it continues: a new process for them
-    /// starts only after these are dead (invariant 6).
-    pub(super) fn stopping_for(tx: &Tx<'_>, run: &str, from: Option<&str>) -> Result<Vec<Value>, Error> {
+    /// The instances that served `run` or the run it continues and are stopping or gone, `{ id, handle }` (null
+    /// once released): a new process for them starts only after nothing of these is left (invariant 6). A live
+    /// shared instance is never one of them.
+    pub(super) fn old_instances(tx: &Tx<'_>, run: &str, from: Option<&str>) -> Result<Vec<Value>, Error> {
         let mut stmt = tx.sql().prepare(
-            "SELECT DISTINCT i.handle FROM attempts a JOIN instances i ON i.id = a.instance \
-             WHERE a.run IN (?1, ?2) AND i.state = 'stopping' AND i.handle IS NOT NULL",
+            "SELECT DISTINCT a.instance, i.handle FROM attempts a LEFT JOIN instances i ON i.id = a.instance \
+             WHERE a.run IN (?1, ?2) AND a.instance IS NOT NULL AND (i.id IS NULL OR i.state = 'stopping')",
         )?;
-        let rows = stmt.query_map(params![run, from.unwrap_or(run)], |r| r.get::<_, String>(0))?;
-        let handles: Vec<String> = rows.collect::<Result<_, _>>()?;
-        Ok(handles.iter().filter_map(|h| serde_json::from_str(h).ok()).collect())
+        let rows = stmt.query_map(params![run, from.unwrap_or(run)], |r| {
+            Ok((r.get::<_, String>(0)?, r.get::<_, Option<String>>(1)?))
+        })?;
+        let old: Vec<(String, Option<String>)> = rows.collect::<Result<_, _>>()?;
+        let handle = |h: Option<String>| h.and_then(|h| serde_json::from_str::<Value>(&h).ok());
+        Ok(old
+            .into_iter()
+            .map(|(id, h)| json!({ "id": id, "handle": handle(h) }))
+            .collect())
     }
 
     pub(super) fn stop_instance(tx: &mut Tx<'_>, id: &str, reason: &str) -> Result<(), Error> {

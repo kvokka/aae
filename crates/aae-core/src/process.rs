@@ -192,6 +192,29 @@ pub(crate) async fn wait_dead(pid: i32, start_time: u64, limit: Duration) -> boo
     true
 }
 
+/// Waits until nothing is left of the instance `id` (invariants 6, 7): its process `leader` (pid, start time)
+/// gets `limit` to end by itself, then every process still carrying the marker is killed. `false` past `limit`.
+pub(crate) async fn wait_gone(id: &str, leader: Option<(i32, u64)>, limit: Duration) -> bool {
+    let deadline = tokio::time::Instant::now() + limit;
+    if let Some((pid, start_time)) = leader
+        && !wait_dead(pid, start_time, limit).await
+    {
+        return false;
+    }
+    loop {
+        let marker = id.to_owned();
+        // Walking `/proc` is synchronous.
+        let found = tokio::task::spawn_blocking(move || crate::orphans::sweep(&marker)).await;
+        if found.unwrap_or(0) == 0 {
+            return true;
+        }
+        if tokio::time::Instant::now() >= deadline {
+            return false;
+        }
+        tokio::time::sleep(Duration::from_millis(50)).await;
+    }
+}
+
 /// Tells the orphan reaper the child is no longer its own however [`run`] ends, a dropped future included.
 struct Own(Option<u32>);
 
@@ -295,5 +318,29 @@ mod tests {
         child.kill().unwrap();
         assert!(wait_dead(pid, start, Duration::from_secs(5)).await, "a zombie is dead");
         child.wait().unwrap();
+    }
+
+    #[cfg(target_os = "linux")] // the sweep reads `/proc`
+    #[tokio::test]
+    async fn wait_gone_spares_a_live_leader_and_kills_what_is_left_after_it() {
+        let id = format!("wait-gone-{}", std::process::id());
+        let mut command = tokio::process::Command::new("sh");
+        command
+            .args(["-c", "sleep 300 & exec sleep 300"])
+            .env(crate::orphans::INSTANCE_ENV, &id);
+        let mut leader = crate::orphans::spawn(&mut command).unwrap();
+        let pid = i32::try_from(leader.id().unwrap()).unwrap();
+        let start = crate::orphans::start_time(pid).unwrap();
+        assert!(!wait_gone(&id, Some((pid, start)), Duration::from_millis(200)).await);
+        assert_eq!(
+            crate::orphans::start_time(pid),
+            Some(start),
+            "the leader ends by itself"
+        );
+        let child = leader.id();
+        leader.kill().await.unwrap();
+        crate::orphans::waited(child);
+        assert!(wait_gone(&id, Some((pid, start)), Duration::from_secs(5)).await);
+        assert_eq!(crate::orphans::sweep(&id), 0, "its descendant is gone");
     }
 }

@@ -95,7 +95,8 @@ pub(crate) fn reap() -> usize {
         .count()
 }
 
-/// Kills every process but this one whose environment carries `AAE_INSTANCE=<id>`; how many.
+/// Kills every process but this one whose environment carries `AAE_INSTANCE=<id>`; how many it found, so one it
+/// could not kill does not pass for dead.
 pub(crate) fn sweep(id: &str) -> usize {
     let marker = format!("{INSTANCE_ENV}={id}");
     let me = getpid().as_raw_nonzero().get();
@@ -106,7 +107,9 @@ pub(crate) fn sweep(id: &str) -> usize {
             environ.split(|b| *b == 0).any(|var| var == marker.as_bytes())
         })
         .filter_map(|(pid, ..)| Pid::from_raw(pid))
-        .filter(|pid| kill_process(*pid, Signal::KILL).is_ok())
+        .inspect(|pid| {
+            let _ = kill_process(*pid, Signal::KILL);
+        })
         .count()
 }
 

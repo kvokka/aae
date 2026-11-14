@@ -121,7 +121,7 @@ pub(crate) fn check(w: &World, play: &mut Play) -> Result<(), String> {
             continue;
         }
         if open > 1 {
-            return Err(format!("{run}: {open} attempts not ended (invariant 6)"));
+            return Err(format!("{run}: {open} attempts not ended (invariant 2)"));
         }
         let deadlines: i64 = conn
             .query_row("SELECT COUNT(*) FROM deadlines WHERE id LIKE ?1 || ':%'", [run], |r| {

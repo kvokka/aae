@@ -18,7 +18,7 @@ times, how long) are config parameters with defaults; the choice of a reaction i
 | 3 | The daemon claims a bead in the same transaction as the decision to launch; an agent never claims | contracts 5.1, 6.2 |
 | 4 | A bead is released only conditionally: owner and generation compared | contracts 5.1 |
 | 5 | A session's death loses no work: exit or EOF moves the run to "attempt failed" in one transaction; the bead stays with the run until the run is terminal | contracts 6.2, 4.4 |
-| 6 | Confirmed death before replacement: a new process for the same run or session starts only after the old process group has ended | contracts 8 |
+| 6 | Confirmed death before replacement: a new process for the same run or session starts only after nothing is left of the instance it replaces, its marked descendants included; a live shared instance is left alone | contracts 8 |
 | 7 | No descendant of a stopped session survives. A process group is not enough (a claude child orphaned with its own group after `kill -9` kept working); the daemon is a child subreaper and sweeps by the instance marker | contracts 8, [experiments](experiments.md#descendants-after-kill--9-invariant-7) |
 | 8 | One writer per harness session, the daemon: while a run lives nobody else writes into its session | contracts 4 |
 | 9 | Intent before effect: launch, stop and kill are recorded first and executed after; recovery completes or rolls back | [event model](event-model.md), contracts 8 |
@@ -36,8 +36,9 @@ times, how long) are config parameters with defaults; the choice of a reaction i
 
 How they are checked: the deterministic chaos stand (`aae-testkit/tests/chaos`) plays seeded sequences of
 commands, harness behaviour, policy hooks, operator actions, lost and repeated deliveries and daemon crashes, and
-checks invariants 2, 3, 6, 10, 12, 13, 14, 15, 16 and 17 on the state and the journal after every step. Every run
-plays new seeds from a random base it prints; a failure names its seed and `AAE_CHAOS_SEED=<n>` replays it. The
+checks invariants 2, 3, 10, 12, 13, 14, 15, 16 and 17 on the state and the journal after every step. Every run
+plays new seeds from a random base it prints; a failure names its seed and `AAE_CHAOS_SEED=<n>` replays it.
+Invariant 6 runs real marked processes (`aae-testkit/tests/old_instances.rs`, `process::tests::wait_gone_*`). The
 others are covered by the integration suites of `aae-testkit/tests` and by the acceptance scenarios (criterion 8:
 20 `kill -9` of the daemon mid-turn in CI and 5 on each real harness).
 

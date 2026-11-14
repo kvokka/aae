@@ -172,10 +172,9 @@ impl RunExecutor {
         let key = key(p);
         let part = SessionPart(p["session"].clone());
         for old in p["after"].as_array().into_iter().flatten() {
-            let Ok(old) = serde_json::from_value::<InstanceHandle>(old.clone()) else {
-                continue;
-            };
-            if !crate::process::wait_dead(old.pid, old.start_time, DEATH_WAIT).await {
+            let leader = serde_json::from_value::<InstanceHandle>(old["handle"].clone()).ok();
+            let id = old["id"].as_str().unwrap_or_default();
+            if !crate::process::wait_gone(id, leader.map(|h| (h.pid, h.start_time)), DEATH_WAIT).await {
                 return Err(Failure::new(FailureKind::Unknown, Source::Core));
             }
         }

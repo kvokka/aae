@@ -259,7 +259,7 @@ impl RunHandler {
             params![row.id, row.attempt, instance],
         )?;
         Self::use_services(tx, &row.id, row.attempt, &services)?;
-        let after = Self::stopping_for(tx, &row.id, continued.as_deref())?;
+        let after = Self::old_instances(tx, &row.id, continued.as_deref())?;
         let prompt = match resume {
             Some(_) if row.attempt > 1 => RECONCILE.to_owned(),
             _ => row.prompt.clone().unwrap_or_default(),

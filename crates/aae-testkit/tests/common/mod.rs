@@ -267,3 +267,26 @@ pub(crate) fn hollow_turn() -> Vec<Step> {
         }),
     ]
 }
+
+/// A real process marked with the instance `id`, as a tool command of the harness would be.
+pub(crate) fn marked(id: &str) -> std::process::Child {
+    std::process::Command::new("sleep")
+        .arg("300")
+        .env(aae_core::orphans::INSTANCE_ENV, id)
+        .spawn()
+        .unwrap()
+}
+
+/// Whether `child` is killed within a few real seconds; the sweep walks `/proc` on a blocking thread.
+pub(crate) async fn killed(mut child: std::process::Child) -> bool {
+    for _ in 0..300 {
+        if child.try_wait().unwrap().is_some() {
+            return true;
+        }
+        tokio::time::sleep(Duration::from_millis(10)).await;
+        std::thread::sleep(Duration::from_millis(10));
+    }
+    let _ = child.kill();
+    let _ = child.wait();
+    false
+}

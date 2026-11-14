@@ -9,13 +9,9 @@ use aae_core::{
     run::{Create, Msg},
 };
 use aae_testkit::{ScriptedDriver, Step};
-use common::{World, world_driven};
+use common::{World, killed, world_driven};
 use serde_json::{Value, json};
-use std::{
-    process::{Child, Command},
-    sync::Arc,
-    time::Duration,
-};
+use std::{process::Child, sync::Arc, time::Duration};
 
 /// Two rigs and two agents: `dev` and `same` share a process part, `other` has its own.
 const FILES: &[(&str, &str)] = &[
@@ -90,25 +86,7 @@ impl World {
 
 /// A real process marked with the first instance's id, as a tool command of the harness would be.
 fn marked(w: &World) -> Child {
-    Command::new("sleep")
-        .arg("300")
-        .env(aae_core::orphans::INSTANCE_ENV, &w.instance_events()[0].1)
-        .spawn()
-        .unwrap()
-}
-
-/// Whether `child` is killed within a few real seconds; the sweep walks `/proc` on a blocking thread.
-async fn killed(mut child: Child) -> bool {
-    for _ in 0..300 {
-        if child.try_wait().unwrap().is_some() {
-            return true;
-        }
-        tokio::time::sleep(Duration::from_millis(10)).await;
-        std::thread::sleep(Duration::from_millis(10));
-    }
-    let _ = child.kill();
-    let _ = child.wait();
-    false
+    common::marked(&w.instance_events()[0].1)
 }
 
 fn failed(events: &[(String, Value)]) -> bool {
