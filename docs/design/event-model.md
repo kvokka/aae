@@ -20,6 +20,22 @@ all of them share.
   rotated away), and acknowledges the batch in the outbox only after that sync: an unsynced line is never acked, so
   a power loss can cost journal lines but the next drain writes them again from the outbox.
 
+## State
+
+- One SQLite database, `$XDG_STATE_HOME/aae/state.db`, in WAL mode; SQLite is linked statically (rusqlite
+  `bundled`). The daemon is its only writer (`crates/aae-core/src/store.rs` opens it, the writer changes it). The CLI,
+  plugins and agents change the state only through the API.
+- The state holds runtime only: runs, attempts, session references, harness instances (the process part and the
+  handle: pid, start time, pgid), bead ownership with its generation and failure count, ready sets and tracker cursors, deadlines (timers
+  and schedules), gates (operator holds among them), idempotency keys, the outbox and the effects queue.
+- Definitions (projects, rigs, agents, formulas, triggers, plugins) live in config files. A run keeps only the
+  snapshot of its effective config (`runs.config`, the serialized `EffectiveConfig`), so it answers "what did this
+  run with" and is reproducible.
+- No status files, PID files or lock files. One daemon per state directory: the daemon holds an exclusive `flock`
+  on the state directory itself (`crates/aae/src/daemon.rs`, `lock`); the OS drops it with the process, so a crash
+  leaves nothing stale. Whether a process is alive is read from the process table: pid plus its kernel start time.
+- The state directory and `journal/` are 0700, the database and journal files 0600, whatever the umask.
+
 ## Effects
 
 - Effects run after commit through a queue keyed by subject (a run, a harness instance, `daemon`; see
