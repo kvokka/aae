@@ -44,8 +44,7 @@ impl Live {
         Self::open(provider, dir, retries, approval, None).await.unwrap()
     }
 
-    /// `resume` binds the thread of another live app-server: a second writer.
-    /// The same provider and state make the same `CODEX_HOME`, where the thread is.
+    /// `resume` binds another live app-server's thread (a second writer): one provider and state, one `CODEX_HOME`.
     async fn open(
         provider: Arc<Provider>,
         dir: &Path,

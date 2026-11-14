@@ -191,7 +191,7 @@ impl Driver for Claude {
             sessions_per_instance: 1,
             instance_idle: Duration::ZERO,
             // The versions the contract tests and experiments ran on, inclusive.
-            versions: [(2, 1, 322), (2, 1, 323)],
+            versions: [(2, 1, 322), (2, 1, 325)],
         }
     }
 

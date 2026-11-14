@@ -3,8 +3,8 @@
 Results of the throwaway experiments that precede the core. Every number carries a `MEASURE` marker. The
 experiments are recorded here and their code has left the tree (spec §2.1 item 17); each section names the commit
 that still holds it (`git show <commit>:<path>`). Their logs stay in `experiments/`: sanitized samples (`<home>`,
-`<work>` placeholders; long `tools`/`skills` arrays are replaced by their length) that serve as fixtures for the
-scripted harness. A new experiment goes to `experiments/` as a separate Cargo workspace outside the product
+`<work>` placeholders; long `tools`/`skills` arrays are replaced by their length) kept as the record of what
+each harness printed; no test reads them. A new experiment goes to `experiments/` as a separate Cargo workspace outside the product
 budgets, ≤ 5 000 lines in total, checked by `scripts/budget.sh`.
 
 Common setup for the claude experiments: `claude -p --input-format stream-json --output-format stream-json

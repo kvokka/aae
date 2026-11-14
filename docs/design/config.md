@@ -220,7 +220,7 @@ error. A reload applies to the deadlines set from then on: a deadline already se
 ```toml
 name = "shop"                       # optional, defaults to the directory name; unique among projects
 packs = [
-  "../packs/kit",               # a local pack directory
+  "../packs/kit",                    # a local pack directory
   { git = "https://github.com/acme/aae-pack-review", rev = "v1.2.0" },  # a pack from git: branch, tag or commit
 ]
 

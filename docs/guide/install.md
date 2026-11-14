@@ -37,8 +37,9 @@ codex = "0"
 "github:Dicklesworthstone/beads_rust" = "0.7.6"
 ```
 
-These are the version ranges this release is tested against (the repository's `mise.toml`; its tests last ran on
-claude 2.1.325 and codex 0.168.0). The daemon resolves each
+These ranges are what to install (the repository's `mise.toml` pins the same). This release is tested against
+claude 2.1.322 to 2.1.325 and codex 0.167.2 to 0.168.0; outside these, `aae doctor` and the daemon print a
+warning and still run the harness. The daemon resolves each
 binary in this order: `binary` in the config (`[harness.claude] binary = "/path/to/claude"`), then
 `mise which <name>`, then `PATH`. A daemon under systemd or launchd has no mise shims on its `PATH`, which is why
 mise is asked directly.

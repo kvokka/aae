@@ -82,3 +82,4 @@ The rest match claude: rate limits, overload, 401, context, unknown model, `kill
 | 2026-11-13 | codex | 0.167.2 | contract suite green, first pin |
 | 2026-11-13 | claude | 2.1.323 | contract suite green, tested range widened |
 | 2026-11-13 | codex | 0.168.0 | contract suite green, tested range widened |
+| 2026-11-14 | claude | 2.1.325 | contract suite green, tested range widened |

@@ -164,6 +164,7 @@ impl Driver for Codex {
         Capabilities {
             sessions_per_instance: self.max_sessions,
             instance_idle: self.instance_idle,
+            // The versions the contract tests ran on, inclusive.
             versions: [(0, 167, 2), (0, 168, 0)],
         }
     }
