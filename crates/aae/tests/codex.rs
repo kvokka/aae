@@ -160,22 +160,26 @@ async fn a_codex_killed_in_a_command_is_resumed_and_its_run_passes() {
         );
         tokio::time::sleep(Duration::from_millis(50)).await;
     };
-    let killed = Instant::now();
+    // Typed is when the core recorded the failure: the `ts` of its event, against the wall clock of the kill.
+    let killed = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap();
     let status = std::process::Command::new("kill")
         .args(["-9", &server.to_string()])
         .status();
     assert!(status.unwrap().success());
-    let failure = loop {
+    let envelope = loop {
         let event = tokio::time::timeout(Duration::from_secs(10), events.next()).await;
         let event = event.expect("an event in time").unwrap().expect("the stream goes on");
         if event.event == "run.attempt_failed" {
-            let envelope: Value = serde_json::from_str(&event.data).unwrap();
-            break envelope["data"]["failure"].clone();
+            break serde_json::from_str::<Value>(&event.data).unwrap();
         }
     };
-    let typed = killed.elapsed();
+    let failure = &envelope["data"]["failure"];
     assert_eq!(failure["kind"], "harness_crash", "{failure}");
-    assert!(typed <= Duration::from_secs(1), "typed in {typed:?}");
+    let at = aae_core::parse_rfc3339_ms(envelope["ts"].as_str().unwrap()).unwrap();
+    let typed = at - i64::try_from(killed.as_millis()).unwrap();
+    assert!(typed <= 1000, "typed in {typed} ms");
     d.until_state(&run, "passed").await;
 }
 
