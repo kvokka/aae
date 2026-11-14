@@ -76,6 +76,20 @@ pub struct Project {
     pub rigs: BTreeMap<String, Rig>,
     /// The project root pack (named after the project, holding the project triggers) first.
     pub packs: Vec<Pack>,
+    pub tracker: TrackerLink,
+}
+
+/// How the project's sessions and commands reach its tracker (spec §10.2). The core knows no tracker (spec §2.1
+/// item 6): the integration that makes trackers fills this in after loading; empty until then.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct TrackerLink {
+    /// The project has a tracker.
+    pub present: bool,
+    /// Variables every session and command of the project gets, tracker or not, under every layer: they name the
+    /// tracker explicitly, so a tool's own search never climbs to another one.
+    pub env: BTreeMap<String, String>,
+    /// The variable that carries the attempt's tracker actor, `aae:<run>:<attempt>` (contracts 5.1), into a command.
+    pub actor: Option<String>,
 }
 
 #[derive(Clone, Debug)]

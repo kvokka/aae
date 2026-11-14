@@ -54,7 +54,7 @@ impl RunHandler {
             },
             None => None,
         };
-        // A continued session resumes in the workdir it ran in (a claude transcript is found by its cwd).
+        // A continued session resumes in the workdir it ran in (a harness may find its transcript by the cwd).
         let mut workdir = rig.path.to_string_lossy().into_owned();
         if let Some(from) = &c.continue_from {
             let found: Option<(String, bool, String)> = tx

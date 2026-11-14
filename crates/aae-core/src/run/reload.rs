@@ -16,16 +16,16 @@ impl RunHandler {
     /// Takes `config` in place of the current one; refused when the change needs a daemon restart (drivers and
     /// trackers are made at start). The reply is `{config_generation, restarted_instances}`.
     pub(super) fn reload(&mut self, tx: &mut Tx<'_>, config: Arc<Config>) -> Result<Value, Error> {
-        // The drivers are made at start with the binary, the sessions per instance and the idle time; the model
-        // goes into the effective config of each session.
+        // The drivers are made at start with the binary and the adapter's settings; the model goes into the
+        // effective config of each session.
         let harnesses = |c: &Config| {
             (c.harnesses.iter())
-                .map(|(name, h)| (name.clone(), h.binary.clone(), h.max_sessions, h.instance_idle_s))
+                .map(|(name, h)| (name.clone(), h.binary.clone(), h.options.clone()))
                 .collect::<Vec<_>>()
         };
         if harnesses(&config) != harnesses(&self.config) {
             return Err(super::rejected(
-                "restart the daemon to change the harnesses, their binaries, sessions per instance or idle time",
+                "restart the daemon to change the harnesses, their binaries or their settings",
             ));
         }
         if config.api_tcp != self.config.api_tcp {
@@ -34,7 +34,7 @@ impl RunHandler {
         let untracked = config
             .projects
             .iter()
-            .any(|p| p.root.join(".beads").is_dir() && !self.trackers.contains_key(&p.name));
+            .any(|p| p.tracker.present && !self.trackers.contains_key(&p.name));
         let gone = (self.trackers.keys()).any(|name| !config.projects.iter().any(|p| p.name == *name));
         if untracked || gone {
             return Err(super::rejected(

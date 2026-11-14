@@ -28,6 +28,7 @@ run = [
   "cargo deny check",
   "cargo machete",
   "scripts/unused-pub.sh",
+  "scripts/core-boundary.sh",
   "scripts/budget-selftest.sh",
   "scripts/budget.sh",
 ]

@@ -36,15 +36,6 @@ impl Loader {
             false => OrchestratorFile::default(),
         };
         self.harnesses = raw.harness.keys().cloned().collect();
-        for (name, h) in raw.harness.iter().filter(|(n, _)| *n != "codex") {
-            let keys = [
-                ("max_sessions", h.max_sessions.is_some()),
-                ("instance_idle_s", h.instance_idle_s.is_some()),
-            ];
-            for (key, _) in keys.iter().filter(|(_, set)| *set) {
-                self.fail(file, format!("`harness.{name}.{key}`: only the codex harness takes it"));
-            }
-        }
         let plugins = self.plugins(file, &base, raw.plugin, &[]);
         let names: Vec<&str> = plugins.iter().map(|p| p.name.as_str()).collect();
         let settings = self.settings(file, &base, raw.settings, &names);
@@ -260,7 +251,7 @@ impl Loader {
         let mut rigs = BTreeMap::new();
         for (rig, r) in raw.rigs {
             self.name(&file, "rig", &rig);
-            // The rig is the tracker label `rig:<name>`; br takes labels of `[A-Za-z0-9_:-]`, 50 at most (§10.2).
+            // The rig is the tracker label `rig:<name>`; the tracker takes labels of `[A-Za-z0-9_:-]`, 50 at most (§10.2).
             if rig.len() > 46 || !rig.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_') {
                 self.fail(
                     &file,
@@ -323,6 +314,7 @@ impl Loader {
             bundled,
             rigs,
             packs,
+            tracker: super::TrackerLink::default(),
         })
     }
 

@@ -21,7 +21,7 @@ pub fn untested(binary: &Path, tested: [(u32, u32, u32); 2]) -> Option<String> {
     }
 }
 
-/// The first `major.minor.patch` word of `--version` output: `2.1.322 (Claude Code)`, `codex-cli 0.167.2`.
+/// The first `major.minor.patch` word of `--version` output: `2.1.322 (Some Tool)`, `some-cli 0.167.2`.
 fn parse(text: &str) -> Option<(u32, u32, u32)> {
     text.split_whitespace().find_map(|word| {
         let mut parts = word.split('.').map(|p| p.parse().ok());

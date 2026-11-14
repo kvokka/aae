@@ -112,9 +112,10 @@ impl RunHandler {
         };
         let (agent, prompt, timeout) = match (&formula.step, row.exec()) {
             (Step::Exec { command, timeout }, true) => {
-                // The tracker by an explicit path, as in a session (spec §10.2): br's own search would climb.
-                let beads = project.root.join(".beads").to_string_lossy().into_owned();
-                let env = json!({ "BEADS_DIR": { "value": beads } });
+                // The tracker by name, as in a session (spec §10.2).
+                let env: serde_json::Map<String, Value> = (project.tracker.env.iter())
+                    .map(|(name, value)| (name.clone(), json!({ "value": value })))
+                    .collect();
                 return Ok((None, timeout_ms(timeout), json!({ "command": command, "env": env })));
             }
             (Step::Prompt { agent, prompt, timeout }, false) => (agent, prompt, timeout),

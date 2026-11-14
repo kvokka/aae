@@ -65,7 +65,7 @@ impl World {
 
 #[tokio::test]
 async fn exit_0_passes_with_the_output_tail_in_the_outcome() {
-    let (w, create) = check("echo \"$BD_ACTOR\"; echo \"$BEADS_DIR\"; pwd; echo warn >&2");
+    let (w, create) = check("echo \"$TRACKER_ACTOR\"; pwd; echo warn >&2");
     let run = w.start(create).await;
     let (kind, data) = w.end(&run).await;
     assert_eq!(kind, "run.passed");

@@ -41,12 +41,19 @@ impl RunHandler {
         )?;
         // No session to start: the command runs from the first moment.
         row.set_state(tx, "running", None)?;
-        let env: Vec<(&String, &Value)> = config["env"]
+        let mut env: Vec<(String, Value)> = config["env"]
             .as_object()
             .into_iter()
             .flatten()
-            .map(|(k, v)| (k, &v["value"]))
+            .map(|(k, v)| (k.clone(), v["value"].clone()))
             .collect();
+        // The tracker actor of the attempt (contracts 5.1), as for a session: the tracker attributes the command's
+        // writes to the run.
+        let project = self.config.projects.iter().find(|p| p.name == row.project);
+        if let Some(name) = project.and_then(|p| p.tracker.actor.clone()) {
+            env.retain(|(k, _)| *k != name);
+            env.push((name, json!(format!("aae:{}:{}", row.id, row.attempt))));
+        }
         let timeout_ms = row.timeout_ms.unwrap_or(super::machine::STEP_TIMEOUT_MS);
         // Run ids repeat across daemons; the marker that recovery kills the command by must not.
         let Some(token) = super::new_token() else {
@@ -127,9 +134,6 @@ pub(super) async fn run(running: &Running, payload: &Value) -> Msg {
     let pairs: Vec<(String, String)> = serde_json::from_value(payload["env"].clone()).unwrap_or_default();
     env.retain(|(k, _)| !pairs.iter().any(|(p, _)| p == k));
     env.extend(pairs);
-    // The tracker actor of the attempt (contracts 5.1), as for a session: br attributes the command's writes to the run.
-    env.retain(|(k, _)| k != "BD_ACTOR");
-    env.push(("BD_ACTOR".to_owned(), format!("aae:{run}:{}", payload["attempt"])));
     let marker = payload["marker"].as_str().unwrap_or_default();
     env.push((crate::orphans::INSTANCE_ENV.to_owned(), marker.to_owned()));
     let stop = Arc::new(Notify::new());

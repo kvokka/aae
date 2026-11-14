@@ -49,13 +49,24 @@ fn a_stronger_layer_wins_and_every_value_keeps_its_layer() {
         (e.env["LANG"].value.as_str(), &e.env["LANG"].from),
         ("en", &Layer::Project)
     );
-    // `BEADS_DIR` comes even without a tracker in the project, so br never searches for one (spec §10.2).
-    assert_eq!(e.env["BEADS_DIR"].from, Layer::Project);
-    assert_eq!(e.env.len(), 3, "the session environment holds only what the layers say");
+    assert_eq!(e.env.len(), 2, "the session environment holds only what the layers say");
     // The rig override of `BASE` applies only to runs on that rig.
     let on_rig = effective(&config, Some("backend"));
     assert_eq!(on_rig.model.as_ref().unwrap().value, "opus");
     assert_eq!(on_rig.model.as_ref().unwrap().from, Layer::RigOverride);
+}
+
+#[test]
+fn the_tracker_variables_come_under_every_layer() {
+    let mut config = with_lines(&[("shop/aae.toml", "[settings]\nenv = { TRACKER = \"mine\" }")]);
+    let shop = config.projects.iter_mut().find(|p| p.name == "shop").unwrap();
+    for (name, value) in [("TRACKER", "theirs"), ("TRACKER_DIR", "/shop/.tracker")] {
+        shop.tracker.env.insert(name.to_owned(), value.to_owned());
+    }
+    let e = effective(&config, None);
+    let env = |name: &str| (e.env[name].value.as_str(), &e.env[name].from);
+    assert_eq!(env("TRACKER_DIR"), ("/shop/.tracker", &Layer::Project));
+    assert_eq!(env("TRACKER"), ("mine", &Layer::Project), "a layer may still set it");
 }
 
 #[test]

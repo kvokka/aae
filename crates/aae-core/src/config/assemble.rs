@@ -306,20 +306,15 @@ impl Config {
             system_prompt: None,
             permission_mode: None,
             inherit_host: None,
-            // The project's tracker database, always by an explicit path (spec §10.2), even where the project has
-            // none: br's own search would climb to another tracker. A layer may still set it.
-            env: Some(p.root.join(".beads"))
-                .map(|dir| {
-                    let value = dir.to_string_lossy().into_owned();
-                    (
-                        "BEADS_DIR".to_owned(),
-                        Sourced {
-                            value,
-                            from: Layer::Project,
-                        },
-                    )
+            // The project's tracker, by name, even where the project has none (spec §10.2). A layer may still set it.
+            env: (p.tracker.env.iter())
+                .map(|(name, value)| {
+                    let value = Sourced {
+                        value: value.clone(),
+                        from: Layer::Project,
+                    };
+                    (name.clone(), value)
                 })
-                .into_iter()
                 .collect(),
             mcp: BTreeMap::new(),
             hooks: BTreeMap::new(),

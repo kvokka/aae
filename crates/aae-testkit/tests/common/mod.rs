@@ -122,7 +122,12 @@ fn core_on(
     driver: &ScriptedDriver,
     tracker: &MemoryTracker,
 ) -> (CoreHandle<Msg>, JoinHandle<Result<(), Error>>) {
-    let config = config::load(&dir.join("config.toml")).unwrap();
+    let mut config = config::load(&dir.join("config.toml")).unwrap();
+    // As the daemon does for a tracker it makes: `shop` has the memory tracker.
+    for p in config.projects.iter_mut().filter(|p| p.name == "shop") {
+        p.tracker.present = true;
+        p.tracker.actor = Some("TRACKER_ACTOR".to_owned());
+    }
     run::start(
         open(&dir.join("state.db")).unwrap(),
         clock,

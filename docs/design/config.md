@@ -17,8 +17,9 @@ error in every file.
   `timezone` changed, is set again from the reload; a removed one is dropped); running runs keep the snapshot they prepared with; an idle instance stops with
   reason `config` only when no agent of the new config, on any rig, starts sessions on its fingerprint (a changed MCP
   restarts only the instances it is part of). It emits `config.reloaded` with the generation (1 at daemon start).
-  A change of the set of harnesses, a harness `binary`, `max_sessions` or `instance_idle_s` (a harness `model` is
-  fine), or of which projects have a `.beads` tracker is refused: drivers and trackers are made at daemon start.
+  A change of the set of harnesses, a harness `binary` or any adapter setting such as `max_sessions` (a harness
+  `model` is fine), or of which projects have a `.beads` tracker is refused: drivers and trackers are made at daemon
+  start.
 
 ## Settings (any layer)
 
@@ -128,9 +129,9 @@ timezone = "Europe/Berlin"          # IANA zone `cron` is read in (default: the 
 model = "sonnet"                    # default model of the harness
 binary = "/opt/claude/bin/claude"   # optional explicit path; otherwise resolved through mise (§6.5)
 
-[harness.codex]
-max_sessions = 8                    # codex only: threads per app-server before a second one starts (default 8)
-instance_idle_s = 60                # codex only: seconds an app-server without threads lives on (default 60)
+[harness.codex]                     # keys beyond `model` and `binary` are the adapter's; claude takes none
+max_sessions = 8                    # codex: threads per app-server before a second one starts (default 8)
+instance_idle_s = 60                # codex: seconds an app-server without threads lives on (default 60)
 
 [[plugin]]                          # an installed plugin; its orchestrator side is enabled
 path = "~/aae-plugins/aae-plugin-mail"

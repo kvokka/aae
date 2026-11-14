@@ -135,6 +135,23 @@ async fn the_config_from_the_cli_lists_explains_checks_and_reloads() {
         "shop.dev",
         "the daemon keeps its config"
     );
+    // The adapter checks its own settings: claude takes none, codex its sessions and idle time (contracts 4.5).
+    let claude = CONFIG.replace("binary = \"true\"\n", "binary = \"true\"\nmax_sessions = 3\n");
+    let codex = |extra: &str| format!("{CONFIG}[harness.codex]\n{extra}");
+    for (text, error) in [
+        (claude, Some("`harness.claude`: unknown key `max_sessions`")),
+        (codex("max_sessions = 0\n"), Some("`harness.codex`")),
+        (codex("idle = 3\n"), Some("`harness.codex`")),
+        (codex("max_sessions = 3\ninstance_idle_s = 0\n"), None),
+    ] {
+        fs::write(&file, &text).unwrap();
+        let out = d.cli(&["config", "check"], &[]);
+        let stderr = String::from_utf8_lossy(&out.stderr);
+        match error {
+            Some(error) => assert!(!out.status.success() && stderr.contains(error), "{text}: {stderr}"),
+            None => assert!(out.status.success(), "{text}: {stderr}"),
+        }
+    }
 
     fs::write(&file, CONFIG).unwrap();
     let trigger = "[[trigger]]\nname = \"tick\"\nevery = \"1h\"\nrun = \"check\"\nrig = \"web\"\n";
