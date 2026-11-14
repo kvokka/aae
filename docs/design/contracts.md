@@ -93,8 +93,8 @@ Observed events (§5.4):
 | `run.queued` | `{run: RunView, waiting_for: "concurrency"\|"gate"\|"workdir"\|"daemon_stopping"\|null, gate}`; re-emitted when the reason changes |
 | `run.started` | `{run}`; once per run, when it first leaves `queued` |
 | `run.state_changed` | `{from, to, attempt, generation, reason}` |
-| `run.parked` | `{gate: Gate, then: "resume"\|"new_session"}` |
-| `run.resumed` | `{gate_key}` |
+| `run.parked` | `{gate: Gate\|null, then: "resume"\|"new_session"}` (`null`: the daemon is stopping) |
+| `run.resumed` | `{gate_key}` (`"daemon_stopping"` after a park for a stopping daemon) |
 | `run.passed` | `{run, outcome: Outcome}` |
 | `run.failed` | `{run, class: "agent"\|"check"\|"hollow_done"\|"infrastructure", reason, outcome}`; `outcome` null unless the agent declared one |
 | `run.cancelled` | `{run, reason}` |
@@ -511,7 +511,7 @@ to the next prompt) the step `timeout` pauses like in `requires_action`. Trigger
 | `interrupted` | `park` | `parked` | gate closed in the same transaction |
 | `interrupted` | `fail`, no decision, attempts ceiling | `failed{infrastructure}` | gate closed if the decision carries one |
 | `parked` | every key of the run open, a concurrency slot free (in creation order with the queue) | `starting` (`then` of the park decision); `run.resumed` | new attempt |
-| `preparing`, `interrupted` | an attempt would start while a key of the run is closed (by anyone, invariant 18) | `parked` (`then`: `new_session` from `preparing`, the decided kind from `interrupted`) | — |
+| `preparing`, `interrupted` | an attempt would start while a key of the run is closed (by anyone, invariant 18) or the daemon is stopping | `parked` (`then`: `new_session` from `preparing`, the decided kind from `interrupted`) | — |
 | any non-terminal | operator cancel | `cancelled` | stop the session, conditional release of the bead |
 
 Every terminal transition releases the run's hold on its workdir and its ownership of its bead. A bead the run

@@ -5,7 +5,7 @@ mod common;
 
 use aae_core::{
     Journal,
-    run::{Decision, ExecHooks},
+    run::{Decision, ExecHooks, Msg},
 };
 use common::{POLICY, World, hollow_turn, last, world, world_with};
 use serde_json::{Value, json};
@@ -50,6 +50,35 @@ async fn a_restart_interrupts_the_running_attempt_stops_its_instance_and_the_run
         2,
         "a new instance for the new attempt"
     );
+}
+
+/// A drain starts no process (spec §5.6): a retry decided meanwhile parks, and the next daemon starts it.
+#[tokio::test]
+async fn a_draining_daemon_parks_a_retry_and_the_next_daemon_starts_it() {
+    let mut w = world(POLICY);
+    let run = w.create().await;
+    assert_eq!(w.states(&run).await.last().unwrap(), "running");
+    w.restart().await;
+    w.until(Some(&run), "run.attempt_failed", 0).await;
+    let stopping = Msg::Stopping { reason: "drain".into() };
+    w.core.send(None, stopping).await.unwrap();
+    let decision = Decision::NewSession {
+        after: Duration::ZERO,
+        gate: None,
+    };
+    w.decide(&run, "run.attempt_failed", 0, decision).await;
+    let parked = w.until(Some(&run), "run.parked", 0).await;
+    assert_eq!(parked["gate"], Value::Null, "{parked}");
+    assert_eq!(w.states(&run).await.last().unwrap(), "parked");
+    assert_eq!(journal(&w, "instance.starting").len(), 1, "no process while draining");
+
+    w.restart().await;
+    w.until(Some(&run), "run.resumed", 0).await;
+    w.events(&run, Duration::from_millis(300)).await;
+    let states = w.states(&run).await;
+    assert_eq!(states[states.len() - 3..], ["parked", "starting", "running"]);
+    assert_eq!(journal(&w, "run.resumed")[0]["data"]["gate_key"], "daemon_stopping");
+    assert_eq!(journal(&w, "instance.starting").len(), 2);
 }
 
 #[tokio::test]

@@ -54,8 +54,10 @@ At daemon start ([contracts](contracts.md) 6.4 has the exact state rules):
 4. Re-arm deadlines and schedules (a missed schedule fires at most once) and resync.
 
 A planned restart drains first (`POST /v1/daemon/drain`, `POST /v1/daemon/restart`, `aae drain`, `aae restart`):
-no new run starts, the active runs go on until none is left or the drain timeout (default 300 s) passes, then the
-daemon stops (`daemon.stopping{reason}`) and recovery resumes what the drain cut.
+no new run starts and no new attempt either (a retry decided meanwhile parks with `run.parked{gate: null}` and the
+next daemon starts it, `run.resumed{gate_key: "daemon_stopping"}`), the active runs go on until none is left or the
+drain timeout (default 300 s) passes, then the daemon stops (`daemon.stopping{reason}`) and recovery resumes what the
+drain cut.
 
 Prompt delivery is "at least once with an idempotent effect": the per-attempt record `intent → sent → acked →
 settled` and the prompt key the harness keeps in its transcript (contracts 6.4). Harness protocols give no

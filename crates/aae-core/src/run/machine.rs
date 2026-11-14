@@ -141,8 +141,8 @@ impl RunHandler {
 
     /// A new attempt (contracts 6.2): a new or resumed session on an instance of its own, then the prompt.
     pub(super) fn start_attempt(&mut self, tx: &mut Tx<'_>, mut row: Row, kind: &str) -> Result<(), Error> {
-        // Every automatic start reads the gates, the operator's among them (invariant 18): a closed one parks.
-        if let Some(gate) = Self::closed_gate(tx, &row)? {
+        // Every automatic start reads the gates, the operator's among them (invariant 18), and a drain: both park.
+        if let Some(gate) = self.held(tx, &row)? {
             return self.park(tx, row, gate, kind);
         }
         if row.exec() {

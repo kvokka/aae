@@ -91,6 +91,14 @@ impl RunHandler {
         Ok(Self::gates_of(tx, row)?.into_iter().next())
     }
 
+    /// What keeps `row` from starting an attempt: the stopping daemon (`null`, spec §5.6) or its oldest closed gate.
+    pub(super) fn held(&self, tx: &Tx<'_>, row: &Row) -> Result<Option<Value>, Error> {
+        if self.stopping.is_some() {
+            return Ok(Some(Value::Null));
+        }
+        Self::closed_gate(tx, row)
+    }
+
     /// Remembers the account and model keys an attempt of `row` reported.
     pub(super) fn learn_keys(
         tx: &Tx<'_>,
@@ -171,13 +179,14 @@ impl RunHandler {
         }
     }
 
-    /// A started run waits for `gate` without a process; the attempt `then` starts when its keys are all open.
+    /// A started run waits for `gate` (`null`: for the stopping daemon) without a process; the attempt `then` starts when its keys are all open.
     pub(super) fn park(&mut self, tx: &mut Tx<'_>, mut row: Row, gate: Value, then: &str) -> Result<(), Error> {
+        let key = gate["key"].as_str().unwrap_or("daemon_stopping");
         tx.sql().execute(
             "UPDATE runs SET next = ?2, waiting_for = ?3 WHERE id = ?1",
-            params![row.id, then, gate["key"].as_str()],
+            params![row.id, then, key],
         )?;
-        row.set_state(tx, "parked", gate["key"].as_str())?;
+        row.set_state(tx, "parked", Some(key))?;
         row.emit(tx, "run.parked", json!({ "gate": gate, "then": then }))?;
         // A gate with `until` opens by its own timer; the park deadline only bounds a wait that nothing ends.
         let until = gate["until"].as_str().and_then(parse_rfc3339_ms);
