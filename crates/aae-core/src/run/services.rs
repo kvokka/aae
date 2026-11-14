@@ -20,14 +20,15 @@ const API: &str = "${AAE_API}";
 /// How long a service with no consumer is kept.
 const IDLE_MS: i64 = 300_000;
 
-/// A service a session uses: its id, and the port its launch waits for when it serves MCP.
-pub(super) type Bound = (String, Option<u16>);
+/// A service a session uses: its id, and its port when the session got it; the launch puts in the port the service
+/// is ready on.
+pub(super) type Bound = (String, u16);
 
 impl RunHandler {
     /// The config a session of `row` starts with: every service it uses is acquired (started when none of its
     /// definition runs in its scope) and becomes an MCP server with its URL and token, or `AAE_SERVICE_<NAME>_URL`
     /// and `_TOKEN` in its environment; `${AAE_API}` becomes the daemon's API on TCP with its token; every HTTP
-    /// server gets the identity headers. Also the service ids, with the port a launch waits for when it is MCP.
+    /// server gets the identity headers. Its port stays [`super::service_proc::port_of`] until the launch.
     pub(super) fn bind_services(
         tx: &mut Tx<'_>,
         row: &Row,
@@ -72,7 +73,8 @@ impl RunHandler {
                 config.mcp.remove(&name);
                 continue;
             };
-            let url = format!("http://127.0.0.1:{port}");
+            let url = format!("http://127.0.0.1:{}", super::service_proc::port_of(&id));
+            bound.push((id, port));
             let Some(path) = service.mcp else {
                 let var = name
                     .to_ascii_uppercase()
@@ -84,8 +86,6 @@ impl RunHandler {
                     };
                     config.env.insert(format!("AAE_SERVICE_{var}_{key}"), value);
                 }
-                // It may listen on no port: the launch does not wait for one.
-                bound.push((id, None));
                 continue;
             };
             let headers = BTreeMap::from([("Authorization".to_owned(), format!("Bearer {token}"))]);
@@ -97,7 +97,6 @@ impl RunHandler {
                 scope: None,
             };
             config.mcp.insert(name, Sourced { value: mcp, from });
-            bound.push((id, Some(port)));
         }
         let mut lost = Vec::new();
         for (name, server) in &mut config.mcp {
@@ -156,22 +155,19 @@ impl RunHandler {
                 process["token"].as_str().unwrap_or_default().to_owned(),
             )));
         }
-        // shortcut: the port is free when picked, not reserved; a process taking it before the service binds fails
-        // the service until it idles out with no consumer. Hand the service a bound socket if that ever shows.
-        let port = std::net::TcpListener::bind(("127.0.0.1", 0)).and_then(|l| l.local_addr());
-        let (Ok(port), Some(token)) = (port, super::new_token()) else {
+        let (Ok(port), Some(token)) = (free_port(), super::new_token()) else {
             return Ok(None);
         };
         let id = format!("s-{}", &token[..16]);
         let mut process = definition.clone();
-        (process["port"], process["token"], process["restarts"]) = (json!(port.port()), json!(token), json!(0));
+        (process["port"], process["token"], process["restarts"]) = (json!(port), json!(token), json!(0));
         tx.sql().execute(
             "INSERT INTO instances (id, kind, harness, fingerprint, process, state, sessions, capacity, idle_ms) \
              VALUES (?1, 'service', ?2, ?3, ?4, 'starting', 0, 0, ?5)",
             params![id, name, key, process.to_string(), IDLE_MS],
         )?;
         Self::service_start(tx, &id, &process, None)?;
-        Ok(Some((id, port.port(), token)))
+        Ok(Some((id, port, token)))
     }
 
     /// `service.starting` and the effect that runs the process, after the backoff of its restarts.
@@ -254,7 +250,8 @@ impl RunHandler {
     /// The service `id` accepts connections.
     pub(super) fn service_ready(tx: &mut Tx<'_>, id: &str) -> Result<(), Error> {
         let starting = tx.sql().execute(
-            "UPDATE instances SET state = 'ready' WHERE id = ?1 AND kind = 'service' AND state = 'starting'",
+            "UPDATE instances SET state = 'ready', process = json_set(process, '$.ready', json('true')) \
+             WHERE id = ?1 AND kind = 'service' AND state = 'starting'",
             [id],
         )?;
         if starting == 0 {
@@ -265,7 +262,8 @@ impl RunHandler {
     }
 
     /// The process of the service `id` ended, or never accepted connections: without consumers the record goes,
-    /// else it starts again on the same port, so the sessions holding its URL reconnect.
+    /// else it starts again: on a new port until it was first ready (its port may be someone else's), then on the
+    /// same port, so the sessions holding its URL reconnect.
     pub(super) fn service_failed(tx: &mut Tx<'_>, id: &str, stderr: &str) -> Result<(), Error> {
         let row: Option<(String, i64, String)> = tx
             .sql()
@@ -293,6 +291,11 @@ impl RunHandler {
         }
         let mut process: Value = serde_json::from_str(&process).unwrap_or_default();
         process["restarts"] = json!(process["restarts"].as_i64().unwrap_or_default() + 1);
+        if process["ready"] != true
+            && let Ok(port) = free_port()
+        {
+            process["port"] = json!(port);
+        }
         tx.sql().execute(
             "UPDATE instances SET state = 'starting', process = ?2 WHERE id = ?1",
             params![id, process.to_string()],
@@ -339,4 +342,10 @@ impl RunHandler {
         })
         .map(drop)
     }
+}
+
+/// A port free on loopback now. It is not reserved: the service's start checks it again.
+fn free_port() -> std::io::Result<u16> {
+    let listener = std::net::TcpListener::bind(("127.0.0.1", 0))?;
+    Ok(listener.local_addr()?.port())
 }

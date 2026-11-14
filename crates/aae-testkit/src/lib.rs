@@ -48,7 +48,7 @@ struct State {
     started: u64,
     /// The attempt token the core handed over and the session environment, by `(run, attempt)`.
     tokens: HashMap<(String, u32), (String, BTreeMap<String, String>)>,
-    /// The MCP servers of each attempt's effective config, as the core gave them.
+    /// The MCP servers each attempt's session starts with, as its launch gave them.
     mcp: HashMap<(String, u32), Value>,
     texts: Vec<String>,
     /// Set by [`ScriptedDriver::stall_sessions`].
@@ -180,6 +180,18 @@ impl ScriptedDriver {
     }
 }
 
+/// Keeps the environment and the MCP servers a session starts with, as its launch gave them.
+fn got(state: &mut State, part: &SessionPart) {
+    let run = part.0["run"].as_str().unwrap_or_default().to_owned();
+    let attempt = part.0["attempt"].as_u64().and_then(|a| u32::try_from(a).ok());
+    let key = (run, attempt.unwrap_or_default());
+    let env = serde_json::from_value(part.0["env"].clone()).unwrap_or_default();
+    if let Some(entry) = state.tokens.get_mut(&key) {
+        entry.1 = env;
+    }
+    state.mcp.insert(key, part.0["mcp"].clone());
+}
+
 fn ready<'a, T: Send + 'a>(value: T) -> BoxFuture<'a, T> {
     Box::pin(std::future::ready(value))
 }
@@ -212,23 +224,16 @@ impl Driver for ScriptedDriver {
             token,
             ..
         }) = plan;
-        let env = config.env.iter().map(|(k, v)| (k.clone(), v.value.clone())).collect();
-        let mut state = self.lock();
-        state.tokens.insert((run.clone(), *attempt), (token.clone(), env));
-        state.mcp.insert(
-            (run.clone(), *attempt),
-            json!(
-                config
-                    .mcp
-                    .iter()
-                    .map(|(n, m)| (n, &m.value))
-                    .collect::<BTreeMap<_, _>>()
-            ),
-        );
-        drop(state);
+        let env: BTreeMap<_, _> = config.env.iter().map(|(k, v)| (k, &v.value)).collect();
+        let mcp: BTreeMap<_, _> = config.mcp.iter().map(|(n, m)| (n, &m.value)).collect();
+        let entry = (token.clone(), BTreeMap::new());
+        self.lock().tokens.insert((run.clone(), *attempt), entry);
         let process = ProcessPart(json!({ "native": config.native.as_ref().map(|n| &n.value) }));
         let model = config.model.as_ref().map(|m| &m.value);
-        let session = SessionPart(json!({ "model": model, "workdir": workdir }));
+        // The environment and the MCP servers ride with the session: the launch resolves their service ports.
+        let session = SessionPart(json!({
+            "model": model, "workdir": workdir, "run": run, "attempt": attempt, "env": env, "mcp": mcp,
+        }));
         Ok(Split::new(self.harness(), process, session))
     }
 
@@ -272,9 +277,10 @@ impl Driver for ScriptedDriver {
     fn start_session<'a>(
         &'a self,
         instance: &'a InstanceHandle,
-        _session: &'a SessionPart,
+        part: &'a SessionPart,
     ) -> BoxFuture<'a, Result<SessionRef, Failure>> {
         let mut state = self.lock();
+        got(&mut state, part);
         if state.stalled {
             return Box::pin(std::future::pending());
         }
@@ -304,9 +310,10 @@ impl Driver for ScriptedDriver {
         &'a self,
         instance: &'a InstanceHandle,
         session: &'a SessionRef,
-        _part: &'a SessionPart,
+        part: &'a SessionPart,
     ) -> BoxFuture<'a, Result<(), Failure>> {
         let mut state = self.lock();
+        got(&mut state, part);
         if !state.instances.get(&instance.id).is_some_and(|i| i.alive) {
             return ready(Err(Failure::new(FailureKind::HarnessCrash, Source::Adapter)));
         }

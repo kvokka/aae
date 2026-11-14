@@ -75,16 +75,19 @@ mcp = { url = "/mcp" }                         # | true (= /mcp); none: no MCP e
   `${AAE_SERVICE_PORT}` in `command`) and `AAE_SERVICE_TOKEN`; it must refuse requests without
   `Authorization: Bearer <token>`.
 - With `mcp`, sessions get `http://127.0.0.1:<port><path>` as an MCP server of the service's name (it replaces an
-  `mcp` entry of that name) with the token and the identity headers; a session start waits up to 30 s for the port.
-  Without `mcp`, sessions get `AAE_SERVICE_<NAME>_URL` (`http://127.0.0.1:<port>`) and `AAE_SERVICE_<NAME>_TOKEN`
-  in their environment (`<NAME>`: the name in upper case, other characters than letters and digits as `_`), and a
-  session start does not wait.
+  `mcp` entry of that name) with the token and the identity headers. Without `mcp`, sessions get
+  `AAE_SERVICE_<NAME>_URL` (`http://127.0.0.1:<port>`) and `AAE_SERVICE_<NAME>_TOKEN` in their environment
+  (`<NAME>`: the name in upper case, other characters than letters and digits as `_`). Either way a session start
+  waits up to 30 s for the service to be `ready` and gets the port it is ready on.
 - Health decides readiness only: the service is `ready` once its check passes (checked every 100 ms, each check
   up to 5 s; `http` is a `GET` with the token answering 2xx; `command` runs with the service's environment and
   passes on exit 0). Not ready within 30 s, it is stopped and fails. Once ready, a live service is one whose
   process lives: there is no periodic check. A server that is not up is a tool failure, not a failed run.
-- A service that dies is started again on the same port (with the effect backoff) while sessions use it, so they
-  reconnect; with none, it is dropped. A changed `command`, `env` or `health` is a new service; the old one idles
+- The port is checked free right before each start; one taken (someone else listens there and would get the token)
+  fails that start without running `command`. A service that dies or fails is started again (with the effect backoff)
+  while sessions use it: on a new port until it was first `ready`, then on the same port, so the sessions holding
+  its URL reconnect; with none, it is dropped. A process that takes the port while the service itself starts still
+  wins: the port is checked, not handed over bound. A changed `command`, `env` or `health` is a new service; the old one idles
   out. Events: `service.starting`, `service.ready`, `service.failed`, `service.stopped`; `aae instances` lists
   services too.
 - `url` with `${AAE_API}`: the daemon's own API on TCP, e.g. `url = "${AAE_API}/mcp"` for its MCP frontend. The

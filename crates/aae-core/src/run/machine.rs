@@ -273,7 +273,7 @@ impl RunHandler {
         let payload = json!({
             "op": "launch", "run": row.id, "attempt": row.attempt, "harness": config.harness,
             "instance": instance, "handle": handle, "after": after, "process": split.process.0, "session": split.session.0, "resume": resume.map(|s| s.0),
-            "prompt": prompt, "key": key.0.to_string(), "services": services.iter().filter_map(|(_, port)| *port).collect::<Vec<_>>(), "retry": retry.map(|(key, text)| json!({ "key": key, "text": text })),
+            "prompt": prompt, "key": key.0.to_string(), "services": services, "retry": retry.map(|(key, text)| json!({ "key": key, "text": text })),
         });
         tx.effect(&row.id, &format!("launch:{}", row.attempt), &payload)?;
         tx.set_deadline(&row.deadline("state"), tx.now_ms() + START_TIMEOUT_MS)

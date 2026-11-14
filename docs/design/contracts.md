@@ -614,8 +614,9 @@ of their own. The adapter reports the account id (4.5, `Driver::account`).
   that reports before its session is recorded).
 - Confirmed death (invariant 6): a launch first waits until nothing is left of the instances that served its run (or
   the run it continues) and are `stopping` or no longer recorded: the old process gets to end by itself (pid + start
-  time, `/proc/<pid>/stat`), then every process still carrying its marker is killed until none is found and each
-  one killed is a zombie or gone (a dying process loses its environment, so its marker, first), up to 30 s in all; past that the attempt fails with `unknown`. A live shared instance is never waited for.
+  time, `/proc/<pid>/stat`), then every process still carrying its marker is killed until none is found and each one
+  killed is a zombie or gone (a dying process loses its environment, so its marker, first), up to 30 s in all; past
+  that the attempt fails with `unknown`. A live shared instance is never waited for.
 - The process environment of every instance and service holds `AAE_INSTANCE=<id>`: once the instance is stopped
   or has exited, every process still carrying it is killed (the sweep of invariant 7). The daemon is a child
   subreaper ([experiments](experiments.md#descendants-after-kill--9-invariant-7)): every 5 s it reaps the adopted
@@ -631,9 +632,12 @@ of their own. The adapter reports the account id (4.5, `Driver::account`).
   `service`: the service name, the key `<scope>#<sha256 of the definition>` (the definition is `command`, `env`,
   `health`; scope `orchestrator` or `project:<p>`), the definition, the port and the token in the process column, the consumer count in `sessions` (an attempt's services are in
   `attempts.services`). The launch transaction acquires them (a new record emits `service.starting` and the
-  `start_service` effect) and rewrites the session's config before the split. Its health check (the port
-  accepting connections, an HTTP `GET` or a command) passing gives `service.ready`; a process that ends or is not up within 30 s gives `service.failed`, then a restart
-  on the same port after the effect backoff of its restarts while it has consumers, else the record goes. Idle,
+  `start_service` effect) and rewrites the session's config before the split, with `${AAE_SERVICE_PORT:<id>}` for
+  the port: the launch waits for the service's own health check and puts in the port it passed on. A start finds
+  its port free or fails without a process. Its health check (the port accepting connections, an HTTP `GET` or a
+  command) passing gives `service.ready` and `ready: true` in the process column; a process that ends or is not up
+  within 30 s gives `service.failed`, then a restart after the effect backoff of its restarts while it has
+  consumers (on a new port until `ready`, then on the same one), else the record goes. Idle,
   operator and recovery stops go through `stop_service`, which ends the process group and sweeps the
   marker; a reload leaves services alone. pid and pgid of the view are null: the process is tracked by its task and marker, not by pid.
 

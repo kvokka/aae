@@ -12,7 +12,10 @@ use serde_json::Value;
 use std::{
     collections::{BTreeMap, HashMap},
     path::Path,
-    sync::{Arc, Mutex, PoisonError},
+    sync::{
+        Arc, Mutex, PoisonError,
+        atomic::{AtomicBool, Ordering},
+    },
     time::Duration,
 };
 use tokio::{
@@ -24,7 +27,7 @@ use tokio::{
 
 /// The placeholder for the port the daemon picked, in a service's `command`.
 pub(super) const PORT: &str = "${AAE_SERVICE_PORT}";
-/// How long a service may take to pass its health check, and a launch waits for its port.
+/// How long a service may take to pass its health check, and a launch waits for it.
 pub(super) const READY_WAIT: Duration = Duration::from_secs(30);
 /// How long one health check may take.
 const CHECK_WAIT: Duration = Duration::from_secs(5);
@@ -33,9 +36,22 @@ const CHECK_EVERY: Duration = Duration::from_millis(100);
 /// Bytes kept from the end of a service's stderr for its `service.failed`.
 const TAIL: usize = 4 * 1024;
 
-/// The services this daemon runs: the stop and the task of each.
+/// The services this daemon runs, by id.
 pub(super) type Running = Arc<Mutex<HashMap<String, Entry>>>;
-type Entry = (Arc<Notify>, JoinHandle<()>);
+
+/// The latest start of a service: its stop, its task, its port, and whether it passed its health check.
+pub(super) struct Entry {
+    stop: Arc<Notify>,
+    task: JoinHandle<()>,
+    port: u16,
+    ready: Arc<AtomicBool>,
+}
+
+/// What stands for the port of the service `id` in a session's config until its launch: the port may change
+/// before the service is first ready.
+pub(super) fn port_of(id: &str) -> String {
+    format!("${{AAE_SERVICE_PORT:{id}}}")
+}
 
 /// Runs the service of a `start_service` effect in a task of its own: `ServiceReady` once it is healthy,
 /// `ServiceFailed` once it ends unless the registry stopped it.
@@ -59,13 +75,21 @@ pub(super) fn start(running: &Running, core: &CoreHandle<Msg>, p: &Value) {
         (INSTANCE_ENV.to_owned(), id.clone()),
     ]);
     let delay = Duration::from_millis(p["delay_ms"].as_u64().unwrap_or_default());
-    let stop = Arc::new(Notify::new());
-    let (core, own) = (core.clone(), stop.clone());
+    let (stop, is_up) = (Arc::new(Notify::new()), Arc::new(AtomicBool::new(false)));
+    let (core, own, up_flag) = (core.clone(), stop.clone(), is_up.clone());
     let task_id = id.clone();
     let task = tokio::spawn(async move {
         tokio::select! {
             () = tokio::time::sleep(delay) => {}
             () = own.notified() => return,
+        }
+        // A port someone else listens on would pass a port check and get the sessions' token: the core picks
+        // another. shortcut: checked free, not handed over bound; a process taking it while the service starts
+        // still wins. Pass the service a bound socket if that shows.
+        if let Err(e) = std::net::TcpListener::bind(("127.0.0.1", port)) {
+            let stderr = format!("port {port} is taken: {e}");
+            let _ = core.send(None, Msg::ServiceFailed { id: task_id, stderr }).await;
+            return;
         }
         let out = process::run(Spec {
             command: &command,
@@ -81,6 +105,7 @@ pub(super) fn start(running: &Running, core: &CoreHandle<Msg>, p: &Value) {
             out = &mut out => Some(out),
             up = ready(&health, port, &token, &env) => {
                 if up {
+                    up_flag.store(true, Ordering::Release);
                     let _ = core.send(None, Msg::ServiceReady { id: task_id.clone() }).await;
                 } else {
                     own.notify_one();
@@ -96,10 +121,34 @@ pub(super) fn start(running: &Running, core: &CoreHandle<Msg>, p: &Value) {
         // After a stop of the registry's the core drops it: the service is `stopping`.
         let _ = core.send(None, Msg::ServiceFailed { id: task_id, stderr }).await;
     });
-    let old = lock(running).insert(id, (stop, task));
-    if let Some((old, _)) = old {
-        old.notify_one();
+    let entry = Entry {
+        stop,
+        task,
+        port,
+        ready: is_up,
+    };
+    if let Some(old) = lock(running).insert(id, entry) {
+        old.stop.notify_one();
     }
+}
+
+/// `payload` with the port of each of `services` (`(id, port picked)`) in place of [`port_of`], once each is ready
+/// or past [`READY_WAIT`]: a session connects to its services as it starts, one not up by then is a tool failure.
+pub(super) async fn resolve(running: &Running, services: &[(String, u16)], payload: &Value) -> Value {
+    let start = tokio::time::Instant::now();
+    let mut text = payload.to_string();
+    for (id, picked) in services {
+        let port = loop {
+            let now = lock(running).get(id).map(|e| (e.port, e.ready.load(Ordering::Acquire)));
+            match now {
+                Some((port, true)) => break port,
+                _ if start.elapsed() > READY_WAIT => break now.map_or(*picked, |(port, _)| port),
+                _ => tokio::time::sleep(Duration::from_millis(50)).await,
+            }
+        };
+        text = text.replace(&port_of(id), &port.to_string());
+    }
+    serde_json::from_str(&text).unwrap_or_else(|_| payload.clone())
 }
 
 /// Checks `health` until it passes, up to [`READY_WAIT`]; `false` past it.
@@ -154,9 +203,9 @@ async fn http_ok(port: u16, path: &str, token: &str) -> bool {
 /// Ends the service of a `stop_service` effect and every process that carries its marker.
 pub(super) async fn stop(running: &Running, id: &str) {
     let entry = lock(running).remove(id);
-    if let Some((stop, task)) = entry {
-        stop.notify_one();
-        let _ = task.await;
+    if let Some(entry) = entry {
+        entry.stop.notify_one();
+        let _ = entry.task.await;
     }
     let id = id.to_owned();
     // Walking `/proc` is synchronous.
