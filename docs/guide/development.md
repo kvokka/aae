@@ -9,12 +9,12 @@ the pinned claude, codex and br. Every check below is a mise task (`mise.toml`).
 |---|---|---|---|
 | `mise run test` | unit and integration tests (`cargo nextest run`), the chaos stand among them | locally, the everyday loop; CI too | 29 s (2026-11-14, `1a732a4`) |
 | `mise run ci` | the above plus formatting, clippy, `cargo deny`, `cargo machete`, the unused-`pub` check and the line budgets | locally before a commit; CI on every commit | 34 s (2026-11-14, `1a732a4`) |
-| `mise run acceptance-ci` | the acceptance scenarios without a model, each on a real `aae daemon` | CI on every commit (job `acceptance`); locally optional | 55 s (2026-11-14, `1a732a4`) |
+| `mise run acceptance-ci` | the acceptance scenarios without a model, each on a real `aae daemon`, then the checks of criteria 1, 9, 11, 22 and 23 | CI on every commit (job `acceptance`); locally optional | 64 s warm, 265 s with a cold release build (2026-11-14, `a070cd6`+WP-52) |
 | `mise run acceptance` | all acceptance scenarios, including those on a real model | by hand: they cost money and need a harness login | not measured |
 
 <!-- MEASURE id=dev-test-wall date=2026-11-14 ver=1a732a4 env=linux-arm64-orbstack-9-cores src="mise run test" note="warm build; nextest summary 28.8 s for 286 tests; another build ran beside it" -->
 <!-- MEASURE id=dev-ci-wall date=2026-11-14 ver=1a732a4 env=linux-arm64-orbstack-9-cores src="mise run ci" note="warm build, wall time of the whole task; nextest part 28.2 s" -->
-<!-- MEASURE id=dev-acceptance-ci-wall date=2026-11-14 ver=1a732a4 env=linux-arm64-orbstack-9-cores src="mise run acceptance-ci" note="15 scenarios run concurrently; the longest, criterion 8, takes 55 s and criterion 7 watches an idle daemon for 30 s; 14 of 15 passed, criterion 10 failed fast as its workaround was being removed (WP-44a)" -->
+<!-- MEASURE id=dev-acceptance-ci-wall date=2026-11-14 ver=a070cd6+WP-52 env=linux-arm64-orbstack-9-cores src="mise run acceptance-ci" note="the 16 model-free scenarios concurrently, then the checks one by one; warm: release builds up to date; cold: the four release builds took 169 s of the 265 s; re-measure on the CI runner" -->
 
 The times are for a warm build on 9 cores. A cold build comes on top, once.
 
@@ -39,5 +39,8 @@ A failing seed is a bug of the core, not of the test. The crash scenario of the 
 ## Acceptance scenarios
 
 Pass criterion numbers to run only those: `cargo build -p aae && cargo run -p aae-acceptance -- --ci 3 19`. The
-report, with the date and the versions of `aae` and the harnesses, goes to `target/acceptance/report.md`. What is
-checked by hand is in [the manual acceptance checks](../acceptance-manual.md).
+report, with a line for every row of §15, goes to `target/acceptance/report.md`. After the scenarios the same binary
+runs the rows that live in cargo and the scripts, one at a time: `cargo zigbuild --release` for the four targets
+(criterion 1, about a minute per target warm), the crash tests of criterion 9, the contract tests of criterion 11,
+`scripts/budget.sh` (22) and clippy, `cargo machete` and `scripts/unused-pub.sh` (23); they build in the target
+directory the binary runs from. CI has no separate release-build job: criterion 1 is it.
