@@ -145,7 +145,7 @@ fn a_process_inheriting_the_host_with_skills_gets_a_home_linking_the_hosts() {
     for file in ["auth.json", "config.toml", "AGENTS.md"] {
         std::fs::write(host.path().join(file), "").unwrap();
     }
-    for dir in ["skills/mail", "skills/notes"] {
+    for dir in ["skills/mail", "skills/notes", "skills/.system"] {
         std::fs::create_dir_all(host.path().join(dir)).unwrap();
     }
     let mut config = config();
@@ -172,6 +172,10 @@ fn a_process_inheriting_the_host_with_skills_gets_a_home_linking_the_hosts() {
     ] {
         assert_eq!(std::fs::read_link(home.join(link)).unwrap(), target, "{link}");
     }
+    assert!(
+        home.join("skills/.system").symlink_metadata().is_err(),
+        "codex makes its own"
+    );
     let env = part::env(&p, "i1", None);
     assert!(env.contains(&("CODEX_HOME".to_owned(), home.to_string_lossy().into_owned())));
 }

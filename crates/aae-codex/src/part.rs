@@ -232,13 +232,14 @@ pub(crate) fn materialize(p: &Value) -> std::io::Result<()> {
     }
     let host = p["host"].as_str().map_or_else(host_home, PathBuf::from);
     // A home inheriting the host keeps the host's own skills beside the agent's; an agent's skill of the same name
-    // wins.
+    // wins. Hidden entries such as `.system` are codex's own cache: it makes them in every home.
     let host_skills = (p["host"].is_string().then(|| host.join("skills")))
         .and_then(|dir| std::fs::read_dir(dir).ok())
         .into_iter()
         .flatten()
         .flatten()
-        .map(|e| (e.file_name().to_string_lossy().into_owned(), json!(e.path())));
+        .map(|e| (e.file_name().to_string_lossy().into_owned(), json!(e.path())))
+        .filter(|(name, _)| !name.starts_with('.'));
     let own_skills = p["skills"]
         .as_object()
         .into_iter()
