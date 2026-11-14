@@ -87,6 +87,7 @@ impl Loader {
             watchdog,
             projects,
             bridge: Vec::new(),
+            service_wait: std::time::Duration::from_secs(30),
         };
         super::compose::check_runs(&mut self, &config);
         if self.errors.is_empty() {

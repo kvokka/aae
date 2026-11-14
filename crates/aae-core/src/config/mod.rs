@@ -52,6 +52,9 @@ pub struct Config {
     /// server not of scope `session` runs behind it as a service. Empty: no bridge, stdio servers stay per session.
     /// [`load`] leaves it empty; the binary sets it.
     pub bridge: Vec<String>,
+    /// How long a service may take to pass its health check, and a launch waits for it (spec §11.4): 30 s.
+    /// Not from a file: [`load`] sets it, a test shortens it.
+    pub service_wait: Duration,
 }
 
 /// The thresholds of `[watchdog]` in the orchestrator file, in milliseconds (contracts 6.1).

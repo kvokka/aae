@@ -27,8 +27,6 @@ use tokio::{
 
 /// The placeholder for the port the daemon picked, in a service's `command`.
 pub(super) const PORT: &str = "${AAE_SERVICE_PORT}";
-/// How long a service may take to pass its health check, and a launch waits for it.
-pub(super) const READY_WAIT: Duration = Duration::from_secs(30);
 /// How long one health check may take.
 const CHECK_WAIT: Duration = Duration::from_secs(5);
 /// Between two health checks of a starting service.
@@ -62,7 +60,8 @@ pub(super) fn token_of(id: &str) -> String {
 
 /// Runs the service of a `start_service` effect in a task of its own: `ServiceReady` once it is healthy,
 /// `ServiceFailed` once it ends unless the registry stopped it.
-pub(super) fn start(running: &Running, core: &CoreHandle<Msg>, p: &Value) {
+/// It has `wait` to pass its health check.
+pub(super) fn start(running: &Running, core: &CoreHandle<Msg>, p: &Value, wait: Duration) {
     let id = p["service"].as_str().unwrap_or_default().to_owned();
     let port = p["port"]
         .as_u64()
@@ -118,7 +117,7 @@ pub(super) fn start(running: &Running, core: &CoreHandle<Msg>, p: &Value) {
             // The process's own end goes first, then its health check: not at random, so a seed replays.
             biased;
             out = &mut out => Some(out),
-            up = ready(&health, &task_id, port, &token, &env) => {
+            up = ready(&health, &task_id, port, &token, &env, wait) => {
                 if up {
                     up_flag.store(true, Ordering::Release);
                     let _ = core.send(None, Msg::ServiceReady { id: task_id.clone() }).await;
@@ -154,9 +153,9 @@ pub(super) fn start(running: &Running, core: &CoreHandle<Msg>, p: &Value) {
 }
 
 /// `payload` with the port and token of each of `services` in place of [`port_of`] and [`token_of`], once each is
-/// ready, or port 0 and no token past [`READY_WAIT`]: a session connects to its services as it starts, one not up by
+/// ready, or port 0 and no token past `wait`: a session connects to its services as it starts, one not up by
 /// then is a tool failure, and the port it was not ready on may be someone else's, who would get the token.
-pub(super) async fn resolve(running: &Running, services: &[(String, u16)], payload: &Value) -> Value {
+pub(super) async fn resolve(running: &Running, services: &[(String, u16)], payload: &Value, wait: Duration) -> Value {
     let start = tokio::time::Instant::now();
     let mut text = payload.to_string();
     for (id, _) in services {
@@ -167,7 +166,7 @@ pub(super) async fn resolve(running: &Running, services: &[(String, u16)], paylo
                 .map(|e| (e.port, e.token.clone()));
             match now {
                 Some(ready) => break ready,
-                _ if start.elapsed() > READY_WAIT => break (0, String::new()),
+                _ if start.elapsed() > wait => break (0, String::new()),
                 _ => tokio::time::sleep(Duration::from_millis(50)).await,
             }
         };
@@ -178,11 +177,11 @@ pub(super) async fn resolve(running: &Running, services: &[(String, u16)], paylo
     serde_json::from_str(&text).unwrap_or_else(|_| payload.clone())
 }
 
-/// Checks `health` until it passes, up to [`READY_WAIT`]; `false` past it.
-async fn ready(health: &Health, id: &str, port: u16, token: &str, env: &[(String, String)]) -> bool {
+/// Checks `health` until it passes, up to `wait`; `false` past it.
+async fn ready(health: &Health, id: &str, port: u16, token: &str, env: &[(String, String)], wait: Duration) -> bool {
     let start = tokio::time::Instant::now();
     while !healthy(health, id, port, token, env).await {
-        if start.elapsed() > READY_WAIT {
+        if start.elapsed() > wait {
             return false;
         }
         tokio::time::sleep(CHECK_EVERY).await;

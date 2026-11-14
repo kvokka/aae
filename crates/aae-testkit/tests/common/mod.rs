@@ -60,6 +60,8 @@ pub(crate) struct World {
     /// The managed clock of every daemon of the world: a restart does not turn time back.
     pub(crate) clock: Clock,
     hooks: Arc<dyn HookRunner>,
+    /// How long a service may take to be ready, kept across restarts.
+    service_wait: Duration,
     task: JoinHandle<Result<(), Error>>,
     pub(crate) dir: tempfile::TempDir,
 }
@@ -101,6 +103,17 @@ pub(crate) fn world_with(extra: &[(&str, &str)], hooks: Arc<dyn HookRunner>) -> 
 
 /// The world on `driver`.
 pub(crate) fn world_on(extra: &[(&str, &str)], hooks: Arc<dyn HookRunner>, driver: ScriptedDriver) -> World {
+    world_waiting(extra, hooks, driver, Duration::from_secs(30))
+}
+
+/// The world on `driver` whose services have `service_wait` to be ready: a test of a service that never is
+/// waits that long in real time.
+pub(crate) fn world_waiting(
+    extra: &[(&str, &str)],
+    hooks: Arc<dyn HookRunner>,
+    driver: ScriptedDriver,
+    service_wait: Duration,
+) -> World {
     // The state and the journal sync every write: in memory, where the machine has it, that costs nothing.
     let shm = Path::new("/dev/shm");
     let dir = if shm.is_dir() {
@@ -120,7 +133,7 @@ pub(crate) fn world_on(extra: &[(&str, &str)], hooks: Arc<dyn HookRunner>, drive
     }
     let tracker = MemoryTracker::new();
     let clock = Clock::managed(0);
-    let (core, task) = core_on(dir.path(), clock, hooks.clone(), &driver, &tracker);
+    let (core, task) = core_on(dir.path(), clock, hooks.clone(), &driver, &tracker, service_wait);
     World {
         core,
         driver,
@@ -128,6 +141,7 @@ pub(crate) fn world_on(extra: &[(&str, &str)], hooks: Arc<dyn HookRunner>, drive
         journal: dir.path().join("journal"),
         clock,
         hooks,
+        service_wait,
         task,
         dir,
     }
@@ -139,10 +153,12 @@ fn core_on(
     hooks: Arc<dyn HookRunner>,
     driver: &ScriptedDriver,
     tracker: &MemoryTracker,
+    service_wait: Duration,
 ) -> (CoreHandle<Msg>, JoinHandle<Result<(), Error>>) {
     let mut config = config::load(&dir.join("config.toml")).unwrap();
     // `env <command>` runs the command itself: the HTTP probe stands in for a stdio server behind the bridge.
     config.bridge = vec!["env".to_owned()];
+    config.service_wait = service_wait;
     // As the daemon does for a tracker it makes: `shop` has the memory tracker.
     for p in config.projects.iter_mut().filter(|p| p.name == "shop") {
         p.tracker.present = true;
@@ -193,6 +209,7 @@ impl World {
             self.hooks.clone(),
             &self.driver,
             &self.tracker,
+            self.service_wait,
         );
     }
 

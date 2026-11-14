@@ -75,6 +75,7 @@ pub fn start(
         hooks,
         running: exec_step::Running::default(),
         services: service_proc::Running::default(),
+        service_wait: config.service_wait,
         starts: starts.clone(),
     };
     let (handle, task) = writer::start(

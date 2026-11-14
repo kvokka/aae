@@ -37,6 +37,8 @@ pub(super) struct RunExecutor {
     pub running: super::exec_step::Running,
     pub starts: Starts,
     pub services: super::service_proc::Running,
+    /// [`crate::config::Config::service_wait`] at the daemon start.
+    pub service_wait: Duration,
 }
 
 impl Executor for RunExecutor {
@@ -52,7 +54,7 @@ impl Executor for RunExecutor {
                     // A stopped writer drops the message; recovery (WP-20) finds the attempt on restart.
                     let _ = core.send(None, msg).await;
                 }
-                Some("start_service") => super::service_proc::start(&self.services, core, payload),
+                Some("start_service") => super::service_proc::start(&self.services, core, payload, self.service_wait),
                 Some("stop_service") => {
                     let id = payload["service"].as_str().unwrap_or_default().to_owned();
                     super::service_proc::stop(&self.services, &id).await;
@@ -173,7 +175,7 @@ impl RunExecutor {
     /// next call, so every event of them finds its attempt.
     async fn launch(&self, core: &CoreHandle<Msg>, driver: &dyn Driver, p: &Value) -> Result<(), Failure> {
         let services: Vec<(String, u16)> = serde_json::from_value(p["services"].clone()).unwrap_or_default();
-        let p = &super::service_proc::resolve(&self.services, &services, p).await;
+        let p = &super::service_proc::resolve(&self.services, &services, p, self.service_wait).await;
         let run = p["run"].as_str().unwrap_or_default().to_owned();
         let attempt = attempt(p);
         let key = key(p);

@@ -11,9 +11,12 @@ mod common;
 use aae_core::run::{Msg, Msg::StopInstance};
 use aae_testkit::ScriptedDriver;
 use common::services::{PROBE, call, file, project};
-use common::world_driven;
+use common::{Lost, world_driven, world_waiting};
 use serde_json::Value;
-use std::time::{Duration, Instant};
+use std::{
+    sync::Arc,
+    time::{Duration, Instant},
+};
 
 /// The probe as a service named `probe` serving MCP, logging to `log`.
 fn probe(log: &std::path::Path, more: &str) -> (&'static str, String) {
@@ -118,14 +121,22 @@ fn alive(pid: u64) -> bool {
     status.unwrap().success()
 }
 
-#[tokio::test(start_paused = true)]
+/// How long a service may take to be ready in the tests of one that never is: the real processes run in real time.
+const WAIT: Duration = Duration::from_secs(1);
+
+#[tokio::test]
 async fn a_service_that_never_comes_up_fails_the_tool_not_the_run() {
     let (path, text) = project("name = \"probe\"\ncommand = [\"false\"]\nmcp = true");
-    let w = world_driven(&[(path, text.as_str())], ScriptedDriver::new(1));
+    let w = world_waiting(&[(path, text.as_str())], Arc::new(Lost), ScriptedDriver::new(1), WAIT);
+    let start = Instant::now();
     let run = w.create().await;
     w.until_count("service.failed", 1).await;
-    // The launch waits for the service at most 30 s, then the session starts with a URL no one listens on.
-    tokio::time::sleep(Duration::from_secs(31)).await;
+    // The launch waits for the service its whole wait, then the session starts with a URL no one listens on.
+    while w.driver.mcp(&run, 1).is_null() {
+        assert!(start.elapsed() < Duration::from_secs(20), "no session");
+        tokio::time::sleep(Duration::from_millis(20)).await;
+    }
+    assert!(start.elapsed() >= WAIT, "{:?}", start.elapsed());
     let states = w.states(&run).await;
     assert_eq!(states.last().unwrap(), "running", "{states:?}");
     let url = w.driver.mcp(&run, 1)["probe"]["url"].clone();
@@ -200,17 +211,18 @@ async fn a_service_is_ready_only_once_its_health_check_passes_and_the_session_wa
     assert_eq!(call(&w.driver.mcp(&run, 1)["probe"]), 200);
 }
 
-#[tokio::test(start_paused = true)]
+#[tokio::test]
 async fn a_service_whose_health_check_never_passes_fails() {
     for health in ["health = { http = \"/nope\" }", "health = { command = [\"false\"] }"] {
         let dir = tempfile::tempdir().unwrap();
         let (path, text) = probe(&dir.path().join("probe.jsonl"), health);
-        let w = world_driven(&[(path, text.as_str())], ScriptedDriver::new(1));
+        let w = world_waiting(&[(path, text.as_str())], Arc::new(Lost), ScriptedDriver::new(1), WAIT);
+        let start = Instant::now();
         w.create().await;
-        w.until_count("service.starting", 1).await;
-        tokio::time::sleep(Duration::from_secs(31)).await;
-        assert_eq!(w.service_count("service.ready"), 0, "{health}");
         w.until_count("service.failed", 1).await;
+        // The probe stays up: only the end of its wait stops it.
+        assert!(start.elapsed() >= WAIT, "{health}: {:?}", start.elapsed());
+        assert_eq!(w.service_count("service.ready"), 0, "{health}");
     }
 }
 
