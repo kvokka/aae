@@ -5,10 +5,13 @@ exists and the main path works by hand; 6 model-free tests green, including fail
 criteria green on the owner's host; 10 real owner runs without intervention (criterion 20). An open criterion of a
 component caps its score. Updated at the end of every work session.
 
-Assessed 2026-11-14 at `775ffcb`: `mise run acceptance` green on the owner's host (the request rows on claude haiku
-and codex gpt-5.6-luna), and both demos of criterion 20 passed once each from empty rigs to a green smoke test
-(`demos/*/RESULT.md`). No component is at 10 while the owner has not run aae for real without intervention.
-<!-- MEASURE id=readiness date=2026-11-14 ver=775ffcb env=linux-arm64-orbstack src=docs/READINESS.md note="self-assessment by the implementing agent against the letter of the scale; re-assess at the end of every session" -->
+Assessed 2026-11-14 at `5c76ba2`: the `kill -9` tests of criterion 9 green in 20 full runs of the suite in a row
+at `4d32b10`, with the failure typed by the time of its own event. Live, on claude haiku and codex
+gpt-5.6-luna: the request row 2 green at `5c76ba2` (3.8 s and 6.7 s), the request rows 2, 4a, 8 and 17 green at
+`495f0e6`, and both demos of criterion 20 passed from empty rigs to a green smoke test at `775ffcb` and again at
+`495f0e6` (`demos/*/RESULT.md`); the whole `mise run acceptance` was last run at `5c5014f`, 21 of 21. No component is at 10 while the owner has not run aae
+for real without intervention.
+<!-- MEASURE id=readiness date=2026-11-14 ver=5c76ba2 env=linux-arm64-orbstack src=docs/READINESS.md note="self-assessment by the implementing agent against the letter of the scale; re-assess at the end of every session" -->
 
 | Component | Score | Missing for the next point |
 |---|---|---|
