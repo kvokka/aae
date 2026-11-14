@@ -9,7 +9,7 @@
 use super::{Live, exec_formula, hold};
 use crate::{
     Env,
-    daemon::{Daemon, write},
+    daemon::{Daemon, steps, write},
 };
 use serde_json::Value;
 use std::{
@@ -29,19 +29,6 @@ const TERMINAL: [&str; 3] = ["run.passed", "run.failed", "run.cancelled"];
 // Its input is the passed run: a firing whose run with the same inputs is alive would be skipped as an overlap.
 const TRIGGER: &str = "[[trigger]]\nname = \"next\"\non = \"run.passed\"\nwhere = { \"run.formula\" = \"shop.work\" }\n\
                        run = \"follow\"\nrig = \"web\"\ninputs = { of = \"{{ event.run.id }}\" }\n";
-
-/// The processes, other than `daemon`, whose environment names the scenario's tree: the daemon's step commands.
-fn steps(root: &Path, daemon: u32) -> HashSet<u32> {
-    let needle = root.to_string_lossy().into_owned();
-    let pids = fs::read_dir("/proc").unwrap().flatten();
-    let pids = pids.filter_map(|e| e.file_name().to_str()?.parse::<u32>().ok());
-    pids.filter(|&pid| pid != daemon)
-        .filter(|pid| {
-            fs::read(format!("/proc/{pid}/environ"))
-                .is_ok_and(|env| env.windows(needle.len()).any(|w| w == needle.as_bytes()))
-        })
-        .collect()
-}
 
 /// A pause of `from..from + span` ms for the `nth` kill, drawn from `seed`.
 fn jitter(seed: u64, nth: usize, from: u64, span: u64) -> Duration {

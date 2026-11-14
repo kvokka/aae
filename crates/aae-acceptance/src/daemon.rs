@@ -4,6 +4,7 @@ use crate::Env;
 use aae_front::client::{Client, ClientError};
 use serde_json::{Value, json};
 use std::{
+    collections::HashSet,
     fs,
     path::{Path, PathBuf},
     process::{Child, Command},
@@ -16,6 +17,20 @@ const FILES: &[(&str, &str)] = &[
     ("config/aae/shop/aae.toml", "[rigs.web]\npath = \"web\"\n"),
     ("config/aae/shop/web/.keep", ""),
 ];
+
+/// The processes, other than `daemon`, whose environment names the scenario's tree: the daemon's step commands
+/// and harness processes with their descendants.
+pub(crate) fn steps(root: &Path, daemon: u32) -> HashSet<u32> {
+    let needle = root.to_string_lossy().into_owned();
+    let pids = fs::read_dir("/proc").unwrap().flatten();
+    let pids = pids.filter_map(|e| e.file_name().to_str()?.parse::<u32>().ok());
+    pids.filter(|&pid| pid != daemon)
+        .filter(|pid| {
+            fs::read(format!("/proc/{pid}/environ"))
+                .is_ok_and(|env| env.windows(needle.len()).any(|w| w == needle.as_bytes()))
+        })
+        .collect()
+}
 
 /// Writes `text` to `path`, creating its directories.
 pub(crate) fn write(path: impl AsRef<Path>, text: impl AsRef<str>) {
@@ -158,9 +173,18 @@ impl Daemon {
 }
 
 impl Drop for Daemon {
+    /// No later daemon sweeps this tree's instances, so the scenario ends what its daemon left: codex's own
+    /// children (a plugin sync) outlive a killed daemon otherwise.
     fn drop(&mut self) {
         let _ = self.child.kill();
         let _ = self.child.wait();
+        let left = steps(self.dir.path(), self.child.id());
+        if !left.is_empty() {
+            let _ = Command::new("kill")
+                .arg("-KILL")
+                .args(left.iter().map(u32::to_string))
+                .output();
+        }
     }
 }
 
