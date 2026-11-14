@@ -28,13 +28,13 @@ pub(crate) const ALL: &[Scenario] = &[
     },
     Scenario {
         criterion: "11",
-        title: "the contract tests of claude and codex (§7.8) and of the br tracker (§10.2) pass",
+        title: "the contract tests of claude and codex (§7.8) with codex's model list, and of the br tracker (§10.2), pass",
         launch: Launch::Ci,
         run: |env| {
             Box::pin(tests(
                 env,
-                "-p aae-claude -p aae-codex -p aae-br -E binary(contract)",
-                36,
+                "-p aae-claude -p aae-codex -p aae-br -E binary(contract)|binary(models)",
+                37,
             ))
         },
     },
