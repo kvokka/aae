@@ -120,9 +120,9 @@ mcp = { url = "/mcp" }                         # | true (= /mcp); none: no MCP e
 
 Settings live on three levels: the orchestrator (`~/.config/aae/config.toml`: the harnesses with the default model of
 each, shared MCP, hooks, skills, env, plugins), the project (`aae.toml`: rigs, packs, project plugins, overrides) and
-the rig (a section of `aae.toml`: repository path, variables, overrides). An agent is not a level but a consumer: it
-picks one of the orchestrator's harnesses and, optionally, a model, and takes the rest from the layers, weakest
-first:
+the rig (a section of `aae.toml`: repository path, variables, overrides). An agent is not a level but a consumer: its
+`agent.toml` gives the defaults of the role, and every setting, the harness and the model too, comes from the
+layers, weakest first:
 
 1. the harness's own host config (`~/.claude`, `~/.codex`), when `inherit_host` is on;
 2. the orchestrator's `[settings]`, over the default model of the harness;
@@ -259,7 +259,7 @@ bead_failures = 3                   # failed runs of a bead before the core clos
 api_tcp = "127.0.0.1:7171"          # the API on TCP too (off by default; loopback only; a reload cannot change it)
 timezone = "Europe/Berlin"          # IANA zone `cron` is read in (default: the system zone; an unknown name is an error)
 
-[harness.claude]                    # harnesses agents may choose
+[harness.claude]                    # the harnesses of this host
 model = "sonnet"                    # default model of the harness
 binary = "/opt/claude/bin/claude"   # optional explicit path; otherwise mise, then `PATH`
 
@@ -283,7 +283,7 @@ queue_timeout = "168h"              # a run not started
 park_timeout = "168h"               # a parked run on a gate without `until`
 
 [settings]                          # layer 2
-[overrides.implementer]             # layer 7, for an agent of any project
+[overrides.implementer]             # layer 10, for an agent of any project
 ```
 
 Each `[watchdog]` value is a duration with one unit (`ms`, `s`, `m`, `h`) from 1 ms to 8760 h; an unknown key is an

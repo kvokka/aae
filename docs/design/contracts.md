@@ -728,10 +728,8 @@ of their own. The adapter reports the account id (4.5, `Driver::account`).
   (API, CLI).
 - The account key comes from `Driver::account` on the process part of the config, read before every attempt
   launches (or from `account` of a failure); a closed account gate parks the run with no launch, so a second run
-  of the same account does not start (criterion 10). The model key is known once a failure reported
-  `provider_model`; until then a run is admitted on its other keys and parks on a closed model gate only through
-  the policy (`gates` of `run.attempt_failed`). A `park` on a key the run does not have closes the gate and starts
-  the attempt at once.
+  of the same account does not start (criterion 10). A `park` on a key the run does not have closes the gate and
+  starts the attempt at once.
 - `until` is UTC in the form events carry: `YYYY-MM-DDTHH:MM:SS[.fff]Z`; another form is an invalid decision. A
   closure whose `until` has passed counts as open even before its timer fires; one that has passed already when
   asked for closes nothing (the operator's is rejected, a decision's is ignored).

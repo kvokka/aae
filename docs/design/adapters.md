@@ -102,7 +102,8 @@ Made for the two harnesses there are; none is changed before a harness needs it.
   A harness that takes no client id or keeps no readable history can only answer whether the session exists, and
   the guard against a double delivery after the daemon died does not hold for it.
 - Hooks of `EffectiveConfig` are in the Claude dialect (`event`, `matcher`, `command`, `timeout`). codex takes
-  the same form; a harness without command hooks can only refuse an agent that has any, as a `config_error` at
+  the same form, with the attempt environment exported in front of the command (a codex hook runs with the
+  process environment, not the thread's); a harness without command hooks can only refuse an agent that has any, as a `config_error` at
   the start of a run.
 - `capabilities(&ProcessPart)` takes a process part although the tested versions do not depend on it; the root
   reads them from `Adapter.tested` instead.

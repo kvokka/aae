@@ -74,6 +74,6 @@ wait "$daemon" 2>/dev/null || true
 echo "$demo: $result in ${seconds}s; the daemon's log and state stay in $work"
 [ "$result" = passed ] || exit 1
 snapshot="$here/$demo"
-rm -rf "$snapshot/backend" "$snapshot/frontend"
+find "$snapshot/backend" "$snapshot/frontend" -delete 2>/dev/null || true
 cp -R "$work/$demo/backend" "$work/$demo/frontend" "$work/RESULT.md" "$snapshot/"
 rm -f "$snapshot/backend/scores.txt" # what the smoke test posted

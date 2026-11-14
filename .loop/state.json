@@ -1,6 +1,6 @@
 {
-  "max_cycles": 85,
-  "status": "done",
+  "max_cycles": 117,
+  "status": "running",
   "cycle": 67,
   "phase": null,
   "attempt": 0,
@@ -396,7 +396,7 @@
       "ended": "2026-11-14T02:36:51+0700"
     }
   ],
-  "history": [
+  "history_round2": [
     {
       "cycle": 44,
       "base": "c10cb431c739f1a8e8503c0ecec10f7ec3445bb2",
@@ -614,5 +614,5 @@
       "ended": "2026-11-14T17:18:02+0700"
     }
   ],
-  "halt_reason": "ревьюер: complete, оценка 9.0/10"
+  "history": []
 }
