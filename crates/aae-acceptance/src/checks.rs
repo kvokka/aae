@@ -46,6 +46,18 @@ pub(crate) const ALL: &[Scenario] = &[
         },
     },
     Scenario {
+        criterion: "17",
+        title: "a CLI command per API operation, the committed OpenAPI matches the code, MCP serves its five tools",
+        launch: Launch::Ci,
+        run: |env| {
+            Box::pin(tests(
+                env,
+                "-p aae-front -p aae -E binary(openapi)|test(both_epochs_serve_the_same_five_tools)",
+                3,
+            ))
+        },
+    },
+    Scenario {
         criterion: "22",
         title: "line budgets, MEASURE markers and a readiness file whose scores the open rows allow",
         launch: Launch::Ci,
@@ -126,7 +138,6 @@ async fn release(env: Arc<Env>) -> String {
     )
 }
 
-/// The nextest run of `filter` (space-separated arguments); its summary.
 /// The nextest summary of `filter`, which must run `want` tests: a renamed test would leave its row passing.
 async fn tests(env: Arc<Env>, filter: &str, want: u32) -> String {
     let mut args = vec!["nextest", "run", "--locked", "--no-fail-fast"];

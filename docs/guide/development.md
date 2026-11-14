@@ -8,14 +8,14 @@ the pinned claude, codex and br. Every check below is a mise task (`mise.toml`).
 | Task | What it runs | Where | Wall time |
 |---|---|---|---|
 | `mise run test` | unit and integration tests (`cargo nextest run`), the chaos stand among them | locally, the everyday loop; CI too | 29 s (2026-11-14, `1a732a4`) |
-| `mise run ci` | the above plus formatting, clippy, `cargo deny`, `cargo machete`, the unused-`pub` check and the line budgets | locally before a commit; CI on every commit | 34 s (2026-11-14, `1a732a4`) |
-| `mise run acceptance-ci` | the acceptance scenarios without a model, each on a real `aae daemon`, then the checks of criteria 9, 11, 22 and 23 | CI on every commit (job `acceptance`); locally optional | 64 s warm with the release builds (2026-11-14, `a070cd6`+WP-52), less without them |
+| `mise run ci` | the above plus formatting, clippy, `cargo deny`, `cargo machete`, the unused-`pub` check and the line budgets | locally before a commit; CI on every commit | 62 s (2026-11-14, `75a5ee0`) |
+| `mise run acceptance-ci` | the acceptance scenarios without a model, each on a real `aae daemon`, then the checks of criteria 9, 11, 17, 22 and 23 | CI on every commit (job `acceptance`); locally optional | 71 s warm (2026-11-14, `75a5ee0`) |
 | `mise run acceptance-release` | criterion 1: `cargo zigbuild --release` for the four targets, then this host's binary runs | CI on a `v*` tag (workflow `release`) | 169 s cold (2026-11-14, `a070cd6`+WP-52) |
 | `mise run acceptance` | all acceptance scenarios, including those on a real model | by hand: they cost money and need a harness login | not measured |
 
 <!-- MEASURE id=dev-test-wall date=2026-11-14 ver=1a732a4 env=linux-arm64-orbstack-9-cores src="mise run test" note="warm build; nextest summary 28.8 s for 286 tests; another build ran beside it" -->
-<!-- MEASURE id=dev-ci-wall date=2026-11-14 ver=1a732a4 env=linux-arm64-orbstack-9-cores src="mise run ci" note="warm build, wall time of the whole task; nextest part 28.2 s" -->
-<!-- MEASURE id=dev-acceptance-ci-wall date=2026-11-14 ver=ea7f664 env=linux-arm64-orbstack-9-cores src="mise run acceptance-ci" note="the 16 model-free scenarios concurrently, then the checks one by one; warm: release builds up to date; cold: the four release builds took 169 s of the 265 s; re-measure on the CI runner" -->
+<!-- MEASURE id=dev-ci-wall date=2026-11-14 ver=75a5ee0 env=linux-arm64-orbstack-9-cores src="mise run ci" note="warm build, wall time of the whole task; nextest summary 36.9 s for 331 tests" -->
+<!-- MEASURE id=dev-acceptance-ci-wall date=2026-11-14 ver=75a5ee0 env=linux-arm64-orbstack-9-cores src="mise run acceptance-ci" note="warm build, run right after mise run ci; the model-free scenarios concurrently, then the cargo and script checks one by one; no release builds; re-measure on the CI runner" -->
 
 The times are for a warm build on 9 cores. A cold build comes on top, once.
 
