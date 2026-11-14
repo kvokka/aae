@@ -347,7 +347,9 @@ formula, every required input is given, placeholders exist only with `on` and th
 payload, as do the paths of `where`. `rig` is allowed only in a project's `[[trigger]]`.
 
 - A trigger runs on the rigs that list it in `triggers` and, for a project trigger, on its `rig`; one that no rig
-  names never fires. An event trigger sees the events whose `project` and `rig` are its own or null.
+  names never fires. An event trigger sees the events whose `project` and `rig` are its own or null; a `where` on
+  `rig` names the rigs it listens to instead, so a chain can cross the rigs of a project
+  (`where = { rig = "backend", "run.formula" = "kit.build" }` on the rig `frontend`).
 - `cron` is read in the orchestrator's `timezone`, the system zone by default: minute, hour, day of month, month, day
   of week; each field is `*`, a value, `a-b`, any of them with `/step`, or a comma list; months and days also take
   `jan`..`dec` and `sun`..`sat`, and day 7 is Sunday. When both day fields are restricted, a day matching either fires

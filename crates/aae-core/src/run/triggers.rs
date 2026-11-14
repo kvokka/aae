@@ -231,7 +231,8 @@ impl RunHandler {
     }
 
     /// Fires the event triggers the committed `events` match (contracts 2.2): same type, the event's project and rig
-    /// (when it has them) those of the assignment, every `where` entry matching.
+    /// (when it has them) those of the assignment, every `where` entry matching. A `where` on `rig` names the rigs
+    /// itself, so a chain can cross the rigs of a project.
     pub(super) fn match_triggers(&mut self, tx: &mut Tx<'_>, events: &[Value]) -> Result<(), Error> {
         let config = self.config.clone();
         let all = assigned(&config);
@@ -239,9 +240,9 @@ impl RunHandler {
             let kind = event["type"].as_str().unwrap_or_default();
             let listening = all.iter().filter(|a| {
                 let in_scope = |key: &str, own: &str| event[key].as_str().is_none_or(|v| v == own);
-                matches!(&a.trigger.source, Source::Event { on, .. } if on == kind)
+                matches!(&a.trigger.source, Source::Event { on, filter } if on == kind
+                    && (in_scope("rig", a.rig) || filter.paths().any(|p| p == "rig")))
                     && in_scope("project", a.project)
-                    && in_scope("rig", a.rig)
             });
             let view = event_view(event);
             for a in listening {
