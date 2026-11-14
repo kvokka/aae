@@ -497,7 +497,7 @@ tests of §7.8 (WP-28, WP-30).
 
 ### 5.1 Operations
 
-The trait has the five operations the core calls (spec §2.1 item 14: an operation is added when a caller needs it).
+The trait has the five operations the core calls (spec §2, decision 52: an operation is added when a caller needs it).
 Every call names the actor: `aae:<run id>` when the daemon acts for a run, `aae` for
 the daemon's own reads. Sessions and exec steps get `BD_ACTOR=aae:<run id>:<attempt n>` and the database path in
 their environment ([experiments](experiments.md#br-as-an-event-source-experiment-3)). An actor of any other form is a
@@ -584,7 +584,7 @@ so that the state machine has one place where `run.attempt_failed` is decided.
 - An attempt starts a new session or resumes the previous one, and has its own generation.
 
 Ceilings of the core (invariant 16): 20 attempts per run, not counting the attempts whose `auth_required`, `billing` or
-`quota_exhausted` failure the decision parked on the run's own `account:` gate, closed by it (spec §2.1 item 12: a wait
+`quota_exhausted` failure the decision parked on the run's own `account:` gate, closed by it (spec §2, decisions 49, 50: a wait
 on the account does not spend the ceiling; the attempt is marked `waited` in the state; a park on a gate that does not
 close, `until` passed, or any other park counts), 10 remarks per attempt (`continue` after a hollow turn and `remark`
 after `run.finishing` both count). The eleventh fails the run with reason `remarks_ceiling` and the class the event
@@ -824,7 +824,7 @@ then. Implemented in `crates/aae-plugins`.
 | `quota_exhausted` | `park{gate: account, until: T + quota_margin_s (60 s), then: resume}`, `T` = `retry_at` of the failure, else `resets_at` of the used-up account; neither → `until` now + `quota_wait_s` (30 min) |
 | `rate_limited`, `overloaded` with `retried_by_harness` | `park{gate: model, until: now + 10 min, then: resume}` |
 | `rate_limited`, `overloaded` without | `resume{after: min(10 s · 2^(n−1), 5 min)}` over `n` consecutive such failures; from the 3rd — the `park` above |
-| `auth_required`, `billing` | `park{gate: account, until: now + min(30 s · 2^(n−1), 1 h), then: resume}` over `n` consecutive failures of that kind (postmortem 0001: a proxy or WAF error passes by itself; the attempt after the wait is the probe); never escalated to an operator, and these attempts do not count against the core's ceiling (spec §2.1 item 12); no account key: `fail` |
+| `auth_required`, `billing` | `park{gate: account, until: now + min(30 s · 2^(n−1), 1 h), then: resume}` over `n` consecutive failures of that kind (postmortem 0001: a proxy or WAF error passes by itself; the attempt after the wait is the probe); never escalated to an operator, and these attempts do not count against the core's ceiling (spec §2, decisions 49, 50); no account key: `fail` |
 | `context_overflow`, `transcript_divergence` | `new_session` |
 | `config_error` | `fail{gate: agent, until: null}` |
 | `harness_crash`, `adapter_crash` | `resume`; 5 consecutive attempts shorter than 30 s → `park{gate: agent, until: now + 5 min, then: resume}`; 3 consecutive failed resumes → `new_session` |

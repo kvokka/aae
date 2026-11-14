@@ -53,7 +53,7 @@ impl RunHandler {
             env.retain(|(k, _)| *k != name);
             env.push((name, json!(value)));
         }
-        // The context of the run goes in the environment only, never into the command (spec §2.1 item 10).
+        // The context of the run goes in the environment only, never into the command (spec §2, decision 47).
         let inputs: serde_json::Map<String, Value> = serde_json::from_str(&row.inputs).unwrap_or_default();
         let mut context = vec![("AAE_RUN".to_owned(), json!(row.id))];
         context.extend(row.bead.as_ref().map(|bead| ("AAE_BEAD".to_owned(), json!(bead))));

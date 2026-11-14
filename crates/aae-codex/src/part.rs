@@ -16,7 +16,7 @@ use std::{
 /// The variables that carry a credential; a process with one of them uses it, not the host's login.
 pub(crate) const CREDENTIALS: [&str; 2] = ["OPENAI_API_KEY", "CODEX_API_KEY"];
 
-/// The sandbox a process runs in when no config sets one (spec §2.1 item 1); `doctor` warns about it.
+/// The sandbox a process runs in when no config sets one (spec §2, decision 38); `doctor` warns about it.
 pub(crate) const DEFAULT_SANDBOX: &str = "danger-full-access";
 
 /// The process part: `{home, user_home, host, env, overrides, skills}`. An isolated process gets its own `CODEX_HOME`
@@ -60,7 +60,7 @@ pub(crate) fn process(config: &EffectiveConfig, state: &Path, host: &Path) -> Re
             part["home"] = json!(host);
             return Ok(part);
         }
-        // Skills need a home of the process's own: it links the host's login and config (spec §2.1 item 9).
+        // Skills need a home of the process's own: it links the host's login and config (spec §2, decision 46).
         part["host"] = json!(host);
     } else if !own {
         host_provider(&mut part, host, true);
@@ -272,8 +272,8 @@ pub(crate) fn daemon_vars(p: &Value) -> impl Iterator<Item = &'static str> {
         .chain(host.into_iter().flatten())
 }
 
-/// Spec §2.1 item 1: a process runs with no sandbox unless the native block of its config, or the host's codex config
-/// in `home` it inherits, sets one.
+/// Spec §2, decision 38: a process runs with no sandbox unless the native block of its config, or the host's codex
+/// config in `home` it inherits, sets one.
 pub(crate) fn unconfined(config: &EffectiveConfig, home: &Path) -> bool {
     let native = config.native.as_ref().and_then(|n| n.value.as_object());
     let host_sets = config.inherits_host() && host_config(home).is_some_and(|c| c.contains_key("sandbox_mode"));

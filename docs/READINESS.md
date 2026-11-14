@@ -3,7 +3,7 @@
 Per-component readiness on the 0–10 scale of spec §14, scored by its letter: 0 nothing; 2 contract written; 4 code
 exists and the main path works by hand; 6 model-free tests green, including failure paths; 8 the component's §15
 criteria green on the owner's host; 10 real owner runs without intervention (criterion 20). An open criterion of a
-component caps its score (§2.1 item 16): a criterion counts as open when a row of it failed, or was not run on the
+component caps its score (§2, decision 53): a criterion counts as open when a row of it failed, or was not run on the
 code assessed. Updated at the end of every work session.
 
 `Criteria` lists the §15 criteria of each component; criterion 22 of `aae-acceptance` checks every score against

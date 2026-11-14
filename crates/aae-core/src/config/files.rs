@@ -225,7 +225,7 @@ pub struct Harness {
     pub model: Option<String>,
     pub binary: Option<PathBuf>,
     /// The other keys: the adapter's own settings, which the core passes on unread and the adapter checks (spec
-    /// §2.1 item 6: the core knows no harness).
+    /// §2, decision 43: the core knows no harness).
     #[serde(flatten)]
     pub options: toml::Table,
 }

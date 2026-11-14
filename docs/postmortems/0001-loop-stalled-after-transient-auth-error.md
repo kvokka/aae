@@ -2,7 +2,7 @@
 
 Date: 2026-11-13. Status: closed in `default-policy` (docs/design/contracts.md 10): `auth_required` parks the account
 for a re-armed wait growing up to an hour whose next attempt is the probe, never needs an operator, and does not spend
-the attempts ceiling (spec §2.1 item 12, 2026-11-14); the scenarios of "Acceptance" are
+the attempts ceiling (spec §2, decisions 49, 50, 2026-11-14); the scenarios of "Acceptance" are
 `crates/aae-testkit/tests/auth.rs`. Liveness by observation is the watchdog of invariant 15 (a deadline to the first
 event, a silence budget, process health), and every wait of a run has a deadline, so a supervisor self-check has nothing
 left to catch: a run waits without one only on a gate with no `until` (an operator pause), listed by `aae gate`.

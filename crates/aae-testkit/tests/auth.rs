@@ -1,6 +1,6 @@
 //! Postmortem 0001 on the scripted driver and the bundled `default-policy`: a 403 parks the account for a growing
 //! wait, the attempt after it probes the cause, and a 403 that lasts keeps waiting, past the attempts ceiling, with no
-//! operator (spec §2.1 item 12). On the paused clock: bundled hooks run on blocking threads, and tokio does not
+//! operator (spec §2, decisions 49, 50). On the paused clock: bundled hooks run on blocking threads, and tokio does not
 //! advance a paused clock while one runs.
 
 mod common;
@@ -102,7 +102,7 @@ async fn a_passing_403_with_a_lost_or_doubled_end_recovers_by_itself() {
 
 #[tokio::test(start_paused = true)]
 async fn a_lasting_403_keeps_waiting_past_the_attempts_ceiling() {
-    // Spec §2.1 item 12: no operator, and the waits on the account gate do not count against the ceiling.
+    // Spec §2, decisions 49, 50: no operator, and the waits on the account gate do not count against the ceiling.
     let w = world("auth_backoff_base_s = 1\nauth_backoff_cap_s = 1\n");
     let past = MAX_ATTEMPTS + 2;
     for _ in 0..past {

@@ -327,7 +327,7 @@ pub(super) async fn execute(trackers: &Trackers, core: &CoreHandle<Msg>, payload
     !retry
 }
 
-/// A bead (as JSON) with a `rig:` label, none of them `rig:<rig>`, belongs to another rig (spec §2.1 item 14).
+/// A bead (as JSON) with a `rig:` label, none of them `rig:<rig>`, belongs to another rig (spec §2, decision 52).
 fn other_rig(bead: &Value, rig: &str) -> bool {
     let rigs: Vec<&str> = (bead["labels"].as_array().into_iter().flatten())
         .filter_map(|l| l.as_str()?.strip_prefix("rig:"))

@@ -85,7 +85,7 @@ fn default_policy_follows_contracts_10() {
             failed("unknown", none.clone(), &[("resume", "unknown", 9); 4], json!([])),
             json!({"decision": "fail", "reason": "unknown"}),
         ),
-        // Postmortem 0001, spec §2.1 item 12: a wait on the account, longer with every failure in a row.
+        // Postmortem 0001, spec §2, decisions 49, 50: a wait on the account, longer with every failure in a row.
         (
             failed(
                 "auth_required",

@@ -1,4 +1,4 @@
-//! The rows of spec §15 that live in cargo builds, cargo tests and the CI scripts (spec §2.1 item 7): each runs its
+//! The rows of spec §15 that live in cargo builds, cargo tests and the CI scripts (spec §2, decision 44): each runs its
 //! commands in the workspace, with the target directory of the spec, and passes when all of them succeed. They run
 //! one after another once the scenarios are done (see `main`).
 
@@ -194,7 +194,7 @@ async fn no_stubs(env: Arc<Env>) -> String {
     "clippy (todo, unimplemented, unreachable_pub denied), cargo machete and scripts/unused-pub.sh are clean".into()
 }
 
-/// Criterion 22 against the rest of the report (spec §14, §2.1 item 16), the report's rows as `(criterion, mark)`.
+/// Criterion 22 against the rest of the report (spec §14, §2, decision 53), the report's rows as `(criterion, mark)`.
 /// A score of 8 is "the component's §15 criteria green", so one of its criteria (the `Criteria` column of
 /// docs/READINESS.md) open caps it at 6: a `FAIL` row, or in a full run a row not run or left out. A 10 needs every
 /// row of criterion 20 green in this run. A full run also needs every component at 8 or more, the letter of

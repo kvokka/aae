@@ -22,7 +22,7 @@ pub(crate) struct Params {
     backoff_cap_s: i64,
     /// From this many consecutive rate limits on, the model gate closes instead of a backoff.
     backoff_park_from: usize,
-    /// The wait on `auth_required` and `billing` (postmortem 0001, spec §2.1 item 12): the account gate closes for
+    /// The wait on `auth_required` and `billing` (postmortem 0001, spec §2, decisions 49, 50): the gate closes for
     /// `min(base · 2^(n−1), cap)` after `n` consecutive such failures; the attempt after it probes the cause. No
     /// escalation to an operator, and the core does not count these attempts against its ceiling.
     auth_backoff_base_s: i64,

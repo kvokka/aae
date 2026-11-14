@@ -107,8 +107,8 @@ pub struct Project {
     pub tracker: TrackerLink,
 }
 
-/// How the project's sessions and commands reach its tracker (spec §10.2). The core knows no tracker (spec §2.1
-/// item 6): the integration that makes trackers fills this in after loading; empty until then.
+/// How the project's sessions and commands reach its tracker (spec §10.2). The core knows no tracker (spec §2,
+/// decision 43): the integration that makes trackers fills this in after loading; empty until then.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct TrackerLink {
     /// The project has a tracker.
