@@ -203,6 +203,14 @@ pub fn open(path: &Path) -> rusqlite::Result<Connection> {
             14,
             "ALTER TABLE idempotency ADD COLUMN request TEXT NOT NULL DEFAULT '';",
         ),
+        // The tokens an attempt used and the last limit each account reported (contracts 4.3).
+        (
+            15,
+            "ALTER TABLE attempts ADD COLUMN input_tokens INTEGER NOT NULL DEFAULT 0; \
+             ALTER TABLE attempts ADD COLUMN output_tokens INTEGER NOT NULL DEFAULT 0; \
+             CREATE TABLE account_limits (account TEXT PRIMARY KEY, utilization REAL NOT NULL, \
+             resets_at_ms INTEGER);",
+        ),
     ]
     .into_iter()
     .filter(|(to, _)| *to > version)

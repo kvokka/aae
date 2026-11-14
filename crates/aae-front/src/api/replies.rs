@@ -47,6 +47,15 @@ pub(crate) struct Run {
     outcome: Option<Outcome>,
     /// The last 20, newest last.
     attempts: Vec<Attempt>,
+    /// The tokens of every attempt of the run.
+    usage: Usage,
+}
+
+/// The tokens the harness reported (docs/design/contracts.md §4.3 `usage`).
+#[derive(ToSchema)]
+pub(crate) struct Usage {
+    input_tokens: u64,
+    output_tokens: u64,
 }
 
 /// `Outcome` of docs/design/contracts.md §1.3.
@@ -72,6 +81,8 @@ pub(crate) struct Attempt {
     /// The harness's own session reference (spec §7.7).
     #[schema(value_type = Option<Object>)]
     session: Option<Value>,
+    input_tokens: u64,
+    output_tokens: u64,
 }
 
 /// The errors of an operation that takes an `Idempotency-Key`: the core carries it out.

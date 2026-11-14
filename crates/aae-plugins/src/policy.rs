@@ -143,10 +143,19 @@ fn attempt_failed(event: &Value, p: &Params) -> Value {
         // A park needs a key of the run; without one the retry just waits as long.
         None => resume(until.map_or(0, |u| (u - now) / 1000)),
     };
+    // The account's last known limit, when it says the account is used up until a reset still ahead.
+    let used_up = Some(&data["rate_limit"])
+        .filter(|l| l["utilization"].as_f64().is_some_and(|u| u >= 1.0))
+        .and_then(|l| time(&l["resets_at"]))
+        .filter(|t| *t > now);
     match kind {
         "quota_exhausted" => {
-            let reset = time(&data["failure"]["retry_at"]).map(|t| t + p.quota_margin_s * 1000);
-            park(key("account:"), Some(reset.unwrap_or(now + p.quota_wait_s * 1000)))
+            let reset = time(&data["failure"]["retry_at"]).or(used_up);
+            let until = reset.map_or(now + p.quota_wait_s * 1000, |t| t + p.quota_margin_s * 1000);
+            park(key("account:"), Some(until))
+        }
+        "rate_limited" if used_up.is_some() && key("account:").is_some() => {
+            park(key("account:"), used_up.map(|t| t + p.quota_margin_s * 1000))
         }
         "rate_limited" | "overloaded" => {
             let n = streak(&["rate_limited", "overloaded"]);

@@ -2330,7 +2330,9 @@
           "generation",
           "kind",
           "started_at",
-          "harness"
+          "harness",
+          "input_tokens",
+          "output_tokens"
         ],
         "properties": {
           "ended_at": {
@@ -2353,6 +2355,11 @@
           "harness": {
             "type": "string"
           },
+          "input_tokens": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
           "kind": {
             "type": "string",
             "description": "`new_session` or `resume`."
@@ -2360,6 +2367,11 @@
           "n": {
             "type": "integer",
             "format": "int32",
+            "minimum": 0
+          },
+          "output_tokens": {
+            "type": "integer",
+            "format": "int64",
             "minimum": 0
           },
           "session": {
@@ -3015,7 +3027,8 @@
           "correlation",
           "created_at",
           "inputs",
-          "attempts"
+          "attempts",
+          "usage"
         ],
         "properties": {
           "agent": {
@@ -3135,6 +3148,10 @@
             "type": "string",
             "description": "`prompt` or `exec`."
           },
+          "usage": {
+            "$ref": "#/components/schemas/Usage",
+            "description": "The tokens of every attempt of the run."
+          },
           "waiting_for": {
             "type": [
               "string",
@@ -3251,6 +3268,26 @@
           },
           "trigger": {
             "type": "string"
+          }
+        }
+      },
+      "Usage": {
+        "type": "object",
+        "description": "The tokens the harness reported (docs/design/contracts.md §4.3 `usage`).",
+        "required": [
+          "input_tokens",
+          "output_tokens"
+        ],
+        "properties": {
+          "input_tokens": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "output_tokens": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
           }
         }
       }

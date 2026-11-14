@@ -42,6 +42,8 @@ const RUN: Shape = Obj(&[
     ("started_at", Leaf),
 ]);
 
+const USAGE: Shape = Obj(&[("input_tokens", Leaf), ("output_tokens", Leaf)]);
+
 const FAILURE: Shape = Obj(&[
     ("kind", Leaf),
     ("text", Leaf),
@@ -112,9 +114,15 @@ fn payload(event_type: &str) -> Option<&'static [(&'static str, Shape)]> {
         ],
         "run.parked" => &[("gate", GATE), ("then", Leaf)],
         "run.resumed" => &[("gate_key", Leaf)],
-        "run.passed" => &[("run", RUN), ("outcome", OUTCOME)],
-        "run.failed" => &[("run", RUN), ("class", Leaf), ("reason", Leaf), ("outcome", OUTCOME)],
-        "run.cancelled" => &[("run", RUN), ("reason", Leaf)],
+        "run.passed" => &[("run", RUN), ("outcome", OUTCOME), ("usage", USAGE)],
+        "run.failed" => &[
+            ("run", RUN),
+            ("class", Leaf),
+            ("reason", Leaf),
+            ("outcome", OUTCOME),
+            ("usage", USAGE),
+        ],
+        "run.cancelled" => &[("run", RUN), ("reason", Leaf), ("usage", USAGE)],
         "trigger.fired" => &[
             ("trigger", Leaf),
             ("cause_seq", Leaf),
@@ -156,6 +164,10 @@ fn payload(event_type: &str) -> Option<&'static [(&'static str, Shape)]> {
             ("failure", FAILURE),
             ("attempts", Leaf),
             ("gates", Leaf),
+            (
+                "rate_limit",
+                Obj(&[("utilization", Leaf), ("resets_at", Leaf)]),
+            ),
             ("keys", Leaf),
             ("agent_failures_1h", Leaf),
             ("deadline", Leaf),

@@ -124,7 +124,8 @@ impl Row {
 /// `Attempts` of contracts 1.3: the last 20 attempts of a run, newest last.
 pub(super) fn attempts(conn: &Connection, run: &str) -> Result<Vec<Value>, Error> {
     let mut stmt = conn.prepare(
-        "SELECT n, kind, started_ms, ended_ms, json_extract(failure, '$.kind'), harness, session FROM \
+        "SELECT n, kind, started_ms, ended_ms, json_extract(failure, '$.kind'), harness, session, input_tokens, \
+         output_tokens FROM \
          (SELECT * FROM attempts WHERE run = ?1 ORDER BY n DESC LIMIT 20) ORDER BY n",
     )?;
     let rows = stmt.query_map([run], |r| {
@@ -134,7 +135,17 @@ pub(super) fn attempts(conn: &Connection, run: &str) -> Result<Vec<Value>, Error
             "failure_kind": r.get::<_, Option<String>>(4)?, "harness": r.get::<_, String>(5)?,
             // The session reference (spec §7.7): the harness's own tools open the conversation by it.
             "session": r.get::<_, Option<String>>(6)?.and_then(|s| serde_json::from_str::<Value>(&s).ok()),
+            "input_tokens": r.get::<_, i64>(7)?, "output_tokens": r.get::<_, i64>(8)?,
         }))
     })?;
     Ok(rows.collect::<Result<_, _>>()?)
+}
+
+/// The tokens every attempt of a run used, `{input_tokens, output_tokens}` (contracts 1.3).
+pub(super) fn usage(conn: &Connection, run: &str) -> Result<Value, Error> {
+    Ok(conn.query_row(
+        "SELECT COALESCE(SUM(input_tokens), 0), COALESCE(SUM(output_tokens), 0) FROM attempts WHERE run = ?1",
+        [run],
+        |r| Ok(json!({ "input_tokens": r.get::<_, i64>(0)?, "output_tokens": r.get::<_, i64>(1)? })),
+    )?)
 }

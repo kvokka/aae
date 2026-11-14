@@ -3,10 +3,11 @@
 
 use super::{RunHandler, rejected, row::Row};
 use crate::{
+    driver::RateLimit,
     journal::{parse_rfc3339_ms, rfc3339_ms},
     writer::{Error, Event, Tx},
 };
-use rusqlite::{Connection, params};
+use rusqlite::{Connection, OptionalExtension, params};
 use serde_json::{Value, json};
 
 /// A closure as a decision or the operator asks for it.
@@ -107,6 +108,48 @@ impl RunHandler {
             params![row.id, account, model],
         )?;
         Ok(())
+    }
+
+    /// Adds the tokens of a `usage` event to the attempt and keeps the account's limit it reports, if any
+    /// (contracts 4.3): the last one known per account goes to the policy with `run.attempt_failed`.
+    pub(super) fn usage(
+        tx: &Tx<'_>,
+        row: &Row,
+        attempt: u32,
+        tokens: [u64; 2],
+        limit: Option<&RateLimit>,
+    ) -> Result<(), Error> {
+        let [input, output] = tokens.map(|t| i64::try_from(t).unwrap_or(i64::MAX));
+        tx.sql().execute(
+            "UPDATE attempts SET input_tokens = input_tokens + ?3, output_tokens = output_tokens + ?4 \
+             WHERE run = ?1 AND n = ?2",
+            params![row.id, attempt, input, output],
+        )?;
+        if let Some(limit) = limit {
+            tx.sql().execute(
+                "INSERT OR REPLACE INTO account_limits (account, utilization, resets_at_ms) \
+                 SELECT account, ?2, ?3 FROM runs WHERE id = ?1 AND account IS NOT NULL",
+                params![row.id, limit.utilization, limit.resets_at_ms],
+            )?;
+        }
+        Ok(())
+    }
+
+    /// The last limit known for the run's account, `{utilization, resets_at}`, or `null`.
+    pub(super) fn limit_of(tx: &Tx<'_>, row: &Row) -> Result<Value, Error> {
+        let limit = tx
+            .sql()
+            .query_row(
+                "SELECT utilization, resets_at_ms FROM account_limits \
+                 WHERE account = (SELECT account FROM runs WHERE id = ?1)",
+                [&row.id],
+                |r| {
+                    Ok(json!({ "utilization": r.get::<_, f64>(0)?,
+                        "resets_at": r.get::<_, Option<i64>>(1)?.map(rfc3339_ms) }))
+                },
+            )
+            .optional()?;
+        Ok(limit.unwrap_or_default())
     }
 
     /// Closes `gate` for `by` (`policy`, `operator`, `core`); a closure of the same `(key, by)` is replaced.

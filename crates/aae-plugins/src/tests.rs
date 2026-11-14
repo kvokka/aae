@@ -139,6 +139,28 @@ fn every_policy_threshold_comes_from_the_config() {
         until(&policy(&no_reset, json!({"quota_wait_s": 60}))),
         "2026-11-13T12:01:00.000Z"
     );
+    // Without a reset time of its own, the account's last known limit gives it, once used up and still ahead.
+    let limit = |utilization: f64, resets_at: &str| {
+        let mut event = quota(none.clone());
+        event["data"]["rate_limit"] = json!({ "utilization": utilization, "resets_at": resets_at });
+        event
+    };
+    let margin = json!({"quota_margin_s": 0, "quota_wait_s": 60});
+    let known = limit(1.0, "2026-11-13T14:00:00.000Z");
+    assert_eq!(until(&policy(&known, margin.clone())), "2026-11-13T14:00:00.000Z");
+    for not_used_up in [
+        limit(0.4, "2026-11-13T14:00:00.000Z"),
+        limit(1.0, "2026-11-13T11:00:00.000Z"),
+    ] {
+        assert_eq!(until(&policy(&not_used_up, margin.clone())), "2026-11-13T12:01:00.000Z");
+    }
+    let mut limited = known.clone();
+    limited["data"]["failure"]["kind"] = json!("rate_limited");
+    let parked = policy(&limited, margin);
+    assert_eq!(
+        (&parked["gate"]["key"], until(&parked)),
+        (&json!("account:claude/a1"), json!("2026-11-13T14:00:00.000Z"))
+    );
     let overloaded = failed("overloaded", json!({"retried_by_harness": true}), &[], json!([]));
     assert_eq!(
         until(&policy(&overloaded, json!({"model_pause_s": 60}))),

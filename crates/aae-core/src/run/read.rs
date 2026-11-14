@@ -64,6 +64,7 @@ impl Reader {
         view["request"] = request.and_then(|r| serde_json::from_str(&r).ok()).unwrap_or_default();
         view["gate"] = json!(gate);
         view["attempts"] = json!(row::attempts(&conn, id)?);
+        view["usage"] = row::usage(&conn, id)?;
         Ok(Some(view))
     }
 

@@ -277,7 +277,7 @@ impl RunHandler {
             rows.collect::<Result<_, _>>()?
         };
         let data = json!({ "run": row.view(), "failure": failure, "attempts": attempts,
-            "gates": Self::gates_of(tx, &row)?,
+            "gates": Self::gates_of(tx, &row)?, "rate_limit": Self::limit_of(tx, &row)?,
             "keys": Self::keys(tx.sql(), &row)?, "agent_failures_1h": agent_failures });
         self.deciding(tx, row, "run.attempt_failed", data)
     }
@@ -345,19 +345,14 @@ impl RunHandler {
         row.class = class.map(str::to_owned);
         row.set_state(tx, state, Some(reason))?;
         self.let_go_bead(tx, &row, state, reason)?;
-        match state {
-            "passed" => row.emit(tx, "run.passed", json!({ "run": row.view(), "outcome": outcome }))?,
-            "failed" => row.emit(
-                tx,
-                "run.failed",
-                json!({ "run": row.view(), "class": class, "reason": reason, "outcome": outcome }),
-            )?,
-            _ => row.emit(
-                tx,
-                &format!("run.{state}"),
-                json!({ "run": row.view(), "reason": reason }),
-            )?,
+        let usage = super::row::usage(tx.sql(), &row.id)?;
+        let data = match state {
+            "passed" => json!({ "run": row.view(), "outcome": outcome, "usage": usage }),
+            "failed" => json!({ "run": row.view(), "class": class, "reason": reason, "outcome": outcome,
+                "usage": usage }),
+            _ => json!({ "run": row.view(), "reason": reason, "usage": usage }),
         };
+        row.emit(tx, &format!("run.{state}"), data)?;
         self.schedule(tx)
     }
 }

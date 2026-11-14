@@ -130,6 +130,14 @@ impl RunHandler {
         if let Normalized::PromptAcked { key } = &event {
             super::prompts::advance(tx, &row.id, attempt, Some(*key), "acked")?;
         }
+        if let Normalized::Usage {
+            input_tokens,
+            output_tokens,
+            rate_limit,
+        } = &event
+        {
+            Self::usage(tx, &row, attempt, [*input_tokens, *output_tokens], rate_limit.as_ref())?;
+        }
         match event {
             Normalized::PromptAcked { key } if row.state == "starting" => {
                 if super::prompts::first(tx, &row.id, attempt)? != Some(key.0.to_string()) {
