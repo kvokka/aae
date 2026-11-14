@@ -78,6 +78,7 @@ impl Loader {
             plugins,
             bundled,
             projects,
+            bridge: Vec::new(),
         };
         if self.errors.is_empty() {
             Ok(config)

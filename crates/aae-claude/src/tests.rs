@@ -91,7 +91,7 @@ fn a_config_the_adapter_cannot_deliver_is_a_config_error() {
     let split = driver.split(&config, &plan).unwrap();
     assert_eq!(
         split.process.0["mcp"]["mcpServers"]["shared"]["type"], "stdio",
-        "no bridge: per session"
+        "a stdio server reaching the adapter is the session's own: the core shares the others behind the bridge"
     );
 }
 

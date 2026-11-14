@@ -164,7 +164,7 @@ fn service_files_run_this_binary_with_the_config() {
 }
 
 #[test]
-fn stdio_mcp_servers_of_the_host_and_of_the_config_are_warned_about() {
+fn stdio_mcp_servers_of_the_host_are_warned_about() {
     let dir = tree(
         "[settings.mcp.lint]\ncommand = [\"lint\"]\n[settings.mcp.solo]\ncommand = [\"solo\"]\nscope = \"session\"\n",
     );
@@ -175,27 +175,6 @@ fn stdio_mcp_servers_of_the_host_and_of_the_config_are_warned_about() {
     assert!(passed, "{found:?}");
     assert_eq!(level(&found, "claude host mcp").0, "ok");
     assert_eq!(level(&found, "codex host mcp").0, "ok");
-    let (per_session, why) = level(&found, "mcp per session");
-    assert!(
-        per_session == "warning" && why.starts_with("lint:"),
-        "scope session is said: {found:?}"
-    );
-    // The daemon says it too when it starts.
-    let mut daemon = common::command(dir.path())
-        .env("PATH", format!("{}:/usr/bin:/bin", dir.path().join("bin").display()))
-        .stderr(std::process::Stdio::piped())
-        .spawn()
-        .unwrap();
-    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
-    while !dir.path().join("run/aae/aae.sock").exists() {
-        assert!(std::time::Instant::now() < deadline, "the daemon did not come up");
-        std::thread::sleep(std::time::Duration::from_millis(20));
-    }
-    let _ = Command::new("kill").args(["-TERM", &daemon.id().to_string()]).status();
-    let mut err = String::new();
-    std::io::Read::read_to_string(&mut daemon.stderr.take().unwrap(), &mut err).unwrap();
-    daemon.wait().unwrap();
-    assert!(err.contains("aae daemon: warning: lint:"), "{err}");
 
     let host = r#"{"mcpServers": {"deja": {"command": "deja"}, "web": {"type": "http", "url": "http://x"}},
         "projects": {"/p": {"mcpServers": {"local": {"type": "stdio", "command": "l"}}}}}"#;

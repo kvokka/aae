@@ -45,7 +45,7 @@ fn text(v: &Value) -> &str {
 
 fn findings(paths: &Paths) -> Vec<Value> {
     let mut found = Vec::new();
-    match load(&paths.config) {
+    match load(paths) {
         Err(errors) => found.extend(errors.into_iter().map(|e| check("config", "error", e))),
         Ok(config) => {
             found.push(check("config", "ok", paths.config.display().to_string()));
@@ -56,7 +56,6 @@ fn findings(paths: &Paths) -> Vec<Value> {
                     found.push(host_mcp(name));
                 }
             }
-            found.extend(per_session(&config).map(|why| check("mcp per session", "warning", why)));
             if config.projects.iter().any(|p| p.root.join(".beads").is_dir()) {
                 let (path, source) = binary("br", None);
                 found.push(binary_check("br", &path, source, aae_br::TESTED));
@@ -126,46 +125,10 @@ fn host_mcp(harness: &str) -> Value {
             "warning",
             format!(
                 "stdio MCP servers of the host settings start in every session that inherits the host: {}; \
-                 declare them in aae (a `url` or a service) to share them, or set inherit_host = false",
+                 declare them in the aae config, where they are shared, or set inherit_host = false",
                 names.join(", ")
             ),
         ),
-    }
-}
-
-/// The stdio MCP servers of the config that are not of scope `session`: with no stdio→HTTP bridge in this release
-/// they start per session all the same (spec §11.4).
-fn per_session(config: &aae_core::config::Config) -> Option<String> {
-    let mut names = std::collections::BTreeSet::new();
-    for p in &config.projects {
-        for pack in &p.packs {
-            for agent in pack.agents.keys() {
-                let name = aae_core::config::Name {
-                    pack: pack.name.clone(),
-                    name: agent.clone(),
-                };
-                let Ok(effective) = config.effective(&p.name, None, &name) else {
-                    continue;
-                };
-                let stdio = effective.mcp.into_iter().filter(|(_, m)| {
-                    m.value.url.is_none() && m.value.scope != Some(aae_core::config::McpScope::Session)
-                });
-                names.extend(stdio.map(|(n, _)| n));
-            }
-        }
-    }
-    let names: Vec<String> = names.into_iter().collect();
-    (!names.is_empty()).then(|| {
-        let why = "stdio MCP servers start per session (no stdio→HTTP bridge in this release); give them \
-                   scope = \"session\", or run them as a service with a `url`";
-        format!("{}: {why}", names.join(", "))
-    })
-}
-
-/// The daemon's visible warning for [`per_session`], at start and on every reload (spec §11.4).
-pub(crate) fn warn_per_session(config: &aae_core::config::Config) {
-    if let Some(why) = per_session(config) {
-        eprintln!("aae daemon: warning: {why}");
     }
 }
 

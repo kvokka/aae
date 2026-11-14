@@ -41,9 +41,14 @@ contribution of a plugin; the top level of `agent.toml`; and the overrides `[ove
 
 - `url` alone: an HTTP server someone else runs. Every session gets it with its own `headers` and the identity
   headers `X-Aae-Project`, `X-Aae-Rig`, `X-Aae-Agent` and `X-Aae-Run`.
-- `command` alone: a stdio server, started by the harness in each session. There is no stdio→HTTP bridge in this
-  release, so a stdio server is per session whatever its `scope`; `aae doctor` warns about those not of scope
-  `session`.
+- `command` alone: a stdio server. With `scope = "session"` the harness starts it in each session. Otherwise
+  (`orchestrator`, the default, or `project`) it is shared: the daemon runs it as a service behind the bridge
+  `aae mcp-bridge -- <command>` (internal subcommand), whose MCP endpoint `/mcp` the sessions get as for a service
+  with `mcp`. The bridge initializes the server once, answers every client's handshake itself in both protocol
+  epochs, passes each request under its own id with the identity headers as `params._meta` (`aae/project`,
+  `aae/rig`, `aae/agent`, `aae/run`), and does not pass the server's own requests and notifications to clients. A
+  server with state per client (a browser) or that needs the session's working directory (the bridge starts in `/`)
+  needs `scope = "session"`.
 - `command` and `url` together: an error; a server the daemon runs is a `[[service]]` with `mcp` (below).
 
 A **service** is a `[[service]]` table at the top level of the orchestrator config, a project's `aae.toml` or a

@@ -283,3 +283,42 @@ async fn a_service_with_an_http_check_is_ready_once_it_answers() {
     w.until_count("service.ready", 1).await;
     assert_eq!(w.count("service.failed"), 0);
 }
+
+#[tokio::test(start_paused = true)]
+async fn a_stdio_server_is_shared_behind_the_bridge_unless_it_is_per_session() {
+    let dir = tempfile::tempdir().unwrap();
+    let log = dir.path().join("probe.jsonl");
+    let agent = format!(
+        "harness = \"scripted\"\n[mcp.notes]\ncommand = [\"{PROBE}\", \"{}\"]\n[mcp.solo]\ncommand = [\"solo\"]\n\
+         scope = \"session\"\n",
+        log.display()
+    );
+    let driver = ScriptedDriver::new(2);
+    driver.stall_sessions();
+    let files = [
+        ("shop/agents/dev/agent.toml", agent.as_str()),
+        (
+            "shop/aae.toml",
+            "[rigs.web]\npath = \"web\"\n[rigs.api]\npath = \"api\"\n",
+        ),
+        ("shop/api/.keep", ""),
+    ];
+    let w = world_driven(&files, driver);
+    let (a, b) = (w.create().await, w.create_on("api").await);
+    w.until_count("service.ready", 1).await;
+    w.events(&b, Duration::from_millis(500)).await;
+    assert_eq!(w.count("service.starting"), 1, "one bridge for both sessions");
+    let (na, nb) = (
+        w.driver.mcp(&a, 1)["notes"].clone(),
+        w.driver.mcp(&b, 1)["notes"].clone(),
+    );
+    assert_eq!(na["url"], nb["url"]);
+    assert!(na["command"].is_null(), "{na}");
+    assert_eq!(nb["headers"]["X-Aae-Run"], b.as_str());
+    assert_eq!(call(&na), 200);
+    assert_eq!(
+        w.driver.mcp(&a, 1)["solo"]["command"][0],
+        "solo",
+        "per session: stdio as it is"
+    );
+}

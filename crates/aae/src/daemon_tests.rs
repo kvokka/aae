@@ -10,6 +10,7 @@ fn the_codex_settings_reach_the_driver_capabilities() {
         config: "/nonexistent/config.toml".into(),
         state: "/nonexistent/state".into(),
         socket: "/nonexistent/aae.sock".into(),
+        exe: "/nonexistent/aae".into(),
     };
     let caps = |options: &str| {
         let harness = Harness {

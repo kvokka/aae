@@ -84,8 +84,9 @@ pub(crate) fn tested(driver: &Arc<dyn Driver>) -> [(u32, u32, u32); 2] {
     driver.capabilities(&ProcessPart(json!(null))).versions
 }
 
-/// The config in `file` with the parameters of the bundled plugins checked, or every error in it.
-pub(crate) fn load(file: &Path) -> Result<config::Config, Vec<String>> {
+/// The config of `paths` with the parameters of the bundled plugins checked, or every error in it.
+pub(crate) fn load(paths: &Paths) -> Result<config::Config, Vec<String>> {
+    let file = &paths.config;
     let mut config = config::load(file).map_err(|errors| errors.iter().map(ToString::to_string).collect::<Vec<_>>())?;
     // br is the tracker of a project with a `.beads` directory, always named by an explicit path: its own search
     // would climb to another project's (spec §10.2).
@@ -95,6 +96,9 @@ pub(crate) fn load(file: &Path) -> Result<config::Config, Vec<String>> {
         (p.tracker.env).insert("BEADS_DIR".to_owned(), dir.to_string_lossy().into_owned());
         p.tracker.actor = Some("BD_ACTOR".to_owned());
     }
+    config.bridge = [paths.exe.to_string_lossy().as_ref(), "mcp-bridge", "--"]
+        .map(str::to_owned)
+        .to_vec();
     let harnesses = (config.harnesses.iter())
         .filter_map(|(name, h)| options_error(name, h).map(|e| format!("{}: `harness.{name}`: {e}", file.display())));
     let all = config

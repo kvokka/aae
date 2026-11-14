@@ -29,10 +29,13 @@ use tokio::{
 };
 
 /// Where the daemon keeps its files (XDG base directories).
+#[derive(Clone)]
 pub(crate) struct Paths {
     pub(crate) config: PathBuf,
     pub(crate) state: PathBuf,
     pub(crate) socket: PathBuf,
+    /// This binary, taken at start: once it is replaced on disk, Linux names the running one `<path> (deleted)`.
+    pub(crate) exe: PathBuf,
 }
 
 impl Paths {
@@ -50,6 +53,7 @@ impl Paths {
             config,
             state: dirs::state()?,
             socket,
+            exe: std::env::current_exe().unwrap_or_else(|_| "aae".into()),
         })
     }
 }
@@ -57,9 +61,7 @@ impl Paths {
 /// Runs the daemon until a stop signal or a drain; `true` when the drain was a restart. An error is why it could
 /// not start.
 pub(crate) async fn run(paths: Paths) -> Result<bool, String> {
-    let mut config = load(&paths.config)
-        .inspect(crate::doctor::warn_per_session)
-        .map_err(|errors| format!("the config has errors:\n{}", errors.join("\n")))?;
+    let mut config = load(&paths).map_err(|errors| format!("the config has errors:\n{}", errors.join("\n")))?;
     private_dir(&paths.state)?;
     // Held until the daemon exits: one writer per state directory (spec §5.1), whatever socket it serves.
     let _lock = lock(&paths.state)?;
@@ -176,12 +178,15 @@ pub(crate) async fn run(paths: Paths) -> Result<bool, String> {
         }),
         config: RwLock::new(config),
         applied: tokio::sync::Mutex::new(1),
-        load: Box::new(move || {
-            let mut loaded = load(&paths.config).inspect(crate::doctor::warn_per_session);
-            if let Ok(config) = &mut loaded {
-                config.api_token.clone_from(&token);
+        load: Box::new({
+            let paths = paths.clone();
+            move || {
+                let mut loaded = load(&paths);
+                if let Ok(config) = &mut loaded {
+                    config.api_token.clone_from(&token);
+                }
+                loaded
             }
-            loaded
         }),
         drivers,
     };

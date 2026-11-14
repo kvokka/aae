@@ -123,6 +123,8 @@ fn core_on(
     tracker: &MemoryTracker,
 ) -> (CoreHandle<Msg>, JoinHandle<Result<(), Error>>) {
     let mut config = config::load(&dir.join("config.toml")).unwrap();
+    // `env <command>` runs the command itself: the HTTP probe stands in for a stdio server behind the bridge.
+    config.bridge = vec!["env".to_owned()];
     // As the daemon does for a tracker it makes: `shop` has the memory tracker.
     for p in config.projects.iter_mut().filter(|p| p.name == "shop") {
         p.tracker.present = true;

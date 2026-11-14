@@ -7,7 +7,7 @@
 
 use super::{RunHandler, row::Row};
 use crate::{
-    config::{EffectiveConfig, Mcp, ServiceScope, Sourced},
+    config::{EffectiveConfig, Health, Mcp, McpScope, Service, ServiceScope, Sourced},
     driver::{Failure, FailureKind, Source},
     writer::{Error, Event, Tx},
 };
@@ -34,6 +34,31 @@ impl RunHandler {
         mut config: EffectiveConfig,
         daemon: &crate::config::Config,
     ) -> Result<(EffectiveConfig, Vec<Bound>), Error> {
+        // A stdio server shared by its scope runs behind the bridge, as a service with an MCP endpoint.
+        for (name, server) in config
+            .mcp
+            .iter()
+            .filter(|(_, s)| s.value.scope != Some(McpScope::Session))
+        {
+            let (Some(command), false) = (&server.value.command, daemon.bridge.is_empty()) else {
+                continue;
+            };
+            let service = Service {
+                command: daemon.bridge.iter().chain(command).cloned().collect(),
+                env: server.value.env.clone(),
+                scope: match server.value.scope {
+                    Some(McpScope::Project) => ServiceScope::Project,
+                    _ => ServiceScope::Orchestrator,
+                },
+                health: Health::Port,
+                mcp: Some("/mcp".to_owned()),
+            };
+            let from = server.from.clone();
+            config
+                .services
+                .entry(name.clone())
+                .or_insert(Sourced { value: service, from });
+        }
         let mut bound = Vec::new();
         for (name, Sourced { value: service, from }) in std::mem::take(&mut config.services) {
             let scope = match service.scope {

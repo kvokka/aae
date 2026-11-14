@@ -40,6 +40,10 @@ pub struct Config {
     /// The enabled bundled plugins with their parameters, run after every declared plugin.
     pub bundled: Vec<Bundled>,
     pub projects: Vec<Project>,
+    /// The command prefix that serves a stdio MCP server over HTTP on `AAE_SERVICE_PORT` (spec §11.4): a stdio
+    /// server not of scope `session` runs behind it as a service. Empty: no bridge, stdio servers stay per session.
+    /// [`load`] leaves it empty; the binary sets it.
+    pub bridge: Vec<String>,
 }
 
 /// The plugins bundled with aae (spec §11.5): name, the events they hook, and whether they are on with no
