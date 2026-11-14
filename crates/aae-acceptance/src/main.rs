@@ -158,7 +158,7 @@ fn order(criterion: &str) -> (u32, &str) {
     (criterion[..digits].parse().unwrap_or(u32::MAX), &criterion[digits..])
 }
 
-/// A line of the report: `mark` is `pass`, `FAIL`, `not run` (a request or release row of a CI run) or `open` (nothing to run).
+/// A line of the report: `mark` is `pass`, `FAIL` or `not run` (a request or release row of a CI run).
 struct Row {
     criterion: &'static str,
     title: &'static str,
@@ -250,19 +250,10 @@ async fn main() -> ExitCode {
             took: Duration::ZERO,
         });
     }
-    for (criterion, title, why) in checks::OPEN.iter().filter(|(c, ..)| wanted(c)) {
-        rows.push(Row {
-            criterion,
-            title,
-            mark: "open",
-            notes: (*why).to_owned(),
-            took: Duration::ZERO,
-        });
-    }
     rows.sort_by(|a, b| order(a.criterion).cmp(&order(b.criterion)));
     let mut open: Vec<&str> = rows
         .iter()
-        .filter(|r| r.criterion != "22" && matches!(r.mark, "FAIL" | "open"))
+        .filter(|r| r.criterion != "22" && r.mark == "FAIL")
         .map(|r| r.criterion)
         .collect();
     open.dedup();
@@ -291,13 +282,13 @@ async fn main() -> ExitCode {
         env.host.replace(' ', "-"),
     );
     let count = |mark: &str| rows.iter().filter(|r| r.mark == mark).count();
-    let (passed, failed, opened) = (count("pass"), count("FAIL"), count("open"));
+    let (passed, failed) = (count("pass"), count("FAIL"));
     for row in &rows {
         report.push_str(&row.line());
     }
     let _ = writeln!(
         report,
-        "\n{passed} of {} rows passed, {failed} failed, {opened} open, {} not run, in {:.0} s.",
+        "\n{passed} of {} rows passed, {failed} failed, {} not run, in {:.0} s.",
         rows.len(),
         count("not run"),
         started.elapsed().as_secs_f64()
@@ -313,8 +304,7 @@ async fn main() -> ExitCode {
     }
     println!("{}", report.lines().last().unwrap_or_default());
     println!("report: {}", args.report.display());
-    // An open row holds back a run of the whole spec; a CI run does not run the request rows it belongs to.
-    if failed == 0 && (args.ci || opened == 0) {
+    if failed == 0 {
         ExitCode::SUCCESS
     } else {
         ExitCode::FAILURE

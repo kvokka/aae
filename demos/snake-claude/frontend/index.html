@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Snake</title>
+<style>
+  body {
+    font-family: system-ui, sans-serif;
+    background: #111;
+    color: #eee;
+    display: flex;
+    justify-content: center;
+    margin: 0;
+    padding: 24px;
+  }
+  #wrap { display: flex; gap: 24px; align-items: flex-start; flex-wrap: wrap; }
+  canvas { background: #1b1b1b; border: 2px solid #444; display: block; }
+  #side { min-width: 200px; }
+  h1 { font-size: 22px; margin: 0 0 8px; }
+  h2 { font-size: 16px; margin: 16px 0 6px; }
+  #score { font-size: 18px; }
+  ol { padding-left: 24px; margin: 0; font-family: monospace; font-size: 15px; }
+  #status { color: #aaa; font-size: 14px; margin-top: 16px; min-height: 1.2em; }
+</style>
+</head>
+<body>
+<div id="wrap">
+  <canvas id="board" width="400" height="400"></canvas>
+  <div id="side">
+    <h1>Snake</h1>
+    <div id="score">Score: 0</div>
+    <h2>Best scores</h2>
+    <ol id="scores"><li>Loading…</li></ol>
+    <div id="status">Arrow keys to steer. Space to start.</div>
+  </div>
+</div>
+<script>
+(() => {
+  const API = 'http://127.0.0.1:8765';
+  const COLS = 20, ROWS = 20, CELL = 20;
+  const TICK_MS = 120;
+
+  const canvas = document.getElementById('board');
+  const ctx = canvas.getContext('2d');
+  const scoreEl = document.getElementById('score');
+  const scoresEl = document.getElementById('scores');
+  const statusEl = document.getElementById('status');
+
+  const DIRS = {
+    ArrowUp: { x: 0, y: -1 },
+    ArrowDown: { x: 0, y: 1 },
+    ArrowLeft: { x: -1, y: 0 },
+    ArrowRight: { x: 1, y: 0 },
+  };
+
+  // state: 'idle' (before first game), 'running', 'over'
+  let state = 'idle';
+  let snake, dir, pending, food, score;
+  let timer = null;
+
+  function randomFood() {
+    if (snake.length >= COLS * ROWS) return null; // board is full
+    while (true) {
+      const f = { x: Math.floor(Math.random() * COLS), y: Math.floor(Math.random() * ROWS) };
+      if (!snake.some(s => s.x === f.x && s.y === f.y)) return f;
+    }
+  }
+
+  function reset() {
+    const cx = Math.floor(COLS / 2), cy = Math.floor(ROWS / 2);
+    snake = [{ x: cx, y: cy }, { x: cx - 1, y: cy }, { x: cx - 2, y: cy }];
+    dir = { x: 1, y: 0 };
+    pending = dir;
+    score = 0;
+    food = randomFood();
+    scoreEl.textContent = 'Score: 0';
+  }
+
+  function start() {
+    clearTimeout(timer);
+    reset();
+    state = 'running';
+    statusEl.textContent = '';
+    draw();
+    schedule();
+  }
+
+  function schedule() {
+    timer = setTimeout(tick, TICK_MS);
+  }
+
+  function tick() {
+    if (state !== 'running') return;
+    dir = pending;
+    const head = { x: snake[0].x + dir.x, y: snake[0].y + dir.y };
+    const eating = food && head.x === food.x && head.y === food.y;
+    // The tail vacates its cell this tick unless we are eating.
+    const body = eating ? snake : snake.slice(0, -1);
+    if (head.x < 0 || head.y < 0 || head.x >= COLS || head.y >= ROWS ||
+        body.some(s => s.x === head.x && s.y === head.y)) {
+      gameOver();
+      return;
+    }
+    snake.unshift(head);
+    if (eating) {
+      score++;
+      scoreEl.textContent = 'Score: ' + score;
+      food = randomFood();
+      if (!food) { // board full: nothing left to eat
+        draw();
+        gameOver();
+        return;
+      }
+    } else {
+      snake.pop();
+    }
+    draw();
+    schedule();
+  }
+
+  async function gameOver() {
+    state = 'over';
+    clearTimeout(timer);
+    draw();
+    statusEl.textContent = 'Game over. Enter your name to save your score.';
+    const name = askName();
+    if (name === null) {
+      if (state === 'over') statusEl.textContent = 'Game over. Score not saved. Press Space to play again.';
+    } else {
+      await postScore(name, score);
+      if (state === 'over') statusEl.textContent = 'Game over. Press Space to play again.';
+    }
+    await loadScores();
+  }
+
+  function askName() {
+    const raw = window.prompt('Game over! Your score: ' + score + '\nEnter your name:', 'player');
+    if (raw === null) return null;
+    // Names must not contain spaces, since the protocol separates name and score by a space.
+    return raw.trim().replace(/\s+/g, '_').slice(0, 20) || 'anon';
+  }
+
+  async function postScore(name, value) {
+    statusEl.textContent = 'Saving score…';
+    try {
+      const res = await fetch(API + '/scores', {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain' },
+        body: name + ' ' + value,
+      });
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      if (state === 'over') statusEl.textContent = 'Score saved.';
+    } catch (e) {
+      if (state === 'over') statusEl.textContent = 'Could not save score (server unreachable). The game still works.';
+    }
+  }
+
+  function li(text) {
+    const el = document.createElement('li');
+    el.textContent = text;
+    return el;
+  }
+
+  async function loadScores() {
+    try {
+      const res = await fetch(API + '/scores');
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      const text = await res.text();
+      const rows = text.split('\n')
+        .map(l => l.trim())
+        .filter(Boolean)
+        .map(l => {
+          const parts = l.split(/\s+/);
+          return { name: parts[0], score: parts[parts.length - 1] };
+        });
+      scoresEl.replaceChildren(...(rows.length
+        ? rows.map(r => li(r.name + '  ' + r.score))
+        : [li('No scores yet')]));
+    } catch (e) {
+      scoresEl.replaceChildren(li('Scores unavailable (server offline)'));
+    }
+  }
+
+  function draw() {
+    const w = canvas.width, h = canvas.height;
+    ctx.fillStyle = '#1b1b1b';
+    ctx.fillRect(0, 0, w, h);
+
+    if (food) {
+      ctx.fillStyle = '#e74c3c';
+      ctx.fillRect(food.x * CELL + 3, food.y * CELL + 3, CELL - 6, CELL - 6);
+    }
+    snake.forEach((s, i) => {
+      ctx.fillStyle = i === 0 ? '#8be9a0' : '#2ecc71';
+      ctx.fillRect(s.x * CELL + 1, s.y * CELL + 1, CELL - 2, CELL - 2);
+    });
+
+    if (state !== 'running') {
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
+      ctx.fillRect(0, 0, w, h);
+      ctx.fillStyle = '#fff';
+      ctx.textAlign = 'center';
+      ctx.font = 'bold 26px system-ui, sans-serif';
+      ctx.fillText(state === 'over' ? 'Game over' : 'SNAKE', w / 2, h / 2 - 8);
+      ctx.font = '16px system-ui, sans-serif';
+      ctx.fillText('Press Space to ' + (state === 'over' ? 'play again' : 'start'), w / 2, h / 2 + 24);
+    }
+  }
+
+  window.addEventListener('keydown', e => {
+    if (e.code === 'Space' || e.key === ' ') {
+      e.preventDefault();
+      // Ignore Space mid-game so an accidental press does not discard a run.
+      if (state !== 'running' && !e.repeat) start();
+      return;
+    }
+    const d = DIRS[e.key];
+    if (d) {
+      e.preventDefault();
+      if (state !== 'running') return;
+      // Reject reversing directly into the body (checked against the direction in effect).
+      if (d.x === -dir.x && d.y === -dir.y) return;
+      pending = d;
+    }
+  });
+
+  // Initial screen: board with the idle overlay, and the best-score list.
+  reset();
+  state = 'idle';
+  draw();
+  loadScores();
+})();
+</script>
+</body>
+</html>

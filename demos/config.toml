@@ -1,0 +1,5 @@
+# The orchestrator config of both demos, for `aae config check`; `run.sh` writes one per run with only its demo.
+projects = ["snake-claude", "snake-mixed"]
+
+[harness.claude]
+[harness.codex]

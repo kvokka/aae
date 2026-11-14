@@ -1,0 +1,16 @@
+# The demos of spec §15 run real models: they need the harness logins and spend tokens, so they run only here, by
+# hand. CI runs only `check`. claude, codex and jq come from the repository's mise.toml.
+[tools]
+python = "3.15.0"                     # the backend and the smoke test
+
+[tasks.check]
+description = "The demo pack and projects load"
+run = "aae config check --config config.toml"
+
+[tasks.snake-claude]
+description = "Demo 1: snake on claude haiku, from empty rigs to a green smoke test"
+run = "./run.sh snake-claude"
+
+[tasks.snake-mixed]
+description = "Demo 2: the same with the backend on codex"
+run = "./run.sh snake-mixed"

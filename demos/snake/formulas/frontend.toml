@@ -1,0 +1,13 @@
+name = "frontend"
+description = "Write the snake game as one page that keeps its best scores in the backend"
+
+[inputs]                              # the backend's API, from the outcome of its run (the trigger in aae.toml)
+port = { type = "integer", required = true }
+get = { type = "string", required = true }
+post = { type = "string", required = true }
+
+[step]
+kind = "prompt"
+agent = "frontend"
+prompt = "frontend.md"
+timeout = "10m"

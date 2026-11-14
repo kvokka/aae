@@ -11,6 +11,7 @@ finisher and by plugins.
 - [Your first project](docs/guide/first-project.md)
 - [Your first formula with an agent](docs/guide/first-formula.md)
 - [Writing a plugin](docs/guide/plugin.md)
+- [Demos](demos/README.md): a snake game made by a claude agent and a codex one, chained by triggers
 - Reference: [configuration files](docs/design/config.md), [contracts](docs/design/contracts.md) (events, hooks,
   run states), [HTTP API](docs/api/openapi.json)
 
@@ -67,9 +68,10 @@ The acceptance criteria of the first release are executable scenarios in `crates
 `aae daemon` in a temporary directory tree. `mise run acceptance-ci` runs the scenarios without a model, as CI does on
 every commit. `mise run acceptance` runs all of them, including those that call a real model: they use the cheapest
 model, cost money and need your harness login. Pass criterion numbers to run only those:
-`cargo build -p aae && cargo run -p aae-acceptance -- --ci 3 19`. The rows that live in cargo and the CI scripts run
-from the same binary after the scenarios: the release build for the four targets (1, not with `--ci`), the crash tests of the adapters
-(9), the contract tests (11), the line budgets with the readiness file checked against the open rows (22) and the
-stub linters (23). The report has a line for every row of §15, run or not, with the date and the versions of `aae`
-and the harnesses, and goes to `target/acceptance/report.md`. No row is checked by hand; the demos of criterion 20
-show as open until they exist.
+`cargo build -p aae && cargo run -p aae-acceptance -- --ci 3 19`. The rows that live in cargo and the CI scripts
+run from the same binary after the scenarios: the release build for the four targets (1, not with `--ci`), the
+crash tests of the adapters (9), the contract tests (11), the demos (20; in CI only that they load), the line
+budgets with the readiness file checked against the failed rows (22) and the stub linters (23). The report has a
+line for every row of §15, run or not, with the date and the versions of `aae` and the harnesses, and goes to
+`target/acceptance/report.md`. No row is checked by hand. A row that is not run cannot fail, so a green 22 under
+`--ci` says nothing of the rows that need a model, the demos of 20 among them.

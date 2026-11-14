@@ -5,13 +5,6 @@
 use crate::{Env, Launch, Scenario};
 use std::{env::consts, path::PathBuf, sync::Arc};
 
-/// Rows with nothing to run yet: the report shows them open, and an open row fails a whole run of the spec.
-pub(crate) const OPEN: &[(&str, &str, &str)] = &[(
-    "20",
-    "demos 1 and 2 pass from launch to a green smoke test without intervention",
-    "no scenario: the demos/ of §15 are not built yet",
-)];
-
 /// The four release targets of spec §13.
 const TARGETS: [&str; 4] = [
     "x86_64-unknown-linux-musl",
@@ -57,6 +50,24 @@ pub(crate) const ALL: &[Scenario] = &[
                 5,
             ))
         },
+    },
+    Scenario {
+        criterion: "20",
+        title: "the pack and both projects of demos/ load",
+        launch: Launch::Ci,
+        run: |env| Box::pin(demos_load(env)),
+    },
+    Scenario {
+        criterion: "20",
+        title: "demo 1, snake on claude, passes from empty rigs to a green smoke test without intervention",
+        launch: Launch::Request,
+        run: |env| Box::pin(demo(env, "snake-claude")),
+    },
+    Scenario {
+        criterion: "20",
+        title: "demo 2, snake on claude and codex, passes from empty rigs to a green smoke test without intervention",
+        launch: Launch::Request,
+        run: |env| Box::pin(demo(env, "snake-mixed")),
     },
     Scenario {
         criterion: "22",
@@ -151,6 +162,19 @@ async fn tests(env: Arc<Env>, filter: &str, want: u32) -> String {
     summary
 }
 
+async fn demos_load(env: Arc<Env>) -> String {
+    let aae = env.aae.to_string_lossy().into_owned();
+    command(&env, &aae, &["config", "check", "--config", "demos/config.toml"]).await;
+    "`aae config check` of demos/config.toml is clean".into()
+}
+
+/// One demo on real models (spec §15 "Demo"); `demos/run.sh` keeps its rigs as the snapshot in `demos/<demo>/`.
+async fn demo(env: Arc<Env>, name: &str) -> String {
+    let aae = format!("AAE={}", env.aae.display());
+    let out = command(&env, "env", &[&aae, "demos/run.sh", name]).await;
+    line_with(&out, name)
+}
+
 async fn budget(env: Arc<Env>) -> String {
     let out = command(&env, "scripts/budget.sh", &[]).await;
     format!(
@@ -205,14 +229,9 @@ mod tests {
 
     #[test]
     fn every_row_of_section_15_is_in_the_report() {
-        let known: Vec<&str> = (ALL.iter().chain(crate::scenarios::ALL).map(|s| s.criterion))
-            .chain(OPEN.iter().map(|(c, ..)| *c))
-            .collect();
+        let known: Vec<&str> = (ALL.iter().chain(crate::scenarios::ALL).map(|s| s.criterion)).collect();
         for row in ROWS {
-            assert!(
-                known.contains(row),
-                "criterion {row} has no check, scenario or open entry"
-            );
+            assert!(known.contains(row), "criterion {row} has no check or scenario");
         }
         assert!(known.iter().all(|c| ROWS.contains(c)), "{known:?}");
     }

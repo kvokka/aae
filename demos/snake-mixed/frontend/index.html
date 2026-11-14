@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Snake</title>
+<style>
+  body {
+    font-family: system-ui, sans-serif;
+    background: #1b1d23;
+    color: #eee;
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+    gap: 32px;
+    padding: 24px;
+    margin: 0;
+  }
+  h1 { font-size: 1.4em; margin: 0 0 8px; }
+  #hud { margin-bottom: 8px; }
+  canvas {
+    background: #111;
+    border: 2px solid #444;
+    display: block;
+  }
+  #message { margin-top: 8px; min-height: 1.2em; color: #ccc; }
+  #side { min-width: 200px; }
+  ol { margin: 0; padding-left: 24px; font-family: monospace; }
+  #status { margin-top: 8px; font-size: 0.9em; color: #aaa; min-height: 1.2em; }
+</style>
+</head>
+<body>
+<div>
+  <h1>Snake</h1>
+  <div id="hud">Score: <span id="score">0</span></div>
+  <canvas id="board" width="400" height="400"></canvas>
+  <div id="message">Press Space to start</div>
+</div>
+<div id="side">
+  <h1>Best scores</h1>
+  <ol id="scores"><li>Loading…</li></ol>
+  <div id="status"></div>
+</div>
+
+<script>
+(function () {
+  'use strict';
+
+  const API = 'http://127.0.0.1:8765';
+  const COLS = 20;
+  const ROWS = 20;
+  const CELL = 20;
+  const TICK_MS = 120;
+  const REQUEST_TIMEOUT_MS = 3000;
+  const MAX_NAME_LENGTH = 20;
+
+  const DIRS = {
+    ArrowUp: { x: 0, y: -1 },
+    ArrowDown: { x: 0, y: 1 },
+    ArrowLeft: { x: -1, y: 0 },
+    ArrowRight: { x: 1, y: 0 },
+  };
+
+  const canvas = document.getElementById('board');
+  const ctx = canvas.getContext('2d');
+  const scoreEl = document.getElementById('score');
+  const messageEl = document.getElementById('message');
+  const scoresEl = document.getElementById('scores');
+  const statusEl = document.getElementById('status');
+
+  // state: 'idle' (before first game), 'running', 'saving' (name prompt open), 'over'
+  let state = 'idle';
+  let snake = [];
+  let dir = { x: 1, y: 0 };
+  let nextDir = dir;
+  let food = null;
+  let score = 0;
+  let timer = null;
+
+  function reset() {
+    const mid = Math.floor(COLS / 2);
+    snake = [{ x: mid, y: mid }, { x: mid - 1, y: mid }, { x: mid - 2, y: mid }];
+    dir = { x: 1, y: 0 };
+    nextDir = dir;
+    score = 0;
+    scoreEl.textContent = '0';
+    food = placeFood();
+  }
+
+  function placeFood() {
+    const free = [];
+    for (let x = 0; x < COLS; x++) {
+      for (let y = 0; y < ROWS; y++) {
+        if (!snake.some(s => s.x === x && s.y === y)) free.push({ x, y });
+      }
+    }
+    return free.length ? free[Math.floor(Math.random() * free.length)] : null;
+  }
+
+  function tick() {
+    dir = nextDir;
+    const head = { x: snake[0].x + dir.x, y: snake[0].y + dir.y };
+    const eating = food !== null && head.x === food.x && head.y === food.y;
+    // When not eating, the tail moves away this tick, so it is not an obstacle.
+    const body = eating ? snake : snake.slice(0, -1);
+    const hitWall = head.x < 0 || head.y < 0 || head.x >= COLS || head.y >= ROWS;
+    const hitSelf = body.some(s => s.x === head.x && s.y === head.y);
+    if (hitWall || hitSelf) {
+      endGame();
+      return;
+    }
+    snake.unshift(head);
+    if (eating) {
+      score++;
+      scoreEl.textContent = String(score);
+      food = placeFood();
+    } else {
+      snake.pop();
+    }
+    draw();
+  }
+
+  function startGame() {
+    clearInterval(timer);
+    reset();
+    state = 'running';
+    messageEl.textContent = '';
+    draw();
+    timer = setInterval(tick, TICK_MS);
+  }
+
+  function endGame() {
+    clearInterval(timer);
+    timer = null;
+    state = 'saving';
+    draw();
+    messageEl.textContent = 'Game over! Enter your name to save your score.';
+    // Let the final frame paint before the blocking prompt opens.
+    setTimeout(saveScore, 0);
+  }
+
+  async function saveScore() {
+    const finalScore = score;
+    const raw = window.prompt('Game over! Score: ' + finalScore + '\nEnter your name to save it:', '');
+    if (raw !== null) {
+      const name = raw.trim().replace(/\s+/g, '_').slice(0, MAX_NAME_LENGTH) || 'anonymous';
+      await postScore(name, finalScore);
+    }
+    state = 'over';
+    draw();
+    messageEl.textContent = 'Game over. Press Space to play again.';
+    loadScores();
+  }
+
+  function fetchWithTimeout(url, options) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+    return fetch(url, Object.assign({ signal: controller.signal }, options))
+      .finally(() => clearTimeout(timeout));
+  }
+
+  async function postScore(name, value) {
+    try {
+      const res = await fetchWithTimeout(API + '/scores', {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain' },
+        body: name + ' ' + value,
+      });
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      statusEl.textContent = 'Score saved.';
+    } catch (err) {
+      statusEl.textContent = 'Could not save score (backend unreachable).';
+    }
+  }
+
+  async function loadScores() {
+    try {
+      const res = await fetchWithTimeout(API + '/scores');
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      const text = await res.text();
+      const rows = text
+        .split('\n')
+        .map(line => line.trim())
+        .filter(Boolean)
+        .map(line => {
+          const parts = line.split(/\s+/);
+          return { name: parts[0], score: parts[1] || '' };
+        });
+      renderScores(rows);
+    } catch (err) {
+      renderScores(null);
+    }
+  }
+
+  function renderScores(rows) {
+    scoresEl.replaceChildren();
+    if (rows === null) {
+      scoresEl.appendChild(makeItem('Backend unavailable'));
+    } else if (rows.length === 0) {
+      scoresEl.appendChild(makeItem('No scores yet'));
+    } else {
+      rows.forEach(r => scoresEl.appendChild(makeItem(r.name + ' ' + r.score)));
+    }
+  }
+
+  function makeItem(text) {
+    const li = document.createElement('li');
+    li.textContent = text; // textContent: server data is never parsed as HTML
+    return li;
+  }
+
+  function draw() {
+    ctx.fillStyle = '#111';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    if (food) {
+      ctx.fillStyle = '#e74c3c';
+      ctx.fillRect(food.x * CELL + 2, food.y * CELL + 2, CELL - 4, CELL - 4);
+    }
+    snake.forEach((s, i) => {
+      ctx.fillStyle = i === 0 ? '#f1c40f' : '#2ecc71';
+      ctx.fillRect(s.x * CELL + 1, s.y * CELL + 1, CELL - 2, CELL - 2);
+    });
+
+    if (state !== 'running') {
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.fillStyle = '#fff';
+      ctx.textAlign = 'center';
+      ctx.font = 'bold 28px sans-serif';
+      ctx.fillText(state === 'idle' ? 'SNAKE' : 'GAME OVER', canvas.width / 2, canvas.height / 2 - 10);
+      if (state !== 'saving') {
+        ctx.font = '16px sans-serif';
+        ctx.fillText(state === 'idle' ? 'Press Space to start' : 'Press Space to play again',
+          canvas.width / 2, canvas.height / 2 + 24);
+      }
+    }
+  }
+
+  window.addEventListener('keydown', e => {
+    if (Object.prototype.hasOwnProperty.call(DIRS, e.key)) {
+      e.preventDefault();
+      if (state !== 'running') return;
+      const d = DIRS[e.key];
+      // Ignore reversing straight into the body.
+      if (d.x === -dir.x && d.y === -dir.y) return;
+      nextDir = d;
+    } else if (e.key === ' ' || e.code === 'Space') {
+      e.preventDefault();
+      if (state === 'idle' || state === 'over') startGame();
+    }
+  });
+
+  reset();
+  draw();
+  loadScores();
+})();
+</script>
+</body>
+</html>

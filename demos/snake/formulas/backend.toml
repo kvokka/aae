@@ -1,0 +1,8 @@
+name = "backend"
+description = "Write the backend of the snake game: the best scores in a plain-text file"
+
+[step]
+kind = "prompt"
+agent = "backend"                     # the project's own agent: the one thing the two demos change
+prompt = "backend.md"
+timeout = "10m"

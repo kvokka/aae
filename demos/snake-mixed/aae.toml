@@ -1,0 +1,26 @@
+packs = ["../snake"]
+
+[settings]
+inherit_host = false                  # only what this pack sets reaches the agents; the logins still come from the host
+
+[rigs.backend]
+path = "backend"
+[rigs.frontend]
+path = "frontend"
+
+# The chain: backend passed -> frontend with the backend's API -> smoke test. Each `where` names the rig it listens to.
+[[trigger]]
+name = "frontend-after-backend"
+on = "run.passed"
+where = { rig = "backend", "run.formula" = "snake.backend" }
+run = "snake.frontend"
+rig = "frontend"
+inputs = { port = "{{ event.outcome.data.port }}", get = "{{ event.outcome.data.get }}", post = "{{ event.outcome.data.post }}" }
+
+[[trigger]]
+name = "smoke-after-frontend"
+on = "run.passed"
+where = { rig = "frontend", "run.formula" = "snake.frontend" }
+run = "snake.smoke"
+rig = "backend"
+inputs = { frontend = "{{ event.run.workdir }}" }

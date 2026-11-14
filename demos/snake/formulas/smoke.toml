@@ -1,0 +1,12 @@
+name = "smoke"
+description = "The demo's smoke test: the backend stores and serves a score, the frontend has the game"
+
+[inputs]
+frontend = { type = "string", required = true }   # the frontend rig's directory
+
+[step]
+kind = "exec"
+# Runs in the backend rig, next to server.py. The path holds while the pack sits beside the project, as in run.sh's
+# work directory and in demos/ itself.
+command = ["sh", "../../snake/smoke.sh"]
+timeout = "2m"
