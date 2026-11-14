@@ -46,8 +46,9 @@ pub(crate) const ALL: &[Scenario] = &[
         run: |env| {
             Box::pin(tests(
                 env,
-                "-p aae-front -p aae -E binary(openapi)|binary(replies)|test(both_epochs_serve_the_same_five_tools)",
-                5,
+                "-p aae-front -p aae -E binary(openapi)|binary(replies)|test(both_epochs_serve_the_same_five_tools)\
+                 |test(a_codex_thread_that_calls_the_finisher_passes_its_run)",
+                6,
             ))
         },
     },

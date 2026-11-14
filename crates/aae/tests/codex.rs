@@ -4,7 +4,7 @@
 mod common;
 
 use aae_testkit::openai::{Provider, Reply};
-use common::Daemon;
+use common::{Daemon, schema::check};
 use serde_json::Value;
 use std::{
     fs,
@@ -89,6 +89,8 @@ async fn a_codex_thread_that_calls_the_finisher_passes_its_run() {
     let requests = provider.requests();
     let output = requests[1].body["input"].to_string();
     assert!(output.contains("function_call_output"), "{output}");
+    // The app-server outlives the run: a live instance to check against the `Instance` schema.
+    check("get", "/v1/instances", &d.get("/v1/instances").await);
 }
 
 /// A codex agent with a skill that inherits the host runs in a `CODEX_HOME` of its own linking the host's: the model

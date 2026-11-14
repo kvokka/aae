@@ -2,6 +2,8 @@
 // Each test crate uses a part of this module.
 #![allow(dead_code)]
 
+pub(crate) mod schema;
+
 use aae_front::client::{Client, ClientError};
 use serde_json::{Value, json};
 use std::{
