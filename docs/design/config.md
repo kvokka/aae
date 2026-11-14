@@ -345,6 +345,7 @@ declared by the orchestrator or the project.
 when it exists; its text is the agent layer's `system_prompt`, so an override may still replace it, and setting
 `system_prompt` in `agent.toml` too is an error), `max_runs` (optional positive integer: runs of this agent
 started at once in its project; the orchestrator's `max_runs` still applies), then the settings keys above.
+A role prompt file that is empty or only whitespace is a load error naming the file.
 Everything of one agent (settings, prompts,
 skills, hooks, scripts) lives in its directory, laid out as its author likes. The core has no role names: whatever a
 role does is configuration.
@@ -390,6 +391,8 @@ of either step kind, a git worktree that aae makes and removes (the bundled `wor
 A prompt template is checked at load (contracts 2.3): `inputs.<name>` must be a declared input; `bead.<field>` needs
 a `bead` input and a field of `Bead` (contracts 5.2); `run.<field>` a field of `RunView` (1.3); `project.name`,
 `project.path`; `rig.name`, `rig.path` and `rig.<var>` (a rig variable, checked when the run starts).
+A prompt is never empty: a template file of only whitespace is a load error, and a prompt that is empty after
+substitution fails the run (`infrastructure`, `prompt: empty after substitution`) before any process starts.
 
 ## Trigger
 

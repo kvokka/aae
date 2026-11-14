@@ -296,3 +296,30 @@ async fn a_run_whose_workdir_is_gone_fails_with_the_reason_and_no_launch() {
     );
     assert_eq!(failed["run"]["attempt"], 0, "no launch: {failed}");
 }
+
+#[tokio::test(start_paused = true)]
+async fn a_prompt_empty_after_substitution_fails_the_run_before_a_launch() {
+    let formula = "name = \"build\"\n[inputs.goal]\ntype = \"string\"\n\
+                   [step]\nkind = \"prompt\"\nagent = \"dev\"\nprompt = \"build.md\"\n";
+    let w = world(&[
+        ("shop/formulas/build.toml", formula),
+        ("shop/formulas/build.md", "{{ inputs.goal }}\n"),
+    ]);
+    let create = Create {
+        project: "shop".into(),
+        rig: "web".into(),
+        formula: "build".into(),
+        inputs: json!({ "goal": " " }).as_object().unwrap().clone(),
+        correlation: None,
+        depth: 0,
+        parent_run: None,
+        continue_from: None,
+    };
+    let reply = w.core.send(None, Msg::Create(create)).await.unwrap();
+    let events = w
+        .events(reply["run"].as_str().unwrap(), Duration::from_millis(200))
+        .await;
+    let failed = last(&events, "run.failed");
+    assert_eq!(failed["reason"], "prompt: empty after substitution", "{failed}");
+    assert_eq!(failed["run"]["attempt"], 0, "no launch: {failed}");
+}

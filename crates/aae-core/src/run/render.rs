@@ -46,6 +46,9 @@ impl RunHandler {
             "project": { "name": project.name, "path": project.root },
         });
         let text = prompt.render(&context).map_err(|e| format!("prompt: {e}"))?;
+        if text.trim().is_empty() {
+            return Err("prompt: empty after substitution".to_owned());
+        }
         Ok((Some(text), timeout_ms(timeout), json!(config)))
     }
 }

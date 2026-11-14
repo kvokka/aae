@@ -101,10 +101,13 @@ impl Loader {
         }
     }
 
+    /// The text of a prompt file: a prompt is never empty (spec §6.3, §8.1).
     pub(super) fn text(&mut self, file: &Path, path: &Path) -> Option<String> {
-        fs::read_to_string(path)
-            .map_err(|e| self.fail(file, format!("`{}`: {e}", path.display())))
-            .ok()
+        match fs::read_to_string(path) {
+            Ok(text) if text.trim().is_empty() => self.none(file, format!("`{}` is empty", path.display())),
+            Ok(text) => Some(text),
+            Err(e) => self.none(file, format!("`{}`: {e}", path.display())),
+        }
     }
 
     pub(super) fn formula(&mut self, file: &Path) -> Option<(String, Formula)> {

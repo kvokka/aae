@@ -285,6 +285,12 @@ fn files_reject_unknown_keys_and_undeclared_names() {
         ],
         "`system_prompt` and a role prompt file are both set",
     );
+    // A prompt is never empty: a role prompt or a formula template of blanks is a load error naming the file.
+    fails(
+        &[("kit/agents/implementer/prompt.md", " \n\t\n")],
+        "implementer/prompt.md` is empty",
+    );
+    fails(&[("kit/formulas/implement.md", "\n  \n")], "implement.md` is empty");
     let unreadable_prompt = ("kit/agents/reviewer/prompt.md/.keep", "");
     fails(
         &[
