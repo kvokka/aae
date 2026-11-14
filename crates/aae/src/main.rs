@@ -25,19 +25,13 @@ fn main() -> ExitCode {
         Command::Doctor { config } => {
             return match daemon::Paths::resolve(config, cli.socket) {
                 Ok(paths) => doctor::run(&paths, cli.json),
-                Err(e) => {
-                    eprintln!("aae doctor: {e}");
-                    ExitCode::FAILURE
-                }
+                Err(e) => cli::fail(cli.json, "config_error", &format!("doctor: {e}")),
             };
         }
         Command::Fetch { config, update } => {
             return match daemon::Paths::resolve(config, cli.socket) {
                 Ok(paths) => fetch::run(&paths.config, update),
-                Err(e) => {
-                    eprintln!("aae fetch: {e}");
-                    ExitCode::FAILURE
-                }
+                Err(e) => cli::fail(cli.json, "config_error", &format!("fetch: {e}")),
             };
         }
         Command::McpBridge { command } => return bridge::run(command),

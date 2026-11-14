@@ -19,8 +19,9 @@ request on the TCP listener needs `Authorization: Bearer <token>`; the daemon wr
 | `cancel_run` | `id`, `reason`?, `idempotency_key`? | `POST /v1/runs/{id}/cancel` |
 
 A tool result carries the API's JSON reply as text. An API error (`bad_request`, `not_found`, `rejected`, ...) is a
-result with `isError: true` and the text `<code>: <message>`; an unknown tool is the JSON-RPC error `-32602`. `idempotency_key` works as the API's `Idempotency-Key`: the same key
-and arguments return the first result, other arguments are `idempotency_key_reused`.
+result with `isError: true` and the text `<code>: <message>`; an unknown tool is the JSON-RPC error `-32602`.
+`idempotency_key` works as the API's `Idempotency-Key`: the same key and
+arguments return the first result, other arguments are `idempotency_key_reused`.
 
 ## Protocol epochs
 

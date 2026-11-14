@@ -97,15 +97,21 @@ pub fn local(
         } => {
             let config = match load(config) {
                 Ok(config) => config,
-                Err(errors) => return fail(&format!("the config has errors:\n{}", errors.join("\n"))),
+                Err(errors) => {
+                    return fail(
+                        json,
+                        "config_error",
+                        &format!("the config has errors:\n{}", errors.join("\n")),
+                    );
+                }
             };
             match explained(&config, &project, &agent, rig.as_deref()) {
                 Ok(reply) if json => print(json, &reply),
                 Ok(reply) => print!("{}", reply["text"].as_str().unwrap_or_default()),
-                Err(e) => return fail(&e),
+                Err(e) => return fail(json, "not_found", &e),
             }
             ExitCode::SUCCESS
         }
-        ConfigCommand::Reload { .. } => fail("`config reload` needs the daemon"),
+        ConfigCommand::Reload { .. } => fail(json, "usage", "`config reload` needs the daemon"),
     }
 }

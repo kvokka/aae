@@ -37,8 +37,9 @@ Code: `crates/aae-front/src/cli/`. The CLI is a thin client of the HTTP API in t
 
 - One command per API operation; a test checks the command table against the OpenAPI document.
 - `--json` on every command gives the API's JSON; `--key` on every mutating command sets the idempotency key.
-- An error exits 1 with `aae: <message>` on stderr; under `--json`, stderr is `{"error": {"code", "message", ...}}`
-  (the API's error object, or the code `no_daemon`).
+- An error exits 1 with `aae: <message>` on stderr; under `--json`, stderr is `{"error": {"code", "message", ...}}`:
+  the API's error object, or for a local error the code `no_daemon`, `usage`, `config_error`, `not_found` or
+  `internal`. Arguments that do not parse exit 2 with the usage text.
 - `aae run start` prints the run id; when a bead input finds nothing ready it says so on stderr and exits 3.
 - `aae run watch <run>` prints the live view (a line per event, `-  harness  <type>` per session message) and exits
   0 once the stream ends with the run; `aae run show` gives the outcome.

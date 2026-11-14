@@ -75,6 +75,10 @@ async fn the_finisher_reports_the_answer_and_needs_the_session_environment() {
     let d = Daemon::start(|_| {}).await;
     let out = d.cli(&["finish", "pass", "--summary", "done"], &[]);
     assert!(!out.status.success());
+    // A local error under `--json` is a JSON error object too.
+    let out = d.cli(&["--json", "finish", "pass", "--summary", "done"], &[]);
+    let error: Value = serde_json::from_slice(&out.stderr).unwrap();
+    assert_eq!((out.status.code(), &error["error"]["code"]), (Some(1), &"usage".into()));
     let env = [("AAE_RUN", "nope"), ("AAE_ATTEMPT_TOKEN", "bad")];
     let out = d.cli(&["finish", "pass", "--summary", "done", "--data", "{\"n\":1}"], &env);
     assert_eq!(String::from_utf8_lossy(&out.stdout).trim(), "invalid");
@@ -151,6 +155,12 @@ fn the_config_is_checked_and_explained_without_a_daemon() {
     let out = aae(&["config", "explain", "--project", "shop", "--agent", "dev", "--json"]);
     let reply: Value = serde_json::from_slice(&out.stdout).unwrap();
     assert_eq!(reply["inherits_host"], true, "{reply}");
+    let out = aae(&["--json", "config", "explain", "--project", "nope", "--agent", "dev"]);
+    let error: Value = serde_json::from_slice(&out.stderr).unwrap();
+    assert_eq!(
+        (out.status.code(), &error["error"]["code"]),
+        (Some(1), &"not_found".into())
+    );
     let out = aae(&["config", "check", "--config", broken]);
     assert!(!out.status.success());
     assert!(String::from_utf8_lossy(&out.stderr).contains("broken.toml"));

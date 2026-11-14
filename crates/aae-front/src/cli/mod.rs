@@ -191,12 +191,12 @@ pub fn has_command(words: &str) -> bool {
 pub fn run(cli: Cli) -> ExitCode {
     let socket = match cli.socket.clone().map_or_else(crate::dirs::socket, Ok) {
         Ok(socket) => socket,
-        Err(e) => return fail(&e),
+        Err(e) => return fail(cli.json, "config_error", &e),
     };
     let runtime = tokio::runtime::Builder::new_current_thread().enable_all().build();
     let runtime = match runtime {
         Ok(runtime) => runtime,
-        Err(e) => return fail(&format!("runtime: {e}")),
+        Err(e) => return fail(cli.json, "internal", &format!("runtime: {e}")),
     };
     let (client, json) = (Client::new(socket.clone()), cli.json);
     let error = match runtime.block_on(execute(&client, cli)) {
@@ -205,18 +205,22 @@ pub fn run(cli: Cli) -> ExitCode {
             let message = format!("no daemon on {} ({e}); start it with `aae daemon`", socket.display());
             json!({ "code": "no_daemon", "message": message })
         }
-        Err(e @ ClientError::Api { .. }) if !json => return fail(&e.to_string()),
+        Err(e @ ClientError::Api { .. }) if !json => return fail(false, "", &e.to_string()),
         Err(ClientError::Api { error, .. }) => error,
     };
-    if !json {
-        return fail(error["message"].as_str().unwrap_or_default());
-    }
-    eprintln!("{}", json!({ "error": error }));
-    ExitCode::FAILURE
+    report(json, error)
 }
 
-pub(crate) fn fail(message: &str) -> ExitCode {
-    eprintln!("aae: {message}");
+/// A local error: `aae: <message>`, or under `--json` the API's error object with `code`.
+pub fn fail(json: bool, code: &str, message: &str) -> ExitCode {
+    report(json, json!({ "code": code, "message": message }))
+}
+
+fn report(json: bool, error: Value) -> ExitCode {
+    match json {
+        true => eprintln!("{}", json!({ "error": error })),
+        false => eprintln!("aae: {}", error["message"].as_str().unwrap_or_default()),
+    }
     ExitCode::FAILURE
 }
 
@@ -229,6 +233,8 @@ async fn execute(client: &Client, cli: Cli) -> Result<ExitCode, ClientError> {
         | Command::McpBridge { .. }
         | Command::Config(ConfigCommand::Check { .. } | ConfigCommand::Explain { .. }) => {
             return Ok(fail(
+                json,
+                "usage",
                 "`daemon`, `doctor`, `fetch`, `mcp-bridge` and `config check|explain` run without a daemon, not as its \
                  client",
             ));
@@ -244,7 +250,7 @@ async fn execute(client: &Client, cli: Cli) -> Result<ExitCode, ClientError> {
         Command::Plugin(command) => config::list(client, json, "plugins", command).await?,
         Command::Config(ConfigCommand::Reload { idempotency }) => config::reload(client, json, idempotency).await?,
         Command::Events { from } => follow(client.events(from).await?, json).await?,
-        Command::Finish { result, summary, data } => return finish(client, result, summary, data).await,
+        Command::Finish { result, summary, data } => return finish(client, json, result, summary, data).await,
         Command::Status => print(json, &client.request("GET", "/v1/daemon", None, None).await?),
         Command::Drain { timeout, key } => print(
             json,

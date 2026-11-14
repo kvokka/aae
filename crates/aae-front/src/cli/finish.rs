@@ -17,12 +17,15 @@ const EX_TEMPFAIL: u8 = 75;
 /// The finisher: the run and the token come from the session environment; an unreachable daemon is retried.
 pub(super) async fn finish(
     client: &Client,
+    json: bool,
     result: Verdict,
     summary: String,
     data: Option<String>,
 ) -> Result<ExitCode, ClientError> {
     let (Ok(run), Ok(token)) = (std::env::var("AAE_RUN"), std::env::var("AAE_ATTEMPT_TOKEN")) else {
         return Ok(fail(
+            json,
+            "usage",
             "AAE_RUN and AAE_ATTEMPT_TOKEN are not set: `aae finish` runs inside an agent session",
         ));
     };
@@ -33,9 +36,9 @@ pub(super) async fn finish(
         None => Value::Null,
         Some(Ok(text)) => match serde_json::from_str(&text) {
             Ok(value) => value,
-            Err(e) => return Ok(fail(&format!("--data: {e}"))),
+            Err(e) => return Ok(fail(json, "usage", &format!("--data: {e}"))),
         },
-        Some(Err(e)) => return Ok(fail(&e)),
+        Some(Err(e)) => return Ok(fail(json, "usage", &e)),
     };
     let result = match result {
         Verdict::Pass => "pass",
