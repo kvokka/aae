@@ -38,7 +38,7 @@ while [ $(($(date +%s) - started)) -lt 1080 ]; do
   sleep 5
 done
 seconds=$(($(date +%s) - started))
-sha=$(git -C "$here" rev-parse --short HEAD 2>/dev/null || echo unknown)
+sha=$(git -C "$here" describe --always --dirty 2>/dev/null || echo unknown)
 versions="aae-$("$aae" --version | cut -d' ' -f2)@$sha"
 for harness in claude codex; do
   versions="$versions,$harness-$("$harness" --version 2>/dev/null | grep -Eo '[0-9]+\.[0-9]+\.[0-9]+' | head -1)"
