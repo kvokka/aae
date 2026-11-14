@@ -131,8 +131,8 @@ async fn relay(state: Arc<Api>, run: String, mut next: i64, tx: mpsc::Sender<Res
                 }
             }
             Err(e) => {
-                let data = gap(&e).message;
-                let _ = tx.send(Ok(Event::default().event("gap").data(data))).await;
+                let e = gap(&e);
+                let _ = tx.send(Ok(Event::default().event(e.code).data(e.message))).await;
                 return;
             }
         }

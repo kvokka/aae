@@ -59,6 +59,7 @@ fn every_operation_lists_the_errors_it_can_return() {
             let statuses: Vec<&String> = op["responses"].as_object().unwrap().keys().collect();
             let lists = |status: &str| statuses.iter().any(|s| *s == status);
             let at = format!("{} {path}", method.to_uppercase());
+            assert!(lists("401"), "{at}: lists 401, the reply over TCP without the token");
             if has("Idempotency-Key", "header") {
                 assert!(
                     lists("422") && lists("503"),

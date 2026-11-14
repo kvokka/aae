@@ -69,9 +69,10 @@ pub(crate) async fn stream(
                         }
                     }
                 }
+                // `gap` for events rotated away under a slow reader, `journal` for a failed read.
                 Err(e) => {
-                    let data = gap(&e).message;
-                    let _ = tx.send(Ok(Event::default().event("gap").data(data))).await;
+                    let e = gap(&e);
+                    let _ = tx.send(Ok(Event::default().event(e.code).data(e.message))).await;
                     return;
                 }
             }

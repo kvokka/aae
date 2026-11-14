@@ -190,7 +190,9 @@ pub(crate) fn checked(loaded: Result<Config, Vec<String>>) -> Value {
 /// harnesses or the trackers needs a daemon restart (409). A replayed key answers as before and applies nothing.
 #[utoipa::path(post, path = "/v1/config/reload",
     params(("Idempotency-Key" = Option<String>, Header)),
-    responses((status = OK, body = Reloaded), (status = CONFLICT, description = REJECTED, body = ErrorReply), Keyed))]
+    responses((status = OK, body = Reloaded), (status = CONFLICT, description = REJECTED, body = ErrorReply), Keyed,
+        (status = BAD_REQUEST, description = "`config_error` with `errors`: the file has errors and nothing changed; \
+            `bad_request`: the request is malformed", body = ErrorReply)))]
 pub(crate) async fn reload(state: State, headers: HeaderMap) -> Reply {
     let mut applied = state.applied.lock().await;
     let config = Arc::new((state.load)().map_err(|errors| {

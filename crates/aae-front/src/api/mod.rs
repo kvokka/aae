@@ -115,9 +115,35 @@ fn router() -> OpenApiRouter<Arc<Api>> {
         .routes(routes!(instances::stop))
 }
 
-/// The OpenAPI document of the API, generated from the handlers.
+/// The OpenAPI document of the API, generated from the handlers; every operation may answer 401 over TCP.
 pub fn openapi() -> utoipa::openapi::OpenApi {
-    router().split_for_parts().1
+    use utoipa::openapi::{ContentBuilder, Ref, ResponseBuilder};
+    let mut doc = router().split_for_parts().1;
+    let unauthorized = ResponseBuilder::new()
+        .description("`unauthorized`: over TCP, without `Authorization: Bearer <api_token>`")
+        .content(
+            "application/json",
+            ContentBuilder::new()
+                .schema(Some(Ref::from_schema_name("ErrorReply")))
+                .build(),
+        )
+        .build();
+    for item in doc.paths.paths.values_mut() {
+        let operations = [
+            &mut item.get,
+            &mut item.post,
+            &mut item.put,
+            &mut item.delete,
+            &mut item.patch,
+        ];
+        for operation in operations.into_iter().flatten() {
+            operation
+                .responses
+                .responses
+                .insert("401".into(), unauthorized.clone().into());
+        }
+    }
+    doc
 }
 
 /// Serves the API on `listener`, and on `tcp` with `Authorization: Bearer <api_token>`, until `signal` resolves
@@ -166,7 +192,8 @@ pub async fn serve(
     }
 }
 
-/// Puts what a request with an `Idempotency-Key` was (method, path, body) into its `aae-request` header for [`key`].
+/// Puts what a request with an `Idempotency-Key` was (method, path with its query, body) into its `aae-request`
+/// header for [`key`].
 async fn fingerprint(request: Request, next: Next) -> Response {
     if !request.headers().contains_key("idempotency-key") {
         return next.run(request).await;
@@ -184,7 +211,11 @@ async fn fingerprint(request: Request, next: Next) -> Response {
     let request = [
         parts.method.as_str().as_bytes(),
         b" ",
-        parts.uri.path().as_bytes(),
+        parts
+            .uri
+            .path_and_query()
+            .map_or(parts.uri.path(), |p| p.as_str())
+            .as_bytes(),
         b"\n",
         &body,
     ];

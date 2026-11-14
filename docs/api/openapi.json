@@ -51,6 +51,16 @@
               }
             }
           },
+          "401": {
+            "description": "`unauthorized`: over TCP, without `Authorization: Bearer <api_token>`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorReply"
+                }
+              }
+            }
+          },
           "404": {
             "description": "`not_found`: no such project",
             "content": {
@@ -74,6 +84,16 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/Checked"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthorized`: over TCP, without `Authorization: Bearer <api_token>`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorReply"
                 }
               }
             }
@@ -136,6 +156,16 @@
               }
             }
           },
+          "401": {
+            "description": "`unauthorized`: over TCP, without `Authorization: Bearer <api_token>`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorReply"
+                }
+              }
+            }
+          },
           "404": {
             "description": "`not_found`: no such project, rig or agent",
             "content": {
@@ -177,7 +207,17 @@
             }
           },
           "400": {
-            "description": "`bad_request`: a body unreadable or over 2 MiB, malformed JSON, query or path, or a value the operation refuses",
+            "description": "`config_error` with `errors`: the file has errors and nothing changed; `bad_request`: the request is malformed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorReply"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthorized`: over TCP, without `Authorization: Bearer <api_token>`",
             "content": {
               "application/json": {
                 "schema": {
@@ -243,6 +283,16 @@
               }
             }
           },
+          "401": {
+            "description": "`unauthorized`: over TCP, without `Authorization: Bearer <api_token>`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorReply"
+                }
+              }
+            }
+          },
           "500": {
             "description": "`storage` or `journal`: the daemon could not read its state",
             "content": {
@@ -299,6 +349,16 @@
           },
           "400": {
             "description": "`bad_request`: a body unreadable or over 2 MiB, malformed JSON, query or path, or a value the operation refuses",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorReply"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthorized`: over TCP, without `Authorization: Bearer <api_token>`",
             "content": {
               "application/json": {
                 "schema": {
@@ -401,6 +461,16 @@
               }
             }
           },
+          "401": {
+            "description": "`unauthorized`: over TCP, without `Authorization: Bearer <api_token>`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorReply"
+                }
+              }
+            }
+          },
           "409": {
             "description": "`rejected`: the core refused the request; the message says why",
             "content": {
@@ -461,8 +531,8 @@
               }
             }
           },
-          "500": {
-            "description": "`storage` or `journal`: the daemon could not read its state",
+          "401": {
+            "description": "`unauthorized`: over TCP, without `Authorization: Bearer <api_token>`",
             "content": {
               "application/json": {
                 "schema": {
@@ -516,6 +586,16 @@
           },
           "400": {
             "description": "`bad_request`: the query is malformed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorReply"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthorized`: over TCP, without `Authorization: Bearer <api_token>`",
             "content": {
               "application/json": {
                 "schema": {
@@ -588,6 +668,16 @@
               }
             }
           },
+          "401": {
+            "description": "`unauthorized`: over TCP, without `Authorization: Bearer <api_token>`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorReply"
+                }
+              }
+            }
+          },
           "404": {
             "description": "`not_found`: no such project",
             "content": {
@@ -614,6 +704,16 @@
                   "items": {
                     "$ref": "#/components/schemas/Gate"
                   }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthorized`: over TCP, without `Authorization: Bearer <api_token>`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorReply"
                 }
               }
             }
@@ -669,6 +769,16 @@
           },
           "400": {
             "description": "`bad_request`: a body unreadable or over 2 MiB, malformed JSON, query or path, or a value the operation refuses",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorReply"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthorized`: over TCP, without `Authorization: Bearer <api_token>`",
             "content": {
               "application/json": {
                 "schema": {
@@ -768,6 +878,16 @@
               }
             }
           },
+          "401": {
+            "description": "`unauthorized`: over TCP, without `Authorization: Bearer <api_token>`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorReply"
+                }
+              }
+            }
+          },
           "409": {
             "description": "`rejected`: the core refused the request; the message says why",
             "content": {
@@ -828,6 +948,16 @@
               }
             }
           },
+          "401": {
+            "description": "`unauthorized`: over TCP, without `Authorization: Bearer <api_token>`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorReply"
+                }
+              }
+            }
+          },
           "500": {
             "description": "`storage` or `journal`: the daemon could not read its state",
             "content": {
@@ -878,6 +1008,16 @@
           },
           "400": {
             "description": "`bad_request`: a body unreadable or over 2 MiB, malformed JSON, query or path, or a value the operation refuses",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorReply"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthorized`: over TCP, without `Authorization: Bearer <api_token>`",
             "content": {
               "application/json": {
                 "schema": {
@@ -970,6 +1110,16 @@
               }
             }
           },
+          "401": {
+            "description": "`unauthorized`: over TCP, without `Authorization: Bearer <api_token>`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorReply"
+                }
+              }
+            }
+          },
           "404": {
             "description": "`not_found`: no such project",
             "content": {
@@ -1024,6 +1174,16 @@
               }
             }
           },
+          "401": {
+            "description": "`unauthorized`: over TCP, without `Authorization: Bearer <api_token>`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorReply"
+                }
+              }
+            }
+          },
           "404": {
             "description": "`not_found`: no such project",
             "content": {
@@ -1070,6 +1230,16 @@
           },
           "400": {
             "description": "`bad_request`: the query is malformed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorReply"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthorized`: over TCP, without `Authorization: Bearer <api_token>`",
             "content": {
               "application/json": {
                 "schema": {
@@ -1158,6 +1328,16 @@
               }
             }
           },
+          "401": {
+            "description": "`unauthorized`: over TCP, without `Authorization: Bearer <api_token>`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorReply"
+                }
+              }
+            }
+          },
           "500": {
             "description": "`storage` or `journal`: the daemon could not read its state",
             "content": {
@@ -1209,6 +1389,16 @@
           },
           "400": {
             "description": "`bad_request`: a body unreadable or over 2 MiB, malformed JSON, query or path, or a value the operation refuses",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorReply"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthorized`: over TCP, without `Authorization: Bearer <api_token>`",
             "content": {
               "application/json": {
                 "schema": {
@@ -1295,6 +1485,16 @@
               }
             }
           },
+          "401": {
+            "description": "`unauthorized`: over TCP, without `Authorization: Bearer <api_token>`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorReply"
+                }
+              }
+            }
+          },
           "404": {
             "description": "`not_found`: no such run",
             "content": {
@@ -1366,6 +1566,16 @@
           },
           "400": {
             "description": "`bad_request`: a body unreadable or over 2 MiB, malformed JSON, query or path, or a value the operation refuses",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorReply"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthorized`: over TCP, without `Authorization: Bearer <api_token>`",
             "content": {
               "application/json": {
                 "schema": {
@@ -1473,6 +1683,16 @@
               }
             }
           },
+          "401": {
+            "description": "`unauthorized`: over TCP, without `Authorization: Bearer <api_token>`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorReply"
+                }
+              }
+            }
+          },
           "409": {
             "description": "`rejected`: the core refused the request; the message says why",
             "content": {
@@ -1563,6 +1783,16 @@
           },
           "400": {
             "description": "`bad_request`: a body unreadable or over 2 MiB, malformed JSON, query or path, or a value the operation refuses",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorReply"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthorized`: over TCP, without `Authorization: Bearer <api_token>`",
             "content": {
               "application/json": {
                 "schema": {
@@ -1662,6 +1892,16 @@
               }
             }
           },
+          "401": {
+            "description": "`unauthorized`: over TCP, without `Authorization: Bearer <api_token>`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorReply"
+                }
+              }
+            }
+          },
           "404": {
             "description": "`not_found`: no such run",
             "content": {
@@ -1708,6 +1948,16 @@
                   "items": {
                     "$ref": "#/components/schemas/Trigger"
                   }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthorized`: over TCP, without `Authorization: Bearer <api_token>`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorReply"
                 }
               }
             }
@@ -1764,6 +2014,16 @@
           },
           "400": {
             "description": "`bad_request`: a body unreadable or over 2 MiB, malformed JSON, query or path, or a value the operation refuses",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorReply"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthorized`: over TCP, without `Authorization: Bearer <api_token>`",
             "content": {
               "application/json": {
                 "schema": {
@@ -1862,6 +2122,16 @@
               }
             }
           },
+          "401": {
+            "description": "`unauthorized`: over TCP, without `Authorization: Bearer <api_token>`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorReply"
+                }
+              }
+            }
+          },
           "409": {
             "description": "`rejected`: the core refused the request; the message says why",
             "content": {
@@ -1944,6 +2214,16 @@
           },
           "400": {
             "description": "`bad_request`: a body unreadable or over 2 MiB, malformed JSON, query or path, or a value the operation refuses",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorReply"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthorized`: over TCP, without `Authorization: Bearer <api_token>`",
             "content": {
               "application/json": {
                 "schema": {

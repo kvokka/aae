@@ -20,8 +20,10 @@ Code: `crates/aae-front/src/api/`. Reference: `docs/api/openapi.json`.
   operation (every error body is an `ErrorReply`); `crates/aae-front/tests/openapi.rs` fails when the committed
   document differs or an operation leaves out an error its kind can return. Regenerate with
   `AAE_UPDATE_OPENAPI=1 cargo nextest run -p aae-front openapi`.
-- **Events** (`GET /v1/events`): SSE from a `seq` (or `Last-Event-ID`). A `seq` the journal rotated away is an
-  explicit `gap` event before the stream starts; the client then re-reads the state over the API.
+- **Events** (`GET /v1/events`): SSE from a `seq` (or `Last-Event-ID`). A `seq` the journal rotated away is a 410
+  `gap` reply (with `oldest`) before the stream starts, and a `gap` event when it is rotated away under a slow
+  stream (a failed read of the journal ends the stream with a `journal` event); the client then re-reads the state
+  over the API.
 - **Live view of a run** (`GET /v1/runs/{id}/live`): the run's events from a `seq`, interleaved with the raw messages
   of its current session as `harness` events, relayed from the adapter's tap and never stored by the core. A reader
   that falls behind the tap's buffer (256 messages) gets `lagged` with `{"missed": n}` and goes on. The stream ends
