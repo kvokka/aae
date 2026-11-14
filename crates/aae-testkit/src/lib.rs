@@ -86,8 +86,6 @@ impl ScriptedDriver {
             capabilities: Capabilities {
                 sessions_per_instance,
                 instance_idle: Duration::ZERO,
-                retries_429: false,
-                reset_time: true,
                 versions: [(0, 0, 0), (u32::MAX, u32::MAX, u32::MAX)],
             },
             state: Arc::default(),
@@ -297,7 +295,6 @@ impl Driver for ScriptedDriver {
         );
         drop(state);
         let session = SessionRef(json!({ "session": id }));
-        self.emit(&instance.id, Some(&session), Normalized::SessionStarted);
         ready(Ok(session))
     }
 

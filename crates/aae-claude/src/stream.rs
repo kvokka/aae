@@ -211,7 +211,7 @@ impl Stream {
             return failure;
         };
         let mut failure = self.failure(*kind, raw);
-        // claude retries 429 and 5xx itself before it gives up (capabilities: `retries_429`).
+        // claude retries 429 and 5xx itself before it gives up (so `retried_by_harness`).
         failure.retried_by_harness = matches!(kind, FailureKind::RateLimited | FailureKind::Overloaded);
         failure
     }

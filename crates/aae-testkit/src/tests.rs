@@ -13,14 +13,13 @@ struct Setup {
 
 async fn setup() -> Setup {
     let driver = ScriptedDriver::new(1);
-    let (sink, mut events) = mpsc::unbounded_channel();
+    let (sink, events) = mpsc::unbounded_channel();
     let process = ProcessPart(Value::Null);
     let instance = driver.start_instance("i-1", &process, sink).await.unwrap();
     let session = driver
         .start_session(&instance, &SessionPart(Value::Null))
         .await
         .unwrap();
-    assert_eq!(next(&mut events).await, Some(Normalized::SessionStarted));
     Setup {
         driver,
         instance,

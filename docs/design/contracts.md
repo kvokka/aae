@@ -328,7 +328,6 @@ They are input messages of the core, not journal events; the core turns some of 
 
 | Event | Fields | Core use |
 |---|---|---|
-| `session.started` | `session: SessionRef` | session reference recorded on the attempt |
 | `prompt.acked` | `key` | prompt delivery `sent → acked`; ends `starting` |
 | `turn.started` | — | watchdog: first event seen |
 | `turn.ended` | `stop_reason: completed \| cancelled \| failed` | candidate end of the attempt's work; `failed` follows a `failure` event |
@@ -370,15 +369,15 @@ Success traps (§7.2) are the adapter's: claude `subtype:"success"` with `is_err
 
 ### 4.5 Capabilities
 
-`Capabilities { sessions_per_instance, instance_idle, retries_429, reset_time, versions }`:
+`Capabilities { sessions_per_instance, instance_idle, versions }`:
 
 - `sessions_per_instance`: claude 1 (a process per session, §7.3); codex the config value `max_sessions`
   (default 8).
 - `instance_idle`: how long an instance without sessions lives on (8): claude 0, codex the config value
   `instance_idle_s` (default 60 s).
-- `retries_429`: claude true, codex false (§7.2); copied into `Failure.retried_by_harness` for rate limits.
-- `reset_time`: whether a quota failure can carry `retry_at` for this process part (claude: subscription login
-  only; codex: yes, from the rate-limit update).
+- Whether the harness retries 429 itself is the adapter's knowledge: it sets `Failure.retried_by_harness` on the
+  failure (claude true, codex false; §7.2). Whether a quota failure carries `retry_at` shows on the failure itself
+  (claude: subscription login only; codex: yes, from the rate-limit update).
 - `versions`: the tested range of the harness binary, `[lowest, highest]` inclusive; outside it the daemon warns at
   start, and `aae doctor` does.
 

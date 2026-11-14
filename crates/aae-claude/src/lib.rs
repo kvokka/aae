@@ -184,13 +184,10 @@ impl Driver for Claude {
         "claude"
     }
 
-    fn capabilities(&self, process: &ProcessPart) -> Capabilities {
+    fn capabilities(&self, _process: &ProcessPart) -> Capabilities {
         Capabilities {
             sessions_per_instance: 1,
             instance_idle: Duration::ZERO,
-            retries_429: true,
-            // Only a subscription login reports when its limit resets.
-            reset_time: process.0["env"]["ANTHROPIC_API_KEY"].is_null(),
             // The versions the contract tests and experiments ran on, inclusive.
             versions: [(2, 1, 322), (2, 1, 323)],
         }

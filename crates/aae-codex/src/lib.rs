@@ -162,8 +162,6 @@ impl Driver for Codex {
         Capabilities {
             sessions_per_instance: self.max_sessions,
             instance_idle: self.instance_idle,
-            retries_429: false,
-            reset_time: true,
             versions: [(0, 167, 2), (0, 168, 0)],
         }
     }
