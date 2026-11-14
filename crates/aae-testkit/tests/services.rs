@@ -88,8 +88,8 @@ async fn one_service_serves_every_session_and_restarts_on_its_port() {
         .any(|(_, d)| d["failure"]["raw"].as_str().is_some_and(|r| r.contains(&taken)))
     {
         assert_eq!(call(&sa), 200, "the same URL works again: {events:?}");
+        assert_ne!(*pids(&log).last().unwrap(), pid, "a new process answers");
     }
-    assert_ne!(*pids(&log).last().unwrap(), pid);
 
     // The operator stops it only once no session uses it.
     let id = w.service_events()[0].1["service"]["id"].as_str().unwrap().to_owned();
