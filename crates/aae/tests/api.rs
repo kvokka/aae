@@ -154,6 +154,7 @@ async fn one_daemon_per_state_directory_whatever_its_socket() {
         state.join("state.db"),
         state.join("state.db-wal"),
         state.join("journal/events.jsonl"),
+        state.join("lock"),
     ] {
         let mode = fs::metadata(&file).unwrap().permissions().mode();
         assert_eq!(mode & 0o777, 0o600, "{}", file.display());

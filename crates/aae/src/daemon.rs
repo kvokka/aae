@@ -219,7 +219,13 @@ pub(crate) async fn run(paths: Paths) -> Result<bool, String> {
 /// An exclusive lock on the state directory; the OS drops it with the process, so a crash leaves none behind.
 fn lock(state: &Path) -> Result<File, String> {
     let path = state.join("lock");
-    let file = File::create(&path).map_err(|e| format!("{}: {e}", path.display()))?;
+    let file = std::fs::OpenOptions::new()
+        .write(true)
+        .create(true)
+        .truncate(true)
+        .mode(0o600)
+        .open(&path)
+        .map_err(|e| format!("{}: {e}", path.display()))?;
     match file.try_lock() {
         Ok(()) => Ok(file),
         Err(TryLockError::WouldBlock) => Err(format!("another daemon owns {}", state.display())),
