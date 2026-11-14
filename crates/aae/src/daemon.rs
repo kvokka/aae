@@ -221,20 +221,14 @@ pub(crate) async fn run(paths: Paths) -> Result<bool, String> {
         .map_err(|e| format!("serving the API: {e}"))
 }
 
-/// An exclusive lock on the state directory; the OS drops it with the process, so a crash leaves none behind.
+/// An exclusive lock on the state directory itself, so no lock file is left in it (spec §5.2); the OS drops it with
+/// the process, so a crash leaves none behind.
 fn lock(state: &Path) -> Result<File, String> {
-    let path = state.join("lock");
-    let file = std::fs::OpenOptions::new()
-        .write(true)
-        .create(true)
-        .truncate(true)
-        .mode(0o600)
-        .open(&path)
-        .map_err(|e| format!("{}: {e}", path.display()))?;
-    match file.try_lock() {
-        Ok(()) => Ok(file),
+    let dir = File::open(state).map_err(|e| format!("{}: {e}", state.display()))?;
+    match dir.try_lock() {
+        Ok(()) => Ok(dir),
         Err(TryLockError::WouldBlock) => Err(format!("another daemon owns {}", state.display())),
-        Err(TryLockError::Error(e)) => Err(format!("{}: {e}", path.display())),
+        Err(TryLockError::Error(e)) => Err(format!("{}: {e}", state.display())),
     }
 }
 

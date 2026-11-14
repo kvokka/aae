@@ -175,15 +175,27 @@ async fn one_daemon_per_state_directory_whatever_its_socket() {
         state.join("state.db"),
         state.join("state.db-wal"),
         state.join("journal/events.jsonl"),
-        state.join("lock"),
     ] {
         let mode = fs::metadata(&file).unwrap().permissions().mode();
         assert_eq!(mode & 0o777, 0o600, "{}", file.display());
     }
-    let second = command(d.dir.path())
+    // The daemon locks the state directory itself: no lock file (spec §5.2).
+    assert!(!state.join("lock").exists());
+    let mut child = command(d.dir.path())
         .env("XDG_RUNTIME_DIR", d.dir.path().join("other-run"))
-        .output()
+        .stderr(std::process::Stdio::piped())
+        .spawn()
         .unwrap();
+    // A second daemon that wrongly starts serves forever: fail instead of hanging.
+    let deadline = std::time::Instant::now() + WAIT;
+    while child.try_wait().unwrap().is_none() {
+        if std::time::Instant::now() > deadline {
+            child.kill().unwrap();
+            panic!("a second daemon started on the same state");
+        }
+        tokio::time::sleep(Duration::from_millis(20)).await;
+    }
+    let second = child.wait_with_output().unwrap();
     let stderr = String::from_utf8_lossy(&second.stderr);
     assert!(!second.status.success(), "a second daemon must not share the state");
     let state = d.dir.path().join("state/aae");
