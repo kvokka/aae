@@ -175,6 +175,32 @@ fn the_config_is_checked_and_explained_without_a_daemon() {
         "dev",
     ]);
     assert!(!out.status.success());
+    // A named config must exist; a relative one resolves against the working directory, and its project paths are
+    // absolute after that.
+    let out = aae(&["config", "check", "--config", "/nonexistent/config.toml"]);
+    let text = String::from_utf8_lossy(&out.stderr);
+    assert!(
+        !out.status.success() && text.contains("/nonexistent/config.toml"),
+        "{text}"
+    );
+    let out = (Command::new(env!("CARGO_BIN_EXE_aae")))
+        .args([
+            "config",
+            "explain",
+            "--config",
+            "config.toml",
+            "--project",
+            "shop",
+            "--agent",
+            "dev",
+        ])
+        .env("XDG_CONFIG_HOME", "/nonexistent")
+        .current_dir(&files)
+        .output()
+        .unwrap();
+    let text = String::from_utf8_lossy(&out.stdout);
+    let beads = format!("env.BEADS_DIR = \"{}\"", files.join("shop/.beads").display());
+    assert!(text.contains(&beads), "{text}");
     // A reader that went away (`aae config explain | head -1`): a quiet SIGPIPE exit, not a panic.
     let (reader, writer) = std::io::pipe().unwrap();
     drop(reader);

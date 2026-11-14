@@ -42,7 +42,12 @@ impl Paths {
     /// The XDG locations, with `--config` and `--socket` taking precedence.
     pub(crate) fn resolve(config: Option<PathBuf>, socket: Option<PathBuf>) -> Result<Self, String> {
         let config = match config {
-            Some(config) => config,
+            // Only the default file may be missing (no config, the defaults); a named one must be there. Made
+            // absolute here once: the config's relative paths resolve against its directory, whatever the cwd.
+            Some(config) => {
+                std::fs::metadata(&config).map_err(|e| format!("{}: {e}", config.display()))?;
+                std::path::absolute(&config).map_err(|e| format!("{}: {e}", config.display()))?
+            }
             None => dirs::xdg("XDG_CONFIG_HOME", ".config")?.join("aae/config.toml"),
         };
         let socket = match socket {
