@@ -249,8 +249,11 @@ order); the bundled plugins come after all of them (docs/design/config.md, `[bui
   deciding events a hook failure is "no decision from this plugin", so the "no plugin decision" column applies.
 
 `deadline` of a deciding event = commit time + the sum of the timeouts of its hooks + 5 s (one hook can never
-hold a run longer than its own timeout; the runner reports before it unless it is lost). `run.requires_action` keeps waiting for a human after that deadline,
-until `human_timeout`. After a daemon restart the deadline of a deciding event still pending counts again from the
+hold a run longer than its own timeout; the runner reports before it unless it is lost). The deciding hooks of a
+run run in order: when hooks of an earlier deciding event of the run are still queued, the sum counts their
+timeouts too. `run.requires_action` keeps waiting for a human after that deadline, until `human_timeout`. While a
+run in `running` waits for the decision on `run.turn_ended_without_outcome`, no clock of the attempt runs: late
+session events do not re-arm the silence deadline. After a daemon restart the deadline of a deciding event still pending counts again from the
 start of the new daemon, as the sum of the timeouts of the hooks queued on the run's deciding queue + 5 s: the
 hooks run again from their start, and the time the daemon was down is not theirs (the `deadline` in the event
 envelope keeps its first value).

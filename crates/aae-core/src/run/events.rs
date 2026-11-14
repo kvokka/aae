@@ -115,7 +115,18 @@ impl RunHandler {
             return Ok(());
         };
         let w = self.config.watchdog;
-        let silence = |tx: &mut Tx<'_>, row: &Row, ms: i64| tx.set_deadline(&row.deadline("silence"), tx.now_ms() + ms);
+        // A run that waits for a decision on its turn runs no clock: late events of the session do not re-arm it.
+        let waits: bool = tx
+            .sql()
+            .query_row("SELECT waiting IS NOT NULL FROM runs WHERE id = ?1", [&row.id], |r| {
+                r.get(0)
+            })?;
+        let silence = |tx: &mut Tx<'_>, row: &Row, ms: i64| {
+            if waits {
+                return Ok(());
+            }
+            tx.set_deadline(&row.deadline("silence"), tx.now_ms() + ms)
+        };
         if let Normalized::PromptAcked { key } = &event {
             super::prompts::advance(tx, &row.id, attempt, Some(*key), "acked")?;
         }

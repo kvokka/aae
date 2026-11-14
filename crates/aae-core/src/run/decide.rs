@@ -23,7 +23,18 @@ impl RunHandler {
             .iter()
             .filter_map(|h| h["timeout_ms"].as_i64())
             .collect();
-        let at = tx.now_ms() + timeouts.iter().sum::<i64>() + DECIDE_SLACK_MS * i64::from(!timeouts.is_empty());
+        // The deciding hooks of the run run in order under one key: those queued ahead run first (contracts 3.3).
+        let ahead: Option<i64> = tx.sql().query_row(
+            "SELECT MAX(?2, MIN(e.next_at_ms)) + SUM(json_extract(h.value, '$.timeout_ms')) \
+             FROM effects e, json_each(e.payload, '$.hooks') h WHERE e.key = ?1",
+            params![format!("hooks:{}", row.id), tx.now_ms()],
+            |r| r.get(0),
+        )?;
+        let at = if timeouts.is_empty() {
+            tx.now_ms()
+        } else {
+            ahead.unwrap_or(tx.now_ms()) + timeouts.iter().sum::<i64>() + DECIDE_SLACK_MS
+        };
         data["deadline"] = json!(rfc3339_ms(at));
         let seq = row.emit(tx, kind, data)?;
         if timeouts.is_empty() {
