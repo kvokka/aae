@@ -268,13 +268,23 @@ pub(crate) fn hollow_turn() -> Vec<Step> {
     ]
 }
 
-/// A real process marked with the instance `id`, as a tool command of the harness would be.
+/// A real process marked with the instance `id`, as a tool command of the harness would be; `/proc` shows its marker.
 pub(crate) fn marked(id: &str) -> std::process::Child {
-    std::process::Command::new("sleep")
+    let child = std::process::Command::new("sleep")
         .arg("300")
         .env(aae_core::orphans::INSTANCE_ENV, id)
         .spawn()
-        .unwrap()
+        .unwrap();
+    // `spawn` returns while the child is still inside `execve`, where the kernel shows an empty environment: a sweep
+    // that walks `/proc` right then misses the marker. Without `/proc` the read fails and nothing is waited for.
+    let environ = format!("/proc/{}/environ", child.id());
+    let marker = format!("{}={id}", aae_core::orphans::INSTANCE_ENV);
+    let start = std::time::Instant::now();
+    while fs::read(&environ).is_ok_and(|e| !e.split(|b| *b == 0).any(|var| var == marker.as_bytes())) {
+        assert!(start.elapsed() < Duration::from_secs(10), "the marker never showed");
+        std::thread::sleep(Duration::from_millis(1));
+    }
+    child
 }
 
 /// Whether `child` is killed within a few real seconds; the sweep walks `/proc` on a blocking thread.
