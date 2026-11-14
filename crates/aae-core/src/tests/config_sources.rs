@@ -30,6 +30,8 @@ fn files(fetched: bool) -> Vec<(String, String)> {
             });
             files.extend(moved.map(|p| (p, text.to_string())));
         }
+        files.push((format!("shop/.aae/git/{PACK}/.git/HEAD"), format!("{PACK}\n")));
+        files.push((format!(".aae/git/{PLUGIN}/.git/HEAD"), format!("{PLUGIN}\n")));
     }
     files
 }
@@ -100,4 +102,17 @@ fn a_pack_with_an_unknown_key_says_what_a_pack_is() {
         r#"packs = [{ git = "x", rev = "main", extra = 1 }]"#,
     );
     fails(&[("shop/aae.toml", &project)], "a pack is a path or `{ git, rev }`");
+}
+
+#[test]
+fn a_checkout_moved_off_its_pin_is_an_error() {
+    let mut moved = files(true);
+    let head = moved
+        .iter_mut()
+        .find(|(p, _)| p.ends_with(&format!("{PACK}/.git/HEAD")))
+        .unwrap();
+    head.1 = "ref: refs/heads/main\n".to_owned();
+    let errors = load(&moved).expect_err("the pack checkout is not at its pin");
+    let expected = format!("HEAD is `ref: refs/heads/main`, not the pinned `{PACK}`");
+    assert!(errors.iter().any(|e| e.message.contains(&expected)), "{errors:?}");
 }

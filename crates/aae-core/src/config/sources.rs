@@ -148,12 +148,23 @@ impl Loader {
             Source::Git(git) => git,
         };
         let lock = Lock::read(base).map_err(|e| self.fail(file, e)).ok()?;
-        let dir = lock.commit(git).map(|c| checkout(base, c)).filter(|d| d.is_dir());
-        dir.or_else(|| {
-            self.none(
+        let Some((commit, dir)) = (lock.commit(git))
+            .map(|c| (c, checkout(base, c)))
+            .filter(|(_, d)| d.is_dir())
+        else {
+            return self.none(
                 file,
                 format!("`{}` at `{}` is not fetched: run `aae fetch`", git.git, git.rev),
-            )
-        })
+            );
+        };
+        // `aae fetch` leaves the checkout detached at the pin; read without running git. shortcut: changes to the
+        // files of the checkout are not seen, upgrade to `git status` when doctor or fetch verifies checkouts.
+        let head = fs::read_to_string(dir.join(".git/HEAD")).unwrap_or_default();
+        if head.trim() != commit {
+            let found = head.trim();
+            let message = format!("`{}`: HEAD is `{found}`, not the pinned `{commit}`", dir.display());
+            return self.none(file, format!("{message}; remove the directory and run `aae fetch`"));
+        }
+        Some(dir)
     }
 }

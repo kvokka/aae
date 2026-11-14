@@ -304,7 +304,9 @@ A pinned source keeps its commit; only `--update` resolves the revision again. P
 are dropped. It prints `<url> <rev> -> <commit> (fetched|kept|updated)` per source and exits non-zero when any
 source fails (that source keeps its old pin). Loading the config never runs git and never moves a pin, so there are
 no automatic updates: a git source with no pin in `aae.lock`, or with no checkout of its pin, is a config error that
-says to run `aae fetch`. Commit `aae.lock` with the project; `.aae/` is a cache to ignore.
+says to run `aae fetch`. A checkout whose `.git/HEAD` is not its pinned commit (someone checked out another
+revision in it) is an error too: remove the directory and run `aae fetch`. Edits to the files of a checkout are not
+detected. Commit `aae.lock` with the project; `.aae/` is a cache to ignore.
 
 A plugin runs any command with the user's rights, so nothing installs or enables one implicitly: its orchestrator
 side runs only once a `[[plugin]]` declares it, its agent side only for the agents that attach it in `plugins`, and a
