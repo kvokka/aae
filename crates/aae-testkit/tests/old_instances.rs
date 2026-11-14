@@ -37,8 +37,14 @@ impl World {
         };
         self.until(Some(run), "run.attempt_failed", 0).await;
         self.decide(run, "run.attempt_failed", 0, decision).await;
-        let states = self.states(run).await;
-        assert_eq!(states[states.len() - 2..], ["starting", "running"], "{states:?}");
+        let start = Instant::now();
+        loop {
+            let states = self.states(run).await;
+            if states[states.len() - 2..] == ["starting", "running"] {
+                return;
+            }
+            assert!(start.elapsed() < Duration::from_secs(10), "{states:?}");
+        }
     }
 
     /// Waits until `run` runs.
