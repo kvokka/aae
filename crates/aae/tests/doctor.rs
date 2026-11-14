@@ -182,6 +182,8 @@ fn stdio_mcp_servers_of_the_host_are_warned_about() {
     assert!(passed, "{found:?}");
     assert_eq!(level(&found, "claude host mcp").0, "ok");
     assert_eq!(level(&found, "codex host mcp").0, "ok");
+    let (sandbox, why) = level(&found, "codex sandbox");
+    assert!(sandbox == "warning" && why.contains("danger-full-access"), "{found:?}");
 
     let host = r#"{"mcpServers": {"deja": {"command": "deja"}, "web": {"type": "http", "url": "http://x"}},
         "projects": {"/p": {"mcpServers": {"local": {"type": "stdio", "command": "l"}}}}}"#;

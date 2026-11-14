@@ -301,11 +301,17 @@ impl Stream {
             .map(|s| s * 1000)
     }
 
-    /// A snapshot is sparse: what it names replaces the last one's; it goes to every thread with a turn in flight.
+    /// A snapshot is sparse: what it names replaces the last one's, and a window it does not name is forgotten once
+    /// past its reset; it goes to every thread with a turn in flight.
     fn rate_limits(&mut self, limits: &Value) -> Events {
+        let now_s = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map_or(0, |d| i64::try_from(d.as_secs()).unwrap_or(i64::MAX));
         for window in ["primary", "secondary"] {
             if !limits[window].is_null() {
                 self.limits[window] = limits[window].clone();
+            } else if self.limits[window]["resetsAt"].as_i64().is_some_and(|at| at <= now_s) {
+                self.limits[window] = Value::Null;
             }
         }
         let worst = ["primary", "secondary"]

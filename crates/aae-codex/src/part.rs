@@ -16,18 +16,22 @@ use std::{
 /// The variables that carry a credential; a process with one of them uses it, not the host's login.
 const CREDENTIALS: [&str; 2] = ["OPENAI_API_KEY", "CODEX_API_KEY"];
 
+/// The sandbox a process runs in when no config sets one (spec §2.1 item 1); `doctor` warns about it.
+pub(crate) const DEFAULT_SANDBOX: &str = "danger-full-access";
+
 fn config_error(raw: String) -> Failure {
     let mut failure = Failure::new(FailureKind::ConfigError, Source::Adapter);
     failure.raw = raw;
     failure
 }
 
-/// The process part: `{home, user_home, env, overrides, skills}`. An isolated process gets its own `CODEX_HOME` and `HOME`
-/// under the state directory, keyed by the rest of the part, so equal parts share one app-server and its threads
-/// survive a daemon restart; `overrides` are the `-c key=value` flags of the native block.
-pub(crate) fn process(config: &EffectiveConfig, state: &Path) -> Result<Value, Failure> {
+/// The process part: `{home, user_home, host, env, overrides, skills}`. An isolated process gets its own `CODEX_HOME`
+/// and `HOME` under the state directory, keyed by the rest of the part, so equal parts share one app-server and its
+/// threads survive a daemon restart; a process inheriting the host with skills gets its own `CODEX_HOME` there that
+/// links the host's (`host`); `overrides` are the `-c key=value` flags of the native block.
+pub(crate) fn process(config: &EffectiveConfig, state: &Path, host: &Path) -> Result<Value, Failure> {
     // The contributions of attached plugins are already merged into the config (layer 5 of spec §6.3).
-    let overrides = match config.native.as_ref().map(|n| &n.value) {
+    let mut overrides: Vec<String> = match config.native.as_ref().map(|n| &n.value) {
         None => Vec::new(),
         Some(Value::Object(native)) => native
             .iter()
@@ -42,6 +46,11 @@ pub(crate) fn process(config: &EffectiveConfig, state: &Path) -> Result<Value, F
             ));
         }
     };
+    // Spec §2.1 item 1: no sandbox unless the config, or the host's codex config a process inherits, sets one.
+    let host_sets = config.inherits_host() && host_config(host).is_some_and(|c| c.contains_key("sandbox_mode"));
+    if !overrides.iter().any(|o| o.starts_with("sandbox_mode=")) && !host_sets {
+        overrides.push(format!("sandbox_mode={}", toml::Value::from(DEFAULT_SANDBOX)));
+    }
     let env: BTreeMap<_, _> = config.env.iter().map(|(k, v)| (k.clone(), v.value.clone())).collect();
     let own = CREDENTIALS.iter().any(|k| env.contains_key(*k));
     let mut part = json!({ "env": env, "overrides": overrides });
@@ -54,23 +63,23 @@ pub(crate) fn process(config: &EffectiveConfig, state: &Path) -> Result<Value, F
         part["skills"] = json!(skills);
     }
     if config.inherits_host() {
-        if !skills.is_empty() {
-            return Err(config_error(
-                "codex skills need `inherit_host = false`: they go to the process's own CODEX_HOME".into(),
-            ));
+        host_provider(&mut part, host, false);
+        if skills.is_empty() {
+            part["home"] = json!(host);
+            return Ok(part);
         }
-        part["home"] = json!(host_home());
-        host_provider(&mut part, &host_home(), false);
-        return Ok(part);
-    }
-    if !own {
-        host_provider(&mut part, &host_home(), true);
+        // Skills need a home of the process's own: it links the host's login and config (spec §2.1 item 9).
+        part["host"] = json!(host);
+    } else if !own {
+        host_provider(&mut part, host, true);
     }
     let dir = state
         .join("codex")
         .join(&Fingerprint::of("codex", &ProcessPart(part.clone())).0[..16]);
     part["home"] = json!(dir.join("codex-home"));
-    part["user_home"] = json!(dir.join("home"));
+    if part["host"].is_null() {
+        part["user_home"] = json!(dir.join("home"));
+    }
     Ok(part)
 }
 
@@ -182,11 +191,11 @@ pub(crate) fn args(p: &Value) -> Vec<String> {
     args
 }
 
-/// The environment of the app-server: the daemon's `PATH`, `HOME`, `LANG`, `SHELL`, the agent's variables, the
-/// homes, and the instance id the orphan sweep looks for. The attempt variables go to each thread instead.
+/// The environment of the app-server: the daemon's `PATH`, `HOME`, `LANG`, `SHELL` (and network settings when it
+/// inherits the host), the agent's variables, the homes, and the instance id the orphan sweep looks for. The attempt
+/// variables go to each thread instead.
 pub(crate) fn env(p: &Value, id: &str, socket: Option<&Path>) -> Vec<(String, String)> {
-    let mut env: Vec<(String, String)> = ["PATH", "HOME", "LANG", "SHELL"]
-        .into_iter()
+    let mut env: Vec<(String, String)> = daemon_vars(p)
         .filter_map(|k| std::env::var(k).ok().map(|v| (k.to_owned(), v)))
         .collect();
     let text = |v: &Value| v.as_str().map(str::to_owned).unwrap_or_else(|| v.to_string());
@@ -213,12 +222,14 @@ pub(crate) fn env(p: &Value, id: &str, socket: Option<&Path>) -> Vec<(String, St
 /// Creates the homes of an isolated process; without a credential of its own it gets the host's login, linked so
 /// a token codex refreshes is the host's too.
 pub(crate) fn materialize(p: &Value) -> std::io::Result<()> {
-    let Some(user_home) = p["user_home"].as_str() else {
+    if p["user_home"].is_null() && p["host"].is_null() {
         return Ok(());
-    };
+    }
     let home = Path::new(p["home"].as_str().unwrap_or_default());
-    std::fs::create_dir_all(user_home)?;
     std::fs::create_dir_all(home)?;
+    if let Some(user_home) = p["user_home"].as_str() {
+        std::fs::create_dir_all(user_home)?;
+    }
     // Links to the skill directories; the home is keyed by the part, so a link there is never another skill's.
     for (name, path) in p["skills"].as_object().into_iter().flatten() {
         let link = home.join("skills").join(name);
@@ -227,18 +238,39 @@ pub(crate) fn materialize(p: &Value) -> std::io::Result<()> {
             std::os::unix::fs::symlink(path.as_str().unwrap_or_default(), link)?;
         }
     }
-    let auth = host_home().join("auth.json");
     let own = CREDENTIALS.iter().any(|k| !p["env"][k].is_null());
-    let link = home.join("auth.json");
-    if !own && auth.exists() && !link.exists() {
-        std::os::unix::fs::symlink(auth, link)?;
+    // A home inheriting the host links its config too: codex reads the provider, the MCP servers ... from it.
+    let linked: &[&str] = match p["host"].as_str() {
+        Some(_) => &["auth.json", "config.toml"],
+        None if own => &[],
+        None => &["auth.json"],
+    };
+    let host = p["host"].as_str().map_or_else(host_home, PathBuf::from);
+    for file in linked {
+        let (target, link) = (host.join(file), home.join(file));
+        if target.exists() && link.symlink_metadata().is_err() {
+            std::os::unix::fs::symlink(target, link)?;
+        }
     }
     Ok(())
 }
 
+/// The daemon's variables the app-server gets.
+pub(crate) fn daemon_vars(p: &Value) -> impl Iterator<Item = &'static str> {
+    let host = p["user_home"].is_null().then_some(aae_core::driver::HOST_NETWORK_ENV);
+    ["PATH", "HOME", "LANG", "SHELL"]
+        .into_iter()
+        .chain(host.into_iter().flatten())
+}
+
+/// `config.toml` in `home`, if it is there and reads.
+fn host_config(home: &Path) -> Option<toml::Table> {
+    toml::from_str(&std::fs::read_to_string(home.join("config.toml")).ok()?).ok()
+}
+
 /// The model provider `config.toml` in `home` selects, by name, if the file defines it.
 fn provider(home: &Path) -> Option<(String, toml::Value)> {
-    let config: toml::Table = toml::from_str(&std::fs::read_to_string(home.join("config.toml")).ok()?).ok()?;
+    let config = host_config(home)?;
     let name = config.get("model_provider")?.as_str()?;
     Some((name.to_owned(), config.get("model_providers")?.get(name)?.clone()))
 }
@@ -272,7 +304,7 @@ pub(crate) fn host_provider(part: &mut Value, host: &Path, isolated: bool) {
 }
 
 /// The host's codex home: the daemon's `CODEX_HOME`, else `~/.codex`.
-fn host_home() -> PathBuf {
+pub(crate) fn host_home() -> PathBuf {
     match std::env::var_os("CODEX_HOME") {
         Some(dir) => dir.into(),
         None => Path::new(&std::env::var_os("HOME").unwrap_or_default()).join(".codex"),
@@ -288,3 +320,6 @@ pub(crate) fn account(p: &Value) -> String {
     };
     Fingerprint::of("codex", &ProcessPart(source)).0[..16].to_owned()
 }
+
+#[cfg(test)]
+mod tests;

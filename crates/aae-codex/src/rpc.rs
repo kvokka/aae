@@ -2,7 +2,9 @@
 //! the rest into events.
 
 use crate::stream::Stream;
-use aae_core::driver::{DriverEvent, EventSink, Failure, FailureKind, Normalized, PromptKey, SessionRef, Source};
+use aae_core::driver::{
+    DriverEvent, EventSink, Failure, FailureKind, Normalized, PromptKey, SessionRef, Source, Transcript,
+};
 use serde_json::{Value, json};
 use std::{
     collections::HashMap,
@@ -44,6 +46,15 @@ pub(crate) fn lock<T>(m: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
 
 pub(crate) fn crashed() -> Failure {
     Failure::new(FailureKind::HarnessCrash, Source::Adapter)
+}
+
+/// The transcript a failed `thread/read` shows: an answer that the thread cannot be read means it is missing; no
+/// answer (a stall, a crash) says nothing about it, so the attempt fails and the session is kept.
+pub(crate) fn unread(failure: Failure) -> Result<Transcript, Failure> {
+    match failure.kind {
+        FailureKind::Stall | FailureKind::HarnessCrash => Err(failure),
+        _ => Ok(Transcript::Missing),
+    }
 }
 
 impl Instance {

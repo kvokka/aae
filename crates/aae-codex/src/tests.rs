@@ -2,14 +2,14 @@ use super::*;
 use aae_core::driver::Normalized;
 use aae_core::driver::{RateLimit, RequestKind, SessionState, StopReason};
 
-fn agent<T>(value: T) -> aae_core::config::Sourced<T> {
+pub(crate) fn agent<T>(value: T) -> aae_core::config::Sourced<T> {
     aae_core::config::Sourced {
         value,
         from: aae_core::config::Layer::Agent,
     }
 }
 
-fn config() -> EffectiveConfig {
+pub(crate) fn config() -> EffectiveConfig {
     EffectiveConfig {
         services: Default::default(),
         harness: "codex".into(),
@@ -155,6 +155,31 @@ fn a_usage_limit_is_a_quota_with_the_reset_of_the_exhausted_window() {
 }
 
 #[test]
+fn a_window_past_its_reset_no_longer_counts() {
+    let mut stream = Stream::new(None);
+    stream.bind("t", None);
+    let limits = |l: Value| note("account/rateLimits/updated", json!({ "rateLimits": l }));
+    let events = play(
+        &mut stream,
+        &[
+            note("turn/started", json!({ "threadId": "t", "turn": { "id": "u" } })),
+            limits(json!({ "primary": { "usedPercent": 100, "resetsAt": 1_000 },
+                "secondary": { "usedPercent": 42, "resetsAt": 4_000_000_000_i64 } })),
+            limits(json!({ "secondary": { "usedPercent": 50, "resetsAt": 4_000_000_000_i64 } })),
+        ],
+    );
+    let usage = |utilization, at: i64| Normalized::Usage {
+        input_tokens: 0,
+        output_tokens: 0,
+        rate_limit: Some(RateLimit {
+            utilization,
+            resets_at_ms: Some(at * 1000),
+        }),
+    };
+    assert_eq!(events[1..], [usage(1.0, 1_000), usage(0.5, 4_000_000_000)]);
+}
+
+#[test]
 fn every_final_error_has_its_kind() {
     let cases = [
         (
@@ -282,116 +307,6 @@ fn an_approval_is_a_permission_request_and_an_exit_crashes_open_turns() {
                 signal: Some(9)
             }
         )
-    );
-}
-
-#[test]
-fn the_process_gets_the_native_block_and_the_thread_the_rest() {
-    let mut config = config();
-    config.hooks.insert(
-        "stop".into(),
-        agent(aae_core::config::Hook {
-            enabled: true,
-            event: Some("Stop".into()),
-            matcher: None,
-            command: Some("true".into()),
-            timeout: None,
-        }),
-    );
-    let plan = SessionPlan::New {
-        workdir: "/w".into(),
-        run: "r".into(),
-        attempt: 1,
-        token: "tok".into(),
-    };
-    let driver = Codex::new("codex".into(), "/state".into(), None, 8);
-    let split = driver.split(&config, &plan).unwrap();
-    let p = &split.process.0;
-    let args = part::args(p);
-    assert!(
-        args.contains(&"sandbox_mode=\"danger-full-access\"".to_owned()),
-        "{args:?}"
-    );
-    let provider = args.iter().find(|a| a.starts_with("model_providers=")).unwrap();
-    let parsed: toml::Table = toml::from_str(provider).unwrap();
-    assert_eq!(
-        parsed["model_providers"]["fake"]["wire_api"].as_str(),
-        Some("responses")
-    );
-    assert!(p["home"].as_str().unwrap().starts_with("/state/codex/"));
-    let env = part::env(p, "i1", None);
-    assert!(env.contains(&("OPENAI_API_KEY".to_owned(), "sk-fake".to_owned())));
-    assert!(env.iter().any(|(k, v)| k == "HOME" && v.ends_with("/home")));
-    let s = &split.session.0;
-    assert_eq!(s["cwd"], "/w");
-    assert_eq!(
-        (s["model"].as_str(), s["approvalPolicy"].as_str()),
-        (Some("gpt-fake"), Some("never"))
-    );
-    assert_eq!(
-        s["config"]["shell_environment_policy"]["set"],
-        json!({ "AAE_RUN": "r", "AAE_ATTEMPT_TOKEN": "tok", "BD_ACTOR": "aae:r:1" })
-    );
-    assert_eq!(s["config"]["hooks"]["Stop"][0]["hooks"][0]["command"], "true");
-    assert_eq!(s["config"]["bypass_hook_trust"], true);
-    assert_eq!(s["config"]["model_reasoning_effort"], "low");
-    // The session part is not in the fingerprint: two runs of one agent share a process.
-    let other = SessionPlan::New {
-        workdir: "/v".into(),
-        run: "q".into(),
-        attempt: 2,
-        token: "t2".into(),
-    };
-    assert_eq!(driver.split(&config, &other).unwrap().fingerprint, split.fingerprint);
-    config.native = Some(agent(json!("x")));
-    assert_eq!(driver.split(&config, &plan).unwrap_err().kind, FailureKind::ConfigError);
-    // Skills go to the process's own home, which a process on the host's home does not have.
-    config.native = None;
-    let skill = aae_core::config::Skill {
-        enabled: true,
-        path: Some("/skills/mail".into()),
-    };
-    config.skills.insert("mail".into(), agent(skill));
-    config.inherit_host = Some(agent(true));
-    let refused = driver.split(&config, &plan).unwrap_err();
-    assert!(refused.raw.contains("inherit_host"), "{}", refused.raw);
-}
-
-#[test]
-fn a_process_without_a_key_of_its_own_logs_in_by_the_host_provider() {
-    let host = tempfile::tempdir().unwrap();
-    let login = |isolated: bool| {
-        let mut p = json!({ "home": "/h", "env": {}, "overrides": ["model=\"m\""] });
-        part::host_provider(&mut p, host.path(), isolated);
-        let keyed = part::env(&p, "i1", None).iter().any(|(k, _)| k == "CARGO_MANIFEST_DIR");
-        (keyed, part::args(&p))
-    };
-    assert!(!login(false).0, "no host config, no key");
-    std::fs::write(
-        host.path().join("config.toml"),
-        "model_provider = \"my.proxy\"\n[model_providers.\"my.proxy\"]\nenv_key = \"CARGO_MANIFEST_DIR\"\n\
-         base_url = \"http://proxy\"\nexperimental_bearer_token = \"secret\"\nhttp_headers = { a = \"secret\" }\n",
-    )
-    .unwrap();
-    let (keyed, args) = login(false);
-    assert!(keyed);
-    assert!(
-        !args.iter().any(|a| a.contains("proxy")),
-        "codex reads the host config itself: {args:?}"
-    );
-    // An isolated process does not read the host config: the provider comes as flags before the native block's.
-    let (keyed, args) = login(true);
-    assert!(keyed);
-    let at = |flag: &str| args.iter().position(|a| a.starts_with(flag)).expect(flag);
-    assert!(at("model_provider=\"my.proxy\"") < at("model=\"m\""), "{args:?}");
-    let table: toml::Table = toml::from_str(&args[at("model_providers=")]).unwrap();
-    assert_eq!(
-        table["model_providers"]["my.proxy"]["base_url"].as_str(),
-        Some("http://proxy")
-    );
-    assert!(
-        !args.iter().any(|a| a.contains("secret")),
-        "secrets stay out of argv: {args:?}"
     );
 }
 

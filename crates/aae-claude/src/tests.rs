@@ -200,7 +200,17 @@ fn an_isolated_session_without_a_credential_gets_the_host_login() {
     let mut p = json!({ "config_dir": "/state/claude/s1/config", "env": {} });
     assert_eq!(token(&p).as_deref(), Some("sk-ant-oat-host"));
     let isolated = part::account(&p);
+    let vars = |p: &Value| part::daemon_vars(p).collect::<Vec<_>>();
+    assert!(!vars(&p).contains(&"HTTPS_PROXY") && !vars(&p).contains(&"CLAUDE_CONFIG_DIR"));
     p["config_dir"] = Value::Null;
+    for var in [
+        "HTTPS_PROXY",
+        "NODE_EXTRA_CA_CERTS",
+        "SSL_CERT_FILE",
+        "CLAUDE_CONFIG_DIR",
+    ] {
+        assert!(vars(&p).contains(&var), "an inheriting session gets {var}");
+    }
     assert_eq!(token(&p), None, "an inheriting session reads the login itself");
     assert_eq!(part::account(&p), isolated, "either way it is the host's account");
     p["config_dir"] = json!("/state/claude/s1/config");

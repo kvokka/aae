@@ -55,6 +55,15 @@ fn findings(paths: &Paths) -> Vec<Value> {
                     found.push(login(name));
                     found.push(host_mcp(name));
                 }
+                if name == "codex" {
+                    // Spec §2.1 item 1: the codex sandbox needs user namespaces, which many hosts lack.
+                    found.push(check(
+                        "codex sandbox",
+                        "warning",
+                        "codex agents run with sandbox_mode = \"danger-full-access\" unless their native block or \
+                         the host's codex config sets sandbox_mode: commands are not confined to the workdir",
+                    ));
+                }
             }
             if config.projects.iter().any(|p| p.root.join(".beads").is_dir()) {
                 let (path, source) = binary("br", None);

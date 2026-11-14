@@ -31,6 +31,10 @@ aae config explain --project hello --agent helper
 By default the harness also reads your own host settings (`~/.claude`, `~/.codex`); `inherit_host = false` turns
 that off.
 
+A codex agent runs with `sandbox_mode = "danger-full-access"` unless its `[native.codex]` table (or your
+`~/.codex/config.toml`) sets `sandbox_mode`: its commands can touch anything your user can. `aae doctor` warns
+about this; set `sandbox_mode = "workspace-write"` where the host allows user namespaces.
+
 ## 2. The formula
 
 `~/work/hello/formulas/summarize.toml`:

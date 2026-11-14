@@ -195,6 +195,8 @@ async fn s01_rate_limits_then_an_answer_complete_the_turn() {
 async fn s02_endless_rate_limits_are_rate_limited() {
     let (failure, seen) = failure_of(Reply::RateLimited, 1).await;
     assert_eq!(failure.kind, FailureKind::RateLimited, "{seen:?}");
+    // codex retried the 429 itself ("Reconnecting... 1/1"): the core does not add its fast retry.
+    assert!(failure.retried_by_harness, "{seen:?}");
 }
 
 #[tokio::test]
@@ -208,6 +210,7 @@ async fn s03_a_usage_limit_is_a_quota_with_its_reset_time() {
 async fn s04_a_quota_in_unknown_words_is_a_rate_limit_by_its_status() {
     let (failure, seen) = failure_of(Reply::StrangeQuota, 0).await;
     assert_eq!(failure.kind, FailureKind::RateLimited, "{seen:?}");
+    assert!(!failure.retried_by_harness, "{seen:?}");
 }
 
 #[tokio::test]

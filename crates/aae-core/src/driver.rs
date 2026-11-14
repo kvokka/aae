@@ -126,6 +126,22 @@ pub enum Health {
     Dead,
 }
 
+/// The daemon's network settings a harness process inheriting the host gets too (spec §6.4): proxies and the
+/// certificates to trust.
+pub const HOST_NETWORK_ENV: [&str; 11] = [
+    "HTTPS_PROXY",
+    "https_proxy",
+    "HTTP_PROXY",
+    "http_proxy",
+    "ALL_PROXY",
+    "all_proxy",
+    "NO_PROXY",
+    "no_proxy",
+    "SSL_CERT_FILE",
+    "SSL_CERT_DIR",
+    "NODE_EXTRA_CA_CERTS",
+];
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Capabilities {
     pub sessions_per_instance: usize,

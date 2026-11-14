@@ -233,8 +233,7 @@ pub(crate) fn materialize(p: &Value) -> std::io::Result<()> {
 /// `host` is the host's claude config directory: an isolated session without a credential of its own gets the
 /// host's login from there (§6.4).
 pub(crate) fn env(p: &Value, id: &str, socket: Option<&Path>, host: &Path) -> Vec<(String, String)> {
-    let mut env: Vec<(String, String)> = ["PATH", "HOME", "LANG"]
-        .into_iter()
+    let mut env: Vec<(String, String)> = daemon_vars(p)
         .filter_map(|k| std::env::var(k).ok().map(|v| (k.to_owned(), v)))
         .collect();
     let text = |v: &Value| v.as_str().map(str::to_owned).unwrap_or_else(|| v.to_string());
@@ -267,6 +266,17 @@ pub(crate) fn env(p: &Value, id: &str, socket: Option<&Path>, host: &Path) -> Ve
         env.extend(host_token(host).map(|t| ("CLAUDE_CODE_OAUTH_TOKEN".to_owned(), t)));
     }
     env
+}
+
+/// The daemon's variables `claude` gets; a session inheriting the host also gets the host's config directory and
+/// network settings.
+pub(crate) fn daemon_vars(p: &Value) -> impl Iterator<Item = &'static str> {
+    let inherits = p["config_dir"].is_null();
+    let host = inherits.then_some(aae_core::driver::HOST_NETWORK_ENV);
+    ["PATH", "HOME", "LANG"]
+        .into_iter()
+        .chain(host.into_iter().flatten())
+        .chain(inherits.then_some("CLAUDE_CONFIG_DIR"))
 }
 
 /// The variables that carry a credential; a session with one of them uses it, not the host's login.

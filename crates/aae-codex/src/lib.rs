@@ -16,7 +16,7 @@ use aae_core::{
     },
     orphans,
 };
-use rpc::{Instance, crashed, lock};
+use rpc::{Instance, crashed, lock, unread};
 use rustix::process::{Pid, Signal, kill_process_group};
 use serde_json::{Value, json};
 use std::{
@@ -171,7 +171,7 @@ impl Driver for Codex {
     }
 
     fn split(&self, config: &EffectiveConfig, plan: &SessionPlan) -> Result<Split, Failure> {
-        let process = part::process(config, &self.state)?;
+        let process = part::process(config, &self.state, &part::host_home())?;
         let session = part::session(config, plan)?;
         Ok(Split::new("codex", ProcessPart(process), SessionPart(session)))
     }
@@ -338,8 +338,9 @@ impl Driver for Codex {
         Box::pin(async move {
             let known = self.instance(&instance.id)?;
             let params = json!({ "threadId": thread_id(session), "includeTurns": true });
-            let Ok(result) = known.call("thread/read", params, None).await else {
-                return Ok(Transcript::Missing);
+            let result = match known.call("thread/read", params, None).await {
+                Ok(result) => result,
+                Err(failure) => return unread(failure),
             };
             let key = key.0.to_string();
             let turns = result["thread"]["turns"].as_array().cloned().unwrap_or_default();
