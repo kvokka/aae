@@ -18,6 +18,10 @@ the pinned claude, codex and br. Every check below is a mise task (`mise.toml`).
 
 The times are for a warm build on 9 cores. A cold build comes on top, once.
 
+Run `mise run test` and `mise run acceptance-ci` one after the other, not side by side: the first builds
+`target/debug/aae` with the features of the test dependencies, the second without them, and each rewrites the binary
+the other's daemons are running.
+
 ## The chaos stand
 
 <!-- MEASURE id=dev-chaos-share date=2026-11-14 ver=1a732a4 env=linux-arm64-orbstack-9-cores src="mise run test" note="the per-test times of the eight chaos shares in the nextest output" -->
