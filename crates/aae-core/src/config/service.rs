@@ -85,11 +85,15 @@ impl Loader {
         let mut services = BTreeMap::new();
         for s in raw {
             self.name(file, "service", &s.name);
+            let at = |text: String| match plugin {
+                Some(dir) => text.replace(super::load::PLUGIN_DIR, dir),
+                None => text,
+            };
             let health = match s.health {
                 None => Health::Port,
                 Some(HealthFile::Guess(Http::Http)) => Health::Http("/health".to_owned()),
                 Some(HealthFile::Http { http }) => Health::Http(http),
-                Some(HealthFile::Command { command }) => Health::Command(command),
+                Some(HealthFile::Command { command }) => Health::Command(command.into_iter().map(at).collect()),
             };
             let mcp = match s.mcp {
                 None | Some(McpFile::Guess(false)) => None,
@@ -110,13 +114,9 @@ impl Loader {
             if s.command.is_empty() || matches!(&health, Health::Command(c) if c.is_empty()) {
                 self.fail(file, format!("service `{}`: a command is empty", s.name));
             }
-            let at = |text: String| match plugin {
-                Some(dir) => text.replace(super::load::PLUGIN_DIR, dir),
-                None => text,
-            };
             let service = Service {
                 command: s.command.into_iter().map(at).collect(),
-                env: s.env,
+                env: s.env.into_iter().map(|(k, v)| (k, at(v))).collect(),
                 scope: s.scope,
                 health,
                 mcp,

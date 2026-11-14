@@ -66,8 +66,8 @@ mcp = { url = "/mcp" }                         # | true (= /mcp); none: no MCP e
 
 - Layers: services merge by name like `mcp` entries; a stronger layer replaces a service whole. An orchestrator or
   project service is used by every session of its level; a plugin's by the sessions of the agents that attach the
-  plugin. `${AAE_PLUGIN_DIR}` in a plugin's service `command` is the plugin directory. `explain` prints
-  `service.<name>` with its layer.
+  plugin. `${AAE_PLUGIN_DIR}` in a plugin's service `command`, `env` and `health.command` is the plugin directory.
+  `explain` prints `service.<name>` with its layer.
 - The daemon runs `command` once per scope (`orchestrator`, the default, or `project`), lazily, when the first
   session that uses it starts, and stops it 5 minutes after its last session ended. The process starts in `/` with a
   clean environment with `env`, `AAE_SERVICE_PORT` (a free port on 127.0.0.1 picked by the daemon; also replaces

@@ -38,7 +38,9 @@ fn services_layer_like_settings_and_guess_their_paths() {
         ),
         (
             "plugins/mail/plugin.toml",
-            "[[service]]\nname = \"inbox\"\ncommand = [\"${AAE_PLUGIN_DIR}/bin/inbox\"]\nhealth = { http = \"/up\" }",
+            "[[service]]\nname = \"inbox\"\ncommand = [\"${AAE_PLUGIN_DIR}/bin/inbox\"]\nhealth = { http = \"/up\" }\n\
+             [[service]]\nname = \"sorter\"\ncommand = [\"sorter\"]\nenv = { RULES = \"${AAE_PLUGIN_DIR}/rules\" }\n\
+             health = { command = [\"${AAE_PLUGIN_DIR}/bin/ok\"] }",
         ),
     ])
     .unwrap();
@@ -65,6 +67,13 @@ fn services_layer_like_settings_and_guess_their_paths() {
         inbox.value.command
     );
     assert_eq!(inbox.value.health, Health::Http("/up".into()));
+    // Its health check and environment reach its files too.
+    let sorter = &e.services["sorter"].value;
+    assert!(sorter.env["RULES"].ends_with("plugins/mail/rules"), "{sorter:?}");
+    let Health::Command(check) = &sorter.health else {
+        panic!("{sorter:?}")
+    };
+    assert!(check[0].ends_with("plugins/mail/bin/ok"), "{check:?}");
     assert!(e.explain().contains("service.inbox = "), "{}", e.explain());
 
     // The orchestrator's own: the guessed paths.
