@@ -97,6 +97,7 @@ impl RunHandler {
             run: String::new(),
             attempt: 1,
             token: String::new(),
+            actor: None,
         };
         let mut out = HashSet::new();
         for p in &self.config.projects {

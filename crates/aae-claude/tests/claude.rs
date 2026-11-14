@@ -73,6 +73,7 @@ async fn turn(
         run: "r1".into(),
         attempt: 1,
         token: "t".into(),
+        actor: None,
     };
     let mut config = config(&provider);
     edit(&mut config);

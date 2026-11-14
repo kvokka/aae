@@ -49,10 +49,9 @@ impl RunHandler {
             .collect();
         // The tracker actor of the attempt (contracts 5.1), as for a session: the tracker attributes the command's
         // writes to the run.
-        let project = self.config.projects.iter().find(|p| p.name == row.project);
-        if let Some(name) = project.and_then(|p| p.tracker.actor.clone()) {
+        if let Some((name, value)) = self.config.actor(&row.project, &row.id, row.attempt) {
             env.retain(|(k, _)| *k != name);
-            env.push((name, json!(format!("aae:{}:{}", row.id, row.attempt))));
+            env.push((name, json!(value)));
         }
         // The context of the run goes in the environment only, never into the command (spec §2.1 item 10).
         let inputs: serde_json::Map<String, Value> = serde_json::from_str(&row.inputs).unwrap_or_default();

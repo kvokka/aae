@@ -433,7 +433,8 @@ updated|closed` for it; every bead ready at that read is new to the set and rais
 is `aae:<run id>[:<attempt n>]` carries that run and its correlation; `bead.ready` carries those of the last such
 write in the same read (the write that freed the bead is usually that one); the rig of a bead event is the bead's
 `rig:` label, absent without one. The daemon gives a project a tracker when `<project>/.beads` exists, and every
-session and exec step of the project gets `BEADS_DIR` (layer: project) and `BD_ACTOR=aae:<run id>:<attempt n>`.
+session and exec step of the project gets `BEADS_DIR` (layer: project) and `BD_ACTOR=aae:<run id>:<attempt n>`; the
+core sets the actor of an exec step and hands that of a session to the adapter in the session plan.
 
 ### 5.2 Types and errors
 

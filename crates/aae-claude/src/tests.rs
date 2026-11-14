@@ -70,6 +70,7 @@ fn a_config_the_adapter_cannot_deliver_is_a_config_error() {
         run: "r".into(),
         attempt: 1,
         token: "t".into(),
+        actor: None,
     };
     let one = driver.split(&config, &plan).unwrap();
     assert_eq!(
@@ -141,8 +142,14 @@ fn hooks_join_the_native_settings_and_mcp_servers_take_claude_form() {
         run: "r".into(),
         attempt: 1,
         token: "t".into(),
+        actor: Some(("BD_ACTOR".into(), "aae:r:1".into())),
     };
     let p = part::process(&config, &plan, Path::new("/state")).unwrap();
+    let env = part::env(&p, "i1", None, Path::new("/state"));
+    assert!(
+        env.contains(&("BD_ACTOR".to_owned(), "aae:r:1".to_owned())),
+        "the attempt's tracker actor, as the core planned it"
+    );
     let stop = &p["settings"]["hooks"]["Stop"];
     assert_eq!(
         stop.as_array().map(Vec::len),
@@ -175,6 +182,7 @@ fn hooks_join_the_native_settings_and_mcp_servers_take_claude_form() {
         run: "r".into(),
         attempt: 2,
         token: "t".into(),
+        actor: None,
     };
     let next = part::process(&config, &next, Path::new("/state")).unwrap();
     assert_ne!(next["session_id"], p["session_id"]);
@@ -217,12 +225,10 @@ fn an_isolated_session_without_a_credential_gets_the_host_login() {
     p["env"]["ANTHROPIC_API_KEY"] = json!("k");
     assert_eq!(token(&p), None, "its own credential wins");
     assert_ne!(part::account(&p), isolated);
-    p["run"] = json!("run_7");
-    p["attempt"] = json!(2);
     let env = part::env(&p, "i1", None, host.path());
     assert!(
-        env.contains(&("BD_ACTOR".to_owned(), "aae:run_7:2".to_owned())),
-        "the attempt's tracker actor"
+        !env.iter().any(|(k, _)| k == "BD_ACTOR"),
+        "a plan without a tracker actor sets none"
     );
 }
 

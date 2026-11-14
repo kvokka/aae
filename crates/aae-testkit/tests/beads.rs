@@ -122,9 +122,10 @@ async fn a_run_claims_its_bead_shows_it_to_the_agent_and_closes_it_when_it_passe
     w.driver.script(slow_turn());
     let run = w.fix(json!(bead)).await.unwrap()["run"].as_str().unwrap().to_owned();
     tokio::time::sleep(Duration::from_secs(1)).await;
-    let held = w.tracker.bead(&bead).unwrap();
-    assert_eq!(held.assignee.as_deref(), Some(format!("aae:{run}").as_str()));
-    assert_eq!(w.driver.sent(&run, 1).1, [format!("Fix Task {bead}.")]);
+    assert_eq!(w.tracker.bead(&bead).unwrap().assignee, Some(format!("aae:{run}")));
+    let (env, prompts) = w.driver.sent(&run, 1);
+    assert_eq!(prompts, [format!("Fix Task {bead}.")]);
+    assert_eq!(env.unwrap()["TRACKER_ACTOR"], format!("aae:{run}:1"));
     w.finish(&run, Verdict::Pass, "fixed").await;
     tokio::time::sleep(Duration::from_secs(20)).await;
     let events = w.events(&run, Duration::ZERO).await;

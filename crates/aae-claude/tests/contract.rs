@@ -59,6 +59,7 @@ impl Live {
                 run,
                 attempt,
                 token,
+                actor: None,
             },
             Some(session) => SessionPlan::Resume {
                 session,
@@ -66,6 +67,7 @@ impl Live {
                 run,
                 attempt,
                 token,
+                actor: None,
             },
         };
         let env = [

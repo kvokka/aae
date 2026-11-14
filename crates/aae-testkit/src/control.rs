@@ -101,8 +101,8 @@ impl ScriptedDriver {
             .unwrap_or_default()
     }
 
-    /// The environment the session of attempt `attempt` of `run` gets from the effective config, and every prompt
-    /// text sent so far, in order.
+    /// The environment the session of attempt `attempt` of `run` gets from the effective config and the tracker
+    /// actor, and every prompt text sent so far, in order.
     pub fn sent(&self, run: &str, attempt: u32) -> (Option<BTreeMap<String, String>>, Vec<String>) {
         let state = self.lock();
         let env = state.tokens.get(&(run.to_owned(), attempt)).map(|t| t.1.clone());

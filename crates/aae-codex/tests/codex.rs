@@ -70,6 +70,7 @@ async fn a_prompt_runs_a_command_in_the_thread_and_the_turn_completes() {
         run: "run-1".into(),
         attempt: 1,
         token: "tok".into(),
+        actor: None,
     };
     // A skill reaches the thread through the process's own `CODEX_HOME/skills`.
     let skill = dir.path().join("skills/mail");
@@ -143,6 +144,7 @@ async fn a_usage_limit_ends_the_turn_with_a_quota_and_its_reset() {
         run: "r".into(),
         attempt: 1,
         token: "t".into(),
+        actor: None,
     };
     let split = driver.split(&config(&provider), &plan).unwrap();
     let (tx, mut rx) = mpsc::unbounded_channel();
@@ -188,6 +190,7 @@ async fn a_thread_resumed_on_its_live_app_server_gets_the_new_attempt_token() {
         run: run.clone(),
         attempt: 1,
         token: "one".into(),
+        actor: None,
     };
     let split = driver.split(&config(&provider), &plan).unwrap();
     let (tx, mut rx) = mpsc::unbounded_channel();
@@ -204,6 +207,7 @@ async fn a_thread_resumed_on_its_live_app_server_gets_the_new_attempt_token() {
         run,
         attempt: 2,
         token: "two".into(),
+        actor: None,
     };
     let split = driver.split(&config(&provider), &plan).unwrap();
     let resumed = driver.resume_session(&instance, &session, &split.session);

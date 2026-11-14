@@ -63,6 +63,7 @@ impl Live {
                 run,
                 attempt,
                 token,
+                actor: None,
             },
             Some(session) => SessionPlan::Resume {
                 session,
@@ -70,10 +71,12 @@ impl Live {
                 run,
                 attempt,
                 token,
+                actor: None,
             },
         };
-        let provider_config = json!({ "name": "fake", "base_url": provider.base_url(), "wire_api": "responses",
-            "request_max_retries": retries, "stream_max_retries": retries });
+        let native = json!({ "model_provider": "fake", "sandbox_mode": "danger-full-access", "model_providers": {
+            "fake": { "name": "fake", "base_url": provider.base_url(), "wire_api": "responses",
+            "request_max_retries": retries, "stream_max_retries": retries } } });
         let config = EffectiveConfig {
             services: Default::default(),
             harness: "codex".into(),
@@ -88,10 +91,7 @@ impl Live {
             skills: Default::default(),
             plugins: Vec::new(),
             // The host forbids user namespaces, so the codex sandbox cannot run here (docs/design/experiments.md).
-            native: Some(sourced(
-                json!({ "model_provider": "fake", "sandbox_mode": "danger-full-access",
-                "model_providers": { "fake": provider_config } }),
-            )),
+            native: Some(sourced(native)),
         };
         let split = driver.split(&config, &plan).unwrap();
         let (sink, events) = mpsc::unbounded_channel();

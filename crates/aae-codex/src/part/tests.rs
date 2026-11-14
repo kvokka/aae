@@ -26,6 +26,7 @@ fn the_process_gets_the_native_block_and_the_thread_the_rest() {
         run: "r".into(),
         attempt: 1,
         token: "tok".into(),
+        actor: Some(("BD_ACTOR".into(), "aae:r:1".into())),
     };
     let driver = Codex::new("codex".into(), "/state".into(), None, 8);
     let split = driver.split(&config, &plan).unwrap();
@@ -64,6 +65,7 @@ fn the_process_gets_the_native_block_and_the_thread_the_rest() {
         run: "q".into(),
         attempt: 2,
         token: "t2".into(),
+        actor: None,
     };
     assert_eq!(driver.split(&config, &other).unwrap().fingerprint, split.fingerprint);
     config.native = Some(agent(json!("x")));

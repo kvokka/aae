@@ -116,15 +116,19 @@ impl Driver for ScriptedDriver {
             run,
             attempt,
             token,
+            actor,
         }
         | SessionPlan::Resume {
             workdir,
             run,
             attempt,
             token,
+            actor,
             ..
         }) = plan;
-        let env: BTreeMap<_, _> = config.env.iter().map(|(k, v)| (k, &v.value)).collect();
+        // The tracker actor joins the session's environment, as a harness adapter sets it.
+        let mut env: BTreeMap<_, _> = config.env.iter().map(|(k, v)| (k.clone(), v.value.clone())).collect();
+        env.extend(actor.clone());
         let mcp: BTreeMap<_, _> = config.mcp.iter().map(|(n, m)| (n, &m.value)).collect();
         let entry = (token.clone(), BTreeMap::new());
         self.lock().tokens.insert((run.clone(), *attempt), entry);

@@ -53,8 +53,8 @@ impl Split {
     }
 }
 
-/// What the session of an attempt is; `run` and `attempt` name files in the state directory; `run` and `token` set
-/// the attempt environment (`AAE_RUN`, `AAE_ATTEMPT_TOKEN`, contracts 6.3).
+/// What the session of an attempt is; `run` and `attempt` name files in the state directory. The attempt environment:
+/// `run`, `token` (`AAE_RUN`, `AAE_ATTEMPT_TOKEN`, contracts 6.3) and `actor` (the project's tracker actor, 5.1).
 #[derive(Clone, Debug, PartialEq)]
 pub enum SessionPlan {
     New {
@@ -62,6 +62,7 @@ pub enum SessionPlan {
         run: String,
         attempt: u32,
         token: String,
+        actor: Option<(String, String)>,
     },
     Resume {
         session: SessionRef,
@@ -69,6 +70,7 @@ pub enum SessionPlan {
         run: String,
         attempt: u32,
         token: String,
+        actor: Option<(String, String)>,
     },
 }
 

@@ -108,7 +108,8 @@ pub struct TrackerLink {
     /// Variables every session and command of the project gets, tracker or not, under every layer: they name the
     /// tracker explicitly, so a tool's own search never climbs to another one.
     pub env: BTreeMap<String, String>,
-    /// The variable that carries the attempt's tracker actor, `aae:<run>:<attempt>` (contracts 5.1), into a command.
+    /// The variable that carries the attempt's tracker actor, `aae:<run>:<attempt>` (contracts 5.1), into a session
+    /// or a command.
     pub actor: Option<String>,
 }
 
@@ -231,6 +232,15 @@ impl Project {
             .and_then(|p| p.formulas.get(&name.name))
             .ok_or(format!("no formula `{name}`"))?;
         Ok((name, formula))
+    }
+}
+
+impl Config {
+    /// The tracker actor of attempt `attempt` of run `run` in `project` (contracts 5.1): the variable and
+    /// `aae:<run>:<attempt>`; none when the project has no actor variable.
+    pub fn actor(&self, project: &str, run: &str, attempt: u32) -> Option<(String, String)> {
+        let p = self.projects.iter().find(|p| p.name == project)?;
+        Some((p.tracker.actor.clone()?, format!("aae:{run}:{attempt}")))
     }
 }
 

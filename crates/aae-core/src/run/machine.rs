@@ -203,12 +203,14 @@ impl RunHandler {
             Some(session) => SessionPlan::Resume {
                 session,
                 workdir,
+                actor: self.config.actor(&row.project, &run, attempt),
                 run,
                 attempt,
                 token,
             },
             None => SessionPlan::New {
                 workdir,
+                actor: self.config.actor(&row.project, &run, attempt),
                 run,
                 attempt,
                 token,
