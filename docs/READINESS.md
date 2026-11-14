@@ -10,14 +10,13 @@ code assessed. Updated at the end of every work session.
 them: one with a `FAIL` row (or, in a full run, a row not run) holds the score at 6, a 10 needs criterion 20 green,
 and the marker below must name a commit at or after the last change of `crates/`.
 
-Assessed 2026-11-15 at `bf45900`, after the second audit: launch settings (a provider and the harness derived from it,
-which `d5d927b` replaced by the harness the user names, short model names, pack, formula and variant layers), child runs
-and `aae run wait`, and the demos rebuilt as a planner and its workers. The model-free rows and the cargo tests are
-checked by the full `mise run ci` and `acceptance-ci` on this code. Demo 1 (`snake-claude`) passed live on this code;
-demo 2 (`snake-mixed`) did not run: codex is not logged in on the owner's host. The rows with a real model (2, 4a, the
-live rows of 8 and 17) and the release builds (1) did not run on this code: the components with such a criterion stay at
-6, and none reaches 10 while a row of criterion 20 has not run.
-<!-- MEASURE id=readiness date=2026-11-15 ver=bf45900 env=linux-arm64-orbstack src=docs/READINESS.md note="assessed against the letter of the scale; the model rows are open until a full run on this code" -->
+Assessed 2026-11-15 at `67e8c07`, after the harness replaced the provider: the user names the harness, a run has one
+model gate key from its config, rig paths are normalized, `aae doctor` checks a codex host model provider's key. The
+model-free rows and the cargo tests are checked by the full `mise run ci` and `acceptance-ci` on this code. Both demos
+passed live on this code: `snake-claude` in 99 s, `snake-mixed` (its backend worker on codex) in 119 s. The rows with a
+real model (2, 4a, the live rows of 8 and 17) and the release builds (1) did not run on this code: the components with
+such a criterion stay at 6, and none reaches 10 while a row of criterion 20 has not run.
+<!-- MEASURE id=readiness date=2026-11-15 ver=67e8c07 env=linux-arm64-orbstack src=docs/READINESS.md note="assessed against the letter of the scale; the model rows are open until a full run on this code" -->
 
 | Component | Criteria | Score | Missing for the next point |
 |---|---|---|---|
