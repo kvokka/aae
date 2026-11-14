@@ -6,7 +6,7 @@ mod doctor;
 mod fetch;
 mod harness;
 
-use aae_front::cli::{self, Cli, Command};
+use aae_front::cli::{self, Cli, Command, ConfigCommand};
 use clap::Parser;
 use std::process::ExitCode;
 
@@ -38,6 +38,12 @@ fn main() -> ExitCode {
             };
         }
         Command::McpBridge { command } => return bridge::run(command),
+        // Loaded here as the daemon loads it, so a check or an explain needs no daemon.
+        Command::Config(command @ (ConfigCommand::Check { .. } | ConfigCommand::Explain { .. })) => {
+            return cli::config_local(cli.json, command, |config| {
+                harness::load(&daemon::Paths::resolve(config, cli.socket).map_err(|e| vec![e])?)
+            });
+        }
         Command::Daemon { config, service: None } => config,
         _ => return cli::run(cli),
     };

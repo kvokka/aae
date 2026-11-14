@@ -1,7 +1,7 @@
 //! The HTTP API (spec §12): JSON over a unix socket, the event stream as SSE. Mutating operations take an
 //! `Idempotency-Key` header: a repeated request with the same key returns the first reply and changes nothing.
 
-mod config;
+pub(crate) mod config;
 mod daemon;
 mod events;
 mod gates;

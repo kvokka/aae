@@ -81,7 +81,7 @@ the raw messages of its session, and every command takes
 The daemon reads the config at start and again only when you ask:
 
 ```sh
-aae config check      # report the errors of the files on disk, apply nothing
+aae config check      # report the errors of the files on disk, apply nothing; needs no daemon
 aae config reload     # apply them; on an error the old config stays in force
 ```
 

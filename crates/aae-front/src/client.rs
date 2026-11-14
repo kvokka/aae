@@ -25,7 +25,10 @@ impl fmt::Display for ClientError {
             Self::Io(e) => write!(f, "daemon socket: {e}"),
             Self::Api { status, error } => {
                 let text = |key: &str| error[key].as_str().unwrap_or_default().to_owned();
-                write!(f, "{} ({status} {})", text("message"), text("code"))
+                write!(f, "{} ({status} {})", text("message"), text("code"))?;
+                // The errors of a config a reload refused, one per line.
+                (error["errors"].as_array().into_iter().flatten())
+                    .try_for_each(|e| write!(f, "\n{}", e.as_str().unwrap_or_default()))
             }
         }
     }

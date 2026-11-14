@@ -39,8 +39,11 @@ Code: `crates/aae-front/src/cli/`. The CLI is a thin client of the HTTP API in t
   0 once the stream ends with the run; `aae run show` gives the outcome.
 - `aae finish` reads the attempt token from the session environment, retries for 60 s under one idempotency key and
   exits 75 when the daemon stays unreachable (an attempt failure, not a failed run).
-- Without a daemon only `aae daemon`, `aae doctor`, `aae fetch` and `aae --version` work; any other command says
-  that no daemon listens on the socket and how to start one.
+- Without a daemon only `aae daemon`, `aae doctor`, `aae fetch`, `aae config check|explain` and `aae --version` work;
+  any other command says that no daemon listens on the socket and how to start one. `aae config check` and
+  `aae config explain` load the config file themselves as the daemon would (`--config <file>`, default
+  `$XDG_CONFIG_HOME/aae/config.toml`) and print what the API would answer for it.
+- A refused `aae config reload` prints the errors of the file, one per line.
 
 ## MCP
 

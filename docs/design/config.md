@@ -12,7 +12,8 @@ error in every file.
   formulas, triggers and the plugins they declare. A missing orchestrator file is an empty config.
 - Load is all or nothing: every error found is reported with its file, and an invalid config is never applied.
   The daemon re-reads only on an explicit command (§6.5): `aae config reload` (`POST /v1/config/reload`); on
-  error the previous config stays in force, and `aae config check` reports the errors without applying anything.
+  error the previous config stays in force, and `aae config check` reports the errors without applying anything
+  (it loads the file itself, so it needs no daemon).
 - A reload is taken by new runs and by the schedules (a schedule whose `cron`/`every` changed, and every `cron` when
   `timezone` changed, is set again from the reload; a removed one is dropped); running runs keep the snapshot they prepared with; an idle instance stops with
   reason `config` only when no agent of the new config, on any rig, starts sessions on its fingerprint (a changed MCP
@@ -96,9 +97,11 @@ mcp = { url = "/mcp" }                         # | true (= /mcp); none: no MCP e
 orchestrator, project and rig settings, then the contributions of the attached plugins in attachment order, the
 agent, and the overrides of the orchestrator, the project and the rig. Plugins attach first (the `plugins` key of
 every layer), so a stronger layer can detach a plugin and its whole contribution. An override applies when its key
-resolves (see Names) to the agent. Every value keeps its layer; `explain()` prints one line per value with its
-layer and one line for the host: inherited by the harness and invisible to aae, or off (`aae config explain
---project <p> --agent <a> [--rig <r>]`, `GET /v1/config/explain`). The effective config
+resolves (see Names) to the agent. Every value keeps its layer; a value several layers make together (`native`
+tables merged by key, a system prompt with plugin fragments, `PATH` with plugin `bin/` directories) names them all
+in order (`# agent + plugin mail`). `explain()` prints one line per value with its layer and one line for the host:
+inherited by the harness and invisible to aae, or off (`aae config explain --project <p> --agent <a> [--rig <r>]`,
+with no daemon, on the file on disk; `GET /v1/config/explain`, on the config the daemon holds). The effective config
 serializes to JSON: a run keeps it as its snapshot, and `env` is the whole session environment besides what the
 adapter adds (§6.5). The adapter's `split` turns it into a process part, keyed by its fingerprint (contracts 8),
 and a session part.

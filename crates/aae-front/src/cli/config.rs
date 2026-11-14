@@ -1,9 +1,13 @@
 //! The config commands: the lists of projects, agents, formulas, packs and plugins, and `aae config`.
 
-use super::{encode, print};
-use crate::client::{Client, ClientError};
+use super::{encode, fail, print};
+use crate::{
+    api::config::{checked, explained},
+    client::{Client, ClientError},
+};
+use aae_core::config::Config;
 use clap::Subcommand;
-use std::process::ExitCode;
+use std::{path::PathBuf, process::ExitCode};
 
 #[derive(Subcommand)]
 pub enum ListCommand {
@@ -16,10 +20,17 @@ pub enum ListCommand {
 
 #[derive(Subcommand)]
 pub enum ConfigCommand {
-    /// Check the config file as a reload would; exits non-zero when it has errors.
-    Check,
-    /// The effective config of an agent: every value with its layer, the host layer in one line.
+    /// Check the config file as a reload would; exits non-zero when it has errors. Needs no daemon.
+    Check {
+        /// The orchestrator config (default: `$XDG_CONFIG_HOME/aae/config.toml`).
+        #[arg(long)]
+        config: Option<PathBuf>,
+    },
+    /// The effective config of an agent: every value with its layer, the host layer in one line. Needs no daemon.
     Explain {
+        /// The orchestrator config (default: `$XDG_CONFIG_HOME/aae/config.toml`).
+        #[arg(long)]
+        config: Option<PathBuf>,
         #[arg(long)]
         project: String,
         /// `<pack>.<name>`, or a bare name of the project's own pack.
@@ -47,10 +58,25 @@ pub(super) async fn list(client: &Client, json: bool, what: &str, command: ListC
     Ok(())
 }
 
-pub(super) async fn config(client: &Client, json: bool, command: ConfigCommand) -> Result<ExitCode, ClientError> {
+/// `aae config reload`; `check` and `explain` run without a daemon, in [`local`].
+pub(super) async fn reload(client: &Client, json: bool, idempotency: Option<String>) -> Result<(), ClientError> {
+    let reply = client
+        .request("POST", "/v1/config/reload", None, idempotency.as_deref())
+        .await?;
+    print(json, &reply);
+    Ok(())
+}
+
+/// `aae config check|explain` on the config file as the daemon loads it, with no daemon: `load` takes `--config`.
+/// Prints what the API would answer; `reload` needs the daemon.
+pub fn local(
+    json: bool,
+    command: ConfigCommand,
+    load: impl FnOnce(Option<PathBuf>) -> Result<Config, Vec<String>>,
+) -> ExitCode {
     match command {
-        ConfigCommand::Check => {
-            let reply = client.request("POST", "/v1/config/check", None, None).await?;
+        ConfigCommand::Check { config } => {
+            let reply = checked(load(config));
             if json {
                 print(json, &reply);
             }
@@ -58,33 +84,28 @@ pub(super) async fn config(client: &Client, json: bool, command: ConfigCommand) 
             for error in errors.iter().filter(|_| !json) {
                 eprintln!("{}", error.as_str().unwrap_or_default());
             }
-            return Ok(if errors.is_empty() {
-                ExitCode::SUCCESS
-            } else {
-                ExitCode::FAILURE
-            });
-        }
-        ConfigCommand::Explain { project, agent, rig } => {
-            let mut path = format!(
-                "/v1/config/explain?project={}&agent={}",
-                encode(&project),
-                encode(&agent)
-            );
-            if let Some(rig) = rig {
-                path += &format!("&rig={}", encode(&rig));
-            }
-            let reply = client.request("GET", &path, None, None).await?;
-            match json {
-                true => print(json, &reply),
-                false => print!("{}", reply["text"].as_str().unwrap_or_default()),
+            match errors.is_empty() {
+                true => ExitCode::SUCCESS,
+                false => ExitCode::FAILURE,
             }
         }
-        ConfigCommand::Reload { idempotency } => {
-            let reply = client
-                .request("POST", "/v1/config/reload", None, idempotency.as_deref())
-                .await?;
-            print(json, &reply);
+        ConfigCommand::Explain {
+            config,
+            project,
+            agent,
+            rig,
+        } => {
+            let config = match load(config) {
+                Ok(config) => config,
+                Err(errors) => return fail(&format!("the config has errors:\n{}", errors.join("\n"))),
+            };
+            match explained(&config, &project, &agent, rig.as_deref()) {
+                Ok(reply) if json => print(json, &reply),
+                Ok(reply) => print!("{}", reply["text"].as_str().unwrap_or_default()),
+                Err(e) => return fail(&e),
+            }
+            ExitCode::SUCCESS
         }
+        ConfigCommand::Reload { .. } => fail("`config reload` needs the daemon"),
     }
-    Ok(ExitCode::SUCCESS)
 }

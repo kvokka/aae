@@ -129,38 +129,42 @@ pub(crate) struct ExplainQuery {
 #[utoipa::path(get, path = "/v1/config/explain", params(ExplainQuery),
     responses((status = OK, body = Object), (status = NOT_FOUND, body = Object)))]
 pub(crate) async fn explain(state: State, Query(query): Query<ExplainQuery>) -> Reply {
-    let config = state.config();
-    let agent = match query.agent.split_once('.') {
+    let reply = explained(&state.config(), &query.project, &query.agent, query.rig.as_deref()).map_err(not_found)?;
+    Ok(Json(reply))
+}
+
+/// The reply of an explain, for the API and for the CLI without a daemon: a bare agent name is of the project's
+/// first pack, its own.
+pub(crate) fn explained(config: &Config, project: &str, agent: &str, rig: Option<&str>) -> Result<Value, String> {
+    let agent = match agent.split_once('.') {
         Some((pack, name)) => Name {
             pack: pack.to_owned(),
             name: name.to_owned(),
         },
         None => Name {
-            pack: projects(
-                &config,
-                &ProjectQuery {
-                    project: Some(query.project.clone()),
-                },
-            )?[0]
+            pack: (config.projects.iter())
+                .find(|p| p.name == project)
+                .ok_or_else(|| format!("no project `{project}`"))?
                 .packs
                 .first()
                 .map_or_else(String::new, |p| p.name.clone()),
-            name: query.agent.clone(),
+            name: agent.to_owned(),
         },
     };
-    let effective = config
-        .effective(&query.project, query.rig.as_deref(), &agent)
-        .map_err(not_found)?;
-    Ok(Json(
-        json!({ "text": effective.explain(), "inherits_host": effective.inherits_host() }),
-    ))
+    let effective = config.effective(project, rig, &agent)?;
+    Ok(json!({ "text": effective.explain(), "inherits_host": effective.inherits_host() }))
 }
 
 /// Loads the config file as a reload would and reports its errors; changes nothing.
 #[utoipa::path(post, path = "/v1/config/check", responses((status = OK, body = Object)))]
 pub(crate) async fn check(state: State) -> Reply {
-    let errors = (state.load)().err().unwrap_or_default();
-    Ok(Json(json!({ "ok": errors.is_empty(), "errors": errors })))
+    Ok(Json(checked((state.load)())))
+}
+
+/// The reply of a check, for the API and for the CLI without a daemon.
+pub(crate) fn checked(loaded: Result<Config, Vec<String>>) -> Value {
+    let errors = loaded.err().unwrap_or_default();
+    json!({ "ok": errors.is_empty(), "errors": errors })
 }
 
 /// Reads the config file again: new runs and the schedules take it, running runs keep their snapshot, idle

@@ -1,5 +1,6 @@
 //! The CLI (spec §12): a thin client of the API, one command per API operation, JSON output with `--json`.
-//! Without a daemon only `aae daemon`, `aae doctor`, `aae fetch` and `aae --version` work.
+//! Without a daemon only `aae daemon`, `aae doctor`, `aae fetch`, `aae config check|explain` and `aae --version`
+//! work.
 
 mod commands;
 mod config;
@@ -8,12 +9,13 @@ mod finish;
 use crate::client::{Client, ClientError, Events};
 use clap::{CommandFactory, Parser, Subcommand, ValueEnum};
 pub use commands::{Decision, GateCommand, InstanceCommand, RunCommand, TriggerCommand};
-pub use config::{ConfigCommand, ListCommand};
+pub use config::{ConfigCommand, ListCommand, local as config_local};
 use finish::finish;
 use serde_json::Value;
 use std::{path::PathBuf, process::ExitCode};
 
-/// Every API operation and the command that calls it: `(command, method, path)`.
+/// Every API operation and the command that does it: `(command, method, path)`. `config check` and `config explain`
+/// do it locally, without a daemon.
 pub const OPERATIONS: &[(&str, &str, &str)] = &[
     ("run start", "POST", "/v1/runs"),
     ("run list", "GET", "/v1/runs"),
@@ -215,9 +217,14 @@ pub(crate) fn fail(message: &str) -> ExitCode {
 async fn execute(client: &Client, cli: Cli) -> Result<ExitCode, ClientError> {
     let json = cli.json;
     match cli.command {
-        Command::Daemon { .. } | Command::Doctor { .. } | Command::Fetch { .. } | Command::McpBridge { .. } => {
+        Command::Daemon { .. }
+        | Command::Doctor { .. }
+        | Command::Fetch { .. }
+        | Command::McpBridge { .. }
+        | Command::Config(ConfigCommand::Check { .. } | ConfigCommand::Explain { .. }) => {
             return Ok(fail(
-                "`daemon`, `doctor`, `fetch` and `mcp-bridge` run without a daemon, not as its client",
+                "`daemon`, `doctor`, `fetch`, `mcp-bridge` and `config check|explain` run without a daemon, not as its \
+                 client",
             ));
         }
         Command::Run(command) => commands::run(client, json, command).await?,
@@ -229,7 +236,7 @@ async fn execute(client: &Client, cli: Cli) -> Result<ExitCode, ClientError> {
         Command::Formula(command) => config::list(client, json, "formulas", command).await?,
         Command::Pack(command) => config::list(client, json, "packs", command).await?,
         Command::Plugin(command) => config::list(client, json, "plugins", command).await?,
-        Command::Config(command) => return config::config(client, json, command).await,
+        Command::Config(ConfigCommand::Reload { idempotency }) => config::reload(client, json, idempotency).await?,
         Command::Events { from } => follow(client.events(from).await?, json).await?,
         Command::Finish { result, summary, data } => return finish(client, result, summary, data).await,
         Command::Status => print(json, &client.request("GET", "/v1/daemon", None, None).await?),

@@ -10,12 +10,14 @@ use std::{
 };
 
 impl Daemon {
-    /// `aae <args>` on this daemon's socket.
+    /// `aae <args>` on this daemon's socket and its config directory.
     fn cli(&self, args: &[&str], env: &[(&str, &str)]) -> Output {
         let mut command = Command::new(env!("CARGO_BIN_EXE_aae"));
         command
             .args(args)
             .env("AAE_SOCKET", self.socket())
+            .env("HOME", self.dir.path())
+            .env("XDG_CONFIG_HOME", self.dir.path().join("config"))
             .envs(env.iter().copied());
         command.output().unwrap()
     }
@@ -92,6 +94,64 @@ async fn the_finisher_gives_up_on_an_unreachable_daemon_with_tempfail() {
     assert!(String::from_utf8_lossy(&out.stderr).contains("unreachable for 1 s"));
 }
 
+/// `config check` and `config explain` load the file as the daemon would, so they need none (spec §6.3).
+#[test]
+fn the_config_is_checked_and_explained_without_a_daemon() {
+    let dir = tempfile::tempdir().unwrap();
+    for (path, text) in common::FILES {
+        let path = dir.path().join(path);
+        fs::create_dir_all(path.parent().unwrap()).unwrap();
+        fs::write(path, text).unwrap();
+    }
+    let files = dir.path().join("config/aae");
+    let claude = "projects = [\"shop\"]\n[harness.claude]\nbinary = \"true\"\n";
+    fs::write(files.join("config.toml"), claude).unwrap();
+    fs::create_dir_all(files.join("shop/agents/dev")).unwrap();
+    fs::write(
+        files.join("shop/agents/dev/agent.toml"),
+        "harness = \"claude\"\neffort = \"high\"\n",
+    )
+    .unwrap();
+    let broken = files.join("broken.toml");
+    fs::write(&broken, "projects = [\"shop\"\n").unwrap();
+    let broken = broken.to_str().unwrap();
+    let aae = |args: &[&str]| {
+        (Command::new(env!("CARGO_BIN_EXE_aae")).args(args))
+            .env("AAE_SOCKET", "/nonexistent/aae.sock")
+            .env("HOME", dir.path())
+            .env("XDG_CONFIG_HOME", dir.path().join("config"))
+            .output()
+            .unwrap()
+    };
+    let out = aae(&["config", "check", "--json"]);
+    let reply: Value = serde_json::from_slice(&out.stdout).unwrap();
+    assert!(out.status.success(), "{reply}");
+    assert_eq!(reply, serde_json::json!({ "ok": true, "errors": [] }));
+    let out = aae(&["config", "explain", "--project", "shop", "--agent", "dev"]);
+    let text = String::from_utf8_lossy(&out.stdout);
+    assert!(
+        out.status.success() && text.contains("effort = \"high\"  # agent\n"),
+        "{text}"
+    );
+    let out = aae(&["config", "explain", "--project", "shop", "--agent", "dev", "--json"]);
+    let reply: Value = serde_json::from_slice(&out.stdout).unwrap();
+    assert_eq!(reply["inherits_host"], true, "{reply}");
+    let out = aae(&["config", "check", "--config", broken]);
+    assert!(!out.status.success());
+    assert!(String::from_utf8_lossy(&out.stderr).contains("broken.toml"));
+    let out = aae(&[
+        "config",
+        "explain",
+        "--config",
+        broken,
+        "--project",
+        "shop",
+        "--agent",
+        "dev",
+    ]);
+    assert!(!out.status.success());
+}
+
 /// The config by hand (spec §12): lists, the effective config of an agent with the layer of every value, a check
 /// and a reload that a broken file does not pass, and the triggers of the reloaded config with their next firing.
 #[tokio::test]
@@ -129,7 +189,14 @@ async fn the_config_from_the_cli_lists_explains_checks_and_reloads() {
     let out = d.cli(&["config", "check"], &[]);
     assert!(!out.status.success());
     assert!(String::from_utf8_lossy(&out.stderr).contains("config.toml"));
-    assert!(!d.cli(&["config", "reload"], &[]).status.success());
+    let out = d.cli(&["config", "reload"], &[]);
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(!out.status.success(), "{stderr}");
+    // The errors of the refused file, not only that it has some.
+    assert!(
+        stderr.contains("config_error)\n") && stderr.contains("config.toml"),
+        "{stderr}"
+    );
     assert_eq!(
         d.json(&["agent", "list"])[0]["agent"],
         "shop.dev",
