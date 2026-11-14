@@ -34,6 +34,9 @@ coder → reviewer под мастером (`overseer`), без оператор
   `cargo clippy --all-targets -q --message-format short -- -D warnings 2>&1 | head -60`,
   `cargo nextest run --no-fail-fast --status-level fail --final-status-level fail 2>&1 | tail -80`.
 - Grep до Read; Read с offset/limit; не читать `Cargo.lock`, `target/`, длинные логи целиком.
+- Структурный поиск по Rust — `ast-grep` (0.51, стоит на хосте): находит вызовы, impl, match-ветки по шаблону
+  синтаксиса, без ложных совпадений в комментариях и строках. Пример: `ast-grep -l rust -p '$X.unwrap()' crates/`,
+  `ast-grep -l rust -p 'impl $T for Daemon { $$$ }'`. Вывод тоже обрезай (`| head -40`).
 - Тяжёлое чтение и прогоны — субагентам; они возвращают выжимку, детали — в файл.
 - Полный набор проверок за цикл — один раз: `scripts/loop/checks NN` у кодера в конце; ревьюер читает
   `.loop/cycles/NN/checks.md` и не повторяет. GitHub CI гоняет то же самое — его не ждут.
