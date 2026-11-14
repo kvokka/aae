@@ -97,10 +97,10 @@ impl RunHandler {
             ("interrupted", Some(Decision::Park { gate, then })) => {
                 self.policy_gate(tx, Some(&gate))?;
                 // Out of the ceiling is only the wait on the run's own account gate, closed now, after a failure of
-                // the account (owner decision, spec §2.1 item 12): any other park counts.
+                // the account — login, billing or quota (owner decision, spec §2.1 item 12): any other park counts.
                 tx.sql().execute(
                     "UPDATE attempts SET waited = 1 WHERE run = ?1 AND n = ?2 \
-                     AND json_extract(failure, '$.kind') IN ('auth_required', 'billing') \
+                     AND json_extract(failure, '$.kind') IN ('auth_required', 'billing', 'quota_exhausted') \
                      AND ?3 = (SELECT account FROM runs WHERE id = ?1) \
                      AND EXISTS (SELECT 1 FROM gates WHERE key = ?3 AND (until_ms IS NULL OR until_ms > ?4))",
                     params![row.id, row.attempt, gate.key, tx.now_ms()],

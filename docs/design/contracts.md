@@ -566,7 +566,7 @@ so that the state machine has one place where `run.attempt_failed` is decided.
 - Concurrency is bounded per orchestrator (`max_runs`, default 8) and per agent (`max_runs` in `agent.toml`).
 - An attempt starts a new session or resumes the previous one, and has its own generation.
 
-Ceilings of the core (invariant 16): 20 attempts per run, not counting the attempts whose `auth_required` or `billing` failure the decision parked on the run's own `account:` gate, closed by it (spec §2.1 item 12: a wait on the account does not spend the ceiling; the attempt is marked `waited` in the state; a park on a gate that does not close, `until` passed, or any other park counts), 10 remarks per attempt (`continue` after a hollow turn
+Ceilings of the core (invariant 16): 20 attempts per run, not counting the attempts whose `auth_required`, `billing` or `quota_exhausted` failure the decision parked on the run's own `account:` gate, closed by it (spec §2.1 item 12: a wait on the account does not spend the ceiling; the attempt is marked `waited` in the state; a park on a gate that does not close, `until` passed, or any other park counts), 10 remarks per attempt (`continue` after a hollow turn
 and `remark` after `run.finishing` both count). The eleventh fails the run with reason `remarks_ceiling` and the class
 the event would give: `hollow_done` for `continue`, `check` for `remark`. Between turns (from idle without background
 to the next prompt) the step `timeout` pauses like in `requires_action`. Trigger depth (§9.5): a trigger does not start a run deeper than 10 (`trigger.skipped{depth}`); the limit is fixed, with no setting.
