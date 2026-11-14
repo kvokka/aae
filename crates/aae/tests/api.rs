@@ -142,7 +142,16 @@ async fn one_daemon_per_socket_and_a_stop_signal_removes_the_socket() {
 #[tokio::test]
 async fn one_daemon_per_state_directory_whatever_its_socket() {
     let d = Daemon::start(|_| {}).await;
-    assert_eq!(fs::metadata(d.socket()).unwrap().permissions().mode() & 0o777, 0o600);
+    let state = d.dir.path().join("state/aae");
+    for file in [
+        d.socket(),
+        state.join("state.db"),
+        state.join("state.db-wal"),
+        state.join("journal/events.jsonl"),
+    ] {
+        let mode = fs::metadata(&file).unwrap().permissions().mode();
+        assert_eq!(mode & 0o777, 0o600, "{}", file.display());
+    }
     let second = command(d.dir.path())
         .env("XDG_RUNTIME_DIR", d.dir.path().join("other-run"))
         .output()

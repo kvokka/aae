@@ -7,6 +7,7 @@ use serde_json::{Value, json};
 use std::{
     fs::{self, File, OpenOptions},
     io::{self, BufRead, BufReader, Write},
+    os::unix::fs::OpenOptionsExt,
     path::{Path, PathBuf},
 };
 use tokio::sync::watch;
@@ -158,7 +159,11 @@ impl Journal {
         if size > 0 && size + line.len() as u64 + 1 > self.max_bytes {
             self.rotate()?;
         }
-        let mut file = OpenOptions::new().create(true).append(true).open(&current)?;
+        let mut file = OpenOptions::new()
+            .create(true)
+            .append(true)
+            .mode(0o600)
+            .open(&current)?;
         file.write_all(format!("{line}\n").as_bytes())?;
         file.sync_data()
     }

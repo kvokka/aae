@@ -1,5 +1,5 @@
 use rusqlite::Connection;
-use std::path::Path;
+use std::{os::unix::fs::OpenOptionsExt, path::Path};
 
 const SCHEMA_V1: &str = "
 CREATE TABLE outbox (
@@ -170,6 +170,13 @@ CREATE TABLE prompts (
 
 /// Opens the state database in WAL mode and brings its schema to the current version.
 pub fn open(path: &Path) -> rusqlite::Result<Connection> {
+    // Created 0600 whatever the umask; SQLite gives its WAL files the mode of the database. A failure here is the
+    // open's to report.
+    let _ = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .mode(0o600)
+        .open(path);
     let conn = Connection::open(path)?;
     conn.pragma_update(None, "journal_mode", "WAL")?;
     // NORMAL in WAL mode survives a process crash (kill -9, criterion 8); only power loss can drop a commit.
