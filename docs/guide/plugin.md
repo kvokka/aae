@@ -82,7 +82,8 @@ and an optional `timeout` (default 30 s, at most 300 s). The full contract is in
 - **stdin**: the event as one JSON line (`{"schema", "seq", "ts", "type", "project", "rig", "run", "data", ...}`),
   then EOF.
 - **cwd**: the plugin directory. **Environment**: only `PATH`, `HOME`, `LANG`, `AAE_SOCKET` (the API socket, to
-  call back into aae), `AAE_PLUGIN_DIR` and `AAE_PLUGIN_PARAMS` (the `config` table of the declaration as JSON).
+  call back into aae), `AAE_PLUGIN_DIR`, `AAE_PLUGIN_PARAMS` (the `config` table of the declaration as JSON) and
+  `AAE_INSTANCE` (a marker: after a daemon crash the next daemon kills every process that still carries it).
 - **Result**: exit 0 with empty stdout means no objection; exit 0 with one JSON object on stdout is a decision;
   exit 2 blocks, with stderr as the reason; anything else (another exit code, a timeout, bad JSON) is a hook
   failure, reported as the `plugin.hook_failed` event.

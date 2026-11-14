@@ -84,7 +84,10 @@ impl RunHandler {
                 } else {
                     format!("hooks:{run}:obs")
                 };
-                let payload = json!({ "op": "hooks", "event": event, "hooks": hooks });
+                // A hook outlives a daemon crash in its own process group: the next daemon kills it by this marker
+                // (contracts 6.4). Without randomness the hook runs unmarked, as one that ends by itself.
+                let marker = super::new_token().map(|t| format!("h-{}", &t[..16]));
+                let payload = json!({ "op": "hooks", "event": event, "hooks": hooks, "marker": marker });
                 tx.effect(&key, &seq.to_string(), &payload)?;
             }
         }
@@ -154,7 +157,7 @@ async fn run(core: &CoreHandle<Msg>, payload: &Value, hooks: &ExecHooks) {
         // Hooks on observed events may only exit 0 or fail (contracts 3.2).
         let said = match hook["bundled"].as_str() {
             Some(name) => bundled(hooks.bundled, name, hook, &event).await,
-            None => invoke(hook, &event, hooks.socket.as_deref()).await,
+            None => invoke(hook, &event, hooks.socket.as_deref(), payload["marker"].as_str()).await,
         };
         let said = said.and_then(|said| match said {
             Said::Blocked(stderr) if !deciding => Err(Failed {
@@ -287,7 +290,7 @@ async fn bundled(run: Option<BundledHook>, name: &str, hook: &Value, event: &Val
     }
 }
 
-async fn invoke(hook: &Value, event: &Value, socket: Option<&Path>) -> Result<Said, Failed> {
+async fn invoke(hook: &Value, event: &Value, socket: Option<&Path>, marker: Option<&str>) -> Result<Said, Failed> {
     let command: Vec<String> = serde_json::from_value(hook["command"].clone()).unwrap_or_default();
     let dir = PathBuf::from(hook["dir"].as_str().unwrap_or("/"));
     let mut env = process::base_env();
@@ -295,6 +298,7 @@ async fn invoke(hook: &Value, event: &Value, socket: Option<&Path>) -> Result<Sa
     let params = hook.get("params").filter(|p| p.is_object());
     env.extend(params.map(|p| ("AAE_PLUGIN_PARAMS".to_owned(), p.to_string())));
     env.extend(socket.map(|s| ("AAE_SOCKET".to_owned(), s.to_string_lossy().into_owned())));
+    env.extend(marker.map(|m| (crate::orphans::INSTANCE_ENV.to_owned(), m.to_owned())));
     let stdin = format!("{event}\n");
     let timeout = Duration::from_millis(hook["timeout_ms"].as_u64().unwrap_or(30_000));
     let out = process::run(Spec {

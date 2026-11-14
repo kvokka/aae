@@ -8,6 +8,7 @@ use crate::{
     writer::{Error, Event, Tx},
 };
 use serde_json::json;
+use std::collections::BTreeSet;
 
 impl RunHandler {
     pub(super) fn recover(&mut self, tx: &mut Tx<'_>) -> Result<(), Error> {
@@ -20,6 +21,19 @@ impl RunHandler {
         };
         for id in &instances {
             Self::stop_instance(tx, id, "recovery")?;
+        }
+        // A hook still queued may be running in its own process group, left by the dead daemon: it is killed by its
+        // marker now, before it runs again — no effect of this daemon has started yet.
+        let hooks: BTreeSet<String> = {
+            let mut stmt = tx.sql().prepare(
+                "SELECT json_extract(payload, '$.marker') FROM effects
+                 WHERE key LIKE 'hooks:%' AND json_extract(payload, '$.op') = 'hooks'",
+            )?;
+            let rows = stmt.query_map([], |r| r.get::<_, Option<String>>(0))?;
+            rows.filter_map(Result::transpose).collect::<Result<_, _>>()?
+        };
+        if !hooks.is_empty() {
+            crate::orphans::sweep_all(&hooks);
         }
         let active: Vec<String> = {
             let mut stmt = tx.sql().prepare(

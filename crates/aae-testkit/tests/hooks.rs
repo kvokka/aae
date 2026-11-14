@@ -290,3 +290,36 @@ async fn the_bundled_default_policy_resumes_a_crash_and_reminds_once() {
     // The resumed session writes to the tracker as its own attempt (contracts 5.1).
     assert_eq!(env.unwrap()["TRACKER_ACTOR"], format!("aae:{run}:2"));
 }
+
+/// What a hook the dead daemon left running is killed by its marker on restart; the hook, still queued, then runs
+/// again and lets the run start.
+#[cfg(target_os = "linux")]
+#[tokio::test]
+async fn a_restart_kills_the_hook_the_dead_daemon_left() {
+    // The test's restart drops the hook's future, which kills `sh` (a `kill -9` of the daemon would not): the
+    // background `sleep` stands for what survives.
+    let gate = "[ -e hook.pid ] && exit 0\nsleep 60 &\necho $! > hook.pid\nwait";
+    let mut w = policy_timed(&[("run.preparing", gate, "120s")]);
+    let run = w.create().await;
+    let pid_file = w.dir.path().join("policy/hook.pid");
+    let started = Instant::now();
+    let pid: i32 = loop {
+        if let Some(pid) = std::fs::read_to_string(&pid_file).ok().filter(|p| p.ends_with('\n')) {
+            break pid.trim().parse().unwrap();
+        }
+        assert!(started.elapsed() < Duration::from_secs(10), "the hook did not start");
+        tokio::time::sleep(Duration::from_millis(20)).await;
+    };
+    let alive = || std::fs::read_to_string(format!("/proc/{pid}/stat")).is_ok_and(|s| !s.contains(") Z "));
+    assert!(alive(), "the hook runs");
+
+    w.restart().await;
+    while alive() {
+        assert!(
+            started.elapsed() < Duration::from_secs(10),
+            "the hook outlived the restart"
+        );
+        tokio::time::sleep(Duration::from_millis(20)).await;
+    }
+    assert_eq!(w.until(Some(&run), "run.state_changed", 1).await["to"], "starting");
+}

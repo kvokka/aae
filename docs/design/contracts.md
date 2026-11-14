@@ -181,7 +181,8 @@ timeout = "30s"
 - stdin: the event envelope (see 1.1) as one JSON line, then EOF.
 - cwd: the plugin directory. Environment: `PATH`, `HOME`, `LANG`, plus `AAE_SOCKET` (API socket),
   `AAE_PLUGIN_DIR` and `AAE_PLUGIN_PARAMS` (the `config` table of the plugin's `[[plugin]]` declaration as a JSON
-  object, `{}` without one). Nothing else is inherited from the daemon.
+  object, `{}` without one), and `AAE_INSTANCE` (a marker random per queued hook effect, kept by its descendants).
+  Nothing else is inherited from the daemon.
 - A program path with a `/` is relative to the plugin directory; a bare name is looked up on `PATH`.
 - Own process group; at the timeout `SIGTERM` to the group, `SIGKILL` 2 s later.
 - stdout is read up to 64 KiB (more is an `output` failure); the last 4 KiB of stderr are kept.
@@ -552,7 +553,8 @@ of a run whose gate the operator closed parks it instead (invariant 18).
   of an exec step killed by its `AAE_INSTANCE` marker (random per attempt) before any later attempt runs it (a
   `finishing` run loses its declared outcome: the policy's retry runs the turn or the command again, at least once
   as for a running one); runs in `preparing` and `interrupted` keep their state — their hook effect is still
-  queued and its hooks run again; re-arm deadlines and schedules; resync. Deadlines are wall-clock times:
+  queued and its hooks run again; every hook still queued is first killed by its `AAE_INSTANCE` marker, with what
+  it started, so a hook the dead daemon left running does not outlive it; re-arm deadlines and schedules; resync. Deadlines are wall-clock times:
   the writer reads the wall clock at least every 30 s, so a deadline passed while the machine slept fires late by
   at most that.
 - A resumed attempt after `daemon_crash` checks the transcript for the last unsettled key: `Absent` → send the
