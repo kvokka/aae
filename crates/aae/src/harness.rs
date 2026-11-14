@@ -1,13 +1,10 @@
-//! The harnesses of a config: where each binary is, the driver of each and the adapter settings it takes.
+//! The harnesses of a config: the adapter of each, where its binary is and its driver.
 
 use crate::daemon::Paths;
-use aae_claude::Claude;
-use aae_codex::Codex;
 use aae_core::{
     config,
-    driver::{Driver, ProcessPart},
+    driver::{Adapter, Driver, Setup},
 };
-use serde_json::json;
 use std::{
     path::{Path, PathBuf},
     sync::Arc,
@@ -29,59 +26,52 @@ pub(crate) fn binary(name: &str, explicit: Option<&Path>) -> (PathBuf, &'static 
     }
 }
 
+/// The adapters of this build: a harness is a row here, and nothing else in the root knows its name.
+const ADAPTERS: [&Adapter; 2] = [&aae_claude::ADAPTER, &aae_codex::ADAPTER];
+
+/// The adapter of harness `name`.
+pub(crate) fn adapter(name: &str) -> Option<&'static Adapter> {
+    ADAPTERS.into_iter().find(|a| a.name == name)
+}
+
+fn setup<'a>(binary: PathBuf, harness: &'a config::Harness, paths: &'a Paths) -> Setup<'a> {
+    Setup {
+        binary,
+        options: &harness.options,
+        state: &paths.state,
+        socket: Some(&paths.socket),
+    }
+}
+
 /// The driver of harness `name` on its resolved binary, with the binary and its source; `None` for a harness aae
-/// has no adapter for.
+/// has no adapter for or settings it does not take, which `load` refused.
 pub(crate) fn driver(
     name: &str,
     harness: &config::Harness,
     paths: &Paths,
 ) -> Option<(Arc<dyn Driver>, PathBuf, &'static str)> {
+    let adapter = adapter(name)?;
     let (binary, source) = binary(name, harness.binary.as_deref());
-    let (state, socket) = (paths.state.clone(), Some(paths.socket.clone()));
-    let driver: Arc<dyn Driver> = match name {
-        "claude" => Arc::new(Claude::new(binary.clone(), state, socket)),
-        "codex" => {
-            // `load` refused settings that do not parse.
-            let o = codex_options(harness).unwrap_or_default();
-            let max_sessions = o.max_sessions.map_or(8, |n| n.get() as usize);
-            let idle = std::time::Duration::from_secs(o.instance_idle_s.map_or(60, u64::from));
-            Arc::new(Codex::new(binary.clone(), state, socket, max_sessions).instance_idle(idle))
-        }
-        _ => return None,
-    };
+    let driver = (adapter.new)(&setup(binary.clone(), harness, paths)).ok()?;
     Some((driver, binary, source))
-}
-
-/// The settings of `[harness.codex]` beyond `model` and `binary` (contracts 4.5).
-#[derive(Default, serde::Deserialize)]
-#[serde(deny_unknown_fields)]
-struct CodexOptions {
-    /// Threads one app-server holds before a second one starts.
-    max_sessions: Option<std::num::NonZeroU32>,
-    /// Seconds an app-server without threads lives on before it stops.
-    instance_idle_s: Option<u32>,
-}
-
-fn codex_options(harness: &config::Harness) -> Result<CodexOptions, toml::de::Error> {
-    harness.options.clone().try_into()
-}
-
-/// What is wrong with the adapter settings of harness `name`, if anything; claude takes none.
-fn options_error(name: &str, harness: &config::Harness) -> Option<String> {
-    match name {
-        "codex" => codex_options(harness).err().map(|e| {
-            // serde names an unknown key but not the key of a wrong value: each key alone finds it.
-            let alone = |k: &String, v: &toml::Value| toml::Table::from_iter([(k.clone(), v.clone())]);
-            let wrong = (harness.options.iter()).find(|(k, v)| alone(k, v).try_into::<CodexOptions>().is_err());
-            wrong.map_or_else(|| e.message().to_owned(), |(k, _)| format!("`{k}`: {}", e.message()))
-        }),
-        _ => (harness.options.keys().next()).map(|key| format!("unknown key `{key}`")),
-    }
 }
 
 /// The harness versions the adapter of `driver` was tested on.
 pub(crate) fn tested(driver: &Arc<dyn Driver>) -> [(u32, u32, u32); 2] {
-    driver.capabilities(&ProcessPart(json!(null))).versions
+    adapter(driver.harness())
+        .expect("every driver comes from an adapter")
+        .tested
+}
+
+/// What is wrong with `[harness.<name>]`: no adapter for it, or settings its adapter does not take.
+fn harness_error(name: &str, harness: &config::Harness, paths: &Paths) -> Option<String> {
+    let Some(adapter) = adapter(name) else {
+        let known = ADAPTERS.map(|a| a.name).join(", ");
+        return Some(format!("aae has no adapter for harness `{name}`; known: {known}"));
+    };
+    // The binary is not resolved for a check: no adapter reads it before a spawn.
+    let binary = harness.binary.clone().unwrap_or_else(|| name.into());
+    (adapter.new)(&setup(binary, harness, paths)).err()
 }
 
 /// The config of `paths` with the parameters of the bundled plugins checked, or every error in it.
@@ -99,8 +89,9 @@ pub(crate) fn load(paths: &Paths) -> Result<config::Config, Vec<String>> {
     config.bridge = [paths.exe.to_string_lossy().as_ref(), "mcp-bridge", "--"]
         .map(str::to_owned)
         .to_vec();
-    let harnesses = (config.harnesses.iter())
-        .filter_map(|(name, h)| options_error(name, h).map(|e| format!("{}: `harness.{name}`: {e}", file.display())));
+    let harnesses = (config.harnesses.iter()).filter_map(|(name, h)| {
+        harness_error(name, h, paths).map(|e| format!("{}: `harness.{name}`: {e}", file.display()))
+    });
     let all = config
         .bundled
         .iter()

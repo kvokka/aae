@@ -42,6 +42,10 @@ fn tree(extra: &str) -> tempfile::TempDir {
 }
 
 fn aae(dir: &Path, args: &[&str]) -> Output {
+    aae_env(dir, args, &[])
+}
+
+fn aae_env(dir: &Path, args: &[&str], env: &[(&str, &str)]) -> Output {
     Command::new(env!("CARGO_BIN_EXE_aae"))
         .args(args)
         .env("HOME", dir)
@@ -53,13 +57,18 @@ fn aae(dir: &Path, args: &[&str]) -> Output {
         .env_remove("OPENAI_API_KEY")
         .env_remove("CLAUDE_CONFIG_DIR")
         .env_remove("CODEX_HOME")
+        .envs(env.iter().copied())
         .output()
         .unwrap()
 }
 
 /// `aae doctor --json`: whether it passed, and the level and detail of each check by name.
 fn doctor(dir: &Path) -> (bool, Vec<(String, String, String)>) {
-    let out = aae(dir, &["doctor", "--json"]);
+    doctor_env(dir, &[])
+}
+
+fn doctor_env(dir: &Path, env: &[(&str, &str)]) -> (bool, Vec<(String, String, String)>) {
+    let out = aae_env(dir, &["doctor", "--json"], env);
     let found: Value = serde_json::from_slice(&out.stdout).unwrap();
     let found = found.as_array().unwrap().iter().map(|f| {
         let s = |k: &str| f[k].as_str().unwrap().to_owned();
@@ -110,6 +119,50 @@ fn harnesses_resolve_from_the_config_and_from_mise_and_a_missing_one_fails() {
     assert!(level(&found, "codex").1.ends_with("not found"), "{found:?}");
     assert_eq!(level(&found, "claude login").0, "ok");
     assert_eq!(level(&found, "codex login"), ("ok", "PATH is set"));
+}
+
+#[test]
+fn a_login_counts_only_when_a_session_the_daemon_starts_gets_it() {
+    let dir = tree("");
+    // The daemon's own keys reach no session (spec §6.5).
+    let keys = [("ANTHROPIC_API_KEY", "k"), ("OPENAI_API_KEY", "k")];
+    let found = doctor_env(dir.path(), &keys).1;
+    assert_eq!(level(&found, "claude login").0, "warning", "{found:?}");
+    assert_eq!(level(&found, "codex login").0, "warning", "{found:?}");
+
+    let agents = dir.path().join("config/aae/shop/agents");
+    for (name, harness, key) in [("dev", "claude", "ANTHROPIC_API_KEY"), ("ops", "codex", "")] {
+        fs::create_dir_all(agents.join(name)).unwrap();
+        let env = if key.is_empty() {
+            String::new()
+        } else {
+            format!("[env]\n{key} = \"k\"\n")
+        };
+        fs::write(
+            agents.join(name).join("agent.toml"),
+            format!("harness = \"{harness}\"\n{env}"),
+        )
+        .unwrap();
+    }
+    let found = doctor_env(dir.path(), &keys).1;
+    let claude = level(&found, "claude login");
+    assert_eq!(claude, ("ok", "every claude agent has a key in `env`"), "{found:?}");
+    let (codex, why) = level(&found, "codex login");
+    assert!(
+        codex == "warning" && why.ends_with("these agents a key in `env`: shop/web@shop.ops"),
+        "{found:?}"
+    );
+}
+
+#[test]
+fn a_harness_with_no_adapter_is_a_config_error_naming_the_known_ones() {
+    let dir = tree("[harness.opencode]\n");
+    let (passed, found) = doctor(dir.path());
+    let (config, why) = level(&found, "config");
+    assert!(!passed && config == "error", "{found:?}");
+    assert!(why.ends_with("`harness.opencode`: aae has no adapter for harness `opencode`; known: claude, codex"));
+    let out = aae(dir.path(), &["config", "check"]);
+    assert!(!out.status.success() && String::from_utf8_lossy(&out.stderr).contains("known: claude, codex"));
 }
 
 #[test]

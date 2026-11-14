@@ -3,9 +3,9 @@
 
 use crate::{
     daemon::Paths,
-    harness::{binary, driver, load, tested},
+    harness::{adapter, binary, load},
 };
-use aae_core::config::{Config, Name};
+use aae_core::config::{Config, EffectiveConfig, Name};
 use aae_front::cli::Service;
 use serde_json::{Value, json};
 use std::{
@@ -52,14 +52,12 @@ pub(crate) fn findings(paths: &Paths) -> Vec<Value> {
         Ok(config) => {
             found.push(check("config", "ok", paths.config.display().to_string()));
             for (name, harness) in &config.harnesses {
-                if let Some((driver, path, source)) = driver(name, harness, paths) {
-                    found.push(binary_check(name, &path, source, tested(&driver)));
-                    found.push(login(name));
-                    found.push(host_mcp(name));
-                }
-                if name == "codex" {
-                    found.push(sandbox(&config));
-                }
+                // `load` refused a harness with no adapter.
+                let Some(adapter) = adapter(name) else { continue };
+                let (path, source) = binary(name, harness.binary.as_deref());
+                found.push(binary_check(name, &path, source, adapter.tested));
+                let checks = (adapter.doctor)(&agents(&config, name));
+                found.extend(checks.into_iter().map(|c| check(c.check, c.level, c.detail)));
             }
             if config.projects.iter().any(|p| p.root.join(".beads").is_dir()) {
                 let (path, source) = binary("br", None);
@@ -83,114 +81,28 @@ pub(crate) fn findings(paths: &Paths) -> Vec<Value> {
     found
 }
 
-/// Spec §2.1 item 1: the codex sandbox needs user namespaces, which many hosts lack, so a codex agent whose config
-/// sets no `sandbox_mode` runs with none; the warning names every such agent, per rig.
-fn sandbox(config: &Config) -> Value {
-    let host = home("CODEX_HOME", ".codex");
-    let (mut open, mut seen) = (Vec::new(), 0);
+/// The agents on `harness` in every project and rig, labelled `<project>/<rig or ->@<agent>`, with their effective
+/// configs.
+fn agents(config: &Config, harness: &str) -> Vec<(String, Option<EffectiveConfig>)> {
+    let mut found = Vec::new();
     for p in &config.projects {
         let rigs: Vec<Option<&str>> = match p.rigs.is_empty() {
             true => vec![None],
             false => p.rigs.keys().map(|r| Some(r.as_str())).collect(),
         };
         let agents = (p.packs.iter()).flat_map(|pack| pack.agents.iter().map(|(a, agent)| (&pack.name, a, agent)));
-        for (pack, name, _) in agents.filter(|(_, _, agent)| agent.harness == "codex") {
+        for (pack, name, _) in agents.filter(|(_, _, agent)| agent.harness == harness) {
             let agent = Name {
                 pack: pack.clone(),
                 name: name.clone(),
             };
             for rig in &rigs {
-                seen += 1;
-                // A config that does not assemble cannot be shown to set it, so the agent is named too.
-                let effective = config.effective(&p.name, *rig, &agent);
-                if effective.map_or(true, |e| aae_codex::unconfined(&e, &host)) {
-                    open.push(format!("{}/{}@{agent}", p.name, rig.unwrap_or("-")));
-                }
+                let label = format!("{}/{}@{agent}", p.name, rig.unwrap_or("-"));
+                found.push((label, config.effective(&p.name, *rig, &agent).ok()));
             }
         }
     }
-    match (seen, open.is_empty()) {
-        (0, _) => check("codex sandbox", "ok", "no codex agents"),
-        (_, true) => check("codex sandbox", "ok", "every codex agent sets sandbox_mode"),
-        (_, false) => check(
-            "codex sandbox",
-            "warning",
-            format!(
-                "sandbox_mode = \"danger-full-access\", commands not confined to the workdir: {}",
-                open.join(", ")
-            ),
-        ),
-    }
-}
-
-/// The stdio MCP servers of the host's own settings (spec §6.4): with host inheritance on, each starts in every
-/// session, and the shared MCP of `aae` does not cover them.
-fn host_mcp(harness: &str) -> Value {
-    let read = |path: PathBuf| std::fs::read_to_string(path).unwrap_or_default();
-    let mut names: Vec<String> = match harness {
-        "claude" => {
-            let user: Value = serde_json::from_str(&read(claude_json())).unwrap_or_default();
-            let projects = user["projects"]
-                .as_object()
-                .into_iter()
-                .flatten()
-                .map(|(_, p)| &p["mcpServers"]);
-            std::iter::once(&user["mcpServers"])
-                .chain(projects)
-                .filter_map(Value::as_object)
-                .flatten()
-                .filter(|(_, s)| !s["command"].is_null())
-                .map(|(n, _)| n.clone())
-                .collect()
-        }
-        _ => {
-            let codex: toml::Table =
-                toml::from_str(&read(home("CODEX_HOME", ".codex").join("config.toml"))).unwrap_or_default();
-            let servers = codex
-                .get("mcp_servers")
-                .and_then(toml::Value::as_table)
-                .into_iter()
-                .flatten();
-            servers
-                .filter(|(_, s)| s.get("command").is_some())
-                .map(|(n, _)| n.clone())
-                .collect()
-        }
-    };
-    names.sort();
-    names.dedup();
-    match names.is_empty() {
-        true => check(
-            format!("{harness} host mcp"),
-            "ok",
-            "no stdio MCP server in the host settings",
-        ),
-        false => check(
-            format!("{harness} host mcp"),
-            "warning",
-            format!(
-                "stdio MCP servers of the host settings start in every session that inherits the host: {}; \
-                 declare them in the aae config, where they are shared, or set inherit_host = false",
-                names.join(", ")
-            ),
-        ),
-    }
-}
-
-/// The user file of claude: in `$CLAUDE_CONFIG_DIR` when set, else `~/.claude.json`.
-fn claude_json() -> PathBuf {
-    env::var_os("CLAUDE_CONFIG_DIR").map_or_else(
-        || PathBuf::from(env::var_os("HOME").unwrap_or_default()).join(".claude.json"),
-        |d| PathBuf::from(d).join(".claude.json"),
-    )
-}
-
-/// `$<var>`, else `~/<dir>`.
-fn home(var: &str, dir: &str) -> PathBuf {
-    env::var_os(var).map_or_else(
-        || PathBuf::from(env::var_os("HOME").unwrap_or_default()).join(dir),
-        PathBuf::from,
-    )
+    found
 }
 
 /// The binary exists and its version is one the adapter was tested on.
@@ -212,35 +124,6 @@ fn on_disk(path: &Path) -> Option<PathBuf> {
     env::split_paths(&env::var_os("PATH")?)
         .map(|dir| dir.join(path))
         .find(|p| p.is_file())
-}
-
-/// The host login a harness process starts with, unless its agent's env carries a key of its own.
-fn login(harness: &str) -> Value {
-    let (file, key) = match harness {
-        "claude" => (
-            home("CLAUDE_CONFIG_DIR", ".claude").join(".credentials.json"),
-            "ANTHROPIC_API_KEY".to_owned(),
-        ),
-        _ => {
-            let codex = home("CODEX_HOME", ".codex");
-            // A host provider with `env_key` takes its key from there, not from the login.
-            let key = aae_codex::host_key(&codex).unwrap_or_else(|| "OPENAI_API_KEY".to_owned());
-            (codex.join("auth.json"), key)
-        }
-    };
-    let what = format!("{harness} login");
-    match (file.is_file(), env::var_os(&key).is_some()) {
-        (true, _) => check(what, "ok", file.display().to_string()),
-        (false, true) => check(what, "ok", format!("{key} is set")),
-        (false, false) => check(
-            what,
-            "warning",
-            format!(
-                "no {} and no {key}: log in, or give the agents a key in `env`",
-                file.display()
-            ),
-        ),
-    }
 }
 
 /// A directory of the daemon is the owner's only; one not made yet is made so at start.

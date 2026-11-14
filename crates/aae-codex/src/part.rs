@@ -14,7 +14,7 @@ use std::{
 };
 
 /// The variables that carry a credential; a process with one of them uses it, not the host's login.
-const CREDENTIALS: [&str; 2] = ["OPENAI_API_KEY", "CODEX_API_KEY"];
+pub(crate) const CREDENTIALS: [&str; 2] = ["OPENAI_API_KEY", "CODEX_API_KEY"];
 
 /// The sandbox a process runs in when no config sets one (spec §2.1 item 1); `doctor` warns about it.
 pub(crate) const DEFAULT_SANDBOX: &str = "danger-full-access";
@@ -280,16 +280,16 @@ pub(crate) fn daemon_vars(p: &Value) -> impl Iterator<Item = &'static str> {
         .chain(host.into_iter().flatten())
 }
 
-/// `config.toml` in `home`, if it is there and reads.
 /// Spec §2.1 item 1: a process runs with no sandbox unless the native block of its config, or the host's codex config
 /// in `home` it inherits, sets one.
-pub fn unconfined(config: &EffectiveConfig, home: &Path) -> bool {
+pub(crate) fn unconfined(config: &EffectiveConfig, home: &Path) -> bool {
     let native = config.native.as_ref().and_then(|n| n.value.as_object());
     let host_sets = config.inherits_host() && host_config(home).is_some_and(|c| c.contains_key("sandbox_mode"));
     !native.is_some_and(|n| n.contains_key("sandbox_mode")) && !host_sets
 }
 
-fn host_config(home: &Path) -> Option<toml::Table> {
+/// `config.toml` in `home`, if it is there and reads.
+pub(crate) fn host_config(home: &Path) -> Option<toml::Table> {
     toml::from_str(&std::fs::read_to_string(home.join("config.toml")).ok()?).ok()
 }
 
@@ -301,7 +301,7 @@ fn provider(home: &Path) -> Option<(String, toml::Value)> {
 }
 
 /// The variable that holds the key of the model provider `config.toml` in `home` selects (its `env_key`), if any.
-pub fn host_key(home: &Path) -> Option<String> {
+pub(crate) fn host_key(home: &Path) -> Option<String> {
     provider(home)?.1.get("env_key")?.as_str().map(str::to_owned)
 }
 

@@ -1,11 +1,12 @@
 //! The codex adapter (spec §7, docs/design/contracts.md 4.6): one `codex app-server` per fingerprint over stdio,
 //! JSON-RPC without the `jsonrpc` field, a thread per session.
 
+mod adapter;
 mod part;
 mod rpc;
 mod stream;
 
-pub use part::{host_key, unconfined};
+pub use adapter::ADAPTER;
 
 use aae_core::{
     BoxFuture,
@@ -44,6 +45,9 @@ pub struct Codex {
     instance_idle: Duration,
     instances: Arc<Mutex<HashMap<String, Arc<Instance>>>>,
 }
+
+/// The versions the contract tests ran on, inclusive.
+const TESTED: [(u32, u32, u32); 2] = [(0, 167, 2), (0, 168, 0)];
 
 /// How long a resume waits for app-server to close the thread it still holds.
 const UNLOAD_WAIT: Duration = Duration::from_secs(10);
@@ -164,8 +168,7 @@ impl Driver for Codex {
         Capabilities {
             sessions_per_instance: self.max_sessions,
             instance_idle: self.instance_idle,
-            // The versions the contract tests ran on, inclusive.
-            versions: [(0, 167, 2), (0, 168, 0)],
+            versions: TESTED,
         }
     }
 

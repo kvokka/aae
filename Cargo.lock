@@ -67,6 +67,7 @@ dependencies = [
  "aae-core",
  "aae-testkit",
  "rustix",
+ "serde",
  "serde_json",
  "tempfile",
  "tokio",

@@ -9,7 +9,9 @@ use std::{path::PathBuf, time::Duration};
 use tokio::sync::{broadcast, mpsc};
 use uuid::Uuid;
 
+mod adapter;
 mod failure;
+pub use adapter::{Adapter, Check, DoctorAgents, Setup, host_mcp_check, login_check};
 pub use failure::{Failure, FailureKind, Scope, Source};
 
 /// The part of the effective config that needs its own process; opaque to the core.

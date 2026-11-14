@@ -280,7 +280,7 @@ pub(crate) fn daemon_vars(p: &Value) -> impl Iterator<Item = &'static str> {
 }
 
 /// The variables that carry a credential; a session with one of them uses it, not the host's login.
-const CREDENTIALS: [&str; 3] = ["ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN", "CLAUDE_CODE_OAUTH_TOKEN"];
+pub(crate) const CREDENTIALS: [&str; 3] = ["ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN", "CLAUDE_CODE_OAUTH_TOKEN"];
 
 /// The host's claude config directory: the daemon's `CLAUDE_CONFIG_DIR`, else `~/.claude`.
 pub(crate) fn host_dir() -> PathBuf {

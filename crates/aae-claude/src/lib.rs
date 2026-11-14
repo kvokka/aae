@@ -1,8 +1,11 @@
 //! The claude adapter (spec §7, docs/design/contracts.md 4.6): one `claude -p` process per session, stream-json
 //! on stdin and stdout.
 
+mod adapter;
 mod part;
 mod stream;
+
+pub use adapter::ADAPTER;
 
 use aae_core::{
     BoxFuture,
@@ -30,6 +33,9 @@ use tokio::{
     sync::broadcast,
 };
 use uuid::Uuid;
+
+/// The versions the contract tests and experiments ran on, inclusive.
+const TESTED: [(u32, u32, u32); 2] = [(2, 1, 322), (2, 1, 325)];
 
 /// The claude driver; `state` holds the config directories of isolated sessions, `socket` is the API socket a
 /// session gets in `AAE_SOCKET`.
@@ -190,8 +196,7 @@ impl Driver for Claude {
         Capabilities {
             sessions_per_instance: 1,
             instance_idle: Duration::ZERO,
-            // The versions the contract tests and experiments ran on, inclusive.
-            versions: [(2, 1, 322), (2, 1, 325)],
+            versions: TESTED,
         }
     }
 
