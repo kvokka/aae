@@ -18,6 +18,7 @@ use std::{
 };
 use tokio::task::JoinHandle;
 
+pub(crate) mod beads;
 pub(crate) mod services;
 pub(crate) mod triggers;
 
@@ -149,6 +150,15 @@ fn core_on(
 }
 
 impl World {
+    /// The data of every event `kind` in the journal, of any run or none.
+    pub(crate) fn all(&self, kind: &str) -> Vec<Value> {
+        let all = Journal::new(&self.journal).read_from(1, 100_000).unwrap();
+        all.into_iter()
+            .filter(|e| e["type"] == kind)
+            .map(|e| e["data"].clone())
+            .collect()
+    }
+
     /// The daemon dies without a word (its writer is dropped mid-flight) and a new one starts on its state, with a
     /// new driver: the old one's processes are unknown to it, the transcripts of its sessions survive.
     pub(crate) async fn restart(&mut self) {

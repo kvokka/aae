@@ -2,13 +2,9 @@
 
 mod common;
 
-use aae_core::{
-    Journal,
-    run::{Decision, GateSpec, Msg},
-};
+use aae_core::run::{Decision, GateSpec, Msg};
 use aae_testkit::Step;
 use common::{POLICY, World, hollow_turn, last, world};
-use serde_json::Value;
 use std::time::Duration;
 
 const RIG: &str = "rig:shop/web";
@@ -29,15 +25,6 @@ fn crash() -> Vec<Step> {
 }
 
 impl World {
-    /// The data of every event `kind` in the journal, of any run or none.
-    fn all(&self, kind: &str) -> Vec<Value> {
-        let all = Journal::new(&self.journal).read_from(1, 100_000).unwrap();
-        all.into_iter()
-            .filter(|e| e["type"] == kind)
-            .map(|e| e["data"].clone())
-            .collect()
-    }
-
     async fn operator(&self, msg: Msg) {
         self.core.send(None, msg).await.unwrap();
     }

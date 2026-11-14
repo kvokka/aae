@@ -3,63 +3,16 @@
 
 mod common;
 
-use aae_core::{
-    Journal,
-    run::{Create, Msg, Outcome, Verdict},
+use aae_core::run::{Msg, Outcome, Verdict};
+use common::{
+    World,
+    beads::{FIX, next_ready, slow_turn},
+    hollow_turn, last, world,
 };
-use aae_testkit::Step;
-use common::{World, hollow_turn, last, world};
 use serde_json::{Value, json};
 use std::time::Duration;
 
-const FIX: &[(&str, &str)] = &[
-    (
-        "shop/formulas/fix.toml",
-        "name = \"fix\"\n[inputs]\nbead = { type = \"bead\", required = true }\n\
-         [step]\nkind = \"prompt\"\nagent = \"dev\"\nprompt = \"fix.md\"\n",
-    ),
-    ("shop/formulas/fix.md", "Fix {{ bead.title }}."),
-];
-
 impl World {
-    async fn fix(&self, bead: Value) -> Result<Value, aae_core::Error> {
-        let create = Create {
-            project: "shop".into(),
-            rig: "web".into(),
-            formula: "fix".into(),
-            inputs: [("bead".to_owned(), bead)].into_iter().collect(),
-            correlation: None,
-            depth: 0,
-            parent_run: None,
-            continue_from: None,
-        };
-        self.core.send(None, Msg::Create(create)).await
-    }
-
-    /// The tracker says it changed; the core reads its ready set again.
-    async fn run_on(&self, bead: Value) -> String {
-        let reply = self.fix(bead).await.unwrap();
-        reply["run"].as_str().unwrap().to_owned()
-    }
-
-    fn assignee(&self, bead: &str) -> Option<String> {
-        self.tracker.bead(bead).unwrap().assignee
-    }
-
-    async fn changed(&self) {
-        let msg = Msg::TrackerChanged("shop".into());
-        self.core.send(None, msg).await.unwrap();
-        tokio::time::sleep(Duration::from_millis(100)).await;
-    }
-
-    fn all(&self, kind: &str) -> Vec<Value> {
-        let all = Journal::new(&self.journal).read_from(1, 100_000).unwrap();
-        all.into_iter()
-            .filter(|e| e["type"] == kind)
-            .map(|e| e["data"].clone())
-            .collect()
-    }
-
     async fn finish(&self, run: &str, result: Verdict, summary: &str) {
         let token = self.driver.token(run, 1).unwrap();
         let outcome = Outcome {
@@ -74,17 +27,6 @@ impl World {
         };
         self.core.send(None, msg).await.unwrap();
     }
-}
-
-fn next_ready() -> Value {
-    json!({ "next_ready": true })
-}
-
-/// A turn that ends 10 s after the prompt: time for the finisher.
-fn slow_turn() -> Vec<Step> {
-    let mut steps = hollow_turn();
-    steps.insert(1, Step::Wait(Duration::from_secs(10)));
-    steps
 }
 
 #[tokio::test(start_paused = true)]
@@ -349,52 +291,4 @@ async fn claims_that_answer_after_their_runs_failed_neither_count_nor_reach_the_
         "the stale claims were released before"
     );
     assert_eq!(w.driver.sent(&run, 1).1, [format!("Fix Task {bead}.")]);
-}
-
-#[tokio::test(start_paused = true)]
-async fn tracker_writes_become_bead_events_and_a_write_by_a_run_carries_its_chain() {
-    let w = world(FIX);
-    let old = w.tracker.add(&[], None);
-    w.changed().await;
-    assert!(
-        w.all("bead.created").is_empty(),
-        "the history before the first read raises nothing"
-    );
-    let ready = w.all("bead.ready");
-    assert_eq!((ready.len(), &ready[0]["bead"]["id"]), (1, &json!(old)));
-    let new = w.tracker.add(&["rig:web"], None);
-    w.changed().await;
-    let created = w.all("bead.created");
-    assert_eq!(created.len(), 1, "{created:?}");
-    assert_eq!(
-        (&created[0]["bead"]["id"], &created[0]["actor"]),
-        (&json!(new), &json!("human"))
-    );
-    assert_eq!(w.all("bead.ready").len(), 2, "each bead is ready once");
-    w.driver.script(slow_turn());
-    let run = w.run_on(json!(new)).await;
-    tokio::time::sleep(Duration::from_secs(1)).await;
-    w.changed().await;
-    let all = Journal::new(&w.journal).read_from(1, 100_000).unwrap();
-    let claimed = all.iter().rfind(|e| e["type"] == "bead.updated").unwrap();
-    let queued = all.iter().find(|e| e["type"] == "run.queued").unwrap();
-    assert_eq!(
-        (&claimed["run"], &claimed["rig"], &claimed["correlation"]),
-        (&json!(run), &json!("web"), &queued["correlation"]),
-        "the claim is the run's write"
-    );
-    assert_eq!(claimed["data"]["changed"], json!(["status", "assignee"]));
-}
-
-#[tokio::test(start_paused = true)]
-async fn a_write_whose_signal_is_lost_is_read_by_the_periodic_resync() {
-    let w = world(FIX);
-    w.changed().await;
-    let lost = w.tracker.add(&[], None);
-    tokio::time::sleep(Duration::from_secs(4 * 60)).await;
-    assert!(w.all("bead.created").is_empty(), "no signal, no read yet");
-    tokio::time::sleep(Duration::from_secs(61)).await;
-    let created = w.all("bead.created");
-    assert_eq!(created.len(), 1, "{created:?}");
-    assert_eq!(created[0]["bead"]["id"], json!(lost));
 }
