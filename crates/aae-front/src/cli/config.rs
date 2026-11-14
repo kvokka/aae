@@ -2,7 +2,7 @@
 
 use super::{encode, fail, print};
 use crate::{
-    api::config::{checked, explained},
+    api::config::{Explain, checked, explained},
     client::{Client, ClientError},
 };
 use aae_core::config::Config;
@@ -26,7 +26,8 @@ pub enum ConfigCommand {
         #[arg(long)]
         config: Option<PathBuf>,
     },
-    /// The effective config of an agent: every value with its layer, the host layer in one line. Needs no daemon.
+    /// The effective config of an agent, or of the agent of a formula's run on a rig with the layers of its pack, its
+    /// step and the rig's variant: every value with its layer, the host layer in one line. Needs no daemon.
     Explain {
         /// The orchestrator config (default: `$XDG_CONFIG_HOME/aae/config.toml`).
         #[arg(long)]
@@ -34,8 +35,11 @@ pub enum ConfigCommand {
         #[arg(long)]
         project: String,
         /// `<pack>.<name>`, or a bare name of the project's own pack.
-        #[arg(long)]
-        agent: String,
+        #[arg(long, required_unless_present = "formula", conflicts_with = "formula")]
+        agent: Option<String>,
+        /// A formula, as a run start takes it; needs `--rig`.
+        #[arg(long, requires = "rig")]
+        formula: Option<String>,
         #[arg(long)]
         rig: Option<String>,
     },
@@ -93,6 +97,7 @@ pub fn local(
             config,
             project,
             agent,
+            formula,
             rig,
         } => {
             let config = match load(config) {
@@ -105,7 +110,8 @@ pub fn local(
                     );
                 }
             };
-            match explained(&config, &project, &agent, rig.as_deref()) {
+            let of = agent.map_or_else(|| Explain::Formula(formula.unwrap_or_default()), Explain::Agent);
+            match explained(&config, &project, &of, rig.as_deref()) {
                 Ok(reply) if json => print(json, &reply),
                 Ok(reply) => print!("{}", reply["text"].as_str().unwrap_or_default()),
                 Err(e) => return fail(json, "not_found", &e),

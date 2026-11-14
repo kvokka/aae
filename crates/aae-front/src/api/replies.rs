@@ -171,6 +171,8 @@ pub(crate) struct Checked {
 
 #[derive(ToSchema)]
 pub(crate) struct Explained {
+    /// `<pack>.<name>`, or the rig's variant that a run of the formula is of.
+    agent: String,
     /// One line per value with its layer.
     text: String,
     inherits_host: bool,
@@ -274,7 +276,10 @@ pub(crate) struct Agent {
     project: String,
     /// `<pack>.<name>`.
     agent: String,
-    harness: String,
+    /// The harness and the provider it runs on in the project outside any rig and formula; null when its layers
+    /// do not decide it.
+    harness: Option<String>,
+    provider: Option<String>,
     /// Runs of the agent at once in its project; null for no limit but the daemon's.
     max_runs: Option<u32>,
 }

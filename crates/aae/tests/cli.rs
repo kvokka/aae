@@ -164,6 +164,10 @@ fn the_config_is_checked_and_explained_without_a_daemon() {
         "harness = \"claude\"\neffort = \"high\"\n",
     )
     .unwrap();
+    fs::create_dir_all(files.join("shop/formulas")).unwrap();
+    let formula = "name = \"go\"\n[step]\nkind = \"prompt\"\nagent = \"dev\"\nprompt = \"go.md\"\neffort = \"low\"\n";
+    fs::write(files.join("shop/formulas/go.toml"), formula).unwrap();
+    fs::write(files.join("shop/formulas/go.md"), "Go.\n").unwrap();
     let broken = files.join("broken.toml");
     fs::write(&broken, "projects = [\"shop\"\n").unwrap();
     let broken = broken.to_str().unwrap();
@@ -188,6 +192,27 @@ fn the_config_is_checked_and_explained_without_a_daemon() {
     let out = aae(&["config", "explain", "--project", "shop", "--agent", "dev", "--json"]);
     let reply: Value = serde_json::from_slice(&out.stdout).unwrap();
     assert_eq!(reply["inherits_host"], true, "{reply}");
+    // With a formula the step's layer counts, over the agent's.
+    let out = aae(&[
+        "config",
+        "explain",
+        "--project",
+        "shop",
+        "--formula",
+        "go",
+        "--rig",
+        "web",
+        "--json",
+    ]);
+    let reply: Value = serde_json::from_slice(&out.stdout).unwrap();
+    let text = reply["text"].as_str().unwrap_or_default();
+    assert!(text.contains("effort = \"low\"  # formula shop.go"), "{reply}");
+    assert_eq!(reply["agent"], "shop.dev", "{reply}");
+    assert!(
+        !aae(&["config", "explain", "--project", "shop", "--formula", "go"])
+            .status
+            .success()
+    );
     let out = aae(&["--json", "config", "explain", "--project", "nope", "--agent", "dev"]);
     let error: Value = serde_json::from_slice(&out.stderr).unwrap();
     assert_eq!(
@@ -266,7 +291,12 @@ async fn the_config_from_the_cli_lists_explains_checks_and_reloads() {
     })
     .await;
     assert_eq!(d.json(&["project", "list"])[0]["rigs"][0]["name"], "web");
-    assert_eq!(d.json(&["agent", "list", "--project", "shop"])[0]["agent"], "shop.dev");
+    let agent = &d.json(&["agent", "list", "--project", "shop"])[0];
+    // The provider follows from the harness the agent names.
+    assert_eq!(
+        (&agent["agent"], &agent["harness"], &agent["provider"]),
+        (&"shop.dev".into(), &"claude".into(), &"anthropic".into())
+    );
     assert_eq!(d.json(&["formula", "list"]).as_array().unwrap().len(), 2);
     assert_eq!(d.json(&["pack", "list"])[0]["name"], "shop");
     let plugins = d.json(&["plugin", "list"]);

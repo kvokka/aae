@@ -58,7 +58,8 @@ pub(crate) async fn list_projects(state: State, Param(Query(query)): Param<Query
     Ok(Json(out.into()))
 }
 
-/// Lists the agents, as `<pack>.<name>` with their harness.
+/// Lists the agents, as `<pack>.<name>` with the harness and provider they run on in the project, outside any rig
+/// and formula; null where the agent's layers do not decide it.
 #[utoipa::path(get, path = "/v1/agents", params(ProjectQuery),
     responses((status = OK, body = [Agent]),
         (status = BAD_REQUEST, description = BAD_QUERY, body = ErrorReply),
@@ -69,8 +70,15 @@ pub(crate) async fn list_agents(state: State, Param(Query(query)): Param<Query<P
     for p in projects(&config, &query)? {
         for pack in &p.packs {
             for (name, a) in &pack.agents {
-                out.push(json!({ "project": p.name, "agent": format!("{}.{name}", pack.name),
-                    "harness": a.harness, "max_runs": a.max_runs }));
+                let agent = Name {
+                    pack: pack.name.clone(),
+                    name: name.clone(),
+                };
+                let launch = config.effective(&p.name, None, &agent).ok();
+                out.push(json!({ "project": p.name, "agent": agent.to_string(),
+                    "harness": launch.as_ref().map(|e| &e.harness),
+                    "provider": launch.as_ref().and_then(|e| e.provider.as_ref()).map(|s| &s.value),
+                    "max_runs": a.max_runs }));
             }
         }
     }
@@ -141,24 +149,56 @@ pub(crate) async fn list_plugins(state: State, Param(Query(query)): Param<Query<
 #[derive(Deserialize, IntoParams)]
 pub(crate) struct ExplainQuery {
     project: String,
-    /// `<pack>.<name>`, or a bare name of the project's own pack.
-    agent: String,
-    /// The rig of the run; its layer counts when given.
+    /// `<pack>.<name>`, or a bare name of the project's own pack; or else `formula`.
+    agent: Option<String>,
+    /// A formula: the agent its run on `rig` is of, with the layers of its pack, its step and the rig's variant.
+    formula: Option<String>,
+    /// The rig of the run; its layer counts when given. A `formula` needs it.
     rig: Option<String>,
 }
 
 /// The effective config of an agent: one line per value with its layer, and the host layer in one line (spec §6.3).
 #[utoipa::path(get, path = "/v1/config/explain", params(ExplainQuery),
     responses((status = OK, body = Explained), (status = BAD_REQUEST, description = BAD_QUERY, body = ErrorReply),
-        (status = NOT_FOUND, description = "`not_found`: no such project, rig or agent", body = ErrorReply)))]
+        (status = NOT_FOUND, description = "`not_found`: no such project, rig, agent or formula", body = ErrorReply)))]
 pub(crate) async fn explain(state: State, Param(Query(query)): Param<Query<ExplainQuery>>) -> Reply {
-    let reply = explained(&state.config(), &query.project, &query.agent, query.rig.as_deref()).map_err(not_found)?;
+    let of = match (query.agent, query.formula) {
+        (Some(agent), None) => Explain::Agent(agent),
+        (None, Some(formula)) => Explain::Formula(formula),
+        _ => {
+            return Err(ApiError::new(
+                StatusCode::BAD_REQUEST,
+                "bad_request",
+                "give `agent` or `formula`, one of them",
+            ));
+        }
+    };
+    let reply = explained(&state.config(), &query.project, &of, query.rig.as_deref()).map_err(not_found)?;
     Ok(Json(reply))
+}
+
+/// What an explain is of.
+pub(crate) enum Explain {
+    Agent(String),
+    /// The agent of a run of the formula.
+    Formula(String),
 }
 
 /// The reply of an explain, for the API and for the CLI without a daemon: a bare agent name is of the project's
 /// first pack, its own.
-pub(crate) fn explained(config: &Config, project: &str, agent: &str, rig: Option<&str>) -> Result<Value, String> {
+pub(crate) fn explained(config: &Config, project: &str, of: &Explain, rig: Option<&str>) -> Result<Value, String> {
+    let agent = match of {
+        Explain::Agent(agent) => agent,
+        Explain::Formula(formula) => {
+            let rig = rig.ok_or("the explain of a formula needs its rig")?;
+            let (agent, effective) = config.for_run(project, rig, formula)?;
+            let text = format!(
+                "# the agent of `{formula}` on `{rig}`: {agent}\n{}",
+                effective.explain()
+            );
+            return Ok(json!({ "agent": agent, "text": text, "inherits_host": effective.inherits_host() }));
+        }
+    };
     let agent = match agent.split_once('.') {
         Some((pack, name)) => Name {
             pack: pack.to_owned(),
@@ -175,7 +215,7 @@ pub(crate) fn explained(config: &Config, project: &str, agent: &str, rig: Option
         },
     };
     let effective = config.effective(project, rig, &agent)?;
-    Ok(json!({ "text": effective.explain(), "inherits_host": effective.inherits_host() }))
+    Ok(json!({ "agent": agent.to_string(), "text": effective.explain(), "inherits_host": effective.inherits_host() }))
 }
 
 /// Loads the config file as a reload would and reports its errors; changes nothing.

@@ -159,7 +159,9 @@ model the adapter expanded keeps the short name it was given (`model = "gpt-6-lu
 "luna"`). The new layers print as `pack <name>`, `formula <pack>.<name>` and `variant <name>`. `explain()` prints one
 line per value with its layer and one line for the host:
 inherited by the harness and invisible to aae, or off (`aae config explain --project <p> --agent <a> [--rig <r>]`,
-with no daemon, on the file on disk; `GET /v1/config/explain`, on the config the daemon holds). The effective config
+with no daemon, on the file on disk; `GET /v1/config/explain`, on the config the daemon holds). The pack, formula and
+variant layers count only for a run, so they show with `--formula <f> --rig <r>` in place of `--agent`: the agent a
+run of the formula on the rig is of, the rig's variant if it maps one, with its effective config. The effective config
 serializes to JSON: a run keeps it as its snapshot, and `env` is the whole session environment besides what the
 adapter adds: a session does not inherit the daemon's environment wholesale. The core assembles it when the run
 prepares, right before the session starts; the adapter materializes it into launch flags, session parameters or a
@@ -219,7 +221,7 @@ skills that inherits the host gets a `CODEX_HOME` of its own in the state direct
 such an agent, and `HOME` stays the operator's.
 
 codex runs with `sandbox_mode = "danger-full-access"` unless the native block, or the host's `config.toml` of an
-inheriting process, sets `sandbox_mode` (spec §2.1 item 1): the codex sandbox needs unprivileged user namespaces,
+inheriting process, sets `sandbox_mode` (spec §2, decision 38): the codex sandbox needs unprivileged user namespaces,
 which many hosts forbid (`docs/design/experiments.md`). Commands are then not confined to the workdir; `aae doctor`
 names each such agent, as `<project>/<rig>@<pack>.<agent>`, in a warning; an agent whose config does not assemble
 cannot be shown to set it and is named too.
@@ -560,8 +562,8 @@ or for a project).
   `crash_pause_s` (300), `resume_failures` (3), `unknown_after_s` (30), `unknown_retries` (3). The waits and caps that a
   zero would turn into a hot loop (`quota_wait_s`, `model_pause_s`, both bases and both caps, `crash_pause_s`) and
   `crash_loop` must be at least 1; `quota_margin_s`, `rapid_s` and `unknown_after_s` must not be negative.
-- `worktree` has no table: it is on for the runs of the formulas with `worktree = true` (a formula setting, spec §2.1
-  item 11), and a `[builtin.worktree]` table is a config error that says so. Each such run gets a git worktree of its
+- `worktree` has no table: it is on for the runs of the formulas with `worktree = true` (a formula setting, spec §2,
+  decision 48), and a `[builtin.worktree]` table is a config error saying so. Each such run gets a git worktree of its
   rig on the branch `aae/<run>`, in `<git common dir>/aae/worktrees/<run>`, as its workdir. When the run ends the
   worktree is removed unless it has uncommitted changes or a HEAD no ref reaches (then `plugin.hook_failed` says why);
   the branch is deleted only when it is merged. A run with `continue_from` starts in the workdir of the run it continues
@@ -581,7 +583,7 @@ need no external runtime, and are counted on their own budget line (`plugins` in
 inside the release total.
 
 Postmortem 0001 (`docs/postmortems/0001-loop-stalled-after-transient-auth-error.md`) and the owner's decision of
-2026-11-14 (spec §2.1 item 12) shaped `auth_required` and `billing`: a proxy or WAF 403 passes by itself, so every
+2026-11-14 (spec §2, decisions 49, 50) shaped `auth_required` and `billing`: a proxy or WAF 403 passes by itself, so every
 such failure parks the account gate for a wait that grows with each failure in a row up to an hour, and the next
 attempt is the probe. Nothing goes to an operator and there is no alerting: the journal and the logs tell it. The
 core does not count these attempts against its ceiling, so a long outage never ends in `failed{attempts_ceiling}`.

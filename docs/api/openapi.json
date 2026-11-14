@@ -12,7 +12,7 @@
   "paths": {
     "/v1/agents": {
       "get": {
-        "summary": "Lists the agents, as `<pack>.<name>` with their harness.",
+        "summary": "Lists the agents, as `<pack>.<name>` with the harness and provider they run on in the project, outside any rig\nand formula; null where the agent's layers do not decide it.",
         "operationId": "list_agents",
         "parameters": [
           {
@@ -117,16 +117,31 @@
           {
             "name": "agent",
             "in": "path",
-            "description": "`<pack>.<name>`, or a bare name of the project's own pack.",
+            "description": "`<pack>.<name>`, or a bare name of the project's own pack; or else `formula`.",
             "required": true,
             "schema": {
-              "type": "string"
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          {
+            "name": "formula",
+            "in": "path",
+            "description": "A formula: the agent its run on `rig` is of, with the layers of its pack, its step and the rig's variant.",
+            "required": true,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
             }
           },
           {
             "name": "rig",
             "in": "path",
-            "description": "The rig of the run; its layer counts when given.",
+            "description": "The rig of the run; its layer counts when given. A `formula` needs it.",
             "required": true,
             "schema": {
               "type": [
@@ -167,7 +182,7 @@
             }
           },
           "404": {
-            "description": "`not_found`: no such project, rig or agent",
+            "description": "`not_found`: no such project, rig, agent or formula",
             "content": {
               "application/json": {
                 "schema": {
@@ -2294,8 +2309,7 @@
         "type": "object",
         "required": [
           "project",
-          "agent",
-          "harness"
+          "agent"
         ],
         "properties": {
           "agent": {
@@ -2303,7 +2317,11 @@
             "description": "`<pack>.<name>`."
           },
           "harness": {
-            "type": "string"
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "The harness and the provider it runs on in the project outside any rig and formula; null when its layers\ndo not decide it."
           },
           "max_runs": {
             "type": [
@@ -2316,6 +2334,12 @@
           },
           "project": {
             "type": "string"
+          },
+          "provider": {
+            "type": [
+              "string",
+              "null"
+            ]
           }
         }
       },
@@ -2584,10 +2608,15 @@
       "Explained": {
         "type": "object",
         "required": [
+          "agent",
           "text",
           "inherits_host"
         ],
         "properties": {
+          "agent": {
+            "type": "string",
+            "description": "`<pack>.<name>`, or the rig's variant that a run of the formula is of."
+          },
           "inherits_host": {
             "type": "boolean"
           },
