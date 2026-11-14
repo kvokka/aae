@@ -93,6 +93,12 @@ aae run show run_2
 The run goes `queued` → `preparing` → `running` → `finishing` → `passed`. While it runs, `aae instance list` shows
 the harness process serving it. `aae run cancel <run>` stops it.
 
+A run that stays `queued` waits for something: `aae run show` names it in `waiting_for`. One wait surprises at first:
+a step that fails with a fault of the rig rather than of the work — a `command` that does not exist (a typo), a
+working directory that cannot be used, `workspace_failure` in `aae events` — closes the rig's gate
+(`rig:<project>/<rig>`), and every later run of the rig waits until you fix the cause and run
+`aae gate open rig:hello/main`. `aae gate list` shows the closed gates and why.
+
 ## A worktree per run
 
 With `worktree = true` next to `name` in the formula, each run works in its own git worktree of the rig, on the
