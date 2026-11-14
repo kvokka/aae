@@ -87,8 +87,10 @@ pub(super) fn start(running: &Running, core: &CoreHandle<Msg>, p: &Value) {
     let task_id = id.clone();
     let task = tokio::spawn(async move {
         tokio::select! {
-            () = tokio::time::sleep(delay) => {}
+            // A stop goes first, then the timer: not at random, so a seed replays.
+            biased;
             () = own.notified() => return,
+            () = tokio::time::sleep(delay) => {}
         }
         // Starting on a port someone else listens on fails the start: the core picks another. One who takes it
         // while the service starts does not pass its health check (`healthy`), so the service fails to bind.
@@ -113,6 +115,8 @@ pub(super) fn start(running: &Running, core: &CoreHandle<Msg>, p: &Value) {
         });
         tokio::pin!(out);
         let ended = tokio::select! {
+            // The process's own end goes first, then its health check: not at random, so a seed replays.
+            biased;
             out = &mut out => Some(out),
             up = ready(&health, &task_id, port, &token, &env) => {
                 if up {

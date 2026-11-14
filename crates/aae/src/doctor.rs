@@ -1,6 +1,6 @@
 //! `aae doctor` (spec §13), without a daemon or from it (`GET /v1/doctor`): the harness and br binaries with their
-//! versions and logins, the
-//! private directories, the state and its outbox; and `aae daemon --service`, the service file that runs the daemon.
+//! versions and logins, the private directories, the state and its outbox; and `aae daemon --service`, the service
+//! file that runs the daemon.
 
 use crate::{
     daemon::Paths,

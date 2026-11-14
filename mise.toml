@@ -26,6 +26,7 @@ run = [
   "cargo machete",
   "scripts/unused-pub.sh",
   "scripts/core-boundary.sh",
+  "scripts/select-biased.sh",
   "scripts/budget-selftest.sh",
   "scripts/budget.sh",
 ]
