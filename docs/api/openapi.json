@@ -1290,6 +1290,18 @@
             }
           },
           {
+            "name": "parent",
+            "in": "path",
+            "description": "The runs whose `parent_run` this is: those its sessions started and those its events triggered.",
+            "required": true,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          {
             "name": "limit",
             "in": "path",
             "description": "At most this many, newest first (default 100).",
@@ -1351,7 +1363,7 @@
         }
       },
       "post": {
-        "summary": "Starts a run of a formula; the reply is `{\"run\": \"<id>\"}`, or `{\"nothing_ready\": true}` when a bead input\n`{ next_ready = true }` finds no ready bead to take (spec §10.3).",
+        "summary": "Starts a run of a formula; the reply is `{\"run\": \"<id>\"}`, or `{\"nothing_ready\": true}` when a bead input\n`{ next_ready = true }` finds no ready bead to take (spec §10.3). With `parent`, a stale token or a chain deeper\nthan 10 is `rejected`.",
         "operationId": "create",
         "parameters": [
           {
@@ -2460,6 +2472,17 @@
               "type": "string"
             }
           },
+          "parent": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/ParentAttempt",
+                "description": "The agent session that starts this run (`AAE_RUN`, `AAE_ATTEMPT_TOKEN`): the run is its child, with its\ncorrelation, one level deeper (docs/design/contracts.md 6.1). Absent: a new correlation at depth 0."
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "project": {
             "type": "string"
           },
@@ -2903,6 +2926,22 @@
               "string",
               "null"
             ]
+          }
+        }
+      },
+      "ParentAttempt": {
+        "type": "object",
+        "required": [
+          "run",
+          "token"
+        ],
+        "properties": {
+          "run": {
+            "type": "string"
+          },
+          "token": {
+            "type": "string",
+            "description": "The attempt token of the session; a stale one is rejected."
           }
         }
       },

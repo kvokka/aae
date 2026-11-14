@@ -242,6 +242,7 @@ async fn a_run_continues_the_session_of_a_finished_run_only_when_asked() {
         correlation: None,
         depth: 0,
         parent_run: None,
+        token: None,
         continue_from: Some(from.into()),
     };
     let early = w.core.send(None, Msg::Create(create(&first))).await;
@@ -274,6 +275,7 @@ async fn a_run_must_name_a_runnable_formula_with_its_inputs() {
         correlation: None,
         depth: 0,
         parent_run: None,
+        token: None,
         continue_from: None,
     };
     for (formula, inputs) in [("nope", json!({})), ("build", json!({ "extra": 1 }))] {
@@ -313,6 +315,7 @@ async fn a_prompt_empty_after_substitution_fails_the_run_before_a_launch() {
         correlation: None,
         depth: 0,
         parent_run: None,
+        token: None,
         continue_from: None,
     };
     let reply = w.core.send(None, Msg::Create(create)).await.unwrap();

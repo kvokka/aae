@@ -79,6 +79,7 @@ fn create(bead: Option<&str>) -> Create {
         correlation: None,
         depth: 0,
         parent_run: None,
+        token: None,
         continue_from: None,
     }
 }

@@ -110,6 +110,7 @@ async fn a_restart_kills_the_command_of_an_exec_step_the_dead_daemon_left() {
         correlation: None,
         depth: 0,
         parent_run: None,
+        token: None,
         continue_from: None,
     };
     let reply = w.core.send(None, aae_core::run::Msg::Create(create)).await.unwrap();

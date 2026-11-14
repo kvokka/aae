@@ -25,6 +25,7 @@ impl World {
             correlation: None,
             depth: 0,
             parent_run: None,
+            token: None,
             continue_from: None,
         };
         self.core.send(None, Msg::Create(create)).await

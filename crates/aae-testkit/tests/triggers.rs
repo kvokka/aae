@@ -45,6 +45,7 @@ async fn an_event_chain_keeps_its_correlation_stops_at_the_depth_limit_and_survi
         correlation: None,
         depth: 0,
         parent_run: None,
+        token: None,
         continue_from: None,
     };
     let build = core.send(None, Msg::Create(create)).await.unwrap()["run"].clone();
@@ -245,6 +246,7 @@ async fn an_event_trigger_switched_off_does_not_fire() {
         correlation: None,
         depth: 0,
         parent_run: None,
+        token: None,
         continue_from: None,
     };
     core.send(None, Msg::Create(create)).await.unwrap();

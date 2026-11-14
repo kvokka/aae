@@ -33,10 +33,21 @@ pub(crate) struct CreateRun {
     inputs: Map<String, Value>,
     /// A terminal run whose last session this run continues (spec §9.3).
     continue_from: Option<String>,
+    /// The agent session that starts this run (`AAE_RUN`, `AAE_ATTEMPT_TOKEN`): the run is its child, with its
+    /// correlation, one level deeper (docs/design/contracts.md 6.1). Absent: a new correlation at depth 0.
+    parent: Option<ParentAttempt>,
+}
+
+#[derive(Deserialize, ToSchema)]
+pub(crate) struct ParentAttempt {
+    run: String,
+    /// The attempt token of the session; a stale one is rejected.
+    token: String,
 }
 
 /// Starts a run of a formula; the reply is `{"run": "<id>"}`, or `{"nothing_ready": true}` when a bead input
-/// `{ next_ready = true }` finds no ready bead to take (spec §10.3).
+/// `{ next_ready = true }` finds no ready bead to take (spec §10.3). With `parent`, a stale token or a chain deeper
+/// than 10 is `rejected`.
 #[utoipa::path(post, path = "/v1/runs", request_body = CreateRun,
     params(("Idempotency-Key" = Option<String>, Header, description = "Repeats return the first reply")),
     responses((status = OK, body = Started), (status = CONFLICT, description = REJECTED, body = ErrorReply), Keyed))]
@@ -48,7 +59,8 @@ pub(crate) async fn create(state: State, headers: HeaderMap, Body(body): Body<Cr
         inputs: body.inputs,
         correlation: None,
         depth: 0,
-        parent_run: None,
+        token: body.parent.as_ref().map(|p| p.token.clone()),
+        parent_run: body.parent.map(|p| p.run),
         continue_from: body.continue_from,
     };
     Ok(Json(state.core.send_request(key(&headers), Msg::Create(create)).await?))
@@ -74,6 +86,8 @@ pub(crate) struct ListQuery {
     project: Option<String>,
     /// One of the run states; another is a bad request.
     state: Option<String>,
+    /// The runs whose `parent_run` this is: those its sessions started and those its events triggered.
+    parent: Option<String>,
     /// At most this many, newest first (default 100).
     limit: Option<u32>,
 }
@@ -90,6 +104,7 @@ pub(crate) async fn list(state: State, Param(Query(query)): Param<Query<ListQuer
     let filter = RunFilter {
         project: query.project,
         state: query.state,
+        parent: query.parent,
         limit: query.limit,
     };
     Ok(Json(state.reader.runs(&filter)?.into()))

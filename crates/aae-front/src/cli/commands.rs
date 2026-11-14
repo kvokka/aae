@@ -8,7 +8,8 @@ use std::process::ExitCode;
 
 #[derive(Subcommand)]
 pub enum RunCommand {
-    /// Start a run of a formula; prints its id.
+    /// Start a run of a formula; prints its id. Inside an agent session (`AAE_RUN`, `AAE_ATTEMPT_TOKEN`) the run is
+    /// a child of the session's run: same correlation, one level deeper.
     Start {
         project: String,
         rig: String,
@@ -30,6 +31,9 @@ pub enum RunCommand {
         project: Option<String>,
         #[arg(long)]
         state: Option<String>,
+        /// Only the runs whose `parent_run` is this one.
+        #[arg(long)]
+        parent: Option<String>,
         #[arg(long)]
         limit: Option<u32>,
     },
@@ -42,7 +46,7 @@ pub enum RunCommand {
         #[arg(long)]
         from: Option<i64>,
     },
-    /// Cancel a run.
+    /// Cancel a run, and the live runs its sessions started.
     Cancel {
         id: String,
         #[arg(long)]
@@ -134,8 +138,13 @@ pub(super) async fn run(client: &Client, json: bool, command: RunCommand) -> Res
             key,
         } => {
             let inputs: Map<String, Value> = inputs.iter().map(|i| input(i)).collect();
+            // The session the command runs in, as the finisher finds it.
+            let parent = match (std::env::var("AAE_RUN"), std::env::var("AAE_ATTEMPT_TOKEN")) {
+                (Ok(run), Ok(token)) => json!({ "run": run, "token": token }),
+                _ => Value::Null,
+            };
             let body = json!({ "project": project, "rig": rig, "formula": formula, "inputs": inputs,
-                "continue_from": continue_from });
+                "continue_from": continue_from, "parent": parent });
             let reply = client.request("POST", "/v1/runs", Some(&body), key.as_deref()).await?;
             match reply["run"].as_str() {
                 _ if json => print(json, &reply),
@@ -146,10 +155,16 @@ pub(super) async fn run(client: &Client, json: bool, command: RunCommand) -> Res
                 return Ok(ExitCode::from(3));
             }
         }
-        RunCommand::List { project, state, limit } => {
+        RunCommand::List {
+            project,
+            state,
+            parent,
+            limit,
+        } => {
             let query: Vec<String> = [
                 ("project", project),
                 ("state", state),
+                ("parent", parent),
                 ("limit", limit.map(|l| l.to_string())),
             ]
             .into_iter()

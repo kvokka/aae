@@ -37,6 +37,7 @@ fn check_with(inputs: &str, script: &str) -> (World, Create) {
         correlation: None,
         depth: 0,
         parent_run: None,
+        token: None,
         continue_from: None,
     };
     (w, create)
@@ -104,6 +105,7 @@ async fn the_command_gets_the_run_and_its_inputs_in_the_environment_and_inputs_a
         correlation: None,
         depth: 0,
         parent_run: None,
+        token: None,
         continue_from: None,
     };
     let run = w

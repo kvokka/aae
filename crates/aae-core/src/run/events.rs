@@ -27,7 +27,21 @@ impl RunHandler {
         if !row.live() {
             return Err(rejected(format!("`{run}` is already `{}`", row.state)));
         }
-        self.terminal(tx, row, "cancelled", None, reason)
+        self.terminal(tx, row, "cancelled", None, reason)?;
+        // The live runs its sessions started go with it; a trigger's run is not the parent's to cancel.
+        let children: Vec<String> = {
+            let mut stmt = tx.sql().prepare(
+                "SELECT id FROM runs WHERE parent_run = ?1 AND trigger IS NULL \
+                 AND state NOT IN ('passed', 'failed', 'cancelled') ORDER BY n",
+            )?;
+            stmt.query_map([run], |r| r.get(0))?.collect::<Result<_, _>>()?
+        };
+        for child in children {
+            if Row::load(tx, &child)?.live() {
+                self.cancel(tx, &child, "parent_cancelled")?;
+            }
+        }
+        Ok(())
     }
 
     /// The current attempt of `run` is `attempt` and still live.

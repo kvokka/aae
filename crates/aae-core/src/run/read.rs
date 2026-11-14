@@ -14,6 +14,8 @@ pub struct Reader(Mutex<Connection>);
 pub struct RunFilter {
     pub project: Option<String>,
     pub state: Option<String>,
+    /// The runs whose `parent_run` this is.
+    pub parent: Option<String>,
     pub limit: Option<u32>,
 }
 
@@ -74,10 +76,10 @@ impl Reader {
             let conn = self.conn();
             let mut stmt = conn.prepare(
                 "SELECT id FROM runs WHERE (?1 IS NULL OR project = ?1) AND (?2 IS NULL OR state = ?2) \
-                 ORDER BY n DESC LIMIT ?3",
+                 AND (?4 IS NULL OR parent_run = ?4) ORDER BY n DESC LIMIT ?3",
             )?;
             let rows = stmt.query_map(
-                params![filter.project, filter.state, filter.limit.unwrap_or(100)],
+                params![filter.project, filter.state, filter.limit.unwrap_or(100), filter.parent],
                 |r| r.get(0),
             )?;
             rows.collect::<Result<_, _>>()?

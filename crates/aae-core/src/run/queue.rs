@@ -1,7 +1,7 @@
 //! Creation and the queue (spec §9.3, docs/design/contracts.md 6.1–6.2): a run waits in `queued` for a free
 //! workdir and a concurrency slot, then leaves for `preparing`, oldest first.
 
-use super::{Create, RunHandler, rejected, row::Row};
+use super::{Create, RunHandler, events::attempt_live, rejected, row::Row, token_sha256, triggers::MAX_DEPTH};
 use crate::{
     config::{InputType, Step},
     writer::{Error, Tx},
@@ -11,6 +11,9 @@ use serde_json::{Value, json};
 
 impl RunHandler {
     pub(super) fn create(&mut self, tx: &mut Tx<'_>, mut c: Create) -> Result<Value, Error> {
+        if let Some(token) = c.token.take() {
+            Self::child_of(tx, &mut c, &token)?;
+        }
         let project = self.config.projects.iter().find(|p| p.name == c.project);
         let project = project.ok_or_else(|| rejected(format!("no project `{}`", c.project)))?;
         let rig = project.rigs.get(&c.rig);
@@ -137,6 +140,39 @@ impl RunHandler {
         )?;
         self.schedule(tx)?;
         Ok(json!({ "run": id }))
+    }
+
+    /// A run an agent session starts is a child of the session's run: the token must be that of the parent's live
+    /// current attempt, as for the finisher (contracts 6.3); the child takes the parent's correlation, one level
+    /// deeper, within the depth ceiling triggers share.
+    fn child_of(tx: &Tx<'_>, c: &mut Create, token: &str) -> Result<(), Error> {
+        let parent = c
+            .parent_run
+            .as_deref()
+            .ok_or_else(|| rejected("an attempt token needs its run"))?;
+        let row = Row::load(tx, parent)?;
+        let n: Option<u32> = tx
+            .sql()
+            .query_row(
+                "SELECT n FROM attempts WHERE run = ?1 AND token_sha256 = ?2",
+                params![parent, token_sha256(token)],
+                |r| r.get(0),
+            )
+            .optional()?;
+        if n != Some(row.attempt) || !attempt_live(&row.state) {
+            return Err(rejected(format!(
+                "stale attempt: the token is not that of a live attempt of `{parent}`"
+            )));
+        }
+        let depth = row.depth + 1;
+        if depth > MAX_DEPTH {
+            return Err(rejected(format!(
+                "depth {depth} is over {MAX_DEPTH}: `{parent}` is too deep a chain"
+            )));
+        }
+        c.correlation = Some(row.correlation);
+        c.depth = u32::try_from(depth).unwrap_or(u32::MAX);
+        Ok(())
     }
 
     /// A workdir holds one live started run (spec §9.3).

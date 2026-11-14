@@ -173,6 +173,7 @@ async fn an_exec_step_in_finishing_passes_after_a_restart_with_its_command_run_o
         correlation: None,
         depth: 0,
         parent_run: None,
+        token: None,
         continue_from: None,
     };
     let reply = w.core.send(None, Msg::Create(create)).await.unwrap();

@@ -186,7 +186,8 @@ pub enum Verdict {
     Fail,
 }
 
-/// A run to create: by hand (`correlation` and `parent_run` absent, depth 0) or by a trigger.
+/// A run to create: by hand (`correlation` and `parent_run` absent, depth 0), by a trigger, or from an agent session
+/// (`parent_run` and its attempt `token`: the core takes the correlation and the depth from the parent).
 pub struct Create {
     pub project: String,
     pub rig: String,
@@ -196,6 +197,8 @@ pub struct Create {
     pub correlation: Option<String>,
     pub depth: u32,
     pub parent_run: Option<String>,
+    /// The attempt token of the session of `parent_run` that starts this run; checked as the finisher's is.
+    pub token: Option<String>,
     /// A terminal run whose last session this run continues (spec §9.3); never implicit.
     pub continue_from: Option<String>,
 }

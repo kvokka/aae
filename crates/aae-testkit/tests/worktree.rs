@@ -105,6 +105,7 @@ async fn a_run_continuing_a_session_works_in_the_worktree_of_that_session() {
         correlation: None,
         depth: 0,
         parent_run: None,
+        token: None,
         continue_from: Some(first.clone()),
     };
     let reply = w.core.send(None, Msg::Create(create)).await.unwrap();

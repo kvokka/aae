@@ -11,9 +11,9 @@ use crate::{
 use rusqlite::{OptionalExtension, params};
 use serde_json::{Map, Value, json};
 
-/// Trigger depth (contracts 6.1): a run started by a trigger is one deeper than the run that caused it, except on
-/// `bead.ready`.
-const MAX_DEPTH: i64 = 10;
+/// Chain depth (contracts 6.1): a run started by a trigger is one deeper than the run that caused it, except on
+/// `bead.ready`; a run an agent session starts is one deeper than the session's run.
+pub(super) const MAX_DEPTH: i64 = 10;
 
 /// One trigger on one rig of its project.
 struct Assigned<'a> {
@@ -322,6 +322,7 @@ impl RunHandler {
             correlation: text("correlation"),
             depth: u32::try_from(depth).unwrap_or(u32::MAX),
             parent_run: parent.clone(),
+            token: None,
             continue_from: None,
         };
         let created = tx.unit(|tx| {

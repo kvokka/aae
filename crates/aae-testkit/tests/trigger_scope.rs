@@ -45,6 +45,7 @@ inputs = { from = "{{ event.run.id }}" }
             correlation: None,
             depth: 0,
             parent_run: None,
+            token: None,
             continue_from: None,
         };
         core.send(None, Msg::Create(create)).await.unwrap();
@@ -110,6 +111,7 @@ inputs = { from = "{{ event.run.id }}" }
         correlation: None,
         depth: 0,
         parent_run: None,
+        token: None,
         continue_from: None,
     };
     core.send(None, Msg::Create(create)).await.unwrap();
