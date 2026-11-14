@@ -358,12 +358,29 @@ fn prompt_keys_are_stable_and_distinct() {
 
 #[test]
 fn failures_take_the_default_scope_of_their_kind() {
-    use aae_core::driver::Scope;
-    let scope = |kind| Failure::new(kind, Source::Adapter).scope;
-    assert_eq!(scope(FailureKind::QuotaExhausted), Scope::Account);
-    assert_eq!(scope(FailureKind::Overloaded), Scope::ProviderModel);
-    assert_eq!(scope(FailureKind::AdapterCrash), Scope::Instance);
-    assert_eq!(scope(FailureKind::HollowDone), Scope::Run);
-    assert_eq!(scope(FailureKind::WorkspaceFailure), Scope::Rig);
-    assert_eq!(scope(FailureKind::Stall), Scope::Session);
+    use FailureKind::*;
+    use aae_core::driver::Scope::*;
+    // The whole table of docs/design/contracts.md 4.4, one row per kind.
+    let table = [
+        (QuotaExhausted, Account),
+        (RateLimited, ProviderModel),
+        (Overloaded, ProviderModel),
+        (AuthRequired, Account),
+        (Billing, Account),
+        (ContextOverflow, Session),
+        (ConfigError, Session),
+        (HarnessCrash, Session),
+        (AdapterCrash, Instance),
+        (DaemonCrash, Run),
+        (Stall, Session),
+        (RunawayTurn, Session),
+        (ToolFailure, Session),
+        (TranscriptDivergence, Session),
+        (WorkspaceFailure, Rig),
+        (HollowDone, Run),
+        (Unknown, Session),
+    ];
+    for (kind, scope) in table {
+        assert_eq!(Failure::new(kind, Source::Adapter).scope, scope, "{kind:?}");
+    }
 }
