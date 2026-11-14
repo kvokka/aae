@@ -19,6 +19,9 @@ use std::collections::BTreeMap;
 const API: &str = "${AAE_API}";
 /// How long a service with no consumer is kept.
 const IDLE_MS: i64 = 300_000;
+/// Starts in a row a ready service finds its port taken before it moves: an outgoing connection may hold the port
+/// for a moment.
+const TAKEN_MOVES: i64 = 2;
 
 /// A service a session uses: its id, and its port when the session got it; the launch puts in the port the service
 /// is ready on.
@@ -263,8 +266,9 @@ impl RunHandler {
 
     /// The process of the service `id` ended, or never accepted connections: without consumers the record goes,
     /// else it starts again: on a new port until it was first ready (its port may be someone else's), then on the
-    /// same port, so the sessions holding its URL reconnect.
-    pub(super) fn service_failed(tx: &mut Tx<'_>, id: &str, stderr: &str) -> Result<(), Error> {
+    /// same port, so the sessions holding its URL reconnect, unless someone else holds it ([`TAKEN_MOVES`] starts
+    /// in a row): then on a new one, new sessions get it and the ones holding the old URL lose the tool.
+    pub(super) fn service_failed(tx: &mut Tx<'_>, id: &str, stderr: &str, taken: bool) -> Result<(), Error> {
         let row: Option<(String, i64, String)> = tx
             .sql()
             .query_row(
@@ -291,10 +295,16 @@ impl RunHandler {
         }
         let mut process: Value = serde_json::from_str(&process).unwrap_or_default();
         process["restarts"] = json!(process["restarts"].as_i64().unwrap_or_default() + 1);
-        if process["ready"] != true
+        let taken = if taken {
+            process["taken"].as_i64().unwrap_or_default() + 1
+        } else {
+            0
+        };
+        process["taken"] = json!(taken);
+        if (process["ready"] != true || taken >= TAKEN_MOVES)
             && let Ok(port) = free_port()
         {
-            process["port"] = json!(port);
+            (process["port"], process["taken"]) = (json!(port), json!(0));
         }
         tx.sql().execute(
             "UPDATE instances SET state = 'starting', process = ?2 WHERE id = ?1",

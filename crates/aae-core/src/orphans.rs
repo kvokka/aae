@@ -131,6 +131,46 @@ pub(crate) fn sweep_all(ids: &BTreeSet<String>) -> Vec<(i32, u64)> {
         .collect()
 }
 
+/// `port` on loopback is listened on, and only by processes marked `id`: a port check passed by anyone else would
+/// hand them the sessions' token (spec §11.4). Listeners on every address of the port count: none is the service's.
+#[cfg(target_os = "linux")]
+pub(crate) fn listens_alone(id: &str, port: u16) -> bool {
+    let tables = ["/proc/net/tcp", "/proc/net/tcp6"].map(|table| std::fs::read_to_string(table).unwrap_or_default());
+    let listening: BTreeSet<String> = tables
+        .iter()
+        .flat_map(|table| table.lines().skip(1))
+        .filter_map(|line| listener(line, port))
+        .collect();
+    let fds = marked().filter(|(_, marker)| marker == id).flat_map(|(pid, _)| {
+        std::fs::read_dir(format!("/proc/{pid}/fd"))
+            .into_iter()
+            .flatten()
+            .flatten()
+    });
+    let owned: BTreeSet<String> = fds
+        .filter_map(|fd| Some(std::fs::read_link(fd.path()).ok()?.to_str()?.to_owned()))
+        .filter(|link| listening.contains(link))
+        .collect();
+    !listening.is_empty() && owned == listening
+}
+
+/// shortcut: without `/proc` whoever listens on the port passes for the service (macOS is not checked in the first
+/// release, §1.1); read the sockets through `proc_pidfdinfo` once macOS is checked.
+#[cfg(not(target_os = "linux"))]
+pub(crate) fn listens_alone(_id: &str, _port: u16) -> bool {
+    true
+}
+
+/// `socket:[<inode>]`, as a `/proc/<pid>/fd` link reads, of a line of `/proc/net/tcp*` listening on `port`.
+#[cfg(target_os = "linux")]
+fn listener(line: &str, port: u16) -> Option<String> {
+    let fields: Vec<&str> = line.split_whitespace().collect();
+    let local = u16::from_str_radix(fields.get(1)?.rsplit_once(':')?.1, 16).ok()?;
+    // `0A` is TCP_LISTEN.
+    (local == port && *fields.get(3)? == "0A").then_some(())?;
+    Some(format!("socket:[{}]", fields.get(9)?))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -171,6 +211,33 @@ mod tests {
             tokio::time::sleep(Duration::from_millis(20)).await;
         }
         panic!("descendants with the marker are still alive");
+    }
+
+    /// A port is the instance's only while a process with its marker alone listens on it.
+    #[cfg(target_os = "linux")]
+    #[tokio::test]
+    async fn a_port_is_the_instances_only_while_it_alone_listens() {
+        let id = format!("test-port-{}", std::process::id());
+        let listener = std::net::TcpListener::bind(("127.0.0.1", 0)).unwrap();
+        let port = listener.local_addr().unwrap().port();
+        assert!(!listens_alone(&id, port), "this unmarked process listens");
+        // The listening socket moves to a marked child: the parent's copy is closed by the spawn.
+        let socket = Stdio::from(std::os::fd::OwnedFd::from(listener));
+        let mut child = spawn(Command::new("sleep").arg("30").env(INSTANCE_ENV, &id).stdin(socket)).unwrap();
+        let mut alone = false;
+        for _ in 0..100 {
+            alone = listens_alone(&id, port);
+            if alone {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(20)).await;
+        }
+        assert!(alone, "the marked child listens");
+        assert!(!listens_alone("someone-else", port));
+        let pid = child.id();
+        child.kill().await.unwrap();
+        waited(pid);
+        assert!(!listens_alone(&id, port), "nothing listens");
     }
 
     /// An orphan that cleared its environment is adopted and reaped; the daemon's own child is left to its `wait`.

@@ -74,10 +74,12 @@ pub enum Msg {
     ServiceReady {
         id: String,
     },
-    /// The process of the service `id` ended, or never accepted connections; the end of its stderr.
+    /// The process of the service `id` ended, or never accepted connections; the end of its stderr. `taken`: it did
+    /// not start, someone else listens on its port.
     ServiceFailed {
         id: String,
         stderr: String,
+        taken: bool,
     },
     /// The stop of the service `id` is done.
     ServiceStopped {

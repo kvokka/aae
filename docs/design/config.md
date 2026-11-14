@@ -15,12 +15,12 @@ error in every file.
   error the previous config stays in force, and `aae config check` reports the errors without applying anything
   (it loads the file itself, so it needs no daemon).
 - A reload is taken by new runs and by the schedules (a schedule whose `cron`/`every` changed, and every `cron` when
-  `timezone` changed, is set again from the reload; a removed one is dropped); running runs keep the snapshot they prepared with; an idle instance stops with
-  reason `config` only when no agent of the new config, on any rig, starts sessions on its fingerprint (a changed MCP
-  restarts only the instances it is part of). It emits `config.reloaded` with the generation (1 at daemon start).
-  A change of the set of harnesses, a harness `binary` or any adapter setting such as `max_sessions` (a harness
-  `model` is fine), or of which projects have a `.beads` tracker is refused: drivers and trackers are made at daemon
-  start.
+  `timezone` changed, is set again from the reload; a removed one is dropped); running runs keep the snapshot they
+  prepared with; an idle instance stops with reason `config` only when no agent of the new config, on any rig, starts
+  sessions on its fingerprint (a changed MCP restarts only the instances it is part of). It emits `config.reloaded`
+  with the generation (1 at daemon start). A change of the set of harnesses, a harness `binary` or any adapter setting
+  such as `max_sessions` (a harness `model` is fine), or of which projects have a `.beads` tracker is refused: drivers
+  and trackers are made at daemon start.
 
 ## Settings (any layer)
 
@@ -84,11 +84,16 @@ mcp = { url = "/mcp" }                         # | true (= /mcp); none: no MCP e
   passes on exit 0). Not ready within 30 s, it is stopped and fails. Once ready, a live service is one whose
   process lives: there is no periodic check. A server that is not up is a tool failure, not a failed run.
 - The port is checked free right before each start; one taken (someone else listens there and would get the token)
-  fails that start without running `command`. A service that dies or fails is started again (with the effect backoff)
-  while sessions use it: on a new port until it was first `ready`, then on the same port, so the sessions holding
-  its URL reconnect; with none, it is dropped. A process that takes the port while the service itself starts still
-  wins: the port is checked, not handed over bound. A changed `command`, `env` or `health` is a new service; the old one idles
-  out. Events: `service.starting`, `service.ready`, `service.failed`, `service.stopped`; `aae instances` lists
+  fails that start without running `command`. A port or `http` check passes only while the service's processes
+  (the ones with its `AAE_INSTANCE` marker) alone listen on the port, so a process that takes the port while the
+  service starts gets no check and no token; the service then fails to bind and starts again. A `command` check
+  checks what it likes. A service that dies or fails is started again (with the effect backoff) while sessions use
+  it: on a new port until it was first `ready`, then on the same port, so the sessions holding its URL reconnect,
+  unless someone else listens there: then on a new port, which new sessions get, and the sessions holding the old
+  URL lose the tool. With no sessions it is dropped. A session start that waited 30 s in vain gets port 0 in the
+  service's URL: the port the service was not ready on may be someone else's. On macOS the listener is not told
+  (`/proc` only), any listener passes the check. A changed `command`, `env` or `health` is a new service; the old
+  one idles out. Events: `service.starting`, `service.ready`, `service.failed`, `service.stopped`; `aae instances` lists
   services too.
 - `url` with `${AAE_API}`: the daemon's own API on TCP, e.g. `url = "${AAE_API}/mcp"` for its MCP frontend. The
   placeholder becomes `http://<api_tcp>` and the session gets `Authorization: Bearer <token>` with the token of the
@@ -304,11 +309,12 @@ payload, as do the paths of `where`. `rig` is allowed only in a project's `[[tri
 
 - A trigger runs on the rigs that list it in `triggers` and, for a project trigger, on its `rig`; one that no rig
   names never fires. An event trigger sees the events whose `project` and `rig` are its own or null.
-- `cron` is read in the orchestrator's `timezone`, the system zone by default: minute, hour, day of month, month, day of week; each field is `*`, a value, `a-b`, any of
-  them with `/step`, or a comma list; months and days also take `jan`..`dec` and `sun`..`sat`, and day 7 is Sunday.
-  When both day fields are restricted, a day matching either fires (as in Vixie cron).
-  A local time skipped by a clock change fires when the clock moves on (02:30 in a spring gap fires at 03:30); a
-  local time that repeats fires once, on its first pass, so `*/15` is silent in the repeated hour's second pass.
+- `cron` is read in the orchestrator's `timezone`, the system zone by default: minute, hour, day of month, month, day
+  of week; each field is `*`, a value, `a-b`, any of them with `/step`, or a comma list; months and days also take
+  `jan`..`dec` and `sun`..`sat`, and day 7 is Sunday. When both day fields are restricted, a day matching either fires
+  (as in Vixie cron). A local time skipped by a clock change fires when the clock moves on (02:30 in a spring gap
+  fires at 03:30); a local time that repeats fires once, on its first pass, so `*/15` is silent in the repeated hour's
+  second pass.
 - `every` first fires one interval after the daemon first sees the trigger, then one interval after each firing.
   A schedule missed while the daemon was down fires once at start, and the next one is counted from then.
 - A trigger on `trigger.skipped` is a config error: a skip that fires a trigger could skip again forever.
@@ -381,19 +387,22 @@ or for a project).
   `crash_loop` (5), `crash_pause_s` (300), `resume_failures` (3), `unknown_after_s` (30), `unknown_retries` (3).
 - `worktree` has no table: it is on for the runs of the formulas with `worktree = true` (a formula setting, spec
   §2.1 item 11), and a `[builtin.worktree]` table is a config error that says so. Each such run gets a git worktree
-  of its rig on the branch `aae/<run>`, in `<git common dir>/aae/worktrees/<run>`, as its workdir. When the run ends the worktree is removed unless it has uncommitted changes or a HEAD no ref
-  reaches (then `plugin.hook_failed` says why); the branch is deleted only when it is merged. A run with
-  `continue_from` starts in the workdir of the run it continues (a session resumes where it ran); when that is a
-  worktree of this plugin, it is brought back on its branch if it was removed, whatever the run's formula says.
+  of its rig on the branch `aae/<run>`, in `<git common dir>/aae/worktrees/<run>`, as its workdir. When the run
+  ends the worktree is removed unless it has uncommitted changes or a HEAD no ref reaches (then `plugin.hook_failed`
+  says why); the branch is deleted only when it is merged. A run with `continue_from` starts in the workdir of the
+  run it continues (a session resumes where it ran); when that is a worktree of this plugin, it is brought back on
+  its branch if it was removed, whatever the run's formula says. A reload that leaves a project no formula with
+  `worktree = true` turns the plugin off there: the worktrees of its runs still going are left in place, as are
+  their branches.
 
 ### Where the bundled plugins end and the core begins
 
 The mechanisms live in the core: resuming an attempt, a new session that keeps ownership, issue gates, the counters
-the policy reads, the ceiling of 20 attempts per run (waits on an account gate not counted), the watchdog and every deadline. The bundled plugins only
-choose a reaction and its thresholds; they never change a harness. With `default-policy` off, the "no plugin decision"
-column of contracts 1.3 applies: a failed attempt ends the run `failed` with class `infrastructure`. The
-bundled plugins are compiled into the same binary, need no external runtime, and are counted on their own budget
-line (`plugins` in `scripts/budget.sh`, 1500 lines) inside the release total.
+the policy reads, the ceiling of 20 attempts per run (waits on an account gate not counted), the watchdog and every
+deadline. The bundled plugins only choose a reaction and its thresholds; they never change a harness. With
+`default-policy` off, the "no plugin decision" column of contracts 1.3 applies: a failed attempt ends the run `failed`
+with class `infrastructure`. The bundled plugins are compiled into the same binary, need no external runtime, and are
+counted on their own budget line (`plugins` in `scripts/budget.sh`, 1500 lines) inside the release total.
 
 Postmortem 0001 (`docs/postmortems/0001-loop-stalled-after-transient-auth-error.md`) and the owner's decision of
 2026-11-14 (spec §2.1 item 12) shaped `auth_required` and `billing`: a proxy or WAF 403 passes by itself, so every

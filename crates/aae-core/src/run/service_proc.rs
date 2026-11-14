@@ -83,12 +83,16 @@ pub(super) fn start(running: &Running, core: &CoreHandle<Msg>, p: &Value) {
             () = tokio::time::sleep(delay) => {}
             () = own.notified() => return,
         }
-        // A port someone else listens on would pass a port check and get the sessions' token: the core picks
-        // another. shortcut: checked free, not handed over bound; a process taking it while the service starts
-        // still wins. Pass the service a bound socket if that shows.
+        // Starting on a port someone else listens on fails the start: the core picks another. One who takes it
+        // while the service starts does not pass its health check (`healthy`), so the service fails to bind.
         if let Err(e) = std::net::TcpListener::bind(("127.0.0.1", port)) {
             let stderr = format!("port {port} is taken: {e}");
-            let _ = core.send(None, Msg::ServiceFailed { id: task_id, stderr }).await;
+            let failed = Msg::ServiceFailed {
+                id: task_id,
+                stderr,
+                taken: true,
+            };
+            let _ = core.send(None, failed).await;
             return;
         }
         let out = process::run(Spec {
@@ -103,7 +107,7 @@ pub(super) fn start(running: &Running, core: &CoreHandle<Msg>, p: &Value) {
         tokio::pin!(out);
         let ended = tokio::select! {
             out = &mut out => Some(out),
-            up = ready(&health, port, &token, &env) => {
+            up = ready(&health, &task_id, port, &token, &env) => {
                 if up {
                     up_flag.store(true, Ordering::Release);
                     let _ = core.send(None, Msg::ServiceReady { id: task_id.clone() }).await;
@@ -119,7 +123,12 @@ pub(super) fn start(running: &Running, core: &CoreHandle<Msg>, p: &Value) {
         };
         let stderr = String::from_utf8_lossy(&out.stderr).into_owned();
         // After a stop of the registry's the core drops it: the service is `stopping`.
-        let _ = core.send(None, Msg::ServiceFailed { id: task_id, stderr }).await;
+        let failed = Msg::ServiceFailed {
+            id: task_id,
+            stderr,
+            taken: false,
+        };
+        let _ = core.send(None, failed).await;
     });
     let entry = Entry {
         stop,
@@ -132,17 +141,18 @@ pub(super) fn start(running: &Running, core: &CoreHandle<Msg>, p: &Value) {
     }
 }
 
-/// `payload` with the port of each of `services` (`(id, port picked)`) in place of [`port_of`], once each is ready
-/// or past [`READY_WAIT`]: a session connects to its services as it starts, one not up by then is a tool failure.
+/// `payload` with the port of each of `services` in place of [`port_of`], once each is ready, or port 0 past
+/// [`READY_WAIT`]: a session connects to its services as it starts, one not up by then is a tool failure, and the
+/// port it was not ready on may be someone else's, who would get the token.
 pub(super) async fn resolve(running: &Running, services: &[(String, u16)], payload: &Value) -> Value {
     let start = tokio::time::Instant::now();
     let mut text = payload.to_string();
-    for (id, picked) in services {
+    for (id, _) in services {
         let port = loop {
             let now = lock(running).get(id).map(|e| (e.port, e.ready.load(Ordering::Acquire)));
             match now {
                 Some((port, true)) => break port,
-                _ if start.elapsed() > READY_WAIT => break now.map_or(*picked, |(port, _)| port),
+                _ if start.elapsed() > READY_WAIT => break 0,
                 _ => tokio::time::sleep(Duration::from_millis(50)).await,
             }
         };
@@ -152,9 +162,9 @@ pub(super) async fn resolve(running: &Running, services: &[(String, u16)], paylo
 }
 
 /// Checks `health` until it passes, up to [`READY_WAIT`]; `false` past it.
-async fn ready(health: &Health, port: u16, token: &str, env: &[(String, String)]) -> bool {
+async fn ready(health: &Health, id: &str, port: u16, token: &str, env: &[(String, String)]) -> bool {
     let start = tokio::time::Instant::now();
-    while !healthy(health, port, token, env).await {
+    while !healthy(health, id, port, token, env).await {
         if start.elapsed() > READY_WAIT {
             return false;
         }
@@ -163,7 +173,17 @@ async fn ready(health: &Health, port: u16, token: &str, env: &[(String, String)]
     true
 }
 
-async fn healthy(health: &Health, port: u16, token: &str, env: &[(String, String)]) -> bool {
+/// A port or HTTP check counts only once the service alone listens on its port: one who took the port while it
+/// started would pass it and get the token. A command checks what it likes.
+async fn healthy(health: &Health, id: &str, port: u16, token: &str, env: &[(String, String)]) -> bool {
+    if matches!(health, Health::Port | Health::Http(_)) {
+        let id = id.to_owned();
+        // Walking `/proc` is synchronous.
+        let alone = tokio::task::spawn_blocking(move || crate::orphans::listens_alone(&id, port)).await;
+        if !alone.unwrap_or(false) {
+            return false;
+        }
+    }
     match health {
         Health::Port => TcpStream::connect(("127.0.0.1", port)).await.is_ok(),
         Health::Http(path) => tokio::time::timeout(CHECK_WAIT, http_ok(port, path, token))
