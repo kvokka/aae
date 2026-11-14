@@ -14,7 +14,7 @@ use serde_json::Value;
 use std::{
     collections::BTreeMap,
     fs,
-    path::{Path, PathBuf},
+    path::{Component, Path, PathBuf},
 };
 
 /// The roots of a prompt template (contracts 2.3).
@@ -261,10 +261,22 @@ pub(super) fn parent(file: &Path) -> PathBuf {
     file.parent().map(Path::to_path_buf).unwrap_or_default()
 }
 
-/// `path` relative to `base`, with a leading `~/` meaning the home directory.
+/// `path` relative to `base`, with a leading `~/` meaning the home directory, without `.` and `..`.
 pub(super) fn resolve(base: &Path, path: &Path) -> PathBuf {
-    match (path.strip_prefix("~"), std::env::var_os("HOME")) {
+    let joined = match (path.strip_prefix("~"), std::env::var_os("HOME")) {
         (Ok(rest), Some(home)) => PathBuf::from(home).join(rest),
         _ => base.join(path),
+    };
+    // Lexically, as written: `.` goes and `..` takes the name before it; a symlink stays as it is.
+    let mut out = PathBuf::new();
+    for part in joined.components() {
+        match (part, out.components().next_back()) {
+            (Component::CurDir, _) | (Component::ParentDir, Some(Component::RootDir)) => {}
+            (Component::ParentDir, Some(Component::Normal(_))) => {
+                out.pop();
+            }
+            (part, _) => out.push(part),
+        }
     }
+    out
 }
