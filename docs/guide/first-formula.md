@@ -1,7 +1,7 @@
 # Your first formula with an agent
 
-This page adds an **agent** to the project of [the previous page](first-project.md) and a `prompt` formula that
-gives it a task. Use the cheapest model while you try things out.
+This page adds an **agent** to the project of [the previous page](first-project.md) and a `prompt` formula: the agent
+is a general role, the formula the process it goes through, and the task itself is the run's input, from you.
 
 ## 1. The agent
 
@@ -9,8 +9,9 @@ An agent is a directory under `agents/` with an `agent.toml` and, usually, a rol
 `~/work/hello/agents/helper/agent.toml`:
 
 ```toml
-harness = "claude"                    # one of the [harness.*] of the orchestrator config
-model = "haiku"                       # optional; the harness default otherwise
+provider = "anthropic"                # the harness follows from it: claude (or name `harness = "claude"`)
+model = "sonnet"                      # optional; the harness default otherwise; a short name is the latest model
+effort = "medium"                     # optional
 permission_mode = "acceptEdits"       # claude's --permission-mode; for codex its approval policy
 ```
 
@@ -20,12 +21,24 @@ permission_mode = "acceptEdits"       # claude's --permission-mode; for codex it
 You are a careful assistant working in this repository.
 ```
 
-Settings such as `model`, `env`, `mcp`, `hooks` and `skills` may also be set for the whole orchestrator, a project
-or a rig (`[settings]`); the agent and the overrides are stronger layers. See what a session will actually get, and
-which layer each value comes from:
+`provider`, `harness`, `model` and `effort` in `agent.toml` are only the role's defaults. What the agent runs on in
+your project is your setting, stronger than the agent's: an override for the whole project or one rig, here the
+cheapest model while you try things out, in `~/work/hello/aae.toml`:
+
+```toml
+[overrides.helper]                    # or [rigs.main.overrides.helper] for one rig
+model = "haiku"
+```
+
+To run the same role on another provider under a name of its own, declare a variant (`[agents.<name>] base =
+"<pack>.<agent>"`) and map it on a rig (`[rigs.<r>] agents = { helper = "<name>" }`); see
+[Agent variants](../design/config.md#agent-variants). Settings such as `env`, `mcp`, `hooks` and `skills` may also be
+set for the whole orchestrator, a project or a rig (`[settings]`), weaker than the agent. See what a session will
+actually get, and which layer each value comes from:
 
 ```sh
 aae config explain --project hello --agent helper
+aae config explain --project hello --formula summarize --rig main   # with the formula's and the rig's layers
 ```
 
 By default the harness also reads your own host settings (`~/.claude`, `~/.codex`); `inherit_host = false` turns
@@ -53,7 +66,7 @@ prompt = "summarize.md"               # relative to this file
 timeout = "10m"
 ```
 
-`~/work/hello/formulas/summarize.md`, the prompt template:
+`~/work/hello/formulas/summarize.md`, the prompt template: the steps of the work, with the inputs filled in.
 
 ```markdown
 Read {{ inputs.file }} in {{ rig.path }} and write a one-paragraph summary of it to SUMMARY.md.

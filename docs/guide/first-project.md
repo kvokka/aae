@@ -39,8 +39,9 @@ The project is named after its directory (`hello`); `name = "..."` in `aae.toml`
 
 ## 3. A formula without a model
 
-A **formula** says what a run does. Its one step is either `exec` (a command) or `prompt` (an agent working from a
-prompt). `~/work/hello/formulas/check.toml`:
+A **formula** says how a run works: the process, never the particular task, which comes in as the run's inputs. Its
+one step is either `exec` (a command) or `prompt` (an agent working through a prompt template).
+`~/work/hello/formulas/check.toml`:
 
 ```toml
 name = "check"
