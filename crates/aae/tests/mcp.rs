@@ -144,6 +144,19 @@ async fn a_run_started_over_mcp_is_followed_listed_and_cancelled_there() {
     );
     let (text, error) = call(&d, "start_run", json!({ "project": "shop" })).await;
     assert!(error && text.as_str().unwrap().starts_with("bad_request"), "{text}");
+    let keyed = |formula| json!({ "project": "shop", "rig": "web", "formula": formula, "idempotency_key": "k-1" });
+    let (first, error) = call(&d, "start_run", keyed("check")).await;
+    assert!(!error, "{first}");
+    assert_eq!(
+        call(&d, "start_run", keyed("check")).await,
+        (first, false),
+        "the first result"
+    );
+    let (text, error) = call(&d, "start_run", keyed("slow")).await;
+    assert!(
+        error && text.as_str().unwrap().starts_with("idempotency_key_reused"),
+        "{text}"
+    );
     let (text, error) = call(&d, "run_state", json!({ "id": "nope" })).await;
     assert!(error && text.as_str().unwrap().starts_with("not_found"), "{text}");
 }

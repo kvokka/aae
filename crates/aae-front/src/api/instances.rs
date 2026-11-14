@@ -18,6 +18,6 @@ pub(crate) async fn list(state: State) -> Reply {
     params(("id" = String, Path), ("Idempotency-Key" = Option<String>, Header)),
     responses((status = OK, body = Object), (status = CONFLICT, body = Object)))]
 pub(crate) async fn stop(state: State, headers: HeaderMap, Path(id): Path<String>) -> Reply {
-    state.core.send(key(&headers), Msg::StopInstance { id }).await?;
+    state.core.send_request(key(&headers), Msg::StopInstance { id }).await?;
     Ok(Json(json!({ "stopping": true })))
 }

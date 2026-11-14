@@ -1,5 +1,6 @@
 //! The HTTP API (spec §12): JSON over a unix socket, the event stream as SSE. Mutating operations take an
-//! `Idempotency-Key` header: a repeated request with the same key returns the first reply and changes nothing.
+//! `Idempotency-Key` header: a repeated request with the same key returns the first reply and changes nothing; the
+//! key repeated with another method, path or body is refused with 422.
 
 pub(crate) mod config;
 mod daemon;
@@ -20,7 +21,7 @@ use aae_core::{
 use axum::{
     Json,
     extract::{FromRequest, Request, rejection::JsonRejection},
-    http::{HeaderMap, StatusCode},
+    http::{HeaderMap, HeaderValue, StatusCode},
     middleware::Next,
     response::{IntoResponse, Response},
 };
@@ -122,6 +123,7 @@ pub async fn serve(
         .split_for_parts()
         .0
         .route("/mcp", axum::routing::post(mcp::post).get(mcp::get))
+        .layer(axum::middleware::from_fn(fingerprint))
         .with_state(Arc::new(api));
     let guarded = app
         .clone()
@@ -149,6 +151,40 @@ pub async fn serve(
         () = signal => Ok("signal"),
         reason = drained.wait_for(Option::is_some) => Ok(reason.map_or("signal", |r| r.unwrap_or("signal"))),
     }
+}
+
+/// Puts what a request with an `Idempotency-Key` was (method, path, body) into its `aae-request` header for [`key`].
+async fn fingerprint(request: Request, next: Next) -> Response {
+    if !request.headers().contains_key("idempotency-key") {
+        return next.run(request).await;
+    }
+    let (mut parts, body) = request.into_parts();
+    // The limit of a JSON body in axum.
+    let Ok(body) = axum::body::to_bytes(body, 2 << 20).await else {
+        return ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "bad_request",
+            "the body is unreadable or too large",
+        )
+        .into_response();
+    };
+    let request = [
+        parts.method.as_str().as_bytes(),
+        b" ",
+        parts.uri.path().as_bytes(),
+        b"\n",
+        &body,
+    ];
+    parts.headers.insert("aae-request", request_hash(request.concat()));
+    next.run(Request::from_parts(parts, axum::body::Body::from(body))).await
+}
+
+/// FNV-1a of a request: a hash stable across builds, unlike the standard library's.
+fn request_hash(bytes: impl IntoIterator<Item = u8>) -> HeaderValue {
+    let hash = (bytes.into_iter()).fold(0xcbf2_9ce4_8422_2325_u64, |h, b| {
+        (h ^ u64::from(b)).wrapping_mul(0x0100_0000_01b3)
+    });
+    HeaderValue::from(hash)
 }
 
 /// Compares in a time that does not depend on where the inputs differ.
@@ -180,6 +216,7 @@ impl From<aae_core::Error> for ApiError {
     fn from(e: aae_core::Error) -> Self {
         let (status, code) = match &e {
             aae_core::Error::Rejected(_) => (StatusCode::CONFLICT, "rejected"),
+            aae_core::Error::KeyReused => (StatusCode::UNPROCESSABLE_ENTITY, "idempotency_key_reused"),
             aae_core::Error::Storage(_) => (StatusCode::INTERNAL_SERVER_ERROR, "storage"),
             aae_core::Error::Stopped => (StatusCode::SERVICE_UNAVAILABLE, "stopped"),
         };
@@ -210,9 +247,10 @@ impl<T: serde::de::DeserializeOwned, S: Send + Sync> FromRequest<S> for Body<T> 
     }
 }
 
-/// The `Idempotency-Key` of a request.
-fn key(headers: &HeaderMap) -> Option<&str> {
-    headers.get("idempotency-key").and_then(|v| v.to_str().ok())
+/// The `Idempotency-Key` of a request and what the request was ([`fingerprint`]).
+fn key(headers: &HeaderMap) -> Option<(&str, &str)> {
+    let get = |name| headers.get(name).and_then(|v: &HeaderValue| v.to_str().ok());
+    Some((get("idempotency-key")?, get("aae-request").unwrap_or_default()))
 }
 
 type Reply = Result<Json<Value>, ApiError>;

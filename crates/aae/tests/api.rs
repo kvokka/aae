@@ -76,6 +76,12 @@ async fn an_operator_gate_holds_a_new_run_until_opened_by_hand() {
         Err(ClientError::Api { status: 409, error }) => assert_eq!(error["code"], "rejected"),
         other => panic!("{other:?}"),
     }
+    for path in ["/v1/gates", "/v1/gates/open"] {
+        match d.post(path, json!({ "key": "shop" }), None).await {
+            Err(ClientError::Api { status: 400, error }) => assert_eq!(error["code"], "bad_request"),
+            other => panic!("{path}: {other:?}"),
+        }
+    }
     d.post("/v1/gates/open", json!({ "key": "project:shop" }), None)
         .await
         .unwrap();
@@ -99,6 +105,21 @@ async fn a_run_is_cancelled_and_bad_requests_get_json_errors() {
     match d.post("/v1/runs", json!({ "project": "shop" }), None).await {
         Err(ClientError::Api { status: 400, error }) => assert_eq!(error["code"], "bad_request"),
         other => panic!("{other:?}"),
+    }
+    // The same key with the same request returns the first reply; with another request it is refused.
+    let create = |formula| json!({ "project": "shop", "rig": "web", "formula": formula });
+    let first = d.post("/v1/runs", create("check"), Some("k-1")).await.unwrap();
+    assert_eq!(d.post("/v1/runs", create("check"), Some("k-1")).await.unwrap(), first);
+    match d.post("/v1/runs", create("slow"), Some("k-1")).await {
+        Err(ClientError::Api { status: 422, error }) => assert_eq!(error["code"], "idempotency_key_reused"),
+        other => panic!("{other:?}"),
+    }
+    match d
+        .post("/v1/gates/open", json!({ "key": "project:shop" }), Some("k-1"))
+        .await
+    {
+        Err(ClientError::Api { status: 422, .. }) => {}
+        other => panic!("another path: {other:?}"),
     }
 }
 

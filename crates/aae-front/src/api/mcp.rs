@@ -3,7 +3,7 @@
 //! other takes the `initialize` epoch, with no session id, so a daemon restart strands no client.
 
 use super::{
-    ApiError, Body, State,
+    ApiError, Body, State, request_hash,
     runs::{self, CancelRun, CreateRun, ListQuery},
 };
 use aae_core::config::{Config, InputType};
@@ -11,7 +11,7 @@ use axum::{
     Json,
     body::Bytes,
     extract::{Path, Query},
-    http::{HeaderMap, StatusCode, header},
+    http::{HeaderMap, HeaderValue, StatusCode, header},
     response::{IntoResponse, Response},
 };
 use serde_json::{Map, Value, json};
@@ -25,6 +25,8 @@ pub const SUPPORTED: &[&str] = &["2025-11-25", "2025-06-18", "2025-03-26"];
 fn tools() -> Value {
     let id = json!({ "type": "string", "description": "The run id." });
     let text = json!({ "type": "string" });
+    let key = json!({ "type": "string", "description": "A repeat with the same key and arguments returns the first \
+        result and changes nothing; with other arguments it is an error." });
     json!([
         { "name": "list_formulas", "description": "The formulas a run can start, by project, with their inputs.",
           "inputSchema": { "type": "object", "properties": { "project": text } } },
@@ -33,14 +35,16 @@ fn tools() -> Value {
               "project": text, "rig": text,
               "formula": { "type": "string", "description": "`name`, or `<pack>.<name>`, as list_formulas gives it." },
               "inputs": { "type": "object" },
-              "continue_from": { "type": "string", "description": "A terminal run whose last session to continue." } } } },
+              "continue_from": { "type": "string", "description": "A terminal run whose last session to continue." },
+              "idempotency_key": key } } },
         { "name": "run_state", "description": "The state of a run: its view, where it waits, its attempts.",
           "inputSchema": { "type": "object", "required": ["id"], "properties": { "id": id } } },
         { "name": "list_runs", "description": "Runs, newest first.",
           "inputSchema": { "type": "object", "properties": { "project": text, "state": text,
               "limit": { "type": "integer", "minimum": 1 } } } },
         { "name": "cancel_run", "description": "Cancels a run.",
-          "inputSchema": { "type": "object", "required": ["id"], "properties": { "id": id, "reason": text } } },
+          "inputSchema": { "type": "object", "required": ["id"], "properties": { "id": id, "reason": text,
+              "idempotency_key": key } } },
     ])
 }
 
@@ -109,8 +113,9 @@ fn reply(status: StatusCode, body: Value) -> Response {
 
 /// A tool result; `None` for an unknown tool. Bad arguments and API errors are results with `isError`.
 async fn call(state: State, params: &Value) -> Option<Value> {
-    let args = params.get("arguments").cloned().unwrap_or_else(|| json!({}));
+    let mut args = params.get("arguments").cloned().unwrap_or_else(|| json!({}));
     let parse = |e: serde_json::Error| ApiError::new(StatusCode::BAD_REQUEST, "bad_request", e.to_string());
+    let headers = keyed(&mut args, params["name"].as_str()?);
     let id = || {
         args["id"]
             .as_str()
@@ -119,9 +124,10 @@ async fn call(state: State, params: &Value) -> Option<Value> {
     };
     let reply = match params["name"].as_str()? {
         "list_formulas" => Ok(Json(formulas(&state.config(), args["project"].as_str()))),
-        "start_run" => match serde_json::from_value::<CreateRun>(args.clone()) {
-            Ok(body) => runs::create(state, HeaderMap::new(), Body(body)).await,
-            Err(e) => Err(parse(e)),
+        "start_run" => match (headers, serde_json::from_value::<CreateRun>(args.clone())) {
+            (Ok(headers), Ok(body)) => runs::create(state, headers, Body(body)).await,
+            (Err(e), _) => Err(e),
+            (_, Err(e)) => Err(parse(e)),
         },
         "run_state" => match id() {
             Ok(id) => runs::get(state, Path(id)).await,
@@ -131,10 +137,10 @@ async fn call(state: State, params: &Value) -> Option<Value> {
             Ok(query) => runs::list(state, Query(query)).await,
             Err(e) => Err(parse(e)),
         },
-        "cancel_run" => match (id(), serde_json::from_value::<CancelRun>(args.clone())) {
-            (Ok(id), Ok(body)) => runs::cancel(state, HeaderMap::new(), Path(id), Body(body)).await,
-            (Err(e), _) => Err(e),
-            (_, Err(e)) => Err(parse(e)),
+        "cancel_run" => match (id(), headers, serde_json::from_value::<CancelRun>(args.clone())) {
+            (Ok(id), Ok(headers), Ok(body)) => runs::cancel(state, headers, Path(id), Body(body)).await,
+            (Err(e), ..) | (_, Err(e), _) => Err(e),
+            (.., Err(e)) => Err(parse(e)),
         },
         _ => return None,
     };
@@ -145,6 +151,25 @@ async fn call(state: State, params: &Value) -> Option<Value> {
             json!({ "content": [{ "type": "text", "text": text }], "isError": true })
         }
     })
+}
+
+/// The headers of a call to `tool` whose `args` carry an `idempotency_key` (taken out of them): what
+/// [`super::fingerprint`] makes of an HTTP request.
+fn keyed(args: &mut Value, tool: &str) -> Result<HeaderMap, ApiError> {
+    let mut headers = HeaderMap::new();
+    if let Some(key) = args.as_object_mut().and_then(|args| args.remove("idempotency_key")) {
+        let key = key.as_str().and_then(|key| HeaderValue::from_str(key).ok());
+        let bad = || {
+            ApiError::new(
+                StatusCode::BAD_REQUEST,
+                "bad_request",
+                "`idempotency_key` is not a header value",
+            )
+        };
+        headers.insert("idempotency-key", key.ok_or_else(bad)?);
+        headers.insert("aae-request", request_hash(format!("{tool} {args}").into_bytes()));
+    }
+    Ok(headers)
 }
 
 /// Every formula of every project (or of `project`), named as a run start takes it.

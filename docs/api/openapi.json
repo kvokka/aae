@@ -506,6 +506,15 @@
               }
             }
           },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
           "409": {
             "content": {
               "application/json": {

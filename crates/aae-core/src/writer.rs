@@ -30,6 +30,8 @@ pub enum Error {
     Storage(rusqlite::Error),
     /// The handler refused the message; nothing of it was committed.
     Rejected(String),
+    /// The idempotency key was used before for another request; nothing was done.
+    KeyReused,
     /// The writer has stopped.
     Stopped,
 }
@@ -39,6 +41,7 @@ impl fmt::Display for Error {
         match self {
             Self::Storage(e) => write!(f, "state storage: {e}"),
             Self::Rejected(reason) => write!(f, "rejected: {reason}"),
+            Self::KeyReused => f.write_str("the idempotency key was used for another request"),
             Self::Stopped => f.write_str("the core has stopped"),
         }
     }
@@ -164,7 +167,8 @@ pub trait Executor: Send + Sync + 'static {
 }
 
 struct Input<M> {
-    key: Option<String>,
+    /// The idempotency key and what the request was.
+    key: Option<(String, String)>,
     msg: M,
     reply: oneshot::Sender<Result<Value, Error>>,
 }
@@ -184,9 +188,15 @@ impl<M: Send + 'static> CoreHandle<M> {
     /// Handles `msg` and returns the handler's reply. With an idempotency key, a repeated message returns the
     /// stored reply of the first one and changes nothing (invariant 10).
     pub async fn send(&self, key: Option<&str>, msg: M) -> Result<Value, Error> {
+        self.send_request(key.map(|key| (key, "")), msg).await
+    }
+
+    /// [`Self::send`] with the key and what the request was: a repeat of the key with another request is
+    /// [`Error::KeyReused`].
+    pub async fn send_request(&self, key: Option<(&str, &str)>, msg: M) -> Result<Value, Error> {
         let (reply, answer) = oneshot::channel();
         let input = Input {
-            key: key.map(str::to_owned),
+            key: key.map(|(key, request)| (key.to_owned(), request.to_owned())),
             msg,
             reply,
         };
@@ -286,16 +296,19 @@ fn process<H: Handler>(
     conn: &mut Connection,
     handler: &mut H,
     now_ms: i64,
-    key: Option<String>,
+    key: Option<(String, String)>,
     msg: H::Msg,
 ) -> Result<Value, Error> {
     let tx = conn.transaction()?;
-    if let Some(key) = &key {
-        let stored: Option<Value> = tx
-            .query_row("SELECT reply FROM idempotency WHERE key = ?1", [key], |r| r.get(0))
-            .optional()?;
-        if let Some(stored) = stored {
-            return Ok(stored);
+    if let Some((key, request)) = &key {
+        let sql = "SELECT reply, request FROM idempotency WHERE key = ?1";
+        let stored: Option<(Value, String)> = tx.query_row(sql, [key], |r| Ok((r.get(0)?, r.get(1)?))).optional()?;
+        if let Some((stored, first)) = stored {
+            return if first == *request {
+                Ok(stored)
+            } else {
+                Err(Error::KeyReused)
+            };
         }
     }
     let mut tx = Tx {
@@ -305,15 +318,15 @@ fn process<H: Handler>(
     };
     let reply = handler.handle(&mut tx, msg)?;
     settle(&mut tx, handler)?;
-    if let Some(key) = key {
+    if let Some((key, request)) = key {
         // A key is kept a day: a client retries within seconds or minutes, and the table must not grow forever.
         tx.tx.execute(
             "DELETE FROM idempotency WHERE at_ms < ?1",
             [now_ms - IDEMPOTENCY_KEEP_MS],
         )?;
         tx.tx.execute(
-            "INSERT INTO idempotency (key, reply, at_ms) VALUES (?1, ?2, ?3)",
-            params![key, reply.to_string(), now_ms],
+            "INSERT INTO idempotency (key, reply, at_ms, request) VALUES (?1, ?2, ?3, ?4)",
+            params![key, reply.to_string(), now_ms, request],
         )?;
     }
     tx.tx.commit()?;

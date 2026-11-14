@@ -39,7 +39,7 @@ pub(crate) async fn create(state: State, headers: HeaderMap, Body(body): Body<Cr
         parent_run: None,
         continue_from: body.continue_from,
     };
-    Ok(Json(state.core.send(key(&headers), Msg::Create(create)).await?))
+    Ok(Json(state.core.send_request(key(&headers), Msg::Create(create)).await?))
 }
 
 #[derive(Deserialize, IntoParams)]
@@ -89,7 +89,12 @@ pub(crate) async fn cancel(
     let reason = Some(body.reason)
         .filter(|r| !r.is_empty())
         .unwrap_or_else(|| "by the operator".into());
-    Ok(Json(state.core.send(key(&headers), Msg::Cancel { run, reason }).await?))
+    Ok(Json(
+        state
+            .core
+            .send_request(key(&headers), Msg::Cancel { run, reason })
+            .await?,
+    ))
 }
 
 #[derive(Deserialize, ToSchema)]
@@ -118,7 +123,7 @@ pub(crate) async fn answer(
         request: body.request,
         answer,
     };
-    Ok(Json(state.core.send(key(&headers), msg).await?))
+    Ok(Json(state.core.send_request(key(&headers), msg).await?))
 }
 
 #[derive(Deserialize, ToSchema)]
@@ -146,5 +151,5 @@ pub(crate) async fn finish(
         token: body.token,
         outcome: body.outcome,
     };
-    Ok(Json(state.core.send(key(&headers), msg).await?))
+    Ok(Json(state.core.send_request(key(&headers), msg).await?))
 }

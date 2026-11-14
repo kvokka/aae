@@ -52,7 +52,7 @@ async fn stop(state: State, headers: &HeaderMap, q: Drain, reason: &'static str)
     let msg = Msg::Stopping {
         reason: reason.to_owned(),
     };
-    let mut reply = state.core.send(key(headers), msg).await?;
+    let mut reply = state.core.send_request(key(headers), msg).await?;
     // The first reason wins: a restart asked during a drain does not turn it into one, nor the reverse.
     if reply["reason"] != reason {
         return Err(aae_core::Error::Rejected(format!("the daemon is already stopping: {}", reply["reason"])).into());

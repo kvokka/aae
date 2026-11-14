@@ -13,13 +13,14 @@ request on the TCP listener needs `Authorization: Bearer <token>`; the daemon wr
 | Tool | Arguments | Same as |
 |---|---|---|
 | `list_formulas` | `project`? | the formulas of the config, named as `start_run` takes them, with their inputs |
-| `start_run` | `project`, `rig`, `formula`, `inputs`?, `continue_from`? | `POST /v1/runs` |
+| `start_run` | `project`, `rig`, `formula`, `inputs`?, `continue_from`?, `idempotency_key`? | `POST /v1/runs` |
 | `run_state` | `id` | `GET /v1/runs/{id}` |
 | `list_runs` | `project`?, `state`?, `limit`? | `GET /v1/runs` |
-| `cancel_run` | `id`, `reason`? | `POST /v1/runs/{id}/cancel` |
+| `cancel_run` | `id`, `reason`?, `idempotency_key`? | `POST /v1/runs/{id}/cancel` |
 
 A tool result carries the API's JSON reply as text. An API error (`bad_request`, `not_found`, `rejected`, ...) is a
-result with `isError: true` and the text `<code>: <message>`; an unknown tool is the JSON-RPC error `-32602`.
+result with `isError: true` and the text `<code>: <message>`; an unknown tool is the JSON-RPC error `-32602`. `idempotency_key` works as the API's `Idempotency-Key`: the same key
+and arguments return the first result, other arguments are `idempotency_key_reused`.
 
 ## Protocol epochs
 

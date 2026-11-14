@@ -11,9 +11,11 @@ Code: `crates/aae-front/src/api/`. Reference: `docs/api/openapi.json`.
   sets `api_tcp`; the address must be loopback, and every request on it needs `Authorization: Bearer <token>`. The
   token is new at every daemon start and is written to `api.token` in the state directory, readable by the owner
   only. `api_tcp` cannot change on a reload.
-- **Format.** JSON in and out; errors are JSON with a code (`bad_request`, `not_found`, `rejected`, ...).
+- **Format.** JSON in and out; errors are JSON with a code (`bad_request`, `not_found`, `rejected`, ...). A malformed gate
+  key is `bad_request` (400).
 - **Idempotency.** Every mutating operation takes an `Idempotency-Key` header; a repeated key returns the first
-  answer. Keys are kept a day. `POST /v1/config/check` changes nothing and takes none.
+  answer. The key repeated with another method, path or body is refused with 422 `idempotency_key_reused` and
+  changes nothing. Keys are kept a day. `POST /v1/config/check` changes nothing and takes none.
 - **OpenAPI.** Generated from the code (`utoipa`); `crates/aae-front/tests/openapi.rs` fails when the committed
   document differs. Regenerate with `AAE_UPDATE_OPENAPI=1 cargo nextest run -p aae-front openapi`.
 - **Events** (`GET /v1/events`): SSE from a `seq` (or `Last-Event-ID`). A `seq` the journal rotated away is an

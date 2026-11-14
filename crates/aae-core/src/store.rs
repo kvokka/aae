@@ -198,6 +198,11 @@ pub fn open(path: &Path) -> rusqlite::Result<Connection> {
         (12, "CREATE TABLE triggers_off (id TEXT PRIMARY KEY);"),
         // An attempt whose failure parked the run on an account gate: outside the attempts ceiling (invariant 16).
         (13, "ALTER TABLE attempts ADD COLUMN waited INTEGER NOT NULL DEFAULT 0;"),
+        // What the request of an idempotency key was: a repeat of the key with another one is refused.
+        (
+            14,
+            "ALTER TABLE idempotency ADD COLUMN request TEXT NOT NULL DEFAULT '';",
+        ),
     ]
     .into_iter()
     .filter(|(to, _)| *to > version)

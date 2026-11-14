@@ -3,7 +3,7 @@
 use super::{ApiError, Body, Reply, State, key};
 use aae_core::{
     parse_rfc3339_ms,
-    run::{GateSpec, Msg},
+    run::{GateSpec, Msg, valid_key},
 };
 use axum::{
     Json,
@@ -34,6 +34,7 @@ pub(crate) struct CloseGate {
     params(("Idempotency-Key" = Option<String>, Header)),
     responses((status = OK, body = Object), (status = BAD_REQUEST, body = Object), (status = CONFLICT, body = Object)))]
 pub(crate) async fn close(state: State, headers: HeaderMap, Body(body): Body<CloseGate>) -> Reply {
+    valid(&body.key)?;
     let until_ms = match &body.until {
         Some(until) => Some(parse_rfc3339_ms(until).ok_or_else(|| {
             ApiError::new(
@@ -49,7 +50,9 @@ pub(crate) async fn close(state: State, headers: HeaderMap, Body(body): Body<Clo
         until_ms,
         reason: body.reason,
     };
-    Ok(Json(state.core.send(key(&headers), Msg::CloseGate(gate)).await?))
+    Ok(Json(
+        state.core.send_request(key(&headers), Msg::CloseGate(gate)).await?,
+    ))
 }
 
 #[derive(Deserialize, ToSchema)]
@@ -60,10 +63,19 @@ pub(crate) struct OpenGate {
 /// Opens a gate: every closure of the key goes, the policy's too.
 #[utoipa::path(post, path = "/v1/gates/open", request_body = OpenGate,
     params(("Idempotency-Key" = Option<String>, Header)),
-    responses((status = OK, body = Object), (status = CONFLICT, body = Object)))]
+    responses((status = OK, body = Object), (status = BAD_REQUEST, body = Object), (status = CONFLICT, body = Object)))]
 pub(crate) async fn open(state: State, headers: HeaderMap, Body(body): Body<OpenGate>) -> Reply {
+    valid(&body.key)?;
     let msg = Msg::OpenGate { key: body.key };
-    Ok(Json(state.core.send(key(&headers), msg).await?))
+    Ok(Json(state.core.send_request(key(&headers), msg).await?))
+}
+
+/// A malformed key is the request's fault (400); a well-formed one the core may still refuse (409).
+fn valid(key: &str) -> Result<(), ApiError> {
+    let message = || format!("`{key}` is not a gate key");
+    valid_key(key)
+        .then_some(())
+        .ok_or_else(|| ApiError::new(StatusCode::BAD_REQUEST, "bad_request", message()))
 }
 
 /// The wall clock, as the daemon's system clock reads it.

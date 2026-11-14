@@ -26,7 +26,7 @@ pub(crate) async fn fire(state: State, headers: HeaderMap, Body(body): Body<OnRi
         rig: body.rig,
         trigger: body.trigger,
     };
-    Ok(Json(state.core.send(key(&headers), msg).await?))
+    Ok(Json(state.core.send_request(key(&headers), msg).await?))
 }
 
 /// Switches a trigger on a rig back on: `{"trigger": name, "enabled": true}`.
@@ -53,7 +53,7 @@ async fn switch(state: State, headers: HeaderMap, body: OnRig, enabled: bool) ->
         trigger: body.trigger,
         enabled,
     };
-    Ok(Json(state.core.send(key(&headers), msg).await?))
+    Ok(Json(state.core.send_request(key(&headers), msg).await?))
 }
 
 /// Lists every trigger on every rig it runs on, with its source and next firing (`next_at`, null for an event

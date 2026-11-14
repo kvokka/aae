@@ -180,7 +180,10 @@ pub(crate) async fn reload(state: State, headers: HeaderMap) -> Reply {
         e.extra = json!({ "errors": errors });
         e
     })?);
-    let reply = state.core.send(key(&headers), Msg::Reload(config.clone())).await?;
+    let reply = state
+        .core
+        .send_request(key(&headers), Msg::Reload(config.clone()))
+        .await?;
     let generation = reply["config_generation"].as_u64().unwrap_or_default();
     if generation > *applied {
         *applied = generation;

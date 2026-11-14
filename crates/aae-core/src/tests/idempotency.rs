@@ -43,3 +43,21 @@ async fn a_key_is_forgotten_a_day_after_its_message() {
         "a forgotten key is a new message"
     );
 }
+
+#[tokio::test(start_paused = true)]
+async fn a_key_repeated_with_another_request_is_refused_and_changes_nothing() {
+    let dir = tempfile::tempdir().unwrap();
+    let db = dir.path().join("state.db");
+    let r = rig(&db, Clock::managed(T0), 0, Duration::ZERO);
+    let work = |dedupe| Msg::Work {
+        effect_key: "run-1",
+        dedupe,
+    };
+    let first = r.core.send_request(Some(("cmd-1", "a")), work("a")).await.unwrap();
+    let again = r.core.send_request(Some(("cmd-1", "a")), work("a")).await.unwrap();
+    assert_eq!(first, again);
+    let other = r.core.send_request(Some(("cmd-1", "b")), work("b")).await;
+    assert!(matches!(other, Err(crate::Error::KeyReused)), "{other:?}");
+    settle().await;
+    assert_eq!(max_seq(&rusqlite::Connection::open(&db).unwrap()), 1);
+}
