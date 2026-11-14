@@ -65,9 +65,10 @@ impl Stream {
         }
     }
 
-    /// We sent `control_request{interrupt}`: the next error result is `TurnEnded{Cancelled}`, never a failure.
+    /// We sent `control_request{interrupt}`: the error result of the open turn is `TurnEnded{Cancelled}`, never a
+    /// failure. With no turn open there is nothing to cancel, and a later turn's failure stays one.
     pub(crate) fn interrupted(&mut self) {
-        self.interrupted = true;
+        self.interrupted = self.open;
     }
 
     /// One stdout line seen at `now`; the events it yields, in order. Unknown types yield nothing.
