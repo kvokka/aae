@@ -404,26 +404,19 @@ tests of §7.8 (WP-28, WP-30).
 
 ### 5.1 Operations
 
-Twelve operations (§10.1); the trait in code carries those its callers use (the core: `claim`, `release`, `close`,
-`ready(None)`), and the adapter adds the rest with the API that needs them. Every call names the actor: `aae:<run id>` when the daemon acts for a run, `aae` for
+The trait has the five operations the core calls (spec §2.1 item 14: an operation is added when a caller needs it).
+Every call names the actor: `aae:<run id>` when the daemon acts for a run, `aae` for
 the daemon's own reads. Sessions and exec steps get `BD_ACTOR=aae:<run id>:<attempt n>` and the database path in
 their environment ([experiments](experiments.md#br-as-an-event-source-experiment-3)). An actor of any other form is a
 human or an outside tool and starts a new correlation chain (§9.5).
 
 ```rust
 trait Tracker: Send + Sync {
-    fn create(&self, actor: &str, bead: &NewBead) -> BoxFuture<Result<Bead, TrackerError>>;
-    fn show(&self, id: &str) -> BoxFuture<Result<Bead, TrackerError>>;
-    fn update(&self, actor: &str, id: &str, patch: &BeadPatch) -> BoxFuture<Result<Bead, TrackerError>>;
     fn claim(&self, owner: &str, id: &str) -> BoxFuture<Result<Bead, TrackerError>>;
     fn release(&self, owner: &str, id: &str) -> BoxFuture<Result<(), TrackerError>>;   // conditional
     fn close(&self, owner: &str, id: &str, reason: &str) -> BoxFuture<Result<(), TrackerError>>; // conditional
-    fn ready(&self, epic: Option<&str>) -> BoxFuture<Result<Vec<Bead>, TrackerError>>;
-    fn list(&self, filter: &BeadFilter) -> BoxFuture<Result<Vec<Bead>, TrackerError>>;
-    fn add_dependency(&self, actor: &str, id: &str, depends_on: &str) -> BoxFuture<Result<(), TrackerError>>;
-    fn comment(&self, actor: &str, id: &str, text: &str) -> BoxFuture<Result<(), TrackerError>>;
+    fn ready(&self) -> BoxFuture<Result<Vec<Bead>, TrackerError>>;          // every ready bead, tracker order
     fn changes(&self, after: i64) -> BoxFuture<Result<Vec<Change>, TrackerError>>;           // after a seq
-    fn health(&self) -> BoxFuture<Health>;
 }
 ```
 
@@ -433,7 +426,7 @@ made for and is dropped unless the run still owns the bead in that generation an
 
 `changes` is pull-only; the adapter also owns a watcher that sends a "changed" message to the core, and the core
 then calls `changes` from its stored cursor (and on start and after recovery without waiting for a signal). One
-effect on the queue `tracker:<project>` reads `changes(cursor)` and then `ready(None)`; the core turns the writes
+effect on the queue `tracker:<project>` reads `changes(cursor)` and then `ready()`; the core turns the writes
 past the cursor into events, moves the cursor (table `tracker_cursors`, never back) and diffs the ready set. The
 first read of a project's tracker takes its whole history as the starting cursor and raises no `bead.created|
 updated|closed` for it; every bead ready at that read is new to the set and raises `bead.ready`. A write whose actor
@@ -447,11 +440,9 @@ session and exec step of the project gets `BEADS_DIR` (layer: project) and `BD_A
 - `Bead`: `{id, title, description, status: "open"|"in_progress"|"blocked"|"deferred"|"closed", priority, labels,
   assignee, epic, created_at, updated_at, closed_at}`. `epic` is computed by the adapter (br has no such field,
   §10.2). The rig of a bead is its `rig:<name>` label.
-- `NewBead`: `{title, description, priority, labels, epic}`; `BeadPatch`: the same fields, all optional.
-- `BeadFilter`: `{status, labels (all must match), epic, assignee}`, all optional.
 - `Change`: `{seq, kind: "created"|"updated"|"closed", actor, changed: [field], bead: Bead}`; `seq` orders the
   writes and is the cursor of `changes(after)`, `bead` is the bead when the change is read; the core maps it to `bead.created`,
-  `bead.updated`, `bead.closed`, and derives `bead.ready` by diffing `ready(None)` with the last ready set it keeps
+  `bead.updated`, `bead.closed`, and derives `bead.ready` by diffing `ready()` with the last ready set it keeps
   in the state (a bead is "ready" the first time it enters the set, §9.5).
 - `TrackerError`: `NotFound`; `Claimed { holder }` (claim of a bead someone else holds — told by the state of the
   bead after the call, not by the exit code text, §10.2); `OwnerMismatch { holder }` (conditional release or close

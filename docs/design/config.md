@@ -310,6 +310,14 @@ timeout = "45m"                     # optional
 ```
 
 An `exec` step has `command = ["prog", "arg", ..]` (non-empty) and `timeout` instead of `agent` and `prompt`.
+Nothing is substituted into the command; it gets the run in its environment: `AAE_RUN`, `AAE_BEAD` (when the run has
+a bead) and `AAE_INPUT_<NAME>` per input (the name upper-cased, other characters than letters and digits as `_`; a
+string as it is, any other value as JSON).
+
+A run start checks the inputs: no undeclared one, every `required` one present, an `integer` input a JSON integer, a
+`boolean` one a JSON boolean. A `bead` input is a bead id or `{ next_ready = true, epic = <id> }`; a bead named by id
+that carries a `rig:` label of another rig is refused, at the start when the ready set knows the bead, else at its
+claim (the run fails with `bead_of_another_rig` and the claim is released).
 `worktree = true` gives each run of the formula, of either step kind, a git worktree that aae makes and removes (the
 bundled `worktree`, see below).
 

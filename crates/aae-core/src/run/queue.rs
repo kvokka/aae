@@ -36,6 +36,17 @@ impl RunHandler {
         if let Some((key, _)) = missing {
             return Err(rejected(format!("`{name}` needs input `{key}`")));
         }
+        let mistyped = c.inputs.iter().find_map(|(key, value)| {
+            let want = match formula.inputs[key].kind {
+                InputType::Integer if !value.is_i64() && !value.is_u64() => "an integer",
+                InputType::Boolean if !value.is_boolean() => "a boolean",
+                _ => return None,
+            };
+            Some(format!("input `{key}` of `{name}` must be {want}, not {value}"))
+        });
+        if let Some(why) = mistyped {
+            return Err(rejected(why));
+        }
         // A run holds at most one bead (spec §10.3); its input becomes the id of the bead it works on.
         let bead_input = formula
             .inputs

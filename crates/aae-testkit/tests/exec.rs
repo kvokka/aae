@@ -15,8 +15,14 @@ use std::{
 
 /// A world with the exec formula `check` running `sh -c <script>` with a 2 s timeout.
 fn check(script: &str) -> (World, Create) {
+    check_with("", script)
+}
+
+/// [`check`] with the `[inputs]` table `inputs`.
+fn check_with(inputs: &str, script: &str) -> (World, Create) {
     let formula = format!(
-        "name = \"check\"\n[step]\nkind = \"exec\"\ncommand = [\"sh\", \"-c\", {}]\ntimeout = \"2s\"\n",
+        "name = \"check\"\n[inputs]\n{inputs}[step]\nkind = \"exec\"\ncommand = [\"sh\", \"-c\", {}]\n\
+         timeout = \"2s\"\n",
         json!(script)
     );
     let w = world_with(
@@ -81,6 +87,40 @@ async fn exit_0_passes_with_the_output_tail_in_the_outcome() {
         stdout.starts_with(&format!("aae:{run}:1\n")),
         "the attempt is the tracker actor: {out}"
     );
+}
+
+#[tokio::test]
+async fn the_command_gets_the_run_and_its_inputs_in_the_environment_and_inputs_are_typed() {
+    let inputs = "n = { type = \"integer\" }\nflag = { type = \"boolean\" }\nnote-text = { type = \"string\" }\n";
+    let (w, _) = check_with(
+        inputs,
+        "echo \"$AAE_RUN $AAE_INPUT_N $AAE_INPUT_FLAG $AAE_INPUT_NOTE_TEXT ${AAE_BEAD-none}\"",
+    );
+    let with = |inputs: Value| Create {
+        project: "shop".into(),
+        rig: "web".into(),
+        formula: "check".into(),
+        inputs: inputs.as_object().unwrap().clone(),
+        correlation: None,
+        depth: 0,
+        parent_run: None,
+        continue_from: None,
+    };
+    let run = w
+        .start(with(json!({ "n": 3, "flag": true, "note-text": "a {b}" })))
+        .await;
+    let (kind, data) = w.end(&run).await;
+    assert_eq!(kind, "run.passed", "{data}");
+    let stdout = &data["outcome"]["data"]["stdout"];
+    assert_eq!(stdout, &json!(format!("{run} 3 true a {{b}} none\n")));
+    for (input, value) in [("n", json!("3")), ("flag", json!(1))] {
+        let refused = w
+            .core
+            .send(None, Msg::Create(with(json!({ input: value }))))
+            .await
+            .unwrap_err();
+        assert!(refused.to_string().contains("must be a"), "{input}: {refused}");
+    }
 }
 
 #[tokio::test]

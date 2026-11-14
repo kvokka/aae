@@ -20,6 +20,14 @@ impl RunHandler {
     /// ready (§10.3).
     pub(super) fn pick_bead(tx: &Tx<'_>, project: &str, rig: &str, input: &Value) -> Result<Option<String>, Error> {
         if let Some(id) = input.as_str() {
+            // A bead that names another rig is refused here when the ready list knows it, else when it is claimed.
+            let sql = "SELECT body FROM ready_beads WHERE project = ?1 AND id = ?2";
+            let body: Option<Value> = tx.sql().query_row(sql, [project, id], |r| r.get(0)).optional()?;
+            if body.is_some_and(|b| other_rig(&b, rig)) {
+                return Err(rejected(format!(
+                    "bead `{id}` is labelled for another rig than `{rig}`"
+                )));
+            }
             return Ok(Some(id.to_owned()));
         }
         if input["next_ready"] != json!(true)
@@ -37,17 +45,9 @@ impl RunHandler {
              (SELECT 1 FROM beads b WHERE b.project = r.project AND b.id = r.id AND b.owner IS NOT NULL) ORDER BY r.pos",
         )?;
         let ready = stmt.query_map([project], |r| Ok((r.get::<_, String>(0)?, r.get::<_, Value>(1)?)))?;
-        let rig_label = format!("rig:{rig}");
         for bead in ready {
             let (id, body) = bead?;
-            let labels: Vec<&str> = body["labels"]
-                .as_array()
-                .into_iter()
-                .flatten()
-                .filter_map(Value::as_str)
-                .collect();
-            let other_rig = labels.iter().any(|l| l.starts_with("rig:")) && !labels.contains(&rig_label.as_str());
-            if epic.is_some_and(|e| body["epic"] != e) || other_rig {
+            if epic.is_some_and(|e| body["epic"] != e) || other_rig(&body, rig) {
                 continue;
             }
             let key = [format!("bead:{project}/{id}")];
@@ -129,6 +129,10 @@ impl RunHandler {
                     return Ok(());
                 }
                 tx.clear_deadline(&row.deadline("state"))?;
+                if other_rig(&json!(data), &row.rig) {
+                    // Still owned, so the end of the run releases the claim.
+                    return self.terminal(tx, row, "failed", Some("infrastructure"), "bead_of_another_rig");
+                }
                 tx.sql().execute(
                     "UPDATE runs SET bead_data = ?2 WHERE id = ?1",
                     params![run, json!(data).to_string()],
@@ -320,4 +324,12 @@ pub(super) async fn execute(trackers: &Trackers, core: &CoreHandle<Msg>, payload
         )
         .await;
     !retry
+}
+
+/// A bead (as JSON) with a `rig:` label, none of them `rig:<rig>`, belongs to another rig (spec §2.1 item 14).
+fn other_rig(bead: &Value, rig: &str) -> bool {
+    let rigs: Vec<&str> = (bead["labels"].as_array().into_iter().flatten())
+        .filter_map(|l| l.as_str()?.strip_prefix("rig:"))
+        .collect();
+    !rigs.is_empty() && !rigs.contains(&rig)
 }

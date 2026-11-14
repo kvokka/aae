@@ -69,15 +69,14 @@ impl fmt::Display for TrackerError {
     }
 }
 
-/// The operations of contracts 5.1 the core calls; `owner` is `aae:<run id>`. The adapter adds the rest of the twelve
-/// as the API and the event source need them.
+/// The operations of contracts 5.1, those the core calls; `owner` is `aae:<run id>`.
 pub trait Tracker: Send + Sync {
     fn claim<'a>(&'a self, owner: &'a str, id: &'a str) -> BoxFuture<'a, Result<Bead, TrackerError>>;
     /// Conditional on `assignee == owner`.
     fn release<'a>(&'a self, owner: &'a str, id: &'a str) -> BoxFuture<'a, Result<(), TrackerError>>;
     /// Conditional on `assignee == owner`.
     fn close<'a>(&'a self, owner: &'a str, id: &'a str, reason: &'a str) -> BoxFuture<'a, Result<(), TrackerError>>;
-    /// Every ready bead, in the tracker's order (`ready(None)` of contracts 5.1: the core picks within an epic itself).
+    /// Every ready bead, in the tracker's order (the core picks within an epic itself).
     fn ready(&self) -> BoxFuture<'_, Result<Vec<Bead>, TrackerError>>;
     /// The writes after `after` (a `seq`, 0 for all), oldest first.
     fn changes(&self, after: i64) -> BoxFuture<'_, Result<Vec<Change>, TrackerError>>;

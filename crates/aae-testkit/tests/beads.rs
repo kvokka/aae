@@ -206,6 +206,11 @@ async fn a_bead_someone_else_holds_fails_the_run_as_bead_claimed_and_stays_their
     );
     assert_eq!(w.tracker.bead(&bead).unwrap().assignee.as_deref(), Some("alice"));
     assert!(w.all("resync.diverged").is_empty(), "nothing of alice's was released");
+    // One of another rig the ready set has not seen fails at its claim, which is released.
+    let unseen = w.tracker.add(&["rig:api"], None);
+    let events = w.events(&w.run_on(json!(unseen)).await, Duration::from_secs(1)).await;
+    let failed = (&last(&events, "run.failed")["reason"], w.assignee(&unseen));
+    assert_eq!(failed, (&json!("bead_of_another_rig"), None));
 }
 
 #[tokio::test(start_paused = true)]
@@ -263,6 +268,9 @@ async fn a_trigger_on_the_next_ready_bead_takes_each_bead_once_then_skips_with_n
     );
     let third = w.core.send(None, fire()).await.unwrap();
     assert_eq!(third["skipped"], "nothing_ready");
+    // Named by id, a bead of another rig the ready set knows is refused at once.
+    let refused = w.fix(json!(beads[1])).await.unwrap_err().to_string();
+    assert!(refused.contains("another rig"), "{refused}");
 }
 
 #[tokio::test(start_paused = true)]

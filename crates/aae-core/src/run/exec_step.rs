@@ -54,6 +54,26 @@ impl RunHandler {
             env.retain(|(k, _)| *k != name);
             env.push((name, json!(format!("aae:{}:{}", row.id, row.attempt))));
         }
+        // The context of the run goes in the environment only, never into the command (spec §2.1 item 10).
+        let inputs: serde_json::Map<String, Value> = serde_json::from_str(&row.inputs).unwrap_or_default();
+        let mut context = vec![("AAE_RUN".to_owned(), json!(row.id))];
+        context.extend(row.bead.as_ref().map(|bead| ("AAE_BEAD".to_owned(), json!(bead))));
+        for (name, value) in inputs {
+            let name: String = name
+                .chars()
+                .map(|c| {
+                    if c.is_ascii_alphanumeric() {
+                        c.to_ascii_uppercase()
+                    } else {
+                        '_'
+                    }
+                })
+                .collect();
+            let text = value.as_str().map_or_else(|| value.to_string(), str::to_owned);
+            context.push((format!("AAE_INPUT_{name}"), json!(text)));
+        }
+        env.retain(|(k, _)| !context.iter().any(|(c, _)| c == k));
+        env.extend(context);
         let timeout_ms = row.timeout_ms.unwrap_or(super::machine::STEP_TIMEOUT_MS);
         // Run ids repeat across daemons; the marker that recovery kills the command by must not.
         let Some(token) = super::new_token() else {
