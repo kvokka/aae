@@ -1,0 +1,369 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Snake</title>
+<style>
+  body {
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    background: #1e1e24;
+    color: #eee;
+    margin: 0;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+  h1 { margin: 8px 0 16px; }
+  #layout {
+    display: flex;
+    gap: 24px;
+    align-items: flex-start;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+  canvas {
+    background: #111;
+    border: 2px solid #444;
+    display: block;
+  }
+  #status { margin: 10px 0; min-height: 1.4em; }
+  #side { min-width: 220px; }
+  #score { font-weight: bold; }
+  h2 { margin: 12px 0 6px; font-size: 1.2em; }
+  #scores-msg { min-height: 1.2em; margin-bottom: 6px; }
+  #scores-msg.error { color: #ff8a8a; }
+  #scores { padding-left: 28px; margin: 0; }
+  #scores li { margin: 2px 0; }
+  #scores .sc { float: right; margin-left: 16px; font-variant-numeric: tabular-nums; }
+  button {
+    font: inherit;
+    padding: 6px 14px;
+    background: #3a7bd5;
+    color: #fff;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+  }
+  button:disabled { background: #555; cursor: default; }
+</style>
+</head>
+<body>
+<h1>Snake</h1>
+<div id="layout">
+  <div>
+    <canvas id="board" width="400" height="400" tabindex="0"></canvas>
+    <div id="status">Press Enter or Space to start. Use the arrow keys to steer.</div>
+    <button id="restart" type="button" disabled>New game</button>
+  </div>
+  <div id="side">
+    <div>Score: <span id="score">0</span></div>
+    <h2>Top 10</h2>
+    <div id="scores-msg">Loading scores…</div>
+    <ol id="scores"></ol>
+  </div>
+</div>
+
+<script>
+(function () {
+  'use strict';
+
+  var API = 'http://127.0.0.1:8765';
+  var COLS = 20;
+  var ROWS = 20;
+  var CELL = 20;
+  var TICK_MS = 120;
+  var MAX_QUEUED_TURNS = 3;
+
+  var canvas = document.getElementById('board');
+  var ctx = canvas.getContext('2d');
+  var statusEl = document.getElementById('status');
+  var scoreEl = document.getElementById('score');
+  var restartBtn = document.getElementById('restart');
+  var scoresMsg = document.getElementById('scores-msg');
+  var scoresList = document.getElementById('scores');
+
+  var DIRS = {
+    ArrowUp:    { x: 0,  y: -1 },
+    ArrowDown:  { x: 0,  y: 1 },
+    ArrowLeft:  { x: -1, y: 0 },
+    ArrowRight: { x: 1,  y: 0 }
+  };
+
+  // Game state
+  var state = 'idle';      // 'idle' | 'running' | 'over' | 'submitting'
+  var snake = [];
+  var dir = { x: 1, y: 0 };
+  var queue = [];          // pending direction changes, applied one per tick
+  var food = { x: 0, y: 0 };
+  var score = 0;
+  var timer = null;
+
+  function setStatus(text) {
+    statusEl.textContent = text;
+  }
+
+  function setScoresMessage(text, isError) {
+    scoresMsg.textContent = text;
+    scoresMsg.className = isError ? 'error' : '';
+  }
+
+  function isOccupied(x, y, cells) {
+    for (var i = 0; i < cells.length; i++) {
+      if (cells[i].x === x && cells[i].y === y) return true;
+    }
+    return false;
+  }
+
+  function placeFood() {
+    var x, y;
+    do {
+      x = Math.floor(Math.random() * COLS);
+      y = Math.floor(Math.random() * ROWS);
+    } while (isOccupied(x, y, snake));
+    food = { x: x, y: y };
+  }
+
+  function resetGame() {
+    snake = [
+      { x: 10, y: 10 },
+      { x: 9, y: 10 },
+      { x: 8, y: 10 }
+    ];
+    dir = { x: 1, y: 0 };
+    queue = [];
+    score = 0;
+    scoreEl.textContent = '0';
+    placeFood();
+  }
+
+  function draw() {
+    ctx.fillStyle = '#111';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    // food
+    ctx.fillStyle = '#e74c3c';
+    ctx.beginPath();
+    ctx.arc(food.x * CELL + CELL / 2, food.y * CELL + CELL / 2, CELL / 2 - 2, 0, Math.PI * 2);
+    ctx.fill();
+
+    // snake
+    for (var i = 0; i < snake.length; i++) {
+      ctx.fillStyle = i === 0 ? '#2ecc71' : '#27ae60';
+      ctx.fillRect(snake[i].x * CELL + 1, snake[i].y * CELL + 1, CELL - 2, CELL - 2);
+    }
+
+    // overlay when not playing
+    if (state !== 'running') {
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.55)';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.fillStyle = '#fff';
+      ctx.textAlign = 'center';
+      ctx.font = 'bold 28px sans-serif';
+      var title = state === 'idle' ? 'SNAKE' : 'GAME OVER';
+      ctx.fillText(title, canvas.width / 2, canvas.height / 2 - 10);
+      ctx.font = '16px sans-serif';
+      var sub = state === 'idle' ? 'Press Enter or Space to start'
+              : state === 'ending' ? ''
+              : state === 'submitting' ? 'Saving score…'
+              : 'Press Enter or Space to play again';
+      ctx.fillText(sub, canvas.width / 2, canvas.height / 2 + 20);
+    }
+  }
+
+  function stopTimer() {
+    if (timer !== null) {
+      clearInterval(timer);
+      timer = null;
+    }
+  }
+
+  function step() {
+    if (queue.length > 0) {
+      dir = queue.shift();
+    }
+
+    var head = { x: snake[0].x + dir.x, y: snake[0].y + dir.y };
+    var ate = head.x === food.x && head.y === food.y;
+
+    // Wall collision
+    if (head.x < 0 || head.x >= COLS || head.y < 0 || head.y >= ROWS) {
+      gameOver();
+      return;
+    }
+
+    // Self collision. The tail cell moves away this tick unless we eat,
+    // so it is only a collision when the snake grows.
+    var body = ate ? snake : snake.slice(0, snake.length - 1);
+    if (isOccupied(head.x, head.y, body)) {
+      gameOver();
+      return;
+    }
+
+    snake.unshift(head);
+    if (ate) {
+      score += 1;
+      scoreEl.textContent = String(score);
+      placeFood();
+    } else {
+      snake.pop();
+    }
+    draw();
+  }
+
+  function startGame() {
+    if (state === 'running' || state === 'submitting') return;
+    stopTimer();
+    resetGame();
+    state = 'running';
+    restartBtn.disabled = true;
+    setStatus('Game on! Score: 0');
+    draw();
+    timer = setInterval(step, TICK_MS);
+  }
+
+  function gameOver() {
+    stopTimer();
+    state = 'ending';   // blocks new starts until the name prompt is handled
+    draw();
+    setStatus('Game over! Your score: ' + score);
+    // Let the final frame paint before the blocking prompt.
+    setTimeout(handleGameOver, 0);
+  }
+
+  // Ask for a single-token, non-empty name. Returns null if the player cancels.
+  function askName(finalScore) {
+    var message = 'Game over! Score: ' + finalScore + '\nEnter your name:';
+    for (;;) {
+      var value = window.prompt(message);
+      if (value === null) return null;
+      var name = value.trim().replace(/\s+/g, '_');
+      if (name !== '') return name;
+      message = 'The name cannot be empty. Enter your name:';
+    }
+  }
+
+  function handleGameOver() {
+    var finalScore = score;
+    var name = askName(finalScore);
+    if (name === null) {
+      setStatus('Score not submitted. Press Enter or Space, or click New game, to play again.');
+      afterRound();
+      loadScores();
+      return;
+    }
+    submitScore(name, finalScore);
+  }
+
+  function submitScore(name, finalScore) {
+    state = 'submitting';
+    draw();
+    setStatus('Saving score…');
+    restartBtn.disabled = true;
+
+    fetch(API + '/scores', {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain' },
+      body: name + ' ' + finalScore
+    })
+      .then(function (res) {
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        setStatus('Score saved for ' + name + ' (' + finalScore + ').');
+      })
+      .catch(function (err) {
+        setStatus('Could not save score (' + err.message + '). The game still works without the backend.');
+      })
+      .then(function () {
+        afterRound();
+        return loadScores();
+      });
+  }
+
+  function afterRound() {
+    state = 'over';
+    restartBtn.disabled = false;
+    draw();
+  }
+
+  function parseScores(text) {
+    var entries = [];
+    var lines = text.split(/\r?\n/);
+    for (var i = 0; i < lines.length; i++) {
+      var line = lines[i].trim();
+      if (line === '') continue;
+      var parts = line.split(' ');
+      if (parts.length < 2) continue;
+      entries.push({ name: parts[0], score: parts[parts.length - 1] });
+    }
+    return entries.slice(0, 10);
+  }
+
+  function loadScores() {
+    setScoresMessage('Loading scores…', false);
+    scoresList.innerHTML = '';
+    return fetch(API + '/scores', { cache: 'no-store' })
+      .then(function (res) {
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        return res.text();
+      })
+      .then(function (text) {
+        var entries = parseScores(text);
+        scoresList.innerHTML = '';
+        if (entries.length === 0) {
+          setScoresMessage('No scores yet.', false);
+          return;
+        }
+        setScoresMessage('', false);
+        for (var i = 0; i < entries.length; i++) {
+          var li = document.createElement('li');
+          var nameSpan = document.createElement('span');
+          nameSpan.textContent = entries[i].name;
+          var scoreSpan = document.createElement('span');
+          scoreSpan.className = 'sc';
+          scoreSpan.textContent = entries[i].score;
+          li.appendChild(nameSpan);
+          li.appendChild(scoreSpan);
+          scoresList.appendChild(li);
+        }
+      })
+      .catch(function (err) {
+        scoresList.innerHTML = '';
+        setScoresMessage('Score list unavailable: could not reach the backend at ' +
+          API + ' (' + err.message + ').', true);
+      });
+  }
+
+  function queueTurn(next) {
+    var last = queue.length > 0 ? queue[queue.length - 1] : dir;
+    // Reject reversing into the snake (opposite of the last planned direction).
+    if (next.x === -last.x && next.y === -last.y) return;
+    if (next.x === last.x && next.y === last.y) return;
+    if (queue.length >= MAX_QUEUED_TURNS) return;
+    queue.push(next);
+  }
+
+  window.addEventListener('keydown', function (e) {
+    if (DIRS.hasOwnProperty(e.key)) {
+      e.preventDefault();  // stop the page from scrolling
+      if (state === 'running') queueTurn(DIRS[e.key]);
+      return;
+    }
+    if (e.key === 'Enter' || e.key === ' ' || e.key === 'Spacebar') {
+      e.preventDefault();
+      if (state === 'idle' || state === 'over') startGame();
+    }
+  });
+
+  restartBtn.addEventListener('click', function () {
+    if (state === 'idle' || state === 'over') startGame();
+  });
+
+  // Initial screen
+  resetGame();
+  draw();
+  loadScores();
+})();
+</script>
+</body>
+</html>

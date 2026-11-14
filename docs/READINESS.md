@@ -10,20 +10,21 @@ code assessed. Updated at the end of every work session.
 them: one with a `FAIL` row (or, in a full run, a row not run) holds the score at 6, a 10 needs criterion 20 green,
 and the marker below must name a commit at or after the last change of `crates/`.
 
-Assessed 2026-11-14 at `7942f5e`. The model-free rows and the cargo tests were green on the code before this
-session's changes and are checked again by the CI run of this commit; criterion 8 passed 10 of 10 runs under a load
-of 8 busy cores at `1dee5b0`, its orphan check now able to fail. The rows with a real model (2, 4a, the live rows of
-8 and 17) and the release builds (1) were last green at `495f0e6` and earlier: since then the core's recovery, both
-harness adapters, the config and the CLI changed, and no full `mise run acceptance` ran on this code (the last full
-run was at `5c5014f`). The components with such a criterion stay at 6 until a full run shows it green.
-<!-- MEASURE id=readiness date=2026-11-14 ver=56063f0 env=linux-arm64-orbstack src=docs/READINESS.md note="assessed against the letter of the scale; the model rows are open until a full run on this code" -->
+Assessed 2026-11-15 at `bf45900`, after the second audit: launch settings (provider, the harness derived from it,
+short model names, pack, formula and variant layers), child runs and `aae run wait`, and the demos rebuilt as a
+planner and its workers. The model-free rows and the cargo tests are checked by the full `mise run ci` and
+`acceptance-ci` on this code. Demo 1 (`snake-claude`) passed live on this code; demo 2 (`snake-mixed`) did not run:
+codex is not logged in on the owner's host. The rows with a real model (2, 4a, the live rows of 8 and 17) and the
+release builds (1) did not run on this code: the components with such a criterion stay at 6, and none reaches 10
+while a row of criterion 20 has not run.
+<!-- MEASURE id=readiness date=2026-11-15 ver=bf45900 env=linux-arm64-orbstack src=docs/READINESS.md note="assessed against the letter of the scale; the model rows are open until a full run on this code" -->
 
 | Component | Criteria | Score | Missing for the next point |
 |---|---|---|---|
 | Event loop and state | 6, 7, 8, 18 | 6 | 8: the live rows of criterion 8 (`kill -9` mid-turn of claude and codex) on this code |
 | Runs and finisher | 2, 3, 4, 4a | 6 | 8: rows 2 and 4a with a real model on this code |
 | Triggers and schedules | 5a, 5b, 6 | 8 | 10: criterion 20; 5b runs on the wall clock, not a managed one |
-| Issue gates | 10, 19 | 8 | 10: criterion 20; a model gate is learned only from a run's own failure |
+| Issue gates | 10, 19 | 8 | 10: criterion 20 |
 | Recovery | 8, 9 | 6 | 8: the live rows of criterion 8 on this code (recovery changed in this session) |
 | Config assembly | 12, 13 | 8 | 10: criterion 20 |
 | Instance and service registry | 13, 14 | 8 | 10: criterion 20 |
