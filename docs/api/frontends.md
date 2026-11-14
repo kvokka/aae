@@ -51,6 +51,9 @@ Code: `crates/aae-front/src/cli/`. The CLI is a thin client of the HTTP API in t
   any other command says that no daemon listens on the socket and how to start one. `aae config check` and
   `aae config explain` load the config file themselves as the daemon would (`--config <file>`, default
   `$XDG_CONFIG_HOME/aae/config.toml`) and print what the API would answer for it.
+- `aae doctor` has no API operation: it checks the host for a daemon that may not run yet (harness and br binaries,
+  logins, private directories, the state file), from the shell that will start it. A running daemon reports its own
+  state in `GET /v1/daemon` instead (journal, outbox, runs in a turn).
 - A refused `aae config reload` prints the errors of the file, one per line.
 
 ## MCP
