@@ -50,7 +50,13 @@ pub(crate) fn findings(paths: &Paths) -> Vec<Value> {
     match load(paths) {
         Err(errors) => found.extend(errors.into_iter().map(|e| check("config", "error", e))),
         Ok(config) => {
-            found.push(check("config", "ok", paths.config.display().to_string()));
+            let path = paths.config.display();
+            let detail = if paths.config.exists() {
+                path.to_string()
+            } else {
+                format!("no config file at {path}, the defaults")
+            };
+            found.push(check("config", "ok", detail));
             for (name, harness) in &config.harnesses {
                 // `load` refused a harness with no adapter.
                 let Some(adapter) = adapter(name) else { continue };

@@ -312,3 +312,15 @@ async fn the_daemon_answers_the_same_checks_over_the_api() {
     assert_eq!(state["level"], "ok", "the state the daemon holds open: {state}");
     assert!(state["detail"].as_str().unwrap().starts_with("outbox: "), "{state}");
 }
+
+#[test]
+fn with_no_config_file_the_defaults_are_named() {
+    let dir = tree("");
+    fs::remove_file(dir.path().join("config/aae/config.toml")).unwrap();
+    let (_, found) = doctor(dir.path());
+    let (config, why) = level(&found, "config");
+    assert!(
+        config == "ok" && why.starts_with("no config file at ") && why.ends_with(", the defaults"),
+        "{found:?}"
+    );
+}
