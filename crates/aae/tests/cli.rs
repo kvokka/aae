@@ -150,6 +150,18 @@ fn the_config_is_checked_and_explained_without_a_daemon() {
         "dev",
     ]);
     assert!(!out.status.success());
+    // A reader that went away (`aae config explain | head -1`): a quiet SIGPIPE exit, not a panic.
+    let (reader, writer) = std::io::pipe().unwrap();
+    drop(reader);
+    let out = (Command::new(env!("CARGO_BIN_EXE_aae")))
+        .args(["config", "explain", "--project", "shop", "--agent", "dev"])
+        .env("AAE_SOCKET", "/nonexistent/aae.sock")
+        .env("XDG_CONFIG_HOME", dir.path().join("config"))
+        .stdout(writer)
+        .output()
+        .unwrap();
+    assert_eq!(out.status.code(), Some(141), "{}", String::from_utf8_lossy(&out.stderr));
+    assert!(out.stderr.is_empty(), "{}", String::from_utf8_lossy(&out.stderr));
 }
 
 /// The config by hand (spec §12): lists, the effective config of an agent with the layer of every value, a check

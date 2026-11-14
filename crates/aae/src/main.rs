@@ -14,6 +14,9 @@ fn main() -> ExitCode {
     // Taken now: once the binary is replaced on disk, Linux names the running one `<path> (deleted)`.
     let exe = std::env::current_exe().unwrap_or_else(|_| "aae".into());
     let cli = Cli::parse();
+    if !matches!(cli.command, Command::Daemon { service: None, .. }) {
+        quiet_on_closed_stdout();
+    }
     let config = match cli.command {
         Command::Daemon {
             config,
@@ -67,4 +70,17 @@ fn main() -> ExitCode {
             ExitCode::FAILURE
         }
     }
+}
+
+/// A command whose reader went away (`aae status | head -1`) ends quietly with the exit of a SIGPIPE, as other CLI
+/// tools do, not with a panic of `print!`. Only the CLI: the daemon is not printing to a reader.
+fn quiet_on_closed_stdout() {
+    let default = std::panic::take_hook();
+    std::panic::set_hook(Box::new(move |info| {
+        let message = info.payload().downcast_ref::<String>();
+        if message.is_some_and(|m| m.starts_with("failed printing to stdout") && m.contains("Broken pipe")) {
+            std::process::exit(141);
+        }
+        default(info);
+    }));
 }
