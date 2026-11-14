@@ -192,8 +192,9 @@ timeout = "30s"
 - Hooks run after commit, outside the core loop; the result enters the core as a message. Hooks of different
   events run concurrently; the hooks of one run are serialized in `seq` order on two queues: deciding events on
   one, observed events on the other (see 3.5), so an observer never delays a decision.
-- Delivery is at least once: a hook cut by a daemon crash runs again after restart (see 3.4). Hooks must be
-  idempotent; `seq` identifies the event.
+- Delivery is at least once: a hook cut by a daemon crash runs again after restart if its run is still in the state
+  that emitted the event (see 3.4); observed hooks always run again. Hooks must be idempotent; `seq` identifies the
+  event.
 
 ### 3.2 Decisions
 
@@ -240,8 +241,10 @@ until `human_timeout`.
 The hook effect of a deciding event stays queued until its decision is committed (see 3.5). A decision message names the event
 `seq` and the run generation of the event; the core applies it only if the run is still in the state that emitted
 that event with that generation, else it is dropped as stale and nothing changes. After a restart the dispatcher
-runs the hooks of every deciding event still pending; the run waits in its state meanwhile (the run was moved to
-`interrupted` by recovery only if it had a live attempt, see 6.4).
+runs the hooks of every deciding event still pending; the run waits in its state meanwhile. Recovery first drops
+the pending deciding hooks of every run it moves to `interrupted` (a run with a live attempt: `starting`, `running`,
+`requires_action`, `finishing`, see 6.4): they judge the lost attempt, and that attempt's `attempt_failed` queues
+its own hooks.
 
 ### 3.5 Outbox lifetime
 

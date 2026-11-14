@@ -107,7 +107,9 @@ the `require` parameter, so the run fails with class `check` and the reason from
 ## Rules worth keeping
 
 - **Be idempotent.** Delivery is at least once: a hook cut by a daemon crash runs again after the restart, with the
-  same `seq`.
+  same `seq`, if its run is still in the state that emitted the event. A deciding hook of a run that had a live
+  attempt (`run.finishing`, `run.requires_action`, `run.turn_ended_without_outcome`) does not run again: the
+  restart interrupts that attempt, and the policy's next attempt emits fresh events.
 - **Be quick.** A deciding hook holds its run until it answers or times out.
 - **Parse JSON properly.** The example uses `sed` to stay dependency-free; a real hook should use `jq` or a real
   JSON parser.
