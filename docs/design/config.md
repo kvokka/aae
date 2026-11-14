@@ -400,7 +400,10 @@ payload, as do the paths of `where`. `rig` is allowed only in a project's `[[tri
 - A trigger on `trigger.skipped` is a config error: a skip that fires a trigger could skip again forever.
 - A run started by a trigger is one level deeper than the run of its event (1 without one, a schedule included);
   past depth 10 the firing is skipped with `depth`. Loops are bounded by this depth, not by the length of a chain:
-  a long epic is legal. Repeated runs over one bead are bounded by the bead's failure count (`bead_failures`).
+  a long epic is legal. A `bead.ready` event does not add a level: a bead made ready by the run that closed its
+  blocker is the tracker's next work, not a run that run started, so its run keeps the depth of the event's run
+  (at least 1) and an epic of beads each blocked by the last runs to its end. Repeated runs over one bead are
+  bounded by the bead's failure count (`bead_failures`).
 
 ### How runs start and what a firing guarantees
 

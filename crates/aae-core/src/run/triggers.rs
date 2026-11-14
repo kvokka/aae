@@ -11,7 +11,8 @@ use crate::{
 use rusqlite::{OptionalExtension, params};
 use serde_json::{Map, Value, json};
 
-/// Trigger depth (contracts 6.1): a run started by a trigger is one deeper than the run that caused it.
+/// Trigger depth (contracts 6.1): a run started by a trigger is one deeper than the run that caused it, except on
+/// `bead.ready`.
 const MAX_DEPTH: i64 = 10;
 
 /// One trigger on one rig of its project.
@@ -289,7 +290,10 @@ impl RunHandler {
             }
             None => None,
         };
-        let depth = parent_depth.map_or(1, |d| d + 1);
+        // A bead made ready is the next work of the tracker, not a run the parent started (spec §9.5, §2 item 18):
+        // it keeps its parent's depth, so a long epic is legal; a bead retried in a loop is bounded by its failures.
+        let step = i64::from(cause.is_none_or(|e| e["type"] != "bead.ready"));
+        let depth = parent_depth.map_or(1, |d| (d + step).max(1));
         if depth > MAX_DEPTH {
             return skip(tx, "depth", format!("depth {depth} is over {MAX_DEPTH}"));
         }
