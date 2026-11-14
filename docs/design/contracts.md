@@ -80,7 +80,7 @@ Shared objects:
   run, newest last, at most 20 entries.
 - `Outcome`: `{result: "pass"|"fail", summary, data}`; `summary` ≤ 4 KiB, `data` any JSON ≤ 64 KiB.
 
-Observed events (§5.4):
+Observed events (plugins and clients read them and cannot change what happens):
 
 | Type | `data` |
 |---|---|
@@ -108,8 +108,18 @@ Observed events (§5.4):
 | `plugin.hook_failed` | `{plugin, hook_type, event_seq, error: "spawn"\|"timeout"\|"exit"\|"output", exit_code, stderr_tail}` |
 | `resync.diverged` | `{subject: "process"\|"instance"\|"run"\|"bead"\|"gate", id, expected, observed}` (no automatic effect follows, invariant 20) |
 
-Deciding events (§5.4; decisions: see 3). Each carries `deadline`, the time after which the core applies the
-"no plugin decision" column:
+Deciding events (an exec hook of a plugin may change what happens; decisions: see 3). The last column is what the
+core does when no plugin decides, `default-policy` switched off included:
+
+| Type | What a hook may do | No plugin decision |
+|---|---|---|
+| `run.preparing` | change the workdir and the env, add to the prompt, deny the start | start as is |
+| `run.requires_action` | answer the permission request or the question | wait for a human answer through the API until `human_timeout` (default 1 h), then answer `deny`; the run goes back to `running` |
+| `run.attempt_failed` | choose the reaction to the typed failure: resume, new session, park on a gate until a time, fail | `failed{infrastructure}`, reason `no_decision` |
+| `run.turn_ended_without_outcome` | return a remark to the agent and go on, or fail | `failed{hollow_done}`, reason `no_decision` |
+| `run.finishing` | veto a `pass` with a reason, or return a remark to the agent | the outcome is taken as declared |
+
+Each of them carries `deadline`, the time after which the core applies the "no plugin decision" column (see 3.3):
 
 | Type | `data` |
 |---|---|
@@ -122,6 +132,10 @@ Deciding events (§5.4; decisions: see 3). Each carries `deadline`, the time aft
 `remarks` is the number of remarks already returned in this attempt. `gates` lists every closed gate whose key
 applies to the run; `keys` lists the gate keys of the run (7), so a policy can name the account, model, agent or rig
 gate in its decision. Credentials and environment values never enter an event: the journal is not a secret store.
+
+Every refusal of the core to act on its own writes an event with its reason (`run.queued` with `waiting_for`,
+`trigger.skipped`, `gate.closed`, `run.failed` with `reason`, ...): the core never waits silently. A refused API
+request is answered with an error instead.
 
 ## 2. Filter and template language
 
@@ -148,8 +162,8 @@ expression in the first release; a trigger that needs more uses an `exec` step t
 
 ### 2.3 Substitution (`inputs` and prompt templates)
 
-One language for trigger `inputs` (§9.5) and prompt templates (§9.1): `{{ path }}` with optional spaces, nothing
-else — no filters, conditions or loops.
+One language for trigger `inputs` (§9.5) and prompt templates (`config.md`, "Formula"): `{{ path }}` with optional
+spaces, nothing else — no filters, conditions or loops.
 
 - In `inputs` the root is `event` (`{{ event.bead.epic }}`); a schedule trigger has no event, so any placeholder
   there is a config error.
@@ -159,10 +173,11 @@ else — no filters, conditions or loops.
 - An unresolved path in `inputs` (absent or null at fire time) skips the firing:
   `trigger.skipped{reason: "input_unresolved", detail: <path>}`.
 - In a prompt template the roots are `inputs`, `bead` (when the run has one), `rig`, `run` and `project`; an
-  unresolved path is an error before the run starts (§9.1) and fails the run with class `infrastructure`.
+  unresolved path is an error before the run starts and fails the run with class `infrastructure`.
 - `{{` that is not a placeholder is written `{{"{{"}}`.
 
-A bead input is either a bead id (string) or `{ next_ready = true, epic = <id or absent> }` (§10.3).
+A bead input is either a bead id (string) or `{ next_ready = true, epic = <id or absent> }`
+([tracker-br.md](tracker-br.md#beads-and-runs)).
 
 ## 3. Orchestrator hooks: decisions and timeouts
 
@@ -277,7 +292,9 @@ its own hooks.
 The core owns one driver per harness, behind one object-safe trait; the binary wires the claude and codex adapters
 in, tests wire the scripted driver in (`crates/aae-testkit`). Futures are boxed; events go to the core through a
 sink handed to `start_instance`. The adapter translates and executes; it never retries a turn, parks or decides
-an outcome (§4, §7.2).
+an outcome (§4; adapter duties in 4.4–4.6). The interface has no steer in the middle of a turn, no model change
+inside a live session and no way for a human to join a live session
+([frontends](../api/frontends.md#humans-and-runs)).
 
 In code (`crates/aae-core/src/driver.rs`) `Capabilities.versions` joins with the first adapter (WP-27): until then
 it has no producer.
@@ -312,18 +329,18 @@ trait Driver: Send + Sync {
 
 | Type | Content |
 |---|---|
-| `EffectiveConfig` | the merged harness-neutral categories of §6.2 (model, effort, env, MCP servers, harness hooks, skills, system prompt, permission mode, plugin parts, host inheritance flag) plus the uninterpreted `native` block of the harness; produced by config assembly with the provenance of every value |
+| `EffectiveConfig` | the merged harness-neutral categories of `config.md` "Settings" (model, effort, env, MCP servers, harness hooks, skills, system prompt, permission mode, plugin parts, host inheritance flag) plus the uninterpreted `native` block of the harness; produced by config assembly with the provenance of every value |
 | `SessionPlan` | `New { workdir, run, attempt }` or `Resume { session: SessionRef, workdir, run, attempt }`; the adapter needs `run`/`attempt` only to name files in the state directory and to set the attempt environment |
 | `Split` | `{ process: ProcessPart, session: SessionPart, fingerprint: Fingerprint }`; the two parts are opaque serializable values of the adapter; `fingerprint` = SHA-256 of the harness name and the canonical JSON of `process` (see 8) |
 | `InstanceHandle` | `{ id, pid, start_time, pgid }`; `start_time` is the kernel start time of `pid` (`/proc/<pid>/stat`), pid + start time identify the process (§5.2) |
-| `SessionRef` | opaque JSON the adapter fills with everything resume needs; the core stores and returns it. claude: `{session_id, config_dir}`; codex: `{thread_id, codex_home}` (§7.1: the transcript lives in `CODEX_HOME`) |
+| `SessionRef` | opaque JSON the adapter fills with everything resume needs; the core stores and returns it. claude: `{session_id, config_dir}`; codex: `{thread_id, codex_home}` (the transcript lives in `CODEX_HOME`, so one id is not enough) |
 | `PromptKey` | UUID v5 of `"aae:prompt:<run>/<attempt n>/<prompt n>"` in the URL namespace; the idempotency key of one prompt (see 6.4) |
 | `Answer` | `Allow { updated_input }`, `Deny { message }`, `Text { text }` (decisions of `run.requires_action`) |
 | `Transcript` | `Missing` or `Present { prompt: Absent \| Unanswered \| Answered }` — whether the session exists and where the prompt with `key` stands in it |
 | `Health` | `Ok`, `Degraded { text }`, `Dead` |
 
-The live tap (`live`) is the direct relay of §5.3: raw harness messages of a session, up to 256 buffered, a slow
-reader loses messages; nothing of it enters the state or the journal.
+The live tap (`live`) is the direct relay of the live view ([event model](event-model.md#journal)): raw harness
+messages of a session, up to 256 buffered, a slow reader loses messages; nothing of it enters the state or the journal.
 
 ### 4.3 Normalized events
 
@@ -345,7 +362,8 @@ They are input messages of the core, not journal events; the core turns some of 
 
 ### 4.4 Failure kinds
 
-The kinds of §7.1. Emitted by the adapter unless marked core; default `scope` in the last column (the adapter
+Every failure kind there is. Waiting for a human and background work outside a turn are states (4.3), not
+failures. Emitted by the adapter unless marked core; default `scope` in the last column (the adapter
 may report a narrower or wider scope when the harness says so).
 
 | Kind | Source | Scope |
@@ -368,20 +386,25 @@ may report a narrower or wider scope when the harness says so).
 | `hollow_done` | core | run |
 | `unknown` | adapter | session; `text` holds the harness wording |
 
-Success traps (§7.2) are the adapter's: claude `subtype:"success"` with `is_error:true` is a failure, never
+Success traps are the adapter's: claude `subtype:"success"` with `is_error:true` is a failure, never
 `turn.ended{completed}`; an exit with code 0 and no turn result is `harness_crash`.
 
 ### 4.5 Capabilities
 
 `Capabilities { sessions_per_instance, instance_idle, versions }`:
 
-- `sessions_per_instance`: claude 1 (a process per session, §7.3); codex the config value `max_sessions`
+- `sessions_per_instance`: claude 1 (a process per session, 8); codex the config value `max_sessions`
   (default 8).
 - `instance_idle`: how long an instance without sessions lives on (8): claude 0, codex the config value
   `instance_idle_s` (default 60 s).
 - Whether the harness retries 429 itself is the adapter's knowledge: it sets `Failure.retried_by_harness` on the
-  failure (claude true, codex false; §7.2). Whether a quota failure carries `retry_at` shows on the failure itself
-  (claude: subscription login only; codex: yes, from the rate-limit update).
+  failure, and the policy never retries on top of a harness that already did. claude retries 429 and 5xx itself, up
+  to 10 times by default (`CLAUDE_CODE_MAX_RETRIES`; 7 seen in the experiment log), so its `rate_limited` and
+  `overloaded` are always retried. codex retries 5xx, but a 429 only when the provider sent `Retry-After`, once
+  after that pause: a 429 without it is never retried by codex and the policy must do it. Whether a quota failure
+  carries `retry_at` shows on the failure itself (claude: subscription login only; codex: yes, from the rate-limit
+  update).
+  <!-- MEASURE id=claude-self-retries date=2026-11-10 ver=claude-2.1.322 env=linux-arm64-orbstack src=reports/34 note="delays 0.57→32.8 s on a fake API; set by CLAUDE_CODE_MAX_RETRIES" -->
 - `versions`: the tested range of the harness binary, `[lowest, highest]` inclusive; outside it the daemon warns at
   start, and `aae doctor` does.
 
@@ -395,11 +418,52 @@ process part, never the credential itself.
 | Process and session | process per session; everything is in `ProcessPart`, so the fingerprint is unique per session; `start_session` and `resume_session` only bind the reference (the `--session-id`/`--resume` flag is part of the spawn) | one app-server per fingerprint over stdio; `ProcessPart` = `CODEX_HOME`, `HOME`, skills (links in its own `CODEX_HOME/skills`; with host inheritance that home links the host's `auth.json` and `config.toml`), the default `sandbox_mode`, provider and key variable, process environment; `SessionPart` = cwd, model, effort, instructions, MCP, hooks with `bypass_hook_trust`, command environment ([experiments](experiments.md#config-and-credential-delivery-experiments-4-and-5)) |
 | Prompt key | user message `uuid` | `clientUserMessageId` |
 | `prompt.acked` | `command_lifecycle{queued}` with our uuid | `turn/start` response with a turn id |
-| Turn end | `result` of a turn, then "idle without background" by the three-condition rule ([experiments](experiments.md#idle-without-background-both-signals-in-one-run)) | `turn/completed` only; thread status `idle` does not end a turn (§7.5) |
+| Turn end | `result` of a turn, then "idle without background" by the three-condition rule ([experiments](experiments.md#idle-without-background-both-signals-in-one-run)) | `turn/completed` only; thread status `idle` does not end a turn (below) |
 | Cancel | `control_request{interrupt}`; the following `aborted_tools` result is `turn.ended{cancelled}` | `turn/interrupt` |
 | Resume | full flag set again on every `--resume` | full thread config again on every `thread/resume`, after app-server closed the thread (`thread/unsubscribe` until `notLoaded`, at most 10 s, else `transcript_divergence`): a thread it still holds keeps the old config |
 | Attempt environment | process environment | `shell_environment_policy.set` of the thread; hooks get per-session values on their command line |
 | Transcript check | the session file under `config_dir`: user record with `key`, answer after it | `thread/read` with turns: `userMessage` with `clientId == key`, completed turn after it |
+
+Every adapter runs each session process (claude) or instance process (codex) in its own process group, and takes
+the end of a turn from the harness's authoritative signal, never from the answer to a request.
+
+claude (`crates/aae-claude`):
+
+- Transport: `claude -p` with stream-json input and output, a given `--session-id`, resume by `--resume`. The
+  session config is flags and files in the state directory: setting sources (the host inheritance switch),
+  `--settings` with the hooks, `--mcp-config`, `--plugin-dir`, system prompt, model, effort, permission mode; the
+  model is passed explicitly on resume too
+  ([experiments](experiments.md#config-and-credential-delivery-experiments-4-and-5)).
+- Signals read: `system/api_retry` (`retrying`), `rate_limit_event` with the reset time, the turn `result` with
+  its error flag, `session_state_changed`, `background_tasks_changed`, `task_notification`, and the
+  `tool_progress` heartbeat of a long tool every 30 s ([experiments](experiments.md#heartbeat-of-a-long-tool)).
+  No heartbeat comes from inside a subagent or while a permission request waits; the watchdog's budgets allow for
+  that (invariant 15).
+- The reset time of a limit comes only with a subscription login; with an API key a limit is a plain `rate_limit`
+  without it. The shape of the event when a real quota runs out has not been seen live (the claude half of
+  criterion 10 stays open).
+- Nothing is printed before the first prompt: `init` comes after the prompt and on every turn, so waiting for
+  `init` before the prompt deadlocks. The number of turn results is not the number of prompts: a background task
+  wakes the session into a turn of its own.
+- When the daemon dies, the turn goes on unobserved; its outcome is learned from the transcript and the state of the
+  repository (4.2 `Transcript`, 6.4).
+- A cold start takes 0.25–0.35 s to `init`; the rest is the model's time to the first token, so no warm pool.
+  <!-- MEASURE id=claude-coldstart-init date=2026-11-10 ver=claude-2.1.322 env=linux-arm64-orbstack src=reports/42 note="haiku, n=5–7, medians from spawn; re-measure on the role models" -->
+
+codex (`crates/aae-codex`):
+
+- Transport: aae's own `codex app-server` over stdio; the user's own codex daemon is never used. Protocol types are
+  not generated from the schema: the adapter reads the fields it uses by hand, and the contract suite
+  ([harness updates](../harness-updates.md)) catches a change on every codex update.
+- Signals read: `error` with `willRetry` and `codexErrorInfo`, `turn/completed` with its status,
+  `thread/status/changed`, `account/rateLimits/updated` with the reset time.
+- Thread status `idle` comes before `turn/completed`, and a command sent to the background runs while the status is
+  `idle`. While the provider is silent before its response headers there is no notification at all and codex has no
+  timeout of its own: the core's watchdog owns it.
+- Two `turn/start` on one thread are not queued but merged: the second becomes a steer of the first. The core sends
+  a session's next prompt only after its turn ended (6.2), so this never happens.
+- Hooks run with the environment of the app-server process, not of the thread (4.6 table, attempt environment).
+- app-server is marked `[experimental]` and codex ships often; see [harness updates](../harness-updates.md).
 
 The failure classification tables (harness wording → kind) are owned by the adapters and pinned by the contract
 tests of §7.8 (WP-28, WP-30).
@@ -458,7 +522,7 @@ core sets the actor of an exec step and hands that of a session to the adapter i
   (the daemon is the only claimer, invariant 3). An owner found changed before the write is `OwnerMismatch`,
   reported as `resync.diverged`; a human write that lands inside the window shows up only as a `bead.updated` of
   the next `changes` batch, until the resync of the tracker compares owners (WP-20b).
-- The state of the orchestrator is the truth of ownership; the assignee in br mirrors it (§10.3).
+- The state of the orchestrator is the truth of ownership; the assignee in br mirrors it (6.2).
 
 ## 6. Run
 
@@ -479,8 +543,19 @@ core sets the actor of an exec step and hands that of a session to the adapter i
 The thresholds named here (`queue_timeout`, `start_timeout`, the silence budgets, `human_timeout`, `park_timeout`)
 are the `[watchdog]` table of the orchestrator config, with these defaults (config.md, orchestrator).
 
-`interrupted` in §9.3 names the daemon restart only; here it is every attempt failure waiting for its decision,
+`interrupted` is every attempt failure waiting for its decision, a daemon restart among them,
 so that the state machine has one place where `run.attempt_failed` is decided.
+
+- The class of `failed` tells the cause: `agent` (the finisher said `fail`), `check` (a plugin's veto or deny),
+  `hollow_done` (the turn ended without an outcome), `infrastructure` (attempts ran out or the policy ended the run).
+- `queued` has not started: it waits for a concurrency slot, a free workdir or an open gate. `parked` has started and
+  waits for a gate with no harness process.
+- A run belongs to a project and a rig, named when it is created (API, CLI, MCP) or by the trigger that fires on the
+  rig; an unknown rig is refused before the run exists. Its workdir is the rig's directory, or a worktree of it with
+  `worktree = true` in the formula (config.md). One live run holds a workdir: a second run in the same directory
+  waits in `queued` (`waiting_for: workdir`); parallel work in one rig is the worktree's job.
+- Concurrency is bounded per orchestrator (`max_runs`, default 8) and per agent (`max_runs` in `agent.toml`).
+- An attempt starts a new session or resumes the previous one, and has its own generation.
 
 Ceilings of the core (invariant 16): 20 attempts per run, not counting the attempts whose failure the decision parked on an `account:` gate (spec §2.1 item 12: a wait on the account does not spend the ceiling; the attempt is marked `waited` in the state), 10 remarks per attempt (`continue` after a hollow turn
 and `remark` after `run.finishing` both count). The eleventh fails the run with reason `remarks_ceiling` and the class
@@ -492,7 +567,7 @@ to the next prompt) the step `timeout` pauses like in `requires_action`. Trigger
 | From | On | To | Effects after commit |
 |---|---|---|---|
 | — | create (API, CLI, MCP, trigger) with an idempotency key | `queued` | — (with a bead input the run is recorded as the bead's owner in this transaction, invariant 3: a bead another live run holds refuses; `{ next_ready = true, epic }` takes the first bead of the last ready set, in the tracker's order, that is in the epic, of the run's rig or of no rig, without an owner and without a closed gate; none → the reply `{"nothing_ready": true}`, for a trigger `trigger.skipped{nothing_ready}`; the input then holds the bead id) |
-| — | create with `continue_from: <run>` (a terminal run with a session; never implicit, §9.3) | `queued` | in the workdir of that run; the first attempt resumes that run's last session with the formula prompt; a later `resume` uses the run's own session, or that one while it has none; a harness other than the agent's → `failed{infrastructure}` |
+| — | create with `continue_from: <run>` (a terminal run with a session; a session is never reused implicitly) | `queued` | in the workdir of that run; the first attempt resumes that run's last session with the formula prompt; a later `resume` uses the run's own session, or that one while it has none; a harness other than the agent's → `failed{infrastructure}` |
 | `queued` | slot free, workdir free, no gate of the run closed | `preparing` | with a bead: the tracker claim as owner `aae:<run>` (queue `tracker:<project>`), and the prompt renders once the claim returned the bead; `run.preparing` hooks |
 | `preparing` | decision `proceed` (or no hooks) | `starting` | attempt 1: instance acquire, `start_session`, `send_prompt` |
 | `preparing` | `deny`, template error, claim error `Claimed` / `NotFound` / `Invalid`, no claim answer within `start_timeout` | `failed{check}`, `failed{infrastructure}`, `failed{infrastructure, bead_claimed / bead_not_found / bead_invalid}`, `failed{infrastructure, tracker_unavailable}` | — |
@@ -517,7 +592,7 @@ Every terminal transition releases the run's hold on its workdir and its ownersh
 claimed is closed (`passed`) or released conditionally (`failed`, `cancelled`) by an effect on the queue
 `tracker:<project>`, followed by a new read of the ready set; a refusal (`OwnerMismatch`, `NotFound`) is
 `resync.diverged{subject: "bead"}`, an unavailable tracker `tracker.sync_failed` and a retry, and the outcome of the
-run never changes. The failure counter of the bead (§10.3): a failed run that held the claim adds one, `passed`
+run never changes. The failure counter of the bead: a failed run that held the claim adds one, `passed`
 resets it, `cancelled` and a refused claim leave it; at `bead_failures` (orchestrator config, default 3) the core
 closes the gate `bead:<project>/<id>`, and the operator opening that gate resets the counter. Operator holds (§5.7
 gates closed by the operator, cancel) are read by every automatic decision: a decision that would start an attempt
@@ -536,9 +611,30 @@ of a run whose gate the operator closed parks it instead (invariant 18).
   `invalid` (unknown token or run, `summary` over 4 KiB, `data` over 64 KiB, a call while the run is
   `finishing`: the declared outcome is under check, or a call while the run waits for the decision on
   `run.turn_ended_without_outcome`: the turn is over, and an outcome now would decide nothing). With the daemon unreachable the command retries with backoff for 60 s (`AAE_FINISH_RETRY` seconds overrides it), then exits with code 75; every try carries the same idempotency key, a hash of the request, so a retry after a lost reply gets the first answer.
-- The table of §9.4 maps onto 6.2: a call during a turn stores the outcome (`running` stays); a repeated call
-  replaces it; the end of the turn with background work keeps `running` until idle without background (deadline:
-  background silence budget).
+- The finisher is the agent's word on the outcome: `pass` or `fail`, a short summary, optional data. A failure of
+  the infrastructure is not an outcome: it raises `run.attempt_failed`. The outcome is kept in the run's result
+  and reaches triggers as `outcome` of `run.passed` and `run.failed` (`outcome.data.<key>` in `where` and `inputs`).
+
+How the finisher behaves, on the transitions of 6.2:
+
+| Situation | What happens |
+|---|---|
+| finisher called while the turn still runs | the declared outcome is stored in the state; the run stays `running` |
+| finisher called again in the same attempt | the last call wins |
+| turn ended, no background work, outcome declared | `finishing`: `run.finishing` is raised, check plugins may veto |
+| turn ended, background work (subagents) still running | the run stays `running` until idle without background; the wait has a deadline (background silence budget, 6.1) |
+| turn ended, no background work, no outcome | `run.turn_ended_without_outcome`; with no plugin decision `failed{hollow_done}` |
+| a `run.finishing` hook returned a remark | the remark goes to the agent as the next prompt in the same session and attempt; the declared outcome is cleared; the token stays valid |
+| a `run.finishing` hook vetoed | `failed{check}` with the hook's reason |
+| finisher with the token of a stale attempt | refused with an explicit error (`stale_attempt`); the state does not change |
+| daemon unreachable at the call | the command retries for a bounded time and fails (exit 75); after the daemon restarts, the run goes the `interrupted` way |
+
+The token belongs to the attempt, not to one call. Returning a remark is the check loop; the number of returns is
+bounded by the core's ceiling (6.1, invariant 16).
+
+Out of the box `pass` is the agent's word. Checking that the work is really done (a commit exists, tests are green)
+is the job of an outer loop of the user and is not bundled: the veto mechanism is there (`run.finishing`), a plugin
+for it is not.
 
 ### 6.4 Prompt delivery and recovery
 
@@ -567,14 +663,14 @@ of a run whose gate the operator closed parks it instead (invariant 18).
 Issue gates are the core's only "do not start yet" mechanism: a record "key closed until time T, or until removed
 by hand". A run with a closed key waits in `queued` (or `parked`, once started) with the gate as the visible reason.
 Three parties close gates: the policy in answer to a failure (an account limit, an agent quarantined after a crash
-series), the operator (a pause) and the core itself (a bead after a series of failed runs, §10.3). Gates are rows
+series), the operator (a pause) and the core itself (a bead after a series of failed runs, see 6.2). Gates are rows
 in the state: they survive a restart, are listed by the API (`/v1/gates`, `aae gate`), and every closure and opening
 is an event. The account traffic light and the operator hold are built from this one mechanism, with no subsystem
 of their own. The adapter reports the account id (4.5, `Driver::account`).
 
 - Keys: `orchestrator`, `project:<project>`, `rig:<project>/<rig>`, `agent:<agent>` (the qualified agent name of
-  §8.2), `bead:<project>/<bead id>`, `account:<harness>/<account id>`, `model:<provider>/<model>`. The keys of a
-  run are all of these that it has; a run is admitted only if none is closed.
+  `config.md` "Names"), `bead:<project>/<bead id>`, `account:<harness>/<account id>`, `model:<provider>/<model>`.
+  The keys of a run are all of these that it has; a run is admitted only if none is closed.
 - A gate is a set of closures `{key, until, reason, closed_by, closed_at}`, at most one per `(key, closed_by)`;
   the key is closed while any closure is active. Automation (`policy`, `core`) removes only its own closures; an
   operator closure is removed only by the operator, so automation never reopens an operator pause (criterion 19).
@@ -599,7 +695,12 @@ of their own. The adapter reports the account id (4.5, `Driver::account`).
 ## 8. Instance and service registry
 
 - Fingerprint = SHA-256 of the harness name and the canonical JSON (sorted keys) of the `ProcessPart`; two agents
-  with equal process parts share an instance (criterion 13).
+  with equal process parts share an instance (criterion 13). The adapter decides what is the process part (4.6):
+  claude puts everything in it, so every session has its own process (no shared server, no memory saved); codex
+  shares one app-server per fingerprint. So a plugin whose agent side changes the process part gives another
+  fingerprint and another instance by itself, and a plugin that works only on the orchestrator side adds no instance.
+- An instance that holds many sessions has a session cap (`sessions_per_instance`, 4.5): its crash takes all its
+  sessions down at once. Past the cap a second instance with the same fingerprint starts (acquire, below).
 - Record: `{id, kind: "instance"|"service", harness or service name, fingerprint or scope key, pid, start_time, pgid,
   state: "starting"|"ready"|"stopping", sessions, idle_since}`. Start and stop are written as intent before the
   effect (invariant 9).
@@ -629,7 +730,7 @@ of their own. The adapter reports the account id (4.5, `Driver::account`).
   that process and is not `stopping` counts as its `exited` event, as above: a gone process is not ambiguous, so no
   `resync.diverged`. A record that moved on since the check is left alone. Every process still carrying the marker of
   an instance an attempt used (live or ended within the hour) and no record holds is swept again; at a start too ([event model](event-model.md)).
-- Services (§11.4, [config](config.md#mcp-servers-and-services-spec-114)) use the same record with kind
+- Services ([config](config.md#mcp-servers-and-services-spec-114)) use the same record with kind
   `service`: the service name, the key `<scope>#<sha256 of the definition>` (the definition is `command`, `env`,
   `health`; scope `orchestrator` or `project:<p>`), the definition, the port and the token in the process column, the consumer count in `sessions` (an attempt's services are in
   `attempts.services`). The launch transaction acquires them (a new record emits `service.starting` and the
@@ -644,8 +745,8 @@ of their own. The adapter reports the account id (4.5, `Driver::account`).
 
 ## 9. Fakes in the real daemon
 
-The daemon has no test mode. Harness binaries are resolved through mise or taken from an explicit path in config
-(§6.5): `[harness.claude] binary = "<path>"`. Contract tests and model-free acceptance scenarios use exactly this:
+The daemon has no test mode. Harness binaries are resolved through mise or taken from an explicit path in config:
+`[harness.claude] binary = "<path>"`. Contract tests and model-free acceptance scenarios use exactly this:
 
 - the real `claude`/`codex` against a fake provider, configured by ordinary settings (claude: `ANTHROPIC_BASE_URL`
   in the agent env; codex: a `model_providers` entry in the native block);

@@ -24,8 +24,8 @@ error in every file.
 
 ## Settings (any layer)
 
-One table shape for every layer (see "Effective config"): `[settings]` of the orchestrator, a project and a rig; the `[agent]`
-contribution of a plugin; the top level of `agent.toml`; and the overrides `[overrides.<agent>]`.
+One table shape for every layer (see "Effective config"): `[settings]` of the orchestrator, a project and a rig;
+the `[agent]` contribution of a plugin; the top level of `agent.toml`; and the overrides `[overrides.<agent>]`.
 
 | Key | Type | Merge |
 |---|---|---|
@@ -33,7 +33,7 @@ contribution of a plugin; the top level of `agent.toml`; and the overrides `[ove
 | `inherit_host` | boolean | scalar |
 | `env` | table of strings | by key |
 | `mcp.<name>` | `{command = [..], env}` (stdio) or `{url, headers}` (HTTP), not both (a server the daemon runs is a `[[service]]`, below); optional `scope = "orchestrator" \| "project" \| "session"` | by key, entry replaced whole |
-| `hooks.<name>` | `{event, matcher, command, timeout}` (harness hooks, Claude dialect, §11.2) or `{enabled = false}` | named list |
+| `hooks.<name>` | `{event, matcher, command, timeout}` (harness hooks, Claude dialect) or `{enabled = false}` | named list |
 | `skills.<name>` | `{path}` (must exist) or `{enabled = false}` | named list |
 | `plugins` | array of `{name, enabled = true}`, in attachment order; parameters belong to the `[[plugin]]` declaration | named list |
 | `native.<harness>` | any table, passed to the adapter as is; `native.claude` is a table of claude settings keys, delivered with `--settings` together with the hooks; `native.codex` is a table of codex `config.toml` keys, delivered to the app-server as `-c key=value` flags (so it is part of the process fingerprint) | by key |
@@ -51,6 +51,16 @@ contribution of a plugin; the top level of `agent.toml`; and the overrides `[ove
   server with state per client (a browser) or that needs the session's working directory (the bridge starts in `/`)
   needs `scope = "session"`.
 - `command` and `url` together: an error; a server the daemon runs is a `[[service]]` with `mcp` (below).
+- One server per scope, not per session, is the default: one HTTP MCP server served claude, codex and pi, and the
+  identity reached it in the headers (2026-11-10; claude 2.1.321, codex 0.166.0, pi 1.5.0).
+  <!-- MEASURE id=shared-http-mcp date=2026-11-10 ver=claude-2.1.321,codex-0.166.0,pi-1.5.0 env=linux-arm64-orbstack src=reports/36 note="6 calls, 2 per harness; not checked under load" -->
+- The server aae serves, and any shared server recommended with it, speaks both MCP protocol epochs: stateless
+  2026-07-28 and the `initialize` epoch ([mcp.md](../api/mcp.md#protocol-epochs)). codex 0.166 speaks only
+  2025-06-18 and refuses a server of the new epoch only.
+- A restart of a shared server has to be quick: claude reconnects to a restarted stateful server in 7–26 s, and in
+  one run of four the turn failed (2026-11-10, claude 2.1.321); a stateless 2026-07-28 server restarts unnoticed.
+  <!-- MEASURE id=claude-mcp-reconnect date=2026-11-10 ver=claude-2.1.321 env=linux-arm64-orbstack src=reports/36 note="4 runs: 6.8 / 15.7 / 20.6 / 25.7 s; stateful HTTP MCP, restarted on the same port; on stateless 2026-07-28 the restart is transparent" -->
+  A failed MCP server is a failed tool, not a failed run.
 
 A **service** is a `[[service]]` table at the top level of the orchestrator config, a project's `aae.toml` or a
 `plugin.toml` (not of `[settings]`): a long-lived process the daemon supervises, with MCP optional.
@@ -98,8 +108,8 @@ mcp = { url = "/mcp" }                         # | true (= /mcp); none: no MCP e
   the old token. Every move to a new port comes with a new token. With no sessions it is dropped. A session start
   that waited 30 s in vain gets port 0 and no token: the port the service was not ready on may be someone else's. On macOS the listener is not told
   (`/proc` only), any listener passes the check. A changed `command`, `env` or `health` is a new service; the old
-  one idles out. Events: `service.starting`, `service.ready`, `service.failed`, `service.stopped`; `aae instances` lists
-  services too.
+  one idles out. Events: `service.starting`, `service.ready`, `service.failed`, `service.stopped`;
+  `aae instance list` lists services too.
 - `url` with `${AAE_API}`: the daemon's own API on TCP, e.g. `url = "${AAE_API}/mcp"` for its MCP frontend. The
   placeholder becomes `http://<api_tcp>` and the session gets `Authorization: Bearer <token>` with the token of the
   daemon's start. With no `api_tcp` the session goes without the server, as with a service that is not up.
@@ -433,7 +443,7 @@ name = "mail"
 version = "0.1.0"
 prompt = "prompt.md"                # optional: its text joins the system prompt of the attached agents
 
-[agent]                             # layer 5 contribution to the agents that attach the plugin (§11.2)
+[agent]                             # layer 5 contribution to the agents that attach the plugin
 skills.mail = { path = "skills/mail" }
 
 [[hook]]                            # orchestrator hook (§11.3, contracts 3)
@@ -453,6 +463,14 @@ line); and its `bin/` directory, when it has one, ahead of `PATH` (the `PATH` a 
 The daemon's `PATH` taken this way becomes part of the effective config: it is in the run's snapshot and in the
 instance fingerprint, so after a daemon restart with another `PATH` these agents get new instances.
 The example `examples/aae-plugin-review` shows both sides.
+
+A plugin is the unit of extension: a typical extension (a mail integration, a check, a reaction policy) is a
+plugin, not core code. Its directory holds `plugin.toml` (name, version, parameters, the contribution to agents,
+orchestrator hooks, services) and what its parts need (`skills/`, `hooks/`, `bin/`, ...). Its agent side reaches
+only the agents that attach it, native parts of a harness included (`native.<harness>`); a contribution that changes
+the process part of a harness config gives those agents instances of their own, by the fingerprint (contracts 8).
+Its orchestrator hooks keep no state: an event carries the attempt counters, times and gate states a policy needs,
+and the core has no storage for plugins.
 
 ## Bundled plugins: `[builtin.<name>]`
 
@@ -483,9 +501,10 @@ or for a project).
 The mechanisms live in the core: resuming an attempt, a new session that keeps ownership, issue gates, the counters
 the policy reads, the ceiling of 20 attempts per run (waits on an account gate not counted), the watchdog and every
 deadline. The bundled plugins only choose a reaction and its thresholds; they never change a harness. With
-`default-policy` off, the "no plugin decision" column of contracts 1.3 applies: a failed attempt ends the run `failed`
-with class `infrastructure`. The bundled plugins are compiled into the same binary, need no external runtime, and are
-counted on their own budget line (`plugins` in `scripts/budget.sh`, 1500 lines) inside the release total.
+`default-policy` off, the "no plugin decision" column of [contracts 1.3](contracts.md#13-payloads) applies: a failed
+attempt ends the run `failed` with class `infrastructure`. The bundled plugins are compiled into the same binary,
+need no external runtime, and are counted on their own budget line (`plugins` in `scripts/budget.sh`, 1500 lines)
+inside the release total.
 
 Postmortem 0001 (`docs/postmortems/0001-loop-stalled-after-transient-auth-error.md`) and the owner's decision of
 2026-11-14 (spec §2.1 item 12) shaped `auth_required` and `billing`: a proxy or WAF 403 passes by itself, so every

@@ -1,7 +1,8 @@
 # Developing aae
 
-The repository pins its toolchain with [mise](https://mise.jdx.dev); `mise install` brings Rust, the cargo tools and
-the pinned claude, codex and br. Every check below is a mise task (`mise.toml`).
+The repository pins its toolchain with [mise](https://mise.jdx.dev); `mise install` brings Rust, the cargo
+tools, br (an exact version) and claude and codex (a release line: `2.1`, `0`; there is no `mise.lock`).
+Every check below is a mise task (`mise.toml`).
 
 ## Where each kind of test runs
 
@@ -14,6 +15,9 @@ the pinned claude, codex and br. Every check below is a mise task (`mise.toml`).
 | `mise run acceptance` | all acceptance scenarios, including those on a real model; on a pass, the rows of criterion 20 rewrite the demo snapshots in `demos/` (commit them or `git checkout demos`) | by hand: they cost money and need a harness login | not measured |
 
 <!-- MEASURE id=dev-test-wall date=2026-11-14 ver=1a732a4 env=linux-arm64-orbstack-9-cores src="mise run test" note="warm build; nextest summary 28.8 s for 286 tests; another build ran beside it" -->
+<!-- MEASURE id=dev-ci-wall date=2026-11-14 ver=75a5ee0 env=linux-arm64-orbstack-9-cores src="mise run ci" note="warm build, wall time of the whole task" -->
+<!-- MEASURE id=dev-acceptance-ci-wall date=2026-11-14 ver=75a5ee0 env=linux-arm64-orbstack-9-cores src="mise run acceptance-ci" note="warm build, wall time of the whole task" -->
+<!-- MEASURE id=dev-acceptance-release-wall date=2026-11-14 ver=a070cd6 env=linux-arm64-orbstack-9-cores src="mise run acceptance-release" note="cold release build of the four targets" -->
 <!-- MEASURE id=dev-ci-wall date=2026-11-14 ver=75a5ee0 env=linux-arm64-orbstack-9-cores src="mise run ci" note="warm build, wall time of the whole task; nextest summary 36.9 s for 331 tests" -->
 <!-- MEASURE id=dev-acceptance-ci-wall date=2026-11-14 ver=75a5ee0 env=linux-arm64-orbstack-9-cores src="mise run acceptance-ci" note="warm build, run right after mise run ci; the model-free scenarios concurrently, then the cargo and script checks one by one; no release builds; re-measure on the CI runner" -->
 
@@ -43,6 +47,16 @@ A failing seed is a bug of the core, not of the test. The crash scenario of the 
 (`AAE_CRASH_SEED`).
 
 ## Acceptance scenarios
+
+The product has no separate test mode: checking formulas and checking aae itself is one executable acceptance spec,
+`crates/aae-acceptance`, which implements the criteria of the first release. Its scenarios go the way working runs
+go, on a real daemon and the real harness binaries. The scenarios on a real model use a cheap one, set by the agents
+of their own fixtures (haiku for claude), and run only when a user asks for the full spec with one command
+(`mise run acceptance`): it costs money and needs a login, so nothing starts them automatically, on a commit or on a
+schedule. The scenarios without a model (a fake provider, the scripted driver, exec steps) are the same scenarios of
+the same spec, and CI runs this subset on every commit; the launch column of each criterion in spec §15 says which
+part it belongs to. A run of the spec writes a report with the date, the version of aae and the versions of the
+harnesses.
 
 Pass criterion numbers to run only those: `cargo build -p aae && cargo run -p aae-acceptance -- --ci 3 19`. The
 report, with a line for every row of §15, goes to `target/acceptance/report.md`. After the scenarios the same binary

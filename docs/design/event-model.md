@@ -36,6 +36,21 @@ all of them share.
   leaves nothing stale. Whether a process is alive is read from the process table: pid plus its kernel start time.
 - The state directory and `journal/` are 0700, the database and journal files 0600, whatever the umask.
 
+## Journal
+
+- One JSONL journal per orchestrator, for all its projects: `$XDG_STATE_HOME/aae/journal/events.jsonl`, one line
+  per event in the envelope of [contracts.md 1.1](contracts.md#11-envelope-schema-version-1) (`seq` from the one
+  counter of the orchestrator, schema version, time, type, project, rig, run, correlation, payload). It is rotated
+  by size: 10 MB per file, 5 files (`events.1.jsonl` … `events.4.jsonl`; `crates/aae-core/src/journal.rs`).
+- The journal is an observation channel, not the source of truth: past 50 MB the oldest history is dropped. The
+  truth is the state.
+- A consumer continues reading from a `seq`. A `seq` already rotated away is an explicit "gap" error (the `gap` event
+  of `GET /v1/events`), and the consumer recovers by reading the state over the API.
+- Only orchestration-level events enter it ([contracts.md 1.3](contracts.md#13-payloads)). The core neither stores
+  the content of a conversation (model messages, tool calls) nor passes it through its state: the live view relays
+  the adapter's stream directly (`GET /v1/runs/{id}/live`, [frontends](../api/frontends.md)), and the history is
+  the harness transcript, reached by the session reference.
+
 ## Effects
 
 - Effects run after commit through a queue keyed by subject (a run, a harness instance, `daemon`; see
@@ -52,7 +67,9 @@ all of them share.
   Deadlines are wall-clock times: the writer reads the wall clock at least every 30 s so a clock jump is noticed.
   A deadline whose handler fails fires again a minute later.
 - The latency from an event to the core's reaction contains no polling interval. Acceptance checks it as the hop
-  (criterion 6, `crates/aae-acceptance` scenario `c06_hop.rs`: 30 hops, p50 about 35 ms to the harness launch).
+  (criterion 6, `crates/aae-acceptance` scenario `c06_hop.rs`: 30 hops, p50 about 35 ms to the harness launch;
+  recorded 2026-11-13, `49e194c`).
+  <!-- MEASURE id=hop-latency-p50 date=2026-11-13 ver=49e194c env=linux-arm64-orbstack src=crates/aae-acceptance/src/scenarios/c06_hop.rs note="p50 of 30 hops from the trigger to the harness launch; the run it came from is not recorded, re-measure on the next change of the hop path" -->
 - Tests run the same writer on a managed clock (`aae_core::clock`), which makes every deadline deterministic.
 
 ## Resync

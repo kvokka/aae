@@ -25,7 +25,7 @@ arguments return the first result, other arguments are `idempotency_key_reused`.
 
 ## Protocol epochs
 
-Both epochs are served (spec §11.4), chosen per request:
+Both epochs are served, chosen per request:
 
 - `MCP-Protocol-Version: 2026-07-28` — stateless: `server/discover`, `tools/list`, `tools/call`; results carry
   `resultType: "complete"`.

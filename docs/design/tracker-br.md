@@ -1,9 +1,9 @@
 # The br tracker
 
 How aae uses [br](https://github.com/Dicklesworthstone/beads_rust) (beads_rust) as the tracker of a project. The
-tracker interface and its errors are in [contracts.md](contracts.md) §5; the bead and run relation is in the
-spec §10.3. Code: `crates/aae-br` (the adapter), `crates/aae-core/src/run/beads.rs` and `run/bead_events.rs` (the
-core side), `crates/aae/src/daemon.rs` (the bv workspace file).
+tracker interface and its errors are in [contracts.md](contracts.md) §5; the bead and run relation is below
+([Beads and runs](#beads-and-runs)). Code: `crates/aae-br` (the adapter), `crates/aae-core/src/run/beads.rs` and
+`run/bead_events.rs` (the core side), `crates/aae/src/daemon.rs` (the bv workspace file).
 
 ## An external binary, and its license
 
@@ -21,9 +21,37 @@ core side), `crates/aae/src/daemon.rs` (the bv workspace file).
 - The database path is always explicit: every br call and every session or exec step gets `BEADS_DIR`. br's own
   discovery walks up to `$HOME`, and an agent without an explicit path silently writes to someone else's tracker.
 - Every attempt has its own actor: the adapter passes `--actor` to br, sessions get `BD_ACTOR=aae:<run>:<n>`. br
-  tells claim owners apart only by name, and the actor also carries the correlation of an agent's writes. Only the
-  `--actor` flag was confirmed by experiment; the environment variable is passed as well.
+  tells claim owners apart only by name, and the actor also carries the correlation of an agent's writes. Experiment 3
+  confirmed both: `--actor X` and `BD_ACTOR=X` land in br's `events.actor`.
 - Nothing of the orchestrator is written to the tracker: no runs, steps or sessions.
+
+## Beads and runs
+
+- A project works without a tracker too. A run may get a bead as an input (`type = "bead"`); runs without a bead
+  are allowed.
+- The daemon claims, releases and closes; an agent never claims. The run is recorded as the bead's owner in the
+  transaction that creates it, and the tracker claim (owner `aae:<run>`) is made when it leaves `queued`. The claim is
+  held for the whole run, through all its attempts, and let go only when the run is terminal: `passed` closes the
+  bead, `failed` and `cancelled` release it conditionally (owner compared). Transitions:
+  [contracts.md 6.2](contracts.md#62-transitions).
+- A bead has at most one live owner run; a second request for it is refused with the reason.
+- A bead named by id that carries a `rig:` label of another rig is refused: at the start when the ready set knows the
+  bead, else at its claim (`failed{infrastructure, bead_of_another_rig}`, the claim released).
+- Instead of an id the input may ask for the next ready bead, optionally in an epic: `{ next_ready = true, epic }`.
+  The ready list comes from the adapter; the daemon picks and records the owner in one transaction, taking the first
+  bead in the tracker's order that is in the epic, of the run's rig or of no rig, without an owner and without a
+  closed gate. With none ready no run is created: the caller gets the explicit answer `{"nothing_ready": true}`, a
+  trigger `trigger.skipped{nothing_ready}`.
+- Work is cut into beads and the next one is taken by this ready pick, within an epic too. A chain of several
+  formulas over one bead is not in the first release: `pass` always closes the bead.
+- The failure counter of a bead lives in the state of the orchestrator: every failed run that held the claim adds
+  one, `passed` resets it. At `bead_failures` (orchestrator config, default 3) the core closes the gate
+  `bead:<project>/<id>` with a `gate.closed` event; the ready pick skips the bead until a human opens the gate, which
+  resets the counter. Without it a released bead would raise `bead.ready` again and repeat forever.
+- The ownership record in the state is the truth; br's assignee mirrors it. A failed `br close` or release does not
+  change the outcome of the run: the operation is retried through the queue `tracker:<project>`, and a difference is
+  shown by an event (`tracker.sync_failed`, `resync.diverged`).
+- The agent uses `br` itself for the content of its work: child beads, comments, dependencies.
 
 ## Generated from the project configs
 
