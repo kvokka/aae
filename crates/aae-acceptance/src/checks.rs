@@ -41,7 +41,7 @@ pub(crate) const ALL: &[Scenario] = &[
             Box::pin(tests(
                 env,
                 "-p aae-claude -p aae-codex -p aae-br -E binary(contract)",
-                34,
+                35,
             ))
         },
     },
