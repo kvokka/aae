@@ -19,15 +19,19 @@ impl RunHandler {
         let rig = project.rigs.get(&c.rig);
         let rig = rig.ok_or_else(|| rejected(format!("no rig `{}` in `{}`", c.rig, c.project)))?;
         let (name, formula) = project.formula(&c.formula).map_err(rejected)?;
-        // An exec step has no agent; the runs table keeps it as an empty name.
-        let agent = match &formula.step {
-            Step::Prompt { agent, .. } => agent.to_string(),
+        // An exec step has no agent; the runs table keeps it as an empty name. The agent of a prompt step is the one
+        // the rig runs for it (a variant by its name), and the model key of its config is known before it starts.
+        let (agent, model) = match &formula.step {
+            Step::Prompt { .. } => {
+                let (agent, config) = (self.config.for_run(&c.project, &c.rig, &name.to_string())).map_err(rejected)?;
+                (agent, config.model_key())
+            }
             Step::Exec { .. } if c.continue_from.is_some() => {
                 return Err(rejected(format!(
                     "`{name}` is an exec step: it has no session to continue"
                 )));
             }
-            Step::Exec { .. } => String::new(),
+            Step::Exec { .. } => (String::new(), None),
         };
         if let Some(extra) = c.inputs.keys().find(|k| !formula.inputs.contains_key(*k)) {
             return Err(rejected(format!("`{name}` has no input `{extra}`")));
@@ -132,6 +136,7 @@ impl RunHandler {
             ],
         )?;
         let row = Row::load(tx, &id)?;
+        Self::learn_keys(tx, &row, None, model)?;
         let waiting = self.blocker(tx, &row)?;
         Self::queued(tx, &row, waiting, true)?;
         tx.set_deadline(
@@ -209,14 +214,7 @@ impl RunHandler {
             params![row.project, row.agent],
             |r| r.get(0),
         )?;
-        let project = self.config.projects.iter().find(|p| p.name == row.project);
-        let limit = project.into_iter().flat_map(|p| &p.packs).find_map(|pack| {
-            let mut agents = pack.agents.iter();
-            agents
-                .find(|(n, _)| format!("{}.{n}", pack.name) == row.agent)?
-                .1
-                .max_runs
-        });
+        let limit = self.config.max_runs(&row.project, &row.agent);
         let full = all >= self.config.max_runs || limit.is_some_and(|l| agent >= l);
         Ok(full.then_some(("concurrency", Value::Null)))
     }

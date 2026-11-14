@@ -53,3 +53,37 @@ async fn a_failure_naming_another_model_adds_its_key() {
     let keys: Vec<&str> = keys.as_array().unwrap().iter().filter_map(|k| k.as_str()).collect();
     assert!(keys.ends_with(&["model:acme/m1", "model:acme/m1-2026"]), "{keys:?}");
 }
+
+#[tokio::test(start_paused = true)]
+async fn a_closed_model_gate_keeps_a_new_run_queued() {
+    let w = world(ON_MODEL);
+    w.close("model:acme/m1").await;
+    let run = w.create().await;
+    let events = w.events(&run, Duration::from_secs(60)).await;
+    let queued = events.iter().find(|(kind, _)| kind == "run.queued").map(|(_, e)| e);
+    assert_eq!(
+        queued.map(|e| &e["gate"]["key"]),
+        Some(&"model:acme/m1".into()),
+        "{events:?}"
+    );
+    assert!(w.states(&run).await.is_empty(), "never left `queued`");
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_rig_runs_the_variant_under_its_name() {
+    let project = "[agents.fast]\nbase = \"shop.dev\"\nmodel = \"m2\"\n\
+                   [rigs.web]\npath = \"web\"\nagents = { dev = \"fast\" }\n";
+    let w = world(&[ON_MODEL[0], ("shop/aae.toml", project)]);
+    w.close("model:acme/m2").await;
+    let run = w.create().await;
+    let events = w.events(&run, Duration::from_secs(60)).await;
+    let queued = events
+        .iter()
+        .find(|(kind, _)| kind == "run.queued")
+        .map(|(_, e)| e)
+        .unwrap();
+    assert_eq!(
+        (&queued["run"]["agent"], &queued["gate"]["key"]),
+        (&"fast".into(), &"model:acme/m2".into())
+    );
+}
