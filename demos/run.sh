@@ -60,7 +60,7 @@ tokens=$(jq -rs '[.[] | select(.type == "run.passed" or .type == "run.failed") |
   echo '| run | formula | rig | agent | state | parent |'
   echo '|---|---|---|---|---|---|'
   printf "%s" "$runs" | jq -r 'sort_by(.created_at) | .[] |
-    "| \(.id) | \(.formula) | \(.workdir | gsub("(/\\.)+$"; "") | split("/") | last) | \(.agent // "") | \(.state) | \(.parent_run // "") |"'
+    "| \(.id) | \(.formula) | \(.workdir | split("/") | last) | \(.agent // "") | \(.state) | \(.parent_run // "") |"'
   echo
   echo "The planner's outcome (\`aae run wait\`):"
   echo

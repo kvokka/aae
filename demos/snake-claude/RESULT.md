@@ -1,9 +1,9 @@
 # snake-claude: passed
 
-<!-- MEASURE id=demo-snake-claude date=2026-11-14 ver=aae-0.1.0@b09a833-dirty,claude-2.1.325,codex-0.168.0 env=Linux-aarch64 src=demos/run.sh note="passed in 188 s from the request, 2 runs started by the planner, n=1" -->
+<!-- MEASURE id=demo-snake-claude date=2026-11-14 ver=aae-0.1.0@d5d927b-dirty,claude-2.1.325,codex-0.168.0 env=Linux-aarch64 src=demos/run.sh note="passed in 99 s from the request, 2 runs started by the planner, n=1" -->
 
-Run on 2026-11-14 with aae-0.1.0@b09a833-dirty,claude-2.1.325,codex-0.168.0 (`Linux aarch64`): passed in 188 s from the request.
-Tokens the harnesses reported for the runs: input 64, output 33267.
+Run on 2026-11-14 with aae-0.1.0@d5d927b-dirty,claude-2.1.325,codex-0.168.0 (`Linux aarch64`): passed in 99 s from the request.
+Tokens the harnesses reported for the runs: input 50, output 27745.
 
 The runs, oldest first, with the run that started each:
 
@@ -17,15 +17,15 @@ The runs, oldest first, with the run that started each:
 The planner's outcome (`aae run wait`):
 
 ```
-data.backend.default_port: 8765
-data.backend.file: server.py
-data.backend.rig: backend
-data.backend.scores_file: scores.txt
-data.frontend.backend_url: http://127.0.0.1:8765
-data.frontend.file: index.html
-data.frontend.rig: frontend
+data.backend.file: backend/server.py
+data.backend.run: PORT=<port> python3 server.py
+data.backend.scores_file: backend/scores.txt (created on first POST)
+data.backend.verified: POST smoke 4242 -> 204, line in scores.txt, GET lists it, CORS and OPTIONS 204, bad body -> 400
+data.frontend.backend_urls: http://127.0.0.1:8765/scores
+data.frontend.file: frontend/index.html
+data.frontend.verified: canvas, arrow keys, /scores GET and POST present; node --check passed; no browser run
 id: run_1
 reason: pass
 state: passed
-summary: Snake game built in two rigs: frontend rig has index.html (canvas, arrow keys, POST/GET /scores on http://127.0.0.1:8765, top-10 list) and README.md; backend rig has server.py (stdlib only, 127.0.0.1, PORT or 8765, scores.txt next to server.py, CORS) and README.md. Verified: POST smoke 4242 -> 204, GET lists it, bad body -> 400, OPTIONS -> 204 with CORS headers.
+summary: Built the snake game in two rigs. frontend rig: index.html, a single plain-JS page with a canvas board, arrow-key steering, a name prompt on game over, POST and GET of /scores to http://127.0.0.1:8765, and a top-ten table. backend rig: server.py, standard library only, listening on 127.0.0.1 on PORT (default 8765), storing scores in scores.txt next to it, with CORS and OPTIONS handling as specified. Interface checked: both sides use http://127.0.0.1:8765/scores and the text/plain '<name> <score>' format. The backend worker verified smoke 4242 end to end; the frontend was checked by reading and a node syntax check only, not in a real browser.
 ```

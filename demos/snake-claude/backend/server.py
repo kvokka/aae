@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
-"""Minimal score server for the snake game (standard library only).
+"""Score server for the browser snake game.
 
-Endpoints:
-  POST /scores  body "<name> <score>" (plain text) -> 204, appends to scores.txt
-  GET  /scores  -> 200, plain text, ten best "<name> <score>" lines, highest first
-  OPTIONS *     -> 204 with CORS headers
+Standard library only. Listens on 127.0.0.1 on $PORT (default 8765).
+Scores are kept in scores.txt next to this file, one "<name> <score>" per line.
 
-Listens on 127.0.0.1 only, on $PORT (default 8765).
+  POST /scores  body "<name> <score>"  -> 204, or 400 if malformed
+  GET  /scores                         -> 200 text/plain, top 10, highest first
+  OPTIONS *                            -> 204 (CORS preflight)
 """
 
 import os
@@ -14,57 +14,63 @@ import re
 import sys
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from urllib.parse import urlsplit
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-SCORES_FILE = os.path.join(HERE, "scores.txt")
+SCORES_PATH = os.path.join(HERE, "scores.txt")
+TOP_N = 10
 HOST = "127.0.0.1"
 DEFAULT_PORT = 8765
-TOP_N = 10
-MAX_BODY = 4096
 
 SCORE_RE = re.compile(r"[0-9]+")
-_lock = threading.Lock()
+MAX_BODY = 4096
+
+_file_lock = threading.Lock()
 
 
 def parse_entry(text):
-    """Return (name, score_str) for a valid "<name> <score>" line, else None."""
-    parts = text.split(" ")
-    if len(parts) != 2:
+    """Return (name, score_int) for a '<name> <score>' string, or None."""
+    fields = text.split()
+    if len(fields) != 2:
         return None
-    name, score = parts
-    if not name or any(c.isspace() for c in name):
-        return None
+    name, score = fields
     if not SCORE_RE.fullmatch(score):
         return None
-    return name, score
+    return name, int(score)
 
 
 def append_score(name, score):
-    with _lock:
+    with _file_lock:
         needs_newline = False
-        if os.path.exists(SCORES_FILE) and os.path.getsize(SCORES_FILE) > 0:
-            with open(SCORES_FILE, "rb") as f:
-                f.seek(-1, os.SEEK_END)
-                needs_newline = f.read(1) != b"\n"
-        with open(SCORES_FILE, "a", encoding="utf-8") as f:
+        try:
+            with open(SCORES_PATH, "rb") as f:
+                f.seek(0, os.SEEK_END)
+                if f.tell() > 0:
+                    f.seek(-1, os.SEEK_END)
+                    needs_newline = f.read(1) != b"\n"
+        except FileNotFoundError:
+            pass
+        with open(SCORES_PATH, "a", encoding="utf-8") as f:
             if needs_newline:
                 f.write("\n")
             f.write(f"{name} {score}\n")
 
 
 def top_scores():
-    with _lock:
-        if not os.path.exists(SCORES_FILE):
+    with _file_lock:
+        try:
+            with open(SCORES_PATH, "r", encoding="utf-8") as f:
+                lines = f.read().splitlines()
+        except FileNotFoundError:
             return []
-        with open(SCORES_FILE, "r", encoding="utf-8") as f:
-            lines = f.read().splitlines()
     entries = []
     for line in lines:
-        parsed = parse_entry(line.strip())
-        if parsed:
-            entries.append((int(parsed[1]), parsed[0]))
-    entries.sort(key=lambda e: e[0], reverse=True)
-    return [f"{name} {score}" for score, name in entries[:TOP_N]]
+        entry = parse_entry(line)
+        if entry is not None:
+            entries.append(entry)
+    # Stable sort: ties keep file order.
+    entries.sort(key=lambda e: e[1], reverse=True)
+    return entries[:TOP_N]
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -75,81 +81,80 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("Access-Control-Allow-Origin", "*")
         super().end_headers()
 
-    def _reply(self, status, body=None, content_type="text/plain; charset=utf-8"):
-        data = body.encode("utf-8") if body else b""
-        self.send_response(status)
-        if status != 204:
+    def _respond(self, code, body=None, content_type="text/plain; charset=utf-8"):
+        payload = b"" if body is None else body.encode("utf-8")
+        self.send_response(code)
+        if code != 204:
             self.send_header("Content-Type", content_type)
-            self.send_header("Content-Length", str(len(data)))
+            self.send_header("Content-Length", str(len(payload)))
         self.end_headers()
-        if data:
-            self.wfile.write(data)
+        if payload:
+            self.wfile.write(payload)
 
     def _path(self):
-        return self.path.split("?", 1)[0]
+        return urlsplit(self.path).path
 
     def do_OPTIONS(self):
         self.send_response(204)
-        self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+        self.send_header("Access-Control-Allow-Methods", "GET, POST")
         self.send_header("Access-Control-Allow-Headers", "Content-Type")
         self.send_header("Content-Length", "0")
         self.end_headers()
 
     def do_GET(self):
         if self._path() != "/scores":
-            self._reply(404, "Not found\n")
+            self._respond(404, "Not found\n")
             return
-        lines = top_scores()
-        body = "".join(line + "\n" for line in lines)
-        self._reply(200, body)
+        lines = "".join(f"{name} {score}\n" for name, score in top_scores())
+        self._respond(200, lines)
 
     def do_POST(self):
         if self._path() != "/scores":
-            self._reply(404, "Not found\n")
+            self._respond(404, "Not found\n")
             return
         try:
             length = int(self.headers.get("Content-Length", "0"))
         except ValueError:
-            self._reply(400, "Bad request\n")
+            self._respond(400, "Bad request\n")
             return
         if length < 0 or length > MAX_BODY:
-            self._reply(400, "Bad request\n")
+            self._respond(400, "Bad request\n")
             return
         raw = self.rfile.read(length) if length else b""
         try:
             text = raw.decode("utf-8")
         except UnicodeDecodeError:
-            self._reply(400, "Bad request\n")
+            self._respond(400, "Bad request\n")
             return
-        entry = parse_entry(text.rstrip("\r\n"))
+        entry = parse_entry(text)
         if entry is None:
-            self._reply(400, "Bad request: expected '<name> <score>'\n")
+            self._respond(400, "Bad request\n")
             return
-        append_score(*entry)
-        self._reply(204)
+        name, score = entry
+        append_score(name, score)
+        self._respond(204)
 
-    def do_PUT(self):
-        self._reply(405, "Method not allowed\n")
+    def _not_allowed(self):
+        self._respond(405, "Method not allowed\n")
 
-    do_DELETE = do_PATCH = do_PUT
+    do_PUT = do_DELETE = do_PATCH = _not_allowed
 
 
 def main():
-    raw_port = os.environ.get("PORT", "").strip()
+    raw_port = os.environ.get("PORT", str(DEFAULT_PORT))
     try:
-        port = int(raw_port) if raw_port else DEFAULT_PORT
+        port = int(raw_port)
     except ValueError:
-        print(f"Invalid PORT: {raw_port!r}", file=sys.stderr)
-        sys.exit(1)
-    ThreadingHTTPServer.daemon_threads = True
-    httpd = ThreadingHTTPServer((HOST, port), Handler)
-    print(f"Listening on http://{HOST}:{port}", flush=True)
+        sys.exit(f"Invalid PORT: {raw_port!r}")
+    server = ThreadingHTTPServer((HOST, port), Handler)
+    server.daemon_threads = True
+    print(f"Serving scores on http://{HOST}:{port}/scores (file: {SCORES_PATH})", flush=True)
     try:
-        httpd.serve_forever()
+        server.serve_forever()
     except KeyboardInterrupt:
         pass
     finally:
-        httpd.server_close()
+        server.server_close()
 
 
 if __name__ == "__main__":
