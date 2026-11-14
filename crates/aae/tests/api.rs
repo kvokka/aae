@@ -143,6 +143,12 @@ async fn one_daemon_per_socket_and_a_stop_signal_removes_the_socket() {
 async fn one_daemon_per_state_directory_whatever_its_socket() {
     let d = Daemon::start(|_| {}).await;
     let state = d.dir.path().join("state/aae");
+    // The journal writer creates its file after the API answers.
+    let deadline = std::time::Instant::now() + WAIT;
+    while journal_lines(&d, "daemon.started").is_empty() {
+        assert!(std::time::Instant::now() < deadline, "no daemon.started in the journal");
+        tokio::time::sleep(Duration::from_millis(20)).await;
+    }
     for file in [
         d.socket(),
         state.join("state.db"),
@@ -214,7 +220,8 @@ async fn a_replayed_reload_keeps_the_config_it_applied() {
 
 /// The journal lines of `type` in the daemon's journal file.
 fn journal_lines(d: &Daemon, kind: &str) -> Vec<Value> {
-    let text = fs::read_to_string(d.dir.path().join("state/aae/journal/events.jsonl")).unwrap();
+    // No file yet: the writer has not drained its first commit.
+    let text = fs::read_to_string(d.dir.path().join("state/aae/journal/events.jsonl")).unwrap_or_default();
     // A line the daemon is still appending has no newline yet.
     let whole = text.split_inclusive('\n').filter(|l| l.ends_with('\n'));
     let lines = whole.map(|l| serde_json::from_str::<Value>(l).unwrap());
