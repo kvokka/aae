@@ -5,6 +5,7 @@
 mod commands;
 mod config;
 mod finish;
+mod wait;
 
 use crate::client::{Client, ClientError, Events};
 use clap::{CommandFactory, Parser, Subcommand, ValueEnum};

@@ -40,11 +40,20 @@ pub enum RunCommand {
     /// Show a run.
     Show { id: String },
     /// Follow a run live until it ends: its events from `--from` (default: the oldest held) and the raw messages of
-    /// its session from now on. Exits 0 however the run ends; `aae run show` gives the outcome.
+    /// its session from now on. Exits 0 however the run ends; `aae run wait` gives the outcome.
     Watch {
         id: String,
         #[arg(long)]
         from: Option<i64>,
+    },
+    /// Wait until every named run ends, then print each: state, class and reason of a failure, the finisher's summary
+    /// and data. Exits 0 when all passed, 1 when not, 124 when `--timeout` ran out first.
+    Wait {
+        #[arg(required = true)]
+        ids: Vec<String>,
+        /// How long to wait at most: `90s`, `30m`, `2h`.
+        #[arg(long, value_parser = aae_core::config::duration)]
+        timeout: Option<std::time::Duration>,
     },
     /// Cancel a run, and the live runs its sessions started.
     Cancel {
@@ -193,6 +202,7 @@ pub(super) async fn run(client: &Client, json: bool, command: RunCommand) -> Res
             let query = from.map(|f| format!("?from={f}")).unwrap_or_default();
             follow(client.stream(&run_path(&id, &format!("/live{query}"))).await?, json).await?;
         }
+        RunCommand::Wait { ids, timeout } => return super::wait::wait(client, json, ids, timeout).await,
         RunCommand::Cancel {
             id,
             reason,
