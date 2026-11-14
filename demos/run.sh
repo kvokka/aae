@@ -39,7 +39,12 @@ for harness in claude codex; do
   versions="$versions,$harness-$("$harness" --version 2>/dev/null | grep -Eo '[0-9]+\.[0-9]+\.[0-9]+' | head -1)"
 done
 runs=$("$aae" --json run list --project "$demo")
-children=$(printf "%s" "$runs" | jq --arg plan "$plan" '[.[] | select(.parent_run == $plan)] | length')
+# The planner's own runs: its children but the smoke run, which its pass fired through the trigger.
+children=$(printf "%s" "$runs" | jq --arg plan "$plan" \
+  '[.[] | select(.parent_run == $plan and (.formula | endswith(".smoke") | not))] | length')
+tokens=$(jq -rs '[.[] | select(.type == "run.passed" or .type == "run.failed") | .data.usage // empty]
+  | "input \(map(.input_tokens) | add // 0), output \(map(.output_tokens) | add // 0)"' \
+  "$XDG_STATE_HOME/aae/journal/events.jsonl")
 {
   echo "# $demo: $result"
   echo
@@ -48,13 +53,14 @@ children=$(printf "%s" "$runs" | jq --arg plan "$plan" '[.[] | select(.parent_ru
     "src=demos/run.sh note=\"$result in $seconds s from the request, $children runs started by the planner, n=1\" -->"
   echo
   echo "Run on $(date -u +%Y-%m-%d) with $versions (\`$(uname -sm)\`): $result in $seconds s from the request."
+  echo "Tokens the harnesses reported for the runs: $tokens."
   echo
   echo "The runs, oldest first, with the run that started each:"
   echo
   echo '| run | formula | rig | agent | state | parent |'
   echo '|---|---|---|---|---|---|'
   printf "%s" "$runs" | jq -r 'sort_by(.created_at) | .[] |
-    "| \(.id) | \(.formula) | \(.workdir | split("/") | last) | \(.agent // "") | \(.state) | \(.parent_run // "") |"'
+    "| \(.id) | \(.formula) | \(.workdir | sub("/\\.$"; "") | split("/") | last) | \(.agent // "") | \(.state) | \(.parent_run // "") |"'
   echo
   echo "The planner's outcome (\`aae run wait\`):"
   echo
