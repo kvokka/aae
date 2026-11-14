@@ -2,8 +2,8 @@
   "max_cycles": 85,
   "status": "running",
   "cycle": 55,
-  "phase": "coder",
-  "attempt": 1,
+  "phase": null,
+  "attempt": 0,
   "base": "905e5f78e1ebcb2bb928a30d2d4a5159e64ec2db",
   "started": "2026-11-14T12:25:50+0700",
   "coder_status": "done",
@@ -495,6 +495,15 @@
       "score": 7.2,
       "verdict": "continue",
       "ended": "2026-11-14T12:25:45+0700"
+    },
+    {
+      "cycle": 55,
+      "base": "905e5f78e1ebcb2bb928a30d2d4a5159e64ec2db",
+      "head": "72ae7040da913ab26d077b38efde7db1a0b4fce4",
+      "coder_status": "done",
+      "score": 7.3,
+      "verdict": "continue",
+      "ended": "2026-11-14T12:53:09+0700"
     }
   ]
 }
