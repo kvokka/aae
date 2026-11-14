@@ -57,7 +57,7 @@ fn gate_event(tx: &mut Tx<'_>, kind: &str, data: Value) -> Result<(), Error> {
 
 impl RunHandler {
     /// The gate keys of a run (contracts 7). The account and model keys are known once an attempt reported them.
-    pub(super) fn keys(tx: &Tx<'_>, row: &Row) -> Result<Vec<String>, Error> {
+    pub(super) fn keys(conn: &Connection, row: &Row) -> Result<Vec<String>, Error> {
         let mut keys = vec![
             "orchestrator".to_owned(),
             format!("project:{}", row.project),
@@ -70,17 +70,16 @@ impl RunHandler {
             keys.push(format!("bead:{}/{bead}", row.project));
         }
         let (account, model): (Option<String>, Option<String>) =
-            tx.sql()
-                .query_row("SELECT account, model FROM runs WHERE id = ?1", [&row.id], |r| {
-                    Ok((r.get(0)?, r.get(1)?))
-                })?;
+            conn.query_row("SELECT account, model FROM runs WHERE id = ?1", [&row.id], |r| {
+                Ok((r.get(0)?, r.get(1)?))
+            })?;
         keys.extend(account.into_iter().chain(model));
         Ok(keys)
     }
 
     /// Every active closure on the keys of `row` (`gates` of `run.attempt_failed`).
     pub(super) fn gates_of(tx: &Tx<'_>, row: &Row) -> Result<Vec<Value>, Error> {
-        closures(tx.sql(), tx.now_ms(), Some(&Self::keys(tx, row)?))
+        closures(tx.sql(), tx.now_ms(), Some(&Self::keys(tx.sql(), row)?))
     }
 
     /// The oldest active closure on the keys of `row`: what keeps it from starting.

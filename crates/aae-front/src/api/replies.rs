@@ -21,6 +21,9 @@ pub(crate) struct Run {
     state: String,
     /// Set once `failed`: `agent`, `check`, `hollow_done` or `infrastructure`.
     class: Option<String>,
+    /// Set once the run ended: why it failed (a plugin's veto, a failure kind) or was cancelled; `pass` for a
+    /// pass.
+    reason: Option<String>,
     attempt: u32,
     generation: u32,
     bead: Option<String>,
@@ -34,6 +37,12 @@ pub(crate) struct Run {
     inputs: Map<String, Value>,
     /// What a queued run waits for: `concurrency`, `gate`, `workdir` or `daemon_stopping`.
     waiting_for: Option<String>,
+    /// The closed gate a run waiting for a gate, or parked, waits on (the oldest closure of its keys).
+    gate: Option<Gate>,
+    /// The open request of a run in `requires_action`: `{id, kind, tool, input, text}`; its `id` is what
+    /// `POST /v1/runs/{id}/answer` takes.
+    #[schema(value_type = Option<Object>)]
+    request: Option<Value>,
     /// The outcome the current attempt declared; for an exec step `data` is `{exit_code, stdout, stderr}`.
     outcome: Option<Outcome>,
     /// The last 20, newest last.

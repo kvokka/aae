@@ -3063,6 +3063,17 @@
           "formula": {
             "type": "string"
           },
+          "gate": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/Gate",
+                "description": "The closed gate a run waiting for a gate, or parked, waits on (the oldest closure of its keys)."
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "generation": {
             "type": "integer",
             "format": "int32",
@@ -3093,6 +3104,20 @@
           },
           "project": {
             "type": "string"
+          },
+          "reason": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Set once the run ended: why it failed (a plugin's veto, a failure kind) or was cancelled; `pass` for a\npass."
+          },
+          "request": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "description": "The open request of a run in `requires_action`: `{id, kind, tool, input, text}`; its `id` is what\n`POST /v1/runs/{id}/answer` takes."
           },
           "rig": {
             "type": "string"

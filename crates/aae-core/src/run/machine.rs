@@ -274,7 +274,7 @@ impl RunHandler {
             rows.collect::<Result<_, _>>()?
         };
         let data = json!({ "run": row.view(), "failure": failure, "attempts": attempts, "gates": Self::gates_of(tx, &row)?,
-            "keys": Self::keys(tx, &row)?, "agent_failures_1h": agent_failures });
+            "keys": Self::keys(tx.sql(), &row)?, "agent_failures_1h": agent_failures });
         self.deciding(tx, row, "run.attempt_failed", data)
     }
 

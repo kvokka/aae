@@ -26,6 +26,14 @@ async fn a_permission_request_waits_for_its_answer() {
     w.driver.script(hollow_turn());
     let run = w.create().await;
     assert_eq!(w.states(&run).await.last().unwrap(), "requires_action");
+    // The view names the open request, so its id is at hand for an answer.
+    let reader = aae_core::run::Reader::open(&w.dir.path().join("state.db")).unwrap();
+    let view = reader.run(&run).unwrap().unwrap();
+    assert_eq!(
+        (&view["request"]["id"], &view["request"]["tool"]),
+        (&json!("req-1"), &json!("Bash")),
+        "{view}"
+    );
     let answer = |request: &str| Msg::Answer {
         run: run.clone(),
         request: request.into(),
@@ -37,6 +45,8 @@ async fn a_permission_request_waits_for_its_answer() {
     ));
     w.core.send(None, answer("req-1")).await.unwrap();
     assert_eq!(w.states(&run).await[3..], ["requires_action", "running", "failed"]);
+    let view = reader.run(&run).unwrap().unwrap();
+    assert!(view["request"].is_null() && view["reason"].is_string(), "{view}");
 }
 
 #[tokio::test(start_paused = true)]

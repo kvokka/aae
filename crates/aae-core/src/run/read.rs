@@ -1,7 +1,7 @@
 //! Reads of the run state for the frontends, on a read-only connection of their own (WAL lets it read beside the
 //! writer without blocking it).
 
-use super::{gates::closures, row, row::Row};
+use super::{RunHandler, gates::closures, row, row::Row};
 use crate::writer::Error;
 use rusqlite::{Connection, OpenFlags, params};
 use serde_json::{Value, json};
@@ -29,18 +29,30 @@ impl Reader {
     }
 
     /// The `RunView` of contracts 1.3 with where the run is, its attempts and the outcome its current attempt
-    /// declared (null if none); `None` if there is no such run.
+    /// declared (null if none); why it ended (`reason`), the open request of a run in `requires_action` and the
+    /// closed gate a queued or parked run waits on; `None` if there is no such run.
     pub fn run(&self, id: &str) -> Result<Option<Value>, Error> {
         let conn = self.conn();
         let Some(row) = Row::read(&conn, id)? else {
             return Ok(None);
         };
-        let (waiting_for, outcome): (Option<String>, Option<String>) = conn.query_row(
-            "SELECT waiting_for, (SELECT outcome FROM attempts WHERE run = runs.id AND n = runs.attempt) FROM runs \
-             WHERE id = ?1",
-            [id],
-            |r| Ok((r.get(0)?, r.get(1)?)),
-        )?;
+        let (waiting_for, reason, outcome, request): (Option<String>, Option<String>, Option<String>, Option<String>) =
+            conn.query_row(
+                "SELECT waiting_for, reason, outcome, request FROM runs \
+                 LEFT JOIN attempts ON attempts.run = runs.id AND attempts.n = runs.attempt WHERE id = ?1",
+                [id],
+                |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?)),
+            )?;
+        let request = request.filter(|_| row.state == "requires_action");
+        let gate = match (waiting_for.as_deref(), row.state.as_str()) {
+            (Some("gate"), _) | (_, "parked") => {
+                let keys = RunHandler::keys(&conn, &row)?;
+                closures(&conn, crate::Clock::system().now_ms(), Some(&keys))?
+                    .into_iter()
+                    .next()
+            }
+            _ => None,
+        };
         let mut view = row.view();
         view["project"] = json!(row.project);
         view["rig"] = json!(row.rig);
@@ -48,6 +60,9 @@ impl Reader {
         view["inputs"] = serde_json::from_str(&row.inputs).unwrap_or_default();
         view["waiting_for"] = json!(waiting_for);
         view["outcome"] = outcome.and_then(|o| serde_json::from_str(&o).ok()).unwrap_or_default();
+        view["reason"] = json!(reason);
+        view["request"] = request.and_then(|r| serde_json::from_str(&r).ok()).unwrap_or_default();
+        view["gate"] = json!(gate);
         view["attempts"] = json!(row::attempts(&conn, id)?);
         Ok(Some(view))
     }

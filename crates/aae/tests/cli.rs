@@ -62,12 +62,23 @@ async fn runs_and_gates_by_hand_from_the_cli() {
     );
     let view = d.json(&["run", "show", &run]);
     assert_eq!((&view["state"], &view["inputs"]["n"]), (&"queued".into(), &2.into()));
+    assert_eq!(
+        (&view["gate"]["key"], &view["gate"]["reason"]),
+        (&"project:shop".into(), &"pause".into())
+    );
     let out = d.cli(&["gate", "open", "project:shop"], &[]);
     assert!(
         out.status.success() && out.stdout.is_empty(),
         "nothing to print, not `null`"
     );
     d.until_state(&run, "passed").await;
+    assert_eq!(d.json(&["run", "show", &run])["reason"], "pass");
+    let slow = d.json(&["run", "start", "shop", "web", "slow"])["run"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+    d.json(&["run", "cancel", &slow, "--reason", "by hand"]);
+    assert_eq!(d.until_state(&slow, "cancelled").await["reason"], "by hand");
     assert_eq!(d.json(&["run", "list", "--state", "passed"])[0]["id"], run.as_str());
     let out = d.cli(&["run", "list", "--state", "bogus"], &[]);
     assert!(
