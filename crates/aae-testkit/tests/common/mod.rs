@@ -19,6 +19,7 @@ use std::{
 use tokio::task::JoinHandle;
 
 pub(crate) mod services;
+pub(crate) mod triggers;
 
 pub(crate) const FILES: &[(&str, &str)] = &[
     (
@@ -61,7 +62,7 @@ pub(crate) struct World {
 }
 
 /// A hook runner lost after the dispatch: decisions come from the test or from the deadline (contracts 3.3).
-struct Lost;
+pub(crate) struct Lost;
 
 impl HookRunner for Lost {
     fn run<'a>(&'a self, _: &'a CoreHandle<Msg>, _: &'a Value) -> BoxFuture<'a, ()> {

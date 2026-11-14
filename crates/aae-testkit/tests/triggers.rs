@@ -4,47 +4,12 @@
 mod common;
 
 use aae_core::{
-    BoxFuture, Clock, CoreHandle, Error, Journal, config, open,
-    run::{self, Create, HookRunner, Msg},
+    config,
+    run::{self, Create, Msg},
 };
-use aae_testkit::ScriptedDriver;
+use common::triggers::{CHAIN, by_trigger, daemon, firings, journal, write};
 use serde_json::Value;
-use std::{fs, path::Path, sync::Arc, time::Duration};
-use tokio::task::JoinHandle;
-
-const NEXT: &str = "name = \"next\"\n[inputs]\nfrom = { type = \"string\" }\n\
-    [step]\nkind = \"prompt\"\nagent = \"dev\"\nprompt = \"build.md\"\n";
-
-/// `after-build` starts `next` from every `build` run; `chain` starts `next` from every `next` run, so only the depth
-/// limit ends the chain; `gated` names a gate the queued run does not have.
-const CHAIN: &str = r#"
-[rigs.web]
-path = "web"
-
-[[trigger]]
-name = "after-build"
-on = "run.queued"
-where = { "run.formula" = "shop.build" }
-run = "next"
-rig = "web"
-inputs = { from = "{{ event.run.id }}" }
-
-[[trigger]]
-name = "chain"
-on = "run.queued"
-where = { "run.formula" = "shop.next" }
-run = "next"
-rig = "web"
-inputs = { from = "{{ event.run.id }}" }
-
-[[trigger]]
-name = "gated"
-on = "run.queued"
-where = { "run.formula" = "shop.build" }
-run = "next"
-rig = "web"
-inputs = { from = "{{ event.gate.key }}" }
-"#;
+use std::{fs, sync::Arc, time::Duration};
 
 const SCHEDULES: &str = r#"
 [rigs.web]
@@ -66,62 +31,6 @@ rig = "web"
 /// 2026-11-13T02:59:30Z.
 const T0: i64 = 1_794_538_770_000;
 const HOUR: u64 = 3_600;
-
-struct Lost;
-
-impl HookRunner for Lost {
-    fn run<'a>(&'a self, _: &'a CoreHandle<Msg>, _: &'a Value) -> BoxFuture<'a, ()> {
-        Box::pin(async {})
-    }
-}
-
-fn write(dir: &Path, project: &str) {
-    // The schedules below are written in UTC, whatever the zone of the machine.
-    let config = format!("timezone = \"UTC\"\n{}", common::FILES[0].1);
-    let extra = [
-        ("shop/aae.toml", project),
-        ("shop/formulas/next.toml", NEXT),
-        ("config.toml", &config),
-    ];
-    for (path, text) in common::FILES.iter().chain(&extra) {
-        let path = dir.join(path);
-        fs::create_dir_all(path.parent().unwrap()).unwrap();
-        fs::write(path, text).unwrap();
-    }
-}
-
-/// The core on the state of `dir`, as a daemon (re)started at `start_ms`.
-fn daemon(dir: &Path, start_ms: i64) -> (CoreHandle<Msg>, JoinHandle<Result<(), Error>>) {
-    let config = config::load(&dir.join("config.toml")).unwrap();
-    run::start(
-        open(&dir.join("state.db")).unwrap(),
-        Clock::managed(start_ms),
-        Arc::new(config),
-        vec![Arc::new(ScriptedDriver::new(1))],
-        Default::default(),
-        Arc::new(Lost),
-        Journal::new(&dir.join("journal")),
-    )
-}
-
-fn journal(dir: &Path, kind: &str) -> Vec<Value> {
-    let all = Journal::new(&dir.join("journal")).read_from(1, 100_000).unwrap();
-    all.into_iter().filter(|e| e["type"] == kind).collect()
-}
-
-/// Every firing of `trigger`, fired or skipped (the run of an earlier firing may still be alive).
-fn firings(dir: &Path, trigger: &str) -> usize {
-    let fired = by_trigger(&journal(dir, "trigger.fired"), trigger).len();
-    fired + by_trigger(&journal(dir, "trigger.skipped"), trigger).len()
-}
-
-fn by_trigger(events: &[Value], trigger: &str) -> Vec<Value> {
-    events
-        .iter()
-        .filter(|e| e["data"]["trigger"] == trigger)
-        .cloned()
-        .collect()
-}
 
 #[tokio::test(start_paused = true)]
 async fn an_event_chain_keeps_its_correlation_stops_at_the_depth_limit_and_survives_a_restart() {
@@ -342,115 +251,4 @@ async fn an_event_trigger_switched_off_does_not_fire() {
     tokio::time::sleep(Duration::from_millis(300)).await;
     assert_eq!(firings(dir.path(), "shop.after-build"), 0);
     assert_eq!(by_trigger(&journal(dir.path(), "trigger.fired"), "shop.chain").len(), 0);
-}
-
-/// A trigger sees the events of its own rig, unless its `where` names the rig: `cross` on `web` follows `build` on
-/// `api`, `own` on `web` does not.
-#[tokio::test(start_paused = true)]
-async fn a_where_on_rig_crosses_the_rigs_of_a_project() {
-    let dir = tempfile::tempdir().unwrap();
-    let project = r#"
-[rigs.web]
-path = "web"
-[rigs.api]
-path = "web"
-
-[[trigger]]
-name = "cross"
-on = "run.queued"
-where = { rig = "api", "run.formula" = "shop.build" }
-run = "next"
-rig = "web"
-inputs = { from = "{{ event.run.id }}" }
-
-[[trigger]]
-name = "own"
-on = "run.queued"
-where = { "run.formula" = "shop.build" }
-run = "next"
-rig = "web"
-inputs = { from = "{{ event.run.id }}" }
-"#;
-    write(dir.path(), project);
-    let (core, _task) = daemon(dir.path(), 0);
-    for rig in ["api", "web"] {
-        let create = Create {
-            project: "shop".into(),
-            rig: rig.into(),
-            formula: "build".into(),
-            inputs: serde_json::Map::new(),
-            correlation: None,
-            depth: 0,
-            parent_run: None,
-            continue_from: None,
-        };
-        core.send(None, Msg::Create(create)).await.unwrap();
-    }
-    tokio::time::sleep(Duration::from_millis(300)).await;
-    let fired = journal(dir.path(), "trigger.fired");
-    let cross = by_trigger(&fired, "shop.cross");
-    assert_eq!(cross.len(), 1, "{fired:?}");
-    assert_eq!(cross[0]["rig"], "web");
-    let api = journal(dir.path(), "run.queued")
-        .into_iter()
-        .find(|e| e["rig"] == "api")
-        .unwrap();
-    assert_eq!(cross[0]["data"]["cause_seq"], api["seq"]);
-    // `own` has inputs from the event, so no overlap would hide a firing on the build of `api`.
-    let own = by_trigger(&fired, "shop.own");
-    assert_eq!(own.len(), 1, "only the build on web: {fired:?}");
-    let web = journal(dir.path(), "run.queued")
-        .into_iter()
-        .find(|e| e["rig"] == "web" && e["data"]["run"]["formula"] == "shop.build");
-    assert_eq!(own[0]["data"]["cause_seq"], web.unwrap()["seq"]);
-    assert_eq!(by_trigger(&journal(dir.path(), "trigger.skipped"), "shop.own").len(), 0);
-}
-
-/// A trigger sees the events of its own project only: a build of `shop` does not wake the trigger of `mall`, whose
-/// rig has the same name.
-#[tokio::test(start_paused = true)]
-async fn an_event_trigger_does_not_hear_another_project() {
-    let dir = tempfile::tempdir().unwrap();
-    write(dir.path(), CHAIN);
-    let mall = r#"
-[rigs.web]
-path = "web"
-
-[[trigger]]
-name = "after-shop"
-on = "run.queued"
-where = { "run.formula" = "shop.build" }
-run = "next"
-rig = "web"
-inputs = { from = "{{ event.run.id }}" }
-"#;
-    let config = "timezone = \"UTC\"\nprojects = [\"shop\", \"mall\"]\n\
-        builtin = { default-policy = { enabled = false } }\n[harness.scripted]\n";
-    for (path, text) in [
-        ("config.toml", config),
-        ("mall/aae.toml", mall),
-        ("mall/web/.keep", ""),
-        ("mall/agents/dev/agent.toml", "harness = \"scripted\"\n"),
-        ("mall/formulas/next.toml", NEXT),
-        ("mall/formulas/build.md", "Next."),
-    ] {
-        let path = dir.path().join(path);
-        fs::create_dir_all(path.parent().unwrap()).unwrap();
-        fs::write(path, text).unwrap();
-    }
-    let (core, _task) = daemon(dir.path(), 0);
-    let create = Create {
-        project: "shop".into(),
-        rig: "web".into(),
-        formula: "build".into(),
-        inputs: serde_json::Map::new(),
-        correlation: None,
-        depth: 0,
-        parent_run: None,
-        continue_from: None,
-    };
-    core.send(None, Msg::Create(create)).await.unwrap();
-    tokio::time::sleep(Duration::from_millis(300)).await;
-    assert_eq!(firings(dir.path(), "shop.after-build"), 1);
-    assert_eq!(firings(dir.path(), "mall.after-shop"), 0);
 }
