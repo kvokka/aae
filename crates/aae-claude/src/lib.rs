@@ -12,7 +12,7 @@ use aae_core::{
     config::EffectiveConfig,
     driver::{
         Answer, Capabilities, Driver, EventSink, Failure, FailureKind, Health, InstanceHandle, Normalized, ProcessPart,
-        PromptKey, PromptState, SessionPart, SessionPlan, SessionRef, Source, Split, Transcript, child,
+        PromptKey, SessionPart, SessionPlan, SessionRef, Source, Split, Transcript, child,
     },
     orphans,
 };
@@ -348,15 +348,8 @@ fn transcript(session: &Value, key: PromptKey, host: &Path) -> Transcript {
     };
     let records: Vec<Value> = text.lines().filter_map(|l| serde_json::from_str(l).ok()).collect();
     let key = key.0.to_string();
-    let prompt = match records
-        .iter()
-        .position(|r| r["type"] == "user" && r["uuid"] == key.as_str())
-    {
-        None => PromptState::Absent,
-        Some(at) if records[at..].iter().any(|r| r["type"] == "assistant") => PromptState::Answered,
-        Some(_) => PromptState::Unanswered,
-    };
-    Transcript::Present { prompt }
+    let delivered = records.iter().any(|r| r["type"] == "user" && r["uuid"] == key.as_str());
+    Transcript::Present { delivered }
 }
 
 #[cfg(test)]

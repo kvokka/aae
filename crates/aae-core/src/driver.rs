@@ -113,18 +113,12 @@ pub enum Answer {
     Text { text: String },
 }
 
-/// Where the prompt with a given key stands in a session's transcript.
+/// Whether a session's transcript exists and holds the prompt with a given key. Whether the prompt was answered
+/// does not matter: a resumed session never has a turn in flight, so a delivered prompt is reconciled either way.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Transcript {
     Missing,
-    Present { prompt: PromptState },
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum PromptState {
-    Absent,
-    Unanswered,
-    Answered,
+    Present { delivered: bool },
 }
 
 #[derive(Clone, Debug, PartialEq)]

@@ -5,7 +5,7 @@ use crate::{
     BoxFuture,
     driver::{
         Driver, DriverEvent, EventSink, Failure, FailureKind, Health, InstanceHandle, Normalized, ProcessPart,
-        PromptKey, PromptState, SessionPart, SessionRef, Source, Transcript,
+        PromptKey, SessionPart, SessionRef, Source, Transcript,
     },
     writer::{CoreHandle, Executor},
 };
@@ -211,9 +211,7 @@ impl RunExecutor {
                         return Err(Failure::new(FailureKind::TranscriptDivergence, Source::Core));
                     }
                     // The harness never got it: the same prompt with the same key, so it cannot run twice.
-                    Transcript::Present {
-                        prompt: PromptState::Absent,
-                    } if !retry.is_null() => {
+                    Transcript::Present { delivered: false } if !retry.is_null() => {
                         (key, text) = (check, retry["text"].as_str().unwrap_or_default().to_owned());
                         let msg = Msg::PromptReplayed {
                             run: run.clone(),

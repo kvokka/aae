@@ -73,12 +73,7 @@ async fn a_delayed_turn_ends_without_an_outcome_after_its_delay() {
     ]);
     let start = Instant::now();
     s.prompt(1).await;
-    assert_eq!(
-        s.transcript(1).await,
-        Transcript::Present {
-            prompt: PromptState::Unanswered
-        }
-    );
+    assert_eq!(s.transcript(1).await, Transcript::Present { delivered: true });
     assert_eq!(next(&mut s.events).await, Some(Normalized::PromptAcked { key: key(1) }));
     assert_eq!(next(&mut s.events).await, Some(Normalized::TurnStarted));
     let end = next(&mut s.events).await;
@@ -96,18 +91,8 @@ async fn a_delayed_turn_ends_without_an_outcome_after_its_delay() {
             background: false
         })
     );
-    assert_eq!(
-        s.transcript(1).await,
-        Transcript::Present {
-            prompt: PromptState::Answered
-        }
-    );
-    assert_eq!(
-        s.transcript(2).await,
-        Transcript::Present {
-            prompt: PromptState::Absent
-        }
-    );
+    assert_eq!(s.transcript(1).await, Transcript::Present { delivered: true });
+    assert_eq!(s.transcript(2).await, Transcript::Present { delivered: false });
 }
 
 #[tokio::test(start_paused = true)]
@@ -128,12 +113,7 @@ async fn a_provider_error_fails_the_turn() {
             stop_reason: StopReason::Failed
         })
     );
-    assert_eq!(
-        s.transcript(1).await,
-        Transcript::Present {
-            prompt: PromptState::Unanswered
-        }
-    );
+    assert_eq!(s.transcript(1).await, Transcript::Present { delivered: true });
 }
 
 #[tokio::test(start_paused = true)]
@@ -218,9 +198,7 @@ async fn the_process_dies_mid_turn_and_later_calls_fail() {
         .unwrap();
     assert_eq!(
         s.driver.transcript(&instance, &s.session, key(1)).await.unwrap(),
-        Transcript::Present {
-            prompt: PromptState::Unanswered
-        }
+        Transcript::Present { delivered: true }
     );
     s.driver.script(vec![ended(StopReason::Completed)]);
     s.driver
@@ -273,12 +251,7 @@ async fn a_permission_request_continues_after_the_answer() {
             stop_reason: StopReason::Completed
         })
     );
-    assert_eq!(
-        s.transcript(1).await,
-        Transcript::Present {
-            prompt: PromptState::Answered
-        }
-    );
+    assert_eq!(s.transcript(1).await, Transcript::Present { delivered: true });
 }
 
 #[tokio::test(start_paused = true)]
@@ -339,9 +312,7 @@ async fn unknown_sessions_have_no_transcript_and_closed_ones_resume() {
     let closed = s.transcript(1).await;
     assert_eq!(
         closed,
-        Transcript::Present {
-            prompt: PromptState::Absent
-        },
+        Transcript::Present { delivered: false },
         "a closed session keeps its transcript"
     );
     let part = SessionPart(Value::Null);

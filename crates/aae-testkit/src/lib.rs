@@ -8,8 +8,7 @@ use aae_core::{
     config::EffectiveConfig,
     driver::{
         Answer, Capabilities, Driver, DriverEvent, EventSink, Failure, FailureKind, Health, InstanceHandle, Normalized,
-        ProcessPart, PromptKey, PromptState, SessionPart, SessionPlan, SessionRef, Source, Split, StopReason,
-        Transcript,
+        ProcessPart, PromptKey, SessionPart, SessionPlan, SessionRef, Source, Split, StopReason, Transcript,
     },
 };
 use serde_json::{Value, json};
@@ -70,8 +69,8 @@ struct Instance {
 
 struct Session {
     instance: String,
-    /// Prompts in order, with whether a completed turn followed.
-    prompts: Vec<(PromptKey, bool)>,
+    /// Prompts in order.
+    prompts: Vec<PromptKey>,
     playing: Option<JoinHandle<()>>,
     /// A turn is in flight: from a prompt or a response until `turn.ended`.
     in_turn: bool,
@@ -254,7 +253,7 @@ impl Driver for ScriptedDriver {
             state.keys.push(key);
             let losing = state.losing;
             // Only a live session can drop a prompt: a dead process refuses it, as a harness's does.
-            Self::live_session(&mut state, instance, session).map(|s| (!losing).then(|| s.prompts.push((key, false))))
+            Self::live_session(&mut state, instance, session).map(|s| (!losing).then(|| s.prompts.push(key)))
         };
         match recorded {
             Ok(Some(())) => ready(self.play(instance, session, Some(Normalized::PromptAcked { key }))),
@@ -319,11 +318,7 @@ impl Driver for ScriptedDriver {
         ready(Ok(match found {
             None => Transcript::Missing,
             Some(s) => Transcript::Present {
-                prompt: match s.prompts.iter().find(|(k, _)| *k == key) {
-                    None => PromptState::Absent,
-                    Some((_, false)) => PromptState::Unanswered,
-                    Some((_, true)) => PromptState::Answered,
-                },
+                delivered: s.prompts.contains(&key),
             },
         }))
     }

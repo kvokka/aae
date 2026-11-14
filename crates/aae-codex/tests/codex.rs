@@ -3,9 +3,7 @@
 use aae_codex::Codex;
 use aae_core::{
     config::{EffectiveConfig, Layer, Skill, Sourced},
-    driver::{
-        Driver, DriverEvent, FailureKind, Normalized, PromptKey, PromptState, SessionPlan, StopReason, Transcript,
-    },
+    driver::{Driver, DriverEvent, FailureKind, Normalized, PromptKey, SessionPlan, StopReason, Transcript},
 };
 use aae_testkit::openai::{Provider, Reply};
 use serde_json::json;
@@ -115,22 +113,12 @@ async fn a_prompt_runs_a_command_in_the_thread_and_the_turn_completes() {
         "the skill is listed to the model"
     );
     let answered = driver.transcript(&instance, &session, key).await.unwrap();
-    assert_eq!(
-        answered,
-        Transcript::Present {
-            prompt: PromptState::Answered
-        }
-    );
+    assert_eq!(answered, Transcript::Present { delivered: true });
     let other = driver
         .transcript(&instance, &session, PromptKey::new("run-1", 1, 2))
         .await
         .unwrap();
-    assert_eq!(
-        other,
-        Transcript::Present {
-            prompt: PromptState::Absent
-        }
-    );
+    assert_eq!(other, Transcript::Present { delivered: false });
     driver.stop_instance(&instance, Duration::from_secs(4)).await;
     until(&mut rx, |e| matches!(e, Normalized::Exited { .. })).await;
 }

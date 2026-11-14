@@ -13,7 +13,7 @@ use aae_core::{
     config::EffectiveConfig,
     driver::{
         Answer, Capabilities, Driver, EventSink, Failure, FailureKind, Health, InstanceHandle, ProcessPart, PromptKey,
-        PromptState, SessionPart, SessionPlan, SessionRef, Source, Split, Transcript, child,
+        SessionPart, SessionPlan, SessionRef, Source, Split, Transcript, child,
     },
     orphans,
 };
@@ -329,12 +329,9 @@ impl Driver for Codex {
                     .into_iter()
                     .any(|i| i["type"] == "userMessage" && i["clientId"] == key.as_str())
             };
-            let prompt = match turns.iter().find(holds) {
-                None => PromptState::Absent,
-                Some(turn) if turn["status"] == "completed" => PromptState::Answered,
-                Some(_) => PromptState::Unanswered,
-            };
-            Ok(Transcript::Present { prompt })
+            Ok(Transcript::Present {
+                delivered: turns.iter().any(|t| holds(&t)),
+            })
         })
     }
 

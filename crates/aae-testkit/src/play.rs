@@ -72,11 +72,9 @@ impl ScriptedDriver {
 
     pub(crate) fn emit(&self, instance: &str, session: Option<&SessionRef>, event: Normalized) {
         let mut state = self.lock();
-        if let (Some(session), Normalized::TurnEnded { stop_reason }) = (session, &event)
+        if let (Some(session), Normalized::TurnEnded { .. }) = (session, &event)
             && let Some(last) = session_id(session).ok().and_then(|id| state.sessions.get_mut(&id))
-            && let Some(prompt) = last.prompts.last_mut()
         {
-            prompt.1 |= *stop_reason == StopReason::Completed;
             last.in_turn = false;
         }
         if let Some(i) = state.instances.get_mut(instance).filter(|i| i.alive) {

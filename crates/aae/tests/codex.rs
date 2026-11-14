@@ -187,7 +187,7 @@ async fn a_codex_killed_in_a_command_is_resumed_and_its_run_passes() {
 }
 
 /// Criterion 8 for codex: after `kill -9` of the daemon mid-turn, the next daemon resumes the same thread in a new
-/// app-server, finds the prompt unanswered by its `clientId` and reconciles; the run passes.
+/// app-server, finds the prompt delivered by its `clientId` and reconciles; the run passes.
 #[tokio::test(flavor = "multi_thread")]
 async fn a_codex_thread_is_resumed_after_a_daemon_restart_and_its_run_passes() {
     let finish = format!("{} finish pass --summary built", env!("CARGO_BIN_EXE_aae"));

@@ -3,7 +3,7 @@
 use aae_claude::Claude;
 use aae_core::{
     config::{EffectiveConfig, Hook, Layer, Mcp, Skill, Sourced},
-    driver::{Driver, DriverEvent, Normalized, PromptKey, PromptState, SessionPlan, StopReason, Transcript},
+    driver::{Driver, DriverEvent, Normalized, PromptKey, SessionPlan, StopReason, Transcript},
 };
 use aae_testkit::anthropic::{Provider, Reply};
 use serde_json::Value;
@@ -109,12 +109,7 @@ async fn a_reply_is_acked_and_completed_and_is_in_the_transcript() {
             stop_reason: StopReason::Completed
         })
     );
-    assert_eq!(
-        transcript,
-        Transcript::Present {
-            prompt: PromptState::Answered
-        }
-    );
+    assert_eq!(transcript, Transcript::Present { delivered: true });
 }
 
 #[tokio::test]
