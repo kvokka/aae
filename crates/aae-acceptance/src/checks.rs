@@ -28,7 +28,7 @@ pub(crate) const ALL: &[Scenario] = &[
     },
     Scenario {
         criterion: "11",
-        title: "the contract tests of claude and codex (§7.8) with codex's model list, and of the br tracker (§10.2), pass",
+        title: "the contract tests of claude and codex (§7.8), codex's model list, and of the br tracker (§10.2) pass",
         launch: Launch::Ci,
         run: |env| {
             Box::pin(tests(
