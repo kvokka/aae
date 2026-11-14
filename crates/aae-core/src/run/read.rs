@@ -85,7 +85,7 @@ impl Reader {
 
     /// `{outbox_depth, outbox_oldest_ms, active_runs}` for the daemon status (contracts 3.5): the outbox rows the
     /// journal has not acknowledged, the time of the oldest one, and the runs a drain waits for (one in a turn,
-    /// a hook or a preparation).
+    /// a hook, a policy decision or a preparation).
     pub fn status(&self) -> Result<Value, Error> {
         let conn = self.conn();
         let (depth, oldest): (i64, Option<i64>) =
@@ -94,7 +94,8 @@ impl Reader {
             })?;
         let active: i64 = conn.query_row(
             "SELECT COUNT(*) FROM runs \
-             WHERE state IN ('preparing', 'starting', 'running', 'requires_action', 'finishing')",
+             WHERE state IN ('preparing', 'starting', 'running', 'requires_action', 'finishing') \
+             OR (state = 'interrupted' AND waiting IS NOT NULL)",
             [],
             |r| r.get(0),
         )?;

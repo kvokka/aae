@@ -102,7 +102,7 @@ async fn a_passing_403_with_a_lost_or_doubled_end_recovers_by_itself() {
 #[tokio::test(start_paused = true)]
 async fn a_lasting_403_keeps_waiting_past_the_attempts_ceiling() {
     // Spec §2.1 item 12: no operator, and the waits on the account gate do not count against the ceiling.
-    let w = world("auth_backoff_base_s = 0\nauth_backoff_cap_s = 0\n");
+    let w = world("auth_backoff_base_s = 1\nauth_backoff_cap_s = 1\n");
     let past = MAX_ATTEMPTS + 2;
     for _ in 0..past {
         w.driver.script(vec![forbidden()]);
@@ -117,7 +117,7 @@ async fn a_lasting_403_keeps_waiting_past_the_attempts_ceiling() {
             break token;
         }
         assert!(
-            started.elapsed() < Duration::from_secs(20),
+            started.elapsed() < Duration::from_secs(60),
             "no attempt past the ceiling"
         );
         tokio::time::sleep(Duration::from_millis(20)).await;

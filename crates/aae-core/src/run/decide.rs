@@ -12,7 +12,7 @@ use serde_json::{Value, json};
 use std::{collections::BTreeMap, path::PathBuf, time::Duration};
 
 /// The slack of a deciding event's deadline (contracts 3.3).
-const DECIDE_SLACK_MS: i64 = 5_000;
+pub(super) const DECIDE_SLACK_MS: i64 = 5_000;
 
 impl RunHandler {
     /// Emits a deciding event; with no hook on its type the "no plugin decision" outcome applies at once, else at
@@ -96,12 +96,15 @@ impl RunHandler {
             }
             ("interrupted", Some(Decision::Park { gate, then })) => {
                 self.policy_gate(tx, Some(&gate))?;
-                if gate.key.starts_with("account:") {
-                    tx.sql().execute(
-                        "UPDATE attempts SET waited = 1 WHERE run = ?1 AND n = ?2",
-                        params![row.id, row.attempt],
-                    )?;
-                }
+                // Out of the ceiling is only the wait on the run's own account gate, closed now, after a failure of
+                // the account (owner decision, spec §2.1 item 12): any other park counts.
+                tx.sql().execute(
+                    "UPDATE attempts SET waited = 1 WHERE run = ?1 AND n = ?2 \
+                     AND json_extract(failure, '$.kind') IN ('auth_required', 'billing') \
+                     AND ?3 = (SELECT account FROM runs WHERE id = ?1) \
+                     AND EXISTS (SELECT 1 FROM gates WHERE key = ?3 AND (until_ms IS NULL OR until_ms > ?4))",
+                    params![row.id, row.attempt, gate.key, tx.now_ms()],
+                )?;
                 self.retry(tx, row, &then, None)
             }
             ("running", None) => self.terminal(tx, row, "failed", Some("hollow_done"), "no_decision"),
@@ -123,7 +126,7 @@ impl RunHandler {
     }
 
     /// Schedules the next attempt of an `interrupted` run after `after` (`None`: parks it on its closed gate),
-    /// within the attempts ceiling: waits on an account gate (owner decision, spec §2.1 item 12) do not count.
+    /// within the attempts ceiling: an attempt whose account failure parked on its closed account gate does not count.
     fn retry(
         &mut self,
         tx: &mut Tx<'_>,

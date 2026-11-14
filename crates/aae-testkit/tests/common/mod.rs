@@ -13,7 +13,7 @@ use serde_json::Value;
 use std::{
     fs,
     path::{Path, PathBuf},
-    sync::Arc,
+    sync::{Arc, Mutex},
     time::Duration,
 };
 use tokio::task::JoinHandle;
@@ -68,6 +68,18 @@ pub(crate) struct Lost;
 impl HookRunner for Lost {
     fn run<'a>(&'a self, _: &'a CoreHandle<Msg>, _: &'a Value) -> BoxFuture<'a, ()> {
         Box::pin(async {})
+    }
+}
+
+/// A hook runner whose hooks never finish; it keeps the type of every event it was given, across restarts.
+#[derive(Default)]
+pub(crate) struct Hanging(pub(crate) Mutex<Vec<String>>);
+
+impl HookRunner for Hanging {
+    fn run<'a>(&'a self, _: &'a CoreHandle<Msg>, payload: &'a Value) -> BoxFuture<'a, ()> {
+        let kind = payload["event"]["type"].as_str().unwrap_or_default().to_owned();
+        self.0.lock().unwrap().push(kind);
+        Box::pin(std::future::pending())
     }
 }
 
@@ -162,8 +174,16 @@ impl World {
     /// The daemon dies without a word (its writer is dropped mid-flight) and a new one starts on its state, with a
     /// new driver: the old one's processes are unknown to it, the transcripts of its sessions survive.
     pub(crate) async fn restart(&mut self) {
+        self.restart_after(Duration::ZERO).await;
+    }
+
+    /// [`Self::restart`] with the daemon down for `idle` of the paused clock in between.
+    pub(crate) async fn restart_after(&mut self, idle: Duration) {
         self.task.abort();
         let _ = (&mut self.task).await;
+        if !idle.is_zero() {
+            tokio::time::advance(idle).await;
+        }
         self.driver = self.driver.after_crash();
         (self.core, self.task) = core_on(
             self.dir.path(),

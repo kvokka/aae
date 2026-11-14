@@ -135,15 +135,17 @@ pub(crate) fn check(w: &World, play: &mut Play) -> Result<(), String> {
         if state == "running" {
             let session: Option<String> = conn
                 .query_row(
-                    "SELECT session FROM attempts WHERE run = ?1 AND ended_ms IS NULL",
+                    // A turn that ended before a restart waits for its decision with no session: recovery let go of
+                    // the handle, and a decision that needs the session fails the attempt.
+                    "SELECT session FROM attempts WHERE run = ?1 AND ended_ms IS NULL AND handle IS NOT NULL",
                     [run],
                     |r| r.get(0),
                 )
                 .optional()
                 .unwrap()
                 .flatten();
-            let session = session.and_then(|s| serde_json::from_str(&s).ok()).unwrap_or_default();
-            if !w.driver.has_transcript(&session) {
+            let session: Option<serde_json::Value> = session.and_then(|s| serde_json::from_str(&s).ok());
+            if let Some(session) = session.filter(|s| !w.driver.has_transcript(s)) {
                 return Err(format!("{run} runs on {session} with no transcript (invariant 17)"));
             }
         }

@@ -86,7 +86,8 @@ impl RunHandler {
     }
 
     /// Sends `text` as the next prompt of the current attempt: the declared outcome is cleared, the token stays
-    /// valid, the step timeout resumes with what it had left. Past the remarks ceiling the run fails with `class`.
+    /// valid, the step timeout resumes with what it had left. Past the remarks ceiling the run fails with `class`;
+    /// with no session to take the prompt, the attempt fails with `daemon_crash`.
     pub(super) fn next_prompt(&mut self, tx: &mut Tx<'_>, mut row: Row, text: &str, class: &str) -> Result<(), Error> {
         let (prompts, paused, harness, handle, session): (i64, Option<i64>, String, Option<String>, Option<String>) =
             tx.sql().query_row(
@@ -97,8 +98,14 @@ impl RunHandler {
         if prompts > MAX_REMARKS {
             return self.terminal(tx, row, "failed", Some(class), "remarks_ceiling");
         }
-        let (Some(handle), Some(session)) = (handle, session) else {
-            return self.attempt_failed(tx, row, Failure::new(FailureKind::Unknown, Source::Core));
+        let n = u32::try_from(prompts + 1).unwrap_or(u32::MAX);
+        let key = PromptKey::new(&row.id, row.attempt, n);
+        super::prompts::intent(tx, &row.id, row.attempt, n, key, text)?;
+        // The session of the turn died with the daemon that ran it (recovery let go of its handle), or dies with the
+        // one that is stopping now: no next turn starts, the attempt fails for the policy to decide (spec §5.6), and
+        // the prompt left as an intent goes to the session a resumed attempt brings back (contracts 6.4).
+        let (Some(handle), Some(session), None) = (handle, session, &self.stopping) else {
+            return self.attempt_failed(tx, row, Failure::new(FailureKind::DaemonCrash, Source::Core));
         };
         tx.sql().execute(
             "UPDATE attempts SET outcome = NULL, paused_ms = NULL, prompts = ?3 WHERE run = ?1 AND n = ?2",
@@ -111,9 +118,6 @@ impl RunHandler {
         if row.state != "running" {
             row.set_state(tx, "running", None)?;
         }
-        let n = u32::try_from(prompts + 1).unwrap_or(u32::MAX);
-        let key = PromptKey::new(&row.id, row.attempt, n);
-        super::prompts::intent(tx, &row.id, row.attempt, n, key, text)?;
         let payload = json!({
             "op": "prompt", "run": row.id, "attempt": row.attempt, "harness": harness, "text": text,
             "handle": serde_json::from_str::<Value>(&handle).unwrap_or_default(),

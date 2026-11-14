@@ -291,16 +291,17 @@ async fn the_bundled_default_policy_resumes_a_crash_and_reminds_once() {
     assert_eq!(env.unwrap()["TRACKER_ACTOR"], format!("aae:{run}:2"));
 }
 
-/// What a hook the dead daemon left running is killed by its marker on restart; the hook, still queued, then runs
-/// again and lets the run start.
+/// What a hook on `on` the dead daemon left running is killed by its marker on restart, before the hook, still
+/// queued, runs again; `reach` brings the run to the event. Returns the run.
 #[cfg(target_os = "linux")]
-#[tokio::test]
-async fn a_restart_kills_the_hook_the_dead_daemon_left() {
+async fn a_restart_kills_the_hook_left_on(on: &str, reach: impl AsyncFn(&World, &str)) -> (World, String) {
     // The test's restart drops the hook's future, which kills `sh` (a `kill -9` of the daemon would not): the
-    // background `sleep` stands for what survives.
+    // background `sleep` stands for what survives. The hook that runs again finds its pid file and says nothing.
     let gate = "[ -e hook.pid ] && exit 0\nsleep 60 &\necho $! > hook.pid\nwait";
-    let mut w = policy_timed(&[("run.preparing", gate, "120s")]);
+    let mut w = policy_timed(&[(on, gate, "120s")]);
+    w.driver.script(slow_turn());
     let run = w.create().await;
+    reach(&w, &run).await;
     let pid_file = w.dir.path().join("policy/hook.pid");
     let started = Instant::now();
     let pid: i32 = loop {
@@ -321,5 +322,21 @@ async fn a_restart_kills_the_hook_the_dead_daemon_left() {
         );
         tokio::time::sleep(Duration::from_millis(20)).await;
     }
+    (w, run)
+}
+
+#[cfg(target_os = "linux")]
+#[tokio::test]
+async fn a_restart_kills_the_preparing_hook_the_dead_daemon_left() {
+    let (w, run) = a_restart_kills_the_hook_left_on("run.preparing", async |_: &World, _: &str| {}).await;
     assert_eq!(w.until(Some(&run), "run.state_changed", 1).await["to"], "starting");
+}
+
+/// The run waits in `finishing` across the restart (contracts 6.4): its hook is the one the sweep must find.
+#[cfg(target_os = "linux")]
+#[tokio::test]
+async fn a_restart_kills_the_finishing_hook_the_dead_daemon_left() {
+    let declare = async |w: &World, run: &str| assert_eq!(w.declare(run).await, "accepted");
+    let (w, run) = a_restart_kills_the_hook_left_on("run.finishing", declare).await;
+    w.until(Some(&run), "run.passed", 0).await;
 }
