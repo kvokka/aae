@@ -53,7 +53,7 @@ pub(crate) const ALL: &[Scenario] = &[
             Box::pin(tests(
                 env,
                 "-p aae-front -p aae -E binary(openapi)|test(both_epochs_serve_the_same_five_tools)",
-                3,
+                4,
             ))
         },
     },
