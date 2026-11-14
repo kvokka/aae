@@ -39,11 +39,25 @@ pub struct Config {
     pub plugins: Vec<Plugin>,
     /// The enabled bundled plugins with their parameters, run after every declared plugin.
     pub bundled: Vec<Bundled>,
+    /// The thresholds of the watchdog (invariant 15): a reload applies to deadlines set from then on.
+    pub watchdog: Watchdog,
     pub projects: Vec<Project>,
     /// The command prefix that serves a stdio MCP server over HTTP on `AAE_SERVICE_PORT` (spec §11.4): a stdio
     /// server not of scope `session` runs behind it as a service. Empty: no bridge, stdio servers stay per session.
     /// [`load`] leaves it empty; the binary sets it.
     pub bridge: Vec<String>,
+}
+
+/// The thresholds of `[watchdog]` in the orchestrator file, in milliseconds (contracts 6.1).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Watchdog {
+    pub silence_ms: i64,
+    pub tool_silence_ms: i64,
+    pub background_silence_ms: i64,
+    pub human_timeout_ms: i64,
+    pub start_timeout_ms: i64,
+    pub queue_timeout_ms: i64,
+    pub park_timeout_ms: i64,
 }
 
 /// The plugins bundled with aae (spec §11.5): name, the events they hook, and whether they are on with no

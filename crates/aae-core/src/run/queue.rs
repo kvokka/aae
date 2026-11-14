@@ -1,7 +1,7 @@
 //! Creation and the queue (spec §9.3, docs/design/contracts.md 6.1–6.2): a run waits in `queued` for a free
 //! workdir and a concurrency slot, then leaves for `preparing`, oldest first.
 
-use super::{Create, RunHandler, machine::QUEUE_TIMEOUT_MS, rejected, row::Row};
+use super::{Create, RunHandler, rejected, row::Row};
 use crate::{
     config::{InputType, Step},
     writer::{Error, Tx},
@@ -107,7 +107,10 @@ impl RunHandler {
         let row = Row::load(tx, &id)?;
         let waiting = self.blocker(tx, &row)?;
         Self::queued(tx, &row, waiting, true)?;
-        tx.set_deadline(&row.deadline("state"), tx.now_ms() + QUEUE_TIMEOUT_MS)?;
+        tx.set_deadline(
+            &row.deadline("state"),
+            tx.now_ms() + self.config.watchdog.queue_timeout_ms,
+        )?;
         self.schedule(tx)?;
         Ok(json!({ "run": id }))
     }

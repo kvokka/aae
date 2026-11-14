@@ -1,12 +1,7 @@
 //! The finisher and the end of a run (docs/design/contracts.md 6.3, spec §9.4): the declared outcome, the decisions
 //! on `run.finishing` and the next prompt of an attempt after a remark or a `continue`.
 
-use super::{
-    Outcome, RunHandler, Verdict,
-    events::{SILENCE_MS, attempt_live},
-    row::Row,
-    token_sha256,
-};
+use super::{Outcome, RunHandler, Verdict, events::attempt_live, row::Row, token_sha256};
 use crate::{
     driver::{Failure, FailureKind, PromptKey, Source},
     writer::{Error, Tx},
@@ -112,7 +107,7 @@ impl RunHandler {
         if let Some(left) = paused {
             tx.set_deadline(&row.deadline("state"), tx.now_ms() + left)?;
         }
-        tx.set_deadline(&row.deadline("silence"), tx.now_ms() + SILENCE_MS)?;
+        tx.set_deadline(&row.deadline("silence"), tx.now_ms() + self.config.watchdog.silence_ms)?;
         if row.state != "running" {
             row.set_state(tx, "running", None)?;
         }

@@ -42,6 +42,7 @@ impl Loader {
         settings.services = self.services(file, raw.service, None);
         let overrides = self.overrides(file, &base, raw.overrides, &names);
         let bundled = super::check::bundled(&mut self, file, raw.builtin);
+        let watchdog = super::check::watchdog(&mut self, file, raw.watchdog);
         let mut projects: Vec<Project> = Vec::new();
         for dir in &raw.projects {
             let Some(project) = self.project(&resolve(&base, dir), &plugins, &bundled) else {
@@ -77,6 +78,7 @@ impl Loader {
             overrides,
             plugins,
             bundled,
+            watchdog,
             projects,
             bridge: Vec::new(),
         };

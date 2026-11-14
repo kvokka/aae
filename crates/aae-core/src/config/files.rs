@@ -119,6 +119,9 @@ pub(super) struct OrchestratorFile {
     pub overrides: BTreeMap<String, Settings>,
     #[serde(default)]
     pub service: Vec<super::service::ServiceFile>,
+    /// `[watchdog]`: thresholds of invariant 15 as durations, by key.
+    #[serde(default)]
+    pub watchdog: BTreeMap<String, String>,
 }
 
 /// A harness agents may choose and its defaults (spec §6.1).

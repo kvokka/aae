@@ -9,9 +9,6 @@ use crate::{
 use rusqlite::{Connection, params};
 use serde_json::{Value, json};
 
-/// A parked run waiting on a gate without `until` fails after this long (contracts 6.1).
-const PARK_TIMEOUT_MS: i64 = 7 * 86_400_000;
-
 /// A closure as a decision or the operator asks for it.
 #[derive(Clone, Debug, PartialEq)]
 pub struct GateSpec {
@@ -190,7 +187,7 @@ impl RunHandler {
         row.emit(tx, "run.parked", json!({ "gate": gate, "then": then }))?;
         // A gate with `until` opens by its own timer; the park deadline only bounds a wait that nothing ends.
         let until = gate["until"].as_str().and_then(parse_rfc3339_ms);
-        let at = tx.now_ms() + PARK_TIMEOUT_MS;
+        let at = tx.now_ms() + self.config.watchdog.park_timeout_ms;
         tx.set_deadline(&row.deadline("state"), until.map_or(at, |u| u.max(at)))?;
         self.schedule(tx)
     }

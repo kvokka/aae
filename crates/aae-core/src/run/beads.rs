@@ -80,7 +80,7 @@ impl RunHandler {
     }
 
     /// Queues the claim of the run's bead in the tracker; the run waits in `preparing` for the bead it returns.
-    pub(super) fn claim(tx: &mut Tx<'_>, row: &Row, bead: &str) -> Result<(), Error> {
+    pub(super) fn claim(&self, tx: &mut Tx<'_>, row: &Row, bead: &str) -> Result<(), Error> {
         let generation: i64 = tx.sql().query_row(
             "SELECT generation FROM beads WHERE project = ?1 AND id = ?2",
             params![row.project, bead],
@@ -89,7 +89,10 @@ impl RunHandler {
         let payload = json!({ "op": "tracker", "call": "claim", "project": row.project, "bead": bead, "run": row.id,
             "generation": generation });
         tx.effect(&tracker_key(&row.project), &format!("claim:{}", row.id), &payload)?;
-        tx.set_deadline(&row.deadline("state"), tx.now_ms() + super::machine::START_TIMEOUT_MS)
+        tx.set_deadline(
+            &row.deadline("state"),
+            tx.now_ms() + self.config.watchdog.start_timeout_ms,
+        )
     }
 
     /// The result of a tracker call (`payload` is its effect).

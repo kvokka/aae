@@ -1,5 +1,5 @@
-use super::config::{BASE, load_with};
-use crate::config::{Config, EffectiveConfig, Layer, Name};
+use super::config::{BASE, fails, load_with};
+use crate::config::{Config, EffectiveConfig, Layer, Name, Watchdog};
 use crate::driver::{Fingerprint, ProcessPart};
 use serde_json::json;
 
@@ -223,5 +223,45 @@ fn a_project_builtin_table_replaces_the_orchestrators_for_its_runs() {
     assert_eq!(
         names(&config.projects[0].bundled),
         [("default-policy", r#"{"rapid_s":5}"#.to_owned())]
+    );
+}
+
+#[test]
+fn the_watchdog_deadlines_come_from_the_orchestrator_file() {
+    let defaults = Watchdog {
+        silence_ms: 300_000,
+        tool_silence_ms: 600_000,
+        background_silence_ms: 1_800_000,
+        human_timeout_ms: 3_600_000,
+        start_timeout_ms: 120_000,
+        queue_timeout_ms: 604_800_000,
+        park_timeout_ms: 604_800_000,
+    };
+    assert_eq!(load_with(BASE).unwrap().watchdog, defaults);
+    let all = "[watchdog]\nsilence = \"1ms\"\ntool_silence = \"2s\"\nbackground_silence = \"3m\"\n\
+        human_timeout = \"4h\"\nstart_timeout = \"5s\"\nqueue_timeout = \"6m\"\npark_timeout = \"8760h\"";
+    let expected = Watchdog {
+        silence_ms: 1,
+        tool_silence_ms: 2_000,
+        background_silence_ms: 180_000,
+        human_timeout_ms: 14_400_000,
+        start_timeout_ms: 5_000,
+        queue_timeout_ms: 360_000,
+        park_timeout_ms: 31_536_000_000,
+    };
+    assert_eq!(with_lines(&[("config.toml", all)]).watchdog, expected);
+    let one = |line: &str| format!("{}[watchdog]\n{line}\n", BASE[0].1);
+    fails(&[("config.toml", &one("stall = \"1m\""))], "unknown key `stall`");
+    fails(
+        &[("config.toml", &one("silence = \"0s\""))],
+        "`silence` is from 1ms to 8760h",
+    );
+    fails(
+        &[("config.toml", &one("park_timeout = \"8761h\""))],
+        "`park_timeout` is from 1ms",
+    );
+    fails(
+        &[("config.toml", &one("human_timeout = \"5 minutes\""))],
+        "`human_timeout`: `5 minutes`",
     );
 }

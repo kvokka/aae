@@ -480,6 +480,9 @@ session and exec step of the project gets `BEADS_DIR` (layer: project) and `BD_A
 | `parked` | a started run waits for a gate; no harness process | `park_timeout` 7 d from parking, or the gate's `until` if later (a gate with `until` opens by its timer first) | `failed{infrastructure, park_timeout}` |
 | `passed`, `failed{class}`, `cancelled` | terminal | — | — |
 
+The thresholds named here (`queue_timeout`, `start_timeout`, the silence budgets, `human_timeout`, `park_timeout`)
+are the `[watchdog]` table of the orchestrator config, with these defaults (config.md, orchestrator).
+
 `interrupted` in §9.3 names the daemon restart only; here it is every attempt failure waiting for its decision,
 so that the state machine has one place where `run.attempt_failed` is decided.
 

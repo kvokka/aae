@@ -15,8 +15,6 @@ use rusqlite::{OptionalExtension, params};
 use serde_json::{Value, json};
 use std::{collections::BTreeMap, path::PathBuf};
 
-pub(super) const QUEUE_TIMEOUT_MS: i64 = 7 * 24 * 3_600_000;
-pub(super) const START_TIMEOUT_MS: i64 = 120_000;
 pub(super) const STEP_TIMEOUT_MS: i64 = 45 * 60_000;
 /// The prompt of a resumed attempt (contracts 6.4).
 const RECONCILE: &str =
@@ -34,7 +32,7 @@ impl RunHandler {
         row.emit(tx, "run.started", json!({ "run": row.view() }))?;
         match row.bead.clone() {
             // The prompt may show the bead: it renders once the claim returned it.
-            Some(bead) if row.bead_data.is_none() => Self::claim(tx, &row, &bead),
+            Some(bead) if row.bead_data.is_none() => self.claim(tx, &row, &bead),
             _ => self.render_and_prepare(tx, row),
         }
     }
@@ -276,7 +274,10 @@ impl RunHandler {
             "prompt": prompt, "key": key.0.to_string(), "services": services, "retry": retry.map(|(key, text)| json!({ "key": key, "text": text })),
         });
         tx.effect(&row.id, &format!("launch:{}", row.attempt), &payload)?;
-        tx.set_deadline(&row.deadline("state"), tx.now_ms() + START_TIMEOUT_MS)
+        tx.set_deadline(
+            &row.deadline("state"),
+            tx.now_ms() + self.config.watchdog.start_timeout_ms,
+        )
     }
 
     /// Ends the current attempt with `failure` and asks for a decision on it (`interrupted`).

@@ -186,9 +186,21 @@ path = "~/aae-plugins/aae-plugin-mail"
 [builtin.default-policy]            # a bundled plugin (see below); on with no table
 backoff_cap_s = 300
 
+[watchdog]                          # thresholds of invariant 15 (contracts 6.1); every key optional
+silence = "5m"                      # no event after the ack, the model thinking, after a turn ended
+tool_silence = "10m"                # a tool running
+background_silence = "30m"          # background work after the turn
+human_timeout = "1h"                # a request waiting for its answer
+start_timeout = "120s"              # the bead claim, then the ack of the first prompt
+queue_timeout = "168h"              # a run not started
+park_timeout = "168h"               # a parked run on a gate without `until`
+
 [settings]                          # layer 2
 [overrides.implementer]             # layer 7, for an agent of any project
 ```
+
+Each `[watchdog]` value is a duration with one unit (`ms`, `s`, `m`, `h`) from 1 ms to 8760 h; an unknown key is an
+error. A reload applies to the deadlines set from then on: a deadline already set keeps its time.
 
 ## Project: `<project>/aae.toml`
 

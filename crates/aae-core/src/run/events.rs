@@ -13,12 +13,6 @@ use crate::{
 use rusqlite::{OptionalExtension, params};
 use serde_json::{Value, json};
 
-/// Silence budgets of `running` (contracts 6.1).
-pub(super) const SILENCE_MS: i64 = 5 * 60_000;
-const TOOL_SILENCE_MS: i64 = 10 * 60_000;
-const BACKGROUND_SILENCE_MS: i64 = 30 * 60_000;
-const HUMAN_TIMEOUT_MS: i64 = 3_600_000;
-
 /// States in which an attempt is live and its session may report.
 pub(super) fn attempt_live(state: &str) -> bool {
     matches!(state, "starting" | "running" | "requires_action")
@@ -120,6 +114,7 @@ impl RunHandler {
         let Some(mut row) = Self::current(tx, run, attempt)? else {
             return Ok(());
         };
+        let w = self.config.watchdog;
         let silence = |tx: &mut Tx<'_>, row: &Row, ms: i64| tx.set_deadline(&row.deadline("silence"), tx.now_ms() + ms);
         if let Normalized::PromptAcked { key } = &event {
             super::prompts::advance(tx, &row.id, attempt, Some(*key), "acked")?;
@@ -132,7 +127,7 @@ impl RunHandler {
                 row.set_state(tx, "running", None)?;
                 let timeout = row.timeout_ms.unwrap_or(super::machine::STEP_TIMEOUT_MS);
                 tx.set_deadline(&row.deadline("state"), tx.now_ms().saturating_add(timeout))?;
-                silence(tx, &row, SILENCE_MS)
+                silence(tx, &row, w.silence_ms)
             }
             // A failure or an exit ends the attempt in every live state (contracts 6.2, invariant 5).
             Normalized::Failure(failure) => self.attempt_failed(tx, row, failure),
@@ -140,19 +135,19 @@ impl RunHandler {
                 self.attempt_failed(tx, row, Failure::new(FailureKind::HarnessCrash, Source::Adapter))
             }
             _ if row.state != "running" => Ok(()),
-            Normalized::Activity { tool_running: true } => silence(tx, &row, TOOL_SILENCE_MS),
+            Normalized::Activity { tool_running: true } => silence(tx, &row, w.tool_silence_ms),
             Normalized::TurnEnded { .. } => {
                 super::prompts::advance(tx, &row.id, attempt, None, "settled")?;
                 tx.sql().execute(
                     "UPDATE attempts SET turn_ended = 1 WHERE run = ?1 AND n = ?2",
                     params![row.id, attempt],
                 )?;
-                silence(tx, &row, SILENCE_MS)
+                silence(tx, &row, w.silence_ms)
             }
             Normalized::State {
                 state: SessionState::Idle,
                 background: true,
-            } => silence(tx, &row, BACKGROUND_SILENCE_MS),
+            } => silence(tx, &row, w.background_silence_ms),
             Normalized::State {
                 state: SessionState::Idle,
                 background: false,
@@ -176,7 +171,7 @@ impl RunHandler {
                     params![row.id, attempt, request.to_string()],
                 )?;
                 row.set_state(tx, "requires_action", None)?;
-                let at = tx.now_ms() + HUMAN_TIMEOUT_MS;
+                let at = tx.now_ms() + w.human_timeout_ms;
                 tx.set_deadline(&row.deadline("human"), at)?;
                 let seq = row.emit(
                     tx,
@@ -190,7 +185,7 @@ impl RunHandler {
                 }
                 Ok(())
             }
-            _ => silence(tx, &row, SILENCE_MS),
+            _ => silence(tx, &row, w.silence_ms),
         }
     }
 
@@ -280,7 +275,7 @@ impl RunHandler {
         });
         tx.effect(run, &format!("respond:{}:{id}", row.attempt), &payload)?;
         row.set_state(tx, "running", None)?;
-        tx.set_deadline(&row.deadline("silence"), tx.now_ms() + SILENCE_MS)
+        tx.set_deadline(&row.deadline("silence"), tx.now_ms() + self.config.watchdog.silence_ms)
     }
 
     pub(super) fn on_deadline(&mut self, tx: &mut Tx<'_>, run: &str, what: &str) -> Result<(), Error> {

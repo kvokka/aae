@@ -1,7 +1,7 @@
 //! References between files: names resolved to their packs (spec §8.2), trigger inputs against their formula,
-//! rigs and overrides against what the project has; the tables of the bundled plugins.
+//! rigs and overrides against what the project has; the tables of the bundled plugins; the watchdog table.
 
-use super::{BUNDLED, Bundled, Name, Pack, Project, Step, load::Loader};
+use super::{BUNDLED, Bundled, Name, Pack, Project, Step, Watchdog, load::Loader};
 use crate::template::Inputs;
 use serde_json::{Map, Value};
 use std::{collections::BTreeMap, path::Path};
@@ -215,4 +215,40 @@ pub(super) fn project_bundled(
     }
     all.sort_by_key(|b| BUNDLED.iter().position(|(n, ..)| *n == b.name));
     all
+}
+
+/// `[watchdog]` over the defaults of contracts 6.1; each threshold is from 1 ms to 8760 h, which keeps every
+/// `now + threshold` far from overflow.
+pub(super) fn watchdog(loader: &mut Loader, file: &Path, table: BTreeMap<String, String>) -> Watchdog {
+    const MAX_MS: u128 = 8760 * 3_600_000;
+    let mut w = Watchdog {
+        silence_ms: 5 * 60_000,
+        tool_silence_ms: 10 * 60_000,
+        background_silence_ms: 30 * 60_000,
+        human_timeout_ms: 3_600_000,
+        start_timeout_ms: 120_000,
+        queue_timeout_ms: 7 * 86_400_000,
+        park_timeout_ms: 7 * 86_400_000,
+    };
+    for (key, text) in table {
+        let field = match key.as_str() {
+            "silence" => &mut w.silence_ms,
+            "tool_silence" => &mut w.tool_silence_ms,
+            "background_silence" => &mut w.background_silence_ms,
+            "human_timeout" => &mut w.human_timeout_ms,
+            "start_timeout" => &mut w.start_timeout_ms,
+            "queue_timeout" => &mut w.queue_timeout_ms,
+            "park_timeout" => &mut w.park_timeout_ms,
+            _ => {
+                loader.fail(file, format!("[watchdog]: unknown key `{key}`"));
+                continue;
+            }
+        };
+        match super::duration(&text).map(|d| d.as_millis()) {
+            Ok(ms @ 1..=MAX_MS) => *field = ms as i64,
+            Ok(_) => loader.fail(file, format!("[watchdog]: `{key}` is from 1ms to 8760h")),
+            Err(e) => loader.fail(file, format!("[watchdog]: `{key}`: {e}")),
+        }
+    }
+    w
 }
