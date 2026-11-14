@@ -202,7 +202,7 @@ pub(crate) async fn wait_gone(id: &str, leader: Option<(i32, u64)>, limit: Durat
         return false;
     }
     // A killed process loses its environment, so its marker, before it is dead: what was killed is awaited by pid.
-    let mut killed = Vec::new();
+    let (mut killed, mut once_empty) = (Vec::new(), false);
     loop {
         let marker = id.to_owned();
         // Walking `/proc` is synchronous.
@@ -210,12 +210,17 @@ pub(crate) async fn wait_gone(id: &str, leader: Option<(i32, u64)>, limit: Durat
         killed.extend(found.unwrap_or_default());
         killed.retain(|&(pid, start)| crate::orphans::start_time(pid) == Some(start));
         if killed.is_empty() {
-            return true;
-        }
-        if tokio::time::Instant::now() >= deadline {
+            // A process inside `execve` shows no environment yet: a walk that found nothing is confirmed by another.
+            if once_empty {
+                return true;
+            }
+            once_empty = true;
+        } else if tokio::time::Instant::now() >= deadline {
             return false;
+        } else {
+            once_empty = false;
         }
-        tokio::time::sleep(Duration::from_millis(50)).await;
+        tokio::time::sleep(Duration::from_millis(if once_empty { 20 } else { 50 })).await;
     }
 }
 

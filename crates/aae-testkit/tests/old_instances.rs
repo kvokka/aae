@@ -177,7 +177,8 @@ async fn the_resync_leaves_the_processes_of_a_live_instance_alone() {
     let pending = "SELECT count(*) FROM effects WHERE key = 'daemon'";
     while db.query_row(pending, [], |r| r.get::<_, i64>(0)).unwrap() > 0 {
         assert!(start.elapsed() < Duration::from_secs(10), "the resync never ended");
-        std::thread::sleep(Duration::from_millis(10));
+        // The resync runs on this runtime: yield to it.
+        tokio::time::sleep(Duration::from_millis(10)).await;
     }
     assert!(
         kept.try_wait().unwrap().is_none(),

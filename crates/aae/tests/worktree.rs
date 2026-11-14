@@ -1,5 +1,6 @@
 //! The bundled `worktree` plugin through a real `aae daemon` and the real `claude` on the fake Anthropic API
-//! (spec §11.5): the session of a formula with `worktree = true` works in its own git worktree, which goes once the run passes.
+//! (spec §11.5): the session of a formula with `worktree = true` works in its own git worktree, which goes once the
+//! run passes.
 
 mod common;
 
