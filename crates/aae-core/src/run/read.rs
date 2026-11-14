@@ -28,20 +28,26 @@ impl Reader {
         self.0.lock().unwrap_or_else(std::sync::PoisonError::into_inner)
     }
 
-    /// The `RunView` of contracts 1.3 with where the run is and its attempts; `None` if there is no such run.
+    /// The `RunView` of contracts 1.3 with where the run is, its attempts and the outcome its current attempt
+    /// declared (null if none); `None` if there is no such run.
     pub fn run(&self, id: &str) -> Result<Option<Value>, Error> {
         let conn = self.conn();
         let Some(row) = Row::read(&conn, id)? else {
             return Ok(None);
         };
-        let waiting_for: Option<String> =
-            conn.query_row("SELECT waiting_for FROM runs WHERE id = ?1", [id], |r| r.get(0))?;
+        let (waiting_for, outcome): (Option<String>, Option<String>) = conn.query_row(
+            "SELECT waiting_for, (SELECT outcome FROM attempts WHERE run = runs.id AND n = runs.attempt) FROM runs \
+             WHERE id = ?1",
+            [id],
+            |r| Ok((r.get(0)?, r.get(1)?)),
+        )?;
         let mut view = row.view();
         view["project"] = json!(row.project);
         view["rig"] = json!(row.rig);
         view["correlation"] = json!(row.correlation);
         view["inputs"] = serde_json::from_str(&row.inputs).unwrap_or_default();
         view["waiting_for"] = json!(waiting_for);
+        view["outcome"] = outcome.and_then(|o| serde_json::from_str(&o).ok()).unwrap_or_default();
         view["attempts"] = json!(row::attempts(&conn, id)?);
         Ok(Some(view))
     }

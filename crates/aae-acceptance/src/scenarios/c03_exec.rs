@@ -34,6 +34,11 @@ pub(crate) async fn run(env: Arc<Env>) -> String {
 
     let view = d.until_state(&ok, "passed", WITHIN).await;
     assert_eq!(view["attempts"].as_array().map(Vec::len), Some(1), "{view}");
+    assert_eq!(
+        view["outcome"]["result"], "pass",
+        "the run view shows the outcome: {view}"
+    );
+    assert_eq!(view["outcome"]["data"]["exit_code"], 0, "{view}");
 
     let view = d.until_state(&flaky, "passed", WITHIN).await;
     let attempts = view["attempts"].as_array().expect("attempts");
@@ -47,5 +52,6 @@ pub(crate) async fn run(env: Arc<Env>) -> String {
     let view = d.until_state(&broken, "failed", WITHIN).await;
     let attempts = view["attempts"].as_array().expect("attempts");
     assert_eq!(attempts.len(), 1, "exit 3 fails the formula, not the attempt: {view}");
+    assert_eq!(view["outcome"]["data"]["exit_code"], 3, "{view}");
     String::new()
 }

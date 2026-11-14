@@ -7,7 +7,7 @@ use serde_json::{Map, Value};
 use std::collections::BTreeMap;
 use utoipa::{IntoResponses, ToSchema};
 
-/// A run: `RunView` of docs/design/contracts.md §1.3 with where it is and its attempts.
+/// A run: `RunView` of docs/design/contracts.md §1.3 with where it is, its attempts and its outcome.
 #[derive(ToSchema)]
 pub(crate) struct Run {
     id: String,
@@ -34,8 +34,20 @@ pub(crate) struct Run {
     inputs: Map<String, Value>,
     /// What a queued run waits for: `concurrency`, `gate`, `workdir` or `daemon_stopping`.
     waiting_for: Option<String>,
+    /// The outcome the current attempt declared; for an exec step `data` is `{exit_code, stdout, stderr}`.
+    outcome: Option<Outcome>,
     /// The last 20, newest last.
     attempts: Vec<Attempt>,
+}
+
+/// `Outcome` of docs/design/contracts.md §1.3.
+#[derive(ToSchema)]
+pub(crate) struct Outcome {
+    /// `pass` or `fail`.
+    result: String,
+    summary: String,
+    /// Any JSON.
+    data: Option<Value>,
 }
 
 #[derive(ToSchema)]
@@ -231,7 +243,8 @@ pub(crate) struct Agent {
     /// `<pack>.<name>`.
     agent: String,
     harness: String,
-    max_runs: u32,
+    /// Runs of the agent at once in its project; null for no limit but the daemon's.
+    max_runs: Option<u32>,
 }
 
 #[derive(ToSchema)]

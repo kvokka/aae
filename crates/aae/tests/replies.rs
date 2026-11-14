@@ -13,12 +13,47 @@ fn reply_schema(doc: &Value, method: &str, path: &str) -> Value {
     schema.clone()
 }
 
-/// Every key of `reply` is a declared property and every required property is there, down nested objects.
+/// The JSON Schema type of `value`.
+fn type_of(value: &Value) -> &'static str {
+    match value {
+        Value::Null => "null",
+        Value::Bool(_) => "boolean",
+        Value::Number(n) if n.is_f64() => "number",
+        Value::Number(_) => "integer",
+        Value::String(_) => "string",
+        Value::Array(_) => "array",
+        Value::Object(_) => "object",
+    }
+}
+
+/// `reply` has a type the schema allows, every key of it is a declared property and every required property is
+/// there, down nested objects.
 fn fits(doc: &Value, schema: &Value, reply: &Value, at: &str) {
     let schema = match schema["$ref"].as_str() {
         Some(r) => &doc["components"]["schemas"][r.trim_start_matches("#/components/schemas/")],
         None => schema,
     };
+    // An optional reference: `null`, or a value that fits one of the other branches.
+    if let Some(branches) = schema["oneOf"].as_array() {
+        let null = branches.iter().any(|b| b["type"] == "null");
+        if !(reply.is_null() && null) {
+            let other: Vec<_> = branches.iter().filter(|b| b["type"] != "null").collect();
+            assert_eq!(other.len(), 1, "{at}: a oneOf this check does not read");
+            fits(doc, other[0], reply, at);
+        }
+        return;
+    }
+    let types: Vec<&str> = match &schema["type"] {
+        Value::String(t) => vec![t],
+        Value::Array(ts) => ts.iter().filter_map(Value::as_str).collect(),
+        _ => vec![],
+    };
+    let found = type_of(reply);
+    let allowed = types.contains(&found) || (found == "integer" && types.contains(&"number"));
+    assert!(
+        types.is_empty() || allowed,
+        "{at}: a {found}, the schema says {types:?}"
+    );
     if let (Some(items), Some(reply)) = (schema.get("items"), reply.as_array()) {
         reply.iter().for_each(|r| fits(doc, items, r, at));
         return;
@@ -67,6 +102,10 @@ async fn the_replies_fit_their_schemas() {
     let passed = d.create("check", None).await;
     let view = d.until_state(&passed, "passed").await;
     assert!(!view["attempts"].as_array().unwrap().is_empty(), "{view}");
+    assert!(
+        view["outcome"]["data"]["stdout"].is_string(),
+        "the exec step's output: {view}"
+    );
     check("get", "/v1/runs/{id}", &view);
     check("get", "/v1/runs", &d.get("/v1/runs").await);
     let run = d.post(

@@ -20,7 +20,7 @@ pub(super) const NULL: &str = "Done; the body is JSON `null`";
 pub(super) const BAD_QUERY: &str = "`bad_request`: the query is malformed";
 const BAD_PATH: &str = "`bad_request`: the path is malformed";
 const RUN_VIEW: &str = "The run: `RunView` (docs/design/contracts.md §1.3) with `project`, `rig`, `correlation`, \
-    `inputs`, `waiting_for` and `attempts`";
+    `inputs`, `waiting_for`, `outcome` and `attempts`";
 const RUN_VIEWS: &str = "Run views as `GET /v1/runs/{id}` gives them";
 
 #[derive(Deserialize, ToSchema)]
