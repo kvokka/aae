@@ -256,6 +256,12 @@ async fn main() -> ExitCode {
         .filter(|r| r.criterion != "22" && r.mark == "FAIL")
         .map(|r| r.criterion)
         .collect();
+    // A 10 needs every row of criterion 20 green in this run: one not run or filtered out leaves it open, so a
+    // `--ci` run or `--ci 22` alone still checks the scores.
+    let twenty: Vec<&str> = rows.iter().filter(|r| r.criterion == "20").map(|r| r.mark).collect();
+    if twenty.is_empty() || twenty.iter().any(|m| *m != "pass") {
+        open.push("20");
+    }
     open.dedup();
     if let Some(row) = rows.iter_mut().find(|r| r.criterion == "22" && r.mark == "pass") {
         let readiness = fs::read_to_string(checks::root().join("docs/READINESS.md")).unwrap_or_default();
