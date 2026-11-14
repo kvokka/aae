@@ -64,6 +64,8 @@ struct Instance {
     sink: EventSink,
     seq: u64,
     alive: bool,
+    /// Set by [`ScriptedDriver::degrade`].
+    degraded: Option<String>,
 }
 
 struct Session {
@@ -155,6 +157,7 @@ impl Driver for ScriptedDriver {
                 sink,
                 seq: 0,
                 alive: true,
+                degraded: None,
             },
         );
         ready(Ok(InstanceHandle {
@@ -166,8 +169,10 @@ impl Driver for ScriptedDriver {
     }
 
     fn health<'a>(&'a self, instance: &'a InstanceHandle) -> BoxFuture<'a, Health> {
-        let alive = self.lock().instances.get(&instance.id).is_some_and(|i| i.alive);
-        ready(if alive { Health::Ok } else { Health::Dead })
+        ready(match self.lock().instances.get(&instance.id) {
+            Some(i) if i.alive => i.degraded.clone().map_or(Health::Ok, |text| Health::Degraded { text }),
+            _ => Health::Dead,
+        })
     }
 
     fn stop_instance<'a>(&'a self, instance: &'a InstanceHandle, _grace: Duration) -> BoxFuture<'a, ()> {

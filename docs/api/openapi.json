@@ -933,7 +933,7 @@
     },
     "/v1/instances": {
       "get": {
-        "summary": "Lists every harness instance: `{id, kind, harness, fingerprint, state, sessions, capacity, pid, pgid,\nidle_since}`.",
+        "summary": "Lists every harness instance: `{id, kind, harness, fingerprint, state, sessions, capacity, pid, pgid,\nidle_since, degraded}`.",
         "operationId": "list",
         "responses": {
           "200": {
@@ -2742,6 +2742,13 @@
           "capacity": {
             "type": "integer",
             "format": "int64"
+          },
+          "degraded": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Why the harness says a ready instance is degraded; it keeps its sessions."
           },
           "fingerprint": {
             "type": "string"

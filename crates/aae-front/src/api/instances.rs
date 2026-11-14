@@ -10,7 +10,7 @@ use axum::{Json, extract::Path, http::HeaderMap};
 use serde_json::json;
 
 /// Lists every harness instance: `{id, kind, harness, fingerprint, state, sessions, capacity, pid, pgid,
-/// idle_since}`.
+/// idle_since, degraded}`.
 #[utoipa::path(get, path = "/v1/instances", responses((status = OK, body = [Instance]), Failed))]
 pub(crate) async fn list(state: State) -> Reply {
     Ok(Json(state.reader.instances()?.into()))

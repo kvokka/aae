@@ -42,6 +42,13 @@ impl ScriptedDriver {
         self.lock().losing = losing;
     }
 
+    /// Every instance started so far reports `Degraded{text}` to its health checks (`None`: `Ok` again).
+    pub fn degrade(&self, text: Option<&str>) {
+        for instance in self.lock().instances.values_mut() {
+            instance.degraded = text.map(str::to_owned);
+        }
+    }
+
     /// The key of every prompt sent so far, in order.
     pub fn keys(&self) -> Vec<PromptKey> {
         self.lock().keys.clone()

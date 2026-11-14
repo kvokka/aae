@@ -80,3 +80,34 @@ async fn the_event_of_a_turn_without_an_outcome_tells_how_the_turn_ended() {
     let ended = w.until(Some(&run), "run.turn_ended_without_outcome", 0).await;
     assert_eq!(ended["stop_reason"], "cancelled");
 }
+
+#[tokio::test(start_paused = true)]
+async fn a_degraded_instance_is_told_and_keeps_its_session() {
+    let w = world(&[]);
+    let mut long = hollow_turn();
+    long.insert(1, Step::Wait(Duration::from_secs(150)));
+    w.driver.script(long);
+    let run = w.create().await;
+    w.until(Some(&run), "run.state_changed", 2).await;
+    w.driver.degrade(Some("auth refresh failing"));
+    let degraded = w.until(None, "instance.degraded", 0).await;
+    assert_eq!(degraded["reason"], "auth refresh failing");
+    let reader = aae_core::run::Reader::open(&w.dir.path().join("state.db")).unwrap();
+    let instance = &reader.instances().unwrap()[0];
+    assert_eq!(
+        (&instance["state"], &instance["degraded"]),
+        (&json!("ready"), &json!("auth refresh failing"))
+    );
+    w.driver.degrade(None);
+    w.until(None, "instance.ready", 1).await;
+    assert_eq!(reader.instances().unwrap()[0]["degraded"], json!(null));
+    let events = w.events(&run, Duration::from_secs(150)).await;
+    assert!(
+        !events.iter().any(|(t, _)| t == "run.attempt_failed"),
+        "the session goes on"
+    );
+    assert_eq!(
+        last(&events, "run.turn_ended_without_outcome")["stop_reason"],
+        "completed"
+    );
+}

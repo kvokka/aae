@@ -211,6 +211,8 @@ pub fn open(path: &Path) -> rusqlite::Result<Connection> {
              CREATE TABLE account_limits (account TEXT PRIMARY KEY, utilization REAL NOT NULL, \
              resets_at_ms INTEGER);",
         ),
+        // Why a ready instance is degraded, while it is (contracts 8).
+        (16, "ALTER TABLE instances ADD COLUMN degraded TEXT;"),
     ]
     .into_iter()
     .filter(|(to, _)| *to > version)

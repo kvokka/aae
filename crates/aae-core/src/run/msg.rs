@@ -61,6 +61,11 @@ pub enum Msg {
         id: String,
         failure: Failure,
     },
+    /// The health check found the registry's instance `id` degraded (`Some` reason) or well again (`None`).
+    InstanceHealth {
+        id: String,
+        degraded: Option<String>,
+    },
     /// The periodic resync found the process of a registry instance gone (spec §5.1).
     InstanceGone {
         handle: InstanceHandle,

@@ -251,6 +251,8 @@ pub(crate) struct Instance {
     pid: Option<i64>,
     pgid: Option<i64>,
     idle_since: Option<String>,
+    /// Why the harness says a ready instance is degraded; it keeps its sessions.
+    degraded: Option<String>,
 }
 
 #[derive(ToSchema)]

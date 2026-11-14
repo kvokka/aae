@@ -277,28 +277,45 @@ impl RunExecutor {
             .await;
         started.clone()
     }
-    /// Checks the health of `handle` while its start is kept; a dead instance reports its exit, as a harness whose
-    /// process ended would (contracts 8).
+    /// Checks the health of `handle` while its start is kept: a degraded instance is told and keeps working; a dead
+    /// one reports its exit, as a harness whose process ended would (contracts 8).
     fn watch(&self, driver: Arc<dyn Driver>, handle: InstanceHandle) {
-        let (starts, sink) = (self.starts.clone(), self.sink.clone());
+        let (starts, sink, core) = (self.starts.clone(), self.sink.clone(), self.core.clone());
         tokio::spawn(async move {
+            let mut told = None;
             loop {
                 tokio::time::sleep(HEALTH_EVERY).await;
                 if !(starts.lock().unwrap_or_else(PoisonError::into_inner)).contains_key(&handle.id) {
                     return;
                 }
-                if matches!(driver.health(&handle).await, Health::Dead) {
-                    let event = Normalized::Exited {
-                        code: None,
-                        signal: None,
+                let degraded = match driver.health(&handle).await {
+                    Health::Ok => None,
+                    Health::Degraded { text } => Some(text),
+                    Health::Dead => {
+                        let event = Normalized::Exited {
+                            code: None,
+                            signal: None,
+                        };
+                        let instance = handle.id.clone();
+                        let _ = sink.send(DriverEvent {
+                            instance,
+                            session: None,
+                            seq: 0,
+                            event,
+                        });
+                        return;
+                    }
+                };
+                if degraded != told
+                    && let Some(core) = core.get()
+                {
+                    told.clone_from(&degraded);
+                    let msg = Msg::InstanceHealth {
+                        id: handle.id.clone(),
+                        degraded,
                     };
-                    let _ = sink.send(DriverEvent {
-                        instance: handle.id.clone(),
-                        session: None,
-                        seq: 0,
-                        event,
-                    });
-                    return;
+                    // A stopped writer drops the message; the next check tells it again to a new one.
+                    let _ = core.send(None, msg).await;
                 }
             }
         });

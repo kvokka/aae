@@ -144,6 +144,7 @@ impl Handler for RunHandler {
             Msg::InstanceFailed { id, failure } => Self::instance_failed(tx, &id, &failure),
             Msg::InstanceStopped { id, reason } => Self::instance_stopped(tx, &id, &reason),
             Msg::InstanceGone { handle } => self.instance_gone(tx, handle),
+            Msg::InstanceHealth { id, degraded } => Self::instance_health(tx, &id, degraded.as_deref()),
             Msg::ServiceReady { id } => Self::service_ready(tx, &id),
             Msg::ServiceFailed { id, stderr, taken } => Self::service_failed(tx, &id, &stderr, taken),
             Msg::ServiceStopped { id, reason } => Self::service_stopped(tx, &id, &reason),

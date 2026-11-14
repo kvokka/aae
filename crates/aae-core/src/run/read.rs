@@ -132,8 +132,8 @@ impl Reader {
     pub fn instances(&self) -> Result<Vec<Value>, Error> {
         let conn = self.conn();
         let mut stmt = conn.prepare(
-            "SELECT id, kind, harness, fingerprint, state, sessions, capacity, handle, idle_since_ms \
-             FROM instances ORDER BY rowid",
+            "SELECT id, kind, harness, fingerprint, state, sessions, capacity, handle, idle_since_ms, \
+             degraded FROM instances ORDER BY rowid",
         )?;
         let rows = stmt.query_map([], |r| {
             let handle: Option<String> = r.get(7)?;
@@ -145,6 +145,7 @@ impl Reader {
                 "sessions": r.get::<_, i64>(5)?, "capacity": r.get::<_, i64>(6)?,
                 "pid": handle["pid"], "pgid": handle["pgid"],
                 "idle_since": idle_since.map(crate::journal::rfc3339_ms),
+                "degraded": r.get::<_, Option<String>>(9)?,
             }))
         })?;
         Ok(rows.collect::<Result<_, _>>()?)

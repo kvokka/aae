@@ -99,7 +99,9 @@ fn payload(event_type: &str) -> Option<&'static [(&'static str, Shape)]> {
         "daemon.started" => &[("version", Leaf), ("pid", Leaf), ("interrupted_runs", Leaf)],
         "daemon.stopping" => &[("reason", Leaf)],
         "config.reloaded" => &[("config_generation", Leaf), ("restarted_instances", Leaf)],
-        "instance.starting" | "instance.ready" | "instance.stopped" => &[("instance", INSTANCE), ("reason", Leaf)],
+        "instance.starting" | "instance.ready" | "instance.degraded" | "instance.stopped" => {
+            &[("instance", INSTANCE), ("reason", Leaf)]
+        }
         "instance.failed" => &[("instance", INSTANCE), ("failure", FAILURE)],
         "service.starting" | "service.ready" | "service.stopped" => &[("service", SERVICE), ("reason", Leaf)],
         "service.failed" => &[("service", SERVICE), ("failure", FAILURE)],

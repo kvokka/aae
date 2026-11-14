@@ -161,6 +161,19 @@ impl RunHandler {
         }
     }
 
+    /// A ready instance turned degraded (`Some` reason) or well again: it is told, and it keeps its sessions.
+    pub(super) fn instance_health(tx: &mut Tx<'_>, id: &str, degraded: Option<&str>) -> Result<(), Error> {
+        let changed = tx.sql().execute(
+            "UPDATE instances SET degraded = ?2 WHERE id = ?1 AND state = 'ready' AND degraded IS NOT ?2",
+            params![id, degraded],
+        )?;
+        match (changed, degraded) {
+            (0, _) => Ok(()),
+            (_, Some(text)) => Self::instance_event(tx, id, "instance.degraded", json!({ "reason": text })),
+            (_, None) => Self::instance_event(tx, id, "instance.ready", json!({ "reason": null })),
+        }
+    }
+
     /// The instance `id` could not start or died: its record goes, its marked descendants are killed (invariant
     /// 7), the attempts on it fail through their launches.
     pub(super) fn instance_failed(tx: &mut Tx<'_>, id: &str, failure: &Failure) -> Result<(), Error> {
