@@ -45,7 +45,8 @@ done
 {
   echo "# $demo: $result"
   echo
-  echo "<!-- MEASURE id=demo-$demo date=$(date -u +%Y-%m-%d) ver=$versions env=$(uname -sm | tr ' ' '-') src=demos/run.sh note=\"$result in $seconds s from the backend start, n=1\" -->"
+  # Split so that scripts/budget.sh does not take this template for a marker.
+  echo "<!-- MEASURE" "id=demo-$demo date=$(date -u +%Y-%m-%d) ver=$versions env=$(uname -sm | tr ' ' '-') src=demos/run.sh note=\"$result in $seconds s from the backend start, n=1\" -->"
   echo
   echo "The runs of the chain, newest first (\`aae run list\`):"
   echo
