@@ -35,6 +35,11 @@ there is no adapter protocol between processes (spec §4).
    `ADAPTERS` when it loads the config (`config::load_for`); the core knows no harness by name. Which vendor a harness
    reaches its model through is the harness's own setting (host config or `native.<harness>`); the core neither
    reads nor names it.
+
+   A test of the adapter checks the table against the harness's own model list, with no model call (codex:
+   `model/list` of `codex app-server`, `crates/aae-codex/tests/models.rs`). A target the harness does not list, or
+   marks as replaced, fails it: that is a finding for the owner, who picks the new name; the table is never switched
+   to another model silently.
 3. One row in `ADAPTERS` (`crates/aae/src/harness.rs`) and the crate in `crates/aae/Cargo.toml`. Nothing else in
    the root names a harness; a `[harness.<name>]` with no row is a config error that lists the known ones.
 4. The binary pinned in `mise.toml` (spec §13), a line budget in `scripts/budget.sh`, and the contract suite below.

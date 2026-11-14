@@ -1,7 +1,8 @@
 # Frontends
 
 The daemon has three frontends over one typed interface of the core: the HTTP API, the CLI and a small MCP server.
-None of them holds state of its own; the core's state and journal are the truth (docs/design/event-model.md).
+None of them holds state or domain logic of its own: each translates a request into a call of the core and its
+answer back; the core's state and journal are the truth (docs/design/event-model.md).
 
 ## HTTP API
 

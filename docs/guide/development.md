@@ -9,7 +9,7 @@ Every check below is a mise task (`mise.toml`).
 | Task | What it runs | Where | Wall time |
 |---|---|---|---|
 | `mise run test` | unit and integration tests (`cargo nextest run`), the chaos stand among them | locally, the everyday loop; CI too | 29 s (2026-11-14, `1a732a4`) |
-| `mise run ci` | the above plus formatting, clippy, `cargo deny`, `cargo machete`, the unused-`pub` check and the line budgets | locally before a commit; CI on every commit | 62 s (2026-11-14, `75a5ee0`) |
+| `mise run ci` | the above plus formatting, clippy, `cargo deny`, `cargo machete`, the unused-`pub` check, the line budgets and the core boundary (`scripts/core-boundary.sh`: no harness name, `br`, `max_sessions`, `instance_idle_s`, `beads_dir` or `.beads` in the code of `aae-core`) and the fixed branch order of its `select!` (`scripts/select-biased.sh`: `biased;` with a comment on the order) | locally before a commit; CI on every commit | 62 s (2026-11-14, `75a5ee0`) |
 | `mise run acceptance-ci` | the acceptance scenarios without a model, each on a real `aae daemon`, then the checks of criteria 9, 11, 17, 22 and 23 | CI on every commit (job `acceptance`); locally optional | 71 s warm (2026-11-14, `75a5ee0`) |
 | `mise run acceptance-release` | criterion 1: `cargo zigbuild --release` for the four targets, then this host's binary runs | locally, the full acceptance run; no tag is made for it | 169 s cold (2026-11-14, `a070cd6`+WP-52) |
 | `mise run acceptance` | all acceptance scenarios, including those on a real model; on a pass, the rows of criterion 20 rewrite the demo snapshots in `demos/` (commit them or `git checkout demos`) | by hand: they cost money and need a harness login | not measured |
@@ -27,6 +27,7 @@ CI has no access to a model by design: it builds, tests and checks with scripted
 scenarios on a real model and the demos run only on a developer's machine, on the cheapest model. Acceptance runs on
 Linux arm64; the other three targets are built (criterion 1) but not exercised. Dependencies must have MIT-compatible
 licenses (`cargo deny` checks them); no code of br or bv enters the tree.
+The repository is public: no secrets and no absolute paths of a developer's machine enter it.
 
 Run `mise run test` and `mise run acceptance-ci` one after the other, not side by side: the first builds
 `target/debug/aae` with the features of the test dependencies, the second without them, and each rewrites the binary

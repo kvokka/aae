@@ -47,12 +47,12 @@ overrides `[overrides.<agent>]`. A pack's `[settings]` and a prompt step take on
   headers `X-Aae-Project`, `X-Aae-Rig`, `X-Aae-Agent` and `X-Aae-Run`.
 - `command` alone: a stdio server. With `scope = "session"` the harness starts it in each session. Otherwise
   (`orchestrator`, the default, or `project`) it is shared: the daemon runs it as a service behind the bridge
-  `aae mcp-bridge -- <command>` (internal subcommand), whose MCP endpoint `/mcp` the sessions get as for a service
-  with `mcp`. The bridge initializes the server once, answers every client's handshake itself in both protocol
-  epochs, passes each request under its own id with the identity headers as `params._meta` (`aae/project`,
-  `aae/rig`, `aae/agent`, `aae/run`), and does not pass the server's own requests and notifications to clients. A
-  server with state per client (a browser) or that needs the session's working directory (the bridge starts in `/`)
-  needs `scope = "session"`.
+  `aae mcp-bridge -- <command>` (internal subcommand of the `aae` binary, `crates/aae/src/bridge.rs`; the bridge is
+  not part of the core), whose MCP endpoint `/mcp` the sessions get as for a service with `mcp`. The bridge
+  initializes the server once, answers every client's handshake itself in both protocol epochs, passes each request
+  under its own id with the identity headers as `params._meta` (`aae/project`, `aae/rig`, `aae/agent`, `aae/run`),
+  and does not pass the server's own requests and notifications to clients. A server with state per client (a
+  browser) or that needs the session's working directory (the bridge starts in `/`) needs `scope = "session"`.
 - `command` and `url` together: an error; a server the daemon runs is a `[[service]]` with `mcp` (below).
 - One server per scope, not per session, is the default: one HTTP MCP server served claude, codex and pi, and the
   identity reached it in the headers (2026-11-10; claude 2.1.321, codex 0.166.0, pi 1.5.0).
@@ -236,7 +236,7 @@ Known limits:
 - macOS keeps the claude login in the keychain, which is not read (the file only);
 - of a host provider, only `env_key` is passed from the environment (`env_http_headers` is not); an isolated codex
   gets the provider without `http_headers` and `experimental_bearer_token`, so a provider whose login is only there
-  is not logged in under isolation (and `doctor` does not count it as a login).
+  is not logged in under isolation (and `doctor` reports such a provider's login as not checked).
 
 Checked by criterion 12 of the acceptance spec (`crates/aae-acceptance`), the unit tests of both adapters and
 `crates/aae/tests/doctor.rs`.

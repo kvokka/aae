@@ -2,6 +2,8 @@
 
 This page adds an **agent** to the project of [the previous page](first-project.md) and a `prompt` formula: the agent
 is a general role, the formula the process it goes through, and the task itself is the run's input, from you.
+Keep it that way: an agent's prompt knows nothing of a task and a pack holds no word of one; what to do comes
+only from the input of a run.
 
 ## 1. The agent
 
