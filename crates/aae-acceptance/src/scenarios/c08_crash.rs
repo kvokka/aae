@@ -24,6 +24,9 @@ use std::{
 const KILLS: usize = 20;
 const HARNESS_KILLS: usize = 5;
 const UP_WITHIN: Duration = Duration::from_secs(30);
+/// The step of `work`: its first attempt holds for 60 s, far past the 5 s the orphan check waits; a resumed one
+/// passes at once.
+const WORK: &str = "f=held-$AAE_RUN\n[ -e \"$f\" ] && exit 0\ntouch \"$f\"\nexec sleep 60\n";
 const TERMINAL: [&str; 3] = ["run.passed", "run.failed", "run.cancelled"];
 
 // Its input is the passed run: a firing whose run with the same inputs is alive would be skipped as an overlap.
@@ -53,7 +56,8 @@ pub(crate) async fn run(env: Arc<Env>) -> String {
             root.join("config/aae/shop/aae.toml"),
             format!("[rigs.web]\npath = \"web\"\n{TRIGGER}"),
         );
-        exec_formula(root, "work", "", "\"sleep\", \"2\"");
+        write(root.join("config/aae/shop/web/work.sh"), WORK);
+        exec_formula(root, "work", "", "\"sh\", \"work.sh\"");
         exec_formula(
             root,
             "follow",
@@ -68,13 +72,13 @@ pub(crate) async fn run(env: Arc<Env>) -> String {
     let mut slowest = Duration::ZERO;
     for nth in 0..KILLS {
         work.push(d.create("work").await);
-        // Kill only with a step running, at a different point of it each time.
+        // Kill only with the first attempt's step holding, at a different point of it each time.
+        let held = d.path(&format!("config/aae/shop/web/held-{}", work.last().unwrap()));
         let deadline = Instant::now() + UP_WITHIN;
-        while steps(d.dir.path(), d.pid()).is_empty() {
+        while !held.exists() {
             assert!(Instant::now() < deadline, "no step started");
             tokio::time::sleep(Duration::from_millis(20)).await;
         }
-        // Always within the 2 s step, with room for a loaded host noticing the step late.
         tokio::time::sleep(jitter(seed, nth, 50, 800)).await;
         let done = passed(&d).await;
         slowest = slowest.max(kill(&mut d).await);
