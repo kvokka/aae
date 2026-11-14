@@ -192,3 +192,20 @@ fn a_crash_between_rotation_and_write_does_not_repeat_the_rotated_lines() {
     let current = std::fs::read_to_string(journal_dir.join("events.jsonl")).unwrap();
     assert_eq!(current.lines().count(), 1);
 }
+
+/// One drain of many events writes them as one batch and still rotates inside it: no file over the limit, no line
+/// lost or repeated.
+#[test]
+fn one_drain_rotates_inside_its_batch() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut conn = outbox(dir.path(), 12);
+    let journal_dir = dir.path().join("journal");
+    let mut journal = Journal::with_limits(&journal_dir, 200, 10);
+    journal.drain(&mut conn).unwrap();
+    let files = std::fs::read_dir(&journal_dir).unwrap().count();
+    assert!(files > 2, "{files} files");
+    for file in std::fs::read_dir(&journal_dir).unwrap() {
+        assert!(file.unwrap().metadata().unwrap().len() <= 200);
+    }
+    assert_eq!(seqs(&journal), (1..=12).collect::<Vec<_>>());
+}

@@ -121,9 +121,13 @@ impl Journal {
                 (acked.max(self.recover()?.unwrap_or(0)), acked)
             }
         };
-        for (seq, ts_ms, body) in outbox_after(conn, written).map_err(io::Error::other)? {
-            self.append(&envelope(seq, ts_ms, &body).to_string())?;
-            written = seq;
+        let new = outbox_after(conn, written).map_err(io::Error::other)?;
+        if let Some(&(last, ..)) = new.last() {
+            self.append(
+                new.iter()
+                    .map(|(seq, ts_ms, body)| envelope(*seq, *ts_ms, body).to_string()),
+            )?;
+            written = last;
         }
         if written > acked {
             store::ack(conn, CONSUMER, written).map_err(io::Error::other)?;
@@ -152,20 +156,32 @@ impl Journal {
         Ok(fs::read(self.path(1)).ok().and_then(|bytes| last_seq(&bytes)))
     }
 
-    fn append(&self, line: &str) -> io::Result<()> {
+    /// Appends `lines` with one sync for the whole batch: a sync per line held the writer, and so the delivery of
+    /// every event behind it, for as many syncs as a transaction has events.
+    fn append(&self, lines: impl Iterator<Item = String>) -> io::Result<()> {
         fs::create_dir_all(&self.dir)?;
         let current = self.path(0);
-        let size = fs::metadata(&current).map(|m| m.len()).unwrap_or(0);
-        if size > 0 && size + line.len() as u64 + 1 > self.max_bytes {
-            self.rotate()?;
+        let mut size = fs::metadata(&current).map(|m| m.len()).unwrap_or(0);
+        let mut file: Option<File> = None;
+        for line in lines {
+            let len = line.len() as u64 + 1;
+            if size > 0 && size + len > self.max_bytes {
+                // What goes to a rotated file is synced before it leaves the current name.
+                if let Some(full) = file.take() {
+                    full.sync_data()?;
+                }
+                self.rotate()?;
+                size = 0;
+            }
+            let open = || OpenOptions::new().create(true).append(true).mode(0o600).open(&current);
+            let out = match &mut file {
+                Some(f) => f,
+                None => file.insert(open()?),
+            };
+            out.write_all(format!("{line}\n").as_bytes())?;
+            size += len;
         }
-        let mut file = OpenOptions::new()
-            .create(true)
-            .append(true)
-            .mode(0o600)
-            .open(&current)?;
-        file.write_all(format!("{line}\n").as_bytes())?;
-        file.sync_data()
+        file.map_or(Ok(()), |f| f.sync_data())
     }
 
     fn rotate(&self) -> io::Result<()> {

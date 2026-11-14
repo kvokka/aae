@@ -279,15 +279,20 @@ async fn a_claude_killed_in_a_command_is_resumed_and_its_run_passes() {
         );
         tokio::time::sleep(Duration::from_millis(50)).await;
     };
-    let killed = Instant::now();
+    // Typed is when the core recorded the failure: the `ts` of its event, against the wall clock of the kill.
+    let killed = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap();
     let status = std::process::Command::new("kill")
         .args(["-9", &claude.to_string()])
         .status();
     assert!(status.unwrap().success());
-    let failure = next(&mut events, "run.attempt_failed").await["data"]["failure"].clone();
-    let typed = killed.elapsed();
+    let event = next(&mut events, "run.attempt_failed").await;
+    let failure = &event["data"]["failure"];
     assert_eq!(failure["kind"], "harness_crash", "{failure}");
-    assert!(typed <= Duration::from_secs(1), "typed in {typed:?}");
+    let at = aae_core::parse_rfc3339_ms(event["ts"].as_str().unwrap()).unwrap();
+    let typed = at - i64::try_from(killed.as_millis()).unwrap();
+    assert!(typed <= 1000, "typed in {typed} ms");
     let owner = json!(format!("aae:{run}"));
     assert_eq!(
         bead(&project, &id),
