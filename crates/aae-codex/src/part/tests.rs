@@ -142,8 +142,11 @@ fn a_process_inheriting_the_host_with_skills_gets_a_home_linking_the_hosts() {
         tempfile::tempdir().unwrap(),
         tempfile::tempdir().unwrap(),
     );
-    for file in ["auth.json", "config.toml"] {
+    for file in ["auth.json", "config.toml", "AGENTS.md"] {
         std::fs::write(host.path().join(file), "").unwrap();
+    }
+    for dir in ["skills/mail", "skills/notes"] {
+        std::fs::create_dir_all(host.path().join(dir)).unwrap();
     }
     let mut config = config();
     config.inherit_host = Some(agent(true));
@@ -163,7 +166,9 @@ fn a_process_inheriting_the_host_with_skills_gets_a_home_linking_the_hosts() {
     for (link, target) in [
         ("auth.json", host.path().join("auth.json")),
         ("config.toml", host.path().join("config.toml")),
+        ("AGENTS.md", host.path().join("AGENTS.md")),
         ("skills/mail", skill.path().to_owned()),
+        ("skills/notes", host.path().join("skills/notes")),
     ] {
         assert_eq!(std::fs::read_link(home.join(link)).unwrap(), target, "{link}");
     }

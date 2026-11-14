@@ -230,8 +230,22 @@ pub(crate) fn materialize(p: &Value) -> std::io::Result<()> {
     if let Some(user_home) = p["user_home"].as_str() {
         std::fs::create_dir_all(user_home)?;
     }
+    let host = p["host"].as_str().map_or_else(host_home, PathBuf::from);
+    // A home inheriting the host keeps the host's own skills beside the agent's; an agent's skill of the same name
+    // wins.
+    let host_skills = (p["host"].is_string().then(|| host.join("skills")))
+        .and_then(|dir| std::fs::read_dir(dir).ok())
+        .into_iter()
+        .flatten()
+        .flatten()
+        .map(|e| (e.file_name().to_string_lossy().into_owned(), json!(e.path())));
+    let own_skills = p["skills"]
+        .as_object()
+        .into_iter()
+        .flatten()
+        .map(|(n, s)| (n.clone(), s.clone()));
     // Links to the skill directories; the home is keyed by the part, so a link there is never another skill's.
-    for (name, path) in p["skills"].as_object().into_iter().flatten() {
+    for (name, path) in own_skills.chain(host_skills) {
         let link = home.join("skills").join(name);
         if link.symlink_metadata().is_err() {
             std::fs::create_dir_all(home.join("skills"))?;
@@ -239,13 +253,13 @@ pub(crate) fn materialize(p: &Value) -> std::io::Result<()> {
         }
     }
     let own = CREDENTIALS.iter().any(|k| !p["env"][k].is_null());
-    // A home inheriting the host links its config too: codex reads the provider, the MCP servers ... from it.
+    // A home inheriting the host links its config and instructions too: codex reads the provider, the MCP
+    // servers ... from them.
     let linked: &[&str] = match p["host"].as_str() {
-        Some(_) => &["auth.json", "config.toml"],
+        Some(_) => &["auth.json", "config.toml", "AGENTS.md"],
         None if own => &[],
         None => &["auth.json"],
     };
-    let host = p["host"].as_str().map_or_else(host_home, PathBuf::from);
     for file in linked {
         let (target, link) = (host.join(file), home.join(file));
         if target.exists() && link.symlink_metadata().is_err() {
