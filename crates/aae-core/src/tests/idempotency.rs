@@ -58,6 +58,10 @@ async fn a_key_repeated_with_another_request_is_refused_and_changes_nothing() {
     assert_eq!(first, again);
     let other = r.core.send_request(Some(("cmd-1", "b")), work("b")).await;
     assert!(matches!(other, Err(crate::Error::KeyReused)), "{other:?}");
+    // A key kept from before requests were stored has none: its repeat still gets the first reply.
+    let legacy = r.core.send(Some("cmd-2"), work("c")).await.unwrap();
+    let repeat = r.core.send_request(Some(("cmd-2", "c")), work("c")).await.unwrap();
+    assert_eq!(legacy, repeat);
     settle().await;
-    assert_eq!(max_seq(&rusqlite::Connection::open(&db).unwrap()), 1);
+    assert_eq!(max_seq(&rusqlite::Connection::open(&db).unwrap()), 2);
 }
