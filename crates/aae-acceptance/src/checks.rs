@@ -31,13 +31,19 @@ pub(crate) const ALL: &[Scenario] = &[
         criterion: "9",
         title: "kill -9 of claude and of the codex app-server mid-tool is typed, resumed and reaches its outcome",
         launch: Launch::Ci,
-        run: |env| Box::pin(tests(env, "-p aae -E test(/killed_in_a_command_is_resumed/)")),
+        run: |env| Box::pin(tests(env, "-p aae -E test(/killed_in_a_command_is_resumed/)", 2)),
     },
     Scenario {
         criterion: "11",
         title: "the contract tests of claude and codex (§7.8) and of the br tracker (§10.2) pass",
         launch: Launch::Ci,
-        run: |env| Box::pin(tests(env, "-p aae-claude -p aae-codex -p aae-br -E binary(contract)")),
+        run: |env| {
+            Box::pin(tests(
+                env,
+                "-p aae-claude -p aae-codex -p aae-br -E binary(contract)",
+                34,
+            ))
+        },
     },
     Scenario {
         criterion: "22",
@@ -121,10 +127,16 @@ async fn release(env: Arc<Env>) -> String {
 }
 
 /// The nextest run of `filter` (space-separated arguments); its summary.
-async fn tests(env: Arc<Env>, filter: &str) -> String {
+/// The nextest summary of `filter`, which must run `want` tests: a renamed test would leave its row passing.
+async fn tests(env: Arc<Env>, filter: &str, want: u32) -> String {
     let mut args = vec!["nextest", "run", "--locked", "--no-fail-fast"];
     args.extend(filter.split(' '));
-    line_with(&command(&env, "cargo", &args).await, "Summary")
+    let summary = line_with(&command(&env, "cargo", &args).await, "Summary");
+    assert!(
+        summary.contains(&format!(" {want} tests run")),
+        "{want} tests expected: {summary}"
+    );
+    summary
 }
 
 async fn budget(env: Arc<Env>) -> String {

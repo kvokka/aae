@@ -238,7 +238,8 @@ async fn a_service_without_mcp_reaches_the_session_as_its_url_and_token() {
         assert!(start.elapsed() < Duration::from_secs(20), "no port in its command");
         std::thread::sleep(Duration::from_millis(20));
     }
-    assert!(!env["AAE_SERVICE_MAIL_DB_TOKEN"].is_empty());
+    let token = &env["AAE_SERVICE_MAIL_DB_TOKEN"];
+    assert!(!token.is_empty() && !token.starts_with("${"), "{token}");
     assert_eq!(w.driver.sent(&b, 1).0.unwrap()["AAE_SERVICE_MAIL_DB_URL"], *url);
     assert!(w.driver.mcp(&a, 1).get("mail-db").is_none(), "no MCP server");
     // It listens on no port: the launch waited for its check, not for a port.

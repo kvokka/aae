@@ -15,7 +15,7 @@ the pinned claude, codex and br. Every check below is a mise task (`mise.toml`).
 
 <!-- MEASURE id=dev-test-wall date=2026-11-14 ver=1a732a4 env=linux-arm64-orbstack-9-cores src="mise run test" note="warm build; nextest summary 28.8 s for 286 tests; another build ran beside it" -->
 <!-- MEASURE id=dev-ci-wall date=2026-11-14 ver=1a732a4 env=linux-arm64-orbstack-9-cores src="mise run ci" note="warm build, wall time of the whole task; nextest part 28.2 s" -->
-<!-- MEASURE id=dev-acceptance-ci-wall date=2026-11-14 ver=a070cd6+WP-52 env=linux-arm64-orbstack-9-cores src="mise run acceptance-ci" note="the 16 model-free scenarios concurrently, then the checks one by one; warm: release builds up to date; cold: the four release builds took 169 s of the 265 s; re-measure on the CI runner" -->
+<!-- MEASURE id=dev-acceptance-ci-wall date=2026-11-14 ver=ea7f664 env=linux-arm64-orbstack-9-cores src="mise run acceptance-ci" note="the 16 model-free scenarios concurrently, then the checks one by one; warm: release builds up to date; cold: the four release builds took 169 s of the 265 s; re-measure on the CI runner" -->
 
 The times are for a warm build on 9 cores. A cold build comes on top, once.
 
