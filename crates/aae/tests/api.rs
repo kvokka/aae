@@ -114,10 +114,10 @@ async fn a_run_is_cancelled_and_bad_requests_get_json_errors() {
         Err(ClientError::Api { status: 422, error }) => assert_eq!(error["code"], "idempotency_key_reused"),
         other => panic!("{other:?}"),
     }
-    match d
-        .post("/v1/gates/open", json!({ "key": "project:shop" }), Some("k-1"))
-        .await
-    {
+    // Only the path differs: without it in the request the open would silently get the close's reply.
+    let gate = json!({ "key": "project:shop" });
+    d.post("/v1/gates", gate.clone(), Some("k-2")).await.unwrap();
+    match d.post("/v1/gates/open", gate, Some("k-2")).await {
         Err(ClientError::Api { status: 422, .. }) => {}
         other => panic!("another path: {other:?}"),
     }
