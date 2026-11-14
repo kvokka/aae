@@ -1,5 +1,6 @@
 //! Daemon start (spec §5.6, criterion 8): a daemon that dies mid-run leaves no process behind once a new one starts,
-//! and the attempt it was running fails with `daemon_crash` for the policy to decide.
+//! and the attempt it was running fails with `daemon_crash` for the policy to decide. On the paused clock, except the
+//! test whose exec step runs a real command and is watched through `/proc`.
 
 mod common;
 
@@ -16,7 +17,7 @@ fn journal(w: &World, kind: &str) -> Vec<Value> {
     all.into_iter().filter(|e| e["type"] == kind).collect()
 }
 
-#[tokio::test]
+#[tokio::test(start_paused = true)]
 async fn a_restart_interrupts_the_running_attempt_stops_its_instance_and_the_run_goes_on() {
     let mut w = world(POLICY);
     let run = w.create().await;
@@ -53,7 +54,7 @@ async fn a_restart_interrupts_the_running_attempt_stops_its_instance_and_the_run
 }
 
 /// A drain starts no process (spec §5.6): a retry decided meanwhile parks, and the next daemon starts it.
-#[tokio::test]
+#[tokio::test(start_paused = true)]
 async fn a_draining_daemon_parks_a_retry_and_the_next_daemon_starts_it() {
     let mut w = world(POLICY);
     let run = w.create().await;
@@ -81,7 +82,7 @@ async fn a_draining_daemon_parks_a_retry_and_the_next_daemon_starts_it() {
     assert_eq!(journal(&w, "instance.starting").len(), 2);
 }
 
-#[tokio::test]
+#[tokio::test(start_paused = true)]
 async fn a_restart_with_nothing_running_changes_no_run() {
     let mut w = world(&[]);
     tokio::time::sleep(Duration::from_millis(100)).await;
@@ -164,7 +165,7 @@ async fn resume_after_restart(w: &mut World, run: &str) -> Vec<String> {
     w.driver.sent(run, 2).1
 }
 
-#[tokio::test]
+#[tokio::test(start_paused = true)]
 async fn a_prompt_the_harness_never_got_goes_again_with_its_key_after_a_restart() {
     let mut w = world(POLICY);
     w.driver.lose_prompts(true);
@@ -179,7 +180,7 @@ async fn a_prompt_the_harness_never_got_goes_again_with_its_key_after_a_restart(
     assert_eq!(rows[0].2, rows[1].2);
 }
 
-#[tokio::test]
+#[tokio::test(start_paused = true)]
 async fn a_prompt_the_harness_got_brings_the_reconcile_prompt_with_a_new_key_after_a_restart() {
     let mut w = world(POLICY);
     let run = w.create().await;
@@ -192,7 +193,7 @@ async fn a_prompt_the_harness_got_brings_the_reconcile_prompt_with_a_new_key_aft
     assert_eq!(states, ["acked", "acked"]);
 }
 
-#[tokio::test]
+#[tokio::test(start_paused = true)]
 async fn a_prompt_whose_turn_ended_is_settled() {
     let w = world(&[]);
     w.driver.script(hollow_turn());
