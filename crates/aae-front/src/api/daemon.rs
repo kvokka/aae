@@ -1,7 +1,11 @@
 //! The daemon (spec §12, §9.3): its status, and a drain or a planned restart — no run starts from then on, the
 //! daemon stops when the runs in a turn are done or the drain times out, and a restart starts it again in place.
 
-use super::{Reply, State, key};
+use super::{
+    ErrorReply, Param, Reply, State, key,
+    replies::{Daemon, Failed, Keyed, Stopping},
+    runs::REJECTED,
+};
 use aae_core::{Clock, run::Msg};
 use axum::{Json, extract::Query, http::HeaderMap};
 use serde::Deserialize;
@@ -11,7 +15,7 @@ use utoipa::IntoParams;
 
 /// The daemon: its version, process and socket, the journal (last `seq`, failed writes in a row and the last
 /// error), the outbox (depth and age of the oldest row, contracts 3.5), the runs in a turn and whether it stops.
-#[utoipa::path(get, path = "/v1/daemon", responses((status = OK, body = Object)))]
+#[utoipa::path(get, path = "/v1/daemon", responses((status = OK, body = Daemon), Failed))]
 pub(crate) async fn status(state: State) -> Reply {
     let mut daemon = state.daemon.clone();
     let mut status = state.reader.status()?;
@@ -35,16 +39,16 @@ pub(crate) struct Drain {
 /// is in a turn or after `timeout_s`. The reply is `{"seq": <daemon.stopping>, "reason", "active_runs": n}`; a drain
 /// asked while a restart is under way, or the reverse, is refused with 409.
 #[utoipa::path(post, path = "/v1/daemon/drain", params(Drain, ("Idempotency-Key" = Option<String>, Header)),
-    responses((status = OK, body = Object), (status = CONFLICT, body = Object)))]
-pub(crate) async fn drain(state: State, headers: HeaderMap, Query(q): Query<Drain>) -> Reply {
+    responses((status = OK, body = Stopping), (status = CONFLICT, description = REJECTED, body = ErrorReply), Keyed))]
+pub(crate) async fn drain(state: State, headers: HeaderMap, Param(Query(q)): Param<Query<Drain>>) -> Reply {
     stop(state, &headers, q, "drain").await
 }
 
 /// A drain after which the daemon starts again in the same process (`daemon.stopping{reason: "restart"}`);
 /// recovery resumes the runs the drain cut (spec §5.6).
 #[utoipa::path(post, path = "/v1/daemon/restart", params(Drain, ("Idempotency-Key" = Option<String>, Header)),
-    responses((status = OK, body = Object), (status = CONFLICT, body = Object)))]
-pub(crate) async fn restart(state: State, headers: HeaderMap, Query(q): Query<Drain>) -> Reply {
+    responses((status = OK, body = Stopping), (status = CONFLICT, description = REJECTED, body = ErrorReply), Keyed))]
+pub(crate) async fn restart(state: State, headers: HeaderMap, Param(Query(q)): Param<Query<Drain>>) -> Reply {
     stop(state, &headers, q, "restart").await
 }
 

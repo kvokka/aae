@@ -1,7 +1,11 @@
 //! The config through the API (spec §12, §6.3, §6.5): projects and rigs, agents, formulas, packs, plugins, the
 //! effective config of an agent with the layer of every value, a check of the file and its reload.
 
-use super::{ApiError, Reply, State, key};
+use super::{
+    ApiError, ErrorReply, Param, Reply, State, key,
+    replies::{Agent, Checked, Explained, Formula, Keyed, Pack, Plugin, Project as ProjectReply, Reloaded},
+    runs::{BAD_QUERY, REJECTED},
+};
 use aae_core::{
     config::{Config, Name, Project},
     run::Msg,
@@ -29,14 +33,17 @@ fn projects<'a>(config: &'a Config, query: &ProjectQuery) -> Result<Vec<&'a Proj
     }
 }
 
+const NO_PROJECT: &str = "`not_found`: no such project";
+
 fn not_found(message: String) -> ApiError {
     ApiError::new(StatusCode::NOT_FOUND, "not_found", message)
 }
 
 /// Lists the projects with their rigs.
 #[utoipa::path(get, path = "/v1/projects", params(ProjectQuery),
-    responses((status = OK, body = [Object]), (status = NOT_FOUND, body = Object)))]
-pub(crate) async fn list_projects(state: State, Query(query): Query<ProjectQuery>) -> Reply {
+    responses((status = OK, body = [ProjectReply]),
+        (status = BAD_REQUEST, description = BAD_QUERY, body = ErrorReply), (status = NOT_FOUND, description = NO_PROJECT, body = ErrorReply)))]
+pub(crate) async fn list_projects(state: State, Param(Query(query)): Param<Query<ProjectQuery>>) -> Reply {
     let config = state.config();
     let out: Vec<Value> = projects(&config, &query)?
         .iter()
@@ -52,8 +59,9 @@ pub(crate) async fn list_projects(state: State, Query(query): Query<ProjectQuery
 
 /// Lists the agents, as `<pack>.<name>` with their harness.
 #[utoipa::path(get, path = "/v1/agents", params(ProjectQuery),
-    responses((status = OK, body = [Object]), (status = NOT_FOUND, body = Object)))]
-pub(crate) async fn list_agents(state: State, Query(query): Query<ProjectQuery>) -> Reply {
+    responses((status = OK, body = [Agent]),
+        (status = BAD_REQUEST, description = BAD_QUERY, body = ErrorReply), (status = NOT_FOUND, description = NO_PROJECT, body = ErrorReply)))]
+pub(crate) async fn list_agents(state: State, Param(Query(query)): Param<Query<ProjectQuery>>) -> Reply {
     let config = state.config();
     let mut out = Vec::new();
     for p in projects(&config, &query)? {
@@ -69,8 +77,9 @@ pub(crate) async fn list_agents(state: State, Query(query): Query<ProjectQuery>)
 
 /// Lists the formulas, named as a run start takes them, with their inputs.
 #[utoipa::path(get, path = "/v1/formulas", params(ProjectQuery),
-    responses((status = OK, body = [Object]), (status = NOT_FOUND, body = Object)))]
-pub(crate) async fn list_formulas(state: State, Query(query): Query<ProjectQuery>) -> Reply {
+    responses((status = OK, body = [Formula]),
+        (status = BAD_REQUEST, description = BAD_QUERY, body = ErrorReply), (status = NOT_FOUND, description = NO_PROJECT, body = ErrorReply)))]
+pub(crate) async fn list_formulas(state: State, Param(Query(query)): Param<Query<ProjectQuery>>) -> Reply {
     let config = state.config();
     projects(&config, &query)?;
     Ok(Json(super::mcp::formulas(&config, query.project.as_deref())))
@@ -78,8 +87,9 @@ pub(crate) async fn list_formulas(state: State, Query(query): Query<ProjectQuery
 
 /// Lists the packs of the projects; the project's own pack has no version.
 #[utoipa::path(get, path = "/v1/packs", params(ProjectQuery),
-    responses((status = OK, body = [Object]), (status = NOT_FOUND, body = Object)))]
-pub(crate) async fn list_packs(state: State, Query(query): Query<ProjectQuery>) -> Reply {
+    responses((status = OK, body = [Pack]),
+        (status = BAD_REQUEST, description = BAD_QUERY, body = ErrorReply), (status = NOT_FOUND, description = NO_PROJECT, body = ErrorReply)))]
+pub(crate) async fn list_packs(state: State, Param(Query(query)): Param<Query<ProjectQuery>>) -> Reply {
     let config = state.config();
     let mut out = Vec::new();
     for p in projects(&config, &query)? {
@@ -96,8 +106,9 @@ pub(crate) async fn list_packs(state: State, Query(query): Query<ProjectQuery>) 
 /// Lists the declared plugins (of the orchestrator, or of a project with `project`) and the enabled bundled ones
 /// (of the orchestrator, or those on for the project's runs).
 #[utoipa::path(get, path = "/v1/plugins", params(ProjectQuery),
-    responses((status = OK, body = [Object]), (status = NOT_FOUND, body = Object)))]
-pub(crate) async fn list_plugins(state: State, Query(query): Query<ProjectQuery>) -> Reply {
+    responses((status = OK, body = [Plugin]),
+        (status = BAD_REQUEST, description = BAD_QUERY, body = ErrorReply), (status = NOT_FOUND, description = NO_PROJECT, body = ErrorReply)))]
+pub(crate) async fn list_plugins(state: State, Param(Query(query)): Param<Query<ProjectQuery>>) -> Reply {
     let config = state.config();
     let (declared, bundled) = match &query.project {
         None => (&config.plugins, &config.bundled),
@@ -127,8 +138,9 @@ pub(crate) struct ExplainQuery {
 
 /// The effective config of an agent: one line per value with its layer, and the host layer in one line (spec §6.3).
 #[utoipa::path(get, path = "/v1/config/explain", params(ExplainQuery),
-    responses((status = OK, body = Object), (status = NOT_FOUND, body = Object)))]
-pub(crate) async fn explain(state: State, Query(query): Query<ExplainQuery>) -> Reply {
+    responses((status = OK, body = Explained), (status = BAD_REQUEST, description = BAD_QUERY, body = ErrorReply),
+        (status = NOT_FOUND, description = "`not_found`: no such project, rig or agent", body = ErrorReply)))]
+pub(crate) async fn explain(state: State, Param(Query(query)): Param<Query<ExplainQuery>>) -> Reply {
     let reply = explained(&state.config(), &query.project, &query.agent, query.rig.as_deref()).map_err(not_found)?;
     Ok(Json(reply))
 }
@@ -156,7 +168,7 @@ pub(crate) fn explained(config: &Config, project: &str, agent: &str, rig: Option
 }
 
 /// Loads the config file as a reload would and reports its errors; changes nothing.
-#[utoipa::path(post, path = "/v1/config/check", responses((status = OK, body = Object)))]
+#[utoipa::path(post, path = "/v1/config/check", responses((status = OK, body = Checked)))]
 pub(crate) async fn check(state: State) -> Reply {
     Ok(Json(checked((state.load)())))
 }
@@ -172,7 +184,7 @@ pub(crate) fn checked(loaded: Result<Config, Vec<String>>) -> Value {
 /// harnesses or the trackers needs a daemon restart (409). A replayed key answers as before and applies nothing.
 #[utoipa::path(post, path = "/v1/config/reload",
     params(("Idempotency-Key" = Option<String>, Header)),
-    responses((status = OK, body = Object), (status = BAD_REQUEST, body = Object), (status = CONFLICT, body = Object)))]
+    responses((status = OK, body = Reloaded), (status = CONFLICT, description = REJECTED, body = ErrorReply), Keyed))]
 pub(crate) async fn reload(state: State, headers: HeaderMap) -> Reply {
     let mut applied = state.applied.lock().await;
     let config = Arc::new((state.load)().map_err(|errors| {

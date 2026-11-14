@@ -16,8 +16,10 @@ Code: `crates/aae-front/src/api/`. Reference: `docs/api/openapi.json`.
 - **Idempotency.** Every mutating operation takes an `Idempotency-Key` header; a repeated key returns the first
   answer. The key repeated with another method, path or body is refused with 422 `idempotency_key_reused` and
   changes nothing. Keys are kept a day. `POST /v1/config/check` changes nothing and takes none.
-- **OpenAPI.** Generated from the code (`utoipa`); `crates/aae-front/tests/openapi.rs` fails when the committed
-  document differs. Regenerate with `AAE_UPDATE_OPENAPI=1 cargo nextest run -p aae-front openapi`.
+- **OpenAPI.** Generated from the code (`utoipa`), with the reply schemas and the error statuses of every
+  operation (every error body is an `ErrorReply`); `crates/aae-front/tests/openapi.rs` fails when the committed
+  document differs or an operation leaves out an error its kind can return. Regenerate with
+  `AAE_UPDATE_OPENAPI=1 cargo nextest run -p aae-front openapi`.
 - **Events** (`GET /v1/events`): SSE from a `seq` (or `Last-Event-ID`). A `seq` the journal rotated away is an
   explicit `gap` event before the stream starts; the client then re-reads the state over the API.
 - **Live view of a run** (`GET /v1/runs/{id}/live`): the run's events from a `seq`, interleaved with the raw messages

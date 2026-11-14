@@ -9,6 +9,7 @@ mod gates;
 mod instances;
 mod live;
 pub mod mcp;
+mod replies;
 mod runs;
 mod triggers;
 
@@ -20,18 +21,18 @@ use aae_core::{
 };
 use axum::{
     Json,
-    extract::{FromRequest, Request, rejection::JsonRejection},
-    http::{HeaderMap, HeaderValue, StatusCode},
+    extract::{FromRequest, FromRequestParts, Request, rejection::JsonRejection},
+    http::{HeaderMap, HeaderValue, StatusCode, request::Parts},
     middleware::Next,
     response::{IntoResponse, Response},
 };
-use serde_json::{Value, json};
+use serde_json::{Map, Value};
 use std::sync::{Arc, PoisonError, RwLock};
 use tokio::{
     net::{TcpListener, UnixListener},
     sync::watch,
 };
-use utoipa::OpenApi;
+use utoipa::{OpenApi, ToSchema};
 use utoipa_axum::{router::OpenApiRouter, routes};
 
 /// What the handlers share.
@@ -69,7 +70,14 @@ impl Api {
 type State = axum::extract::State<Arc<Api>>;
 
 #[derive(OpenApi)]
-#[openapi(info(title = "aae", description = "The API of the aae daemon (spec §12)."))]
+#[openapi(
+    info(
+        title = "aae",
+        description = "The API of the aae daemon (spec §12). Over TCP every operation needs \
+            `Authorization: Bearer <api_token>`; without it the reply is 401 `unauthorized`, an `ErrorReply`."
+    ),
+    components(schemas(ErrorReply))
+)]
 struct Doc;
 
 fn router() -> OpenApiRouter<Arc<Api>> {
@@ -192,7 +200,23 @@ fn same(a: &[u8], b: &[u8]) -> bool {
     a.len() == b.len() && a.iter().zip(b).fold(0, |acc, (x, y)| acc | (x ^ y)) == 0
 }
 
-/// An error reply: `{"error": {"code", "message"}}`.
+/// An error reply, as every failed operation answers.
+#[derive(serde::Serialize, ToSchema)]
+pub(crate) struct ErrorReply {
+    error: ErrorObject,
+}
+
+/// `code` for programs, `message` for people; some codes add fields: `oldest` with `gap` (410), `errors` with
+/// `config_error` (400).
+#[derive(serde::Serialize, ToSchema)]
+pub(crate) struct ErrorObject {
+    code: &'static str,
+    message: String,
+    #[serde(flatten)]
+    extra: Map<String, Value>,
+}
+
+/// An error reply: `{"error": {"code", "message", ...}}`.
 pub(crate) struct ApiError {
     status: StatusCode,
     code: &'static str,
@@ -226,11 +250,16 @@ impl From<aae_core::Error> for ApiError {
 
 impl IntoResponse for ApiError {
     fn into_response(self) -> Response {
-        let mut error = json!({ "code": self.code, "message": self.message });
-        if let (Value::Object(extra), Some(error)) = (self.extra, error.as_object_mut()) {
-            error.extend(extra);
-        }
-        (self.status, Json(json!({ "error": error }))).into_response()
+        let extra = match self.extra {
+            Value::Object(extra) => extra,
+            _ => Map::new(),
+        };
+        let error = ErrorObject {
+            code: self.code,
+            message: self.message,
+            extra,
+        };
+        (self.status, Json(ErrorReply { error })).into_response()
     }
 }
 
@@ -247,6 +276,23 @@ impl<T: serde::de::DeserializeOwned, S: Send + Sync> FromRequest<S> for Body<T> 
     }
 }
 
+/// A path or query whose rejection is an `ApiError` like every other error.
+pub(crate) struct Param<E>(E);
+
+impl<E, S> FromRequestParts<S> for Param<E>
+where
+    E: FromRequestParts<S, Rejection: std::fmt::Display>,
+    S: Send + Sync,
+{
+    type Rejection = ApiError;
+
+    async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, ApiError> {
+        (E::from_request_parts(parts, state).await)
+            .map(Self)
+            .map_err(|e| ApiError::new(StatusCode::BAD_REQUEST, "bad_request", e.to_string()))
+    }
+}
+
 /// The `Idempotency-Key` of a request and what the request was ([`fingerprint`]).
 fn key(headers: &HeaderMap) -> Option<(&str, &str)> {
     let get = |name| headers.get(name).and_then(|v: &HeaderValue| v.to_str().ok());
@@ -254,3 +300,22 @@ fn key(headers: &HeaderMap) -> Option<(&str, &str)> {
 }
 
 type Reply = Result<Json<Value>, ApiError>;
+
+#[cfg(test)]
+mod tests {
+    use super::{Param, runs::ListQuery};
+    use axum::{extract::FromRequestParts, extract::Query, http::Request, response::IntoResponse};
+
+    #[tokio::test]
+    async fn a_malformed_query_is_an_error_reply() {
+        let (mut parts, ()) = Request::get("/v1/runs?limit=many").body(()).unwrap().into_parts();
+        let Err(e) = Param::<Query<ListQuery>>::from_request_parts(&mut parts, &()).await else {
+            panic!("`limit=many` is accepted");
+        };
+        let reply = e.into_response();
+        assert_eq!(reply.status(), 400);
+        let body = axum::body::to_bytes(reply.into_body(), 1 << 16).await.unwrap();
+        let body: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(body["error"]["code"], "bad_request", "{body}");
+    }
+}

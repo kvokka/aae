@@ -44,3 +44,40 @@ fn every_api_operation_has_a_cli_command() {
     cli.sort();
     assert_eq!(api, cli, "the CLI covers exactly the operations of the API");
 }
+
+#[test]
+fn every_operation_lists_the_errors_it_can_return() {
+    let doc = serde_json::to_value(aae_front::api::openapi()).unwrap();
+    for (path, item) in doc["paths"].as_object().unwrap() {
+        for (method, op) in item.as_object().unwrap() {
+            let params = op["parameters"].as_array().cloned().unwrap_or_default();
+            let has = |name: &str, place: &str| {
+                params
+                    .iter()
+                    .any(|p| p["in"] == place && (name.is_empty() || p["name"] == name))
+            };
+            let statuses: Vec<&String> = op["responses"].as_object().unwrap().keys().collect();
+            let lists = |status: &str| statuses.iter().any(|s| *s == status);
+            let at = format!("{} {path}", method.to_uppercase());
+            if has("Idempotency-Key", "header") {
+                assert!(
+                    lists("422") && lists("503"),
+                    "{at}: a keyed operation lists 422 and 503"
+                );
+            }
+            // A missing run on a POST is the core's 409 (a finish answers `invalid`); a GET of one is 404.
+            if path.contains("{id}") && method == "get" {
+                assert!(lists("404"), "{at}: lists 404");
+            }
+            if !op["requestBody"].is_null() || has("", "query") || has("", "path") {
+                assert!(lists("400"), "{at}: lists 400");
+            }
+            for (status, reply) in op["responses"].as_object().unwrap() {
+                if !status.starts_with('2') {
+                    let schema = &reply["content"]["application/json"]["schema"]["$ref"];
+                    assert_eq!(schema, "#/components/schemas/ErrorReply", "{at}: {status}");
+                }
+            }
+        }
+    }
+}

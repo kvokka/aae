@@ -1,6 +1,10 @@
 //! Issue gates by hand (spec §5.7, contracts 7): list, close as the operator, open.
 
-use super::{ApiError, Body, Reply, State, key};
+use super::{
+    ApiError, Body, ErrorReply, Reply, State, key,
+    replies::{Failed, Gate, Keyed},
+    runs::{NULL, REJECTED},
+};
 use aae_core::{
     parse_rfc3339_ms,
     run::{GateSpec, Msg, valid_key},
@@ -13,7 +17,7 @@ use serde::Deserialize;
 use utoipa::ToSchema;
 
 /// Every active closure, oldest first.
-#[utoipa::path(get, path = "/v1/gates", responses((status = OK, body = [Object])))]
+#[utoipa::path(get, path = "/v1/gates", responses((status = OK, body = [Gate]), Failed))]
 pub(crate) async fn list(state: State) -> Reply {
     Ok(Json(state.reader.gates(now_ms())?.into()))
 }
@@ -32,7 +36,7 @@ pub(crate) struct CloseGate {
 /// Closes a gate as the operator: automation never opens it (criterion 19).
 #[utoipa::path(post, path = "/v1/gates", request_body = CloseGate,
     params(("Idempotency-Key" = Option<String>, Header)),
-    responses((status = OK, body = Object), (status = BAD_REQUEST, body = Object), (status = CONFLICT, body = Object)))]
+    responses((status = OK, description = NULL, body = ()), (status = CONFLICT, description = REJECTED, body = ErrorReply), Keyed))]
 pub(crate) async fn close(state: State, headers: HeaderMap, Body(body): Body<CloseGate>) -> Reply {
     valid(&body.key)?;
     let until_ms = match &body.until {
@@ -63,7 +67,7 @@ pub(crate) struct OpenGate {
 /// Opens a gate: every closure of the key goes, the policy's too.
 #[utoipa::path(post, path = "/v1/gates/open", request_body = OpenGate,
     params(("Idempotency-Key" = Option<String>, Header)),
-    responses((status = OK, body = Object), (status = BAD_REQUEST, body = Object), (status = CONFLICT, body = Object)))]
+    responses((status = OK, description = NULL, body = ()), (status = CONFLICT, description = REJECTED, body = ErrorReply), Keyed))]
 pub(crate) async fn open(state: State, headers: HeaderMap, Body(body): Body<OpenGate>) -> Reply {
     valid(&body.key)?;
     let msg = Msg::OpenGate { key: body.key };

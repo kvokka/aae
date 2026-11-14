@@ -1,7 +1,7 @@
 //! The event stream (spec §5.3): the journal as SSE from a `seq`, then live. A `seq` rotated away is the explicit
 //! "gap" error; the client recovers by reading the state.
 
-use super::{ApiError, State};
+use super::{ApiError, ErrorReply, Param, State, replies::Failed, runs::BAD_QUERY};
 use aae_core::ReadError;
 use axum::{
     extract::Query,
@@ -18,6 +18,9 @@ use tokio::sync::mpsc;
 use tokio_stream::wrappers::ReceiverStream;
 use utoipa::IntoParams;
 
+/// The 410 of an event stream.
+pub(super) const GAP: &str = "`gap`: the `seq` was rotated away; `oldest` is the first one still held";
+
 /// Events read from the journal at a time.
 const BATCH: usize = 256;
 
@@ -30,11 +33,13 @@ pub(crate) struct StreamQuery {
 /// The events as SSE: `id` is the `seq`, `event` the type, `data` the envelope (contracts 1.1). A `seq` rotated
 /// away is `410` with `oldest`, the first `seq` still held; it rotated away while streaming: an event `gap`.
 #[utoipa::path(get, path = "/v1/events", params(StreamQuery, ("Last-Event-ID" = Option<String>, Header)),
-    responses((status = OK, content_type = "text/event-stream", body = String), (status = GONE, body = Object)))]
+    responses((status = OK, content_type = "text/event-stream", body = String),
+        (status = BAD_REQUEST, description = BAD_QUERY, body = ErrorReply), (status = GONE, description = GAP, body = ErrorReply),
+        Failed))]
 pub(crate) async fn stream(
     state: State,
     headers: HeaderMap,
-    Query(query): Query<StreamQuery>,
+    Param(Query(query)): Param<Query<StreamQuery>>,
 ) -> Result<Response, ApiError> {
     let from = query
         .from

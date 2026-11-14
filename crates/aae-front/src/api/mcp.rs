@@ -3,7 +3,7 @@
 //! other takes the `initialize` epoch, with no session id, so a daemon restart strands no client.
 
 use super::{
-    ApiError, Body, State, request_hash,
+    ApiError, Body, Param, State, request_hash,
     runs::{self, CancelRun, CreateRun, ListQuery},
 };
 use aae_core::config::{Config, InputType};
@@ -130,15 +130,15 @@ async fn call(state: State, params: &Value) -> Option<Value> {
             (_, Err(e)) => Err(parse(e)),
         },
         "run_state" => match id() {
-            Ok(id) => runs::get(state, Path(id)).await,
+            Ok(id) => runs::get(state, Param(Path(id))).await,
             Err(e) => Err(e),
         },
         "list_runs" => match serde_json::from_value::<ListQuery>(args.clone()) {
-            Ok(query) => runs::list(state, Query(query)).await,
+            Ok(query) => runs::list(state, Param(Query(query))).await,
             Err(e) => Err(parse(e)),
         },
         "cancel_run" => match (id(), headers, serde_json::from_value::<CancelRun>(args.clone())) {
-            (Ok(id), Ok(headers), Ok(body)) => runs::cancel(state, headers, Path(id), Body(body)).await,
+            (Ok(id), Ok(headers), Ok(body)) => runs::cancel(state, headers, Param(Path(id)), Body(body)).await,
             (Err(e), ..) | (_, Err(e), _) => Err(e),
             (.., Err(e)) => Err(parse(e)),
         },

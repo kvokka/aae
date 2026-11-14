@@ -3,8 +3,9 @@
 //! reconnect gets only the new ones; the history is in the harness's transcript.
 
 use super::{
-    Api, ApiError, State,
-    events::{after_last, event, gap, read},
+    Api, ApiError, ErrorReply, Param, State,
+    events::{GAP, after_last, event, gap, read},
+    replies::Failed,
 };
 use aae_core::{ReadError, driver::SessionRef};
 use axum::{
@@ -38,13 +39,15 @@ pub(crate) struct LiveQuery {
 /// session. The stream ends after the run's `run.passed`, `run.failed` or `run.cancelled`.
 #[utoipa::path(get, path = "/v1/runs/{id}/live",
     params(("id" = String, Path), LiveQuery, ("Last-Event-ID" = Option<String>, Header)),
-    responses((status = OK, content_type = "text/event-stream", body = String), (status = NOT_FOUND, body = Object),
-        (status = GONE, body = Object)))]
+    responses((status = OK, content_type = "text/event-stream", body = String),
+        (status = BAD_REQUEST, description = "`bad_request`: the path or query is malformed", body = ErrorReply),
+        (status = NOT_FOUND, description = "`not_found`: no such run", body = ErrorReply),
+        (status = GONE, description = GAP, body = ErrorReply), Failed))]
 pub(crate) async fn live(
     state: State,
-    Path(id): Path<String>,
+    Param(Path(id)): Param<Path<String>>,
     headers: HeaderMap,
-    Query(query): Query<LiveQuery>,
+    Param(Query(query)): Param<Query<LiveQuery>>,
 ) -> Result<Response, ApiError> {
     if state.reader.run(&id)?.is_none() {
         return Err(ApiError::new(

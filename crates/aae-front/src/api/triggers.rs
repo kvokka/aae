@@ -1,7 +1,11 @@
 //! Triggers (spec §9.5): the list with the next firings, firing one on a rig by hand as its schedule would, and
 //! switching one off and on.
 
-use super::{Body, Reply, State, key};
+use super::{
+    Body, ErrorReply, Reply, State, key,
+    replies::{Failed, Fired, Keyed, Switched, Trigger},
+    runs::REJECTED,
+};
 use aae_core::run::Msg;
 use axum::{Json, http::HeaderMap};
 use serde::Deserialize;
@@ -19,7 +23,7 @@ pub(crate) struct OnRig {
 /// (an overlapping live run, for one).
 #[utoipa::path(post, path = "/v1/triggers/fire", request_body = OnRig,
     params(("Idempotency-Key" = Option<String>, Header)),
-    responses((status = OK, body = Object), (status = BAD_REQUEST, body = Object), (status = CONFLICT, body = Object)))]
+    responses((status = OK, body = Fired), (status = CONFLICT, description = REJECTED, body = ErrorReply), Keyed))]
 pub(crate) async fn fire(state: State, headers: HeaderMap, Body(body): Body<OnRig>) -> Reply {
     let msg = Msg::Fire {
         project: body.project,
@@ -32,7 +36,7 @@ pub(crate) async fn fire(state: State, headers: HeaderMap, Body(body): Body<OnRi
 /// Switches a trigger on a rig back on: `{"trigger": name, "enabled": true}`.
 #[utoipa::path(post, path = "/v1/triggers/enable", request_body = OnRig,
     params(("Idempotency-Key" = Option<String>, Header)),
-    responses((status = OK, body = Object), (status = BAD_REQUEST, body = Object), (status = CONFLICT, body = Object)))]
+    responses((status = OK, body = Switched), (status = CONFLICT, description = REJECTED, body = ErrorReply), Keyed))]
 pub(crate) async fn enable(state: State, headers: HeaderMap, Body(body): Body<OnRig>) -> Reply {
     switch(state, headers, body, true).await
 }
@@ -41,7 +45,7 @@ pub(crate) async fn enable(state: State, headers: HeaderMap, Body(body): Body<On
 /// still does. `{"trigger": name, "enabled": false}`.
 #[utoipa::path(post, path = "/v1/triggers/disable", request_body = OnRig,
     params(("Idempotency-Key" = Option<String>, Header)),
-    responses((status = OK, body = Object), (status = BAD_REQUEST, body = Object), (status = CONFLICT, body = Object)))]
+    responses((status = OK, body = Switched), (status = CONFLICT, description = REJECTED, body = ErrorReply), Keyed))]
 pub(crate) async fn disable(state: State, headers: HeaderMap, Body(body): Body<OnRig>) -> Reply {
     switch(state, headers, body, false).await
 }
@@ -58,7 +62,7 @@ async fn switch(state: State, headers: HeaderMap, body: OnRig, enabled: bool) ->
 
 /// Lists every trigger on every rig it runs on, with its source and next firing (`next_at`, null for an event
 /// trigger) and whether it is `enabled`.
-#[utoipa::path(get, path = "/v1/triggers", responses((status = OK, body = [Object])))]
+#[utoipa::path(get, path = "/v1/triggers", responses((status = OK, body = [Trigger]), Failed))]
 pub(crate) async fn list(state: State) -> Reply {
     Ok(Json(state.reader.triggers(&state.config())?.into()))
 }

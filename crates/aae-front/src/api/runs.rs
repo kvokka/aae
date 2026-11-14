@@ -1,6 +1,9 @@
 //! Runs: start a formula, list, state, cancel, answer a request, the finisher (spec §12, contracts 6).
 
-use super::{ApiError, Body, Reply, State, key};
+use super::{
+    ApiError, Body, ErrorReply, Param, Reply, State, key,
+    replies::{Failed, Finished, Keyed, Started},
+};
 use aae_core::run::{Create, Msg, Outcome, RunFilter, answer_from};
 use axum::{
     Json,
@@ -10,6 +13,15 @@ use axum::{
 use serde::Deserialize;
 use serde_json::{Map, Value};
 use utoipa::{IntoParams, ToSchema};
+
+/// Descriptions the operations share.
+pub(super) const REJECTED: &str = "`rejected`: the core refused the request; the message says why";
+pub(super) const NULL: &str = "Done; the body is JSON `null`";
+pub(super) const BAD_QUERY: &str = "`bad_request`: the query is malformed";
+const BAD_PATH: &str = "`bad_request`: the path is malformed";
+const RUN_VIEW: &str = "The run: `RunView` (docs/design/contracts.md §1.3) with `project`, `rig`, `correlation`, \
+    `inputs`, `waiting_for` and `attempts`";
+const RUN_VIEWS: &str = "Run views as `GET /v1/runs/{id}` gives them";
 
 #[derive(Deserialize, ToSchema)]
 pub(crate) struct CreateRun {
@@ -27,7 +39,7 @@ pub(crate) struct CreateRun {
 /// `{ next_ready = true }` finds no ready bead to take (spec §10.3).
 #[utoipa::path(post, path = "/v1/runs", request_body = CreateRun,
     params(("Idempotency-Key" = Option<String>, Header, description = "Repeats return the first reply")),
-    responses((status = OK, body = Object), (status = CONFLICT, body = Object)))]
+    responses((status = OK, body = Started), (status = CONFLICT, description = REJECTED, body = ErrorReply), Keyed))]
 pub(crate) async fn create(state: State, headers: HeaderMap, Body(body): Body<CreateRun>) -> Reply {
     let create = Create {
         project: body.project,
@@ -51,8 +63,10 @@ pub(crate) struct ListQuery {
 }
 
 /// Lists runs, newest first.
-#[utoipa::path(get, path = "/v1/runs", params(ListQuery), responses((status = OK, body = [Object])))]
-pub(crate) async fn list(state: State, Query(query): Query<ListQuery>) -> Reply {
+#[utoipa::path(get, path = "/v1/runs", params(ListQuery),
+    responses((status = OK, description = RUN_VIEWS, body = [Object]), (status = BAD_REQUEST, description = BAD_QUERY,
+        body = ErrorReply), Failed))]
+pub(crate) async fn list(state: State, Param(Query(query)): Param<Query<ListQuery>>) -> Reply {
     let filter = RunFilter {
         project: query.project,
         state: query.state,
@@ -63,8 +77,9 @@ pub(crate) async fn list(state: State, Query(query): Query<ListQuery>) -> Reply 
 
 /// The state of a run: its view, where it waits and its attempts.
 #[utoipa::path(get, path = "/v1/runs/{id}", params(("id" = String, Path)),
-    responses((status = OK, body = Object), (status = NOT_FOUND, body = Object)))]
-pub(crate) async fn get(state: State, Path(id): Path<String>) -> Reply {
+    responses((status = OK, description = RUN_VIEW, body = Object), (status = BAD_REQUEST, description = BAD_PATH,
+        body = ErrorReply), (status = NOT_FOUND, description = "`not_found`: no such run", body = ErrorReply), Failed))]
+pub(crate) async fn get(state: State, Param(Path(id)): Param<Path<String>>) -> Reply {
     let run = state.reader.run(&id)?;
     run.map(Json)
         .ok_or_else(|| ApiError::new(StatusCode::NOT_FOUND, "not_found", format!("no run `{id}`")))
@@ -79,11 +94,12 @@ pub(crate) struct CancelRun {
 /// Cancels a run.
 #[utoipa::path(post, path = "/v1/runs/{id}/cancel", request_body = CancelRun,
     params(("id" = String, Path), ("Idempotency-Key" = Option<String>, Header)),
-    responses((status = OK, body = Object), (status = CONFLICT, body = Object)))]
+    responses((status = OK, description = NULL, body = ()), (status = CONFLICT, description = REJECTED, body = ErrorReply),
+        Keyed))]
 pub(crate) async fn cancel(
     state: State,
     headers: HeaderMap,
-    Path(run): Path<String>,
+    Param(Path(run)): Param<Path<String>>,
     Body(body): Body<CancelRun>,
 ) -> Reply {
     let reason = Some(body.reason)
@@ -109,11 +125,12 @@ pub(crate) struct AnswerRun {
 /// Answers the open request of a run in `requires_action`.
 #[utoipa::path(post, path = "/v1/runs/{id}/answer", request_body = AnswerRun,
     params(("id" = String, Path), ("Idempotency-Key" = Option<String>, Header)),
-    responses((status = OK, body = Object), (status = BAD_REQUEST, body = Object), (status = CONFLICT, body = Object)))]
+    responses((status = OK, description = NULL, body = ()), (status = CONFLICT, description = REJECTED, body = ErrorReply),
+        Keyed))]
 pub(crate) async fn answer(
     state: State,
     headers: HeaderMap,
-    Path(run): Path<String>,
+    Param(Path(run)): Param<Path<String>>,
     Body(body): Body<AnswerRun>,
 ) -> Reply {
     let answer = answer_from(&body.answer)
@@ -139,11 +156,11 @@ pub(crate) struct FinishRun {
 /// `{"answer": "accepted"|"stale_attempt"|"run_terminal"|"invalid"}`.
 #[utoipa::path(post, path = "/v1/runs/{id}/finish", request_body = FinishRun,
     params(("id" = String, Path), ("Idempotency-Key" = Option<String>, Header)),
-    responses((status = OK, body = Object)))]
+    responses((status = OK, body = Finished), Keyed))]
 pub(crate) async fn finish(
     state: State,
     headers: HeaderMap,
-    Path(run): Path<String>,
+    Param(Path(run)): Param<Path<String>>,
     Body(body): Body<FinishRun>,
 ) -> Reply {
     let msg = Msg::Finish {
