@@ -340,7 +340,7 @@ mod tests {
 
     #[test]
     fn readiness_is_stale_before_the_last_change_of_the_code() {
-        let marker = |ver: &str| format!("<!-- MEASURE id=readiness date=2026-11-14 ver={ver} env=x -->\n");
+        let marker = |ver: &str| format!("<!-- {} id=readiness date=2026-11-14 ver={ver} env=x -->\n", "MEASURE");
         assert_eq!(readiness_fresh(&marker("HEAD")), Ok(()));
         let first = std::process::Command::new("git")
             .args(["rev-list", "--max-parents=0", "HEAD"])
