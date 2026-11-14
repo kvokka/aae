@@ -32,7 +32,10 @@ fn the_transcript_tells_where_the_prompt_stands() {
     let dir = tempfile::tempdir().unwrap();
     let session = json!({ "session_id": "s1", "config_dir": dir.path(), "workdir": "/w/my rig" });
     let key = PromptKey::new("r", 1, 1);
-    assert_eq!(transcript(&session, key), Transcript::Missing);
+    assert_eq!(
+        transcript(&session, key, Path::new("/nonexistent")),
+        Transcript::Missing
+    );
     let file = dir.path().join("projects/-w-my-rig/s1.jsonl");
     std::fs::create_dir_all(file.parent().unwrap()).unwrap();
     let user = json!({ "type": "user", "uuid": key.0.to_string() });
@@ -43,8 +46,17 @@ fn the_transcript_tells_where_the_prompt_stands() {
     ] {
         let text: Vec<String> = lines.iter().map(Value::to_string).collect();
         std::fs::write(&file, text.join("\n")).unwrap();
-        assert_eq!(transcript(&session, key), Transcript::Present { prompt });
+        assert_eq!(
+            transcript(&session, key, Path::new("/nonexistent")),
+            Transcript::Present { prompt }
+        );
     }
+    // A session inheriting the host writes where the daemon's `CLAUDE_CONFIG_DIR` says, and is read there.
+    let inherited = json!({ "session_id": "s1", "config_dir": null, "workdir": "/w/my rig" });
+    let answered = Transcript::Present {
+        prompt: PromptState::Answered,
+    };
+    assert_eq!(transcript(&inherited, key, dir.path()), answered);
 }
 
 #[test]

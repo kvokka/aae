@@ -346,7 +346,7 @@ impl Driver for Claude {
         session: &'a SessionRef,
         key: PromptKey,
     ) -> BoxFuture<'a, Result<Transcript, Failure>> {
-        Box::pin(async move { Ok(transcript(&session.0, key)) })
+        Box::pin(async move { Ok(transcript(&session.0, key, &part::host_dir())) })
     }
 
     fn live(&self, session: &SessionRef) -> Option<broadcast::Receiver<Value>> {
@@ -359,12 +359,12 @@ impl Driver for Claude {
     }
 }
 
-/// Where the prompt `key` stands in the session file `<config>/projects/<workdir, non-alphanumerics as ->/<id>.jsonl`.
-fn transcript(session: &Value, key: PromptKey) -> Transcript {
-    let config = match session["config_dir"].as_str() {
-        Some(dir) => PathBuf::from(dir),
-        None => Path::new(&std::env::var("HOME").unwrap_or_default()).join(".claude"),
-    };
+/// Where the prompt `key` stands in the session file `<config>/projects/<workdir, non-alphanumerics as ->/<id>.jsonl`;
+/// the config directory of a session inheriting the host is `host`, the one its process got (`part::daemon_vars`).
+fn transcript(session: &Value, key: PromptKey, host: &Path) -> Transcript {
+    let config = session["config_dir"]
+        .as_str()
+        .map_or_else(|| host.to_owned(), PathBuf::from);
     let workdir = session["workdir"].as_str().unwrap_or_default();
     let dir: String = workdir
         .chars()
