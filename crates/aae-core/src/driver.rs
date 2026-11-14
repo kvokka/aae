@@ -234,7 +234,7 @@ pub struct DriverEvent {
     pub instance: String,
     /// `None` for instance-wide events.
     pub session: Option<SessionRef>,
-    /// Monotonic per instance, from 1.
+    /// Monotonic per instance, from 1; 0 for an event the core makes itself (a dead instance's `Exited`).
     pub seq: u64,
     pub event: Normalized,
 }

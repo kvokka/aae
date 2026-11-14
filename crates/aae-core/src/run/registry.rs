@@ -161,6 +161,37 @@ impl RunHandler {
         }
     }
 
+    /// Whether an event of `instance` numbered `seq` comes in order (contracts 4.3): a repeat is dropped, and a
+    /// repeat or a gap is told (invariant 20). 0 is an event the core made itself, outside the numbering.
+    pub(super) fn in_order(tx: &mut Tx<'_>, instance: &str, seq: u64) -> Result<bool, Error> {
+        let seq = i64::try_from(seq).unwrap_or(i64::MAX);
+        let last: Option<i64> = tx
+            .sql()
+            .query_row("SELECT seq FROM instances WHERE id = ?1", [instance], |r| r.get(0))
+            .optional()?;
+        let Some(last) = last.filter(|_| seq != 0) else {
+            return Ok(true);
+        };
+        if seq != last + 1 {
+            let data = json!({ "subject": "instance", "id": instance, "expected": last + 1, "observed": seq });
+            let event = Event {
+                kind: "resync.diverged".to_owned(),
+                project: None,
+                rig: None,
+                run: None,
+                correlation: None,
+                data,
+            };
+            tx.emit(&event)?;
+        }
+        if seq <= last {
+            return Ok(false);
+        }
+        tx.sql()
+            .execute("UPDATE instances SET seq = ?2 WHERE id = ?1", params![instance, seq])?;
+        Ok(true)
+    }
+
     /// A ready instance turned degraded (`Some` reason) or well again: it is told, and it keeps its sessions.
     pub(super) fn instance_health(tx: &mut Tx<'_>, id: &str, degraded: Option<&str>) -> Result<(), Error> {
         let changed = tx.sql().execute(

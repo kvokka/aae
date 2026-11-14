@@ -18,6 +18,8 @@ pub enum Step {
         code: Option<i32>,
         signal: Option<i32>,
     },
+    /// The next event of the instance goes out with this `seq`: a repeat or a gap in the numbering.
+    Reseq(u64),
     /// The process dies without a word: no `exited`, only its health turns `Dead`.
     Vanish,
 }

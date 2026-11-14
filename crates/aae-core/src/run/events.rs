@@ -86,6 +86,9 @@ impl RunHandler {
     /// An event goes to the live attempts of its instance: of its session, or all of them for an instance-wide
     /// failure or exit. Events no live attempt owns are late and dropped.
     pub(super) fn driver_event(&mut self, tx: &mut Tx<'_>, event: DriverEvent) -> Result<(), Error> {
+        if !Self::in_order(tx, &event.instance, event.seq)? {
+            return Ok(());
+        }
         if matches!(event.event, Normalized::Exited { .. }) {
             Self::instance_exited(tx, &event.instance)?;
         }

@@ -111,3 +111,32 @@ async fn a_degraded_instance_is_told_and_keeps_its_session() {
         "completed"
     );
 }
+
+#[tokio::test(start_paused = true)]
+async fn a_repeated_driver_event_is_dropped_and_a_gap_is_told() {
+    let w = world(&[]);
+    let crash = Failure::new(FailureKind::HarnessCrash, Source::Adapter);
+    // The ack is 1 and `turn.started` 2: the crash repeats 2, then the numbering jumps to 9.
+    let mut steps = hollow_turn();
+    steps.splice(
+        1..1,
+        [Step::Reseq(2), Step::Emit(Normalized::Failure(crash)), Step::Reseq(9)],
+    );
+    w.driver.script(steps);
+    let run = w.create().await;
+    let events = w.events(&run, Duration::from_millis(200)).await;
+    assert!(
+        !events.iter().any(|(t, _)| t == "run.attempt_failed"),
+        "the repeat is dropped"
+    );
+    assert_eq!(
+        last(&events, "run.turn_ended_without_outcome")["stop_reason"],
+        "completed"
+    );
+    let told: Vec<_> = w
+        .all("resync.diverged")
+        .iter()
+        .map(|d| (d["expected"].clone(), d["observed"].clone()))
+        .collect();
+    assert_eq!(told, [(json!(3), json!(2)), (json!(3), json!(9))]);
+}

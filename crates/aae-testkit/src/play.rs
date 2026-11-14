@@ -53,6 +53,11 @@ impl ScriptedDriver {
                         driver.exit(&instance, code, signal);
                         return;
                     }
+                    Step::Reseq(seq) => {
+                        if let Some(i) = driver.lock().instances.get_mut(&instance) {
+                            i.seq = seq.saturating_sub(1);
+                        }
+                    }
                     Step::Vanish => {
                         if let Some(i) = driver.lock().instances.get_mut(&instance) {
                             i.alive = false;

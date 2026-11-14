@@ -213,6 +213,8 @@ pub fn open(path: &Path) -> rusqlite::Result<Connection> {
         ),
         // Why a ready instance is degraded, while it is (contracts 8).
         (16, "ALTER TABLE instances ADD COLUMN degraded TEXT;"),
+        // The `seq` of the last driver event taken from the instance (contracts 4.3).
+        (17, "ALTER TABLE instances ADD COLUMN seq INTEGER NOT NULL DEFAULT 0;"),
     ]
     .into_iter()
     .filter(|(to, _)| *to > version)
