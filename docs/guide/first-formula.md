@@ -74,10 +74,10 @@ the harness sees.
 
 The agent must be allowed to run that command. With `permission_mode = "acceptEdits"` claude asks before running a
 shell command; the run then waits in `requires_action` until you answer (or until the `human_timeout`, one hour
-by default, after which the request is denied). The `run.requires_action` event names the request:
+by default, after which the request is denied). `aae run show` names the open request:
 
 ```sh
-aae events --json | grep requires_action   # {"run": ..., "request": {"id": "<request>", "kind": "permission", ...}}
+aae run show run_2                         # request.id: <request>, request.kind: permission, request.tool: Bash
 aae run answer run_2 <request> allow       # or: deny <message>; answer <text> for a question
 ```
 
