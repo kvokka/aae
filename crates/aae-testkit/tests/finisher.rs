@@ -171,3 +171,46 @@ async fn continue_after_a_hollow_turn_counts_toward_the_remarks_ceiling() {
         (&json!("hollow_done"), &json!("remarks_ceiling"))
     );
 }
+
+/// A run waiting on its finishing hooks when the daemon dies: hooks run again, a turn does not (contracts 6.4).
+async fn finishing_across_a_restart() -> (World, String) {
+    let mut w = hooked("run.finishing");
+    let mut steps = hollow_turn();
+    steps.insert(1, Step::Wait(Duration::from_secs(1)));
+    w.driver.script(steps);
+    let run = w.create().await;
+    tokio::time::sleep(Duration::from_millis(300)).await;
+    let token = w.driver.token(&run, 1).unwrap();
+    assert_eq!(w.finish(&run, &token, Verdict::Pass, "done").await, "accepted");
+    tokio::time::sleep(Duration::from_millis(900)).await;
+    w.restart().await;
+    (w, run)
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_run_in_finishing_keeps_its_outcome_across_a_restart() {
+    let (w, run) = finishing_across_a_restart().await;
+    assert_eq!(w.states(&run).await.last().unwrap(), "finishing");
+    let started = w.until(None, "daemon.started", 1).await;
+    assert_eq!(started["interrupted_runs"], 0, "{started}");
+    w.decide(&run, "run.finishing", 0, Decision::Accept).await;
+    assert_eq!(w.states(&run).await.last().unwrap(), "passed");
+    let events = w.events(&run, Duration::ZERO).await;
+    assert_eq!(last(&events, "run.passed")["outcome"]["summary"], "done");
+}
+
+/// The remark goes to the session of the dead daemon's instance: the attempt fails at once, nothing waits.
+#[tokio::test(start_paused = true)]
+async fn a_remark_after_a_restart_fails_the_attempt_instead_of_waiting() {
+    let (w, run) = finishing_across_a_restart().await;
+    let message = "Add a test.".to_owned();
+    w.decide(&run, "run.finishing", 0, Decision::Remark { message }).await;
+    let states = w.states(&run).await;
+    assert_eq!(
+        states[states.len() - 4..],
+        ["finishing", "running", "interrupted", "failed"],
+        "{states:?}"
+    );
+    let events = w.events(&run, Duration::ZERO).await;
+    assert_eq!(last(&events, "run.attempt_failed")["failure"]["kind"], "harness_crash");
+}

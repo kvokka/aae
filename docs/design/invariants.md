@@ -49,8 +49,10 @@ At daemon start ([contracts](contracts.md) 6.4 has the exact state rules):
 2. For every recorded harness instance check pid + start time, kill its process group, sweep every process with
    its marker and wait for the end. Instances that survived the restart are not reconnected in the first release:
    reconnection is an assumption left for later.
-3. Runs in active states move to `interrupted` with the attempt failure `daemon_crash`; the policy decides what
-   follows.
+3. Runs in `starting`, `running` and `requires_action` move to `interrupted` with the attempt failure
+   `daemon_crash`; the policy decides what follows. A run in `preparing`, `finishing` or `interrupted` keeps its
+   state and its hooks run again: a finished exec command does not run twice, a claimed outcome is not lost
+   (contracts 6.4); a remark after the restart reaches a dead session and fails the attempt.
 4. Re-arm deadlines and schedules (a missed schedule fires at most once) and resync.
 
 A planned restart drains first (`POST /v1/daemon/drain`, `POST /v1/daemon/restart`, `aae drain`, `aae restart`):

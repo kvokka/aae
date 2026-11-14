@@ -242,6 +242,25 @@ async fn a_shared_instance_that_dies_fails_every_attempt_on_it() {
     assert!(killed(orphan).await, "its marked descendants are swept (invariant 7)");
 }
 
+/// A stop, not a death: the scripted exit lands on a `stopping` instance, so only the stop path sweeps (invariant 7).
+#[cfg(target_os = "linux")] // the sweep reads `/proc`
+#[tokio::test(start_paused = true)]
+async fn a_stopped_instance_has_its_marked_descendants_swept() {
+    let w = world_driven(FILES, ScriptedDriver::new(1));
+    let run = w.start("web", "build").await;
+    let events = w.events(&run, Duration::from_secs(1)).await;
+    assert!(
+        events
+            .iter()
+            .any(|(t, d)| t == "run.state_changed" && d["to"] == "running")
+    );
+    let orphan = marked(&w);
+    w.cancel(&run).await;
+    assert!(killed(orphan).await, "its marked descendants are swept");
+    assert_eq!(w.count("instance.stopped"), 1, "{:?}", w.instance_events());
+    assert_eq!(w.count("instance.failed"), 0);
+}
+
 #[tokio::test(start_paused = true)]
 async fn a_late_event_of_another_session_leaves_the_live_attempt_alone() {
     let w = world_driven(FILES, ScriptedDriver::new(2));
