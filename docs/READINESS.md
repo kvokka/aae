@@ -16,7 +16,7 @@ of 8 busy cores at `1dee5b0`, its orphan check now able to fail. The rows with a
 8 and 17) and the release builds (1) were last green at `495f0e6` and earlier: since then the core's recovery, both
 harness adapters, the config and the CLI changed, and no full `mise run acceptance` ran on this code (the last full
 run was at `5c5014f`). The components with such a criterion stay at 6 until a full run shows it green.
-<!-- MEASURE id=readiness date=2026-11-14 ver=3af4457 env=linux-arm64-orbstack src=docs/READINESS.md note="assessed against the letter of the scale; the model rows are open until a full run on this code" -->
+<!-- MEASURE id=readiness date=2026-11-14 ver=56063f0 env=linux-arm64-orbstack src=docs/READINESS.md note="assessed against the letter of the scale; the model rows are open until a full run on this code" -->
 
 | Component | Criteria | Score | Missing for the next point |
 |---|---|---|---|
