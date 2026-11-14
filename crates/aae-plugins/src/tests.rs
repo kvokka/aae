@@ -16,7 +16,8 @@ fn failed(kind: &str, failure: Value, attempts: &[(&str, &str, i64)], gates: Val
     failure["kind"] = json!(kind);
     json!({ "type": "run.attempt_failed", "ts": "2026-11-13T12:00:00.000Z", "data": {
         "run": { "id": "r1" }, "failure": failure, "attempts": attempts, "gates": gates,
-        "keys": ["orchestrator", "project:shop", "rig:shop/web", "agent:shop.dev", "account:claude/a1", "model:anthropic/haiku"],
+        "keys": ["orchestrator", "project:shop", "rig:shop/web", "agent:shop.dev",
+            "account:claude/a1", "model:anthropic/haiku"],
     } })
 }
 

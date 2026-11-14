@@ -120,7 +120,10 @@ async fn serve(command: &[String], port: u16, token: &str, wait: Duration) -> Re
         )
         .with_state(Arc::new(bridge));
     tokio::select! {
-        served = axum::serve(listener, app) => Err(format!("listener: {}", served.err().map(|e| e.to_string()).unwrap_or_default())),
+        served = axum::serve(listener, app) => Err(format!(
+            "listener: {}",
+            served.err().map(|e| e.to_string()).unwrap_or_default()
+        )),
         _ = reader => Err(gone(&mut child).await),
     }
 }

@@ -114,7 +114,8 @@ pub(crate) struct CancelRun {
 /// Cancels a run.
 #[utoipa::path(post, path = "/v1/runs/{id}/cancel", request_body = CancelRun,
     params(("id" = String, Path), ("Idempotency-Key" = Option<String>, Header)),
-    responses((status = OK, description = NULL, body = ()), (status = CONFLICT, description = REJECTED, body = ErrorReply),
+    responses((status = OK, description = NULL, body = ()),
+        (status = CONFLICT, description = REJECTED, body = ErrorReply),
         Keyed))]
 pub(crate) async fn cancel(
     state: State,
@@ -145,7 +146,8 @@ pub(crate) struct AnswerRun {
 /// Answers the open request of a run in `requires_action`.
 #[utoipa::path(post, path = "/v1/runs/{id}/answer", request_body = AnswerRun,
     params(("id" = String, Path), ("Idempotency-Key" = Option<String>, Header)),
-    responses((status = OK, description = NULL, body = ()), (status = CONFLICT, description = REJECTED, body = ErrorReply),
+    responses((status = OK, description = NULL, body = ()),
+        (status = CONFLICT, description = REJECTED, body = ErrorReply),
         Keyed))]
 pub(crate) async fn answer(
     state: State,

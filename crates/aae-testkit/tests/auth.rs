@@ -83,7 +83,8 @@ async fn a_passing_403_with_a_lost_or_doubled_end_recovers_by_itself() {
     };
     w.core.send(None, finish).await.unwrap();
     w.until(Some(&run), "run.passed", 0).await;
-    // The journal tells it: failure → bounded park → probe by timer, twice, then the pass; no failure counted twice.
+    // The journal tells it: failure → bounded park → probe by timer, twice, then the pass;
+    // no failure counted twice.
     let failed = w.every(&run, "run.attempt_failed");
     assert_eq!(failed.len(), 2);
     assert!(failed.iter().all(|f| f["failure"]["kind"] == "auth_required"));

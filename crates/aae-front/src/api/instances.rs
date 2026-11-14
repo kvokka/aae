@@ -20,7 +20,8 @@ pub(crate) async fn list(state: State) -> Reply {
 /// (409), so no attempt loses its process.
 #[utoipa::path(post, path = "/v1/instances/{id}/stop",
     params(("id" = String, Path), ("Idempotency-Key" = Option<String>, Header)),
-    responses((status = OK, body = InstanceStopping), (status = CONFLICT, description = REJECTED, body = ErrorReply), Keyed))]
+    responses((status = OK, body = InstanceStopping),
+        (status = CONFLICT, description = REJECTED, body = ErrorReply), Keyed))]
 pub(crate) async fn stop(state: State, headers: HeaderMap, Param(Path(id)): Param<Path<String>>) -> Reply {
     state.core.send_request(key(&headers), Msg::StopInstance { id }).await?;
     Ok(Json(json!({ "stopping": true })))

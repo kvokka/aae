@@ -93,23 +93,22 @@ mcp = { url = "/mcp" }                         # | true (= /mcp); none: no MCP e
   up to 5 s; `http` is a `GET` with the token answering 2xx; `command` runs with the service's environment and
   passes on exit 0). Not ready within 30 s, it is stopped and fails. Once ready, a live service is one whose
   process lives: there is no periodic check. A server that is not up is a tool failure, not a failed run.
-- The port is checked free right before each start; one taken (someone else listens there and would get the token)
-  fails that start without running `command`. A port or `http` check passes only while the service's processes
-  (the ones with its `AAE_INSTANCE` marker) alone listen on the port where a connection to `127.0.0.1` reaches
-  (`127.0.0.1`, `0.0.0.0`, `::`, `::ffff:127.0.0.1`), so a process that takes the port while the service starts
-  gets no check and no token; the service then fails to bind and starts again. So a service whose listener is not
-  its own process (`docker run -p`: the Docker daemon's proxy listens; a wrapper that clears the environment, as
-  `env -i` or `sudo` without `-E`) never passes a port or `http` check: give it `health = { command = [...] }`. A
-  `command` check checks what it likes, and does not tell who listens: a process that takes the port while such a
-  service starts may get the token. A service that dies or fails is started again (with the effect backoff) while
-  sessions use it: on a new port until it was first `ready`, then on the same port, so the sessions holding its URL
-  reconnect, unless two starts in a row find someone else listening there: then on a new port with a new token,
-  which new sessions get; the sessions holding the old URL lose the tool, and whoever holds the old port cannot use
-  the old token. Every move to a new port comes with a new token. With no sessions it is dropped. A session start
-  that waited 30 s in vain gets port 0 and no token: the port the service was not ready on may be someone else's. On macOS the listener is not told
-  (`/proc` only), any listener passes the check. A changed `command`, `env` or `health` is a new service; the old
-  one idles out. Events: `service.starting`, `service.ready`, `service.failed`, `service.stopped`;
-  `aae instance list` lists services too.
+- The port is checked free right before each start; one taken (someone else listens there and would get the token) fails
+  that start without running `command`. A port or `http` check passes only while the service's processes (the ones with
+  its `AAE_INSTANCE` marker) alone listen on the port where a connection to `127.0.0.1` reaches (`127.0.0.1`, `0.0.0.0`,
+  `::`, `::ffff:127.0.0.1`), so a process that takes the port while the service starts gets no check and no token; the
+  service then fails to bind and starts again. So a service whose listener is not its own process (`docker run -p`: the
+  Docker daemon's proxy listens; a wrapper that clears the environment, as `env -i` or `sudo` without `-E`) never passes
+  a port or `http` check: give it `health = { command = [...] }`. A `command` check checks what it likes, and does not
+  tell who listens: a process that takes the port while such a service starts may get the token. A service that dies or
+  fails is started again (with the effect backoff) while sessions use it: on a new port until it was first `ready`, then
+  on the same port, so the sessions holding its URL reconnect, unless two starts in a row find someone else listening
+  there: then on a new port with a new token, which new sessions get; the sessions holding the old URL lose the tool,
+  and whoever holds the old port cannot use the old token. Every move to a new port comes with a new token. With no
+  sessions it is dropped. A session start that waited 30 s in vain gets port 0 and no token: the port the service was
+  not ready on may be someone else's. On macOS the listener is not told (`/proc` only), any listener passes the check. A
+  changed `command`, `env` or `health` is a new service; the old one idles out. Events: `service.starting`,
+  `service.ready`, `service.failed`, `service.stopped`; `aae instance list` lists services too.
 - `url` with `${AAE_API}`: the daemon's own API on TCP, e.g. `url = "${AAE_API}/mcp"` for its MCP frontend. The
   placeholder becomes `http://<api_tcp>` and the session gets `Authorization: Bearer <token>` with the token of the
   daemon's start. With no `api_tcp` the session goes without the server, as with a service that is not up.
@@ -381,13 +380,12 @@ a bead) and `AAE_INPUT_<NAME>` per input (the name upper-cased, other characters
 string as it is, any other value as JSON). Two inputs that give one variable (`note-text` and `note_text`) are a
 config error.
 
-A run start checks the inputs: no undeclared one, every `required` one present (`null` is no value), an `integer`
-input a JSON integer or its text, a `boolean` one a JSON boolean or `true`/`false` as text, a `string` one a string
-(the CLI sends `--input` values as text). A `bead` input is a bead id or `{ next_ready = true, epic = <id> }`; a bead named by id
-that carries a `rig:` label of another rig is refused, at the start when the ready set knows the bead, else at its
-claim (the run fails with `bead_of_another_rig` and the claim is released).
-`worktree = true` gives each run of the formula, of either step kind, a git worktree that aae makes and removes (the
-bundled `worktree`, see below).
+A run start checks the inputs: no undeclared one, every `required` one present (`null` is no value), an `integer` input
+a JSON integer or its text, a `boolean` one a JSON boolean or `true`/`false` as text, a `string` one a string (the CLI
+sends `--input` values as text). A `bead` input is a bead id or `{ next_ready = true, epic = <id> }`; a bead named by id
+that carries a `rig:` label of another rig is refused, at the start when the ready set knows the bead, else at its claim
+(the run fails with `bead_of_another_rig` and the claim is released). `worktree = true` gives each run of the formula,
+of either step kind, a git worktree that aae makes and removes (the bundled `worktree`, see below).
 
 A prompt template is checked at load (contracts 2.3): `inputs.<name>` must be a declared input; `bead.<field>` needs
 a `bead` input and a field of `Bead` (contracts 5.2); `run.<field>` a field of `RunView` (1.3); `project.name`,
@@ -457,20 +455,19 @@ command = ["bin/check-mail"]
 timeout = "10s"                     # optional
 ```
 
-Plugin names are unique across the orchestrator and the project; an attachment in `plugins` must name a declared
-plugin, and the `[agent]` of a plugin has no `plugins` (a plugin attaches no plugins). A declaration (a `path`,
-or a `git` source as for packs above) may carry parameters,
-`[[plugin]] path = ".." config = { .. }`: its orchestrator hooks get them
-in `AAE_PLUGIN_PARAMS` (contracts 3.1). In the `[agent]` contribution, `${AAE_PLUGIN_DIR}` in a harness hook
+Plugin names are unique across the orchestrator and the project; an attachment in `plugins` must name a declared plugin,
+and the `[agent]` of a plugin has no `plugins` (a plugin attaches no plugins). A declaration (a `path`, or a `git`
+source as for packs above) may carry parameters, `[[plugin]] path = ".." config = { .. }`: its orchestrator hooks get
+them in `AAE_PLUGIN_PARAMS` (contracts 3.1). In the `[agent]` contribution, `${AAE_PLUGIN_DIR}` in a harness hook
 `command`, an `env` value, an MCP `command` or `env` value and any string of a `native` table is replaced with the
-plugin's directory at load, so they reach the plugin's own files; skill paths are relative to it. A Claude Code
-plugin directory (`--plugin-dir`) cannot be handed over: the adapter takes that flag for skills, so a plugin gives
-its skills, hooks and MCP servers through `[agent]`. Beyond its `[agent]` layer a plugin gives its attached agents two things, in
+plugin's directory at load, so they reach the plugin's own files; skill paths are relative to it. A Claude Code plugin
+directory (`--plugin-dir`) cannot be handed over: the adapter takes that flag for skills, so a plugin gives its skills,
+hooks and MCP servers through `[agent]`. Beyond its `[agent]` layer a plugin gives its attached agents two things, in
 attachment order: the text of its `prompt` file, after the system prompt the layers give (each fragment after a blank
-line); and its `bin/` directory, when it has one, ahead of `PATH` (the `PATH` a layer sets, or else the daemon's).
-The daemon's `PATH` taken this way becomes part of the effective config: it is in the run's snapshot and in the
-instance fingerprint, so after a daemon restart with another `PATH` these agents get new instances.
-The example `examples/aae-plugin-review` shows both sides.
+line); and its `bin/` directory, when it has one, ahead of `PATH` (the `PATH` a layer sets, or else the daemon's). The
+daemon's `PATH` taken this way becomes part of the effective config: it is in the run's snapshot and in the instance
+fingerprint, so after a daemon restart with another `PATH` these agents get new instances. The example
+`examples/aae-plugin-review` shows both sides.
 
 A plugin is the unit of extension: a typical extension (a mail integration, a check, a reaction policy) is a
 plugin, not core code. Its directory holds `plugin.toml` (name, version, parameters, the contribution to agents,
@@ -497,16 +494,15 @@ or for a project).
   The waits and caps that a zero would turn into a hot loop (`quota_wait_s`, `model_pause_s`, both bases and both
   caps, `crash_pause_s`) and `crash_loop` must be at least 1; `quota_margin_s`, `rapid_s` and `unknown_after_s` must
   not be negative.
-- `worktree` has no table: it is on for the runs of the formulas with `worktree = true` (a formula setting, spec
-  §2.1 item 11), and a `[builtin.worktree]` table is a config error that says so. Each such run gets a git worktree
-  of its rig on the branch `aae/<run>`, in `<git common dir>/aae/worktrees/<run>`, as its workdir. When the run
-  ends the worktree is removed unless it has uncommitted changes or a HEAD no ref reaches (then `plugin.hook_failed`
-  says why); the branch is deleted only when it is merged. A run with `continue_from` starts in the workdir of the
-  run it continues (a session resumes where it ran); when that is a worktree of this plugin, it is brought back on
-  its branch if it was removed, whatever the run's formula says. A reload that leaves a project no formula with
-  `worktree = true` turns the plugin off there: the worktrees of its runs still going are left in place, as are
-  their branches. Its hook has the 30 s timeout of a hook; a `git` still running at that timeout is killed with its
-  process group and the hook fails.
+- `worktree` has no table: it is on for the runs of the formulas with `worktree = true` (a formula setting, spec §2.1
+  item 11), and a `[builtin.worktree]` table is a config error that says so. Each such run gets a git worktree of its
+  rig on the branch `aae/<run>`, in `<git common dir>/aae/worktrees/<run>`, as its workdir. When the run ends the
+  worktree is removed unless it has uncommitted changes or a HEAD no ref reaches (then `plugin.hook_failed` says why);
+  the branch is deleted only when it is merged. A run with `continue_from` starts in the workdir of the run it continues
+  (a session resumes where it ran); when that is a worktree of this plugin, it is brought back on its branch if it was
+  removed, whatever the run's formula says. A reload that leaves a project no formula with `worktree = true` turns the
+  plugin off there: the worktrees of its runs still going are left in place, as are their branches. Its hook has the 30
+  s timeout of a hook; a `git` still running at that timeout is killed with its process group and the hook fails.
 
 ### Where the bundled plugins end and the core begins
 

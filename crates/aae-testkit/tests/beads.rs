@@ -181,7 +181,8 @@ async fn an_unavailable_tracker_is_reported_and_the_claim_retried_until_it_answe
 
 #[tokio::test(start_paused = true)]
 async fn a_trigger_on_the_next_ready_bead_takes_each_bead_once_then_skips_with_nothing_ready() {
-    let take = "[rigs.web]\npath = \"web\"\n\n[[trigger]]\nname = \"take\"\nevery = \"1h\"\nrun = \"fix\"\nrig = \"web\"\n\
+    let take = "[rigs.web]\npath = \"web\"\n\n[[trigger]]\nname = \"take\"\nevery = \"1h\"\nrun = \"fix\"\nrig = \
+    \"web\"\n\
         inputs = { bead = { next_ready = true } }\n";
     let w = world(&[FIX[0], FIX[1], ("shop/aae.toml", take)]);
     let beads = [

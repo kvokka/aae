@@ -36,7 +36,8 @@ pub(crate) struct CloseGate {
 /// Closes a gate as the operator: automation never opens it (criterion 19).
 #[utoipa::path(post, path = "/v1/gates", request_body = CloseGate,
     params(("Idempotency-Key" = Option<String>, Header)),
-    responses((status = OK, description = NULL, body = ()), (status = CONFLICT, description = REJECTED, body = ErrorReply), Keyed))]
+    responses((status = OK, description = NULL, body = ()),
+        (status = CONFLICT, description = REJECTED, body = ErrorReply), Keyed))]
 pub(crate) async fn close(state: State, headers: HeaderMap, Body(body): Body<CloseGate>) -> Reply {
     valid(&body.key)?;
     let until_ms = match &body.until {
@@ -67,7 +68,8 @@ pub(crate) struct OpenGate {
 /// Opens a gate: every closure of the key goes, the policy's too.
 #[utoipa::path(post, path = "/v1/gates/open", request_body = OpenGate,
     params(("Idempotency-Key" = Option<String>, Header)),
-    responses((status = OK, description = NULL, body = ()), (status = CONFLICT, description = REJECTED, body = ErrorReply), Keyed))]
+    responses((status = OK, description = NULL, body = ()),
+        (status = CONFLICT, description = REJECTED, body = ErrorReply), Keyed))]
 pub(crate) async fn open(state: State, headers: HeaderMap, Body(body): Body<OpenGate>) -> Reply {
     valid(&body.key)?;
     let msg = Msg::OpenGate { key: body.key };

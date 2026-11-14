@@ -287,7 +287,8 @@ async fn main() -> ExitCode {
     }
     let mut report = format!(
         "# aae acceptance spec\n\n- date: {}\n- aae: {}\n- claude: {}\n- codex: {}\n- br: {}\n- host: {}\n- run: {}\n\n\
-         <!-- {} id=acceptance-times date={} ver={} env={} src=aae-acceptance note=\"wall time of each row; the scenarios run concurrently, \
+         <!-- {} id=acceptance-times date={} ver={} env={} src=aae-acceptance note=\"wall time of each row; the \
+         scenarios run concurrently, \
          then the checks one by one\" -->\n\
          | criterion | check | result | time | notes |\n|---|---|---|---|---|\n",
         env.date,

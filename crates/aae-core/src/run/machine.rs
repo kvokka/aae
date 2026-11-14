@@ -122,7 +122,8 @@ impl RunHandler {
         let last_session = |tx: &Tx<'_>, run: &str| {
             tx.sql()
                 .query_row(
-                    "SELECT session, harness FROM attempts WHERE run = ?1 AND session IS NOT NULL ORDER BY n DESC LIMIT 1",
+                    "SELECT session, harness FROM attempts WHERE run = ?1 AND session IS NOT NULL \
+                    ORDER BY n DESC LIMIT 1",
                     [run],
                     |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?)),
                 )
@@ -230,8 +231,10 @@ impl RunHandler {
         };
         let payload = json!({
             "op": "launch", "run": row.id, "attempt": row.attempt, "harness": config.harness,
-            "instance": instance, "handle": handle, "after": after, "process": split.process.0, "session": split.session.0, "resume": resume.map(|s| s.0),
-            "prompt": prompt, "key": key.0.to_string(), "services": services, "retry": retry.map(|(key, text)| json!({ "key": key, "text": text })),
+            "instance": instance, "handle": handle, "after": after, "process": split.process.0,
+            "session": split.session.0, "resume": resume.map(|s| s.0),
+            "prompt": prompt, "key": key.0.to_string(), "services": services,
+            "retry": retry.map(|(key, text)| json!({ "key": key, "text": text })),
         });
         tx.effect(&row.id, &format!("launch:{}", row.attempt), &payload)?;
         tx.set_deadline(
@@ -273,7 +276,8 @@ impl RunHandler {
             })?;
             rows.collect::<Result<_, _>>()?
         };
-        let data = json!({ "run": row.view(), "failure": failure, "attempts": attempts, "gates": Self::gates_of(tx, &row)?,
+        let data = json!({ "run": row.view(), "failure": failure, "attempts": attempts,
+            "gates": Self::gates_of(tx, &row)?,
             "keys": Self::keys(tx.sql(), &row)?, "agent_failures_1h": agent_failures });
         self.deciding(tx, row, "run.attempt_failed", data)
     }
@@ -287,7 +291,8 @@ impl RunHandler {
         let live: Option<Live> = tx
             .sql()
             .query_row(
-                "SELECT harness, handle, session, instance FROM attempts WHERE run = ?1 AND n = ?2 AND ended_ms IS NULL",
+                "SELECT harness, handle, session, instance FROM attempts WHERE run = ?1 AND n = ?2 \
+                AND ended_ms IS NULL",
                 params![row.id, row.attempt],
                 |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?)),
             )

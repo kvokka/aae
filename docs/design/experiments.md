@@ -1,11 +1,11 @@
 # Experiments
 
-Results of the throwaway experiments that precede the core. Every number carries a `MEASURE` marker. The
-experiments are recorded here and their code has left the tree (spec §2.1 item 17); each section names the commit
-that still holds it (`git show <commit>:<path>`). Their logs stay in `experiments/`: sanitized samples (`<home>`,
-`<work>` placeholders; long `tools`/`skills` arrays are replaced by their length) kept as the record of what
-each harness printed; no test reads them. A new experiment goes to `experiments/` as a separate Cargo workspace outside the product
-budgets, ≤ 5 000 lines in total, checked by `scripts/budget.sh`.
+Results of the throwaway experiments that precede the core. Every number carries a `MEASURE` marker. The experiments are
+recorded here and their code has left the tree (spec §2.1 item 17); each section names the commit that still holds it
+(`git show <commit>:<path>`). Their logs stay in `experiments/`: sanitized samples (`<home>`, `<work>` placeholders;
+long `tools`/`skills` arrays are replaced by their length) kept as the record of what each harness printed; no test
+reads them. A new experiment goes to `experiments/` as a separate Cargo workspace outside the product budgets, ≤ 5 000
+lines in total, checked by `scripts/budget.sh`.
 
 Cheap experiments came first and the core after them. The set and where each stands:
 
@@ -87,10 +87,10 @@ subtree — a per-session cgroup is unavailable without root. On GitHub runners 
 **Chosen method** for "no orphans":
 
 1. Every session process in its own process group (`kill(-pgid)` for the harness itself).
-2. A per-attempt marker variable in the session environment; on cleanup the daemon kills every process carrying
-   the marker (`/proc/<pid>/environ`; macOS is out of scope for the first release, spec §1.1). The same sweep runs during
-   recovery after a daemon crash. Known macOS differences until it is checked: no sweep, no subreaper, and a process
-   is told by its pid alone (no start time), so a reused pid passes for the old process.
+2. A per-attempt marker variable in the session environment; on cleanup the daemon kills every process carrying the
+   marker (`/proc/<pid>/environ`; macOS is out of scope for the first release, spec §1.1). The same sweep runs during
+   recovery after a daemon crash. Known macOS differences until it is checked: no sweep, no subreaper, and a process is
+   told by its pid alone (no start time), so a reused pid passes for the old process.
 3. Linux: the daemon is a child subreaper, so descendants that dropped the marker still become its children and are
    reaped. The daemon must reap only pids it does not manage itself (peek with `waitid(P_ALL, WNOWAIT)` first), or
    it steals exit statuses of its own session processes.
@@ -310,11 +310,12 @@ Open: refresh of a delivered OAuth token after expiry (spec §6.4).
 
 ### Consequences
 
-- claude (WP-27): the adapter delivers everything with flags and files in the state directory: `--settings`
-  (file or inline), `--plugin-dir` for skills and plugin hooks, `--mcp-config`; and repeats the whole set on every
-  `--resume`. It does not pass `--strict-mcp-config`: that would cut the rig's `.mcp.json` too, and with
-  inheritance off the setting sources and the own config directory already cut the host's servers. With inheritance on, the host's personal MCP servers reach the session as well, as spec §6.4 intends. Host inheritance off = `--setting-sources project,local` (not `""`): the rig's
-  own config keeps working — the rig-config rule of `config.md` holds for claude. With an isolated
+- claude (WP-27): the adapter delivers everything with flags and files in the state directory: `--settings` (file or
+  inline), `--plugin-dir` for skills and plugin hooks, `--mcp-config`; and repeats the whole set on every `--resume`. It
+  does not pass `--strict-mcp-config`: that would cut the rig's `.mcp.json` too, and with inheritance off the setting
+  sources and the own config directory already cut the host's servers. With inheritance on, the host's personal MCP
+  servers reach the session as well, as spec §6.4 intends. Host inheritance off = `--setting-sources project,local` (not
+  `""`): the rig's own config keeps working — the rig-config rule of `config.md` holds for claude. With an isolated
   `CLAUDE_CONFIG_DIR` the adapter delivers `CLAUDE_CODE_OAUTH_TOKEN` (or `ANTHROPIC_API_KEY`).
 - codex (WP-29): MCP, hooks (`config.hooks`), instructions and `bypass_hook_trust` go per thread; skills, the
   provider key value and the host layer are per process. The instance fingerprint

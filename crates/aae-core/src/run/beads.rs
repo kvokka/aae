@@ -42,7 +42,8 @@ impl RunHandler {
         let epic = input["epic"].as_str();
         let mut stmt = tx.sql().prepare(
             "SELECT r.id, r.body FROM ready_beads r WHERE r.project = ?1 AND NOT EXISTS \
-             (SELECT 1 FROM beads b WHERE b.project = r.project AND b.id = r.id AND b.owner IS NOT NULL) ORDER BY r.pos",
+             (SELECT 1 FROM beads b WHERE b.project = r.project AND b.id = r.id AND b.owner IS NOT \
+             NULL) ORDER BY r.pos",
         )?;
         let ready = stmt.query_map([project], |r| Ok((r.get::<_, String>(0)?, r.get::<_, Value>(1)?)))?;
         for bead in ready {

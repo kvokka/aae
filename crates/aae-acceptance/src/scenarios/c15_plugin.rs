@@ -1,5 +1,6 @@
 //! Criterion 15: the example external plugin `examples/aae-plugin-review` gives its skill, harness hook, prompt
-//! fragment and `bin/` on `PATH` only to the one of two agents that attaches it, vetoes a `pass` whose summary lacks its word, and a failure of its hook does
+//! fragment and `bin/` on `PATH` only to the one of two agents that attaches it, vetoes a `pass` whose summary lacks
+//! its word, and a failure of its hook does
 //! not bring the daemon down.
 
 use super::claude_agent;
@@ -111,7 +112,8 @@ pub(crate) async fn run(env: Arc<Env>) -> String {
     let pid = d.pid();
     assert_eq!(d.get("/v1/daemon").await["pid"], pid, "the daemon is up");
     format!(
-        "veto: {reason}; skill, hook, prompt fragment and bin/ only in the attaching agent's session; a failed hook: {}",
+        "veto: {reason}; skill, hook, prompt fragment and bin/ only in the attaching agent's \
+        session; a failed hook: {}",
         hook["stderr_tail"].as_str().unwrap_or_default().trim()
     )
 }

@@ -36,7 +36,8 @@ fn config(provider: &Provider) -> EffectiveConfig {
         // The host forbids user namespaces, so the codex sandbox cannot run here (docs/design/experiments.md).
         native: Some(agent(
             json!({ "model_provider": "fake", "sandbox_mode": "danger-full-access",
-            "model_providers": { "fake": { "name": "fake", "base_url": provider.base_url(), "wire_api": "responses" } } }),
+            "model_providers": { "fake": { "name": "fake", "base_url": provider.base_url(),
+            "wire_api": "responses" } } }),
         )),
     }
 }

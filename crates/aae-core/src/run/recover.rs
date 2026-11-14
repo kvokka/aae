@@ -51,7 +51,8 @@ impl RunHandler {
         for (id, waits) in &caught {
             // What the attempt still had queued belongs to a process that is gone.
             tx.sql().execute(
-                "DELETE FROM effects WHERE key = ?1 AND json_extract(payload, '$.op') IN ('launch', 'prompt', 'respond')",
+                "DELETE FROM effects WHERE key = ?1 AND json_extract(payload, '$.op') IN ('launch', \
+                'prompt', 'respond')",
                 [id],
             )?;
             // The command of an exec step lives on in its own process group: it is killed by its marker, under the
@@ -106,7 +107,8 @@ impl RunHandler {
     }
 
     /// A deadline that waits for an effect's answer counts from now: the effect runs again from its start, and the
-    /// time the daemon was down is not the effect's (the deadlines of real time — gates, schedules, `after` — stay).
+    /// time the daemon was down is not the effect's
+    /// (the deadlines of real time — gates, schedules, `after` — stay).
     fn rearm(&self, tx: &mut Tx<'_>) -> Result<(), Error> {
         // The deciding hooks of a run run in order under its key, from the first one's retry time (after a panic of
         // the runner): the decision waits for all of them (contracts 3.3).

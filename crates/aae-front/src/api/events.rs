@@ -34,7 +34,8 @@ pub(crate) struct StreamQuery {
 /// away is `410` with `oldest`, the first `seq` still held; it rotated away while streaming: an event `gap`.
 #[utoipa::path(get, path = "/v1/events", params(StreamQuery, ("Last-Event-ID" = Option<String>, Header)),
     responses((status = OK, content_type = "text/event-stream", body = String),
-        (status = BAD_REQUEST, description = BAD_QUERY, body = ErrorReply), (status = GONE, description = GAP, body = ErrorReply),
+        (status = BAD_REQUEST, description = BAD_QUERY, body = ErrorReply),
+        (status = GONE, description = GAP, body = ErrorReply),
         Failed))]
 pub(crate) async fn stream(
     state: State,

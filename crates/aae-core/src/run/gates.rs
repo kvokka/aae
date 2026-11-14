@@ -175,7 +175,8 @@ impl RunHandler {
         }
     }
 
-    /// A started run waits for `gate` (`null`: for the stopping daemon) without a process; the attempt `then` starts when its keys are all open.
+    /// A started run waits for `gate` (`null`: for the stopping daemon) without a process; the attempt `then` starts
+    /// when its keys are all open.
     pub(super) fn park(&mut self, tx: &mut Tx<'_>, mut row: Row, gate: Value, then: &str) -> Result<(), Error> {
         let key = gate["key"].as_str().unwrap_or("daemon_stopping");
         tx.sql().execute(

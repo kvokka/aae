@@ -323,7 +323,8 @@ async fn act(w: &mut World, rng: &mut Rng, play: &mut Play, op: u64, natural: bo
             } else {
                 1 + rng.below(2)
             };
-            // The harness may drop the prompt a remark or a `continue` sends: only the watchdog moves on (invariant 15).
+            // The harness may drop the prompt a remark or a `continue` sends: only the watchdog moves on (invariant
+            // 15).
             let lost = !natural && rng.below(2) == 0;
             w.driver.lose_prompts(lost);
             for _ in 0..times {

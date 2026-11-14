@@ -50,8 +50,9 @@ tracker interface and its errors are in [contracts.md](contracts.md) §5; the be
   resets the counter. Without it a released bead would raise `bead.ready` again and repeat forever.
 - The ownership record in the state is the truth; br's assignee mirrors it. A failed `br close` or release does not
   change the outcome of the run: the operation is retried through the queue `tracker:<project>`, and a difference is
-  shown by an event (`tracker.sync_failed`, `resync.diverged`). A `.beads` directory the daemon cannot watch at
-  start gives `tracker.sync_failed{op: "watch"}` with no retry: that tracker is then read only by the periodic resync (every 5 min).
+  shown by an event (`tracker.sync_failed`, `resync.diverged`). A `.beads` directory the daemon cannot watch at start
+  gives `tracker.sync_failed{op: "watch"}` with no retry: that tracker is then read only by the periodic resync (every 5
+  min).
 - The agent uses `br` itself for the content of its work: child beads, comments, dependencies.
 
 ## Generated from the project configs

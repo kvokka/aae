@@ -42,7 +42,8 @@ fn not_found(message: String) -> ApiError {
 /// Lists the projects with their rigs.
 #[utoipa::path(get, path = "/v1/projects", params(ProjectQuery),
     responses((status = OK, body = [ProjectReply]),
-        (status = BAD_REQUEST, description = BAD_QUERY, body = ErrorReply), (status = NOT_FOUND, description = NO_PROJECT, body = ErrorReply)))]
+        (status = BAD_REQUEST, description = BAD_QUERY, body = ErrorReply),
+        (status = NOT_FOUND, description = NO_PROJECT, body = ErrorReply)))]
 pub(crate) async fn list_projects(state: State, Param(Query(query)): Param<Query<ProjectQuery>>) -> Reply {
     let config = state.config();
     let out: Vec<Value> = projects(&config, &query)?
@@ -60,7 +61,8 @@ pub(crate) async fn list_projects(state: State, Param(Query(query)): Param<Query
 /// Lists the agents, as `<pack>.<name>` with their harness.
 #[utoipa::path(get, path = "/v1/agents", params(ProjectQuery),
     responses((status = OK, body = [Agent]),
-        (status = BAD_REQUEST, description = BAD_QUERY, body = ErrorReply), (status = NOT_FOUND, description = NO_PROJECT, body = ErrorReply)))]
+        (status = BAD_REQUEST, description = BAD_QUERY, body = ErrorReply),
+        (status = NOT_FOUND, description = NO_PROJECT, body = ErrorReply)))]
 pub(crate) async fn list_agents(state: State, Param(Query(query)): Param<Query<ProjectQuery>>) -> Reply {
     let config = state.config();
     let mut out = Vec::new();
@@ -78,7 +80,8 @@ pub(crate) async fn list_agents(state: State, Param(Query(query)): Param<Query<P
 /// Lists the formulas, named as a run start takes them, with their inputs.
 #[utoipa::path(get, path = "/v1/formulas", params(ProjectQuery),
     responses((status = OK, body = [Formula]),
-        (status = BAD_REQUEST, description = BAD_QUERY, body = ErrorReply), (status = NOT_FOUND, description = NO_PROJECT, body = ErrorReply)))]
+        (status = BAD_REQUEST, description = BAD_QUERY, body = ErrorReply),
+        (status = NOT_FOUND, description = NO_PROJECT, body = ErrorReply)))]
 pub(crate) async fn list_formulas(state: State, Param(Query(query)): Param<Query<ProjectQuery>>) -> Reply {
     let config = state.config();
     projects(&config, &query)?;
@@ -88,7 +91,8 @@ pub(crate) async fn list_formulas(state: State, Param(Query(query)): Param<Query
 /// Lists the packs of the projects; the project's own pack has no version.
 #[utoipa::path(get, path = "/v1/packs", params(ProjectQuery),
     responses((status = OK, body = [Pack]),
-        (status = BAD_REQUEST, description = BAD_QUERY, body = ErrorReply), (status = NOT_FOUND, description = NO_PROJECT, body = ErrorReply)))]
+        (status = BAD_REQUEST, description = BAD_QUERY, body = ErrorReply),
+        (status = NOT_FOUND, description = NO_PROJECT, body = ErrorReply)))]
 pub(crate) async fn list_packs(state: State, Param(Query(query)): Param<Query<ProjectQuery>>) -> Reply {
     let config = state.config();
     let mut out = Vec::new();
@@ -107,7 +111,8 @@ pub(crate) async fn list_packs(state: State, Param(Query(query)): Param<Query<Pr
 /// project (those on for its runs), or of the project `project` only.
 #[utoipa::path(get, path = "/v1/plugins", params(ProjectQuery),
     responses((status = OK, body = [Plugin]),
-        (status = BAD_REQUEST, description = BAD_QUERY, body = ErrorReply), (status = NOT_FOUND, description = NO_PROJECT, body = ErrorReply)))]
+        (status = BAD_REQUEST, description = BAD_QUERY, body = ErrorReply),
+        (status = NOT_FOUND, description = NO_PROJECT, body = ErrorReply)))]
 pub(crate) async fn list_plugins(state: State, Param(Query(query)): Param<Query<ProjectQuery>>) -> Reply {
     let config = state.config();
     let mut lists = vec![];

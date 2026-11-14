@@ -41,11 +41,13 @@ pub(crate) const FILES: &[(&str, &str)] = &[
 pub(crate) const POLICY: &[(&str, &str)] = &[
     (
         "config.toml",
-        "projects = [\"shop\"]\nbuiltin = { default-policy = { enabled = false } }\n[harness.scripted]\n[[plugin]]\npath = \"policy\"\n",
+        "projects = [\"shop\"]\nbuiltin = { default-policy = { enabled = false } \
+        }\n[harness.scripted]\n[[plugin]]\npath = \"policy\"\n",
     ),
     (
         "policy/plugin.toml",
-        "name = \"policy\"\nversion = \"0.1.0\"\n[[hook]]\non = \"run.attempt_failed\"\ncommand = [\"true\"]\ntimeout = \"10s\"\n",
+        "name = \"policy\"\nversion = \"0.1.0\"\n[[hook]]\non = \"run.attempt_failed\"\ncommand = [\"true\"]\ntimeout \
+        = \"10s\"\n",
     ),
 ];
 

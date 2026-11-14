@@ -13,7 +13,8 @@ use std::{collections::HashSet, sync::Arc, time::Duration};
 const WITHIN: Duration = Duration::from_secs(60);
 
 const TRIGGER: &str = "[[trigger]]\nname = \"next\"\non = \"bead.ready\"\nwhere = { \"bead.labels\" = \"auto\" }\n\
-                       run = \"work\"\nrig = \"web\"\ninputs = { bead = { next_ready = true, epic = \"{{ event.bead.epic }}\" } }\n";
+                       run = \"work\"\nrig = \"web\"\ninputs = { bead = { next_ready = true, epic = \"{{ \
+                       event.bead.epic }}\" } }\n";
 
 pub(crate) async fn run(env: Arc<Env>) -> String {
     let d = Daemon::start(&env, |root| {

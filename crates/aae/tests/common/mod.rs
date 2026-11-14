@@ -19,7 +19,8 @@ pub(crate) const FILES: &[(&str, &str)] = &[
     ("config/aae/shop/web/.keep", ""),
     (
         "config/aae/shop/formulas/check.toml",
-        "name = \"check\"\n[inputs]\nn = { type = \"integer\" }\n[step]\nkind = \"exec\"\ncommand = [\"true\"]\ntimeout = \"10s\"\n",
+        "name = \"check\"\n[inputs]\nn = { type = \"integer\" }\n[step]\nkind = \"exec\"\ncommand = \
+        [\"true\"]\ntimeout = \"10s\"\n",
     ),
     (
         "config/aae/shop/formulas/slow.toml",

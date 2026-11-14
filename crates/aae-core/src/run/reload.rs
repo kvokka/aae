@@ -45,9 +45,10 @@ impl RunHandler {
         self.arm_schedules_after(tx, Some(&old))?;
         let kept = self.fingerprints();
         let idle: Vec<String> = {
-            let mut stmt = tx
-                .sql()
-                .prepare("SELECT id, fingerprint FROM instances WHERE kind = 'instance' AND state = 'ready' AND sessions = 0 ORDER BY id")?;
+            let mut stmt = tx.sql().prepare(
+                "SELECT id, fingerprint FROM instances WHERE kind = 'instance' AND state = \
+                'ready' AND sessions = 0 ORDER BY id",
+            )?;
             let rows = stmt.query_map([], |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?)))?;
             let rows = rows.collect::<Result<Vec<_>, _>>()?;
             rows.into_iter()

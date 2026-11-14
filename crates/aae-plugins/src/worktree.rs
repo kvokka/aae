@@ -1,6 +1,6 @@
 //! `worktree` (spec §11.5): on `run.preparing` a run of a formula with `worktree = true` gets its own git worktree on
-//! the branch `aae/<run>` as its workdir; once the run ends the worktree goes, only when it has no uncommitted change and
-//! its commits are reachable from a ref. The branch stays unless it is merged. A run continuing the session of a run
+//! the branch `aae/<run>` as its workdir; once the run ends the worktree goes, only when it has no uncommitted change
+//! and its commits are reachable from a ref. The branch stays unless it is merged. A run continuing the session of a run
 //! that had a worktree works in that same worktree, recreated on its branch if it was removed.
 
 use serde::Deserialize;

@@ -295,9 +295,9 @@ fn an_approval_is_a_permission_request_and_an_exit_crashes_open_turns() {
         ("0", RequestKind::Permission, "commandExecution", "touch x")
     );
     let exit = stream.exited(None, Some(9), "boom");
-    assert!(
-        matches!(&exit[0], (Some(t), Normalized::Failure(f)) if t == "t" && f.kind == FailureKind::HarnessCrash && f.raw.ends_with("boom"))
-    );
+    assert!(matches!(&exit[0], (Some(t), Normalized::Failure(f)) if t == "t"
+            && f.kind == FailureKind::HarnessCrash
+            && f.raw.ends_with("boom")));
     assert_eq!(
         exit[1],
         (

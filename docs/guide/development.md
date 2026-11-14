@@ -43,8 +43,8 @@ it:
 AAE_CHAOS_SEED=<n> cargo nextest run -p aae-testkit --test chaos
 ```
 
-A failing seed is a bug of the core, not of the test. The crash scenario of the acceptance spec (criterion 8) prints its pause seed the same way
-(`AAE_CRASH_SEED`).
+A failing seed is a bug of the core, not of the test. The crash scenario of the acceptance spec (criterion 8) prints its
+pause seed the same way (`AAE_CRASH_SEED`).
 
 ## Acceptance scenarios
 

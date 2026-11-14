@@ -18,9 +18,11 @@ async fn pass(real: Duration) {
 }
 
 /// A service whose first start writes its port to `port`, waits for `go` (or the end of
-/// the test), then dies without listening; later starts run `then` (`$1`, `$2`) or the same again. Every start adds its port to `ports`.
+/// the test), then dies without listening; later starts run `then` (`$1`, `$2`) or the same again. Every start adds its
+/// port to `ports`.
 fn first_dies(dir: &std::path::Path, then: &str, more: &str) -> (&'static str, String) {
-    let script = "echo $AAE_SERVICE_PORT >> \\\"$0/ports\\\"; if [ -n \\\"$1\\\" ] && [ -e \\\"$0/once\\\" ]; then exec \\\"$1\\\" \\\"$2\\\"; fi; \
+    let script = "echo $AAE_SERVICE_PORT >> \\\"$0/ports\\\"; if [ -n \\\"$1\\\" ] && [ -e \
+    \\\"$0/once\\\" ]; then exec \\\"$1\\\" \\\"$2\\\"; fi; \
                   touch \\\"$0/once\\\"; echo $AAE_SERVICE_PORT > \\\"$0/port\\\"; \
                   while [ -d \\\"$0\\\" ] && [ ! -e \\\"$0/go\\\" ]; do sleep 0.05; done; exit 1";
     let log = dir.join("probe.jsonl");

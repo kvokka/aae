@@ -26,7 +26,9 @@ fn policy_timed(hooks: &[(&str, &str, &str)]) -> World {
     let mut toml = "name = \"policy\"\nversion = \"0.1.0\"\n".to_owned();
     let mut files = vec![(
         "config.toml".to_owned(),
-        "projects = [\"shop\"]\nbuiltin = { default-policy = { enabled = false } }\n[harness.scripted]\n[[plugin]]\npath = \"policy\"\nconfig = { level = 2 }\n".to_owned(),
+        "projects = [\"shop\"]\nbuiltin = { default-policy = { enabled = false } \
+        }\n[harness.scripted]\n[[plugin]]\npath = \"policy\"\nconfig = { level = 2 }\n"
+            .to_owned(),
     )];
     for (n, (on, script, timeout)) in hooks.iter().enumerate() {
         toml += &format!("[[hook]]\non = \"{on}\"\ncommand = [\"sh\", \"{n}.sh\"]\ntimeout = \"{timeout}\"\n");
@@ -210,7 +212,10 @@ async fn a_hook_answers_a_permission_request() {
 
 #[tokio::test]
 async fn a_hook_parks_a_run_on_a_gate_it_closes() {
-    let park = r#"echo '{"decision":"park","gate":{"key":"rig:shop/web","until":"2100-01-01T00:00:00Z","reason":"quota"},"then":"resume"}'"#;
+    let park = concat!(
+        r#"echo '{"decision":"park","gate":{"key":"rig:shop/web","until":"2100-01-01T00:00:00Z","#,
+        r#""reason":"quota"},"then":"resume"}'"#
+    );
     let w = policy(&[("run.attempt_failed", park)]);
     w.driver.script(vec![Step::Exit {
         code: Some(1),

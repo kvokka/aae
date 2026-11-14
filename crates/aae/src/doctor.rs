@@ -1,4 +1,5 @@
-//! `aae doctor` (spec §13), without a daemon or from it (`GET /v1/doctor`): the harness and br binaries with their versions and logins, the
+//! `aae doctor` (spec §13), without a daemon or from it (`GET /v1/doctor`): the harness and br binaries with their
+//! versions and logins, the
 //! private directories, the state and its outbox; and `aae daemon --service`, the service file that runs the daemon.
 
 use crate::{
@@ -212,7 +213,8 @@ fn unit(kind: Service, args: &[String], path: &str) -> String {
                  \"http://www.apple.com/DTDs/PropertyList-1.0.dtd\">\n\
                  <plist version=\"1.0\">\n<dict>\n  <key>Label</key>\n  <string>dev.aae.daemon</string>\n\
                  \x20 <key>ProgramArguments</key>\n  <array>\n{program}  </array>\n\
-                 \x20 <key>EnvironmentVariables</key>\n  <dict>\n    <key>PATH</key>\n    <string>{}</string>\n  </dict>\n\
+                 \x20 <key>EnvironmentVariables</key>\n  <dict>\n    <key>PATH</key>\n    \
+                 <string>{}</string>\n  </dict>\n\
                  \x20 <key>RunAtLoad</key>\n  <true/>\n\
                  \x20 <key>KeepAlive</key>\n  <dict>\n    <key>SuccessfulExit</key>\n    <false/>\n  </dict>\n\
                  </dict>\n</plist>\n",

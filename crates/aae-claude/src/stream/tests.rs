@@ -83,10 +83,10 @@ fn a_permission_request_and_an_interrupted_turn() {
     let request = json!({ "type": "control_request", "request_id": "r1", "request": { "subtype": "can_use_tool",
         "tool_name": "Bash", "input": { "command": "touch x" }, "description": "touch x" } });
     let events = feed(&mut s, &[json!({ "type": "system", "subtype": "init" }), request]);
-    assert!(
-        matches!(&events[1..], [Normalized::PermissionRequested { request_id, kind: RequestKind::Permission, tool, text, .. }]
-        if request_id == "r1" && tool == "Bash" && text == "touch x")
-    );
+    assert!(matches!(&events[1..], [Normalized::PermissionRequested { request_id,
+            kind: RequestKind::Permission, tool, text, ..
+        }]
+        if request_id == "r1" && tool == "Bash" && text == "touch x"));
     s.interrupted();
     let aborted = json!({ "subtype": "error_during_execution", "terminal_reason": "aborted_tools" });
     let events = feed(&mut s, &[result(true, aborted)]);
@@ -198,14 +198,16 @@ fn failed_turns_are_classified() {
 
 #[test]
 fn a_rejected_limit_is_a_quota_with_its_reset_and_a_401_fails_at_once() {
-    let limit = json!({ "type": "rate_limit_event", "rate_limit_info": { "status": "rejected", "resetsAt": 1_794_286_800,
+    let limit = json!({ "type": "rate_limit_event", "rate_limit_info": { "status": "rejected",
+        "resetsAt": 1_794_286_800,
         "rateLimitType": "five_hour", "unifiedWindows": { "five_hour": { "utilization": 1.0 } } } });
     let events = feed(
         &mut stream(),
         &[limit, result(true, json!({ "api_error_status": 429 }))],
     );
     assert!(
-        matches!(events[0], Normalized::Usage { rate_limit: Some(RateLimit { utilization, .. }), .. } if utilization == 1.0)
+        matches!(events[0], Normalized::Usage { rate_limit: Some(RateLimit { utilization, .. }), ..
+            } if utilization == 1.0)
     );
     let f = failure(&events);
     assert_eq!(

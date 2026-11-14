@@ -31,7 +31,8 @@ async fn daemon_with(provider: &Provider, orchestrator: &str, inherit_host: bool
                 shop.join("agents/dev/agent.toml"),
                 // The host forbids user namespaces, so the codex sandbox cannot run here (docs/design/experiments.md).
                 format!(
-                    "harness = \"codex\"\nmodel = \"gpt-fake\"\npermission_mode = \"never\"\ninherit_host = {inherit_host}\n\
+                    "harness = \"codex\"\nmodel = \"gpt-fake\"\npermission_mode = \"never\"\ninherit_host = \
+                    {inherit_host}\n\
                      [native.codex]\nmodel_provider = \"fake\"\nsandbox_mode = \"danger-full-access\"\n\
                      [native.codex.model_providers.fake]\nname = \"fake\"\nbase_url = \"{base_url}\"\n\
                      wire_api = \"responses\"\n{agent}"

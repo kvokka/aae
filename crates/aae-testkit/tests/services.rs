@@ -168,7 +168,8 @@ async fn a_service_is_ready_only_once_its_health_check_passes_and_the_session_wa
     let dir = tempfile::tempdir().unwrap();
     let (log, flag) = (dir.path().join("probe.jsonl"), dir.path().join("up"));
     let service = format!(
-        "name = \"probe\"\ncommand = [\"sh\", \"-c\", \"echo $AAE_SERVICE_PORT > \\\"$0/port\\\"; exec \\\"$1\\\" \\\"$2\\\"\", \
+        "name = \"probe\"\ncommand = [\"sh\", \"-c\", \"echo $AAE_SERVICE_PORT > \\\"$0/port\\\"; exec \\\"$1\\\" \
+        \\\"$2\\\"\", \
          \"{}\", \"{PROBE}\", \"{}\"]\nmcp = true\nhealth = {{ command = [\"test\", \"-e\", \"{}\"] }}",
         dir.path().display(),
         log.display(),
@@ -218,7 +219,8 @@ async fn a_service_without_mcp_reaches_the_session_as_its_url_and_token() {
     let dir = tempfile::tempdir().unwrap();
     // `$0` holds the port only if aae put it there: sh does not expand its arguments.
     let service = format!(
-        "name = \"mail-db\"\ncommand = [\"sh\", \"-c\", \"touch \\\"$0\\\"; exec sleep 60\", \"{}/port-${{AAE_SERVICE_PORT}}\"]\n\
+        "name = \"mail-db\"\ncommand = [\"sh\", \"-c\", \"touch \\\"$0\\\"; exec sleep 60\", \
+        \"{}/port-${{AAE_SERVICE_PORT}}\"]\n\
          health = {{ command = [\"true\"] }}",
         dir.path().display()
     );

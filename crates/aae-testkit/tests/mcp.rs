@@ -155,7 +155,8 @@ async fn the_real_codex_calls_the_tool_with_the_headers() {
         "model = \"gpt-fake\"\nmodel_provider = \"fake\"\napproval_policy = \"never\"\n\
          sandbox_mode = \"danger-full-access\"\n[analytics]\nenabled = false\n[feedback]\nenabled = false\n\
          [model_providers.fake]\nname = \"fake\"\nbase_url = \"{}\"\nwire_api = \"responses\"\n\
-         [mcp_servers.probe]\nurl = \"{url}\"\nhttp_headers = {{ Authorization = \"Bearer tok\", X-Aae-Run = \"r2\" }}\n",
+         [mcp_servers.probe]\nurl = \"{url}\"\nhttp_headers = {{ Authorization = \"Bearer tok\", X-Aae-Run = \"r2\" \
+         }}\n",
         p.base_url()
     );
     std::fs::write(dir.path().join("config.toml"), config).unwrap();
