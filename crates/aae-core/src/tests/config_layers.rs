@@ -164,15 +164,38 @@ fn an_attached_plugin_puts_its_bin_ahead_of_path_and_its_prompt_after_the_system
     ])
     .unwrap();
     let e = effective(&config, None);
-    let prompt = e.system_prompt.unwrap();
+    let both = Layer::Merged(vec![Layer::Agent, Layer::Plugin("mail".into())]);
+    let prompt = e.system_prompt.as_ref().unwrap();
     assert_eq!(
-        (prompt.value.as_str(), prompt.from),
-        ("Be brief.\n\nCheck the mail first.", Layer::Agent)
+        (prompt.value.as_str(), &prompt.from),
+        ("Be brief.\n\nCheck the mail first.", &both)
     );
     let path = &e.env["PATH"];
     let bin = config.plugins[0].root.join("bin");
     assert_eq!(path.value, format!("{}:/usr/bin", bin.display()));
-    assert_eq!(path.from, Layer::Plugin("mail".into()));
+    assert_eq!(path.from, both);
+    assert!(
+        e.explain().contains("first.\"  # agent + plugin mail\n"),
+        "{}",
+        e.explain()
+    );
+}
+
+#[test]
+fn native_tables_merge_by_key_across_the_layers() {
+    let config = with_lines(&[
+        ("config.toml", "[settings.native.claude]\na = 1\nb = 2"),
+        ("shop/aae.toml", "[settings.native.claude]\nb = 3"),
+    ]);
+    let native = effective(&config, None).native.unwrap();
+    assert_eq!(native.value, json!({ "a": 1, "b": 3 }));
+    assert_eq!(native.from, Layer::Merged(vec![Layer::Orchestrator, Layer::Project]));
+    let config = with_lines(&[("shop/aae.toml", "[settings.native]\nclaude = \"plain\"")]);
+    assert_eq!(
+        effective(&config, None).native.unwrap().value,
+        json!("plain"),
+        "not a table: replaced"
+    );
 }
 
 #[test]

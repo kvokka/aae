@@ -22,6 +22,25 @@ pub enum Layer {
     OrchestratorOverride,
     ProjectOverride,
     RigOverride,
+    /// A value several layers make together, in the order they apply: tables merged by key, a prompt with fragments.
+    Merged(Vec<Layer>),
+}
+
+impl Layer {
+    /// The layer of a value `self` gave and `next` added to.
+    fn and(&self, next: &Layer) -> Layer {
+        let mut layers = match self {
+            Self::Merged(layers) => layers.clone(),
+            one => vec![one.clone()],
+        };
+        if !layers.contains(next) {
+            layers.push(next.clone());
+        }
+        match <[Layer; 1]>::try_from(layers) {
+            Ok([one]) => one,
+            Err(layers) => Self::Merged(layers),
+        }
+    }
 }
 
 impl fmt::Display for Layer {
@@ -36,6 +55,10 @@ impl fmt::Display for Layer {
             Self::OrchestratorOverride => f.write_str("orchestrator override"),
             Self::ProjectOverride => f.write_str("project override"),
             Self::RigOverride => f.write_str("rig override"),
+            Self::Merged(layers) => {
+                let names: Vec<String> = layers.iter().map(ToString::to_string).collect();
+                f.write_str(&names.join(" + "))
+            }
         }
     }
 }
@@ -63,7 +86,7 @@ pub struct EffectiveConfig {
     pub skills: BTreeMap<String, Sourced<Skill>>,
     /// Attached plugins in attachment order.
     pub plugins: Vec<Sourced<PluginUse>>,
-    /// The native block of this harness.
+    /// The native block of this harness: tables of several layers merged by key.
     pub native: Option<Sourced<Value>>,
     /// The services its session uses; the core binds them to MCP servers or environment before the adapter.
     #[serde(default)]
@@ -97,9 +120,25 @@ impl EffectiveConfig {
             });
         }
         if let Some(value) = settings.native.get(&self.harness) {
-            self.native = Some(Sourced {
-                value: value.clone(),
-                from: from.clone(),
+            self.native = Some(match (self.native.take(), value.as_object()) {
+                // Two tables merge by key; anything else replaces.
+                (
+                    Some(Sourced {
+                        value: Value::Object(mut table),
+                        from: old,
+                    }),
+                    Some(new),
+                ) => {
+                    table.extend(new.iter().map(|(k, v)| (k.clone(), v.clone())));
+                    Sourced {
+                        value: Value::Object(table),
+                        from: old.and(from),
+                    }
+                }
+                _ => Sourced {
+                    value: value.clone(),
+                    from: from.clone(),
+                },
             });
         }
         by_key(&mut self.env, &settings.env, from, |_| true);
@@ -120,21 +159,27 @@ impl EffectiveConfig {
             });
             let gap = if prompt.value.is_empty() { "" } else { "\n\n" };
             prompt.value = format!("{}{gap}{}", prompt.value, fragment.trim_end());
+            prompt.from = prompt.from.and(&Layer::Plugin(plugin.name.clone()));
         }
         let bins: Vec<(&String, &PathBuf)> = (attached.iter())
             .filter_map(|p| Some((&p.name, p.bin.as_ref()?)))
             .collect();
-        let Some((last, _)) = bins.last() else { return };
-        let path = match self.env.get("PATH") {
-            Some(s) => s.value.clone(),
-            None => std::env::var("PATH").unwrap_or_default(),
+        let Some(((first, _), rest)) = bins.split_first() else {
+            return;
         };
+        let (path, from) = match self.env.get("PATH") {
+            Some(s) => (s.value.clone(), s.from.and(&Layer::Plugin((*first).clone()))),
+            None => (
+                std::env::var("PATH").unwrap_or_default(),
+                Layer::Plugin((*first).clone()),
+            ),
+        };
+        let from = (rest.iter()).fold(from, |from, (name, _)| from.and(&Layer::Plugin((*name).clone())));
         let dirs = bins
             .iter()
             .map(|(_, bin)| (*bin).clone())
             .chain(std::env::split_paths(&path));
         let value = std::env::join_paths(dirs).map_or(path, |p| p.to_string_lossy().into_owned());
-        let from = Layer::Plugin((*last).clone());
         self.env.insert("PATH".to_owned(), Sourced { value, from });
     }
 
