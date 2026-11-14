@@ -79,4 +79,7 @@ launchctl load -w ~/Library/LaunchAgents/dev.aae.daemon.plist
 Both files run this binary with the given `--config` and the `PATH` of the shell that printed them.
 
 To stop the daemon, `aae drain` waits until no run is in a turn (no new run starts meanwhile) and exits;
-`aae restart` does the same and starts it again in the same process. Next: [your first project](first-project.md).
+`aae restart` does the same and starts it again in the same process, from the path the daemon was started with:
+to upgrade, replace the binary at that path (a new file moved over it is fine), then run `aae restart`. Should the
+path hold no binary by then, the daemon logs the error and exits with a failure, for the service manager to see.
+Next: [your first project](first-project.md).

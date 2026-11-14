@@ -104,9 +104,15 @@ pub(crate) fn spawn(dir: &std::path::Path) -> Child {
     command(dir).spawn().unwrap()
 }
 
-/// `aae daemon` in the XDG tree under `dir`.
+/// `aae daemon` in the XDG tree under `dir`: the binary `dir/bin/aae` if a test put one there, else the built one.
 pub(crate) fn command(dir: &std::path::Path) -> Command {
-    let mut command = Command::new(env!("CARGO_BIN_EXE_aae"));
+    let own = dir.join("bin/aae");
+    let exe = if own.exists() {
+        own
+    } else {
+        env!("CARGO_BIN_EXE_aae").into()
+    };
+    let mut command = Command::new(exe);
     command
         .arg("daemon")
         .env("HOME", dir)

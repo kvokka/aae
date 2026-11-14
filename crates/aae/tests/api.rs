@@ -259,6 +259,9 @@ async fn a_drain_starts_no_run_and_stops_the_daemon_when_its_timeout_cuts_a_turn
 #[tokio::test]
 async fn a_restart_starts_the_daemon_again_in_the_same_process() {
     let d = Daemon::start(|dir| {
+        // A binary of its own, to replace on disk before the restart, as an upgrade does.
+        fs::create_dir_all(dir.join("bin")).unwrap();
+        fs::copy(env!("CARGO_BIN_EXE_aae"), dir.join("bin/aae")).unwrap();
         let brief = "name = \"brief\"\n[step]\nkind = \"exec\"\ncommand = [\"sleep\", \"1\"]\ntimeout = \"10s\"\n";
         fs::write(dir.join("config/aae/shop/formulas/brief.toml"), brief).unwrap();
     })
@@ -275,6 +278,9 @@ async fn a_restart_starts_the_daemon_again_in_the_same_process() {
     let before = d.get("/v1/daemon").await;
     let brief = d.create("brief", None).await;
     d.until_state(&brief, "running").await;
+    let bin = d.dir.path().join("bin");
+    fs::copy(env!("CARGO_BIN_EXE_aae"), bin.join("aae.new")).unwrap();
+    fs::rename(bin.join("aae.new"), bin.join("aae")).unwrap();
     d.post("/v1/daemon/restart?timeout_s=30", json!(null), None)
         .await
         .unwrap();
@@ -293,6 +299,12 @@ async fn a_restart_starts_the_daemon_again_in_the_same_process() {
         tokio::time::sleep(Duration::from_millis(50)).await;
     };
     assert_eq!(after["pid"], before["pid"], "{after}");
+    #[cfg(target_os = "linux")]
+    assert_eq!(
+        fs::read_link(format!("/proc/{}/exe", after["pid"])).unwrap(),
+        bin.join("aae"),
+        "the daemon runs the new binary"
+    );
     assert_eq!(journal_lines(&d, "daemon.stopping")[0]["data"]["reason"], "restart");
     // From the journal, not the live view: the restarted daemon may have started the run already.
     let queued = journal_lines(&d, "run.queued");

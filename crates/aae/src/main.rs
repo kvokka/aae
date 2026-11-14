@@ -9,6 +9,8 @@ use clap::Parser;
 use std::process::ExitCode;
 
 fn main() -> ExitCode {
+    // Taken now: once the binary is replaced on disk, Linux names the running one `<path> (deleted)`.
+    let exe = std::env::current_exe().unwrap_or_else(|_| "aae".into());
     let cli = Cli::parse();
     let config = match cli.command {
         Command::Daemon {
@@ -42,13 +44,13 @@ fn main() -> ExitCode {
     });
     match started {
         Ok(false) => ExitCode::SUCCESS,
-        // A planned restart: the same binary with the same arguments in this process, so a supervisor sees no exit.
+        // A planned restart: the binary at the same path, so a new one put there, with the same arguments in this
+        // process, so a supervisor sees no exit. Should that fail, the exit is an error a supervisor restarts.
         Ok(true) => {
-            let exe = std::env::current_exe().unwrap_or_else(|_| "aae".into());
-            let mut again = std::process::Command::new(exe);
+            let mut again = std::process::Command::new(&exe);
             again.args(std::env::args_os().skip(1));
             let e = std::os::unix::process::CommandExt::exec(&mut again);
-            eprintln!("aae daemon: restart: {e}");
+            eprintln!("aae daemon: restart: {}: {e}", exe.display());
             ExitCode::FAILURE
         }
         Err(e) => {
