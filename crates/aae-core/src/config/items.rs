@@ -51,10 +51,14 @@ impl Loader {
             None if !dir.join("prompt.md").exists() => None,
             None => self.text(&file, &dir.join("prompt.md")),
         };
-        let settings = self.settings(&file, dir, settings, plugins);
+        let mut settings = self.settings(&file, dir, settings, plugins);
+        // The role prompt is the agent layer's system prompt (spec §8.1, §6.3): one value, so not both.
+        if prompt.is_some() && settings.system_prompt.is_some() {
+            self.fail(&file, "`system_prompt` and a role prompt file are both set; keep one");
+        }
+        settings.system_prompt = settings.system_prompt.or(prompt);
         Some(Agent {
             harness,
-            prompt,
             settings,
             max_runs,
         })

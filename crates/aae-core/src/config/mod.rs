@@ -139,9 +139,7 @@ pub struct Pack {
 #[derive(Clone, Debug)]
 pub struct Agent {
     pub harness: String,
-    /// The role prompt (spec §8.1).
-    pub prompt: Option<String>,
-    /// Layer 6.
+    /// Layer 6; its `system_prompt` is the role prompt file (spec §8.1) when the agent has one.
     pub settings: Settings,
     /// Runs of this agent started at once in its project; no limit but the orchestrator's when absent.
     pub max_runs: Option<u32>,

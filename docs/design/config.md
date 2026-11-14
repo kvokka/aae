@@ -1,7 +1,7 @@
 # Configuration files
 
-The files the daemon reads (spec §6, §8, §9.1, §9.5, §11) and the rules the loader enforces. Layer merging and
-"explain config" are a separate step (§6.3); this document fixes what one file may say. Durations are strings
+The files the daemon reads, the rules the loader enforces, and how the layers merge into the config of one session
+(see "Effective config and "explain config"" below). Durations are strings
 with one unit, as in [`contracts.md`](contracts.md) (`"500ms"`, `"30s"`, `"45m"`, `"2h"`). A relative path is
 relative to the directory of the file that holds it; a leading `~/` is the home directory. Unknown keys are an
 error in every file.
@@ -11,7 +11,7 @@ error in every file.
 - The daemon loads everything at once from the orchestrator file: the projects it lists, their packs, agents,
   formulas, triggers and the plugins they declare. A missing orchestrator file is an empty config.
 - Load is all or nothing: every error found is reported with its file, and an invalid config is never applied.
-  The daemon re-reads only on an explicit command (§6.5): `aae config reload` (`POST /v1/config/reload`); on
+  The daemon re-reads only on an explicit command: `aae config reload` (`POST /v1/config/reload`); on
   error the previous config stays in force, and `aae config check` reports the errors without applying anything
   (it loads the file itself, so it needs no daemon).
 - A reload is taken by new runs and by the schedules (a schedule whose `cron`/`every` changed, and every `cron` when
@@ -24,10 +24,10 @@ error in every file.
 
 ## Settings (any layer)
 
-One table shape for every layer of §6.3: `[settings]` of the orchestrator, a project and a rig; the `[agent]`
+One table shape for every layer (see "Effective config"): `[settings]` of the orchestrator, a project and a rig; the `[agent]`
 contribution of a plugin; the top level of `agent.toml`; and the overrides `[overrides.<agent>]`.
 
-| Key | Type | Merge (§6.3) |
+| Key | Type | Merge |
 |---|---|---|
 | `model`, `effort`, `system_prompt`, `permission_mode` | string; `permission_mode` is the harness's own: claude's `--permission-mode`, codex's approval policy (`untrusted`, `on-request`, `never`) | scalar |
 | `inherit_host` | boolean | scalar |
@@ -106,7 +106,29 @@ mcp = { url = "/mcp" }                         # | true (= /mcp); none: no MCP e
 
 ## Effective config and "explain config"
 
-`Config::effective(project, rig, agent)` merges the layers of §6.3 for one session: the harness default model,
+Settings live on three levels: the orchestrator (`~/.config/aae/config.toml`: the harnesses with the default model of
+each, shared MCP, hooks, skills, env, plugins), the project (`aae.toml`: rigs, packs, project plugins, overrides) and
+the rig (a section of `aae.toml`: repository path, variables, overrides). An agent is not a level but a consumer: it
+picks one of the orchestrator's harnesses and, optionally, a model, and takes the rest from the layers, weakest
+first:
+
+1. the harness's own host config (`~/.claude`, `~/.codex`), when `inherit_host` is on;
+2. the orchestrator's `[settings]`, over the default model of the harness;
+3. the project's `[settings]`;
+4. the rig's `[settings]`;
+5. the `[agent]` contributions of the plugins attached to the agent, in attachment order;
+6. the agent's own `agent.toml`;
+7. `[overrides.<agent>]` of the orchestrator, then the project, then the rig: they fix an agent of an outside pack
+   without forking the pack.
+
+A scalar takes the strongest layer's value; a table (`env`, `mcp`, `native`) merges by key, an entry replaced whole;
+a named list (`hooks`, `skills`, `plugins`) is the union, and a stronger layer turns an element off by name. The host
+layer is the exception: the harness merges it itself, aae neither reads nor parses it, and it is turned off only as a
+whole (`inherit_host = false`), never one element by name. The harness config inside the rig (`CLAUDE.md`,
+`.claude/`, `.mcp.json`, `AGENTS.md`) belongs to the repository, not the host: it applies with inheritance off too
+(see "Host inheritance").
+
+`Config::effective(project, rig, agent)` merges the layers above for one session: the harness default model,
 orchestrator, project and rig settings, then the contributions of the attached plugins in attachment order, the
 agent, and the overrides of the orchestrator, the project and the rig. Plugins attach first (the `plugins` key of
 every layer), so a stronger layer can detach a plugin and its whole contribution. An override applies when its key
@@ -116,8 +138,11 @@ in order (`# agent + plugin mail`). `explain()` prints one line per value with i
 inherited by the harness and invisible to aae, or off (`aae config explain --project <p> --agent <a> [--rig <r>]`,
 with no daemon, on the file on disk; `GET /v1/config/explain`, on the config the daemon holds). The effective config
 serializes to JSON: a run keeps it as its snapshot, and `env` is the whole session environment besides what the
-adapter adds (§6.5). The adapter's `split` turns it into a process part, keyed by its fingerprint (contracts 8),
-and a session part.
+adapter adds: a session does not inherit the daemon's environment wholesale. The core assembles it when the run
+prepares, right before the session starts; the adapter materializes it into launch flags, session parameters or a
+generated harness config directory, which lives in the state directory, never in the rig or the harness's home
+directory. The adapter's `split` turns it into a process part, keyed by its fingerprint (contracts 8), and a session
+part.
 
 ## Host inheritance (spec §6.4)
 
@@ -186,9 +211,9 @@ bead_failures = 3                   # failed runs of a bead before the core clos
 api_tcp = "127.0.0.1:7171"          # the API on TCP too (off by default; loopback only; a reload cannot change it)
 timezone = "Europe/Berlin"          # IANA zone `cron` is read in (default: the system zone; an unknown name is an error)
 
-[harness.claude]                    # harnesses agents may choose (§6.1)
+[harness.claude]                    # harnesses agents may choose
 model = "sonnet"                    # default model of the harness
-binary = "/opt/claude/bin/claude"   # optional explicit path; otherwise resolved through mise (§6.5)
+binary = "/opt/claude/bin/claude"   # optional explicit path; otherwise mise, then `PATH`
 
 [harness.codex]                     # keys beyond `model` and `binary` are the adapter's; claude takes none
 max_sessions = 8                    # codex: threads per app-server before a second one starts (default 8)
@@ -248,7 +273,7 @@ rig = "backend"
 The project root is itself a pack named after the project: `agents/` and `formulas/` next to `aae.toml` belong to
 it, and its triggers are the `[[trigger]]` of `aae.toml`.
 
-### Packs and plugins from git: `aae.lock` and `aae fetch` (spec §8.2, §11.6)
+### Packs and plugins from git: `aae.lock` and `aae fetch`
 
 A pack in `packs` and a `[[plugin]]` (in the orchestrator file or a project's) is a local directory, or a git
 repository with `pack.toml` / `plugin.toml` at its root: `{ git = "<url>", rev = "<branch|tag|commit>" }` for a pack,
@@ -271,6 +296,10 @@ source fails (that source keeps its old pin). Loading the config never runs git 
 no automatic updates: a git source with no pin in `aae.lock`, or with no checkout of its pin, is a config error that
 says to run `aae fetch`. Commit `aae.lock` with the project; `.aae/` is a cache to ignore.
 
+A plugin runs any command with the user's rights, so nothing installs or enables one implicitly: its orchestrator
+side runs only once a `[[plugin]]` declares it, its agent side only for the agents that attach it in `plugins`, and a
+plugin from git runs only at the commit pinned in `aae.lock`.
+
 ## Pack: `<pack>/pack.toml`
 
 ```toml
@@ -287,8 +316,9 @@ run = "implement"
 inputs = { bead = { next_ready = true, epic = "{{ event.bead.epic }}" } }
 ```
 
-Content: `agents/<agent>/agent.toml` (plus `prompt.md` and any other files of the agent, §8.1) and
-`formulas/*.toml`.
+Content: `agents/<agent>/agent.toml` (plus `prompt.md` and any other files of the agent, see "Agent") and
+`formulas/*.toml`. A pack is the unit of content: agents, formulas and triggers. It may require plugins but never
+contains one; a plugin is declared by the orchestrator or the project.
 
 ## Names
 
@@ -300,8 +330,11 @@ Content: `agents/<agent>/agent.toml` (plus `prompt.md` and any other files of th
 ## Agent: `agents/<agent>/agent.toml`
 
 `harness` (required; one of the orchestrator's `[harness.*]`), `prompt` (role prompt file, default `prompt.md`
-when it exists), `max_runs` (optional positive integer: runs of this agent started at once in its project; the
-orchestrator's `max_runs` still applies), then the settings keys above.
+when it exists; its text is the agent layer's `system_prompt`, so an override may still replace it, and setting
+`system_prompt` in `agent.toml` too is an error), `max_runs` (optional positive integer: runs of this agent started at once in its project; the
+orchestrator's `max_runs` still applies), then the settings keys above. Everything of one agent (settings, prompts,
+skills, hooks, scripts) lives in its directory, laid out as its author likes. The core has no role names: whatever a
+role does is configuration.
 
 A run counts toward both limits from `preparing` until it is terminal, except while `parked` (no harness process).
 A run over a limit waits in `queued` with `waiting_for = "concurrency"`; a busy workdir is reported first.
@@ -323,7 +356,12 @@ prompt = "implement.md"             # relative to the formula file
 timeout = "45m"                     # optional
 ```
 
-An `exec` step has `command = ["prog", "arg", ..]` (non-empty) and `timeout` instead of `agent` and `prompt`.
+A formula has a name, a description, declared inputs and exactly one step. A `prompt` step is a turn of the agent in
+a harness session, and its outcome comes from the finisher (`aae finish`, contracts 6.3). An `exec` step is a command
+with no model that the daemon runs in the run's workdir, in a process group of its own, under the step timeout; exit 0
+is `pass`, 75 (`EX_TEMPFAIL`) a failed attempt (not an outcome), any other `fail`, and a bounded tail of its output is
+kept in the result (contracts 6.2). An `exec` step has `command = ["prog", "arg", ..]` (non-empty) and `timeout`
+instead of `agent` and `prompt`.
 Nothing is substituted into the command; it gets the run in its environment: `AAE_RUN`, `AAE_BEAD` (when the run has
 a bead) and `AAE_INPUT_<NAME>` per input (the name upper-cased, other characters than letters and digits as `_`; a
 string as it is, any other value as JSON). Two inputs that give one variable (`note-text` and `note_text`) are a

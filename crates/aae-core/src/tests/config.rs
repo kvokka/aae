@@ -145,7 +145,7 @@ fn a_valid_config_loads_with_every_reference_resolved() {
     assert!(matches!(&kit.triggers[0].source, Source::Cron(c) if *c == crate::cron::Cron::parse("0 3 * * *").unwrap()));
     let agent = &kit.agents["implementer"];
     assert_eq!(
-        (agent.harness.as_str(), agent.prompt.as_deref()),
+        (agent.harness.as_str(), agent.settings.system_prompt.as_deref()),
         ("claude", Some("You implement."))
     );
     assert_eq!(agent.settings.effort.as_deref(), Some("high"));
@@ -278,6 +278,13 @@ fn files_reject_unknown_keys_and_undeclared_names() {
         "hook `lint` needs",
     );
     fails(&[(agent, "harness = \"claude\"\nprompt = \"role.md\"\n")], "role.md");
+    fails(
+        &[
+            (agent, "harness = \"claude\"\nsystem_prompt = \"x\"\n"),
+            ("kit/agents/reviewer/prompt.md", "role"),
+        ],
+        "`system_prompt` and a role prompt file are both set",
+    );
     let unreadable_prompt = ("kit/agents/reviewer/prompt.md/.keep", "");
     fails(
         &[

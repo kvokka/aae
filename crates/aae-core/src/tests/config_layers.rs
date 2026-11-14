@@ -99,6 +99,8 @@ fn explain_names_the_layer_of_every_value_and_the_host_in_one_line() {
     assert!(text.contains("model = \"opus\"  # rig override\n"), "{text}");
     assert!(text.contains("env.LANG = \"C\"  # orchestrator\n"), "{text}");
     assert!(text.contains("skills.mail = "), "{text}");
+    // The role prompt file is the agent layer's system prompt.
+    assert!(text.contains("system_prompt = \"You implement.\"  # agent\n"), "{text}");
     assert!(
         text.ends_with("host: inherited by the harness, its content is not visible to aae\n"),
         "{text}"
@@ -165,7 +167,7 @@ fn an_attached_plugin_puts_its_bin_ahead_of_path_and_its_prompt_after_the_system
         ("plugins/post/bin/post-send", ""),
         (
             "kit/agents/implementer/agent.toml",
-            "harness = \"claude\"\nsystem_prompt = \"Be brief.\"\nenv = { PATH = \"/usr/bin\" }\n\
+            "harness = \"claude\"\nenv = { PATH = \"/usr/bin\" }\n\
              plugins = [{ name = \"mail\" }, { name = \"post\" }]\n",
         ),
     ])
@@ -175,7 +177,7 @@ fn an_attached_plugin_puts_its_bin_ahead_of_path_and_its_prompt_after_the_system
     let prompt = e.system_prompt.as_ref().unwrap();
     assert_eq!(
         (prompt.value.as_str(), &prompt.from),
-        ("Be brief.\n\nCheck the mail first.", &both)
+        ("You implement.\n\nCheck the mail first.", &both)
     );
     let path = &e.env["PATH"];
     let bin = |name: &str| {
