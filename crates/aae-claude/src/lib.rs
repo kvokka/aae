@@ -25,7 +25,7 @@ use std::{
 };
 use stream::Stream;
 use tokio::{
-    io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader},
+    io::{AsyncBufReadExt, AsyncWriteExt, BufReader},
     process::{ChildStdin, Command},
     sync::broadcast,
 };
@@ -119,7 +119,9 @@ impl Claude {
             instance.live.clone(),
         );
         let mut lines = BufReader::new(child.stdout.take().expect("stdout is piped")).lines();
-        let stderr = tokio::spawn(tail(child.stderr.take().expect("stderr is piped")));
+        let stderr = tokio::spawn(aae_core::driver::stderr_tail(
+            child.stderr.take().expect("stderr is piped"),
+        ));
         let instances = self.instances.clone();
         let id = id.to_owned();
         self.instances
@@ -350,16 +352,6 @@ impl Driver for Claude {
             .find(|i| i.session.0["session_id"] == *id)
             .map(|i| i.live.subscribe())
     }
-}
-
-/// The last 4 KiB of `stderr`, read to its end (a descendant may hold it open past the exit: the caller bounds it).
-async fn tail(mut stderr: tokio::process::ChildStderr) -> String {
-    let (mut kept, mut buf) = (Vec::new(), [0; 4096]);
-    while let Ok(n @ 1..) = stderr.read(&mut buf).await {
-        kept.extend_from_slice(&buf[..n]);
-        kept.drain(..kept.len().saturating_sub(buf.len()));
-    }
-    String::from_utf8_lossy(&kept).into_owned()
 }
 
 /// Where the prompt `key` stands in the session file `<config>/projects/<workdir, non-alphanumerics as ->/<id>.jsonl`.

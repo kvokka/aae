@@ -32,12 +32,13 @@ Install them through mise so the daemon finds the same versions you test with, f
 
 ```toml
 [tools]
-claude = "2.1.322"
-codex = "0.167.2"
+claude = "2.1"
+codex = "0"
 "github:Dicklesworthstone/beads_rust" = "0.7.6"
 ```
 
-These are the versions this release is tested against (the repository's `mise.toml`). The daemon resolves each
+These are the version ranges this release is tested against (the repository's `mise.toml`; its tests last ran on
+claude 2.1.325 and codex 0.168.0). The daemon resolves each
 binary in this order: `binary` in the config (`[harness.claude] binary = "/path/to/claude"`), then
 `mise which <name>`, then `PATH`. A daemon under systemd or launchd has no mise shims on its `PATH`, which is why
 mise is asked directly.

@@ -36,13 +36,13 @@ fn worktree_is_on_for_the_formulas_that_ask_for_it() {
         [("default-policy", "{}".to_owned())]
     );
     let audit = "name = \"audit\"\nworktree = true\n[step]\nkind = \"exec\"\ncommand = [\"true\"]\n";
-    let config = load_with(&[("gascity/formulas/audit.toml", audit)]).unwrap();
+    let config = load_with(&[("kit/formulas/audit.toml", audit)]).unwrap();
     assert!(config.projects[0].packs[1].formulas["audit"].worktree);
     assert_eq!(
         names(&config.projects[0].bundled),
         [
             ("default-policy", "{}".to_owned()),
-            ("worktree", r#"{"formulas":["gascity.audit"]}"#.to_owned())
+            ("worktree", r#"{"formulas":["kit.audit"]}"#.to_owned())
         ]
     );
     assert!(
@@ -50,7 +50,7 @@ fn worktree_is_on_for_the_formulas_that_ask_for_it() {
         "no formula outside a project"
     );
     let wrong = audit.replace("worktree = true", "worktree = \"yes\"");
-    fails(&[("gascity/formulas/audit.toml", wrong.as_str())], "worktree");
+    fails(&[("kit/formulas/audit.toml", wrong.as_str())], "worktree");
 }
 
 #[test]

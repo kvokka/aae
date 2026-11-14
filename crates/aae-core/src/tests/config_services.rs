@@ -18,7 +18,7 @@ fn with(lines: &[(&str, &str)]) -> Result<Config, Vec<crate::config::ConfigError
 
 fn agent(name: &str) -> Name {
     Name {
-        pack: "gascity".into(),
+        pack: "kit".into(),
         name: name.into(),
     }
 }

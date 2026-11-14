@@ -64,10 +64,7 @@ fn triggers_are_checked_against_events_and_formulas() {
     let with_rig = BASE[5]
         .1
         .replace("run = \"audit\"", "run = \"audit\"\nrig = \"backend\"");
-    fails(
-        &[("gascity/pack.toml", with_rig.as_str())],
-        "gets its rig from the project",
-    );
+    fails(&[("kit/pack.toml", with_rig.as_str())], "gets its rig from the project");
 }
 
 #[test]

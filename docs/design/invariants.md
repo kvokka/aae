@@ -1,9 +1,8 @@
 # Core invariants and recovery
 
 The rules the core keeps whatever the harness, the policy, the operator or a crash does. They are numbered; code,
-tests and the other design documents cite them as "invariant N". The list is the distilled lesson of Gas City's
-fix history (1 609 of 3 156 commits since 2026-07-01 were fixes, counted 2026-11-10 at gascity `f1f75f53c`).
-<!-- MEASURE id=gascity-fix-commits date=2026-11-10 ver=gascity-f1f75f53c env=linux-arm64-orbstack src=init/reports/21 note="git log --since=2026-07-01: 3156 commits, 1609 fixes, tagged by topic in one pass" -->
+tests and the other design documents cite them as "invariant N". The list is distilled from the fix
+history of an earlier orchestrator of the same kind, where about half of the commits were fixes.
 
 All of them except 19 are mechanisms of the core and are never cut to fit a line budget. Thresholds (how many
 times, how long) are config parameters with defaults; the choice of a reaction is policy (`default-policy`,

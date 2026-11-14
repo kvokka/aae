@@ -15,7 +15,7 @@ use std::{
     time::{Duration, Instant},
 };
 use tokio::{
-    io::{AsyncReadExt, AsyncWriteExt, BufReader},
+    io::{AsyncWriteExt, BufReader},
     process::ChildStdin,
     sync::{broadcast, oneshot},
 };
@@ -186,14 +186,4 @@ pub(crate) async fn read(
             send(thread, event);
         }
     }
-}
-
-/// The last 4 KiB of `stderr`, read to its end (a descendant may hold it open past the exit: the caller bounds it).
-pub(crate) async fn tail(mut stderr: tokio::process::ChildStderr) -> String {
-    let (mut kept, mut buf) = (Vec::new(), [0; 4096]);
-    while let Ok(n @ 1..) = stderr.read(&mut buf).await {
-        kept.extend_from_slice(&buf[..n]);
-        kept.drain(..kept.len().saturating_sub(buf.len()));
-    }
-    String::from_utf8_lossy(&kept).into_owned()
 }

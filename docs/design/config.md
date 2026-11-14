@@ -222,7 +222,7 @@ error. A reload applies to the deadlines set from then on: a deadline already se
 ```toml
 name = "shop"                       # optional, defaults to the directory name; unique among projects
 packs = [
-  "../packs/gascity",               # a local pack directory
+  "../packs/kit",               # a local pack directory
   { git = "https://github.com/acme/aae-pack-review", rev = "v1.2.0" },  # a pack from git: branch, tag or commit
 ]
 
@@ -275,7 +275,7 @@ says to run `aae fetch`. Commit `aae.lock` with the project; `.aae/` is a cache 
 ## Pack: `<pack>/pack.toml`
 
 ```toml
-name = "gascity"
+name = "kit"
 version = "0.3.0"
 requires_plugins = ["mail"]         # must be declared by the orchestrator or the project
 min_aae = "0.1.0"                   # optional

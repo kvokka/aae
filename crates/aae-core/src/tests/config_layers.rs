@@ -5,7 +5,7 @@ use serde_json::json;
 
 fn implementer() -> Name {
     Name {
-        pack: "gascity".into(),
+        pack: "kit".into(),
         name: "implementer".into(),
     }
 }
@@ -118,7 +118,7 @@ fn unknown_project_rig_or_agent_is_an_error() {
     assert!(config.effective("nope", None, &implementer()).is_err());
     assert!(config.effective("shop", Some("frontend"), &implementer()).is_err());
     let nobody = Name {
-        pack: "gascity".into(),
+        pack: "kit".into(),
         name: "reviewer".into(),
     };
     assert!(config.effective("shop", None, &nobody).is_err());
@@ -164,7 +164,7 @@ fn an_attached_plugin_puts_its_bin_ahead_of_path_and_its_prompt_after_the_system
         ("plugins/post/plugin.toml", "name = \"post\"\nversion = \"0.1.0\"\n"),
         ("plugins/post/bin/post-send", ""),
         (
-            "gascity/agents/implementer/agent.toml",
+            "kit/agents/implementer/agent.toml",
             "harness = \"claude\"\nsystem_prompt = \"Be brief.\"\nenv = { PATH = \"/usr/bin\" }\n\
              plugins = [{ name = \"mail\" }, { name = \"post\" }]\n",
         ),

@@ -115,7 +115,9 @@ impl Codex {
             pgid: pid,
         };
         let lines = BufReader::new(child.stdout.take().expect("stdout is piped")).lines();
-        let stderr = tokio::spawn(rpc::tail(child.stderr.take().expect("stderr is piped")));
+        let stderr = tokio::spawn(aae_core::driver::stderr_tail(
+            child.stderr.take().expect("stderr is piped"),
+        ));
         let (instances, id) = (self.instances.clone(), id.to_owned());
         let reader = instance.clone();
         tokio::spawn(async move {

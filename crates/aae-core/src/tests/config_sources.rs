@@ -10,8 +10,8 @@ const CONFIG: &str =
 /// BASE with the pack and the plugin declared from git; `fetched` adds their locks and checkouts.
 fn files(fetched: bool) -> Vec<(String, String)> {
     let project = BASE[3].1.replace(
-        r#"packs = ["../gascity"]"#,
-        r#"packs = [{ git = "https://example.com/gascity.git", rev = "main" }]"#,
+        r#"packs = ["../kit"]"#,
+        r#"packs = [{ git = "https://example.com/kit.git", rev = "main" }]"#,
     );
     let mut files = vec![
         ("config.toml".to_owned(), CONFIG.to_owned()),
@@ -22,12 +22,9 @@ fn files(fetched: bool) -> Vec<(String, String)> {
             format!("[[source]]\ngit = \"https://example.com/{git}.git\"\nrev = \"{rev}\"\ncommit = \"{commit}\"\n")
         };
         files.push(("aae.lock".to_owned(), lock("mail", "v1", PLUGIN)));
-        files.push(("shop/aae.lock".to_owned(), lock("gascity", "main", PACK)));
+        files.push(("shop/aae.lock".to_owned(), lock("kit", "main", PACK)));
         for (path, text) in BASE {
-            let moved = (path
-                .strip_prefix("gascity/")
-                .map(|p| format!("shop/.aae/git/{PACK}/{p}")))
-            .or_else(|| {
+            let moved = (path.strip_prefix("kit/").map(|p| format!("shop/.aae/git/{PACK}/{p}"))).or_else(|| {
                 path.strip_prefix("plugins/mail/")
                     .map(|p| format!(".aae/git/{PLUGIN}/{p}"))
             });
@@ -53,7 +50,7 @@ fn a_git_source_loads_from_its_pinned_checkout() {
     let config = load(&files(true)).unwrap();
     assert!(config.plugins[0].root.ends_with(format!(".aae/git/{PLUGIN}")));
     let pack = &config.projects[0].packs[1];
-    assert_eq!(pack.name, "gascity");
+    assert_eq!(pack.name, "kit");
     assert!(pack.root.ends_with(format!("shop/.aae/git/{PACK}")));
     assert!(pack.formulas.contains_key("implement"));
 }
@@ -99,7 +96,7 @@ fn a_plugin_has_a_path_or_a_git_source() {
 #[test]
 fn a_pack_with_an_unknown_key_says_what_a_pack_is() {
     let project = BASE[3].1.replace(
-        r#"packs = ["../gascity"]"#,
+        r#"packs = ["../kit"]"#,
         r#"packs = [{ git = "x", rev = "main", extra = 1 }]"#,
     );
     fails(&[("shop/aae.toml", &project)], "a pack is a path or `{ git, rev }`");

@@ -386,3 +386,13 @@ pub trait Driver: Send + Sync {
     /// The raw harness messages of a session (spec §5.3 direct relay); a slow reader loses messages.
     fn live(&self, session: &SessionRef) -> Option<broadcast::Receiver<Value>>;
 }
+
+/// The last 4 KiB of `stderr`, read to its end (a descendant may hold it open past the exit: the caller bounds it).
+pub async fn stderr_tail(mut stderr: tokio::process::ChildStderr) -> String {
+    let (mut kept, mut buf) = (Vec::new(), [0; 4096]);
+    while let Ok(n @ 1..) = tokio::io::AsyncReadExt::read(&mut stderr, &mut buf).await {
+        kept.extend_from_slice(&buf[..n]);
+        kept.drain(..kept.len().saturating_sub(buf.len()));
+    }
+    String::from_utf8_lossy(&kept).into_owned()
+}

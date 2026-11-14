@@ -5,7 +5,7 @@ path works by hand; 6 model-free tests green, including failure paths; 8 the com
 owner's host; 10 real owner runs without intervention (criterion 20). Updated at the end of every work session.
 
 Assessed 2026-11-14 after cycle 43; the timings re-measured after cycle 44 at `1a732a4` (WP-40: the requirements of postmortem 0001 in `default-policy`; since WP-43 auth and billing failures wait on the account gate with backoff and never escalate; WP-48, cycle 46: no harness or tracker names in `aae-core`, checked in CI; cycle 41: the whole `mise run acceptance` green, 21 of 21, with the request scenarios on claude haiku and codex gpt-5.6-luna; an isolated codex logs in by the host model provider), with the scores of review 38 as the base: every component at 8, all criteria of §15 green on the owner's host except those left to the owner (20, 21, the claude half of 10).
-<!-- MEASURE id=readiness date=2026-11-14 ver=WP-40,1a732a4 env=linux-arm64-orbstack src=docs/READINESS.md note="self-assessment by the implementing agent; re-assess at the end of every session" -->
+<!-- MEASURE id=readiness date=2026-11-14 ver=1a732a4 env=linux-arm64-orbstack src=docs/READINESS.md note="self-assessment by the implementing agent; re-assess at the end of every session" -->
 
 | Component | Score | Missing for the next point |
 |---|---|---|
