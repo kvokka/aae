@@ -4,7 +4,8 @@
 //! the harnesses.
 //!
 //! Usage: `aae-acceptance [--ci] [--aae <binary>] [--report <file>] [<criterion>...]`; `aae-acceptance --mcp-probe
-//! <log>` is the test MCP service of criterion 14, as aae starts a service.
+//! <log>` is the test MCP service of criterion 14, as aae starts a service; `aae-acceptance --mcp-stdio-probe <log>`
+//! is its stdio MCP server, as aae starts one behind its bridge.
 
 mod daemon;
 mod scenarios;
@@ -55,7 +56,8 @@ struct Args {
     aae: PathBuf,
     report: PathBuf,
     only: Vec<String>,
-    probe: Option<PathBuf>,
+    /// The probe flag given and its log.
+    probe: Option<(String, PathBuf)>,
 }
 
 fn args() -> Result<Args, String> {
@@ -74,7 +76,10 @@ fn args() -> Result<Args, String> {
             "--ci" => args.ci = true,
             "--aae" => args.aae = it.next().ok_or("--aae needs a path")?.into(),
             "--report" => args.report = it.next().ok_or("--report needs a path")?.into(),
-            "--mcp-probe" => args.probe = Some(it.next().ok_or("--mcp-probe needs a path")?.into()),
+            "--mcp-probe" | "--mcp-stdio-probe" => {
+                let log = it.next().ok_or(format!("{arg} needs a path"))?;
+                args.probe = Some((arg, log.into()));
+            }
             flag if flag.starts_with('-') => return Err(format!("unknown flag {flag}")),
             criterion => args.only.push(criterion.to_owned()),
         }
@@ -98,12 +103,18 @@ fn shell(command: &str) -> String {
         .unwrap_or_default()
 }
 
-/// The test MCP service on `AAE_SERVICE_PORT` of 127.0.0.1 with `AAE_SERVICE_TOKEN`, logging to `log`.
-async fn probe(log: &Path) -> ExitCode {
-    match aae_testkit::mcp::serve_service(log).await {
+/// The test MCP service on `AAE_SERVICE_PORT` of 127.0.0.1 with `AAE_SERVICE_TOKEN`, or with `--mcp-stdio-probe`
+/// the stdio server, logging to `log`.
+async fn probe(flag: &str, log: &Path) -> ExitCode {
+    let served = if flag == "--mcp-stdio-probe" {
+        aae_testkit::mcp::serve_stdio(log)
+    } else {
+        aae_testkit::mcp::serve_service(log).await
+    };
+    match served {
         Ok(()) => ExitCode::SUCCESS,
         Err(e) => {
-            eprintln!("aae-acceptance --mcp-probe: {e}");
+            eprintln!("aae-acceptance {flag}: {e}");
             ExitCode::FAILURE
         }
     }
@@ -129,8 +140,8 @@ async fn main() -> ExitCode {
             return ExitCode::from(2);
         }
     };
-    if let Some(log) = &args.probe {
-        return probe(log).await;
+    if let Some((flag, log)) = &args.probe {
+        return probe(flag, log).await;
     }
     let aae = args.aae.to_string_lossy().into_owned();
     let env = Arc::new(Env {
