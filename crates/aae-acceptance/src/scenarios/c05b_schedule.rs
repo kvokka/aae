@@ -15,8 +15,9 @@ use aae_core::parse_rfc3339_ms;
 use serde_json::Value;
 use std::{sync::Arc, time::Duration};
 
-const EVERY: Duration = Duration::from_secs(1);
-const EVERY_MS: i64 = 1000;
+/// Two seconds, not one: the catch-up at start must come before an interval, also on a loaded machine.
+const EVERY: Duration = Duration::from_secs(2);
+const EVERY_MS: i64 = 2000;
 const WITHIN: Duration = Duration::from_secs(60);
 
 /// Per `daemon.started` in the journal: its time and the times of the firings after it, in milliseconds. A firing
