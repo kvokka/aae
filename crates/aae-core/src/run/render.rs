@@ -20,7 +20,7 @@ impl RunHandler {
         let timeout_ms = |t: &Option<std::time::Duration>| {
             t.map_or(STEP_TIMEOUT_MS, |t| i64::try_from(t.as_millis()).unwrap_or(i64::MAX))
         };
-        let (agent, prompt, timeout) = match (&formula.step, row.exec()) {
+        let (prompt, timeout) = match (&formula.step, row.exec()) {
             (Step::Exec { command, timeout }, true) => {
                 // The tracker by name, as in a session (spec §10.2).
                 let env: serde_json::Map<String, Value> = (project.tracker.env.iter())
@@ -28,13 +28,13 @@ impl RunHandler {
                     .collect();
                 return Ok((None, timeout_ms(timeout), json!({ "command": command, "env": env })));
             }
-            (Step::Prompt { agent, prompt, timeout }, false) => (agent, prompt, timeout),
+            (Step::Prompt { prompt, timeout, .. }, false) => (prompt, timeout),
             _ => return Err(format!("`{}` changed its step kind", row.formula)),
         };
-        if agent.to_string() != row.agent {
-            return Err(format!("`{}` now names agent `{agent}`", row.formula));
+        let (agent, config) = self.config.for_run(&row.project, &row.rig, &row.formula)?;
+        if agent != row.agent {
+            return Err(format!("`{}` now runs agent `{agent}`", row.formula));
         }
-        let config = self.config.effective(&row.project, Some(&row.rig), agent)?;
         let mut rig_view = json!({ "name": row.rig, "path": rig.path });
         for (key, value) in &rig.vars {
             rig_view[key] = json!(value);

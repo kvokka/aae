@@ -13,6 +13,9 @@ use std::{
 
 pub const ADAPTER: Adapter = Adapter {
     name: "claude",
+    providers: &["anthropic"],
+    // The CLI itself takes the short names (`fable`, `opus`, `sonnet`, `haiku`) for the latest model of the family.
+    models: &[],
     tested: TESTED,
     new,
     doctor,

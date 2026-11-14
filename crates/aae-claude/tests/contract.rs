@@ -79,6 +79,9 @@ impl Live {
         let config = EffectiveConfig {
             services: Default::default(),
             harness: "claude".into(),
+            harness_from: aae_core::config::Layer::Agent,
+            provider: None,
+            model_given: None,
             model: Some(sourced("claude-haiku-5-5".to_owned())),
             effort: None,
             system_prompt: None,

@@ -1,7 +1,7 @@
 //! The effective config of one (project, rig, agent): the layers of spec §6.3 merged, every value with the layer it
 //! came from, so that "explain config" can show it.
 
-use super::{Config, Hook, Mcp, Name, PluginUse, Service, Settings, Skill, check::resolve};
+use super::{Hook, Mcp, PluginUse, Service, Settings, Skill};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::{collections::BTreeMap, fmt, fmt::Write as _, path::PathBuf};
@@ -19,9 +19,17 @@ pub enum Layer {
     /// The contribution of an attached plugin.
     Plugin(String),
     Agent,
+    /// `[settings]` of the pack of the run's formula.
+    Pack(String),
+    /// The `[step]` of the run's formula.
+    Formula(String),
+    /// The agent variant of the run (`[agents.<name>]`).
+    Variant(String),
     OrchestratorOverride,
     ProjectOverride,
     RigOverride,
+    /// What the adapters make of the other value: the harness of a provider, or the provider of a harness.
+    Derived,
     /// A value several layers make together, in the order they apply: tables merged by key, a prompt with fragments.
     Merged(Vec<Layer>),
 }
@@ -52,6 +60,10 @@ impl fmt::Display for Layer {
             Self::Rig => f.write_str("rig"),
             Self::Plugin(name) => write!(f, "plugin {name}"),
             Self::Agent => f.write_str("agent"),
+            Self::Pack(name) => write!(f, "pack {name}"),
+            Self::Formula(name) => write!(f, "formula {name}"),
+            Self::Variant(name) => write!(f, "variant {name}"),
+            Self::Derived => f.write_str("derived"),
             Self::OrchestratorOverride => f.write_str("orchestrator override"),
             Self::ProjectOverride => f.write_str("project override"),
             Self::RigOverride => f.write_str("rig override"),
@@ -74,7 +86,18 @@ pub struct Sourced<T> {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct EffectiveConfig {
     pub harness: String,
+    /// The layer that names the harness, [`Layer::Derived`] when the provider decides it. A snapshot taken before
+    /// the field has the agent's.
+    #[serde(default = "agent")]
+    pub harness_from: Layer,
+    /// `None` when no layer names it and the harness has no adapter that names its own.
+    #[serde(default)]
+    pub provider: Option<Sourced<String>>,
+    /// The full model name the harness gets.
     pub model: Option<Sourced<String>>,
+    /// The short name a layer gave for `model`, when the adapter expanded it.
+    #[serde(default)]
+    pub model_given: Option<String>,
     pub effort: Option<Sourced<String>>,
     pub system_prompt: Option<Sourced<String>>,
     pub permission_mode: Option<Sourced<String>>,
@@ -93,12 +116,48 @@ pub struct EffectiveConfig {
     pub services: BTreeMap<String, Sourced<Service>>,
 }
 
+fn agent() -> Layer {
+    Layer::Agent
+}
+
 impl EffectiveConfig {
+    pub(super) fn new(
+        harness: String,
+        harness_from: Layer,
+        provider: Option<Sourced<String>>,
+        model: Option<Sourced<String>>,
+    ) -> Self {
+        Self {
+            harness,
+            harness_from,
+            provider,
+            model,
+            model_given: None,
+            effort: None,
+            system_prompt: None,
+            permission_mode: None,
+            inherit_host: None,
+            env: BTreeMap::new(),
+            mcp: BTreeMap::new(),
+            hooks: BTreeMap::new(),
+            skills: BTreeMap::new(),
+            plugins: Vec::new(),
+            native: None,
+            services: BTreeMap::new(),
+        }
+    }
+
+    /// The model gate key of its sessions, `model:<provider>/<model>` (contracts 7), when both are known.
+    pub fn model_key(&self) -> Option<String> {
+        let (provider, model) = (self.provider.as_ref()?, self.model.as_ref()?);
+        Some(format!("model:{}/{}", provider.value, model.value))
+    }
+
     pub fn inherits_host(&self) -> bool {
         self.inherit_host.as_ref().is_none_or(|s| s.value)
     }
 
-    fn apply(&mut self, settings: &Settings, from: &Layer) {
+    pub(super) fn apply(&mut self, settings: &Settings, from: &Layer) {
         let sourced = |value: &String| Sourced {
             value: value.clone(),
             from: from.clone(),
@@ -150,7 +209,7 @@ impl EffectiveConfig {
 
     /// What attached plugins add beyond a settings layer (spec §11.2): their prompt fragments after the system
     /// prompt and their `bin/` directories ahead of `PATH` (the daemon's when no layer sets it), in attachment order.
-    fn contribute(&mut self, attached: &[&super::Plugin]) {
+    pub(super) fn contribute(&mut self, attached: &[&super::Plugin]) {
         for plugin in attached {
             let Some(fragment) = &plugin.prompt else { continue };
             let prompt = self.system_prompt.get_or_insert_with(|| Sourced {
@@ -186,12 +245,18 @@ impl EffectiveConfig {
     /// One line per value with its layer, and one line for the host layer (spec §6.3).
     pub fn explain(&self) -> String {
         let mut out = String::new();
+        let given = (self.model_given.as_ref()).map_or_else(String::new, |g| format!(", given as {}", quoted(g)));
+        if let Some(s) = &self.model {
+            let _ = writeln!(out, "model = {}  # {}{given}", quoted(&s.value), s.from);
+        }
         let mut line = |key: &str, value: String, from: &Layer| {
             let _ = writeln!(out, "{key} = {value}  # {from}");
         };
-        line("harness", quoted(&self.harness), &Layer::Agent);
+        line("harness", quoted(&self.harness), &self.harness_from);
+        if let Some(s) = &self.provider {
+            line("provider", quoted(&s.value), &s.from);
+        }
         for (key, slot) in [
-            ("model", &self.model),
             ("effort", &self.effort),
             ("system_prompt", &self.system_prompt),
             ("permission_mode", &self.permission_mode),
@@ -259,126 +324,4 @@ fn quoted(text: &str) -> String {
 
 fn json(value: &impl Serialize) -> String {
     serde_json::to_string(value).unwrap_or_default()
-}
-
-impl Config {
-    /// The effective config of `agent` for a run in `project`, on `rig` when the run has one (spec §6.3, §6.5).
-    pub fn effective(&self, project: &str, rig: Option<&str>, agent: &Name) -> Result<EffectiveConfig, String> {
-        let p = self
-            .projects
-            .iter()
-            .find(|p| p.name == project)
-            .ok_or(format!("no project `{project}`"))?;
-        let r = rig
-            .map(|r| p.rigs.get(r).ok_or(format!("no rig `{r}` in `{project}`")))
-            .transpose()?;
-        let a = p
-            .packs
-            .iter()
-            .find(|pack| pack.name == agent.pack)
-            .and_then(|pack| pack.agents.get(&agent.name))
-            .ok_or(format!("no agent `{agent}` in `{project}`"))?;
-        // An override names its agent as written in the project; one that names an agent of another project or
-        // nobody here does not apply.
-        let own = p.packs.first().map(|pack| pack.name.as_str()).unwrap_or_default();
-        let has_agent = |pack: &super::Pack, n: &str| pack.agents.contains_key(n);
-        let applies = |key: &String| {
-            resolve(&p.packs, own, &super::load::reference(key), has_agent, "agent").as_ref() == Ok(agent)
-        };
-        let overrides = |map: &BTreeMap<String, Settings>| {
-            map.iter()
-                .filter(|(k, _)| applies(k))
-                .map(|(_, s)| s.clone())
-                .collect::<Vec<_>>()
-        };
-        let mut layers: Vec<(Layer, Settings)> = vec![
-            (Layer::Orchestrator, self.settings.clone()),
-            (Layer::Project, p.settings.clone()),
-        ];
-        layers.extend(r.map(|r| (Layer::Rig, r.settings.clone())));
-        let mut stronger = vec![(Layer::Agent, a.settings.clone())];
-        stronger.extend(
-            overrides(&self.overrides)
-                .into_iter()
-                .map(|s| (Layer::OrchestratorOverride, s)),
-        );
-        stronger.extend(overrides(&p.overrides).into_iter().map(|s| (Layer::ProjectOverride, s)));
-        stronger.extend(
-            r.into_iter()
-                .flat_map(|r| overrides(&r.overrides))
-                .map(|s| (Layer::RigOverride, s)),
-        );
-
-        // Plugins attach first: their contributions are layer 5, between the rig and the agent.
-        let mut plugins: Vec<Sourced<PluginUse>> = Vec::new();
-        for (layer, settings) in layers.iter().chain(&stronger) {
-            for used in &settings.plugins {
-                let at = plugins.iter().position(|s| s.value.name == used.name);
-                match (at, used.enabled) {
-                    (Some(i), true) => {
-                        plugins[i] = Sourced {
-                            value: used.clone(),
-                            from: layer.clone(),
-                        }
-                    }
-                    (Some(i), false) => drop(plugins.remove(i)),
-                    (None, true) => plugins.push(Sourced {
-                        value: used.clone(),
-                        from: layer.clone(),
-                    }),
-                    (None, false) => {}
-                }
-            }
-        }
-        let attached: Vec<&super::Plugin> = (plugins.iter())
-            .filter_map(|used| {
-                self.plugins
-                    .iter()
-                    .chain(&p.plugins)
-                    .find(|d| d.name == used.value.name)
-            })
-            .collect();
-        layers.extend(
-            attached
-                .iter()
-                .map(|d| (Layer::Plugin(d.name.clone()), d.agent.clone())),
-        );
-
-        let mut config = EffectiveConfig {
-            harness: a.harness.clone(),
-            model: self
-                .harnesses
-                .get(&a.harness)
-                .and_then(|h| h.model.clone())
-                .map(|value| Sourced {
-                    value,
-                    from: Layer::Harness,
-                }),
-            effort: None,
-            system_prompt: None,
-            permission_mode: None,
-            inherit_host: None,
-            // The project's tracker, by name, even where the project has none (spec §10.2). A layer may still set it.
-            env: (p.tracker.env.iter())
-                .map(|(name, value)| {
-                    let value = Sourced {
-                        value: value.clone(),
-                        from: Layer::Project,
-                    };
-                    (name.clone(), value)
-                })
-                .collect(),
-            mcp: BTreeMap::new(),
-            hooks: BTreeMap::new(),
-            skills: BTreeMap::new(),
-            plugins,
-            native: None,
-            services: BTreeMap::new(),
-        };
-        for (layer, settings) in layers.iter().chain(&stronger) {
-            config.apply(settings, layer);
-        }
-        config.contribute(&attached);
-        Ok(config)
-    }
 }

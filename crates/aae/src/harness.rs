@@ -27,11 +27,11 @@ pub(crate) fn binary(name: &str, explicit: Option<&Path>) -> (PathBuf, &'static 
 }
 
 /// The adapters of this build: a harness is a row here, and nothing else in the root knows its name.
-const ADAPTERS: [&Adapter; 2] = [&aae_claude::ADAPTER, &aae_codex::ADAPTER];
+const ADAPTERS: &[&Adapter] = &[&aae_claude::ADAPTER, &aae_codex::ADAPTER];
 
 /// The adapter of harness `name`.
 pub(crate) fn adapter(name: &str) -> Option<&'static Adapter> {
-    ADAPTERS.into_iter().find(|a| a.name == name)
+    ADAPTERS.iter().copied().find(|a| a.name == name)
 }
 
 fn setup<'a>(binary: PathBuf, harness: &'a config::Harness, paths: &'a Paths) -> Setup<'a> {
@@ -66,7 +66,7 @@ pub(crate) fn tested(driver: &Arc<dyn Driver>) -> [(u32, u32, u32); 2] {
 /// What is wrong with `[harness.<name>]`: no adapter for it, or settings its adapter does not take.
 fn harness_error(name: &str, harness: &config::Harness, paths: &Paths) -> Option<String> {
     let Some(adapter) = adapter(name) else {
-        let known = ADAPTERS.map(|a| a.name).join(", ");
+        let known = ADAPTERS.iter().map(|a| a.name).collect::<Vec<_>>().join(", ");
         return Some(format!("aae has no adapter for harness `{name}`; known: {known}"));
     };
     // The binary is not resolved for a check: no adapter reads it before a spawn.
@@ -77,7 +77,8 @@ fn harness_error(name: &str, harness: &config::Harness, paths: &Paths) -> Option
 /// The config of `paths` with the parameters of the bundled plugins checked, or every error in it.
 pub(crate) fn load(paths: &Paths) -> Result<config::Config, Vec<String>> {
     let file = &paths.config;
-    let mut config = config::load(file).map_err(|errors| errors.iter().map(ToString::to_string).collect::<Vec<_>>())?;
+    let mut config = config::load_for(file, ADAPTERS)
+        .map_err(|errors| errors.iter().map(ToString::to_string).collect::<Vec<_>>())?;
     // br is the tracker of a project with a `.beads` directory, always named by an explicit path: its own search
     // would climb to another project's (spec §10.2).
     for p in &mut config.projects {

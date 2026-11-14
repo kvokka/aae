@@ -10,10 +10,20 @@ use std::{num::NonZeroU32, path::Path, sync::Arc, time::Duration};
 
 pub const ADAPTER: Adapter = Adapter {
     name: "codex",
+    providers: &["openai"],
+    models: MODELS,
     tested: TESTED,
     new,
     doctor,
 };
+
+/// The short model names of the owner's table (docs/design/adapters.md): the latest model of each family.
+const MODELS: &[(&str, &str)] = &[
+    ("astra", "gpt-6-astra"),
+    ("luna", "gpt-6-luna"),
+    ("terra", "gpt-6-1-terra"),
+    ("sol", "gpt-6-1-sol"),
+];
 
 /// The settings of `[harness.codex]` beyond `model` and `binary` (contracts 4.5).
 #[derive(Default, serde::Deserialize)]

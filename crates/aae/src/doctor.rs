@@ -89,27 +89,43 @@ pub(crate) fn findings(paths: &Paths) -> Vec<Value> {
 }
 
 /// The agents on `harness` in every project and rig, labelled `<project>/<rig or ->@<agent>`, with their effective
-/// configs.
+/// configs: each pack agent alone, `None` where it does not assemble, then as the runs of every prompt formula have
+/// it, a variant by its name.
 fn agents(config: &Config, harness: &str) -> Vec<(String, Option<EffectiveConfig>)> {
-    let mut found = Vec::new();
+    let mut found = std::collections::BTreeMap::new();
     for p in &config.projects {
         let rigs: Vec<Option<&str>> = match p.rigs.is_empty() {
             true => vec![None],
             false => p.rigs.keys().map(|r| Some(r.as_str())).collect(),
         };
-        let agents = (p.packs.iter()).flat_map(|pack| pack.agents.iter().map(|(a, agent)| (&pack.name, a, agent)));
-        for (pack, name, _) in agents.filter(|(_, _, agent)| agent.harness == harness) {
-            let agent = Name {
-                pack: pack.clone(),
-                name: name.clone(),
-            };
-            for rig in &rigs {
-                let label = format!("{}/{}@{agent}", p.name, rig.unwrap_or("-"));
-                found.push((label, config.effective(&p.name, *rig, &agent).ok()));
+        for pack in &p.packs {
+            for (name, agent) in &pack.agents {
+                let name = Name {
+                    pack: pack.name.clone(),
+                    name: name.clone(),
+                };
+                for rig in &rigs {
+                    let label = format!("{}/{}@{name}", p.name, rig.unwrap_or("-"));
+                    match config.effective(&p.name, *rig, &name) {
+                        Ok(c) if c.harness == harness => drop(found.insert(label, Some(c))),
+                        Err(_) if agent.harness.as_deref() == Some(harness) => drop(found.insert(label, None)),
+                        _ => {}
+                    }
+                }
+            }
+            for formula in pack.formulas.keys().map(|f| format!("{}.{f}", pack.name)) {
+                for rig in p.rigs.keys() {
+                    // An exec step has no agent.
+                    if let Ok((agent, c)) = config.for_run(&p.name, rig, &formula)
+                        && c.harness == harness
+                    {
+                        found.insert(format!("{}/{rig}@{agent}", p.name), Some(c));
+                    }
+                }
             }
         }
     }
-    found
+    found.into_iter().collect()
 }
 
 /// The binary exists and its version is one the adapter was tested on.

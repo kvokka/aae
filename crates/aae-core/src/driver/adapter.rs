@@ -43,9 +43,16 @@ impl Check {
 pub type DoctorAgents<'a> = &'a [(String, Option<EffectiveConfig>)];
 
 /// One harness adapter.
+#[derive(Debug)]
 pub struct Adapter {
     /// The harness name: the `[harness.<name>]` table and the binary mise resolves.
     pub name: &'static str,
+    /// The model providers the harness works with, its own first: an agent that names only the harness gets it, and
+    /// an agent that names only a provider gets the one harness that lists it (docs/design/adapters.md).
+    pub providers: &'static [&'static str],
+    /// Short model names and the full names they stand for, the latest of each family; any other name goes to the
+    /// harness as it is.
+    pub models: &'static [(&'static str, &'static str)],
     /// The harness versions the adapter was tested on, `[lowest, highest]` as `(major, minor, patch)`, inclusive.
     pub tested: [(u32, u32, u32); 2],
     /// The driver on `setup`; the error names the key of the adapter's settings that is wrong.

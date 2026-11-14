@@ -3,12 +3,14 @@
 
 mod assemble;
 mod check;
+mod compose;
 mod files;
 mod items;
 mod load;
 pub(crate) mod schema;
 mod service;
 mod sources;
+mod variants;
 
 use crate::template::{Filter, Inputs, Template};
 pub use assemble::{EffectiveConfig, Layer, Sourced};
@@ -36,6 +38,11 @@ pub struct Config {
     pub settings: Settings,
     /// Layer 7, by agent reference; they may name an agent of any project.
     pub overrides: BTreeMap<String, Settings>,
+    /// The agent variants every project sees, by name; a project's own of the same name replaces one.
+    pub variants: BTreeMap<String, Variant>,
+    /// The adapters of the build: which providers each harness works with and its short model names. The
+    /// harnesses they name are the root's; a harness with none here has no provider of its own.
+    pub adapters: &'static [&'static crate::driver::Adapter],
     pub plugins: Vec<Plugin>,
     /// The enabled bundled plugins with their parameters, run after every declared plugin.
     pub bundled: Vec<Bundled>,
@@ -90,6 +97,7 @@ pub struct Project {
     /// Layer 3.
     pub settings: Settings,
     pub overrides: BTreeMap<String, Settings>,
+    pub variants: BTreeMap<String, Variant>,
     pub plugins: Vec<Plugin>,
     /// The bundled plugins on for its runs: the orchestrator's, with the project's `[builtin.<name>]` tables.
     pub bundled: Vec<Bundled>,
@@ -122,6 +130,8 @@ pub struct Rig {
     /// Layer 4.
     pub settings: Settings,
     pub overrides: BTreeMap<String, Settings>,
+    /// The variant that runs in place of a pack agent the formulas name, on this rig.
+    pub agents: BTreeMap<Name, String>,
 }
 
 #[derive(Clone, Debug)]
@@ -134,14 +144,28 @@ pub struct Pack {
     pub agents: BTreeMap<String, Agent>,
     pub formulas: BTreeMap<String, Formula>,
     pub triggers: Vec<Trigger>,
+    /// `[settings]` of `pack.toml`: the launch settings of the runs of its formulas.
+    pub settings: Settings,
 }
 
 #[derive(Clone, Debug)]
 pub struct Agent {
-    pub harness: String,
-    /// Layer 6; its `system_prompt` is the role prompt file (spec §8.1) when the agent has one.
+    /// The harness `agent.toml` names, part of the agent layer.
+    pub harness: Option<String>,
+    /// The agent layer but its harness; its `system_prompt` is the role prompt file (spec §8.1) when the agent has one.
     pub settings: Settings,
     /// Runs of this agent started at once in its project; no limit but the orchestrator's when absent.
+    pub max_runs: Option<u32>,
+}
+
+/// A pack agent under another name with settings of its own (`[agents.<name>]`): the role is the base agent's,
+/// the limit, gates and events are the variant's.
+#[derive(Clone, Debug)]
+pub struct Variant {
+    /// The pack agent, as written; it resolves in the project of the run.
+    pub base: Name,
+    pub settings: Settings,
+    /// Its own limit; the base agent's when absent.
     pub max_runs: Option<u32>,
 }
 
@@ -160,6 +184,8 @@ pub enum Step {
         agent: Name,
         prompt: Template,
         timeout: Option<Duration>,
+        /// The launch settings of the step.
+        settings: Box<Settings>,
     },
     Exec {
         command: Vec<String>,
@@ -261,10 +287,24 @@ impl fmt::Display for ConfigError {
     }
 }
 
-/// Loads the orchestrator file (absent means empty), the projects it lists and everything they use. Every error
-/// found is returned; a config with any error is never returned in part.
+/// Loads the orchestrator file (absent means empty), the projects it lists and everything they use, for a build
+/// with `adapters` (see [`Config::adapters`]). Every error found is returned; a config with any error is never
+/// returned in part.
+pub fn load_for(
+    orchestrator_file: &std::path::Path,
+    adapters: &'static [&'static crate::driver::Adapter],
+) -> Result<Config, Vec<ConfigError>> {
+    let loader = load::Loader {
+        adapters,
+        ..load::Loader::default()
+    };
+    loader.run(orchestrator_file)
+}
+
+/// [`load_for`] a build with no adapters, as tests of the core on a scripted harness load: every agent names its
+/// harness, and none has a provider.
 pub fn load(orchestrator_file: &std::path::Path) -> Result<Config, Vec<ConfigError>> {
-    load::Loader::default().run(orchestrator_file)
+    load_for(orchestrator_file, &[])
 }
 
 /// The environment variable an exec step gets input `name` in: `note-text` → `AAE_INPUT_NOTE_TEXT`.

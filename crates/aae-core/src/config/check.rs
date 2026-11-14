@@ -1,18 +1,19 @@
 //! References between files: names resolved to their packs (spec §8.2), trigger inputs against their formula,
 //! rigs and overrides against what the project has; the tables of the bundled plugins; the watchdog table.
 
-use super::{BUNDLED, Bundled, Name, Pack, Project, Step, Watchdog, load::Loader};
+use super::{BUNDLED, Bundled, Name, Pack, Project, Step, Variant, Watchdog, load::Loader};
 use crate::template::Inputs;
 use serde_json::{Map, Value};
 use std::{collections::BTreeMap, path::Path};
 
-pub(super) fn project(loader: &mut Loader, project: &mut Project) {
+pub(super) fn project(loader: &mut Loader, project: &mut Project, variants: &BTreeMap<String, Variant>) {
     let index = project.packs.clone();
     let Project {
         root,
         overrides,
         rigs,
         packs,
+        variants: own_variants,
         ..
     } = project;
     let has_agent = |p: &Pack, n: &str| p.agents.contains_key(n);
@@ -77,7 +78,11 @@ pub(super) fn project(loader: &mut Loader, project: &mut Project) {
             }
         }
     }
-    for agent in agents {
+    // An override names a pack agent or a variant, by its name.
+    for agent in agents
+        .into_iter()
+        .filter(|a| !own_variants.contains_key(*a) && !variants.contains_key(*a))
+    {
         let name = super::load::reference(agent);
         if let Err(e) = resolve(&index, &own, &name, has_agent, "agent") {
             loader.fail(&file, format!("overrides: {e}"));
@@ -91,9 +96,11 @@ pub(super) fn orchestrator_overrides<'a>(
     file: &std::path::Path,
     keys: impl Iterator<Item = &'a String>,
     projects: &[Project],
+    variants: &BTreeMap<String, Variant>,
 ) {
     let has_agent = |p: &Pack, n: &str| p.agents.contains_key(n);
-    for key in keys {
+    let variant = |key: &String| variants.contains_key(key) || projects.iter().any(|p| p.variants.contains_key(key));
+    for key in keys.filter(|k| !variant(k)) {
         let name = super::load::reference(key);
         let found: Vec<Result<Name, String>> = projects
             .iter()

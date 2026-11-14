@@ -5,7 +5,7 @@
 
 use super::RunHandler;
 use crate::{
-    config::{Config, Name},
+    config::Config,
     driver::SessionPlan,
     writer::{Error, Event, Tx},
 };
@@ -102,21 +102,16 @@ impl RunHandler {
         };
         let mut out = HashSet::new();
         for p in &self.config.projects {
-            let rigs = p.rigs.keys().map(|r| Some(r.as_str())).chain([None]);
-            for rig in rigs {
-                for pack in &p.packs {
-                    for name in pack.agents.keys() {
-                        let agent = Name {
-                            pack: pack.name.clone(),
-                            name: name.clone(),
-                        };
-                        let Ok(config) = self.config.effective(&p.name, rig, &agent) else {
-                            continue;
-                        };
-                        let split = (self.drivers.get(&config.harness)).map(|d| d.split(&config, &plan));
-                        if let Some(Ok(split)) = split {
-                            out.insert(split.fingerprint.0);
-                        }
+            let formulas =
+                (p.packs.iter()).flat_map(|pack| pack.formulas.keys().map(move |f| format!("{}.{f}", pack.name)));
+            for formula in formulas {
+                for rig in p.rigs.keys() {
+                    let Ok((_, config)) = self.config.for_run(&p.name, rig, &formula) else {
+                        continue;
+                    };
+                    let split = (self.drivers.get(&config.harness)).map(|d| d.split(&config, &plan));
+                    if let Some(Ok(split)) = split {
+                        out.insert(split.fingerprint.0);
                     }
                 }
             }

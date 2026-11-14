@@ -26,6 +26,7 @@ const DEFAULT_BEAD_FAILURES: u32 = 3;
 pub(super) struct Loader {
     pub(super) errors: Vec<ConfigError>,
     pub(super) harnesses: BTreeSet<String>,
+    pub(super) adapters: &'static [&'static crate::driver::Adapter],
 }
 
 impl Loader {
@@ -41,6 +42,7 @@ impl Loader {
         let mut settings = self.settings(file, &base, raw.settings, &names);
         settings.services = self.services(file, raw.service, None);
         let overrides = self.overrides(file, &base, raw.overrides, &names);
+        let variants = self.variants(file, &base, raw.agents, &names);
         let bundled = super::check::bundled(&mut self, file, raw.builtin);
         let watchdog = super::check::watchdog(&mut self, file, raw.watchdog);
         let mut projects: Vec<Project> = Vec::new();
@@ -54,9 +56,11 @@ impl Loader {
             projects.push(project);
         }
         for project in &mut projects {
-            super::check::project(&mut self, project);
+            super::check::project(&mut self, project, &variants);
+            super::variants::check_project(&mut self, project, &variants);
         }
-        super::check::orchestrator_overrides(&mut self, file, overrides.keys(), &projects);
+        super::check::orchestrator_overrides(&mut self, file, overrides.keys(), &projects, &variants);
+        super::variants::check_orchestrator(&mut self, file, &variants, &projects);
         if raw.api_tcp.is_some_and(|a| !a.ip().is_loopback()) {
             self.fail(file, "`api_tcp` must be a loopback address");
         }
@@ -76,12 +80,15 @@ impl Loader {
             harnesses: raw.harness,
             settings,
             overrides,
+            variants,
+            adapters: self.adapters,
             plugins,
             bundled,
             watchdog,
             projects,
             bridge: Vec::new(),
         };
+        super::compose::check_runs(&mut self, &config);
         if self.errors.is_empty() {
             Ok(config)
         } else {
@@ -200,6 +207,17 @@ impl Loader {
                 self.fail(file, format!("plugin `{}` is not declared", used.name));
             }
         }
+        if let Some(harness) = settings.harness.as_ref().filter(|h| !self.harnesses.contains(*h)) {
+            self.fail(file, format!("harness `{harness}` is not in the orchestrator config"));
+        }
+        if let Some(provider) =
+            (settings.provider.as_ref()).filter(|p| !self.adapters.iter().any(|a| a.providers.contains(&p.as_str())))
+        {
+            self.fail(
+                file,
+                format!("provider `{provider}`: no harness of this build works with it"),
+            );
+        }
         for harness in settings
             .native
             .keys()
@@ -245,6 +263,7 @@ impl Loader {
         let mut settings = self.settings(&file, dir, raw.settings, &names);
         settings.services = self.services(&file, raw.service, None);
         let overrides = self.overrides(&file, dir, raw.overrides, &names);
+        let variants = self.variants(&file, dir, raw.agents, &names);
         let mut rigs = BTreeMap::new();
         for (rig, r) in raw.rigs {
             self.name(&file, "rig", &rig);
@@ -274,6 +293,8 @@ impl Loader {
                     triggers,
                     settings,
                     overrides,
+                    // Resolved by `check` once the packs are loaded.
+                    agents: (r.agents.into_iter()).map(|(k, v)| (reference(&k), v)).collect(),
                 },
             );
         }
@@ -303,6 +324,7 @@ impl Loader {
                 self.fail(&file, format!("two packs are named `{}`", pack.name));
             }
             (pack.version, pack.requires_plugins) = (Some(raw.version), raw.requires_plugins);
+            pack.settings = self.settings(&manifest, &root, raw.settings.into(), &[]);
             packs.push(pack);
         }
         let bundled = super::check::project_bundled(self, &file, bundled, raw.builtin, &packs);
@@ -311,6 +333,7 @@ impl Loader {
             root: dir.to_owned(),
             settings,
             overrides,
+            variants,
             plugins,
             bundled,
             rigs,
@@ -357,6 +380,7 @@ impl Loader {
             agents,
             formulas,
             triggers: loaded,
+            settings: Settings::default(),
         }
     }
 }

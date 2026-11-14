@@ -1,4 +1,4 @@
-use crate::config::{Config, ConfigError, Name, Source, Step, load};
+use crate::config::{Config, ConfigError, Name, Source, Step};
 use std::{fs, time::Duration};
 
 /// A valid config: an orchestrator with a plugin, a project with a rig and a project trigger, and one pack.
@@ -93,6 +93,14 @@ command = ["sh", "-c", "true"]
 
 /// Loads `BASE` with `changes` written over it (same path replaces, a new path adds).
 pub(super) fn load_with(changes: &[(&str, &str)]) -> Result<Config, Vec<ConfigError>> {
+    load_for_adapters(changes, &[])
+}
+
+/// [`load_with`] for a build with `adapters`.
+pub(super) fn load_for_adapters(
+    changes: &[(&str, &str)],
+    adapters: &'static [&'static crate::driver::Adapter],
+) -> Result<Config, Vec<ConfigError>> {
     let dir = tempfile::tempdir().unwrap();
     for (path, text) in BASE
         .iter()
@@ -103,7 +111,7 @@ pub(super) fn load_with(changes: &[(&str, &str)]) -> Result<Config, Vec<ConfigEr
         fs::create_dir_all(path.parent().unwrap()).unwrap();
         fs::write(path, text).unwrap();
     }
-    load(&dir.path().join("config.toml"))
+    crate::config::load_for(&dir.path().join("config.toml"), adapters)
 }
 
 /// Asserts that loading fails and one error mentions `needle`.
@@ -145,8 +153,8 @@ fn a_valid_config_loads_with_every_reference_resolved() {
     assert!(matches!(&kit.triggers[0].source, Source::Cron(c) if *c == crate::cron::Cron::parse("0 3 * * *").unwrap()));
     let agent = &kit.agents["implementer"];
     assert_eq!(
-        (agent.harness.as_str(), agent.settings.system_prompt.as_deref()),
-        ("claude", Some("You implement."))
+        (agent.harness.as_deref(), agent.settings.system_prompt.as_deref()),
+        (Some("claude"), Some("You implement."))
     );
     assert_eq!(agent.settings.effort.as_deref(), Some("high"));
     match &kit.formulas["implement"].step {
@@ -253,7 +261,10 @@ fn files_reject_unknown_keys_and_undeclared_names() {
         &[(agent, "harness = \"codex\"\n")],
         "harness `codex` is not in the orchestrator config",
     );
-    fails(&[(agent, "effort = \"high\"\n")], "`harness` is required");
+    fails(
+        &[(agent, "effort = \"high\"\n")],
+        "neither `harness` nor `provider` is set",
+    );
     fails(
         &[(agent, "harness = \"claude\"\nmax_runs = 0\n")],
         "`max_runs` must be a positive",

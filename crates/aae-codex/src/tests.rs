@@ -13,6 +13,9 @@ pub(crate) fn config() -> EffectiveConfig {
     EffectiveConfig {
         services: Default::default(),
         harness: "codex".into(),
+        harness_from: aae_core::config::Layer::Agent,
+        provider: None,
+        model_given: None,
         model: Some(agent("gpt-fake".into())),
         effort: Some(agent("low".into())),
         system_prompt: None,

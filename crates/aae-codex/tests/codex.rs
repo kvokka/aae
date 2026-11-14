@@ -21,6 +21,9 @@ fn config(provider: &Provider) -> EffectiveConfig {
     EffectiveConfig {
         services: Default::default(),
         harness: "codex".into(),
+        harness_from: aae_core::config::Layer::Agent,
+        provider: None,
+        model_given: None,
         model: Some(agent("gpt-fake".into())),
         effort: None,
         system_prompt: None,

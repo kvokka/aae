@@ -8,6 +8,10 @@ use std::{collections::BTreeMap, num::NonZeroU32, path::PathBuf};
 #[derive(Clone, Debug, Default, Deserialize, PartialEq)]
 #[serde(deny_unknown_fields)]
 pub struct Settings {
+    /// The agent CLI; when absent, the one harness whose adapter lists `provider` (docs/design/config.md).
+    pub harness: Option<String>,
+    /// The model provider; when absent, the harness's own.
+    pub provider: Option<String>,
     pub model: Option<String>,
     pub effort: Option<String>,
     pub system_prompt: Option<String>,
@@ -205,6 +209,9 @@ pub(super) struct OrchestratorFile {
     pub settings: Settings,
     #[serde(default)]
     pub overrides: BTreeMap<String, Settings>,
+    /// `[agents.<name>]`: variants of pack agents, as tables of an agent's keys with `base`.
+    #[serde(default)]
+    pub agents: BTreeMap<String, toml::Table>,
     #[serde(default)]
     pub service: Vec<super::service::ServiceFile>,
     /// `[watchdog]`: thresholds of invariant 15 as durations, by key.
@@ -259,6 +266,8 @@ pub(super) struct ProjectFile {
     #[serde(default)]
     pub overrides: BTreeMap<String, Settings>,
     #[serde(default)]
+    pub agents: BTreeMap<String, toml::Table>,
+    #[serde(default)]
     pub rigs: BTreeMap<String, RigFile>,
     #[serde(default)]
     pub trigger: Vec<TriggerFile>,
@@ -278,6 +287,9 @@ pub(super) struct RigFile {
     pub settings: Settings,
     #[serde(default)]
     pub overrides: BTreeMap<String, Settings>,
+    /// An agent reference of the formulas and the variant that runs in its place on this rig.
+    #[serde(default)]
+    pub agents: BTreeMap<String, String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -290,6 +302,8 @@ pub(super) struct PackFile {
     pub min_aae: Option<String>,
     #[serde(default)]
     pub trigger: Vec<TriggerFile>,
+    #[serde(default)]
+    pub settings: super::compose::Launch,
 }
 
 #[derive(Debug, Deserialize)]
@@ -347,6 +361,10 @@ pub(super) enum StepFile {
         agent: String,
         prompt: PathBuf,
         timeout: Option<String>,
+        harness: Option<String>,
+        provider: Option<String>,
+        model: Option<String>,
+        effort: Option<String>,
     },
     Exec {
         command: Vec<String>,

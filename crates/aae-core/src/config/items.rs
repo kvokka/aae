@@ -24,27 +24,13 @@ impl Loader {
     pub(super) fn agent(&mut self, dir: &Path, plugins: &[&str]) -> Option<Agent> {
         let file = dir.join("agent.toml");
         let mut table: toml::Table = self.read(&file)?;
-        let mut text = |key: &str| match table.remove(key) {
-            Some(toml::Value::String(s)) => Ok(Some(s)),
-            None => Ok(None),
-            Some(_) => Err(format!("`{key}` must be a string")),
+        let (harness, prompt) = (string(&mut table, "harness"), string(&mut table, "prompt"));
+        let (harness, prompt, (settings, max_runs)) = match (harness, prompt, agent_keys(table)) {
+            (Ok(h), Ok(p), Ok(rest)) => (h, p, rest),
+            (Err(e), ..) | (_, Err(e), _) | (.., Err(e)) => return self.none(&file, e),
         };
-        let (harness, prompt) = (text("harness"), text("prompt"));
-        let max_runs = match table.remove("max_runs") {
-            None => Ok(None),
-            Some(toml::Value::Integer(n)) if u32::try_from(n).is_ok_and(|n| n > 0) => Ok(u32::try_from(n).ok()),
-            Some(_) => Err("`max_runs` must be a positive 32-bit integer".to_owned()),
-        };
-        let parsed = toml::Value::Table(table)
-            .try_into::<Settings>()
-            .map_err(|e| e.to_string());
-        let (harness, prompt, settings, max_runs) = match (harness, prompt, parsed, max_runs) {
-            (Ok(Some(h)), Ok(p), Ok(s), Ok(m)) => (h, p, s, m),
-            (Ok(None), ..) => return self.none(&file, "`harness` is required"),
-            (Err(e), ..) | (_, Err(e), ..) | (_, _, Err(e), _) | (.., Err(e)) => return self.none(&file, e),
-        };
-        if !self.harnesses.contains(&harness) {
-            self.fail(&file, format!("harness `{harness}` is not in the orchestrator config"));
+        if let Some(h) = harness.as_ref().filter(|h| !self.harnesses.contains(*h)) {
+            self.fail(&file, format!("harness `{h}` is not in the orchestrator config"));
         }
         let prompt = match prompt {
             Some(p) => self.text(&file, &dir.join(p)),
@@ -114,7 +100,22 @@ impl Loader {
         let raw: FormulaFile = self.read(file)?;
         self.name(file, "formula", &raw.name);
         let step = match raw.step {
-            StepFile::Prompt { agent, prompt, timeout } => {
+            StepFile::Prompt {
+                agent,
+                prompt,
+                timeout,
+                harness,
+                provider,
+                model,
+                effort,
+            } => {
+                let launch = super::compose::Launch {
+                    harness,
+                    provider,
+                    model,
+                    effort,
+                };
+                let settings = self.settings(file, &parent(file), launch.into(), &[]);
                 let path = resolve(&parent(file), &prompt);
                 let text = self.text(file, &path)?;
                 let template = Template::parse(&text, PROMPT_ROOTS)
@@ -131,6 +132,7 @@ impl Loader {
                     agent: reference(&agent),
                     prompt: template,
                     timeout,
+                    settings: Box::new(settings),
                 }
             }
             StepFile::Exec { command, timeout } => {
@@ -223,6 +225,28 @@ impl Loader {
             rig: raw.rig,
         })
     }
+}
+
+/// Takes the string `key` out of `table`.
+pub(super) fn string(table: &mut toml::Table, key: &str) -> Result<Option<String>, String> {
+    match table.remove(key) {
+        Some(toml::Value::String(s)) => Ok(Some(s)),
+        None => Ok(None),
+        Some(_) => Err(format!("`{key}` must be a string")),
+    }
+}
+
+/// The settings and `max_runs` of an agent's keys, the rest of an `agent.toml` or of an `[agents.<name>]` table.
+pub(super) fn agent_keys(mut table: toml::Table) -> Result<(Settings, Option<u32>), String> {
+    let max_runs = match table.remove("max_runs") {
+        None => None,
+        Some(toml::Value::Integer(n)) if u32::try_from(n).is_ok_and(|n| n > 0) => u32::try_from(n).ok(),
+        Some(_) => return Err("`max_runs` must be a positive 32-bit integer".to_owned()),
+    };
+    let settings = toml::Value::Table(table)
+        .try_into::<Settings>()
+        .map_err(|e| e.to_string())?;
+    Ok((settings, max_runs))
 }
 
 /// Whether a prompt template path can be resolved for a run of a formula with `inputs` (contracts 2.3).

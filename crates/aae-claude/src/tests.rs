@@ -62,6 +62,9 @@ fn a_config_the_adapter_cannot_deliver_is_a_config_error() {
     let mut config = EffectiveConfig {
         services: Default::default(),
         harness: "claude".into(),
+        harness_from: aae_core::config::Layer::Agent,
+        provider: None,
+        model_given: None,
         model: None,
         effort: None,
         system_prompt: None,
@@ -119,6 +122,9 @@ fn hooks_join_the_native_settings_and_mcp_servers_take_claude_form() {
     let mut config = EffectiveConfig {
         services: Default::default(),
         harness: "claude".into(),
+        harness_from: aae_core::config::Layer::Agent,
+        provider: None,
+        model_given: None,
         model: None,
         effort: None,
         system_prompt: None,
