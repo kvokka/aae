@@ -219,7 +219,9 @@ async fn main() -> ExitCode {
     let aae = args.aae.to_string_lossy().into_owned();
     let env = Arc::new(Env {
         // The commit too: the binary's version alone does not tell one build of the code from another.
-        version: format!("{} {}", version_of(&aae), shell("git describe --always --dirty")).trim().to_owned(),
+        version: format!("{} {}", version_of(&aae), shell("git describe --always --dirty"))
+            .trim()
+            .to_owned(),
         date: shell("date -u +%Y-%m-%d"),
         host: shell("uname -sm"),
         aae: args.aae.clone(),
@@ -267,23 +269,20 @@ async fn main() -> ExitCode {
         });
     }
     rows.sort_by(|a, b| order(a.criterion).cmp(&order(b.criterion)));
-    let mut open: Vec<&str> = rows
-        .iter()
-        .filter(|r| r.criterion != "22" && r.mark == "FAIL")
-        .map(|r| r.criterion)
+    let marks: Vec<(&str, &str)> = (rows.iter())
+        .filter(|r| r.criterion != "22")
+        .map(|r| (r.criterion, r.mark))
         .collect();
-    // A 10 needs every row of criterion 20 green in this run: one not run or filtered out leaves it open, so a
-    // `--ci` run or `--ci 22` alone still checks the scores.
-    let twenty: Vec<&str> = rows.iter().filter(|r| r.criterion == "20").map(|r| r.mark).collect();
-    if twenty.is_empty() || twenty.iter().any(|m| *m != "pass") {
-        open.push("20");
-    }
-    open.dedup();
     if let Some(row) = rows.iter_mut().find(|r| r.criterion == "22" && r.mark == "pass") {
         let readiness = fs::read_to_string(checks::root().join("docs/READINESS.md")).unwrap_or_default();
-        if let Err(why) = checks::readiness_verdict(&readiness, &open) {
-            (row.mark, row.notes) = ("FAIL", why);
-            print!("{}", row.line());
+        let verdict =
+            checks::readiness_fresh(&readiness).and_then(|()| checks::readiness_verdict(&readiness, &marks, !args.ci));
+        match verdict {
+            Ok(scores) => row.notes = format!("{}; readiness: {scores}", row.notes),
+            Err(why) => {
+                (row.mark, row.notes) = ("FAIL", why);
+                print!("{}", row.line());
+            }
         }
     }
     let mut report = format!(

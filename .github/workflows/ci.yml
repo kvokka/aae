@@ -13,6 +13,9 @@ jobs:
     runs-on: ubuntu-24.04-arm
     steps:
       - uses: actions/checkout@v7
+        # Whole history: criterion 22 checks the readiness file against the last change of crates/.
+        with:
+          fetch-depth: 0
       - uses: jdx/mise-action@v5
       - uses: Swatinem/rust-cache@v2
       - run: mise run ci
@@ -21,6 +24,9 @@ jobs:
     runs-on: ubuntu-24.04-arm
     steps:
       - uses: actions/checkout@v7
+        # Whole history: criterion 22 checks the readiness file against the last change of crates/.
+        with:
+          fetch-depth: 0
       - uses: jdx/mise-action@v5
       - uses: Swatinem/rust-cache@v2
       # The release builds (criterion 1) run on tags, in release.yml.

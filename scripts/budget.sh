@@ -70,14 +70,16 @@ done <<<"$markers"
 
 [[ -f docs/READINESS.md ]] || err "docs/READINESS.md is missing (spec §14)"
 grep -q 'MEASURE id=' docs/READINESS.md 2>/dev/null || err "docs/READINESS.md has no MEASURE marker"
-# Criterion 22 of spec §15: every component of the readiness table scores at least 8.
-rows=$(awk -F'|' '/^\| / && $3 !~ /Score/ {print $2 "|" $3}' docs/READINESS.md 2>/dev/null || true)
+# The readiness table (spec §14): every component scores 0 to 10, in the column headed `Score`. What a score may
+# claim against the acceptance rows, and the 8 of criterion 22, are checked by aae-acceptance (criterion 22).
+rows=$(awk -F'|' '/^\| / { if (!col) { for (i = 2; i < NF; i++) if ($i ~ /^ *Score *$/) col = i; next }
+  print $2 "|" $col }' docs/READINESS.md 2>/dev/null || true)
 if [[ -z "$rows" ]]; then
   err "docs/READINESS.md has no component table"
 else
   while IFS='|' read -r name score; do
-    [[ "$score" =~ ^\ *([0-9]+(\.[0-9]+)?)\ *$ ]] && awk "BEGIN { exit !(${BASH_REMATCH[1]} >= 8) }" ||
-      err "readiness of${name% } is${score% }, criterion 22 needs at least 8"
+    [[ "$score" =~ ^\ *([0-9]+(\.[0-9]+)?)\ *$ ]] && awk "BEGIN { exit !(${BASH_REMATCH[1]} <= 10) }" ||
+      err "readiness of${name% } is${score% }, not a score from 0 to 10"
   done <<<"$rows"
 fi
 
