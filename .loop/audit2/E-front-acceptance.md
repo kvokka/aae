@@ -183,7 +183,7 @@ claude → ворота аккаунта → второй прогон ждёт 
 **класс**: нарушение правила (гигиена публичного репозитория) · **важность**: средняя ·
 **где**: 25 отслеживаемых логов `.loop/cycles/{33,36,40,41,42,43}/notes/*.log` и `.loop/cycles/43/ci.log`
 (`/home/ubuntu/proj/work/aae/...`, `/home/ubuntu/.local/share/mise/installs/codex/0.168.0/bin/codex`); 13 файлов
-`docs/init/reports/*.md` (`/home/ubuntu/proj/work/gascity…`, `/home/ubuntu/proj/share/gc/city.toml`,
+`docs/init/reports/*.md` (`/home/ubuntu/proj/work/<предшественник>…`, `/home/ubuntu/proj/share/gc/city.toml`,
 `/home/ubuntu/.beads`) ·
 **требование**: `CLAUDE.md` «Git и харнесс»: «никаких… абсолютных путей машины владельца»; §2.1 п. 15 (временные
 логи цикла не коммитятся) ·
@@ -267,7 +267,7 @@ python закреплён в `demos/mise.toml`. Не запускал (живы�
 ### 16. Мелочи
 
 - `docs/design/config.md:137` — маркер `ver=gc-a86d05bd7`: сокращение имени стороннего проекта, который владелец
-  запретил упоминать (п. 16 первого аудита закрыт не до конца; проверено `git grep -iE 'gas ?city|gascity|\bgc\b'`).
+  запретил упоминать (п. 16 первого аудита закрыт не до конца; проверено `git grep -iE 'gas ?city|проект-предшественник|\bgc\b'`).
 - Критерий 7 меряет самый лёгкий случай «одного проекта»: без трекера, без харнесса, без триггеров
   (`aae-acceptance/src/daemon.rs:15-19`, `c07_idle.rs:35`). По букве верно; демон с br-трекером и расписанием в
   простое не мерялся.
