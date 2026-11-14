@@ -3,7 +3,7 @@
 
 mod common;
 
-use aae_core::driver::{Failure, FailureKind, Normalized, RateLimit, Source};
+use aae_core::driver::{Failure, FailureKind, Normalized, RateLimit, Source, StopReason};
 use aae_core::run::ExecHooks;
 use aae_testkit::Step;
 use common::{World, hollow_turn, last, world, world_with};
@@ -66,4 +66,17 @@ async fn a_quota_without_a_reset_time_waits_for_the_accounts_known_reset() {
     );
     let parked = w.until(Some(&run), "run.parked", 0).await;
     assert_eq!(parked["gate"]["until"], "1970-01-01T02:00:00.000Z", "{parked}");
+}
+
+#[tokio::test(start_paused = true)]
+async fn the_event_of_a_turn_without_an_outcome_tells_how_the_turn_ended() {
+    let w = world(&[]);
+    let mut cancelled = hollow_turn();
+    cancelled[1] = Step::Emit(Normalized::TurnEnded {
+        stop_reason: StopReason::Cancelled,
+    });
+    w.driver.script(cancelled);
+    let run = w.create().await;
+    let ended = w.until(Some(&run), "run.turn_ended_without_outcome", 0).await;
+    assert_eq!(ended["stop_reason"], "cancelled");
 }

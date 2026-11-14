@@ -6,7 +6,10 @@ use super::{
     row::{Row, attempts},
 };
 use crate::{
-    driver::{Answer, DriverEvent, Failure, FailureKind, InstanceHandle, Normalized, SessionRef, SessionState, Source},
+    driver::{
+        Answer, DriverEvent, Failure, FailureKind, InstanceHandle, Normalized, SessionRef, SessionState, Source,
+        StopReason,
+    },
     journal::rfc3339_ms,
     writer::{Error, Tx},
 };
@@ -167,11 +170,17 @@ impl RunHandler {
                 row.emit(tx, "run.retrying", data)?;
                 silence(tx, &row, w.silence_ms.saturating_add(delay))
             }
-            Normalized::TurnEnded { .. } => {
+            Normalized::TurnEnded { stop_reason } => {
                 super::prompts::advance(tx, &row.id, attempt, None, "settled")?;
+                // `turn_ended`: 0 while no turn ended, else how it ended (read back in `turn_settled`).
+                let ended: u8 = match stop_reason {
+                    StopReason::Completed => 1,
+                    StopReason::Cancelled => 2,
+                    StopReason::Failed => 3,
+                };
                 tx.sql().execute(
-                    "UPDATE attempts SET turn_ended = 1 WHERE run = ?1 AND n = ?2",
-                    params![row.id, attempt],
+                    "UPDATE attempts SET turn_ended = ?3 WHERE run = ?1 AND n = ?2",
+                    params![row.id, attempt, ended],
                 )?;
                 silence(tx, &row, w.silence_ms)
             }
@@ -222,14 +231,17 @@ impl RunHandler {
 
     /// Idle without background: a turn that ended settles; one that has not ended yet is no news.
     fn turn_settled(&mut self, tx: &mut Tx<'_>, mut row: Row, attempt: u32) -> Result<(), Error> {
-        let ended: bool = tx.sql().query_row(
+        let ended: u8 = tx.sql().query_row(
             "SELECT turn_ended FROM attempts WHERE run = ?1 AND n = ?2",
             params![row.id, attempt],
             |r| r.get(0),
         )?;
-        if !ended {
-            return Ok(());
-        }
+        let stop_reason = match ended {
+            0 => return Ok(()),
+            2 => "cancelled",
+            3 => "failed",
+            _ => "completed",
+        };
         let (outcome, prompts): (Option<String>, i64) = tx.sql().query_row(
             "UPDATE attempts SET turn_ended = 0 WHERE run = ?1 AND n = ?2 RETURNING outcome, prompts",
             params![row.id, attempt],
@@ -244,7 +256,7 @@ impl RunHandler {
             let data = json!({ "run": row.view(), "outcome": outcome, "remarks": remarks });
             return self.deciding(tx, row, "run.finishing", data);
         }
-        let data = json!({ "run": row.view(), "stop_reason": "completed", "remarks": remarks,
+        let data = json!({ "run": row.view(), "stop_reason": stop_reason, "remarks": remarks,
             "attempts": attempts(tx.sql(), &row.id)? });
         self.deciding(tx, row, "run.turn_ended_without_outcome", data)
     }
