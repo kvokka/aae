@@ -103,27 +103,33 @@ pub(crate) async fn list_packs(state: State, Param(Query(query)): Param<Query<Pr
     Ok(Json(out.into()))
 }
 
-/// Lists the declared plugins (of the orchestrator, or of a project with `project`) and the enabled bundled ones
-/// (of the orchestrator, or those on for the project's runs).
+/// Lists the declared plugins and the enabled bundled ones: of the orchestrator (`project` null) and of every
+/// project (those on for its runs), or of the project `project` only.
 #[utoipa::path(get, path = "/v1/plugins", params(ProjectQuery),
     responses((status = OK, body = [Plugin]),
         (status = BAD_REQUEST, description = BAD_QUERY, body = ErrorReply), (status = NOT_FOUND, description = NO_PROJECT, body = ErrorReply)))]
 pub(crate) async fn list_plugins(state: State, Param(Query(query)): Param<Query<ProjectQuery>>) -> Reply {
     let config = state.config();
-    let (declared, bundled) = match &query.project {
-        None => (&config.plugins, &config.bundled),
-        Some(_) => {
-            let project = &projects(&config, &query)?[0];
-            (&project.plugins, &project.bundled)
-        }
-    };
-    let mut out: Vec<Value> = (declared.iter())
-        .map(|p| {
+    let mut lists = vec![];
+    if query.project.is_none() {
+        lists.push((None, &config.plugins, &config.bundled));
+    }
+    for p in projects(&config, &query)? {
+        lists.push((Some(&p.name), &p.plugins, &p.bundled));
+    }
+    let mut out: Vec<Value> = Vec::new();
+    for (project, declared, bundled) in lists {
+        out.extend(declared.iter().map(|p| {
             let on: Vec<&str> = p.hooks.iter().map(|h| h.on.as_str()).collect();
-            json!({ "name": p.name, "version": p.version, "root": p.root, "on": on, "bundled": false })
-        })
-        .collect();
-    out.extend((bundled.iter()).map(|b| json!({ "name": b.name, "on": b.on, "bundled": true })));
+            json!({ "project": project, "name": p.name, "version": p.version, "root": p.root, "on": on,
+                "bundled": false })
+        }));
+        out.extend(
+            bundled
+                .iter()
+                .map(|b| json!({ "project": project, "name": b.name, "on": b.on, "bundled": true })),
+        );
+    }
     Ok(Json(out.into()))
 }
 

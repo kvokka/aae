@@ -985,7 +985,7 @@
     },
     "/v1/plugins": {
       "get": {
-        "summary": "Lists the declared plugins (of the orchestrator, or of a project with `project`) and the enabled bundled ones\n(of the orchestrator, or those on for the project's runs).",
+        "summary": "Lists the declared plugins and the enabled bundled ones: of the orchestrator (`project` null) and of every\nproject (those on for its runs), or of the project `project` only.",
         "operationId": "list_plugins",
         "parameters": [
           {
@@ -2627,6 +2627,13 @@
               "type": "string"
             },
             "description": "The events its hooks run on."
+          },
+          "project": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "The project whose runs it is on; null for the orchestrator's."
           },
           "root": {
             "type": [

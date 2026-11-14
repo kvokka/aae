@@ -236,7 +236,13 @@ async fn the_config_from_the_cli_lists_explains_checks_and_reloads() {
     assert_eq!(d.json(&["agent", "list", "--project", "shop"])[0]["agent"], "shop.dev");
     assert_eq!(d.json(&["formula", "list"]).as_array().unwrap().len(), 2);
     assert_eq!(d.json(&["pack", "list"])[0]["name"], "shop");
-    assert_eq!(d.json(&["plugin", "list"])[0]["name"], "default-policy");
+    let plugins = d.json(&["plugin", "list"]);
+    assert_eq!(
+        (&plugins[0]["project"], &plugins[0]["name"]),
+        (&Value::Null, &"default-policy".into())
+    );
+    let shop = (plugins.as_array().unwrap().iter()).any(|p| p["project"] == "shop" && p["name"] == "default-policy");
+    assert!(shop, "every project's plugins without --project: {plugins}");
     assert!(!d.cli(&["agent", "list", "--project", "nope"], &[]).status.success());
     let out = d.cli(&["config", "explain", "--project", "shop", "--agent", "dev"], &[]);
     let text = String::from_utf8_lossy(&out.stdout);

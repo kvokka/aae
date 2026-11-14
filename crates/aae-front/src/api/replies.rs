@@ -286,6 +286,8 @@ pub(crate) struct Pack {
 /// A declared plugin, or an enabled bundled one (no version nor root).
 #[derive(ToSchema)]
 pub(crate) struct Plugin {
+    /// The project whose runs it is on; null for the orchestrator's.
+    project: Option<String>,
     name: String,
     version: Option<String>,
     root: Option<String>,
