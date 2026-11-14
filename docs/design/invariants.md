@@ -2,7 +2,9 @@
 
 The rules the core keeps whatever the harness, the policy, the operator or a crash does. They are numbered; code,
 tests and the other design documents cite them as "invariant N". The list is distilled from the fix
-history of an earlier orchestrator of the same kind, where about half of the commits were fixes.
+history of an earlier orchestrator of the same kind, where about half of the commits were fixes: 1 609 of 3 156
+since 2026-07-01 (counted 2026-11-10 at its commit `f1f75f53c`).
+<!-- MEASURE id=prior-orchestrator-fix-commits date=2026-11-10 ver=f1f75f53c env=linux-arm64-orbstack src=reports/21 note="git log --since=2026-07-01: 3156 commits, 1609 of them fixes; one manual pass over the subjects" -->
 
 All of them except 19 are mechanisms of the core and are never cut to fit a line budget. Thresholds (how many
 times, how long) are config parameters with defaults; the choice of a reaction is policy (`default-policy`,
@@ -18,7 +20,7 @@ times, how long) are config parameters with defaults; the choice of a reaction i
 | 4 | A bead is released only conditionally: owner and generation compared | contracts 5.1 |
 | 5 | A session's death loses no work: exit or EOF moves the run to "attempt failed" in one transaction; the bead stays with the run until the run is terminal | contracts 6.2, 4.4 |
 | 6 | Confirmed death before replacement: a new process for the same run or session starts only after nothing is left of the instance it replaces, its marked descendants included; a live shared instance is left alone | contracts 8 |
-| 7 | No descendant of a stopped session survives. A process group is not enough (a claude child orphaned with its own group after `kill -9` kept working); the daemon is a child subreaper and sweeps by the instance marker | contracts 8, [experiments](experiments.md#descendants-after-kill--9-invariant-7) |
+| 7 | No descendant of a stopped session survives. A process group is not enough (a claude child orphaned with its own group after `kill -9` kept working); the daemon is a child subreaper and sweeps by the instance marker. Limit: a descendant that dropped the environment (`env -i`, `sudo` without `-E`, a container runtime) carries no marker, so the sweep misses it; the subreaper only reaps it once it exits on its own | contracts 8, [experiments](experiments.md#descendants-after-kill--9-invariant-7) |
 | 8 | One writer per harness session, the daemon: while a run lives nobody else writes into its session | contracts 4 |
 | 9 | Intent before effect: launch, stop and kill are recorded first and executed after; recovery completes or rolls back | [event model](event-model.md), contracts 8 |
 | 10 | Idempotency by key (run, attempt): create, issue, outcome and event are repeatable without duplicates | contracts 1, 6.2; `Idempotency-Key` of the API |
