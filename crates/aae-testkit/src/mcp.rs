@@ -59,15 +59,20 @@ pub async fn serve(listener: TcpListener, token: &str, log: &Path) -> std::io::R
     let app = Router::new().fallback(move |method: Method, uri: Uri, headers: HeaderMap, body: Bytes| {
         let (log, bearer) = (log.clone(), bearer.clone());
         async move {
-            // The health check a daemon polls: not logged, so the log holds MCP traffic only.
+            let authorized = headers.get("authorization").is_some_and(|v| v == bearer.as_str());
+            // The health check a daemon polls, with the token: not logged, so the log holds MCP traffic only.
             if uri.path() == "/health" {
-                return respond(StatusCode::OK, None);
+                let status = if authorized {
+                    StatusCode::OK
+                } else {
+                    StatusCode::UNAUTHORIZED
+                };
+                return respond(status, None);
             }
             if uri.path() != "/mcp" {
                 return respond(StatusCode::NOT_FOUND, None);
             }
             let msg: Value = serde_json::from_slice(&body).unwrap_or_default();
-            let authorized = headers.get("authorization").is_some_and(|v| v == bearer.as_str());
             let header = |name: &str| headers.get(name).and_then(|v| v.to_str().ok()).map(str::to_owned);
             let mut line = json!({ "pid": std::process::id(), "http": method.as_str(), "method": msg["method"],
                 "tool": msg["params"]["name"], "authorized": authorized });
