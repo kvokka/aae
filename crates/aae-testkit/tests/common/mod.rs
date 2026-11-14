@@ -18,6 +18,8 @@ use std::{
 };
 use tokio::task::JoinHandle;
 
+pub(crate) mod services;
+
 pub(crate) const FILES: &[(&str, &str)] = &[
     (
         "config.toml",

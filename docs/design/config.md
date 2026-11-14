@@ -85,13 +85,18 @@ mcp = { url = "/mcp" }                         # | true (= /mcp); none: no MCP e
   process lives: there is no periodic check. A server that is not up is a tool failure, not a failed run.
 - The port is checked free right before each start; one taken (someone else listens there and would get the token)
   fails that start without running `command`. A port or `http` check passes only while the service's processes
-  (the ones with its `AAE_INSTANCE` marker) alone listen on the port, so a process that takes the port while the
-  service starts gets no check and no token; the service then fails to bind and starts again. A `command` check
-  checks what it likes. A service that dies or fails is started again (with the effect backoff) while sessions use
-  it: on a new port until it was first `ready`, then on the same port, so the sessions holding its URL reconnect,
-  unless someone else listens there: then on a new port, which new sessions get, and the sessions holding the old
-  URL lose the tool. With no sessions it is dropped. A session start that waited 30 s in vain gets port 0 in the
-  service's URL: the port the service was not ready on may be someone else's. On macOS the listener is not told
+  (the ones with its `AAE_INSTANCE` marker) alone listen on the port where a connection to `127.0.0.1` reaches
+  (`127.0.0.1`, `0.0.0.0`, `::`, `::ffff:127.0.0.1`), so a process that takes the port while the service starts
+  gets no check and no token; the service then fails to bind and starts again. So a service whose listener is not
+  its own process (`docker run -p`: the Docker daemon's proxy listens; a wrapper that clears the environment, as
+  `env -i` or `sudo` without `-E`) never passes a port or `http` check: give it `health = { command = [...] }`. A
+  `command` check checks what it likes, and does not tell who listens: a process that takes the port while such a
+  service starts may get the token. A service that dies or fails is started again (with the effect backoff) while
+  sessions use it: on a new port until it was first `ready`, then on the same port, so the sessions holding its URL
+  reconnect, unless two starts in a row find someone else listening there: then on a new port with a new token,
+  which new sessions get; the sessions holding the old URL lose the tool, and whoever holds the old port cannot use
+  the old token. Every move to a new port comes with a new token. With no sessions it is dropped. A session start
+  that waited 30 s in vain gets port 0 and no token: the port the service was not ready on may be someone else's. On macOS the listener is not told
   (`/proc` only), any listener passes the check. A changed `command`, `env` or `health` is a new service; the old
   one idles out. Events: `service.starting`, `service.ready`, `service.failed`, `service.stopped`; `aae instances` lists
   services too.

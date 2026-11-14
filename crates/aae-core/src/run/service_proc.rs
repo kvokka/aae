@@ -39,11 +39,12 @@ const TAIL: usize = 4 * 1024;
 /// The services this daemon runs, by id.
 pub(super) type Running = Arc<Mutex<HashMap<String, Entry>>>;
 
-/// The latest start of a service: its stop, its task, its port, and whether it passed its health check.
+/// The latest start of a service: its stop, its task, its port and token, and whether it passed its health check.
 pub(super) struct Entry {
     stop: Arc<Notify>,
     task: JoinHandle<()>,
     port: u16,
+    token: String,
     ready: Arc<AtomicBool>,
 }
 
@@ -51,6 +52,12 @@ pub(super) struct Entry {
 /// before the service is first ready.
 pub(super) fn port_of(id: &str) -> String {
     format!("${{AAE_SERVICE_PORT:{id}}}")
+}
+
+/// What stands for the token of the service `id` in a session's config until its launch: a service that moves to
+/// a new port gets a new token.
+pub(super) fn token_of(id: &str) -> String {
+    format!("${{AAE_SERVICE_TOKEN:{id}}}")
 }
 
 /// Runs the service of a `start_service` effect in a task of its own: `ServiceReady` once it is healthy,
@@ -134,6 +141,7 @@ pub(super) fn start(running: &Running, core: &CoreHandle<Msg>, p: &Value) {
         stop,
         task,
         port,
+        token: p["token"].as_str().unwrap_or_default().to_owned(),
         ready: is_up,
     };
     if let Some(old) = lock(running).insert(id, entry) {
@@ -141,22 +149,27 @@ pub(super) fn start(running: &Running, core: &CoreHandle<Msg>, p: &Value) {
     }
 }
 
-/// `payload` with the port of each of `services` in place of [`port_of`], once each is ready, or port 0 past
-/// [`READY_WAIT`]: a session connects to its services as it starts, one not up by then is a tool failure, and the
-/// port it was not ready on may be someone else's, who would get the token.
+/// `payload` with the port and token of each of `services` in place of [`port_of`] and [`token_of`], once each is
+/// ready, or port 0 and no token past [`READY_WAIT`]: a session connects to its services as it starts, one not up by
+/// then is a tool failure, and the port it was not ready on may be someone else's, who would get the token.
 pub(super) async fn resolve(running: &Running, services: &[(String, u16)], payload: &Value) -> Value {
     let start = tokio::time::Instant::now();
     let mut text = payload.to_string();
     for (id, _) in services {
-        let port = loop {
-            let now = lock(running).get(id).map(|e| (e.port, e.ready.load(Ordering::Acquire)));
+        let (port, token) = loop {
+            let now = lock(running)
+                .get(id)
+                .filter(|e| e.ready.load(Ordering::Acquire))
+                .map(|e| (e.port, e.token.clone()));
             match now {
-                Some((port, true)) => break port,
-                _ if start.elapsed() > READY_WAIT => break 0,
+                Some(ready) => break ready,
+                _ if start.elapsed() > READY_WAIT => break (0, String::new()),
                 _ => tokio::time::sleep(Duration::from_millis(50)).await,
             }
         };
-        text = text.replace(&port_of(id), &port.to_string());
+        text = text
+            .replace(&port_of(id), &port.to_string())
+            .replace(&token_of(id), &token);
     }
     serde_json::from_str(&text).unwrap_or_else(|_| payload.clone())
 }

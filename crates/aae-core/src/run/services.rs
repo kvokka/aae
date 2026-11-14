@@ -71,12 +71,13 @@ impl RunHandler {
             };
             // The MCP path is not part of it: a new path restarts no process.
             let definition = json!({ "command": service.command, "env": service.env, "health": service.health });
-            let Some((id, port, token)) = Self::service(tx, &name, &scope, &definition)? else {
+            let Some((id, port)) = Self::service(tx, &name, &scope, &definition)? else {
                 // No port or no randomness: the session goes without the service, a tool failure (§11.4).
                 config.mcp.remove(&name);
                 continue;
             };
             let url = format!("http://127.0.0.1:{}", super::service_proc::port_of(&id));
+            let token = super::service_proc::token_of(&id);
             bound.push((id, port));
             let Some(path) = service.mcp else {
                 let var = name
@@ -129,13 +130,8 @@ impl RunHandler {
         Ok((config, bound))
     }
 
-    /// The live service of `definition` in `scope`, else a new one: `(id, port, token)`.
-    fn service(
-        tx: &mut Tx<'_>,
-        name: &str,
-        scope: &str,
-        definition: &Value,
-    ) -> Result<Option<(String, u16, String)>, Error> {
+    /// The live service of `definition` in `scope`, else a new one: `(id, port)`.
+    fn service(tx: &mut Tx<'_>, name: &str, scope: &str, definition: &Value) -> Result<Option<(String, u16)>, Error> {
         let key = format!("{scope}#{}", super::token_sha256(&definition.to_string()));
         let found: Option<(String, String)> = tx
             .sql()
@@ -152,11 +148,7 @@ impl RunHandler {
                 .as_u64()
                 .and_then(|p| u16::try_from(p).ok())
                 .unwrap_or_default();
-            return Ok(Some((
-                id,
-                port,
-                process["token"].as_str().unwrap_or_default().to_owned(),
-            )));
+            return Ok(Some((id, port)));
         }
         let (Ok(port), Some(token)) = (free_port(), super::new_token()) else {
             return Ok(None);
@@ -170,7 +162,7 @@ impl RunHandler {
             params![id, name, key, process.to_string(), IDLE_MS],
         )?;
         Self::service_start(tx, &id, &process, None)?;
-        Ok(Some((id, port, token)))
+        Ok(Some((id, port)))
     }
 
     /// `service.starting` and the effect that runs the process, after the backoff of its restarts.
@@ -267,7 +259,8 @@ impl RunHandler {
     /// The process of the service `id` ended, or never accepted connections: without consumers the record goes,
     /// else it starts again: on a new port until it was first ready (its port may be someone else's), then on the
     /// same port, so the sessions holding its URL reconnect, unless someone else holds it ([`TAKEN_MOVES`] starts
-    /// in a row): then on a new one, new sessions get it and the ones holding the old URL lose the tool.
+    /// in a row): then on a new one with a new token, new sessions get both and the ones holding the old URL lose
+    /// the tool.
     pub(super) fn service_failed(tx: &mut Tx<'_>, id: &str, stderr: &str, taken: bool) -> Result<(), Error> {
         let row: Option<(String, i64, String)> = tx
             .sql()
@@ -301,10 +294,11 @@ impl RunHandler {
             0
         };
         process["taken"] = json!(taken);
+        // A new token with the new port: who holds the old one may have the old token from the sessions' URL.
         if (process["ready"] != true || taken >= TAKEN_MOVES)
-            && let Ok(port) = free_port()
+            && let (Ok(port), Some(token)) = (free_port(), super::new_token())
         {
-            (process["port"], process["taken"]) = (json!(port), json!(0));
+            (process["port"], process["token"], process["taken"]) = (json!(port), json!(token), json!(0));
         }
         tx.sql().execute(
             "UPDATE instances SET state = 'starting', process = ?2 WHERE id = ?1",

@@ -132,7 +132,7 @@ pub(crate) fn sweep_all(ids: &BTreeSet<String>) -> Vec<(i32, u64)> {
 }
 
 /// `port` on loopback is listened on, and only by processes marked `id`: a port check passed by anyone else would
-/// hand them the sessions' token (spec §11.4). Listeners on every address of the port count: none is the service's.
+/// hand them the sessions' token (spec §11.4). Only listeners a connection to `127.0.0.1` may reach count.
 #[cfg(target_os = "linux")]
 pub(crate) fn listens_alone(id: &str, port: u16) -> bool {
     let tables = ["/proc/net/tcp", "/proc/net/tcp6"].map(|table| std::fs::read_to_string(table).unwrap_or_default());
@@ -161,13 +161,25 @@ pub(crate) fn listens_alone(_id: &str, _port: u16) -> bool {
     true
 }
 
-/// `socket:[<inode>]`, as a `/proc/<pid>/fd` link reads, of a line of `/proc/net/tcp*` listening on `port`.
+/// The local addresses, as `/proc/net/tcp*` prints them, a connection to `127.0.0.1` may reach: itself, `0.0.0.0`,
+/// `::` (unless it is IPv6-only, which `/proc` does not tell: it counts) and `::ffff:127.0.0.1`.
+#[cfg(target_os = "linux")]
+const REACHED: [&str; 4] = [
+    "0100007F",
+    "00000000",
+    "00000000000000000000000000000000",
+    "0000000000000000FFFF00000100007F",
+];
+
+/// `socket:[<inode>]`, as a `/proc/<pid>/fd` link reads, of a line of `/proc/net/tcp*` listening on `port` at an
+/// address of [`REACHED`].
 #[cfg(target_os = "linux")]
 fn listener(line: &str, port: u16) -> Option<String> {
     let fields: Vec<&str> = line.split_whitespace().collect();
-    let local = u16::from_str_radix(fields.get(1)?.rsplit_once(':')?.1, 16).ok()?;
+    let (address, local) = fields.get(1)?.rsplit_once(':')?;
+    let local = u16::from_str_radix(local, 16).ok()?;
     // `0A` is TCP_LISTEN.
-    (local == port && *fields.get(3)? == "0A").then_some(())?;
+    (local == port && REACHED.contains(&address) && *fields.get(3)? == "0A").then_some(())?;
     Some(format!("socket:[{}]", fields.get(9)?))
 }
 
@@ -213,12 +225,22 @@ mod tests {
         panic!("descendants with the marker are still alive");
     }
 
-    /// A port is the instance's only while a process with its marker alone listens on it.
+    /// A listener on `127.0.0.1:<port>` another process may share with `SO_REUSEPORT`.
+    #[cfg(target_os = "linux")]
+    fn shared(port: u16) -> tokio::net::TcpListener {
+        let socket = tokio::net::TcpSocket::new_v4().unwrap();
+        socket.set_reuseport(true).unwrap();
+        socket.bind(([127, 0, 0, 1], port).into()).unwrap();
+        socket.listen(1).unwrap()
+    }
+
+    /// A port is the instance's only while a process with its marker alone listens on it where a connection to
+    /// `127.0.0.1` may reach.
     #[cfg(target_os = "linux")]
     #[tokio::test]
     async fn a_port_is_the_instances_only_while_it_alone_listens() {
         let id = format!("test-port-{}", std::process::id());
-        let listener = std::net::TcpListener::bind(("127.0.0.1", 0)).unwrap();
+        let listener = shared(0).into_std().unwrap();
         let port = listener.local_addr().unwrap().port();
         assert!(!listens_alone(&id, port), "this unmarked process listens");
         // The listening socket moves to a marked child: the parent's copy is closed by the spawn.
@@ -234,6 +256,13 @@ mod tests {
         }
         assert!(alone, "the marked child listens");
         assert!(!listens_alone("someone-else", port));
+        let other = shared(port);
+        assert!(!listens_alone(&id, port), "this unmarked process listens too");
+        drop(other);
+        // No connection to 127.0.0.1 reaches `[::1]` (where the host has IPv6).
+        if let Ok(_v6) = std::net::TcpListener::bind(("::1", port)) {
+            assert!(listens_alone(&id, port), "a listener on [::1] is no one's concern");
+        }
         let pid = child.id();
         child.kill().await.unwrap();
         waited(pid);
