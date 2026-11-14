@@ -202,25 +202,30 @@ pub(crate) async fn wait_gone(id: &str, leader: Option<(i32, u64)>, limit: Durat
         return false;
     }
     // A killed process loses its environment, so its marker, before it is dead: what was killed is awaited by pid.
-    let (mut killed, mut once_empty) = (Vec::new(), false);
+    let (mut killed, mut empty_before) = (Vec::new(), false);
     loop {
         let marker = id.to_owned();
         // Walking `/proc` is synchronous.
         let found = tokio::task::spawn_blocking(move || crate::orphans::sweep(&marker)).await;
         killed.extend(found.unwrap_or_default());
         killed.retain(|&(pid, start)| crate::orphans::start_time(pid) == Some(start));
-        if killed.is_empty() {
-            // A process inside `execve` shows no environment yet: a walk that found nothing is confirmed by another.
-            if once_empty {
-                return true;
-            }
-            once_empty = true;
-        } else if tokio::time::Instant::now() >= deadline {
-            return false;
-        } else {
-            once_empty = false;
+        let (left, past) = (!killed.is_empty(), tokio::time::Instant::now() >= deadline);
+        if let Some(gone) = after_walk(left, empty_before, past) {
+            return gone;
         }
-        tokio::time::sleep(Duration::from_millis(if once_empty { 20 } else { 50 })).await;
+        empty_before = !left;
+        tokio::time::sleep(Duration::from_millis(if empty_before { 20 } else { 50 })).await;
+    }
+}
+
+/// What [`wait_gone`] makes of a walk of `/proc` that `left` killed processes alive: `Some(gone)` ends the wait,
+/// `None` walks again. A process inside `execve` shows no environment yet: a walk that found nothing ends it only
+/// after the walk before found nothing too.
+fn after_walk(left: bool, empty_before: bool, past_deadline: bool) -> Option<bool> {
+    match (left, empty_before) {
+        (false, true) => Some(true),
+        (false, false) => None,
+        (true, _) => past_deadline.then_some(false),
     }
 }
 
@@ -374,5 +379,15 @@ mod tests {
             assert_eq!(crate::orphans::start_time(pid), None, "dead, not only unmarked");
             child.wait().unwrap();
         }
+    }
+
+    /// An empty walk is confirmed by another, past the deadline too; one with killed processes alive walks again
+    /// until the deadline.
+    #[test]
+    fn an_empty_walk_ends_the_wait_only_once_confirmed() {
+        assert_eq!(after_walk(false, false, true), None);
+        assert_eq!(after_walk(false, true, false), Some(true));
+        assert_eq!(after_walk(true, true, false), None);
+        assert_eq!(after_walk(true, false, true), Some(false));
     }
 }
