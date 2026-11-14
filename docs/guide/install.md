@@ -23,7 +23,9 @@ arm64 host). The Linux binaries need no runtime besides the kernel.
 aae starts agents through their own command-line harnesses and never downloads or installs them:
 
 - `claude` (Claude Code) and/or `codex` (Codex CLI): the harnesses your agents use. Log in to each once as you
-  normally do, or give the agents an API key in `env` (see [the first formula](first-formula.md)).
+  normally do, or give the agents an API key in `env` (see [the first formula](first-formula.md)). A codex whose
+  host config selects a model provider with an `env_key` needs no login: `codex login status` then says "Not logged
+  in", and `aae doctor` checks that variable instead.
 - `br` (beads_rust): only for projects that keep their tasks in a `.beads` tracker. Read
   [its license](../../README.md#the-br-tracker-and-its-license) before you install it.
 

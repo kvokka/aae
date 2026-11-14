@@ -292,6 +292,11 @@ fn provider(home: &Path) -> Option<(String, toml::Value)> {
     Some((name.to_owned(), config.get("model_providers")?.get(name)?.clone()))
 }
 
+/// The name of the model provider `config.toml` in `home` selects, if it defines it.
+pub(crate) fn host_provider_name(home: &Path) -> Option<String> {
+    provider(home).map(|(name, _)| name)
+}
+
 /// The variable that holds the key of the model provider `config.toml` in `home` selects (its `env_key`), if any.
 pub(crate) fn host_key(home: &Path) -> Option<String> {
     provider(home)?.1.get("env_key")?.as_str().map(str::to_owned)

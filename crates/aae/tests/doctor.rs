@@ -119,6 +119,22 @@ fn harnesses_resolve_from_the_config_and_from_mise_and_a_missing_one_fails() {
     assert!(level(&found, "codex").1.ends_with("not found"), "{found:?}");
     assert_eq!(level(&found, "claude login").0, "ok");
     assert_eq!(level(&found, "codex login"), ("ok", "PATH is set"));
+
+    // The provider logs codex in without `auth.json`: an unset key is named, a provider without one is not checked.
+    let provider = |rest: &str| {
+        let text = format!("model_provider = \"proxy\"\n[model_providers.proxy]\n{rest}");
+        fs::write(dir.path().join(".codex/config.toml"), text).unwrap();
+        let found = doctor(dir.path()).1;
+        let (level, detail) = level(&found, "codex login");
+        (level.to_owned(), detail.to_owned())
+    };
+    let (unset, detail) = provider("env_key = \"AAE_TEST_NO_SUCH_KEY\"\n");
+    assert!(
+        unset == "warning" && detail.starts_with("AAE_TEST_NO_SUCH_KEY, the `env_key`"),
+        "{detail}"
+    );
+    let (keyless, detail) = provider("base_url = \"http://127.0.0.1:9\"\n");
+    assert!(keyless == "warning" && detail.starts_with("not checked: "), "{detail}");
 }
 
 #[test]

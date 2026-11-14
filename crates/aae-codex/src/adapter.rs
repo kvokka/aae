@@ -3,7 +3,7 @@
 
 use crate::{
     Codex, TESTED,
-    part::{CREDENTIALS, host_config, host_home, host_key, unconfined},
+    part::{CREDENTIALS, host_config, host_home, host_key, host_provider_name, unconfined},
 };
 use aae_core::driver::{Adapter, Check, DoctorAgents, Driver, Setup, login_check};
 use std::{num::NonZeroU32, path::Path, sync::Arc, time::Duration};
@@ -54,12 +54,22 @@ fn doctor(agents: DoctorAgents) -> Vec<Check> {
     vec![login(&host, agents), host_mcp(&host), sandbox(&host, agents)]
 }
 
-/// The host's login file or a key of the agent's own `env`, as for any harness; or the daemon's variable a host
-/// provider names in `env_key`: the adapter passes that one on.
+/// The host's login file or a key of the agent's own `env`, as for any harness; or, with a model provider in the
+/// host config, the daemon's variable it names in `env_key`: the adapter passes that one on. Such a provider logs
+/// codex in without `auth.json`, so its absence says nothing: a provider with no `env_key` is not checked.
 pub(crate) fn login(host: &Path, agents: DoctorAgents) -> Check {
-    match host_key(host).filter(|k| std::env::var_os(k).is_some()) {
-        Some(key) => Check::new("codex login", "ok", format!("{key} is set")),
-        None => login_check("codex", &host.join("auth.json"), &CREDENTIALS, agents),
+    let check = |level, detail: String| Check::new("codex login", level, detail);
+    match (host_provider_name(host), host_key(host)) {
+        (_, Some(key)) if std::env::var_os(&key).is_some() => check("ok", format!("{key} is set")),
+        (Some(name), Some(key)) => check(
+            "warning",
+            format!("{key}, the `env_key` of the host's model provider `{name}`, is not set for the daemon"),
+        ),
+        (Some(name), None) => check(
+            "warning",
+            format!("not checked: the host's model provider `{name}` has no `env_key`"),
+        ),
+        (None, _) => login_check("codex", &host.join("auth.json"), &CREDENTIALS, agents),
     }
 }
 
