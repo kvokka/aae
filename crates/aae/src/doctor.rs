@@ -86,7 +86,7 @@ fn findings(paths: &Paths) -> Vec<Value> {
 /// sets no `sandbox_mode` runs with none; the warning names every such agent, per rig.
 fn sandbox(config: &Config) -> Value {
     let host = home("CODEX_HOME", ".codex");
-    let mut open = Vec::new();
+    let (mut open, mut seen) = (Vec::new(), 0);
     for p in &config.projects {
         let rigs: Vec<Option<&str>> = match p.rigs.is_empty() {
             true => vec![None],
@@ -99,16 +99,19 @@ fn sandbox(config: &Config) -> Value {
                 name: name.clone(),
             };
             for rig in &rigs {
+                seen += 1;
+                // A config that does not assemble cannot be shown to set it, so the agent is named too.
                 let effective = config.effective(&p.name, *rig, &agent);
-                if effective.is_ok_and(|e| aae_codex::unconfined(&e, &host)) {
+                if effective.map_or(true, |e| aae_codex::unconfined(&e, &host)) {
                     open.push(format!("{}/{}@{agent}", p.name, rig.unwrap_or("-")));
                 }
             }
         }
     }
-    match open.is_empty() {
-        true => check("codex sandbox", "ok", "every codex agent sets sandbox_mode"),
-        false => check(
+    match (seen, open.is_empty()) {
+        (0, _) => check("codex sandbox", "ok", "no codex agents"),
+        (_, true) => check("codex sandbox", "ok", "every codex agent sets sandbox_mode"),
+        (_, false) => check(
             "codex sandbox",
             "warning",
             format!(

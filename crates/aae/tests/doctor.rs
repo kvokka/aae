@@ -208,14 +208,20 @@ fn stdio_mcp_servers_of_the_host_are_warned_about() {
 #[test]
 fn the_sandbox_warning_names_each_codex_agent_that_sets_no_sandbox_mode() {
     let dir = tree("");
-    let agent = dir.path().join("config/aae/shop/agents/fix/agent.toml");
+    assert_eq!(level(&doctor(dir.path()).1, "codex sandbox"), ("ok", "no codex agents"));
+    let shop = dir.path().join("config/aae/shop");
+    fs::create_dir_all(shop.join("api")).unwrap();
+    let rigs = "[rigs.web]\npath = \"web\"\n[rigs.api]\npath = \"api\"\n\
+                [rigs.api.settings.native.codex]\nsandbox_mode = \"workspace-write\"\n";
+    fs::write(shop.join("aae.toml"), rigs).unwrap();
+    let agent = shop.join("agents/fix/agent.toml");
     fs::create_dir_all(agent.parent().unwrap()).unwrap();
     fs::write(&agent, "harness = \"codex\"\n").unwrap();
     let (_, found) = doctor(dir.path());
     let (sandbox, why) = level(&found, "codex sandbox");
     assert!(
-        sandbox == "warning" && why.contains("danger-full-access") && why.ends_with("shop/web@shop.fix"),
-        "{why}"
+        sandbox == "warning" && why.contains("danger-full-access") && why.ends_with(": shop/web@shop.fix"),
+        "only the rig without its own sandbox_mode is named: {why}"
     );
     fs::create_dir_all(dir.path().join(".codex")).unwrap();
     fs::write(
