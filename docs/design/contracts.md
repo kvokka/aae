@@ -215,6 +215,8 @@ timeout = "30s"
 - Delivery is at least once: a hook cut by a daemon crash runs again after restart if its run is still in the state
   that emitted the event (see 3.4); observed hooks always run again. Hooks must be idempotent; `seq` identifies the
   event.
+- A hook keeps no state of its own, and the core has no storage for plugins: a deciding event carries what a policy
+  needs — the attempts with their times, the gates and the run's keys (1.3).
 
 ### 3.2 Decisions
 
