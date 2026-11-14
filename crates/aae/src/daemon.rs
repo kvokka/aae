@@ -70,6 +70,8 @@ pub(crate) async fn run(paths: Paths) -> Result<bool, String> {
     private_dir(&paths.state)?;
     // Held until the daemon exits: one writer per state directory (spec §5.1), whatever socket it serves.
     let _lock = lock(&paths.state)?;
+    // Daemons before the lock on the directory left a `lock` file (spec §5.2: no lock files): it goes.
+    let _ = std::fs::remove_file(paths.state.join("lock"));
     let db = paths.state.join("state.db");
     let conn = open(&db).map_err(|e| format!("{}: {e}", db.display()))?;
     let journal_dir = paths.state.join("journal");
