@@ -50,9 +50,12 @@ At daemon start ([contracts](contracts.md) 6.4 has the exact state rules):
 1. Open the state and drain the outbox.
 2. For every recorded harness instance check pid + start time, kill its process group, sweep every process with
    its marker and wait for the end. Instances that survived the restart are not reconnected in the first release:
-   reconnection is an assumption left for later.
+   reconnection is an assumption left for later. Then the hook processes the dead daemon left running (the hooks
+   still queued) are killed by their `AAE_INSTANCE=h-…` markers in one sweep, before any effect of the new daemon
+   starts; a hook that runs again may start before the old process is gone, so hooks are idempotent.
 3. Runs with a live attempt — `starting`, `running` in a turn, `requires_action` — move to `interrupted` with the
-   attempt failure `daemon_crash`; the policy decides what follows. A run waiting for a decision on a deciding
+   attempt failure `daemon_crash`, the deciding hooks they still had queued dropped (after the sweep of item 2); the
+   policy decides what follows. A run waiting for a decision on a deciding
    event (`preparing`, `interrupted`, `finishing`, `running` after a turn without an outcome) keeps waiting for it:
    its hooks run again, the declared outcome and an exec command's result stand. A `remark` or `continue` then
    fails the attempt with `daemon_crash`, as the session it needs is gone (contracts 3.4, 6.4).

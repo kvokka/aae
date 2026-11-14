@@ -54,8 +54,9 @@ aae doctor
 `aae doctor` needs no daemon. It checks the config, each harness binary (where it was found, its version, the
 login), br and its license, the modes of the state and socket directories, and the state with its outbox. It exits
 non-zero on an error; warnings (an untested version, no login file) do not fail it. `aae doctor --json` prints the
-same checks as JSON. A running daemon answers the same checks as its own process sees them (its environment, its
-`PATH`) at `GET /v1/doctor` of its API.
+same checks as JSON. `GET /v1/doctor` of a running daemon's API makes the same checks from inside the daemon's
+process, with its environment, `PATH` and config file: a failing check is an `error` level in the reply (still
+200), as in `aae doctor --json`.
 
 ## Directories
 

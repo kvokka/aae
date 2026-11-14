@@ -684,22 +684,24 @@ for it is not.
   ([experiments](experiments.md)), so the transcript check finds it.
 - Daemon start (§5.6): open the state and drain the outbox; for every recorded instance check pid + start time,
   kill its process group and sweep every process carrying its marker `AAE_INSTANCE=<id>` in the environment, wait
-  for the end (invariants 6, 7); every hook still queued is first killed by its `AAE_INSTANCE` marker, with what it
-  started, so a hook the dead daemon left running does not outlive it. Runs with a live attempt — `starting`,
-  `running` in a turn, `requires_action` — → `interrupted` with `daemon_crash`, the launches, prompts, answers and
-  deciding hooks they still had queued dropped, and the command of an exec step killed by its `AAE_INSTANCE` marker
-  (random per attempt) before any later attempt runs it. A run that waits for a decision on a deciding event keeps
-  its state and waits for the same decision (3.4): `preparing`, `interrupted` waiting for the policy, `finishing`,
-  and `running` after a turn that ended without an outcome. Its hook effect is still queued and its hooks run
-  again; the declared outcome and the result of an exec command stand, the turn and the command do not run again.
-  Recovery lets go of the handle of such an attempt, whose session died with its instance, and drops what it still
-  had queued for the session. The deadlines that wait for an effect's answer count again from the start: `decide`
-  (3.3) and the claim of a bead in `preparing` (`start_timeout`); those of real time — gate `until`, schedules
-  (a missed one fires at most once), the `after` of a retry, `queue_timeout`, `park_timeout` — stay. Then resync.
-  Deadlines are wall-clock times: the writer reads the wall clock at least every 30 s, so a deadline passed while
-  the machine slept fires late by at most that.
-- Daemon stop (a signal, the end of a drain, `restart`): the core stops first, then the daemon, a child subreaper, kills
-  every descendant it still has — sessions, hooks, exec commands — before it exits.
+  for the end (invariants 6, 7); every hook still queued is first killed by its `AAE_INSTANCE` marker, with what
+  it started, so a hook the dead daemon left running does not outlive it. A hook process is killed with SIGKILL
+  without waiting for its death, so the hook that runs again may start before the old process is gone: hooks must
+  be idempotent (spec §11.3). Runs with a live attempt — `starting`, `running` in a turn, `requires_action` — →
+  `interrupted` with `daemon_crash`, the launches, prompts, answers and deciding hooks they still had queued
+  dropped, and the command of an exec step killed by its `AAE_INSTANCE` marker (random per attempt) before any
+  later attempt runs it. A run that waits for a decision on a deciding event keeps its state and waits for the
+  same decision (3.4): `preparing`, `interrupted` waiting for the policy, `finishing`, and `running` after a turn
+  that ended without an outcome. Its hook effect is still queued and its hooks run again; the declared outcome and
+  the result of an exec command stand, the turn and the command do not run again. Recovery lets go of the handle
+  of such an attempt, whose session died with its instance, and drops what it still had queued for the session.
+  The deadlines that wait for an effect's answer count again from the start: `decide` (3.3) and the claim of a
+  bead in `preparing` (`start_timeout`); those of real time — gate `until`, schedules (a missed one fires at most
+  once), the `after` of a retry, `queue_timeout`, `park_timeout` — stay. Then resync. Deadlines are wall-clock
+  times: the writer reads the wall clock at least every 30 s, so a deadline passed while the machine slept fires
+  late by at most that.
+- Daemon stop (a signal, the end of a drain, `restart`): the core stops first, then the daemon, a child subreaper,
+  kills every descendant it still has — sessions, hooks, exec commands — before it exits.
 - A resumed attempt after `daemon_crash` checks the transcript for the last unsettled key: not delivered → send the
   same prompt with the same key; delivered → send the reconcile prompt (config text, default
   "Your previous turn was interrupted. Check the current state of the work and continue toward the goal.") with a
@@ -717,10 +719,11 @@ of their own. The adapter reports the account id (4.5, `Driver::account`).
 
 - Keys: `orchestrator`, `project:<project>`, `rig:<project>/<rig>`, `agent:<agent>` (the qualified agent name of
   `config.md` "Names", or the name of a variant), `bead:<project>/<bead id>`, `account:<harness>/<account id>`,
-  `model:<provider>/<model>`. The keys of a run are all of these that it has; a run is admitted only if none is
-  closed. The model key is the run's config's (config.md "Harness, provider and model": the provider and the model
-  name the adapter expanded), known before the first attempt; a failure that names another model (`provider_model`,
-  4.4) adds that model's key.
+  `model:<harness>/<model>`. The keys of a run are all of these that it has; a run is admitted only if none is
+  closed. A run has exactly one model key, its effective config's (config.md "Harness and model": the harness and
+  the model name the adapter expanded), taken from the run's snapshot, or before the snapshot as computed when the
+  run was created; it is known before the first attempt. A model a failure names (`provider_model`, 4.4) stays data
+  of the `run.attempt_failed` event and adds no key.
 - A gate is a set of closures `{key, until, reason, closed_by, closed_at}`, at most one per `(key, closed_by)`;
   the key is closed while any closure is active. Automation (`policy`, `core`) removes only its own closures; an
   operator closure is removed only by the operator, so automation never reopens an operator pause (criterion 19).

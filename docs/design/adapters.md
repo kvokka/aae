@@ -13,7 +13,6 @@ there is no adapter protocol between processes (spec §4).
    ```rust
    pub const ADAPTER: aae_core::driver::Adapter = Adapter {
        name: "<name>",                   // [harness.<name>] and the binary mise resolves
-       providers: &["<provider>"],       // the model providers it works with, its own first
        models: &[("<short>", "<full>")], // short model names it expands; any other name goes as it is
        tested: [(1, 2, 0), (1, 4, 3)],   // tested binary versions, inclusive; also Capabilities.versions
        new,                              // fn(&Setup) -> Result<Arc<dyn Driver>, String>
@@ -29,18 +28,13 @@ there is no adapter protocol between processes (spec §4).
    environment reaches no session, so a key there does not count), host settings every session inherits (stdio
    MCP servers), a sandbox. `login_check` and `host_mcp_check` in `aae_core::driver` give the common wording.
 
-   `providers` and `models` are what the config knows of the harness (config.md "Harness, provider and model"): an
-   agent that names only a provider runs on the one harness that lists it, an agent that names only the harness gets
-   the first provider, and a short model name becomes the full one when the config is assembled, so the gate key
-   `model:<provider>/<model>` and `explain` have the name the harness gets. A harness whose CLI resolves its own
-   short names (claude: `fable`, `opus`, `sonnet`, `haiku` to the latest of each) lists none. The core reads them from
-   `Config::adapters`, which the root fills with its `ADAPTERS` when it loads the config (`config::load_for`); the
-   core knows no harness or provider by name.
-
-   While one adapter works with a provider, the harness of a provider follows from the table. When a second one does
-   (a generic ACP adapter that also takes `anthropic`), naming only that provider becomes a load error that asks for
-   `harness`; the way out then is a table of the orchestrator, `[provider.<p>] harness = "<h>"`, the default harness
-   of a provider. It is not made before that.
+   `models` is what the config knows of the harness (config.md "Harness and model"): a short model name becomes
+   the full one when the config is assembled, so the gate key `model:<harness>/<model>` and `explain` have the name
+   the harness gets. A harness whose CLI resolves its own short names (claude: `fable`, `opus`, `sonnet`, `haiku` to
+   the latest of each) lists none. The core reads them from `Config::adapters`, which the root fills with its
+   `ADAPTERS` when it loads the config (`config::load_for`); the core knows no harness by name. Which vendor a harness
+   reaches its model through is the harness's own setting (host config or `native.<harness>`); the core neither
+   reads nor names it.
 3. One row in `ADAPTERS` (`crates/aae/src/harness.rs`) and the crate in `crates/aae/Cargo.toml`. Nothing else in
    the root names a harness; a `[harness.<name>]` with no row is a config error that lists the known ones.
 4. The binary pinned in `mise.toml` (spec §13), a line budget in `scripts/budget.sh`, and the contract suite below.

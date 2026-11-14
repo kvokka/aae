@@ -26,12 +26,12 @@ error in every file.
 
 One table shape for every layer (see "Effective config"): `[settings]` of the orchestrator, a project and a rig;
 the `[agent]` contribution of a plugin; the top level of `agent.toml`; an agent variant `[agents.<name>]`; and the
-overrides `[overrides.<agent>]`. A pack's `[settings]` and a prompt step take only the four launch settings:
-`harness`, `provider`, `model`, `effort`.
+overrides `[overrides.<agent>]`. A pack's `[settings]` and a prompt step take only the three launch settings:
+`harness`, `model`, `effort`. There is no `provider` key: a layer that has one is an unknown field.
 
 | Key | Type | Merge |
 |---|---|---|
-| `harness`, `provider` | string: the agent CLI (one of the orchestrator's `[harness.*]`) and the model provider; see "Harness, provider and model" | scalar |
+| `harness` | string: the agent CLI, one of the orchestrator's `[harness.*]`; see "Harness and model" | scalar |
 | `model`, `effort`, `system_prompt`, `permission_mode` | string; `permission_mode` is the harness's own: claude's `--permission-mode`, codex's approval policy (`untrusted`, `on-request`, `never`) | scalar |
 | `inherit_host` | boolean | scalar |
 | `env` | table of strings | by key |
@@ -147,50 +147,41 @@ whole (`inherit_host = false`), never one element by name. The harness config in
 (see "Host inheritance").
 
 `Config::effective(project, rig, agent)` merges the layers above for one agent alone: the harness default model,
-orchestrator, project and rig settings, then the contributions of the attached plugins in attachment order, the
-agent, and the overrides of the orchestrator, the project and the rig. `Config::for_run(project, rig, formula)` is
-what a run gets: the agent the rig runs for the formula's step (a variant by its name), and its config with the pack,
-step and variant layers too; a run keeps this one. Plugins attach first (the `plugins` key of
-every layer), so a stronger layer can detach a plugin and its whole contribution. An override applies when its key
-resolves (see Names) to the agent. Every value keeps its layer; a value several layers make together (`native`
-tables merged by key, a system prompt with plugin fragments, `PATH` with plugin `bin/` directories) names them all
-in order (`# agent + plugin mail`); the harness or provider one of them follows from the other says `# derived`, and a
+orchestrator, project and rig settings, then the contributions of the attached plugins in attachment order, the agent,
+and the overrides of the orchestrator, the project and the rig. `Config::for_run(project, rig, formula)` is what a run
+gets: the agent the rig runs for the formula's step (a variant by its name), and its config with the pack, step and
+variant layers too; a run keeps this one. Plugins attach first (the `plugins` key of every layer), so a stronger layer
+can detach a plugin and its whole contribution. An override applies when its key resolves (see Names) to the agent.
+Every value keeps its layer; a value several layers make together (`native` tables merged by key, a system prompt with
+plugin fragments, `PATH` with plugin `bin/` directories) names them all in order (`# agent + plugin mail`), and a
 model the adapter expanded keeps the short name it was given (`model = "gpt-6-luna"  # rig override, given as
 "luna"`). The new layers print as `pack <name>`, `formula <pack>.<name>` and `variant <name>`. `explain()` prints one
-line per value with its layer and one line for the host:
-inherited by the harness and invisible to aae, or off (`aae config explain --project <p> --agent <a> [--rig <r>]`,
-with no daemon, on the file on disk; `GET /v1/config/explain`, on the config the daemon holds). The pack, formula and
-variant layers count only for a run, so they show with `--formula <f> --rig <r>` in place of `--agent`: the agent a
-run of the formula on the rig is of, the rig's variant if it maps one, with its effective config. The effective config
-serializes to JSON: a run keeps it as its snapshot, and `env` is the whole session environment besides what the
-adapter adds: a session does not inherit the daemon's environment wholesale. The core assembles it when the run
-prepares, right before the session starts; the adapter materializes it into launch flags, session parameters or a
-generated harness config directory, which lives in the state directory, never in the rig or the harness's home
-directory. The adapter's `split` turns it into a process part, keyed by its fingerprint (contracts 8), and a session
-part.
+line per value with its layer and one line for the host: inherited by the harness and invisible to aae, or off (`aae
+config explain --project <p> --agent <a> [--rig <r>]`, with no daemon, on the file on disk; `GET /v1/config/explain`,
+on the config the daemon holds). The pack, formula and variant layers count only for a run, so they show with
+`--formula <f> --rig <r>` in place of `--agent`: the agent a run of the formula on the rig is of, the rig's variant if
+it maps one, with its effective config. The effective config serializes to JSON: a run keeps it as its snapshot, and
+`env` is the whole session environment besides what the adapter adds: a session does not inherit the daemon's
+environment wholesale. The core assembles it when the run prepares, right before the session starts; the adapter
+materializes it into launch flags, session parameters or a generated harness config directory, which lives in the
+state directory, never in the rig or the harness's home directory. The adapter's `split` turns it into a process part,
+keyed by its fingerprint (contracts 8), and a session part.
 
-## Harness, provider and model
+## Harness and model
 
-`provider` is who serves the model (`anthropic`, `openai`); `harness` is the agent CLI that runs the session
-(`claude`, `codex`). Each adapter says which providers its harness works with, its own first (see
-docs/design/adapters.md), so one follows from the other:
+`harness` is the agent CLI that runs the session (`claude`, `codex`); the user names it, there is no `provider`
+setting (spec §6.2). Which vendor serves the model is the harness's own setting (its host config or
+`native.<harness>`, e.g. codex's `model_provider`); the core does not read it. `harness` changes by the same layers
+as the other launch settings: an override, a variant, a pack, a formula step.
 
-- only `provider` is set: the harness is the one adapter that works with it; none, or more than one, is an error;
-- only `harness` is set: the provider is the harness's own;
-- both are set and the harness does not work with the provider: the stronger layer's value stands and the other
-  follows from it (an agent's `harness = "claude"` under a variant's `provider = "openai"` runs on codex); set in
-  the same layer, it is an error;
-- neither is set: an error.
-
-The harness must be one of the orchestrator's `[harness.*]`. These are load errors: every prompt formula on every rig
-of a project must assemble, and an error names the project file, the formula and rig, the key and the layer of each
-value (`formula `kit.implement` on rig `backend`: `provider = "openai"` (agent) is not one that harness `claude`
-works with: anthropic`).
+The harness must be one of the orchestrator's `[harness.*]`, and some layer must set it. These are load errors:
+every prompt formula on every rig of a project must assemble, and an error names the project file, the formula and
+rig (`formula `kit.implement` on rig `backend`: no layer sets `harness``).
 
 `model` is a full name, passed to the harness as it is, or a short name of the adapter's table, expanded to the
 latest model of that family when the config is assembled: codex takes `astra`, `luna`, `terra`, `sol`; claude
 resolves `fable`, `opus`, `sonnet`, `haiku` itself, so they go to it as they are. The model gate of a run is
-`model:<provider>/<model>` with the expanded name (contracts 7), known from the config before the first attempt.
+`model:<harness>/<model>` with the expanded name (contracts 7), known from the config before the first attempt.
 
 ## Host inheritance (spec §6.4)
 
@@ -306,7 +297,7 @@ path = "plugins/aae-plugin-notes"
 
 [agents.codex-implementer]          # a variant of a pack agent (see "Agent variants")
 base = "kit.implementer"
-provider = "openai"
+harness = "codex"
 model = "luna"
 
 [rigs.backend]
@@ -393,8 +384,8 @@ declared by the orchestrator or the project.
 when it exists; its text is the agent layer's `system_prompt`, so an override may still replace it, and setting
 `system_prompt` in `agent.toml` too is an error), `max_runs` (optional positive integer: runs of this agent
 started at once in its project; the orchestrator's `max_runs` still applies), then the settings keys above. Its
-`harness`, `provider`, `model` and `effort` are the defaults of the role: a pack, a formula, a variant or an override
-may change any of them, and an agent that names neither `harness` nor `provider` needs a layer that does.
+`harness`, `model` and `effort` are the defaults of the role: a pack, a formula, a variant or an override may change
+any of them, and an agent that names no `harness` needs a layer that does.
 A role prompt file that is empty or only whitespace is a load error naming the file.
 Everything of one agent (settings, prompts,
 skills, hooks, scripts) lives in its directory, laid out as its author likes. The core has no role names: whatever a
@@ -432,7 +423,7 @@ agent = "implementer"
 prompt = "implement.md"             # relative to the formula file
 timeout = "45m"                     # optional
 model = "opus"                      # optional, prompt steps only: layer 8, the launch settings `harness`,
-                                    # `provider`, `model`, `effort`
+                                    # `model`, `effort`
 ```
 
 A formula has a name, a description, declared inputs and exactly one step. A `prompt` step is a turn of the agent in

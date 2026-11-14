@@ -9,7 +9,7 @@ An agent is a directory under `agents/` with an `agent.toml` and, usually, a rol
 `~/work/hello/agents/helper/agent.toml`:
 
 ```toml
-provider = "anthropic"                # the harness follows from it: claude (or name `harness = "claude"`)
+harness = "claude"                    # the agent CLI, one of [harness.*] of the orchestrator config
 model = "sonnet"                      # optional; the harness default otherwise; a short name is the latest model
 effort = "medium"                     # optional
 permission_mode = "acceptEdits"       # claude's --permission-mode; for codex its approval policy
@@ -21,7 +21,7 @@ permission_mode = "acceptEdits"       # claude's --permission-mode; for codex it
 You are a careful assistant working in this repository.
 ```
 
-`provider`, `harness`, `model` and `effort` in `agent.toml` are only the role's defaults. What the agent runs on in
+`harness`, `model` and `effort` in `agent.toml` are only the role's defaults. What the agent runs on in
 your project is your setting, stronger than the agent's: an override for the whole project or one rig, here the
 cheapest model while you try things out, in `~/work/hello/aae.toml`:
 
@@ -30,7 +30,7 @@ cheapest model while you try things out, in `~/work/hello/aae.toml`:
 model = "haiku"
 ```
 
-To run the same role on another provider under a name of its own, declare a variant (`[agents.<name>] base =
+To run the same role on another harness under a name of its own, declare a variant (`[agents.<name>] base =
 "<pack>.<agent>"`) and map it on a rig (`[rigs.<r>] agents = { helper = "<name>" }`); see
 [Agent variants](../design/config.md#agent-variants). Settings such as `env`, `mcp`, `hooks` and `skills` may also be
 set for the whole orchestrator, a project or a rig (`[settings]`), weaker than the agent. See what a session will
