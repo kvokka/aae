@@ -116,6 +116,7 @@ pub(crate) fn command(dir: &std::path::Path) -> Command {
     command
         .arg("daemon")
         .env("HOME", dir)
+        .env_remove("CODEX_HOME")
         .env("XDG_CONFIG_HOME", dir.join("config"))
         .env("XDG_STATE_HOME", dir.join("state"))
         .env("XDG_RUNTIME_DIR", dir.join("run"));

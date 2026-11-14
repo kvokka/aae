@@ -138,16 +138,14 @@ What inheritance costs, and what the user should know:
 - the operator's own hooks and plugins run in agent sessions;
 - codex rewrites `~/.codex/config.toml` itself (hook trust hashes); the adapters add no writes of their own to
   the host's files.
-- codex reads skills only from `CODEX_HOME/skills`, so a codex agent with skills of its own that inherits the host
-  gets its own `CODEX_HOME` in the state directory; it links the host's `auth.json`, `config.toml`, `AGENTS.md` and
-  every skill of `~/.codex/skills`, and an agent's skill of the same name wins. Nothing else in `~/.codex` reaches
-  such an agent.
 
 An inheriting process gets the daemon's proxy and certificate variables (`HTTPS_PROXY`, `HTTP_PROXY`, `ALL_PROXY`,
 `NO_PROXY` in either case, `SSL_CERT_FILE`, `SSL_CERT_DIR`, `NODE_EXTRA_CA_CERTS`) and, for claude,
 `CLAUDE_CONFIG_DIR`; an isolated one gets none of them (set them in `env` if it needs them). A codex agent with
-skills that inherits the host gets a `CODEX_HOME` of its own in the state directory: it links the host's
-`auth.json` and `config.toml` and holds the skills; `HOME` stays the operator's.
+skills that inherits the host gets a `CODEX_HOME` of its own in the state directory (codex reads skills only from
+`CODEX_HOME/skills`): it links the host's `auth.json`, `config.toml`, `AGENTS.md` and every skill of
+`~/.codex/skills` beside the agent's own (an agent's skill of the same name wins); nothing else in `~/.codex` reaches
+such an agent, and `HOME` stays the operator's.
 
 codex runs with `sandbox_mode = "danger-full-access"` unless the native block, or the host's `config.toml` of an
 inheriting process, sets `sandbox_mode` (spec §2.1 item 1): the codex sandbox needs unprivileged user namespaces,

@@ -14,11 +14,11 @@ use std::{
 
 /// A daemon whose `build` formula is a prompt run of a codex agent on the fake `provider`.
 async fn daemon(provider: &Provider) -> Daemon {
-    daemon_with(provider, "", "").await
+    daemon_with(provider, "", false, "").await
 }
 
-/// The same with `orchestrator` before the orchestrator config and `agent` after the agent's.
-async fn daemon_with(provider: &Provider, orchestrator: &str, agent: &str) -> Daemon {
+/// The same with `orchestrator` before the orchestrator config, `inherit_host` and `agent` after the agent's config.
+async fn daemon_with(provider: &Provider, orchestrator: &str, inherit_host: bool, agent: &str) -> Daemon {
     let base_url = provider.base_url();
     Daemon::start(|dir| {
         let shop = dir.join("config/aae/shop");
@@ -31,7 +31,7 @@ async fn daemon_with(provider: &Provider, orchestrator: &str, agent: &str) -> Da
                 shop.join("agents/dev/agent.toml"),
                 // The host forbids user namespaces, so the codex sandbox cannot run here (docs/design/experiments.md).
                 format!(
-                    "harness = \"codex\"\nmodel = \"gpt-fake\"\npermission_mode = \"never\"\ninherit_host = false\n\
+                    "harness = \"codex\"\nmodel = \"gpt-fake\"\npermission_mode = \"never\"\ninherit_host = {inherit_host}\n\
                      [native.codex]\nmodel_provider = \"fake\"\nsandbox_mode = \"danger-full-access\"\n\
                      [native.codex.model_providers.fake]\nname = \"fake\"\nbase_url = \"{base_url}\"\n\
                      wire_api = \"responses\"\n{agent}"
@@ -66,7 +66,7 @@ async fn a_codex_thread_calls_the_mcp_of_the_daemon_over_tcp() {
     ];
     let provider = Provider::start(replies).await;
     let orchestrator = format!("api_tcp = \"127.0.0.1:{port}\"\n");
-    let d = daemon_with(&provider, &orchestrator, "[mcp.aae]\nurl = \"${AAE_API}/mcp\"\n").await;
+    let d = daemon_with(&provider, &orchestrator, false, "[mcp.aae]\nurl = \"${AAE_API}/mcp\"\n").await;
     let run = d.create("build", None).await;
     d.until_state(&run, "passed").await;
     // The second model request carries the output of the `list_formulas` call: the daemon's formulas.
@@ -89,6 +89,37 @@ async fn a_codex_thread_that_calls_the_finisher_passes_its_run() {
     let requests = provider.requests();
     let output = requests[1].body["input"].to_string();
     assert!(output.contains("function_call_output"), "{output}");
+}
+
+/// A codex agent with a skill that inherits the host runs in a `CODEX_HOME` of its own linking the host's: the model
+/// sees the host's `AGENTS.md`, the host's skill and the agent's, and the linked `config.toml` is still a link after
+/// the turn.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_codex_agent_with_a_skill_inheriting_the_host_sees_the_hosts_files() {
+    let finish = format!("{} finish pass --summary built", env!("CARGO_BIN_EXE_aae"));
+    let provider = Provider::start(vec![Reply::Command(finish), Reply::Text("Done.".into())]).await;
+    let skill = tempfile::tempdir().unwrap();
+    let text = "---\nname: mail\ndescription: Sends the zq7-mail marker.\n---\nSend it.\n";
+    fs::write(skill.path().join("SKILL.md"), text).unwrap();
+    let agent = format!("[skills.mail]\npath = \"{}\"\n", skill.path().display());
+    let d = daemon_with(&provider, "", true, &agent).await;
+    let host = d.dir.path().join(".codex");
+    fs::create_dir_all(host.join("skills/notes")).unwrap();
+    let text = "---\nname: notes\ndescription: Keeps the zq8-notes marker.\n---\nKeep it.\n";
+    fs::write(host.join("skills/notes/SKILL.md"), text).unwrap();
+    fs::write(host.join("AGENTS.md"), "Mind the zq9-agents marker.\n").unwrap();
+    fs::write(host.join("config.toml"), "").unwrap();
+    let run = d.create("build", None).await;
+    d.until_state(&run, "passed").await;
+    let first = provider.requests()[0].body.to_string();
+    for marker in ["zq7-mail", "zq8-notes", "zq9-agents"] {
+        assert!(first.contains(marker), "{marker} in {first}");
+    }
+    let homes = fs::read_dir(d.dir.path().join("state/aae/codex")).unwrap();
+    let homes: Vec<_> = homes.map(|e| e.unwrap().path().join("codex-home")).collect();
+    assert_eq!(homes.len(), 1, "{homes:?}");
+    let config = fs::read_link(homes[0].join("config.toml")).unwrap();
+    assert_eq!(config, host.join("config.toml"), "still a link to the host's");
 }
 
 /// The processes whose environment holds a path under `dir` and whose command line contains `needle`.
