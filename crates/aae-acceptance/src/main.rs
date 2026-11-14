@@ -218,7 +218,8 @@ async fn main() -> ExitCode {
     }
     let aae = args.aae.to_string_lossy().into_owned();
     let env = Arc::new(Env {
-        version: version_of(&aae),
+        // The commit too: the binary's version alone does not tell one build of the code from another.
+        version: format!("{} {}", version_of(&aae), shell("git describe --always --dirty")).trim().to_owned(),
         date: shell("date -u +%Y-%m-%d"),
         host: shell("uname -sm"),
         aae: args.aae.clone(),

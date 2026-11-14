@@ -54,7 +54,8 @@ aae doctor
 `aae doctor` needs no daemon. It checks the config, each harness binary (where it was found, its version, the
 login), br and its license, the modes of the state and socket directories, and the state with its outbox. It exits
 non-zero on an error; warnings (an untested version, no login file) do not fail it. `aae doctor --json` prints the
-same checks as JSON.
+same checks as JSON. A running daemon answers the same checks as its own process sees them (its environment, its
+`PATH`) at `GET /v1/doctor` of its API.
 
 ## Directories
 
@@ -81,8 +82,11 @@ launchctl load -w ~/Library/LaunchAgents/dev.aae.daemon.plist
 
 Both files run this binary with the given `--config` and the `PATH` of the shell that printed them.
 
-To stop the daemon, `aae drain` waits until no run is in a turn (no new run starts meanwhile) and exits;
-`aae restart` does the same and starts it again in the same process, from the path the daemon was started with:
-to upgrade, replace the binary at that path (a new file moved over it is fine), then run `aae restart`. Should the
-path hold no binary by then, the daemon logs the error and exits with a failure, for the service manager to see.
+To stop the daemon, `aae drain` tells it to wait until no run is in a turn (no new run starts meanwhile) and exit;
+the command itself returns at once, and `aae status` shows `stopping: drain` until the daemon is gone. Stopped by
+a signal (`SIGTERM`, `Ctrl-C`), the daemon does not wait: it ends the processes of its steps and sessions and
+exits, and its next start resumes the runs they belonged to. `aae restart` drains the same way and starts it again
+in the same process, from the path the daemon was started with: to upgrade, replace the binary at that path (a new
+file moved over it is fine), then run `aae restart`. Should the path hold no binary by then, the daemon logs the
+error and exits with a failure, for the service manager to see.
 Next: [your first project](first-project.md).
