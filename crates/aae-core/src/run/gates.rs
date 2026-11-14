@@ -100,7 +100,9 @@ impl RunHandler {
         Self::closed_gate(tx, row)
     }
 
-    /// Remembers the account and model keys an attempt of `row` reported.
+    /// Remembers the account and model keys an attempt of `row` reported. The model column counts only until the
+    /// run has its config snapshot ([`Self::keys`]), which comes before any attempt: only the creation passes a model,
+    /// an attempt passes `None`.
     pub(super) fn learn_keys(
         tx: &Tx<'_>,
         row: &Row,

@@ -187,7 +187,8 @@ fn agent_of<'a>(p: &'a Project, agent: &Name) -> Result<&'a Agent, String> {
         .ok_or(format!("no agent `{agent}` in `{}`", p.name))
 }
 
-/// Every prompt formula of a project on every rig assembles: the harness of its runs is known. Said once the references resolve, of the project file, with the layer of each value.
+/// Every prompt formula of a project on every rig assembles: the harness of its runs is known. Said once the
+/// references resolve, of the project file, with the layer of each value.
 pub(super) fn check_runs(loader: &mut Loader, config: &Config) {
     if !loader.errors.is_empty() {
         return;
