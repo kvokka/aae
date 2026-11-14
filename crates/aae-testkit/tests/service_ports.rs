@@ -75,8 +75,8 @@ async fn a_service_whose_port_is_taken_before_it_is_ready_moves_and_the_session_
     panic!("another process took the port three times");
 }
 
-#[tokio::test]
-async fn a_ready_service_whose_port_is_taken_moves_to_a_new_one_with_a_new_token() {
+/// The scenario of the test below; `false` if another process listened on the port before the test could.
+async fn taken_when_ready() -> bool {
     let dir = tempfile::tempdir().unwrap();
     let up = dir.path().join("up");
     let health = format!(
@@ -93,9 +93,9 @@ async fn a_ready_service_whose_port_is_taken_moves_to_a_new_one_with_a_new_token
     w.until_count("service.ready", 1).await;
     w.events(&first, Duration::from_millis(500)).await;
     let old = w.driver.mcp(&first, 1)["probe"]["headers"]["Authorization"].clone();
-    // The service never listens: if another process holds the port now, the case is not this test's to tell.
+    // The service never listens: if another process holds the port now, the scenario runs again.
     let Ok(_other) = std::net::TcpListener::bind(("127.0.0.1", taken)) else {
-        return;
+        return false;
     };
     std::fs::write(dir.path().join("go"), "").unwrap();
     w.until_count("service.ready", 2).await;
@@ -118,4 +118,15 @@ async fn a_ready_service_whose_port_is_taken_moves_to_a_new_one_with_a_new_token
     assert_eq!(call(&server), 200);
     server["headers"]["Authorization"] = old;
     assert_eq!(call(&server), 401, "the old token");
+    true
+}
+
+#[tokio::test]
+async fn a_ready_service_whose_port_is_taken_moves_to_a_new_one_with_a_new_token() {
+    for _ in 0..3 {
+        if taken_when_ready().await {
+            return;
+        }
+    }
+    panic!("another process took the port three times");
 }
