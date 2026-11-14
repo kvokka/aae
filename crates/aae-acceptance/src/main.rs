@@ -140,14 +140,29 @@ fn panic_text(error: tokio::task::JoinError) -> String {
     }
 }
 
-/// Runs one scenario under the time limit: its notes or why it failed, and its wall time.
+/// Runs one scenario under the time limit: its notes or why it failed, and its wall time. The trees of its
+/// daemons are removed when it passes and kept, named in the reason, when it fails.
 async fn execute(env: Arc<Env>, run: fn(Arc<Env>) -> Notes) -> (Result<String, String>, Duration) {
     let at = Instant::now();
-    let done = tokio::time::timeout(SCENARIO_LIMIT, tokio::spawn(run(env))).await;
+    let trees = daemon::Trees::default();
+    let task = tokio::spawn(daemon::TREES.scope(trees.clone(), run(env)));
+    let done = tokio::time::timeout(SCENARIO_LIMIT, task).await;
     let result = match done {
         Ok(Ok(notes)) => Ok(notes),
         Ok(Err(e)) => Err(panic_text(e)),
         Err(_) => Err(format!("did not finish within {SCENARIO_LIMIT:?}")),
+    };
+    let trees = std::mem::take(&mut *trees.lock().unwrap());
+    let result = match result {
+        Ok(notes) => {
+            trees.iter().for_each(|t| drop(fs::remove_dir_all(t)));
+            Ok(notes)
+        }
+        Err(why) if trees.is_empty() => Err(why),
+        Err(why) => {
+            let trees: Vec<_> = trees.iter().map(|t| t.display().to_string()).collect();
+            Err(format!("{why}; daemon.log and journal kept in {}", trees.join(", ")))
+        }
     };
     (result, at.elapsed())
 }
@@ -314,5 +329,50 @@ async fn main() -> ExitCode {
         ExitCode::SUCCESS
     } else {
         ExitCode::FAILURE
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn env() -> Arc<Env> {
+        let at = PathBuf::new();
+        let text = String::new;
+        let (date, version, host) = (text(), text(), text());
+        Arc::new(Env {
+            aae: at.clone(),
+            date,
+            version,
+            host,
+            target: at,
+        })
+    }
+
+    fn passing(_: Arc<Env>) -> Notes {
+        Box::pin(async { daemon::tree().path().display().to_string() })
+    }
+
+    fn failing(_: Arc<Env>) -> Notes {
+        Box::pin(async {
+            let tree = daemon::tree();
+            fs::write(tree.path().join("daemon.log"), "why").unwrap();
+            panic!("no run passed")
+        })
+    }
+
+    #[tokio::test]
+    async fn a_failed_scenario_keeps_its_tree_and_names_it() {
+        let (Err(why), _) = execute(env(), failing).await else {
+            panic!("the scenario passed")
+        };
+        let (head, tree) = why.split_once("; daemon.log and journal kept in ").unwrap();
+        assert_eq!(head, "no run passed");
+        assert_eq!(fs::read_to_string(Path::new(tree).join("daemon.log")).unwrap(), "why");
+        fs::remove_dir_all(tree).unwrap();
+        let (Ok(tree), _) = execute(env(), passing).await else {
+            panic!("the scenario failed")
+        };
+        assert!(!Path::new(&tree).exists(), "a passed scenario leaves {tree}");
     }
 }

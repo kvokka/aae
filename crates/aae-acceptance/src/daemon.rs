@@ -8,9 +8,20 @@ use std::{
     fs,
     path::{Path, PathBuf},
     process::{Child, Command},
-    sync::Arc,
+    sync::{Arc, Mutex},
     time::{Duration, Instant},
 };
+
+/// The trees of the daemons a scenario starts, kept when it fails: its `daemon.log`, journal and state are what
+/// tells why. `execute` scopes it over a scenario and removes the trees when it passes.
+pub(crate) type Trees = Arc<Mutex<Vec<PathBuf>>>;
+
+tokio::task_local! {
+    pub(crate) static TREES: Trees;
+}
+
+/// The prefix of a scenario's tree in the temporary directory; CI uploads the kept ones as an artifact.
+const TREE_PREFIX: &str = "aae-acceptance-";
 
 const FILES: &[(&str, &str)] = &[
     ("config/aae/config.toml", "projects = [\"shop\"]\n"),
@@ -39,6 +50,18 @@ pub(crate) fn write(path: impl AsRef<Path>, text: impl AsRef<str>) {
     fs::write(path, text.as_ref()).unwrap();
 }
 
+/// A fresh tree for a daemon; inside a scenario it is left for `execute` to remove or keep.
+pub(crate) fn tree() -> tempfile::TempDir {
+    let mut dir = tempfile::Builder::new().prefix(TREE_PREFIX).tempdir().unwrap();
+    if TREES
+        .try_with(|t| t.lock().unwrap().push(dir.path().to_owned()))
+        .is_ok()
+    {
+        dir.disable_cleanup(true);
+    }
+    dir
+}
+
 pub(crate) struct Daemon {
     env: Arc<Env>,
     home: PathBuf,
@@ -60,7 +83,7 @@ impl Daemon {
     }
 
     async fn launch(env: &Arc<Env>, before: impl FnOnce(&Path), home: Option<PathBuf>) -> Self {
-        let dir = tempfile::tempdir().unwrap();
+        let dir = tree();
         for (path, text) in FILES {
             write(dir.path().join(path), text);
         }

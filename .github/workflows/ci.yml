@@ -25,3 +25,13 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       # The release builds (criterion 1) run on tags, in release.yml.
       - run: mise run acceptance-ci
+      # A failed scenario keeps its daemon's tree (aae-acceptance names it in the report row).
+      - if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: acceptance-failures
+          path: |
+            /tmp/aae-acceptance-*/daemon.log
+            /tmp/aae-acceptance-*/state/aae/journal/
+            /tmp/aae-acceptance-*/state/aae/state.db*
+          if-no-files-found: ignore
