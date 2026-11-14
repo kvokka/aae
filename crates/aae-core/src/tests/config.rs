@@ -271,7 +271,7 @@ fn files_reject_unknown_keys_and_undeclared_names() {
             agent,
             "harness = \"claude\"\n[mcp.web]\ncommand = [\"srv\"]\nurl = \"http://x\"\nscope = \"session\"\n",
         )],
-        "with both it is a `[[service]]` with `mcp`",
+        "a server the daemon runs is a `[[service]]` with `mcp`",
     );
     fails(
         &[(agent, "harness = \"claude\"\n[hooks.lint]\nevent = \"Stop\"\n")],

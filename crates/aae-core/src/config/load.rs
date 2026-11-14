@@ -122,7 +122,7 @@ impl Loader {
                 continue;
             };
             let manifest = root.join("plugin.toml");
-            let Some(raw) = self.read::<PluginFile>(&manifest) else {
+            let Some(mut raw) = self.read::<PluginFile>(&manifest) else {
                 continue;
             };
             self.name(&manifest, "plugin", &raw.name);
@@ -147,7 +147,9 @@ impl Loader {
                     timeout,
                 });
             }
-            // A plugin attaches no other plugin to agents.
+            if !std::mem::take(&mut raw.agent.plugins).is_empty() {
+                self.fail(&manifest, "a plugin attaches no plugins: no `plugins` in `[agent]`");
+            }
             let mut agent = self.settings(&manifest, &root, raw.agent, &[]);
             // Its harness hooks and MCP servers reach its own files as `${AAE_PLUGIN_DIR}`.
             let dir = root.to_string_lossy();
@@ -178,16 +180,13 @@ impl Loader {
     /// Checks one layer of settings and makes its paths absolute; `plugins` are the names it may attach.
     pub(super) fn settings(&mut self, file: &Path, base: &Path, mut settings: Settings, plugins: &[&str]) -> Settings {
         for (name, mcp) in &settings.mcp {
-            if !mcp.well_formed() {
-                self.fail(
-                    file,
-                    format!("mcp `{name}` needs a `command` or a `url`; with both it is a `[[service]]` with `mcp`"),
-                );
+            if let Some(why) = mcp.malformed() {
+                self.fail(file, format!("mcp `{name}` {why}"));
             }
         }
         for (name, hook) in &settings.hooks {
-            if hook.enabled && (hook.event.is_none() || hook.command.is_none()) {
-                self.fail(file, format!("hook `{name}` needs `event` and `command`"));
+            if let Some(why) = hook.malformed() {
+                self.fail(file, format!("hook `{name}` {why}"));
             }
             self.timeout(file, hook.timeout.as_deref());
         }
@@ -268,6 +267,9 @@ impl Loader {
             if !path.is_dir() {
                 self.fail(&file, format!("rig `{rig}`: `{}` is not a directory", path.display()));
             }
+            if let Some(key) = r.vars.keys().find(|k| ["name", "path"].contains(&k.as_str())) {
+                self.fail(&file, format!("rig `{rig}`: var `{key}` would hide `rig.{key}`"));
+            }
             let triggers = r.triggers.iter().map(|t| reference(t)).collect();
             let settings = self.settings(&file, dir, r.settings, &names);
             let overrides = self.overrides(&file, dir, r.overrides, &names);
@@ -342,18 +344,7 @@ impl Loader {
                 agents.insert(agent, a);
             }
         }
-        let mut formulas = BTreeMap::new();
-        for file in self.entries(&root.join("formulas")) {
-            if file.extension().is_none_or(|e| e != "toml") {
-                continue;
-            }
-            let Some((formula, f)) = self.formula(&file) else {
-                continue;
-            };
-            if formulas.insert(formula.clone(), f).is_some() {
-                self.fail(&file, format!("two formulas of the pack are named `{formula}`"));
-            }
-        }
+        let formulas = self.formulas(&root.join("formulas"));
         let mut loaded: Vec<Trigger> = Vec::new();
         for raw in triggers {
             let Some(trigger) = self.trigger(manifest, raw, project) else {

@@ -3,6 +3,7 @@ mod config_builtin;
 mod config_layers;
 mod config_services;
 mod config_sources;
+mod config_strict;
 mod config_triggers;
 mod cron;
 mod effect_retry;

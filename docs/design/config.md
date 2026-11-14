@@ -32,8 +32,8 @@ the `[agent]` contribution of a plugin; the top level of `agent.toml`; and the o
 | `model`, `effort`, `system_prompt`, `permission_mode` | string; `permission_mode` is the harness's own: claude's `--permission-mode`, codex's approval policy (`untrusted`, `on-request`, `never`) | scalar |
 | `inherit_host` | boolean | scalar |
 | `env` | table of strings | by key |
-| `mcp.<name>` | `{command = [..], env}` (stdio) or `{url, headers}` (HTTP), not both (a server the daemon runs is a `[[service]]`, below); optional `scope = "orchestrator" \| "project" \| "session"` | by key, entry replaced whole |
-| `hooks.<name>` | `{event, matcher, command, timeout}` (harness hooks, Claude dialect) or `{enabled = false}` | named list |
+| `mcp.<name>` | `{command = [..], env, scope}` (stdio; `scope = "orchestrator" \| "project" \| "session"`, optional) or `{url, headers}` (HTTP), not both (a server the daemon runs is a `[[service]]`, below); a key of the other kind (`headers` with `command`, `env` or `scope` with `url`) is an error | by key, entry replaced whole |
+| `hooks.<name>` | `{event, matcher, command, timeout}` (harness hooks, Claude dialect) or `{enabled = false}`; `event` must be a hook event of claude 2.1 or one codex adds (`Interrupt`, `PreModelRequest`, `PostModelRequest`) | named list |
 | `skills.<name>` | `{path}` (must exist) or `{enabled = false}` | named list |
 | `plugins` | array of `{name, enabled = true}`, in attachment order; parameters belong to the `[[plugin]]` declaration | named list |
 | `native.<harness>` | any table, passed to the adapter as is; `native.claude` is a table of claude settings keys, delivered with `--settings` together with the hooks; `native.codex` is a table of codex `config.toml` keys, delivered to the app-server as `-c key=value` flags (so it is part of the process fingerprint) | by key |
@@ -268,7 +268,7 @@ path = "plugins/aae-plugin-notes"
 
 [rigs.backend]
 path = "../backend"                 # must exist
-vars = { test_cmd = "cargo test" }
+vars = { test_cmd = "cargo test" }   # `{{ rig.test_cmd }}` in a prompt; `name` and `path` are taken by the rig
 triggers = ["nightly-audit"]        # pack triggers that run on this rig (a pack does not know rig names, §9.5)
 [rigs.backend.settings]             # layer 4
 [rigs.backend.overrides.implementer]
@@ -327,8 +327,9 @@ inputs = { bead = { next_ready = true, epic = "{{ event.bead.epic }}" } }
 ```
 
 Content: `agents/<agent>/agent.toml` (plus `prompt.md` and any other files of the agent, see "Agent") and
-`formulas/*.toml`. A pack is the unit of content: agents, formulas and triggers. It may require plugins but never
-contains one; a plugin is declared by the orchestrator or the project.
+`formulas/**/*.toml`: every `.toml` file under `formulas/`, in subdirectories too, is a formula. A pack
+is the unit of content: agents, formulas and triggers. It may require plugins but never contains one; a plugin is
+declared by the orchestrator or the project.
 
 ## Names
 
@@ -341,8 +342,9 @@ contains one; a plugin is declared by the orchestrator or the project.
 
 `harness` (required; one of the orchestrator's `[harness.*]`), `prompt` (role prompt file, default `prompt.md`
 when it exists; its text is the agent layer's `system_prompt`, so an override may still replace it, and setting
-`system_prompt` in `agent.toml` too is an error), `max_runs` (optional positive integer: runs of this agent started at once in its project; the
-orchestrator's `max_runs` still applies), then the settings keys above. Everything of one agent (settings, prompts,
+`system_prompt` in `agent.toml` too is an error), `max_runs` (optional positive integer: runs of this agent
+started at once in its project; the orchestrator's `max_runs` still applies), then the settings keys above.
+Everything of one agent (settings, prompts,
 skills, hooks, scripts) lives in its directory, laid out as its author likes. The core has no role names: whatever a
 role does is configuration.
 
@@ -453,7 +455,8 @@ timeout = "10s"                     # optional
 ```
 
 Plugin names are unique across the orchestrator and the project; an attachment in `plugins` must name a declared
-plugin. A declaration (a `path`, or a `git` source as for packs above) may carry parameters,
+plugin, and the `[agent]` of a plugin has no `plugins` (a plugin attaches no plugins). A declaration (a `path`,
+or a `git` source as for packs above) may carry parameters,
 `[[plugin]] path = ".." config = { .. }`: its orchestrator hooks get them
 in `AAE_PLUGIN_PARAMS` (contracts 3.1). In the `[agent]` contribution, `${AAE_PLUGIN_DIR}` in a harness hook
 `command` or an MCP `command` is replaced with the plugin's directory at load, so they reach the plugin's own files;
@@ -486,12 +489,12 @@ or for a project).
   `quota_wait_s` (1800), `model_pause_s` (600), `backoff_base_s` (10), `backoff_cap_s` (300), `backoff_park_from`
   (3), `auth_backoff_base_s` (30), `auth_backoff_cap_s` (3600), `rapid_s` (30),
   `crash_loop` (5), `crash_pause_s` (300), `resume_failures` (3), `unknown_after_s` (30), `unknown_retries` (3).
-- `worktree` has no table: it is on for the runs of the formulas with `worktree = true` (a formula setting, spec
-  §2.1 item 11), and a `[builtin.worktree]` table is a config error that says so. Each such run gets a git worktree
-  of its rig on the branch `aae/<run>`, in `<git common dir>/aae/worktrees/<run>`, as its workdir. When the run
   The waits and caps that a zero would turn into a hot loop (`quota_wait_s`, `model_pause_s`, both bases and both
   caps, `crash_pause_s`) and `crash_loop` must be at least 1; `quota_margin_s`, `rapid_s` and `unknown_after_s` must
   not be negative.
+- `worktree` has no table: it is on for the runs of the formulas with `worktree = true` (a formula setting, spec
+  §2.1 item 11), and a `[builtin.worktree]` table is a config error that says so. Each such run gets a git worktree
+  of its rig on the branch `aae/<run>`, in `<git common dir>/aae/worktrees/<run>`, as its workdir. When the run
   ends the worktree is removed unless it has uncommitted changes or a HEAD no ref reaches (then `plugin.hook_failed`
   says why); the branch is deleted only when it is merged. A run with `continue_from` starts in the workdir of the
   run it continues (a session resumes where it ran); when that is a worktree of this plugin, it is brought back on

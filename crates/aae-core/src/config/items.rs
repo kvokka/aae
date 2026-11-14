@@ -64,6 +64,26 @@ impl Loader {
         })
     }
 
+    /// The formulas of a pack: every `.toml` file under `dir`, subdirectories included.
+    pub(super) fn formulas(&mut self, dir: &Path) -> BTreeMap<String, Formula> {
+        let (mut formulas, mut files) = (BTreeMap::new(), self.entries(dir));
+        while let Some(file) = files.pop() {
+            if file.is_dir() {
+                files.extend(self.entries(&file));
+            }
+            if file.extension().is_none_or(|e| e != "toml") {
+                continue;
+            }
+            let Some((formula, f)) = self.formula(&file) else {
+                continue;
+            };
+            if formulas.insert(formula.clone(), f).is_some() {
+                self.fail(&file, format!("two formulas of the pack are named `{formula}`"));
+            }
+        }
+        formulas
+    }
+
     /// The entries of a directory in name order; a missing directory has none.
     pub(super) fn entries(&mut self, dir: &Path) -> Vec<PathBuf> {
         if !dir.exists() {

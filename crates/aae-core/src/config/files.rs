@@ -53,12 +53,17 @@ pub struct Mcp {
 }
 
 impl Mcp {
-    /// A non-empty stdio `command` or a `url`, not both.
-    pub(super) fn well_formed(&self) -> bool {
+    /// A non-empty stdio `command` with its `env` and `scope`, or a `url` with its `headers`; why not, otherwise.
+    pub(super) fn malformed(&self) -> Option<&'static str> {
         match (&self.command, &self.url) {
-            (Some(command), None) => !command.is_empty(),
-            (None, url) => url.is_some(),
-            (Some(_), Some(_)) => false,
+            (Some(command), None) if command.is_empty() => Some("has an empty `command`"),
+            (Some(_), None) if !self.headers.is_empty() => Some("has `headers`, which only a `url` server takes"),
+            (None, Some(_)) if !self.env.is_empty() || self.scope.is_some() => {
+                Some("has `env` or `scope`, which only a `command` server takes")
+            }
+            (Some(_), None) | (None, Some(_)) => None,
+            (None, None) => Some("needs a `command` or a `url`"),
+            (Some(_), Some(_)) => Some("has both `command` and `url`: a server the daemon runs is a `[[service]]` with `mcp`"),
         }
     }
 }
@@ -73,6 +78,60 @@ pub struct Hook {
     pub matcher: Option<String>,
     pub command: Option<String>,
     pub timeout: Option<String>,
+}
+
+/// The hook events of the Claude dialect (claude 2.1) and the ones codex adds (`docs/design/config.md`).
+const HOOK_EVENTS: &[&str] = &[
+    "SessionStart",
+    "Setup",
+    "UserPromptSubmit",
+    "UserPromptExpansion",
+    "PreToolUse",
+    "PermissionRequest",
+    "PermissionDenied",
+    "PostToolUse",
+    "PostToolUseFailure",
+    "PostToolBatch",
+    "Notification",
+    "MessageDisplay",
+    "SubagentStart",
+    "SubagentStop",
+    "TaskCreated",
+    "TaskCompleted",
+    "Stop",
+    "StopFailure",
+    "TeammateIdle",
+    "InstructionsLoaded",
+    "ConfigChange",
+    "CwdChanged",
+    "DirectoryAdded",
+    "FileChanged",
+    "WorktreeCreate",
+    "WorktreeRemove",
+    "PreCompact",
+    "PostCompact",
+    "PreModelSwitch",
+    "PostModelSwitch",
+    "Elicitation",
+    "ElicitationResult",
+    "SessionEnd",
+    "Interrupt",
+    "PreModelRequest",
+    "PostModelRequest",
+];
+
+impl Hook {
+    /// An enabled hook has `event` (a known one) and `command`; why not, otherwise.
+    pub(super) fn malformed(&self) -> Option<String> {
+        match (&self.event, &self.command) {
+            _ if !self.enabled => None,
+            (Some(event), Some(_)) if !HOOK_EVENTS.contains(&event.as_str()) => {
+                Some(format!("has an unknown event `{event}`"))
+            }
+            (Some(_), Some(_)) => None,
+            _ => Some("needs `event` and `command`".to_owned()),
+        }
+    }
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
