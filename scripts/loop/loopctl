@@ -24,7 +24,7 @@ STATE = LOOP / "state.json"
 JOURNAL = LOOP / "JOURNAL.md"
 PROTECTED = [".claude", "scripts/loop", "CLAUDE.md"]
 MAX_ATTEMPTS = {"coder": 3, "reviewer": 2}
-DONE_SCORE = 9.0
+DONE_SCORE = 9.8  # target: mean component score per the reviewer
 STAGNATION = 3
 
 
