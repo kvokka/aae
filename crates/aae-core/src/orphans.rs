@@ -234,6 +234,28 @@ mod tests {
         socket.listen(1).unwrap()
     }
 
+    /// Servers listen on every interface by default: `0.0.0.0` and `::` are reached from `127.0.0.1`, `::1` is not.
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn a_listener_on_every_interface_is_reached() {
+        let line = |address: &str, state: &str| {
+            format!("0: {address}:1F90 00000000:0000 {state} 00000000:00000000 00:00000000 00000000 1000 0 77 1")
+        };
+        let v6_any = "0".repeat(32);
+        let v6_loopback = format!("{}01000000", "0".repeat(24));
+        for address in ["0100007F", "00000000", &v6_any, "0000000000000000FFFF00000100007F"] {
+            assert_eq!(
+                listener(&line(address, "0A"), 8080),
+                Some("socket:[77]".to_owned()),
+                "{address}"
+            );
+            assert_eq!(listener(&line(address, "0A"), 8081), None);
+            assert_eq!(listener(&line(address, "01"), 8080), None, "not listening");
+        }
+        assert_eq!(listener(&line("0200007F", "0A"), 8080), None);
+        assert_eq!(listener(&line(&v6_loopback, "0A"), 8080), None);
+    }
+
     /// A port is the instance's only while a process with its marker alone listens on it where a connection to
     /// `127.0.0.1` may reach.
     #[cfg(target_os = "linux")]
