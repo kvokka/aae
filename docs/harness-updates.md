@@ -6,9 +6,9 @@ account.
 
 ## Updating a harness
 
-1. `mise.toml` selects a release line (`claude = "2.1"`, `codex = "0"`); the exact version lives in `mise.lock`.
-   Run `mise upgrade claude` (or `codex`), check that `mise exec -- claude --version` shows the new version, and
-   commit `mise.lock`.
+1. `mise.toml` selects a release line (`claude = "2.1"`, `codex = "0"`) and mise takes the newest version of it;
+   there is no `mise.lock`. Run `mise upgrade claude` (or `codex`) and check that `mise exec -- claude --version`
+   shows the new version.
 2. Run the contract suite and the daemon tests of that harness:
    - claude: `cargo nextest run -p aae-claude` and `cargo nextest run -p aae --test claude`;
    - codex: `cargo nextest run -p aae-codex` and `cargo nextest run -p aae --test codex`.

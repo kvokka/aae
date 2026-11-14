@@ -57,7 +57,7 @@ Claude or Codex agents running `br` inside an aae session has not been assessed.
   seeds each time and prints its base seeds; a failure names its seed and the command that replays it.
 - `mise run ci` adds formatting, clippy, `cargo deny`, `cargo machete` and the line budgets.
 - `mise run acceptance-ci` runs the model-free acceptance scenarios on real daemons; CI runs it on every commit,
-  locally it is optional.
+  locally it is optional. The release builds for the four targets run on a `v*` tag (`mise run acceptance-release`).
 
 Wall times and the replay of a seed: [docs/guide/development.md](docs/guide/development.md).
 
@@ -68,7 +68,7 @@ The acceptance criteria of the first release are executable scenarios in `crates
 every commit. `mise run acceptance` runs all of them, including those that call a real model: they use the cheapest
 model, cost money and need your harness login. Pass criterion numbers to run only those:
 `cargo build -p aae && cargo run -p aae-acceptance -- --ci 3 19`. The rows that live in cargo and the CI scripts run
-from the same binary after the scenarios: the release build for the four targets (1), the crash tests of the adapters
+from the same binary after the scenarios: the release build for the four targets (1, not with `--ci`), the crash tests of the adapters
 (9), the contract tests (11), the line budgets with the readiness file checked against the open rows (22) and the
 stub linters (23). The report has a line for every row of §15, run or not, with the date and the versions of `aae`
 and the harnesses, and goes to `target/acceptance/report.md`. No row is checked by hand; the demos of criterion 20

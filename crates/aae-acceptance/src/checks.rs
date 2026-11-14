@@ -24,7 +24,7 @@ pub(crate) const ALL: &[Scenario] = &[
     Scenario {
         criterion: "1",
         title: "one binary builds for the four targets; the build for this host runs without extra runtimes",
-        launch: Launch::Ci,
+        launch: Launch::Release,
         run: |env| Box::pin(release(env)),
     },
     Scenario {

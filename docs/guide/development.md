@@ -9,7 +9,8 @@ the pinned claude, codex and br. Every check below is a mise task (`mise.toml`).
 |---|---|---|---|
 | `mise run test` | unit and integration tests (`cargo nextest run`), the chaos stand among them | locally, the everyday loop; CI too | 29 s (2026-11-14, `1a732a4`) |
 | `mise run ci` | the above plus formatting, clippy, `cargo deny`, `cargo machete`, the unused-`pub` check and the line budgets | locally before a commit; CI on every commit | 34 s (2026-11-14, `1a732a4`) |
-| `mise run acceptance-ci` | the acceptance scenarios without a model, each on a real `aae daemon`, then the checks of criteria 1, 9, 11, 22 and 23 | CI on every commit (job `acceptance`); locally optional | 64 s warm, 265 s with a cold release build (2026-11-14, `a070cd6`+WP-52) |
+| `mise run acceptance-ci` | the acceptance scenarios without a model, each on a real `aae daemon`, then the checks of criteria 9, 11, 22 and 23 | CI on every commit (job `acceptance`); locally optional | 64 s warm with the release builds (2026-11-14, `a070cd6`+WP-52), less without them |
+| `mise run acceptance-release` | criterion 1: `cargo zigbuild --release` for the four targets, then this host's binary runs | CI on a `v*` tag (workflow `release`) | 169 s cold (2026-11-14, `a070cd6`+WP-52) |
 | `mise run acceptance` | all acceptance scenarios, including those on a real model | by hand: they cost money and need a harness login | not measured |
 
 <!-- MEASURE id=dev-test-wall date=2026-11-14 ver=1a732a4 env=linux-arm64-orbstack-9-cores src="mise run test" note="warm build; nextest summary 28.8 s for 286 tests; another build ran beside it" -->
@@ -43,4 +44,5 @@ report, with a line for every row of §15, goes to `target/acceptance/report.md`
 runs the rows that live in cargo and the scripts, one at a time: `cargo zigbuild --release` for the four targets
 (criterion 1, about a minute per target warm), the crash tests of criterion 9, the contract tests of criterion 11,
 `scripts/budget.sh` (22) and clippy, `cargo machete` and `scripts/unused-pub.sh` (23); they build in the target
-directory the binary runs from. CI has no separate release-build job: criterion 1 is it.
+directory the binary runs from. `--ci` leaves criterion 1 out (the row shows `not run`): the release builds are the
+slowest part, so CI runs them only on a `v*` tag, as `mise run acceptance-release`.

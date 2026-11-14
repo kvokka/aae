@@ -30,6 +30,8 @@ pub(crate) enum Launch {
     Ci,
     /// With a real model: only when the user runs the whole spec.
     Request,
+    /// The release builds: in a whole spec run and in the release workflow on a tag, not in CI on every commit.
+    Release,
 }
 
 pub(crate) type Notes = Pin<Box<dyn Future<Output = String> + Send>>;
@@ -156,7 +158,7 @@ fn order(criterion: &str) -> (u32, &str) {
     (criterion[..digits].parse().unwrap_or(u32::MAX), &criterion[digits..])
 }
 
-/// A line of the report: `mark` is `pass`, `FAIL`, `not run` (a request row of a CI run) or `open` (nothing to run).
+/// A line of the report: `mark` is `pass`, `FAIL`, `not run` (a request or release row of a CI run) or `open` (nothing to run).
 struct Row {
     criterion: &'static str,
     title: &'static str,
@@ -234,7 +236,12 @@ async fn main() -> ExitCode {
         rows.push(row);
     }
     for s in skipped {
-        let notes = "needs a real model: run the spec without --ci".to_owned();
+        let notes = if s.launch == Launch::Release {
+            "release builds: run on a tag, or the spec without --ci"
+        } else {
+            "needs a real model: run the spec without --ci"
+        }
+        .to_owned();
         rows.push(Row {
             criterion: s.criterion,
             title: s.title,

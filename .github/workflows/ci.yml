@@ -23,5 +23,5 @@ jobs:
       - uses: actions/checkout@v7
       - uses: jdx/mise-action@v5
       - uses: Swatinem/rust-cache@v2
-      # Criterion 1 of the acceptance builds the four release targets and runs the arm64 one.
+      # The release builds (criterion 1) run on tags, in release.yml.
       - run: mise run acceptance-ci

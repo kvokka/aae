@@ -66,7 +66,7 @@ impl Daemon {
         }
         before(dir.path());
         let home = home.unwrap_or_else(|| dir.path().to_owned());
-        let child = command(env, dir.path(), &home).arg("daemon").spawn().unwrap();
+        let child = spawn(env, dir.path(), &home);
         let client = Client::new(dir.path().join("run/aae/aae.sock"));
         let daemon = Self {
             env: env.clone(),
@@ -113,10 +113,7 @@ impl Daemon {
         let _ = self.child.kill();
         let _ = self.child.wait();
         tokio::time::sleep(down).await;
-        self.child = command(&self.env, self.dir.path(), &self.home)
-            .arg("daemon")
-            .spawn()
-            .unwrap();
+        self.child = spawn(&self.env, self.dir.path(), &self.home);
         self.until_up().await;
     }
 
@@ -186,6 +183,16 @@ impl Drop for Daemon {
                 .output();
         }
     }
+}
+
+/// `aae daemon` on the tree in `dir`; its stderr goes to `dir/daemon.log`, out of the run's output.
+fn spawn(env: &Env, dir: &Path, home: &Path) -> Child {
+    let log = fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(dir.join("daemon.log"))
+        .unwrap();
+    command(env, dir, home).arg("daemon").stderr(log).spawn().unwrap()
 }
 
 /// `aae` with the XDG directories in `dir`.
