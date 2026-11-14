@@ -177,6 +177,7 @@ pub(crate) async fn run(paths: Paths) -> Result<bool, String> {
         written: written.clone(),
         journal_health,
         stop: tokio::sync::watch::channel(None).0,
+        stopping: std::sync::OnceLock::new(),
         daemon: json!({
             "version": env!("CARGO_PKG_VERSION"), "pid": std::process::id(),
             "socket": paths.socket, "started_at": aae_core::rfc3339_ms(Clock::system().now_ms()),

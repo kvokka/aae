@@ -2229,7 +2229,7 @@
               "string",
               "null"
             ],
-            "description": "`drain` or `restart` once the daemon stops."
+            "description": "`drain` or `restart` from the moment a drain begins; null while the daemon runs on."
           },
           "version": {
             "type": "string"

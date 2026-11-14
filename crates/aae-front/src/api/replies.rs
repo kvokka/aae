@@ -170,7 +170,7 @@ pub(crate) struct Daemon {
     outbox_oldest_age_ms: Option<i64>,
     /// Runs in a turn, a hook or a preparation: what a drain waits for.
     active_runs: i64,
-    /// `drain` or `restart` once the daemon stops.
+    /// `drain` or `restart` from the moment a drain begins; null while the daemon runs on.
     stopping: Option<String>,
 }
 

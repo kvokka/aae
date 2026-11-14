@@ -285,6 +285,7 @@ async fn a_drain_starts_no_run_and_stops_the_daemon_when_its_timeout_cuts_a_turn
         Err(ClientError::Api { status: 409, .. }) => {}
         other => panic!("a restart during a drain: {other:?}"),
     }
+    assert_eq!(d.get("/v1/daemon").await["stopping"], "drain");
     let held = d.create("check", None).await;
     let view = d.until_state(&held, "queued").await;
     assert_eq!(view["waiting_for"], "daemon_stopping", "{view}");

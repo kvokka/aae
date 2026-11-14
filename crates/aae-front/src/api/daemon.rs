@@ -25,7 +25,7 @@ pub(crate) async fn status(state: State) -> Reply {
     daemon["outbox_depth"] = status["outbox_depth"].take();
     daemon["outbox_oldest_age_ms"] = json!(oldest.map(|t| Clock::system().now_ms() - t));
     daemon["active_runs"] = status["active_runs"].take();
-    daemon["stopping"] = json!(*state.stop.borrow());
+    daemon["stopping"] = json!(state.stopping.get());
     Ok(Json(daemon))
 }
 
@@ -70,6 +70,7 @@ async fn stop(state: State, headers: &HeaderMap, q: Drain, reason: &'static str)
     if reply["reason"] != reason {
         return Err(aae_core::Error::Rejected(format!("the daemon is already stopping: {}", reply["reason"])).into());
     }
+    let _ = state.stopping.set(reason);
     reply["active_runs"] = state.reader.status()?["active_runs"].take();
     let deadline = Instant::now() + Duration::from_secs(q.timeout_s.unwrap_or(300));
     tokio::spawn(async move {

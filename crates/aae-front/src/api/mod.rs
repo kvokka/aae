@@ -49,6 +49,8 @@ pub struct Api {
     pub daemon: Value,
     /// Why the daemon stops (`drain` or `restart`) once a drain is over; `serve` returns then.
     pub stop: watch::Sender<Option<&'static str>>,
+    /// Why the daemon is stopping, from the moment a drain or a restart began.
+    pub stopping: std::sync::OnceLock<&'static str>,
     /// The config the daemon runs with; a reload replaces it.
     pub config: RwLock<Arc<Config>>,
     /// The generation `config` is (1 at start); held from reading the file to replacing `config`, so reloads apply
