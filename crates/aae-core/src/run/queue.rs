@@ -29,6 +29,18 @@ impl RunHandler {
         if let Some(extra) = c.inputs.keys().find(|k| !formula.inputs.contains_key(*k)) {
             return Err(rejected(format!("`{name}` has no input `{extra}`")));
         }
+        // A null is no value; the text of an integer or a boolean is one, as the CLI and templates give text.
+        c.inputs.retain(|_, value| !value.is_null());
+        for (key, value) in &mut c.inputs {
+            let parsed = match (formula.inputs[key].kind, value.as_str()) {
+                (InputType::Integer, Some(text)) => text.parse::<i64>().ok().map(Value::from),
+                (InputType::Boolean, Some(text)) => text.parse::<bool>().ok().map(Value::from),
+                _ => None,
+            };
+            if let Some(parsed) = parsed {
+                *value = parsed;
+            }
+        }
         let missing = formula
             .inputs
             .iter()
@@ -40,6 +52,7 @@ impl RunHandler {
             let want = match formula.inputs[key].kind {
                 InputType::Integer if !value.is_i64() && !value.is_u64() => "an integer",
                 InputType::Boolean if !value.is_boolean() => "a boolean",
+                InputType::String if !value.is_string() => "a string",
                 _ => return None,
             };
             Some(format!("input `{key}` of `{name}` must be {want}, not {value}"))

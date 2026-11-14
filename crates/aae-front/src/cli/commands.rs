@@ -13,7 +13,8 @@ pub enum RunCommand {
         project: String,
         rig: String,
         formula: String,
-        /// An input as `name=value`; a value that parses as JSON is taken as JSON.
+        /// An input as `name=value`: text, which an integer or a boolean input takes as its number or `true`/`false`;
+        /// a JSON object or array (a bead input's `{"next_ready": true}`) is taken as JSON.
         #[arg(long = "input", value_name = "NAME=VALUE", value_parser = name_value)]
         inputs: Vec<String>,
         /// A terminal run whose last session this run continues.
@@ -307,9 +308,13 @@ fn name_value(text: &str) -> Result<String, String> {
     }
 }
 
-/// `name=value`, the value as JSON if it parses, else as a string.
+/// `name=value`, the value as text unless it is a JSON object or array: the core reads text by the input's type, so
+/// `version=1.10` stays `1.10` and `name=null` is the text `null`.
 fn input(text: &str) -> (String, Value) {
     let (name, value) = text.split_once('=').unwrap_or((text, ""));
-    let value = serde_json::from_str(value).unwrap_or_else(|_| Value::String(value.to_owned()));
+    let parsed = serde_json::from_str(value)
+        .ok()
+        .filter(|v: &Value| v.is_object() || v.is_array());
+    let value = parsed.unwrap_or_else(|| Value::String(value.to_owned()));
     (name.to_owned(), value)
 }

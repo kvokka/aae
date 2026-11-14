@@ -113,7 +113,17 @@ async fn the_command_gets_the_run_and_its_inputs_in_the_environment_and_inputs_a
     assert_eq!(kind, "run.passed", "{data}");
     let stdout = &data["outcome"]["data"]["stdout"];
     assert_eq!(stdout, &json!(format!("{run} 3 true a {{b}} none\n")));
-    for (input, value) in [("n", json!("3")), ("flag", json!(1))] {
+    // Text is read by the input's type (the CLI gives text); a null is no value, not the text `null`.
+    let run = w
+        .start(with(json!({ "n": "4", "flag": "false", "note-text": null })))
+        .await;
+    let (kind, data) = w.end(&run).await;
+    assert_eq!(kind, "run.passed", "{data}");
+    assert_eq!(
+        data["outcome"]["data"]["stdout"],
+        json!(format!("{run} 4 false  none\n"))
+    );
+    for (input, value) in [("n", json!("three")), ("flag", json!(1)), ("note-text", json!(7))] {
         let refused = w
             .core
             .send(None, Msg::Create(with(json!({ input: value }))))
