@@ -6,7 +6,7 @@ use super::{
     row::{Row, attempts},
 };
 use crate::{
-    config::{Sourced, Step},
+    config::Sourced,
     driver::{Failure, FailureKind, PromptKey, SessionPlan, SessionRef, Source},
     journal::rfc3339_ms,
     writer::{Error, Tx},
@@ -15,7 +15,6 @@ use rusqlite::{OptionalExtension, params};
 use serde_json::{Value, json};
 use std::{collections::BTreeMap, path::PathBuf};
 
-pub(super) const STEP_TIMEOUT_MS: i64 = 45 * 60_000;
 /// The prompt of a resumed attempt (contracts 6.4).
 const RECONCILE: &str =
     "Your previous turn was interrupted. Check the current state of the work and continue toward the goal.";
@@ -95,48 +94,6 @@ impl RunHandler {
         if moved { self.schedule(tx) } else { Ok(()) }
     }
 
-    /// The prompt, the step timeout and the config snapshot of a run, from the config of now: the effective config
-    /// of a prompt step; `{"command", "env"}` of an exec step.
-    fn render(&self, row: &Row) -> Result<(Option<String>, i64, Value), String> {
-        let project = self.config.projects.iter().find(|p| p.name == row.project);
-        let project = project.ok_or(format!("project `{}` is gone from the config", row.project))?;
-        let rig = project
-            .rigs
-            .get(&row.rig)
-            .ok_or(format!("rig `{}` is gone from the config", row.rig))?;
-        let (_, formula) = project.formula(&row.formula)?;
-        let timeout_ms = |t: &Option<std::time::Duration>| {
-            t.map_or(STEP_TIMEOUT_MS, |t| i64::try_from(t.as_millis()).unwrap_or(i64::MAX))
-        };
-        let (agent, prompt, timeout) = match (&formula.step, row.exec()) {
-            (Step::Exec { command, timeout }, true) => {
-                // The tracker by name, as in a session (spec §10.2).
-                let env: serde_json::Map<String, Value> = (project.tracker.env.iter())
-                    .map(|(name, value)| (name.clone(), json!({ "value": value })))
-                    .collect();
-                return Ok((None, timeout_ms(timeout), json!({ "command": command, "env": env })));
-            }
-            (Step::Prompt { agent, prompt, timeout }, false) => (agent, prompt, timeout),
-            _ => return Err(format!("`{}` changed its step kind", row.formula)),
-        };
-        if agent.to_string() != row.agent {
-            return Err(format!("`{}` now names agent `{agent}`", row.formula));
-        }
-        let config = self.config.effective(&row.project, Some(&row.rig), agent)?;
-        let mut rig_view = json!({ "name": row.rig, "path": rig.path });
-        for (key, value) in &rig.vars {
-            rig_view[key] = json!(value);
-        }
-        let context = json!({
-            "inputs": serde_json::from_str::<Value>(&row.inputs).unwrap_or_default(),
-            "rig": rig_view, "run": row.view(),
-            "bead": row.bead_data.as_deref().map(serde_json::from_str::<Value>).transpose().ok().flatten(),
-            "project": { "name": project.name, "path": project.root },
-        });
-        let text = prompt.render(&context).map_err(|e| format!("prompt: {e}"))?;
-        Ok((Some(text), timeout_ms(timeout), json!(config)))
-    }
-
     /// A new attempt (contracts 6.2): a new or resumed session on an instance of its own, then the prompt.
     pub(super) fn start_attempt(&mut self, tx: &mut Tx<'_>, mut row: Row, kind: &str) -> Result<(), Error> {
         // Every automatic start reads the gates, the operator's among them (invariant 18), and a drain: both park.
@@ -199,18 +156,19 @@ impl RunHandler {
         };
         let (run, attempt, workdir) = (row.id.clone(), row.attempt + 1, PathBuf::from(&row.workdir));
         let token_sha256 = super::token_sha256(&token);
+        let actor = self.config.actor(&row.project, &run, attempt);
         let plan = match resume.clone() {
             Some(session) => SessionPlan::Resume {
                 session,
                 workdir,
-                actor: self.config.actor(&row.project, &run, attempt),
+                actor,
                 run,
                 attempt,
                 token,
             },
             None => SessionPlan::New {
                 workdir,
-                actor: self.config.actor(&row.project, &run, attempt),
+                actor,
                 run,
                 attempt,
                 token,

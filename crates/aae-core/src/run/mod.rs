@@ -18,6 +18,7 @@ mod read;
 mod recover;
 mod registry;
 mod reload;
+mod render;
 mod row;
 mod service_proc;
 mod services;

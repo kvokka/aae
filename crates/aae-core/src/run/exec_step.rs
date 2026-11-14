@@ -63,7 +63,7 @@ impl RunHandler {
         }
         env.retain(|(k, _)| !context.iter().any(|(c, _)| c == k));
         env.extend(context);
-        let timeout_ms = row.timeout_ms.unwrap_or(super::machine::STEP_TIMEOUT_MS);
+        let timeout_ms = row.timeout_ms.unwrap_or(super::render::STEP_TIMEOUT_MS);
         // Run ids repeat across daemons; the marker that recovery kills the command by must not.
         let Some(token) = super::new_token() else {
             return self.terminal(

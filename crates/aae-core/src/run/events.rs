@@ -125,7 +125,7 @@ impl RunHandler {
                     return Ok(());
                 }
                 row.set_state(tx, "running", None)?;
-                let timeout = row.timeout_ms.unwrap_or(super::machine::STEP_TIMEOUT_MS);
+                let timeout = row.timeout_ms.unwrap_or(super::render::STEP_TIMEOUT_MS);
                 tx.set_deadline(&row.deadline("state"), tx.now_ms().saturating_add(timeout))?;
                 silence(tx, &row, w.silence_ms)
             }

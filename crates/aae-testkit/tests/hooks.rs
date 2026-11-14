@@ -283,6 +283,10 @@ async fn the_bundled_default_policy_resumes_a_crash_and_reminds_once() {
     );
     let crashed = w.until(Some(&run), "run.attempt_failed", 0).await;
     assert_eq!(crashed["keys"][0], "orchestrator");
-    let (_, prompts) = w.driver.sent(&run, 2);
+    let hollow = w.until(Some(&run), "run.turn_ended_without_outcome", 0).await;
+    assert_eq!(hollow["attempts"][1]["kind"], "resume", "{hollow}");
+    let (env, prompts) = w.driver.sent(&run, 2);
     assert!(prompts.last().is_some_and(|p| p.contains("finisher")), "{prompts:?}");
+    // The resumed session writes to the tracker as its own attempt (contracts 5.1).
+    assert_eq!(env.unwrap()["TRACKER_ACTOR"], format!("aae:{run}:2"));
 }
