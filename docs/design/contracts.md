@@ -544,10 +544,11 @@ of a run whose gate the operator closed parks it instead (invariant 18).
   ([experiments](experiments.md)), so the transcript check finds it.
 - Daemon start (§5.6): open the state and drain the outbox; for every recorded instance check pid + start time,
   kill its process group and sweep every process carrying its marker `AAE_INSTANCE=<id>` in the environment, wait
-  for the end (invariants 6, 7); runs in `starting`, `running`, `requires_action` → `interrupted` with
-  `daemon_crash`, the launches, prompts and answers they still had queued dropped, and the command of an exec step
-  killed by its `AAE_INSTANCE` marker (random per attempt) before any later attempt runs it; runs in `preparing`,
-  `finishing`, `interrupted` keep their state — their hook effect is still
+  for the end (invariants 6, 7); runs in `starting`, `running`, `requires_action`, `finishing` → `interrupted` with
+  `daemon_crash`, the launches, prompts, answers and deciding hooks they still had queued dropped, and the command
+  of an exec step killed by its `AAE_INSTANCE` marker (random per attempt) before any later attempt runs it (a
+  `finishing` run loses its declared outcome: the policy's retry runs the turn or the command again, at least once
+  as for a running one); runs in `preparing` and `interrupted` keep their state — their hook effect is still
   queued and its hooks run again; re-arm deadlines and schedules; resync. Deadlines are wall-clock times:
   the writer reads the wall clock at least every 30 s, so a deadline passed while the machine slept fires late by
   at most that.

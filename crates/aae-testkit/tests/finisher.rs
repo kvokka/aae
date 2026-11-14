@@ -3,18 +3,38 @@
 mod common;
 
 use aae_core::{
+    BoxFuture, CoreHandle,
     driver::{Normalized, SessionState},
-    run::{Decision, MAX_REMARKS, Msg, Outcome, Verdict},
+    run::{Decision, HookRunner, MAX_REMARKS, Msg, Outcome, Verdict},
 };
 use aae_testkit::Step;
-use common::{POLICY, World, hollow_turn, last, world};
+use common::{Lost, POLICY, World, hollow_turn, last, world, world_with};
 use serde_json::{Value, json};
-use std::time::Duration;
+use std::{
+    sync::{Arc, Mutex},
+    time::Duration,
+};
 
 /// A world whose plugin has one hook on `on`: decisions on it wait for the test.
 fn hooked(on: &str) -> World {
+    hooked_with(on, Arc::new(Lost))
+}
+
+fn hooked_with(on: &str, hooks: Arc<dyn HookRunner>) -> World {
     let plugin = POLICY[1].1.replace("run.attempt_failed", on);
-    world(&[POLICY[0], ("policy/plugin.toml", &plugin)])
+    world_with(&[POLICY[0], ("policy/plugin.toml", &plugin)], hooks)
+}
+
+/// A hook runner whose hooks never finish; it keeps the type of every event it was given.
+#[derive(Default)]
+struct Hanging(Mutex<Vec<String>>);
+
+impl HookRunner for Hanging {
+    fn run<'a>(&'a self, _: &'a CoreHandle<Msg>, payload: &'a Value) -> BoxFuture<'a, ()> {
+        let kind = payload["event"]["type"].as_str().unwrap_or_default().to_owned();
+        self.0.lock().unwrap().push(kind);
+        Box::pin(std::future::pending())
+    }
 }
 
 /// A turn that ends 10 s after the prompt: time for the finisher.
@@ -172,9 +192,10 @@ async fn continue_after_a_hollow_turn_counts_toward_the_remarks_ceiling() {
     );
 }
 
-/// A run waiting on its finishing hooks when the daemon dies: hooks run again, a turn does not (contracts 6.4).
-async fn finishing_across_a_restart() -> (World, String) {
-    let mut w = hooked("run.finishing");
+/// A run waiting on its finishing hooks when the daemon dies: the attempt is interrupted like a running one (spec
+/// §5.6, §9.4; contracts 6.4).
+async fn finishing_across_a_restart(hooks: Arc<dyn HookRunner>) -> (World, String) {
+    let mut w = hooked_with("run.finishing", hooks);
     let mut steps = hollow_turn();
     steps.insert(1, Step::Wait(Duration::from_secs(1)));
     w.driver.script(steps);
@@ -183,34 +204,51 @@ async fn finishing_across_a_restart() -> (World, String) {
     let token = w.driver.token(&run, 1).unwrap();
     assert_eq!(w.finish(&run, &token, Verdict::Pass, "done").await, "accepted");
     tokio::time::sleep(Duration::from_millis(900)).await;
+    assert_eq!(w.states(&run).await.last().unwrap(), "finishing");
     w.restart().await;
     (w, run)
 }
 
 #[tokio::test(start_paused = true)]
-async fn a_run_in_finishing_keeps_its_outcome_across_a_restart() {
-    let (w, run) = finishing_across_a_restart().await;
-    assert_eq!(w.states(&run).await.last().unwrap(), "finishing");
+async fn a_run_in_finishing_is_interrupted_by_a_restart_and_left_to_the_policy() {
+    let (w, run) = finishing_across_a_restart(Arc::new(Lost)).await;
     let started = w.until(None, "daemon.started", 1).await;
-    assert_eq!(started["interrupted_runs"], 0, "{started}");
-    w.decide(&run, "run.finishing", 0, Decision::Accept).await;
-    assert_eq!(w.states(&run).await.last().unwrap(), "passed");
-    let events = w.events(&run, Duration::ZERO).await;
-    assert_eq!(last(&events, "run.passed")["outcome"]["summary"], "done");
-}
-
-/// The remark goes to the session of the dead daemon's instance: the attempt fails at once, nothing waits.
-#[tokio::test(start_paused = true)]
-async fn a_remark_after_a_restart_fails_the_attempt_instead_of_waiting() {
-    let (w, run) = finishing_across_a_restart().await;
-    let message = "Add a test.".to_owned();
-    w.decide(&run, "run.finishing", 0, Decision::Remark { message }).await;
+    assert_eq!(started["interrupted_runs"], 1, "{started}");
     let states = w.states(&run).await;
+    // No hook on `run.attempt_failed` here: no plugin decision fails the run.
     assert_eq!(
-        states[states.len() - 4..],
-        ["finishing", "running", "interrupted", "failed"],
+        states[states.len() - 3..],
+        ["finishing", "interrupted", "failed"],
         "{states:?}"
     );
     let events = w.events(&run, Duration::ZERO).await;
-    assert_eq!(last(&events, "run.attempt_failed")["failure"]["kind"], "harness_crash");
+    assert_eq!(last(&events, "run.attempt_failed")["failure"]["kind"], "daemon_crash");
+    assert!(
+        events.iter().all(|(t, _)| t != "run.passed"),
+        "the declared pass is dropped"
+    );
+}
+
+/// The finishing hooks of the dead daemon do not judge the run after the restart (contracts 3.4).
+#[tokio::test(start_paused = true)]
+async fn a_finishing_decision_from_before_a_restart_is_refused() {
+    let (w, run) = finishing_across_a_restart(Arc::new(Lost)).await;
+    let seq = w.seq_of(&run, "run.finishing", 0).await;
+    let msg = Msg::Decide {
+        run: run.clone(),
+        seq,
+        decision: Decision::Accept,
+    };
+    assert!(w.core.send(None, msg).await.is_err());
+    assert_eq!(w.states(&run).await.last().unwrap(), "failed");
+}
+
+/// Finishing hooks still running when the daemon dies judge an attempt that is gone: they are not run again.
+#[tokio::test(start_paused = true)]
+async fn finishing_hooks_cut_by_a_restart_do_not_run_again() {
+    let hooks = Arc::new(Hanging::default());
+    let (w, run) = finishing_across_a_restart(hooks.clone()).await;
+    w.until(Some(&run), "run.failed", 0).await;
+    tokio::time::sleep(Duration::from_secs(1)).await;
+    assert_eq!(*hooks.0.lock().unwrap(), ["run.finishing"]);
 }

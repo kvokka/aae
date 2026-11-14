@@ -16,10 +16,10 @@ for real without intervention.
 | Component | Score | Missing for the next point |
 |---|---|---|
 | Event loop and state | 8 | 10: real owner runs without intervention (criterion 20) |
-| Runs and finisher | 8 | 10: criterion 20; open: what a run caught in `finishing` by a restart becomes (owner's call) |
+| Runs and finisher | 8 | 10: criterion 20 |
 | Triggers and schedules | 8 | 10: criterion 20 |
 | Issue gates | 8 | 10: criterion 20 |
-| Recovery | 8 | 10: criterion 20; open: the `finishing` run at restart, as for runs |
+| Recovery | 8 | 10: criterion 20 |
 | Config assembly | 8 | 10: criterion 20 |
 | Instance and service registry | 8 | 10: criterion 20; a green GitHub CI run of the service tests is still to be seen |
 | claude adapter | 8 | 10: criterion 20; the claude half of criterion 10 (a lost model limit) is not yet observed live |
