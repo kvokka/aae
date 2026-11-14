@@ -289,15 +289,12 @@ its own hooks.
 
 ### 4.1 Shape
 
-The core owns one driver per harness, behind one object-safe trait; the binary wires the claude and codex adapters
-in, tests wire the scripted driver in (`crates/aae-testkit`). Futures are boxed; events go to the core through a
+The core owns one driver per harness, behind one object-safe trait; the binary lists one `Adapter` per harness
+and knows no harness by name ([adapters](adapters.md)), tests wire the scripted driver in (`crates/aae-testkit`). Futures are boxed; events go to the core through a
 sink handed to `start_instance`. The adapter translates and executes; it never retries a turn, parks or decides
 an outcome (§4; adapter duties in 4.4–4.6). The interface has no steer in the middle of a turn, no model change
 inside a live session and no way for a human to join a live session
 ([frontends](../api/frontends.md#humans-and-runs)).
-
-In code (`crates/aae-core/src/driver.rs`) `Capabilities.versions` joins with the first adapter (WP-27): until then
-it has no producer.
 
 ```rust
 trait Driver: Send + Sync {
@@ -330,10 +327,10 @@ trait Driver: Send + Sync {
 | Type | Content |
 |---|---|
 | `EffectiveConfig` | the merged harness-neutral categories of `config.md` "Settings" (model, effort, env, MCP servers, harness hooks, skills, system prompt, permission mode, plugin parts, host inheritance flag) plus the uninterpreted `native` block of the harness; produced by config assembly with the provenance of every value |
-| `SessionPlan` | `New { workdir, run, attempt }` or `Resume { session: SessionRef, workdir, run, attempt }`; the adapter needs `run`/`attempt` only to name files in the state directory and to set the attempt environment |
+| `SessionPlan` | `New { workdir, run, attempt, token, actor }` or `Resume { session: SessionRef, workdir, run, attempt, token, actor }`; the adapter needs `run`/`attempt` only to name files in the state directory, and `run`, `token` and the tracker `actor` to set the attempt environment (4.6) |
 | `Split` | `{ process: ProcessPart, session: SessionPart, fingerprint: Fingerprint }`; the two parts are opaque serializable values of the adapter; `fingerprint` = SHA-256 of the harness name and the canonical JSON of `process` (see 8) |
 | `InstanceHandle` | `{ id, pid, start_time, pgid }`; `start_time` is the kernel start time of `pid` (`/proc/<pid>/stat`), pid + start time identify the process (§5.2) |
-| `SessionRef` | opaque JSON the adapter fills with everything resume needs; the core stores and returns it. claude: `{session_id, config_dir}`; codex: `{thread_id, codex_home}` (the transcript lives in `CODEX_HOME`, so one id is not enough) |
+| `SessionRef` | opaque JSON the adapter fills with everything resume needs; the core stores and returns it. claude: `{session_id, config_dir, workdir}` (`config_dir` null: the session inherits the host, and its transcript is under the daemon's `CLAUDE_CONFIG_DIR`, else `~/.claude`); codex: `{thread_id, codex_home}` (the transcript lives in `CODEX_HOME`; `codex_home` is not read yet: a resume takes the home of the process part) |
 | `PromptKey` | UUID v5 of `"aae:prompt:<run>/<attempt n>/<prompt n>"` in the URL namespace; the idempotency key of one prompt (see 6.4) |
 | `Answer` | `Allow { updated_input }`, `Deny { message }`, `Text { text }` (decisions of `run.requires_action`) |
 | `Transcript` | `Missing` or `Present { prompt: Absent \| Unanswered \| Answered }` — whether the session exists and where the prompt with `key` stands in it |
@@ -354,11 +351,11 @@ They are input messages of the core, not journal events; the core turns some of 
 | `turn.ended` | `stop_reason: completed \| cancelled \| failed` | candidate end of the attempt's work; `failed` follows a `failure` event |
 | `state` | `state: running \| idle \| requires_action`, `background: bool` | "idle without background" = `idle` and `background == false`; the adapter applies the harness rule |
 | `permission.requested` | `request_id, kind: permission \| question, tool, input, text` | `requires_action`, `run.requires_action` |
-| `usage` | `input_tokens, output_tokens, rate_limit: {utilization, resets_at} \| null` | gate inputs for the policy (via the next failure event) |
+| `usage` | `input_tokens, output_tokens, rate_limit: {utilization, resets_at} \| null` | watchdog: activity; nothing else reads it |
 | `retrying` | `attempt, delay, text` | watchdog: activity; the harness is retrying by itself |
 | `activity` | `tool_running: bool` | watchdog only: moves the silence deadline, kept in memory, no transaction; the adapter coalesces it to at most one per second per session |
 | `failure` | `Failure` (see 1.3) | ends the attempt with `run.attempt_failed`; a failed single tool call is never sent (the harness hands it back to the model), `tool_failure` means a tool is gone for the whole session (4.4) |
-| `exited` | `code, signal` | the instance process is gone: every session on it gets `harness_crash` (one session per instance) or `adapter_crash` (shared instance) unless a failure was already reported |
+| `exited` | `code, signal` | the instance process is gone: every session on it gets `harness_crash` unless a failure was already reported |
 
 ### 4.4 Failure kinds
 
@@ -376,7 +373,7 @@ may report a narrower or wider scope when the harness says so).
 | `context_overflow` | adapter | session |
 | `config_error` | adapter | session |
 | `harness_crash` | adapter | session |
-| `adapter_crash` | adapter | instance |
+| `adapter_crash` | adapter (the task reading the harness output panicked: an instance-wide `failure`, then the process group is killed and `exited` follows) | instance |
 | `daemon_crash` | core | run |
 | `stall` | core | session |
 | `runaway_turn` | core | session |
@@ -405,8 +402,8 @@ Success traps are the adapter's: claude `subtype:"success"` with `is_error:true`
   carries `retry_at` shows on the failure itself (claude: subscription login only; codex: yes, from the rate-limit
   update).
   <!-- MEASURE id=claude-self-retries date=2026-11-10 ver=claude-2.1.322 env=linux-arm64-orbstack src=reports/34 note="delays 0.57→32.8 s on a fake API; set by CLAUDE_CODE_MAX_RETRIES" -->
-- `versions`: the tested range of the harness binary, `[lowest, highest]` inclusive; outside it the daemon warns at
-  start, and `aae doctor` does.
+- `versions`: the tested range of the harness binary, `[lowest, highest]` inclusive, the same as `Adapter.tested`
+  ([adapters](adapters.md)); outside it the daemon warns at start, and `aae doctor` does.
 
 `account(process)` returns the account id the gates use (§5.7): a stable hash of the credential source of the
 process part, never the credential itself.
@@ -421,7 +418,7 @@ process part, never the credential itself.
 | Turn end | `result` of a turn, then "idle without background" by the three-condition rule ([experiments](experiments.md#idle-without-background-both-signals-in-one-run)) | `turn/completed` only; thread status `idle` does not end a turn (below) |
 | Cancel | `control_request{interrupt}`; the following `aborted_tools` result is `turn.ended{cancelled}` | `turn/interrupt` |
 | Resume | full flag set again on every `--resume` | full thread config again on every `thread/resume`, after app-server closed the thread (`thread/unsubscribe` until `notLoaded`, at most 10 s, else `transcript_divergence`): a thread it still holds keeps the old config |
-| Attempt environment | process environment | `shell_environment_policy.set` of the thread; hooks get per-session values on their command line |
+| Attempt environment | process environment | `shell_environment_policy.set` of the thread; a hook runs with the process environment, so each hook command starts with `export` of the same variables |
 | Transcript check | the session file under `config_dir`: user record with `key`, answer after it | `thread/read` with turns: `userMessage` with `clientId == key`, completed turn after it |
 
 Every adapter runs each session process (claude) or instance process (codex) in its own process group, and takes
@@ -433,7 +430,11 @@ claude (`crates/aae-claude`):
   session config is flags and files in the state directory: setting sources (the host inheritance switch),
   `--settings` with the hooks, `--mcp-config`, `--plugin-dir`, system prompt, model, effort, permission mode; the
   model is passed explicitly on resume too
-  ([experiments](experiments.md#config-and-credential-delivery-experiments-4-and-5)).
+  ([experiments](experiments.md#config-and-credential-delivery-experiments-4-and-5)). The generated files
+  (`settings.json`, `mcp.json` with the tokens of services, the skills plugin) are a process's own, in
+  `<state>/claude/<session>/<instance>/`, and are removed when it exits; a resume writes them again. The config
+  directory of an isolated session (`<state>/claude/<session>/config/`, its transcript) stays: no driver call says
+  that a session will never be resumed, so it is removed by hand.
 - Signals read: `system/api_retry` (`retrying`), `rate_limit_event` with the reset time, the turn `result` with
   its error flag, `session_state_changed`, `background_tasks_changed`, `task_notification`, and the
   `tool_progress` heartbeat of a long tool every 30 s ([experiments](experiments.md#heartbeat-of-a-long-tool)).
@@ -457,8 +458,9 @@ codex (`crates/aae-codex`):
   ([harness updates](../harness-updates.md)) catches a change on every codex update.
 - Signals read: `error` with `willRetry` and `codexErrorInfo`, `turn/completed` with its status,
   `thread/status/changed`, `account/rateLimits/updated` with the reset time.
-- Thread status `idle` comes before `turn/completed`, and a command sent to the background runs while the status is
-  `idle`. While the provider is silent before its response headers there is no notification at all and codex has no
+- Thread status `idle` comes before `turn/completed`, and a command that outlives its turn (`exec_command` yields
+  while it runs) runs while the status is `idle`: the turn ends `idle` with `background`, and its late
+  `item/completed` makes the thread idle without background (contract scenario 14). While the provider is silent before its response headers there is no notification at all and codex has no
   timeout of its own: the core's watchdog owns it.
 - Two `turn/start` on one thread are not queued but merged: the second becomes a steer of the first. The core sends
   a session's next prompt only after its turn ended (6.2), so this never happens.
@@ -750,10 +752,10 @@ The daemon has no test mode. Harness binaries are resolved through mise or taken
 
 - the real `claude`/`codex` against a fake provider, configured by ordinary settings (claude: `ANTHROPIC_BASE_URL`
   in the agent env; codex: a `model_providers` entry in the native block);
-- or a scripted harness: a test binary in `crates/aae-testkit` that speaks the harness protocol subset the adapter
-  uses and plays a scenario file named in the agent env, put in place by `binary = "<path>"`.
+- or, below the adapters, the in-process scripted driver of `crates/aae-testkit`, which the core's tests wire in
+  instead of an adapter.
 
-The adapters cannot tell either from the real thing; nothing in the product exists only for tests.
+The adapters cannot tell the fake provider from the real thing; nothing in the product exists only for tests.
 
 ## 10. `default-policy` as decisions
 
