@@ -131,7 +131,7 @@ binary = "/opt/claude/bin/claude"   # optional explicit path; otherwise resolved
 
 [harness.codex]                     # keys beyond `model` and `binary` are the adapter's; claude takes none
 max_sessions = 8                    # codex: threads per app-server before a second one starts (default 8)
-instance_idle_s = 60                # codex: seconds an app-server without threads lives on (default 60)
+instance_idle_s = 60                # codex: seconds an app-server without threads lives on (default 60; 0 stops it at once)
 
 [[plugin]]                          # an installed plugin; its orchestrator side is enabled
 path = "~/aae-plugins/aae-plugin-mail"

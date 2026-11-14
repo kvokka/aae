@@ -385,3 +385,7 @@ fn bv_workspace(config: &Path, br: &Path, beads: &[(String, PathBuf)]) -> Result
     let file = dir.join("workspace.yaml");
     std::fs::write(&file, yaml).map_err(|e| format!("{}: {e}", file.display()))
 }
+
+#[cfg(test)]
+#[path = "daemon_tests.rs"]
+mod tests;
