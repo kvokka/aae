@@ -156,7 +156,13 @@ pub(crate) async fn run(paths: Paths) -> Result<bool, String> {
         let (changed, project) = (changed.clone(), name.clone());
         match aae_br::watch(&dir, move || drop(changed.send(project.clone()))) {
             Ok(w) => watchers.push(w),
-            Err(e) => eprintln!("aae daemon: warning: tracker of `{name}` is not watched: {e}"),
+            Err(e) => {
+                eprintln!("aae daemon: warning: tracker of `{name}` is not watched: {e}");
+                // A failure with no retry: the periodic resync alone reads this tracker.
+                let payload = json!({ "call": "watch", "project": name });
+                let result = Err(aae_core::tracker::TrackerError::Invalid { text: e });
+                let _ = core.send(None, Msg::Tracked { payload, result }).await;
+            }
         }
     }
     let notify = core.clone();

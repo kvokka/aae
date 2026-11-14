@@ -111,3 +111,35 @@ async fn a_bead_written_by_hand_is_seen_and_a_run_on_it_claims_and_closes_it_in_
     );
     assert!(said.contains("nothing ready"), "{said}");
 }
+
+#[tokio::test]
+async fn a_tracker_that_cannot_be_watched_says_so_in_an_event() {
+    use std::os::unix::fs::PermissionsExt;
+    let d = Daemon::start(|dir| {
+        let beads = dir.join("config/aae/shop/.beads");
+        std::fs::create_dir_all(&beads).unwrap();
+        // A directory with no read right cannot be watched.
+        std::fs::set_permissions(&beads, std::fs::Permissions::from_mode(0o000)).unwrap();
+    })
+    .await;
+    let journal = d.dir.path().join("state/aae/journal/events.jsonl");
+    let deadline = std::time::Instant::now() + common::WAIT;
+    let failed = loop {
+        let text = std::fs::read_to_string(&journal).unwrap_or_default();
+        let found = text
+            .lines()
+            .filter_map(|l| serde_json::from_str::<Value>(l).ok())
+            .find(|e| e["type"] == "tracker.sync_failed" && e["data"]["op"] == "watch");
+        if let Some(event) = found {
+            break event;
+        }
+        assert!(
+            std::time::Instant::now() < deadline,
+            "no tracker.sync_failed{{op: watch}}"
+        );
+        tokio::time::sleep(Duration::from_millis(50)).await;
+    };
+    assert_eq!(failed["project"], "shop", "{failed}");
+    let beads = d.dir.path().join("config/aae/shop/.beads");
+    std::fs::set_permissions(beads, std::fs::Permissions::from_mode(0o755)).unwrap();
+}
