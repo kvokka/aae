@@ -716,8 +716,11 @@ is an event. The account traffic light and the operator hold are built from this
 of their own. The adapter reports the account id (4.5, `Driver::account`).
 
 - Keys: `orchestrator`, `project:<project>`, `rig:<project>/<rig>`, `agent:<agent>` (the qualified agent name of
-  `config.md` "Names"), `bead:<project>/<bead id>`, `account:<harness>/<account id>`, `model:<provider>/<model>`.
-  The keys of a run are all of these that it has; a run is admitted only if none is closed.
+  `config.md` "Names", or the name of a variant), `bead:<project>/<bead id>`, `account:<harness>/<account id>`,
+  `model:<provider>/<model>`. The keys of a run are all of these that it has; a run is admitted only if none is
+  closed. The model key is the run's config's (config.md "Harness, provider and model": the provider and the model
+  name the adapter expanded), known before the first attempt; a failure that names another model (`provider_model`,
+  4.4) adds that model's key.
 - A gate is a set of closures `{key, until, reason, closed_by, closed_at}`, at most one per `(key, closed_by)`;
   the key is closed while any closure is active. Automation (`policy`, `core`) removes only its own closures; an
   operator closure is removed only by the operator, so automation never reopens an operator pause (criterion 19).

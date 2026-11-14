@@ -25,10 +25,13 @@ error in every file.
 ## Settings (any layer)
 
 One table shape for every layer (see "Effective config"): `[settings]` of the orchestrator, a project and a rig;
-the `[agent]` contribution of a plugin; the top level of `agent.toml`; and the overrides `[overrides.<agent>]`.
+the `[agent]` contribution of a plugin; the top level of `agent.toml`; an agent variant `[agents.<name>]`; and the
+overrides `[overrides.<agent>]`. A pack's `[settings]` and a prompt step take only the four launch settings:
+`harness`, `provider`, `model`, `effort`.
 
 | Key | Type | Merge |
 |---|---|---|
+| `harness`, `provider` | string: the agent CLI (one of the orchestrator's `[harness.*]`) and the model provider; see "Harness, provider and model" | scalar |
 | `model`, `effort`, `system_prompt`, `permission_mode` | string; `permission_mode` is the harness's own: claude's `--permission-mode`, codex's approval policy (`untrusted`, `on-request`, `never`) | scalar |
 | `inherit_host` | boolean | scalar |
 | `env` | table of strings | by key |
@@ -126,9 +129,15 @@ first:
 3. the project's `[settings]`;
 4. the rig's `[settings]`;
 5. the `[agent]` contributions of the plugins attached to the agent, in attachment order;
-6. the agent's own `agent.toml`;
-7. `[overrides.<agent>]` of the orchestrator, then the project, then the rig: they fix an agent of an outside pack
-   without forking the pack.
+6. the agent's own `agent.toml`: the defaults of the role;
+7. `[settings]` of the pack of the run's formula (launch settings only);
+8. the `[step]` of the run's formula (launch settings only);
+9. the agent variant the rig runs in place of the agent (`[agents.<name>]`, see "Agent variants");
+10. `[overrides.<agent>]` of the orchestrator, then the project, then the rig: they fix an agent of an outside pack
+   without forking the pack. A variant takes the overrides named after it, not those of its base agent.
+
+Layers 7 and 8 belong to a run: the agent alone (`explain` without a formula, `aae doctor`) has none of them. What
+the user says for the agent (9, 10) is stronger than what the pack and the formula say.
 
 A scalar takes the strongest layer's value; a table (`env`, `mcp`, `native`) merges by key, an entry replaced whole;
 a named list (`hooks`, `skills`, `plugins`) is the union, and a stronger layer turns an element off by name. The host
@@ -137,13 +146,18 @@ whole (`inherit_host = false`), never one element by name. The harness config in
 `.claude/`, `.mcp.json`, `AGENTS.md`) belongs to the repository, not the host: it applies with inheritance off too
 (see "Host inheritance").
 
-`Config::effective(project, rig, agent)` merges the layers above for one session: the harness default model,
+`Config::effective(project, rig, agent)` merges the layers above for one agent alone: the harness default model,
 orchestrator, project and rig settings, then the contributions of the attached plugins in attachment order, the
-agent, and the overrides of the orchestrator, the project and the rig. Plugins attach first (the `plugins` key of
+agent, and the overrides of the orchestrator, the project and the rig. `Config::for_run(project, rig, formula)` is
+what a run gets: the agent the rig runs for the formula's step (a variant by its name), and its config with the pack,
+step and variant layers too; a run keeps this one. Plugins attach first (the `plugins` key of
 every layer), so a stronger layer can detach a plugin and its whole contribution. An override applies when its key
 resolves (see Names) to the agent. Every value keeps its layer; a value several layers make together (`native`
 tables merged by key, a system prompt with plugin fragments, `PATH` with plugin `bin/` directories) names them all
-in order (`# agent + plugin mail`). `explain()` prints one line per value with its layer and one line for the host:
+in order (`# agent + plugin mail`); the harness or provider one of them follows from the other says `# derived`, and a
+model the adapter expanded keeps the short name it was given (`model = "gpt-6-luna"  # rig override, given as
+"luna"`). The new layers print as `pack <name>`, `formula <pack>.<name>` and `variant <name>`. `explain()` prints one
+line per value with its layer and one line for the host:
 inherited by the harness and invisible to aae, or off (`aae config explain --project <p> --agent <a> [--rig <r>]`,
 with no daemon, on the file on disk; `GET /v1/config/explain`, on the config the daemon holds). The effective config
 serializes to JSON: a run keeps it as its snapshot, and `env` is the whole session environment besides what the
@@ -152,6 +166,29 @@ prepares, right before the session starts; the adapter materializes it into laun
 generated harness config directory, which lives in the state directory, never in the rig or the harness's home
 directory. The adapter's `split` turns it into a process part, keyed by its fingerprint (contracts 8), and a session
 part.
+
+## Harness, provider and model
+
+`provider` is who serves the model (`anthropic`, `openai`); `harness` is the agent CLI that runs the session
+(`claude`, `codex`). Each adapter says which providers its harness works with, its own first (see
+docs/design/adapters.md), so one follows from the other:
+
+- only `provider` is set: the harness is the one adapter that works with it; none, or more than one, is an error;
+- only `harness` is set: the provider is the harness's own;
+- both are set and the harness does not work with the provider: the stronger layer's value stands and the other
+  follows from it (an agent's `harness = "claude"` under a variant's `provider = "openai"` runs on codex); set in
+  the same layer, it is an error;
+- neither is set: an error.
+
+The harness must be one of the orchestrator's `[harness.*]`. These are load errors: every prompt formula on every rig
+of a project must assemble, and an error names the project file, the formula and rig, the key and the layer of each
+value (`formula `kit.implement` on rig `backend`: `provider = "openai"` (agent) is not one that harness `claude`
+works with: anthropic`).
+
+`model` is a full name, passed to the harness as it is, or a short name of the adapter's table, expanded to the
+latest model of that family when the config is assembled: codex takes `astra`, `luna`, `terra`, `sol`; claude
+resolves `fable`, `opus`, `sonnet`, `haiku` itself, so they go to it as they are. The model gate of a run is
+`model:<provider>/<model>` with the expanded name (contracts 7), known from the config before the first attempt.
 
 ## Host inheritance (spec §6.4)
 
@@ -168,7 +205,7 @@ What inheritance costs, and what the user should know:
 - the operator's stdio MCP servers start in every session, about 45 MB per session on the owner's setup. Shared
   MCP (one process for many sessions) covers only the servers declared in the `aae` config; `aae doctor` warns
   when it sees stdio MCP servers in the host settings (`crates/aae/src/doctor.rs`);
-  <!-- MEASURE id=stdio-mcp-per-session date=2026-11-10 ver=gc-a86d05bd7 env=linux-arm64-orbstack src=reports/02,reports/18 note="deja server, PSS 42-62 MB per session; deja version not recorded; depends on the operator's MCP set" -->
+  <!-- MEASURE id=stdio-mcp-per-session date=2026-11-10 ver=prior-a86d05bd7 env=linux-arm64-orbstack src=reports/02,reports/18 note="deja server, PSS 42-62 MB per session; deja version not recorded; depends on the operator's MCP set" -->
 - the operator's own hooks and plugins run in agent sessions;
 - codex rewrites `~/.codex/config.toml` itself (hook trust hashes); the adapters add no writes of their own to
   the host's files.
@@ -263,12 +300,18 @@ packs = [
 path = "plugins/aae-plugin-notes"
 
 [settings]                          # layer 3
-[overrides.implementer]             # layer 7
+[overrides.implementer]             # layer 10
+
+[agents.codex-implementer]          # a variant of a pack agent (see "Agent variants")
+base = "kit.implementer"
+provider = "openai"
+model = "luna"
 
 [rigs.backend]
 path = "../backend"                 # must exist
 vars = { test_cmd = "cargo test" }   # `{{ rig.test_cmd }}` in a prompt; `name` and `path` are taken by the rig
 triggers = ["nightly-audit"]        # pack triggers that run on this rig (a pack does not know rig names, §9.5)
+agents = { implementer = "codex-implementer" }  # on this rig the variant runs where a formula names `implementer`
 [rigs.backend.settings]             # layer 4
 [rigs.backend.overrides.implementer]
 
@@ -319,6 +362,9 @@ version = "0.3.0"
 requires_plugins = ["mail"]         # must be declared by the orchestrator or the project
 min_aae = "0.1.0"                   # optional
 
+[settings]                          # layer 7: launch settings of the runs of its formulas
+model = "sonnet"
+
 [[trigger]]
 name = "implement-next"
 on = "bead.ready"
@@ -341,10 +387,12 @@ declared by the orchestrator or the project.
 
 ## Agent: `agents/<agent>/agent.toml`
 
-`harness` (required; one of the orchestrator's `[harness.*]`), `prompt` (role prompt file, default `prompt.md`
+`prompt` (role prompt file, default `prompt.md`
 when it exists; its text is the agent layer's `system_prompt`, so an override may still replace it, and setting
 `system_prompt` in `agent.toml` too is an error), `max_runs` (optional positive integer: runs of this agent
-started at once in its project; the orchestrator's `max_runs` still applies), then the settings keys above.
+started at once in its project; the orchestrator's `max_runs` still applies), then the settings keys above. Its
+`harness`, `provider`, `model` and `effort` are the defaults of the role: a pack, a formula, a variant or an override
+may change any of them, and an agent that names neither `harness` nor `provider` needs a layer that does.
 A role prompt file that is empty or only whitespace is a load error naming the file.
 Everything of one agent (settings, prompts,
 skills, hooks, scripts) lives in its directory, laid out as its author likes. The core has no role names: whatever a
@@ -352,6 +400,19 @@ role does is configuration.
 
 A run counts toward both limits from `preparing` until it is terminal, except while `parked` (no harness process).
 A run over a limit waits in `queued` with `waiting_for = "concurrency"`; a busy workdir is reported first.
+
+## Agent variants
+
+`[agents.<name>]` of the orchestrator or a project declares a pack agent under another name with settings of its own:
+`base = "<pack>.<agent>"` and any keys of `agent.toml` but `prompt` (the role prompt, skills and directory are the
+base agent's). A rig runs a variant in place of an agent the formulas name: `[rigs.<r>] agents = { <agent> =
+"<variant>" }`. A run of the variant is of the variant's name: `max_runs` (its own, else the base agent's), the gate
+`agent:<variant>`, the events and `explain` count it as an agent of its own. The formulas of the pack still name the
+base agent; the other way to the same change, without a new name, is an override (`[rigs.<r>.overrides.<agent>]`).
+
+A project's variant replaces an orchestrator's of the same name. Load errors: a `base` that resolves to no agent; a
+`base` that names a variant (a variant is of a pack agent, one level); a rig that maps to a variant nobody declares; a
+variant named like an agent of a pack of the project.
 
 ## Formula: `formulas/<file>.toml`
 
@@ -368,6 +429,8 @@ kind = "prompt"                     # prompt: agent + prompt template; exec: com
 agent = "implementer"
 prompt = "implement.md"             # relative to the formula file
 timeout = "45m"                     # optional
+model = "opus"                      # optional, prompt steps only: layer 8, the launch settings `harness`,
+                                    # `provider`, `model`, `effort`
 ```
 
 A formula has a name, a description, declared inputs and exactly one step. A `prompt` step is a turn of the agent in
