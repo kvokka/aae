@@ -54,6 +54,12 @@ async fn runs_and_gates_by_hand_from_the_cli() {
         (out.status.code(), &error["error"]["code"]),
         (Some(1), &"idempotency_key_reused".into())
     );
+    let out = d.cli(&["run", "start", "shop", "web", "check", "--input", "n"], &[]);
+    let text = String::from_utf8_lossy(&out.stderr);
+    assert!(
+        out.status.code() == Some(2) && text.contains("`n` is not NAME=VALUE"),
+        "{text}"
+    );
     let view = d.json(&["run", "show", &run]);
     assert_eq!((&view["state"], &view["inputs"]["n"]), (&"queued".into(), &2.into()));
     let out = d.cli(&["gate", "open", "project:shop"], &[]);

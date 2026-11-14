@@ -14,7 +14,7 @@ pub enum RunCommand {
         rig: String,
         formula: String,
         /// An input as `name=value`; a value that parses as JSON is taken as JSON.
-        #[arg(long = "input", value_name = "NAME=VALUE")]
+        #[arg(long = "input", value_name = "NAME=VALUE", value_parser = name_value)]
         inputs: Vec<String>,
         /// A terminal run whose last session this run continues.
         #[arg(long)]
@@ -297,6 +297,14 @@ pub(super) async fn instance(client: &Client, json: bool, command: InstanceComma
     };
     print(json, &reply);
     Ok(())
+}
+
+/// An `--input` with its `=`: a bare name is a mistake, not an empty value.
+fn name_value(text: &str) -> Result<String, String> {
+    match text.split_once('=') {
+        Some((name, _)) if !name.is_empty() => Ok(text.to_owned()),
+        _ => Err(format!("`{text}` is not NAME=VALUE")),
+    }
 }
 
 /// `name=value`, the value as JSON if it parses, else as a string.
