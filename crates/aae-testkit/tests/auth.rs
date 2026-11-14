@@ -1,6 +1,7 @@
 //! Postmortem 0001 on the scripted driver and the bundled `default-policy`: a 403 parks the account for a growing
 //! wait, the attempt after it probes the cause, and a 403 that lasts keeps waiting, past the attempts ceiling, with no
-//! operator (spec §2.1 item 12). Bundled hooks run on blocking threads, so real time.
+//! operator (spec §2.1 item 12). On the paused clock: bundled hooks run on blocking threads, and tokio does not
+//! advance a paused clock while one runs.
 
 mod common;
 
@@ -11,10 +12,8 @@ use aae_core::{
 use aae_testkit::Step;
 use common::{World, hollow_turn, world_with};
 use serde_json::{Value, json};
-use std::{
-    sync::Arc,
-    time::{Duration, Instant},
-};
+use std::{sync::Arc, time::Duration};
+use tokio::time::Instant;
 
 const ACCOUNT: &str = "account:scripted/a";
 
@@ -46,7 +45,7 @@ impl World {
     }
 }
 
-#[tokio::test]
+#[tokio::test(start_paused = true)]
 async fn a_passing_403_with_a_lost_or_doubled_end_recovers_by_itself() {
     let w = world("auth_backoff_base_s = 1\nauth_backoff_cap_s = 1\n");
     // The failure doubled and the process exits after it; then the process dies without a word.
@@ -100,7 +99,7 @@ async fn a_passing_403_with_a_lost_or_doubled_end_recovers_by_itself() {
     assert_eq!(resumed, [json!({"gate_key": ACCOUNT}), json!({"gate_key": ACCOUNT})]);
 }
 
-#[tokio::test]
+#[tokio::test(start_paused = true)]
 async fn a_lasting_403_keeps_waiting_past_the_attempts_ceiling() {
     // Spec §2.1 item 12: no operator, and the waits on the account gate do not count against the ceiling.
     let w = world("auth_backoff_base_s = 0\nauth_backoff_cap_s = 0\n");
