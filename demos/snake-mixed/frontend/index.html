@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Snake</title>
+<style>
+  body {
+    font-family: system-ui, sans-serif;
+    background: #15171c;
+    color: #e8e8e8;
+    margin: 0;
+    padding: 24px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 32px;
+    justify-content: center;
+  }
+  #board {
+    background: #000;
+    border: 2px solid #444;
+    display: block;
+  }
+  #panel { min-width: 240px; max-width: 320px; }
+  #score { font-weight: bold; font-size: 1.3em; }
+  #status { min-height: 3em; margin: 10px 0; line-height: 1.4; }
+  button {
+    font-size: 1em;
+    padding: 6px 14px;
+    cursor: pointer;
+  }
+  ol { padding-left: 28px; }
+  #help { color: #9a9a9a; font-size: 0.9em; }
+</style>
+</head>
+<body>
+
+<div>
+  <canvas id="board" width="400" height="400"></canvas>
+  <p id="help">Arrow keys: steer. Space or Enter: start a new game.</p>
+</div>
+
+<div id="panel">
+  <div>Score: <span id="score">0</span></div>
+  <div id="status"></div>
+  <button id="new-game" type="button">New game</button>
+  <h2>Top 10</h2>
+  <ol id="scores"></ol>
+</div>
+
+<script>
+"use strict";
+
+// Backend address. Fixed by the backend; change only here.
+const SCORES_URL = "http://127.0.0.1:8765/scores";
+
+const GRID = 20;          // board is GRID x GRID cells
+const CELL = 20;          // pixels per cell (canvas is GRID*CELL = 400)
+const TICK_MS = 120;      // time per snake step
+
+const DIRECTIONS = {
+  ArrowUp:    { x: 0,  y: -1 },
+  ArrowDown:  { x: 0,  y: 1 },
+  ArrowLeft:  { x: -1, y: 0 },
+  ArrowRight: { x: 1,  y: 0 }
+};
+
+const canvas = document.getElementById("board");
+const ctx = canvas.getContext("2d");
+const scoreEl = document.getElementById("score");
+const statusEl = document.getElementById("status");
+const scoresEl = document.getElementById("scores");
+const newGameButton = document.getElementById("new-game");
+
+// Game state. state is one of: "ready", "running", "submitting", "over".
+let state = "ready";
+let snake = [];
+let direction = DIRECTIONS.ArrowRight; // direction applied on the last step
+let queuedDirection = DIRECTIONS.ArrowRight; // latest accepted turn
+let food = null;
+let score = 0;
+let timerId = null;
+
+function setStatus(text) {
+  statusEl.textContent = text;
+}
+
+function sameCell(a, b) {
+  return a.x === b.x && a.y === b.y;
+}
+
+function placeFood() {
+  const free = [];
+  for (let x = 0; x < GRID; x++) {
+    for (let y = 0; y < GRID; y++) {
+      const cell = { x: x, y: y };
+      if (!snake.some(function (s) { return sameCell(s, cell); })) {
+        free.push(cell);
+      }
+    }
+  }
+  if (free.length === 0) return null;
+  return free[Math.floor(Math.random() * free.length)];
+}
+
+function draw() {
+  ctx.fillStyle = "#000";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  if (food) {
+    ctx.fillStyle = "#e5484d";
+    ctx.fillRect(food.x * CELL + 2, food.y * CELL + 2, CELL - 4, CELL - 4);
+  }
+
+  snake.forEach(function (segment, index) {
+    ctx.fillStyle = index === 0 ? "#9be564" : "#46a758";
+    ctx.fillRect(segment.x * CELL + 1, segment.y * CELL + 1, CELL - 2, CELL - 2);
+  });
+
+  scoreEl.textContent = String(score);
+}
+
+function startGame(firstDirection) {
+  snake = [{ x: 10, y: 10 }, { x: 9, y: 10 }, { x: 8, y: 10 }];
+  direction = firstDirection || DIRECTIONS.ArrowRight;
+  queuedDirection = direction;
+  score = 0;
+  food = placeFood();
+  state = "running";
+  setStatus("Playing...");
+  draw();
+  clearTimeout(timerId);
+  timerId = setTimeout(tick, TICK_MS);
+}
+
+function tick() {
+  direction = queuedDirection;
+  const head = { x: snake[0].x + direction.x, y: snake[0].y + direction.y };
+
+  if (head.x < 0 || head.y < 0 || head.x >= GRID || head.y >= GRID) {
+    endGame();
+    return;
+  }
+
+  const eating = food !== null && sameCell(head, food);
+  // The tail moves away on a normal step, so it is not a collision target then.
+  const body = eating ? snake : snake.slice(0, -1);
+  if (body.some(function (s) { return sameCell(s, head); })) {
+    endGame();
+    return;
+  }
+
+  snake.unshift(head);
+  if (eating) {
+    score += 1;
+    food = placeFood();
+    if (food === null) {
+      // Board is full: nothing left to place, treat as game over.
+      draw();
+      endGame();
+      return;
+    }
+  } else {
+    snake.pop();
+  }
+
+  draw();
+  timerId = setTimeout(tick, TICK_MS);
+}
+
+function endGame() {
+  clearTimeout(timerId);
+  timerId = null;
+  state = "submitting";
+  draw();
+  setStatus("Game over! Score: " + score + ". Enter your name...");
+  // Let the browser paint the final board before the blocking prompt.
+  setTimeout(askNameAndSubmit, 50);
+}
+
+function askNameAndSubmit() {
+  let name = null;
+  for (;;) {
+    const input = window.prompt(
+      "Game over! Score: " + score + ".\nEnter your name (no spaces; spaces become underscores):",
+      ""
+    );
+    if (input === null) break;                 // cancelled
+    name = input.trim().replace(/\s+/g, "_");  // no spaces may be sent
+    if (name.length > 0) break;
+    // empty name: ask again
+  }
+
+  const finalScore = score;
+  if (name === null) {
+    setStatus("Score " + finalScore + " not saved (no name entered). Press Space or Enter for a new game.");
+    state = "over";
+    loadScores();
+    return;
+  }
+  submitScore(name, finalScore);
+}
+
+async function submitScore(name, finalScore) {
+  setStatus("Saving score for " + name + "...");
+  let saved = false;
+  try {
+    const response = await fetch(SCORES_URL, {
+      method: "POST",
+      headers: { "Content-Type": "text/plain" },
+      body: name + " " + finalScore
+    });
+    if (!response.ok) {
+      throw new Error("HTTP " + response.status);
+    }
+    saved = true;
+  } catch (err) {
+    setStatus("Could not save score: backend not reachable at " + SCORES_URL + " (" + err.message + ").");
+  }
+
+  await loadScores();
+
+  if (saved) {
+    setStatus("Saved " + name + " " + finalScore + ". Press Space or Enter for a new game.");
+  }
+  state = "over";
+}
+
+async function loadScores() {
+  scoresEl.textContent = "";
+  try {
+    const response = await fetch(SCORES_URL, { cache: "no-store" });
+    if (!response.ok) {
+      throw new Error("HTTP " + response.status);
+    }
+    const text = await response.text();
+    const lines = text.split(/\r?\n/).map(function (l) { return l.trim(); }).filter(Boolean);
+    if (lines.length === 0) {
+      const li = document.createElement("li");
+      li.textContent = "No scores yet.";
+      scoresEl.appendChild(li);
+      return;
+    }
+    lines.slice(0, 10).forEach(function (line) {
+      const li = document.createElement("li");
+      li.textContent = line;
+      scoresEl.appendChild(li);
+    });
+  } catch (err) {
+    const li = document.createElement("li");
+    li.textContent = "Cannot load high scores: backend not reachable at " + SCORES_URL + " (" + err.message + ").";
+    scoresEl.appendChild(li);
+  }
+}
+
+function newGameRequested() {
+  if (state === "ready" || state === "over") {
+    startGame(null);
+  }
+}
+
+document.addEventListener("keydown", function (event) {
+  if (event.key === " " || event.key === "Enter") {
+    if (state === "ready" || state === "over") {
+      event.preventDefault();
+      startGame(null);
+    }
+    return;
+  }
+
+  const next = DIRECTIONS[event.key];
+  if (!next) return;
+  event.preventDefault();
+
+  if (state === "ready" || state === "over") {
+    if (state === "over") return; // wait for an explicit new game
+    startGame(next);
+    return;
+  }
+  if (state !== "running") return;
+
+  // Ignore a reversal straight into the snake's own neck.
+  if (next.x === -queuedDirection.x && next.y === -queuedDirection.y) return;
+  queuedDirection = next;
+});
+
+newGameButton.addEventListener("click", newGameRequested);
+
+// Initial screen.
+snake = [{ x: 10, y: 10 }, { x: 9, y: 10 }, { x: 8, y: 10 }];
+food = placeFood();
+draw();
+setStatus("Press an arrow key to start.");
+loadScores();
+</script>
+</body>
+</html>

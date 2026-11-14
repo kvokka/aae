@@ -2231,3 +2231,14 @@ WP-J: патч `queue.rs` WP-H применён; фронтенд — итого
 (planner/coder, plan/code) + `snake-claude`/`snake-mixed` с `root/` пользователя. Демо 1 вживую — passed дважды
 (96 с, 188 с). Демо 2 — не запускалось (codex не залогинен). `mise run ci` 415/415, `acceptance-ci` 21 pass / 0 fail /
 9 not run на `5823da4`. Отчёт: `.loop/audit2/work/WP-J.md`.
+
+## 2026-11-15T00:45 · цикл аудит-2 · мастер · НАХОДКА
+
+БЛОКЕР WP-J «codex не залогинен» снят — он неверен. На этом хосте codex ходит через провайдера из
+`~/.codex/config.toml` (`model_provider` с `env_key`), а не через логин ChatGPT, поэтому `codex login status` всегда
+отвечает «Not logged in» и `auth.json` нет; живые прогоны при этом работают (правило владельца — `.loop/OWNER-RULES.md`
+§4: не записывать «не залогинен» без живой проверки). Проверка: один живой прогон `cd demos && mise run snake-mixed`
+на `a992a30` — passed за 110 с, планировщик (claude haiku) запустил два дочерних прогона: `backend` — вариант
+`codex-coder` (codex, `luna` → `gpt-6-luna`), `frontend` — `dev.coder` (claude haiku); smoke зелёный. Снимок —
+`demos/snake-mixed/`. Предложение: `aae doctor` и гайды не должны называть отсутствие `auth.json` отсутствием логина,
+когда конфиг хоста задаёт провайдера с ключом в окружении.
