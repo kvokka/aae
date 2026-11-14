@@ -270,7 +270,7 @@ impl Prepared {
 }
 
 /// Runs a bundled plugin's hook off the async threads (it may call git) within the hook timeout. A timeout ends
-/// the wait only: the blocking task and a `git` it started run on to their end.
+/// the wait; the bundled `worktree` kills the `git` it still runs at that timeout too.
 async fn bundled(run: Option<BundledHook>, name: &str, hook: &Value, event: &Value) -> Result<Said, Failed> {
     let failed = |error, stderr: String| Failed {
         error,

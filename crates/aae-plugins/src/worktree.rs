@@ -6,8 +6,12 @@
 use serde::Deserialize;
 use serde_json::{Value, json};
 use std::{
+    io::Read,
+    os::unix::process::CommandExt,
     path::{Path, PathBuf},
-    process::Command,
+    process::{Command, Stdio},
+    thread,
+    time::{Duration, Instant},
 };
 
 /// Set by the loader, not by a table: the qualified names of the formulas with `worktree = true`.
@@ -20,19 +24,28 @@ pub(crate) struct Params {
 /// Where the worktrees of a repository live: inside its git directory, out of every working tree.
 const DIR: &str = "aae/worktrees";
 
+/// The timeout of a bundled hook (contracts 3.1): past it the runner gives up, and the `git` still running is killed
+/// with its process group rather than left to run on.
+const TIMEOUT: Duration = Duration::from_secs(if cfg!(test) { 2 } else { 30 });
+
 pub(crate) fn hook(event: &Value, p: &Params) -> Result<Option<Value>, String> {
     let run = &event["data"]["run"];
     let id = run["id"].as_str().ok_or("the event has no run")?;
     let workdir = Path::new(run["workdir"].as_str().ok_or("the run has no workdir")?);
+    let until = Instant::now() + TIMEOUT;
     match (event["type"].as_str(), worktree(workdir)) {
         // A run continuing another's session got that run's workdir: its worktree, brought back if removed.
-        (Some("run.preparing"), Some((common, of))) => create(&common, of).map(Some),
+        (Some("run.preparing"), Some((common, of))) => create(&common, of, until).map(Some),
         (Some("run.preparing"), None) if p.formulas.iter().any(|f| run["formula"] == f.as_str()) => {
-            let common = git(workdir, &["rev-parse", "--path-format=absolute", "--git-common-dir"])?;
-            create(Path::new(&common), id).map(Some)
+            let common = git(
+                workdir,
+                &["rev-parse", "--path-format=absolute", "--git-common-dir"],
+                until,
+            )?;
+            create(Path::new(&common), id, until).map(Some)
         }
         (Some("run.passed" | "run.failed" | "run.cancelled"), Some((common, of))) => {
-            remove(&common, workdir, of).map(|()| None)
+            remove(&common, workdir, of, until).map(|()| None)
         }
         _ => Ok(None),
     }
@@ -49,51 +62,84 @@ fn worktree(workdir: &Path) -> Option<(PathBuf, &str)> {
 /// Creates the worktree of run `id` in the repository with git dir `common`, from its HEAD; one already there is
 /// reused, so a hook run again after a crash decides the same; an existing branch `aae/<id>` is checked out, never
 /// reset.
-fn create(common: &Path, id: &str) -> Result<Value, String> {
+fn create(common: &Path, id: &str, until: Instant) -> Result<Value, String> {
     let path = common.join(DIR).join(id);
     if !path.join(".git").exists() {
         let branch = format!("aae/{id}");
         let at = path.to_string_lossy();
         // A worktree removed by hand stays registered, and its branch may hold commits: take the branch as it is.
-        git(common, &["worktree", "prune"])?;
-        if git(common, &["branch", "--list", &branch])?.is_empty() {
-            git(common, &["worktree", "add", "-b", &branch, &at, "HEAD"])?;
+        git(common, &["worktree", "prune"], until)?;
+        if git(common, &["branch", "--list", &branch], until)?.is_empty() {
+            git(common, &["worktree", "add", "-b", &branch, &at, "HEAD"], until)?;
         } else {
-            git(common, &["worktree", "add", &at, &branch])?;
+            git(common, &["worktree", "add", &at, &branch], until)?;
         }
     }
     Ok(json!({ "decision": "proceed", "workdir": path }))
 }
 
 /// Removes the worktree at `path` of run `id` unless it holds work a removal would lose.
-fn remove(common: &Path, path: &Path, id: &str) -> Result<(), String> {
+fn remove(common: &Path, path: &Path, id: &str, until: Instant) -> Result<(), String> {
     if !path.exists() {
         return Ok(());
     }
-    let head = git(path, &["rev-parse", "HEAD"])?;
-    if git(path, &["for-each-ref", "--contains", &head, "--format=%(refname)"])?.is_empty() {
+    let head = git(path, &["rev-parse", "HEAD"], until)?;
+    if git(
+        path,
+        &["for-each-ref", "--contains", &head, "--format=%(refname)"],
+        until,
+    )?
+    .is_empty()
+    {
         return Err(format!(
             "{} keeps commits no ref reaches; left in place",
             path.display()
         ));
     }
     // Refuses a worktree with uncommitted changes.
-    git(common, &["worktree", "remove", &path.to_string_lossy()])?;
+    git(common, &["worktree", "remove", &path.to_string_lossy()], until)?;
     // Deletes the branch only when it is merged; an unmerged one is the run's work.
-    let _ = git(common, &["branch", "-d", &format!("aae/{id}")]);
+    let _ = git(common, &["branch", "-d", &format!("aae/{id}")], until);
     Ok(())
 }
 
-fn git(dir: &Path, args: &[&str]) -> Result<String, String> {
-    let out = Command::new("git")
+/// Runs `git` in its own process group, killed with the group once `until` passes.
+fn git(dir: &Path, args: &[&str], until: Instant) -> Result<String, String> {
+    let mut child = Command::new("git")
         .arg("-C")
         .arg(dir)
         .args(args)
-        .output()
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .process_group(0)
+        .spawn()
         .map_err(|e| format!("git: {e}"))?;
-    if !out.status.success() {
-        let err = String::from_utf8_lossy(&out.stderr);
+    let drain = |pipe: Option<Box<dyn Read + Send>>| {
+        thread::spawn(move || {
+            let mut text = String::new();
+            pipe.map(|mut p| p.read_to_string(&mut text));
+            text
+        })
+    };
+    let out = drain(child.stdout.take().map(|p| Box::new(p) as _));
+    let err = drain(child.stderr.take().map(|p| Box::new(p) as _));
+    let status = loop {
+        match child.try_wait().map_err(|e| format!("git: {e}"))? {
+            Some(status) => break Some(status),
+            None if Instant::now() >= until => break None,
+            None => thread::sleep(Duration::from_millis(20)),
+        }
+    };
+    let Some(status) = status else {
+        let group = rustix::process::Pid::from_child(&child);
+        let _ = rustix::process::kill_process_group(group, rustix::process::Signal::KILL);
+        let _ = child.wait();
+        return Err(format!("git {}: killed past the hook timeout", args.join(" ")));
+    };
+    let (out, err) = (out.join().unwrap_or_default(), err.join().unwrap_or_default());
+    if !status.success() {
         return Err(format!("git {}: {}", args.join(" "), err.trim()));
     }
-    Ok(String::from_utf8_lossy(&out.stdout).trim().to_owned())
+    Ok(out.trim().to_owned())
 }

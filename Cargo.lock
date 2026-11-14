@@ -115,6 +115,7 @@ name = "aae-plugins"
 version = "0.1.0"
 dependencies = [
  "aae-core",
+ "rustix",
  "serde",
  "serde_json",
  "tempfile",

@@ -505,7 +505,8 @@ or for a project).
   run it continues (a session resumes where it ran); when that is a worktree of this plugin, it is brought back on
   its branch if it was removed, whatever the run's formula says. A reload that leaves a project no formula with
   `worktree = true` turns the plugin off there: the worktrees of its runs still going are left in place, as are
-  their branches.
+  their branches. Its hook has the 30 s timeout of a hook; a `git` still running at that timeout is killed with its
+  process group and the hook fails.
 
 ### Where the bundled plugins end and the core begins
 

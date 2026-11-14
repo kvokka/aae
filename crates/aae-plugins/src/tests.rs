@@ -1,6 +1,6 @@
 use super::{check, run};
 use serde_json::{Value, json};
-use std::{path::Path, process::Command};
+use std::{path::Path, process::Command, time::Duration};
 
 /// `run.attempt_failed` at 12:00:00 for a failure of `kind`, after `attempts` of `(kind, failure_kind, seconds)`.
 fn failed(kind: &str, failure: Value, attempts: &[(&str, &str, i64)], gates: Value) -> Value {
@@ -317,4 +317,37 @@ fn worktree_on_real_git() {
     git(&repo, &["branch", "-D", "aae/r2"]);
     assert!(run("worktree", &event("run.passed", "r2", &tree, "shop.fix"), &params).is_err());
     assert!(tree.exists());
+}
+
+#[test]
+fn a_git_past_the_hook_timeout_is_killed() {
+    let repo = tempfile::tempdir().unwrap();
+    let repo = repo.path().canonicalize().unwrap();
+    git(&repo, &["init", "-q", "-b", "main"]);
+    git(
+        &repo,
+        &[
+            "-c",
+            "user.email=t@example.com",
+            "-c",
+            "user.name=t",
+            "commit",
+            "-q",
+            "--allow-empty",
+            "-m",
+            "b",
+        ],
+    );
+    // A hook path of the user's own config would skip the repository's hooks.
+    let hooks = repo.join(".git/hooks");
+    git(&repo, &["config", "core.hooksPath", &hooks.to_string_lossy()]);
+    let hook = hooks.join("post-checkout");
+    std::fs::write(&hook, "#!/bin/sh\nexec sleep 20\n").unwrap();
+    std::fs::set_permissions(&hook, std::os::unix::fs::PermissionsExt::from_mode(0o755)).unwrap();
+    let run_ = json!({ "id": "r1", "agent": "shop.dev", "formula": "shop.fix", "workdir": repo });
+    let event = json!({ "type": "run.preparing", "data": { "run": run_ } });
+    let started = std::time::Instant::now();
+    let said = run("worktree", &event, &json!({ "formulas": ["shop.fix"] }));
+    assert!(started.elapsed() < Duration::from_secs(10), "{said:?}");
+    assert!(said.unwrap_err().contains("killed past the hook timeout"));
 }
