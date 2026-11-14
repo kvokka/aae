@@ -128,7 +128,9 @@ impl Claude {
             pgid: pid,
         };
         let events = child::Events::new(&id, sink);
-        tokio::spawn(async move {
+        let (watched, known, gone) = (events.clone(), self.instances.clone(), id.clone());
+        let forget = move || drop(known.lock().unwrap_or_else(PoisonError::into_inner).remove(&gone));
+        let reader = tokio::spawn(async move {
             let send = |session: Option<&SessionRef>, event| events.send(session.cloned(), event);
             while let Ok(Some(line)) = lines.next_line().await {
                 let Ok(msg) = serde_json::from_str::<Value>(&line) else {
@@ -162,6 +164,7 @@ impl Claude {
                 send((!wide).then_some(&session), event);
             }
         });
+        child::watch(reader, watched, handle.clone(), forget);
         Ok(handle)
     }
 }

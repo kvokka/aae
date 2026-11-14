@@ -110,8 +110,12 @@ impl Codex {
         ));
         let (instances, id) = (self.instances.clone(), id.to_owned());
         let reader = instance.clone();
-        tokio::spawn(async move {
-            let mut send = rpc::sender(child::Events::new(&id, sink), reader.home.clone());
+        let events = child::Events::new(&id, sink);
+        let (watched, known, gone) = (events.clone(), self.instances.clone(), id.clone());
+        // The calls waiting on an answer the reader will never route fail at once.
+        let forget = move || lock(&known).remove(&gone).iter().for_each(|i| lock(&i.pending).clear());
+        let task = tokio::spawn(async move {
+            let mut send = rpc::sender(events, reader.home.clone());
             rpc::read(&reader, lines, &mut send).await;
             let status = child.wait().await.ok();
             orphans::waited(u32::try_from(pid).ok());
@@ -124,6 +128,7 @@ impl Codex {
                 send(thread, event);
             }
         });
+        child::watch(task, watched, handle.clone(), forget);
         let client = json!({ "name": "aae", "title": "aae", "version": env!("CARGO_PKG_VERSION") });
         let init = json!({ "clientInfo": client, "capabilities": { "experimentalApi": true } });
         let started = match instance.call("initialize", init, None).await {
