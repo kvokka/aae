@@ -113,21 +113,22 @@ fn marked() -> impl Iterator<Item = (i32, String)> {
         .filter_map(|(pid, ..)| Some((pid, marker(pid)?)))
 }
 
-/// Kills every process but this one whose environment carries `AAE_INSTANCE=<id>`; how many it found, so one it
-/// could not kill does not pass for dead.
-pub(crate) fn sweep(id: &str) -> usize {
+/// Kills every process but this one whose environment carries `AAE_INSTANCE=<id>`; the ones it found as (pid, start
+/// time), so one it could not kill does not pass for dead.
+pub(crate) fn sweep(id: &str) -> Vec<(i32, u64)> {
     sweep_all(&BTreeSet::from([id.to_owned()]))
 }
 
 /// [`sweep`] for every id of `ids` in one walk of `/proc`.
-pub(crate) fn sweep_all(ids: &BTreeSet<String>) -> usize {
+pub(crate) fn sweep_all(ids: &BTreeSet<String>) -> Vec<(i32, u64)> {
     marked()
         .filter(|(_, marker)| ids.contains(marker))
-        .filter_map(|(pid, _)| Pid::from_raw(pid))
-        .inspect(|pid| {
-            let _ = kill_process(*pid, Signal::KILL);
+        .filter_map(|(pid, _)| Some((Pid::from_raw(pid)?, start_time(pid)?)))
+        .map(|(pid, start)| {
+            let _ = kill_process(pid, Signal::KILL);
+            (pid.as_raw_nonzero().get(), start)
         })
-        .count()
+        .collect()
 }
 
 #[cfg(test)]
@@ -162,7 +163,7 @@ mod tests {
         waited(pid);
         let left = marked(&id);
         assert!(left >= 2, "both descendants outlive their parent");
-        assert_eq!(sweep(&id), left);
+        assert_eq!(sweep(&id).len(), left);
         for _ in 0..100 {
             if marked(&id) == 0 {
                 return;

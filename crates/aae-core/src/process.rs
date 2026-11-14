@@ -201,11 +201,15 @@ pub(crate) async fn wait_gone(id: &str, leader: Option<(i32, u64)>, limit: Durat
     {
         return false;
     }
+    // A killed process loses its environment, so its marker, before it is dead: what was killed is awaited by pid.
+    let mut killed = Vec::new();
     loop {
         let marker = id.to_owned();
         // Walking `/proc` is synchronous.
         let found = tokio::task::spawn_blocking(move || crate::orphans::sweep(&marker)).await;
-        if found.unwrap_or(0) == 0 {
+        killed.extend(found.unwrap_or_default());
+        killed.retain(|&(pid, start)| crate::orphans::start_time(pid) == Some(start));
+        if killed.is_empty() {
             return true;
         }
         if tokio::time::Instant::now() >= deadline {
@@ -341,6 +345,29 @@ mod tests {
         leader.kill().await.unwrap();
         crate::orphans::waited(child);
         assert!(wait_gone(&id, Some((pid, start)), Duration::from_secs(5)).await);
-        assert_eq!(crate::orphans::sweep(&id), 0, "its descendant is gone");
+        assert_eq!(crate::orphans::sweep(&id), [], "its descendant is gone");
+    }
+
+    /// Death is confirmed, not only the marker gone: a killed process loses its environment before it is dead.
+    #[cfg(target_os = "linux")] // the sweep reads `/proc`
+    #[tokio::test]
+    async fn wait_gone_returns_once_what_it_killed_is_dead() {
+        let id = format!("wait-dead-{}", std::process::id());
+        // Its memory makes the gap wide: the environment goes first, the pages are freed, then the process is dead.
+        let args = ["if=/dev/zero", "of=/dev/null", "bs=256M"];
+        for _ in 0..5 {
+            let mut command = std::process::Command::new("dd");
+            let mut child = command
+                .args(args)
+                .env(crate::orphans::INSTANCE_ENV, &id)
+                .spawn()
+                .unwrap();
+            std::thread::sleep(Duration::from_millis(100));
+            assert!(wait_gone(&id, None, Duration::from_secs(5)).await);
+            let pid = i32::try_from(child.id()).unwrap();
+            // A zombie is dead; some kernels show it before `waitpid` sees it.
+            assert_eq!(crate::orphans::start_time(pid), None, "dead, not only unmarked");
+            child.wait().unwrap();
+        }
     }
 }
