@@ -322,3 +322,45 @@ async fn a_stdio_server_is_shared_behind_the_bridge_unless_it_is_per_session() {
         "per session: stdio as it is"
     );
 }
+
+/// Two projects with a `[[service]]` and a stdio server behind the bridge, both of `scope`: the starts of a process
+/// and whether the projects share each.
+async fn two_projects(scope: &str) -> (usize, [bool; 2]) {
+    let dir = tempfile::tempdir().unwrap();
+    let (svc, notes) = (dir.path().join("svc.jsonl"), dir.path().join("notes.jsonl"));
+    let config = format!(
+        "projects = [\"shop\", \"mall\"]\nbuiltin = {{ default-policy = {{ enabled = false }} }}\n[harness.scripted]\n\
+         [[service]]\nname = \"probe\"\ncommand = [\"{PROBE}\", \"{}\"]\nmcp = true\nscope = \"{scope}\"\n",
+        svc.display()
+    );
+    // The same agent in both projects: one definition of the server.
+    let agent = format!(
+        "harness = \"scripted\"\n[mcp.notes]\ncommand = [\"{PROBE}\", \"{}\"]\nscope = \"{scope}\"\n",
+        notes.display()
+    );
+    let build = "name = \"build\"\n[step]\nkind = \"prompt\"\nagent = \"dev\"\nprompt = \"build.md\"\n";
+    let files = [
+        ("config.toml", config.as_str()),
+        ("mall/aae.toml", "[rigs.web]\npath = \"web\"\n"),
+        ("mall/web/.keep", ""),
+        ("shop/agents/dev/agent.toml", agent.as_str()),
+        ("mall/agents/dev/agent.toml", agent.as_str()),
+        ("mall/formulas/build.toml", build),
+        ("mall/formulas/build.md", "Build."),
+    ];
+    let driver = ScriptedDriver::new(2);
+    driver.stall_sessions();
+    let w = world_driven(&files, driver);
+    let (a, b) = (w.create().await, w.create_in("mall", "web").await);
+    let processes = if scope == "project" { 4 } else { 2 };
+    w.until_count("service.ready", processes).await;
+    w.events(&b, Duration::from_millis(500)).await;
+    let shared = ["probe", "notes"].map(|name| w.driver.mcp(&a, 1)[name]["url"] == w.driver.mcp(&b, 1)[name]["url"]);
+    (w.count("service.starting"), shared)
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_project_service_runs_once_per_project_an_orchestrator_one_once() {
+    assert_eq!(two_projects("project").await, (4, [false, false]));
+    assert_eq!(two_projects("orchestrator").await, (2, [true, true]));
+}

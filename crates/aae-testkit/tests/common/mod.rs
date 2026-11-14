@@ -188,8 +188,12 @@ impl World {
     }
 
     pub(crate) async fn create_on(&self, rig: &str) -> String {
+        self.create_in("shop", rig).await
+    }
+
+    pub(crate) async fn create_in(&self, project: &str, rig: &str) -> String {
         let create = Create {
-            project: "shop".into(),
+            project: project.into(),
             rig: rig.into(),
             formula: "build".into(),
             inputs: serde_json::Map::new(),
