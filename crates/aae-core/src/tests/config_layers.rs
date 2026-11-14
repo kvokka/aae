@@ -153,13 +153,20 @@ fn a_fingerprint_depends_on_the_process_part_not_on_key_order() {
 fn an_attached_plugin_puts_its_bin_ahead_of_path_and_its_prompt_after_the_system_prompt() {
     let mail = "plugins/mail/plugin.toml";
     let manifest = "name = \"mail\"\nversion = \"0.1.0\"\nprompt = \"prompt.md\"\n";
+    let two = BASE[0]
+        .1
+        .replace("[settings]", "[[plugin]]\npath = \"plugins/post\"\n[settings]");
     let config = load_with(&[
+        ("config.toml", two.as_str()),
         (mail, manifest),
         ("plugins/mail/prompt.md", "Check the mail first.\n"),
         ("plugins/mail/bin/mail-send", ""),
+        ("plugins/post/plugin.toml", "name = \"post\"\nversion = \"0.1.0\"\n"),
+        ("plugins/post/bin/post-send", ""),
         (
             "gascity/agents/implementer/agent.toml",
-            "harness = \"claude\"\nsystem_prompt = \"Be brief.\"\nenv = { PATH = \"/usr/bin\" }\nplugins = [{ name = \"mail\" }]\n",
+            "harness = \"claude\"\nsystem_prompt = \"Be brief.\"\nenv = { PATH = \"/usr/bin\" }\n\
+             plugins = [{ name = \"mail\" }, { name = \"post\" }]\n",
         ),
     ])
     .unwrap();
@@ -171,9 +178,13 @@ fn an_attached_plugin_puts_its_bin_ahead_of_path_and_its_prompt_after_the_system
         ("Be brief.\n\nCheck the mail first.", &both)
     );
     let path = &e.env["PATH"];
-    let bin = config.plugins[0].root.join("bin");
-    assert_eq!(path.value, format!("{}:/usr/bin", bin.display()));
-    assert_eq!(path.from, both);
+    let bin = |name: &str| {
+        let plugin = config.plugins.iter().find(|p| p.name == name).unwrap();
+        plugin.root.join("bin").display().to_string()
+    };
+    assert_eq!(path.value, format!("{}:{}:/usr/bin", bin("mail"), bin("post")));
+    let three = [Layer::Agent, Layer::Plugin("mail".into()), Layer::Plugin("post".into())];
+    assert_eq!(path.from, Layer::Merged(three.to_vec()));
     assert!(
         e.explain().contains("first.\"  # agent + plugin mail\n"),
         "{}",
