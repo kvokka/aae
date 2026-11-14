@@ -614,8 +614,8 @@ of their own. The adapter reports the account id (4.5, `Driver::account`).
   that reports before its session is recorded).
 - Confirmed death (invariant 6): a launch first waits until nothing is left of the instances that served its run (or
   the run it continues) and are `stopping` or no longer recorded: the old process gets to end by itself (pid + start
-  time, `/proc/<pid>/stat`), then every process still carrying its marker is killed until none is found, up to
-  30 s in all; past that the attempt fails with `unknown`. A live shared instance is never waited for.
+  time, `/proc/<pid>/stat`), then every process still carrying its marker is killed until none is found and each
+  one killed is a zombie or gone (a dying process loses its environment, so its marker, first), up to 30 s in all; past that the attempt fails with `unknown`. A live shared instance is never waited for.
 - The process environment of every instance and service holds `AAE_INSTANCE=<id>`: once the instance is stopped
   or has exited, every process still carrying it is killed (the sweep of invariant 7). The daemon is a child
   subreaper ([experiments](experiments.md#descendants-after-kill--9-invariant-7)): every 5 s it reaps the adopted

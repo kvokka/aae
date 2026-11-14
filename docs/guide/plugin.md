@@ -62,8 +62,8 @@ rig settings and the agent's own `agent.toml`, so an agent can still override wh
 - **Skills**: `skills.<name> = { path = "..." }`, a directory relative to the plugin with a `SKILL.md`.
 - **Harness hooks** use the Claude Code dialect (`event`, `matcher`, `command`, `timeout`); aae delivers them to
   claude as they are and translates them for codex. What `remind.sh` prints on `UserPromptSubmit` joins the prompt.
-- `${AAE_PLUGIN_DIR}` in a hook, MCP or service `command` is replaced with the plugin's directory when the config loads, so
-  a command can reach the plugin's own files.
+- `${AAE_PLUGIN_DIR}` in a hook, MCP or service `command`, and in a service's `env` and `health.command`, is replaced
+  with the plugin's directory when the config loads, so a command can reach the plugin's own files.
 - **Scripts**: the plugin's `bin/` directory comes first on the `PATH` of the attached agents' sessions.
 - **A prompt fragment**: the top-level key `prompt = "prompt.md"` names a file whose text is appended to the
   attached agents' system prompt.
