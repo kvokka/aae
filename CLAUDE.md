@@ -33,13 +33,16 @@ coder → reviewer под мастером (`overseer`), без оператор
 - Вывод команд всегда обрезан: `cargo build -q --message-format short 2>&1 | head -60`,
   `cargo clippy --all-targets -q --message-format short -- -D warnings 2>&1 | head -60`,
   `cargo nextest run --no-fail-fast --status-level fail --final-status-level fail 2>&1 | tail -80`.
-- Grep до Read; Read с offset/limit; не читать `Cargo.lock`, `mise.lock`, `target/`, длинные логи целиком.
+- Grep до Read; Read с offset/limit; не читать `Cargo.lock`, `target/`, длинные логи целиком.
 - Тяжёлое чтение и прогоны — субагентам; они возвращают выжимку, детали — в файл.
+- Полный набор проверок за цикл — один раз: `scripts/loop/checks NN` у кодера в конце; ревьюер читает
+  `.loop/cycles/NN/checks.md` и не повторяет. GitHub CI гоняет то же самое — его не ждут.
 
 ## Версии и инструменты
 
 - Всё — на последних релизных версиях на момент добавления, с закреплением: crate добавляется `cargo add <crate>`
-  без версии, `Cargo.lock` в git; инструменты — точные версии в `mise.toml` и `mise.lock` (`mise use <tool>@<x.y.z>`).
+  без версии, `Cargo.lock` в git; инструменты — точные версии в `mise.toml` (`mise use <tool>@<x.y.z>`), claude и
+  codex — линией (`2.1`, `0`); `mise.lock` нет.
   Без причины не обновлять; обновление — отдельным коммитом.
 - Тулчейн — `mise.toml`: Rust 1.99.1 (clippy, rustfmt, rust-analyzer, цели linux-musl и apple-darwin под обе
   архитектуры), cargo-nextest, cargo-deny, cargo-machete, tokei (счётчик строк для бюджетов §14), zig и

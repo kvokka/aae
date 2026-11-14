@@ -1,0 +1,43 @@
+#!/usr/bin/env bash
+# Финальные проверки цикла на закоммиченном HEAD: `mise run ci`, затем acceptance без модели.
+# Кодер запускает один раз перед закрытием отчёта; ревьюер читает итог, а не гоняет то же самое заново.
+# Итог — .loop/cycles/NN/checks.md (первая строка — HEAD), отчёт acceptance — .loop/cycles/NN/acceptance.md,
+# полные логи — .loop/cycles/NN/notes/checks-*.log (не в git, но на диске).
+# Использование: scripts/loop/checks NN
+set -uo pipefail
+cd "$(dirname "$0")/../.."
+n=${1:?номер цикла}
+dir=.loop/cycles/$n
+mkdir -p "$dir/notes"
+if [ -n "$(git status --porcelain -- . ':!.loop')" ]; then
+  echo "есть незакоммиченные изменения вне .loop — сначала коммит" >&2
+  exit 1
+fi
+out=$dir/checks.md
+rows=""
+fail=0
+step() { # имя, команда...
+  local name=$1 t=$SECONDS rc
+  shift
+  "$@" >"$dir/notes/checks-$name.log" 2>&1
+  rc=$?
+  [ $rc -eq 0 ] || fail=1
+  rows+="| $name | $rc | $((SECONDS - t)) s | notes/checks-$name.log |"$'\n'
+}
+step ci mise run ci
+# Не параллельно с ci: тестовая сборка переписывает target/debug/aae, на котором стоят демоны сценариев.
+step acceptance bash -c "cargo build -q --locked -p aae && cargo run -q --locked -p aae-acceptance -- --ci --report '$dir/acceptance.md'"
+{
+  echo "HEAD: $(git rev-parse HEAD)"
+  echo "RESULT: $([ $fail -eq 0 ] && echo pass || echo FAIL)"
+  echo "DATE: $(date -u +%Y-%m-%dT%H:%MZ)"
+  echo
+  echo "| проверка | exit | время | лог |"
+  echo "|---|---|---|---|"
+  printf '%s' "$rows"
+  echo
+  echo "nextest: $(grep -h 'Summary' "$dir/notes/checks-ci.log" | tail -1 | sed 's/^ *//')"
+  echo "acceptance: $(tail -1 "$dir/acceptance.md" 2>/dev/null)"
+} >"$out"
+cat "$out"
+exit $fail

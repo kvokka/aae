@@ -159,7 +159,9 @@ def coder_prompt(st):
     n, mx = st["cycle"], st["max_cycles"]
     lines = [f"Цикл {n} из {mx}. Ты — coder.",
              f"Твой отчёт: {rel(cdir(n) / 'coder.md')} — создай сразу по шаблону из своей инструкции и обновляй по ходу.",
-             f"База цикла (коммит до твоих изменений): {st['base']}."]
+             f"База цикла (коммит до твоих изменений): {st['base']}.",
+             f"Финальные проверки — один раз в конце, на закоммиченном HEAD: scripts/loop/checks {n} "
+             f"(итог в {rel(cdir(n) / 'checks.md')}, его читает ревьюер)."]
     prev = cdir(n - 1) / "review.md"
     if n > 1 and prev.exists():
         lines.append(f"Предыдущее ревью: {rel(prev)} — раздел «Обязательно до продолжения» выполняется первым.")
@@ -184,7 +186,8 @@ def reviewer_prompt(st):
     n, mx = st["cycle"], st["max_cycles"]
     lines = [f"Цикл {n} из {mx}. Ты — reviewer.",
              f"Проверяешь изменения {st['base']}..HEAD (и незакоммиченное, если есть — это замечание).",
-             f"Отчёт кодера: {rel(cdir(n) / 'coder.md')}."]
+             f"Отчёт кодера: {rel(cdir(n) / 'coder.md')}.",
+             f"Итог проверок кодера: {rel(cdir(n) / 'checks.md')} — если HEAD в нём текущий, полный набор не повторяй."]
     for h in handoffs(n, "coder"):
         lines.append(f"Кодер обрезан по контексту, дамп: {rel(h)}.")
     prev = cdir(n - 1) / "review.md"
