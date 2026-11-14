@@ -210,14 +210,6 @@ impl Loader {
         if let Some(harness) = settings.harness.as_ref().filter(|h| !self.harnesses.contains(*h)) {
             self.fail(file, format!("harness `{harness}` is not in the orchestrator config"));
         }
-        if let Some(provider) =
-            (settings.provider.as_ref()).filter(|p| !self.adapters.iter().any(|a| a.providers.contains(&p.as_str())))
-        {
-            self.fail(
-                file,
-                format!("provider `{provider}`: no harness of this build works with it"),
-            );
-        }
         for harness in settings
             .native
             .keys()

@@ -102,7 +102,7 @@ fn launch_settings_that_do_not_go_together_are_load_errors() {
     );
     rejected(
         &[(AGENT, "provider = \"acme\"\n")],
-        "provider `acme`: no harness of this build works with it",
+        "`provider = \"acme\"` (agent): no harness works with it",
     );
     let only_claude = (
         "config.toml",
