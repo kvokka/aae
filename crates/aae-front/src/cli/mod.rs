@@ -152,6 +152,13 @@ pub enum Command {
         #[arg(long)]
         key: Option<String>,
     },
+    /// Serve a stdio MCP server over HTTP on `AAE_SERVICE_PORT` behind `AAE_SERVICE_TOKEN`: how the daemon shares one.
+    #[command(hide = true)]
+    McpBridge {
+        /// The command of the stdio MCP server.
+        #[arg(last = true, required = true)]
+        command: Vec<String>,
+    },
 }
 
 #[derive(Clone, Copy, ValueEnum)]
@@ -208,9 +215,9 @@ pub(crate) fn fail(message: &str) -> ExitCode {
 async fn execute(client: &Client, cli: Cli) -> Result<ExitCode, ClientError> {
     let json = cli.json;
     match cli.command {
-        Command::Daemon { .. } | Command::Doctor { .. } | Command::Fetch { .. } => {
+        Command::Daemon { .. } | Command::Doctor { .. } | Command::Fetch { .. } | Command::McpBridge { .. } => {
             return Ok(fail(
-                "`daemon`, `doctor` and `fetch` run without a daemon, not as its client",
+                "`daemon`, `doctor`, `fetch` and `mcp-bridge` run without a daemon, not as its client",
             ));
         }
         Command::Run(command) => commands::run(client, json, command).await?,

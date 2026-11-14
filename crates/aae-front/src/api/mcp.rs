@@ -17,9 +17,9 @@ use axum::{
 use serde_json::{Map, Value, json};
 
 /// The stateless epoch: chosen by the request header, never negotiated.
-const MODERN: &str = "2026-07-28";
+pub const MODERN: &str = "2026-07-28";
 /// The `initialize` epoch versions answered as asked; any other gets the first.
-const SUPPORTED: &[&str] = &["2025-11-25", "2025-06-18", "2025-03-26"];
+pub const SUPPORTED: &[&str] = &["2025-11-25", "2025-06-18", "2025-03-26"];
 
 /// The tools: `(name, description, input schema)`.
 fn tools() -> Value {

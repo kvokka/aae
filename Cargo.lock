@@ -13,6 +13,7 @@ dependencies = [
  "aae-front",
  "aae-plugins",
  "aae-testkit",
+ "axum",
  "clap",
  "rusqlite",
  "serde",

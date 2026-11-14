@@ -59,6 +59,10 @@ pub async fn serve(listener: TcpListener, token: &str, log: &Path) -> std::io::R
     let app = Router::new().fallback(move |method: Method, uri: Uri, headers: HeaderMap, body: Bytes| {
         let (log, bearer) = (log.clone(), bearer.clone());
         async move {
+            // The health check a daemon polls: not logged, so the log holds MCP traffic only.
+            if uri.path() == "/health" {
+                return respond(StatusCode::OK, None);
+            }
             if uri.path() != "/mcp" {
                 return respond(StatusCode::NOT_FOUND, None);
             }
@@ -118,6 +122,50 @@ fn answer(msg: &Value, line: &Value, modern: bool) -> Option<Value> {
         result["_meta"] = json!({ "io.modelcontextprotocol/serverInfo": info });
     }
     Some(json!({ "jsonrpc": "2.0", "id": id, "result": result }))
+}
+
+/// The one tool of the stdio server.
+pub const STDIO_TOOL: &str = "whoami_stdio";
+
+/// A stdio MCP server in the `initialize` epoch, until stdin closes: one JSON-RPC message a line. [`STDIO_TOOL`]
+/// answers with the `_meta` of its call, after `arguments.sleep_ms` milliseconds if given. Every message appends one
+/// JSON line to the log: the server's pid, the method and the `_meta` of the params.
+///
+/// # Errors
+/// If the log cannot be opened or stdin or stdout fail.
+pub fn serve_stdio(log: &Path) -> std::io::Result<()> {
+    let mut file = File::options().create(true).append(true).open(log)?;
+    let mut stdout = std::io::stdout().lock();
+    for line in std::io::stdin().lines() {
+        let msg: Value = serde_json::from_str(&line?).unwrap_or_default();
+        let meta = &msg["params"]["_meta"];
+        writeln!(
+            file,
+            "{}",
+            json!({ "pid": std::process::id(), "method": msg["method"], "meta": meta })
+        )?;
+        let (Some(id), Some(method)) = (msg.get("id"), msg["method"].as_str()) else {
+            continue;
+        };
+        let mut reply = match method {
+            "initialize" => json!({ "result": { "protocolVersion": msg["params"]["protocolVersion"],
+                "capabilities": { "tools": {} }, "serverInfo": { "name": "aae-mcp-stdio-probe", "version": "1" } } }),
+            "tools/list" => json!({ "result": { "tools": [{ "name": STDIO_TOOL,
+                "description": "Who is calling: the `_meta`.",
+                "inputSchema": { "type": "object", "properties": { "sleep_ms": { "type": "integer" } } } }] } }),
+            "tools/call" if msg["params"]["name"] == STDIO_TOOL => {
+                let wait = msg["params"]["arguments"]["sleep_ms"].as_u64().unwrap_or_default();
+                std::thread::sleep(std::time::Duration::from_millis(wait));
+                json!({ "result": { "content": [{ "type": "text", "text": meta.to_string() }], "isError": false } })
+            }
+            _ => json!({ "error": { "code": -32601, "message": format!("no method or tool for `{method}`") } }),
+        };
+        reply["jsonrpc"] = json!("2.0");
+        reply["id"] = id.clone();
+        writeln!(stdout, "{reply}")?;
+        stdout.flush()?;
+    }
+    Ok(())
 }
 
 fn respond(status: StatusCode, body: Option<Value>) -> Response {

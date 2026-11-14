@@ -7,7 +7,7 @@ mod events;
 mod gates;
 mod instances;
 mod live;
-mod mcp;
+pub mod mcp;
 mod runs;
 mod triggers;
 

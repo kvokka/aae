@@ -1,5 +1,6 @@
 //! `aae` binary entry point: the daemon and the CLI.
 
+mod bridge;
 mod daemon;
 mod doctor;
 mod fetch;
@@ -36,6 +37,7 @@ fn main() -> ExitCode {
                 }
             };
         }
+        Command::McpBridge { command } => return bridge::run(command),
         Command::Daemon { config, service: None } => config,
         _ => return cli::run(cli),
     };
