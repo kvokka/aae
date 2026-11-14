@@ -259,6 +259,18 @@ pub fn load(orchestrator_file: &std::path::Path) -> Result<Config, Vec<ConfigErr
     load::Loader::default().run(orchestrator_file)
 }
 
+/// The environment variable an exec step gets input `name` in: `note-text` → `AAE_INPUT_NOTE_TEXT`.
+pub(crate) fn input_variable(name: &str) -> String {
+    let upper = name.chars().map(|c| {
+        if c.is_ascii_alphanumeric() {
+            c.to_ascii_uppercase()
+        } else {
+            '_'
+        }
+    });
+    format!("AAE_INPUT_{}", upper.collect::<String>())
+}
+
 /// A duration with one unit: `"500ms"`, `"30s"`, `"45m"`, `"2h"` (contracts conventions).
 pub fn duration(text: &str) -> Result<Duration, String> {
     let split = text.find(|c: char| !c.is_ascii_digit()).unwrap_or(text.len());

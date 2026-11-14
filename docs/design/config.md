@@ -312,7 +312,8 @@ timeout = "45m"                     # optional
 An `exec` step has `command = ["prog", "arg", ..]` (non-empty) and `timeout` instead of `agent` and `prompt`.
 Nothing is substituted into the command; it gets the run in its environment: `AAE_RUN`, `AAE_BEAD` (when the run has
 a bead) and `AAE_INPUT_<NAME>` per input (the name upper-cased, other characters than letters and digits as `_`; a
-string as it is, any other value as JSON).
+string as it is, any other value as JSON). Two inputs that give one variable (`note-text` and `note_text`) are a
+config error.
 
 A run start checks the inputs: no undeclared one, every `required` one present, an `integer` input a JSON integer, a
 `boolean` one a JSON boolean. A `bead` input is a bead id or `{ next_ready = true, epic = <id> }`; a bead named by id

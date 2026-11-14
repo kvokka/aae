@@ -110,6 +110,18 @@ impl Loader {
                 if command.is_empty() {
                     self.fail(file, "`command` is empty");
                 }
+                let mut seen = BTreeMap::new();
+                for name in raw.inputs.keys() {
+                    if let Some(other) = seen.insert(super::input_variable(name), name) {
+                        self.fail(
+                            file,
+                            format!(
+                                "inputs `{other}` and `{name}` are both `{}`",
+                                super::input_variable(name)
+                            ),
+                        );
+                    }
+                }
                 Step::Exec {
                     command,
                     timeout: self.timeout(file, timeout.as_deref()),

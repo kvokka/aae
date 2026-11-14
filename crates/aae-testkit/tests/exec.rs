@@ -124,6 +124,21 @@ async fn the_command_gets_the_run_and_its_inputs_in_the_environment_and_inputs_a
 }
 
 #[tokio::test]
+async fn the_command_gets_the_bead_its_run_took_not_the_request_for_one() {
+    let (w, mut create) = check_with(
+        "bead = { type = \"bead\", required = true }\n",
+        "echo \"$AAE_BEAD $AAE_INPUT_BEAD\"",
+    );
+    let bead = w.tracker.add(&[], None);
+    w.core.send(None, Msg::TrackerChanged("shop".into())).await.unwrap();
+    create.inputs.insert("bead".into(), json!({ "next_ready": true }));
+    let run = w.start(create).await;
+    let (kind, data) = w.end(&run).await;
+    assert_eq!(kind, "run.passed", "{data}");
+    assert_eq!(data["outcome"]["data"]["stdout"], json!(format!("{bead} {bead}\n")));
+}
+
+#[tokio::test]
 async fn another_code_fails_the_run() {
     let (w, create) = check("exit 3");
     let run = w.start(create).await;

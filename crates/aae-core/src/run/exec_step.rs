@@ -59,18 +59,8 @@ impl RunHandler {
         let mut context = vec![("AAE_RUN".to_owned(), json!(row.id))];
         context.extend(row.bead.as_ref().map(|bead| ("AAE_BEAD".to_owned(), json!(bead))));
         for (name, value) in inputs {
-            let name: String = name
-                .chars()
-                .map(|c| {
-                    if c.is_ascii_alphanumeric() {
-                        c.to_ascii_uppercase()
-                    } else {
-                        '_'
-                    }
-                })
-                .collect();
             let text = value.as_str().map_or_else(|| value.to_string(), str::to_owned);
-            context.push((format!("AAE_INPUT_{name}"), json!(text)));
+            context.push((crate::config::input_variable(&name), json!(text)));
         }
         env.retain(|(k, _)| !context.iter().any(|(c, _)| c == k));
         env.extend(context);

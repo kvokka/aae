@@ -214,6 +214,16 @@ fn names_are_unique_within_a_pack_and_a_project() {
 }
 
 #[test]
+fn two_inputs_of_an_exec_step_may_not_share_a_variable() {
+    let inputs = "[inputs]\nnote-text = { type = \"string\" }\nnote_text = { type = \"string\" }\n";
+    let audit = format!("name = \"audit\"\n{inputs}[step]\nkind = \"exec\"\ncommand = [\"true\"]\n");
+    fails(
+        &[("gascity/formulas/audit.toml", audit.as_str())],
+        "inputs `note-text` and `note_text` are both `AAE_INPUT_NOTE_TEXT`",
+    );
+}
+
+#[test]
 fn a_prompt_template_may_use_only_values_its_runs_have() {
     let template = "gascity/formulas/implement.md";
     fails(&[(template, "{{ inputs.nope }}")], "`{{ inputs.nope }}`");
