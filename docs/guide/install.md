@@ -9,7 +9,7 @@ aae is built from source. The repository pins its toolchain with [mise](https://
 
 ```sh
 git clone <this repository> aae && cd aae
-mise install                       # Rust, zig, cargo-zigbuild and the pinned claude, codex and br
+mise install                       # Rust, zig, cargo-zigbuild, br, and claude and codex
 cargo build --release --locked -p aae
 install -m 0755 target/release/aae ~/.local/bin/aae
 ```
@@ -37,12 +37,13 @@ codex = "0"
 "github:Dicklesworthstone/beads_rust" = "0.7.6"
 ```
 
-These ranges are what to install (the repository's `mise.toml` pins the same). This release is tested against
+These ranges are what to install (the repository's `mise.toml` takes br at an exact version and claude and codex
+by release line). This release is tested against
 claude 2.1.322 to 2.1.325 and codex 0.167.2 to 0.168.0; outside these, `aae doctor` and the daemon print a
 warning and still run the harness. The daemon resolves each
-binary in this order: `binary` in the config (`[harness.claude] binary = "/path/to/claude"`), then
-`mise which <name>`, then `PATH`. A daemon under systemd or launchd has no mise shims on its `PATH`, which is why
-mise is asked directly.
+binary in this order: `binary` in the config (`[harness.claude] binary = "/path/to/claude"`; harnesses only, br has
+no such key), then `mise which <name>`, then `PATH`. A daemon under systemd or launchd has no mise shims on its
+`PATH`, which is why mise is asked directly.
 
 ## Check the setup
 

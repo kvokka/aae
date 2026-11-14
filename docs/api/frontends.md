@@ -64,6 +64,17 @@ Code: `crates/aae-front/src/api/mcp.rs`; details in `docs/api/mcp.md`. Five tool
 API listeners in both protocol epochs. No agent gets it by default: tool descriptions cost tokens in every session,
 so an agent names it in its own config (`[mcp.aae] url = "${AAE_API}/mcp"`, which needs `api_tcp`).
 
+## Humans and runs
+
+- A human sees runs, follows a run's live view and answers its permission requests and questions through these
+  frontends (`aae run watch`, `aae run answer` or the API).
+- The state of a run shows each attempt's `session`: the harness's own session reference (claude
+  `{session_id, config_dir}`, codex `{thread_id, codex_home}`). After the run a human may open that conversation
+  with the harness's own tools; aae takes no part in it.
+- Joining a live session and handing control over to a human is the next development cycle. The first release has
+  no operation, no state and no stub for it, and the driver interface has none either
+  ([contracts](../design/contracts.md#41-shape)).
+
 ## Verified by
 
 - Integration tests on the real daemon: `crates/aae/tests/api.rs`, `cli.rs`, `mcp.rs`; the live view and

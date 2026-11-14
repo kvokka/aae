@@ -1,4 +1,4 @@
-# Experiments (spec §16)
+# Experiments
 
 Results of the throwaway experiments that precede the core. Every number carries a `MEASURE` marker. The
 experiments are recorded here and their code has left the tree (spec §2.1 item 17); each section names the commit
@@ -6,6 +6,18 @@ that still holds it (`git show <commit>:<path>`). Their logs stay in `experiment
 `<work>` placeholders; long `tools`/`skills` arrays are replaced by their length) kept as the record of what
 each harness printed; no test reads them. A new experiment goes to `experiments/` as a separate Cargo workspace outside the product
 budgets, ≤ 5 000 lines in total, checked by `scripts/budget.sh`.
+
+Cheap experiments came first and the core after them. The set and where each stands:
+
+| # | Experiment | Why | Status |
+|---|---|---|---|
+| 1 | claude stream-json client: "reply OK", resume, cancel, permission request, prompt acknowledgement; `kill -9` in a command and the fate of every descendant; background subagent and shell, "idle without background" from both signals | no Rust client exists, the protocol is hand-written | done (1a, 1b below) |
+| 2 | codex app-server client: transport, two threads in one process, config and hooks per thread, reconnect | the instance registry | done (below) |
+| 3 | br as an event source: watching, cost, reliability, attribution by actor | tracker triggers, correlation | done (below) |
+| 4 | delivery of hooks, skills and MCP into a session without writing into the rig, with and without host inheritance | config delivery | done (below) |
+| 5 | credentials in a session with host inheritance off | config delivery | done for claude and codex API keys; codex subscription login not checked (below) |
+| 6 | finisher from a session: token in the environment, resume, the codex sandbox | finisher | done except the sandbox: deferred until after the release, on a host with user namespaces or macOS; until then the codex adapter sets `danger-full-access` ([config](config.md)) |
+| 7 | opencode, by the open questions of spec §7.6 | next release | deferred to the next release, with the opencode adapter |
 
 Common setup for the claude experiments: `claude -p --input-format stream-json --output-format stream-json
 --verbose --setting-sources "" --strict-mcp-config --model haiku`, clean environment (only `PATH`, `HOME`, `LANG`,
@@ -93,6 +105,7 @@ orphaned while the daemon itself is down (it goes to PID 1, not to the restarted
 `tool_progress{heartbeat:true}` at 30.0 s and 60.0 s after the `tool_use` of a 100 s foreground Bash command —
 the 30 s interval of the context notes holds.
 
+<!-- MEASURE id=claude-tool-heartbeat date=2026-11-11 ver=claude-2.1.322 env=linux-arm64-orbstack src=reports/46a note="tool_progress in stream-json; the stall watchdog threshold depends on the interval" -->
 <!-- MEASURE id=claude-tool-heartbeat-1b date=2026-11-12 ver=claude-2.1.322 env=linux-arm64-orbstack src=experiments/02-claude-process/logs/orphans.ndjson note="n=1, Bash in the main thread" -->
 
 ### "Idle without background" (both signals in one run)
@@ -181,8 +194,12 @@ turn goes to the fake provider, `HOME` and `CODEX_HOME` are fresh directories, t
 <!-- MEASURE id=codex-stdio-eof-exit date=2026-11-12 ver=codex-0.167.2 env=linux-arm64-orbstack src=experiments/03-codex-appserver/logs/run.txt note="n=1, stdin closed 1 s into a turn whose provider answer was delayed by 6 s" -->
 
 Memory on 0.167.2: 89–91 MB empty, 147–150 MB with two threads after one turn each, 155–159 MB with four — the
-same as on 0.166.0 (spec §7.3). `initialize` answered 150–307 ms after spawn on both transports (77 ms on 0.166.0
-per the context notes, other setup).
+same as on 0.166.0: 93 MB empty, +39–62 MB for the first thread, ≈ 5–10 MB for each next one.
+
+<!-- MEASURE id=codex-appserver-rss date=2026-11-10 ver=codex-0.166.0 env=linux-arm64-orbstack src=reports/15 note="RSS, up to 4 threads, turns reply OK; not checked on long histories: a thread's history lives in the process memory" -->
+
+`initialize` answered 150–307 ms after spawn on both transports (77 ms on 0.166.0 per the context notes, other
+setup).
 
 **Types.** `codex app-server generate-json-schema --out DIR` writes the bundle;
 `cargo run -p codex-appserver --bin gen -- DIR/codex_app_server_protocol.v2.schemas.json` takes the hand-picked roots
@@ -190,9 +207,10 @@ listed in `gen.rs`, collects the definitions they reach and generates `src/gener
 (9 roots → 83 definitions → 5.1k lines, excluded from the line budgets). The four types the scenarios parse
 (`ThreadStartResponse`, `ThreadResumeResponse`, `TurnCompletedNotification`, `HookCompletedNotification`)
 deserialized every message received. `InitializeResponse` is only in the non-v2 bundle
-(`codex_app_server_protocol.schemas.json`); the client reads it as plain JSON. For WP-29: the same generator as a dev
-tool of the adapter crate, the output
-committed under `generated/`, regenerated on every codex version bump and checked by the contract tests.
+(`codex_app_server_protocol.schemas.json`); the client reads it as plain JSON. The adapter (WP-29) does not take this
+route: generated types are not needed, it reads by hand the few fields it uses, and the contract suite
+([harness updates](../harness-updates.md)) catches a changed field on every codex update. The generator is kept only
+in the commit named above.
 
 **Fake provider** (sketch for WP-26): an HTTP server on `127.0.0.1` given to codex as
 `[model_providers.fake] base_url = "http://…/v1", wire_api = "responses"` in `CODEX_HOME/config.toml`. A turn is
@@ -296,13 +314,14 @@ Open: refresh of a delivered OAuth token after expiry (spec §6.4).
   (file or inline), `--plugin-dir` for skills and plugin hooks, `--mcp-config`; and repeats the whole set on every
   `--resume`. It does not pass `--strict-mcp-config`: that would cut the rig's `.mcp.json` too, and with
   inheritance off the setting sources and the own config directory already cut the host's servers. With inheritance on, the host's personal MCP servers reach the session as well, as spec §6.4 intends. Host inheritance off = `--setting-sources project,local` (not `""`): the rig's
-  own config keeps working — the spec §6.3 assumption holds for claude. With an isolated `CLAUDE_CONFIG_DIR` the
-  adapter delivers `CLAUDE_CODE_OAUTH_TOKEN` (or `ANTHROPIC_API_KEY`).
+  own config keeps working — the rig-config rule of `config.md` holds for claude. With an isolated
+  `CLAUDE_CONFIG_DIR` the adapter delivers `CLAUDE_CODE_OAUTH_TOKEN` (or `ANTHROPIC_API_KEY`).
 - codex (WP-29): MCP, hooks (`config.hooks`), instructions and `bypass_hook_trust` go per thread; skills, the
-  provider key value and the host layer are per process. The instance fingerprint (spec §7.3) therefore holds
+  provider key value and the host layer are per process. The instance fingerprint
+  ([contracts](contracts.md#8-instance-and-service-registry)) therefore holds
   `CODEX_HOME`, `HOME`, the skill roots and the provider and its key; MCP and hooks are not in it. Host
   inheritance off = own `CODEX_HOME` **and** own `HOME` (or the host's `~/.agents/skills` leak in); the rig's
-  `.codex/`, `AGENTS.md` and `.agents/skills` keep working — the spec §6.3 assumption holds for codex as well.
+  `.codex/`, `AGENTS.md` and `.agents/skills` keep working — the rig-config rule of `config.md` holds for codex too.
   Without a key of its own, an isolated process logs in as the host does: the host `auth.json` is linked into its
   `CODEX_HOME`, and a model provider the host config selects comes as the first `-c` flags with its `env_key`
   variable passed from the daemon's environment (`aae-codex/src/part.rs::host_provider`).

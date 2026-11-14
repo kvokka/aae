@@ -1,8 +1,15 @@
 # Harness updates
 
-aae drives `claude` and `codex` through their own protocols, so every new harness version is checked before it is
-pinned. The check is the contract suite of spec §7.8: the real binary against a fake provider API, no model and no
-account.
+aae drives `claude` and `codex` through their own protocols, so every new harness version is checked before the
+adapter's tested range takes it in. The check is the contract suite below: the real binary against a fake provider
+API, no model and no account. Keeping the harness up to date is the user's or the aae developer's job; aae itself
+only warns outside the tested range.
+
+`mise.toml` selects a release line of each harness, not an exact version: a newer release of the line is taken on
+`mise upgrade`, and the contract suite is what guards the protocol. That matters most for codex: app-server is
+marked `[experimental]`, and codex released every 2–8 days (observed on 2026-11-10, codex 0.166.0).
+
+<!-- MEASURE id=codex-release-cadence date=2026-11-10 ver=codex-0.166.0 env=linux-arm64-orbstack src=reports/15 note="from the release history; recount before choosing an update policy" -->
 
 ## Updating a harness
 
@@ -28,7 +35,7 @@ account.
   unknown words; 529/503; 401; `insufficient_quota`; context overflow; unknown model; `kill -9` in a command; EOF on
   stdin in a turn; a silent provider; a permission request; a background task after the turn; a second writer in
   the session. The tables below give the expected outcome per harness.
-- The scenarios run the real pinned binary against fake provider APIs written in this repository:
+- The scenarios run the real binary mise selects against fake provider APIs written in this repository:
   `crates/aae-testkit/src/anthropic.rs` (claude) and `crates/aae-testkit/src/openai.rs` (codex, Responses API).
   They cost no model calls and need no account, so CI runs them on every commit (criterion 11 of the release).
 - The suite is rerun on every harness update (above), and beyond it one real turn on the cheapest model of the
@@ -38,7 +45,7 @@ account.
 
 ## What the claude suite covers
 
-`crates/aae-claude/tests/contract.rs`, one test per scenario of spec §7.8:
+`crates/aae-claude/tests/contract.rs`, one test per scenario above:
 
 | # | Scenario | Expected from the adapter |
 |---|---|---|
