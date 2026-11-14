@@ -170,29 +170,37 @@ async fn s13_a_permission_request_is_answered_and_the_command_runs() {
     live.stop().await;
 }
 
-/// codex has no background tasks a session waits for: the turn ends on `turn/completed` with the session idle
-/// without background, and no turn follows on its own.
+/// A command that outlives its turn (spec §7.5): `exec_command` yields while the command still runs, the turn ends
+/// idle with background, and the thread is idle without it once the command's `item/completed` comes, outside any
+/// turn; no turn follows on its own.
 #[tokio::test]
-async fn s14_a_command_sent_to_the_background_ends_nothing_later() {
+async fn s14_a_command_that_outlives_its_turn_keeps_the_session_in_background() {
     let dir = tempfile::tempdir().unwrap();
-    let plan = vec![
-        Reply::Command("(sleep 1 && touch bg) > /dev/null 2>&1 &".into()),
+    let plan = vec![Reply::Turn(vec![
+        Reply::Command("sleep 14 && touch bg".into()),
         Reply::Text("Started.".into()),
-    ];
+    ])];
     let mut live = Live::start(plan, dir.path(), 0, "never").await;
     assert_eq!(live.ended().await, StopReason::Completed, "{:?}", live.seen);
-    let idle = Normalized::State {
+    let idle = |background| Normalized::State {
         state: SessionState::Idle,
-        background: false,
+        background,
     };
-    let after = live.until(Duration::from_secs(5), |e| *e == idle).await;
-    assert_eq!(after, Some(idle), "{:?}", live.seen);
-    // Past the end of the background command.
+    let state = live
+        .until(Duration::from_secs(5), |e| matches!(e, Normalized::State { .. }))
+        .await;
+    assert_eq!(state, Some(idle(true)), "the command still runs: {:?}", live.seen);
+    assert!(!live.rig.join("bg").exists());
+    let after = live.until(Duration::from_secs(30), |e| *e == idle(false)).await;
+    assert_eq!(after, Some(idle(false)), "{:?}", live.seen);
+    assert!(
+        live.rig.join("bg").exists(),
+        "idle without background once the command is done"
+    );
     let more = live
         .until(Duration::from_secs(2), |e| *e == Normalized::TurnStarted)
         .await;
     assert_eq!(more, None, "{:?}", live.seen);
-    assert_eq!(live.provider.requests().len(), 2);
     live.stop().await;
 }
 

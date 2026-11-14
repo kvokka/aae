@@ -320,3 +320,48 @@ fn a_text_answers_every_question_of_a_user_input_request_by_its_id() {
         json!({ "id": 7, "result": { "answers": { "q1": { "answers": ["blue"] }, "q2": { "answers": ["blue"] } } } })
     );
 }
+
+/// A command that outlives its turn (spec §7.5): the turn ends idle with background, and the thread is idle without
+/// it only once the command completes, outside any turn.
+#[test]
+fn a_command_that_outlives_its_turn_keeps_the_thread_in_background() {
+    let mut stream = Stream::new(None);
+    let command = |method: &str| {
+        note(
+            method,
+            json!({ "threadId": "t", "item": { "type": "commandExecution", "id": "c" } }),
+        )
+    };
+    let events = play(
+        &mut stream,
+        &[
+            note("turn/started", json!({ "threadId": "t", "turn": { "id": "u" } })),
+            command("item/started"),
+            turn_completed("completed", Value::Null),
+        ],
+    );
+    let idle = |background| Normalized::State {
+        state: SessionState::Idle,
+        background,
+    };
+    assert_eq!(
+        events[events.len() - 2..],
+        [
+            Normalized::TurnEnded {
+                stop_reason: StopReason::Completed
+            },
+            idle(true)
+        ]
+    );
+    let idle_note = note(
+        "thread/status/changed",
+        json!({ "threadId": "t", "status": { "type": "idle" } }),
+    );
+    assert_eq!(
+        play(&mut stream, &[idle_note]),
+        [idle(true)],
+        "an idle status with the command running"
+    );
+    let events = play(&mut stream, &[command("item/completed")]);
+    assert_eq!(events.last(), Some(&idle(false)), "{events:?}");
+}

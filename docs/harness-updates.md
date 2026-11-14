@@ -79,7 +79,7 @@ background command running passes the run only after the command (criterion 4a o
 | 3 | quota with a reset time | `quota_exhausted` with `retry_at` from the rate-limit snapshot |
 | 7 | `insufficient_quota` | codex words it as `usageLimitExceeded` "… check your plan and billing details": `billing` |
 | 11 | EOF on stdin in a turn | the app-server exits at once with code 0, the turn left open: `harness_crash` |
-| 14 | command sent to the background | codex tracks no background tasks: the turn ends, idle without background, no turn follows |
+| 14 | command that outlives its turn | `exec_command` yields while the command runs: the turn ends idle with `background`, idle without background on the command's late `item/completed`, no turn follows |
 | 15 | second writer in the thread | refused ("already has an active writer"): `transcript_divergence` |
 
 The rest match claude: rate limits, overload, 401, context, unknown model, `kill -9`, silence and permission.
