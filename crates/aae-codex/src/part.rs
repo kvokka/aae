@@ -94,13 +94,14 @@ pub(crate) fn session(config: &EffectiveConfig, plan: &SessionPlan) -> Result<Va
         } => (workdir, run, token, actor),
     };
     let value = |s: &Option<aae_core::config::Sourced<String>>| s.as_ref().map(|s| s.value.clone());
-    let mut thread_config = json!({
-        "shell_environment_policy": { "set": { "AAE_RUN": run, "AAE_ATTEMPT_TOKEN": token } },
-    });
-    // The tracker actor of the attempt, as the core planned it (contracts 5.1); the thread, not the shared process.
-    if let Some((name, actor)) = actor {
-        thread_config["shell_environment_policy"]["set"][name] = json!(actor);
-    }
+    // The attempt environment and the tracker actor of the attempt, as the core planned it (contracts 5.1); the
+    // thread's, not the shared process's.
+    let mut attempt = Map::from_iter([
+        ("AAE_RUN".to_owned(), json!(run)),
+        ("AAE_ATTEMPT_TOKEN".to_owned(), json!(token)),
+    ]);
+    attempt.extend(actor.iter().map(|(name, actor)| (name.clone(), json!(actor))));
+    let mut thread_config = json!({ "shell_environment_policy": { "set": attempt } });
     if let Some(effort) = value(&config.effort) {
         thread_config["model_reasoning_effort"] = json!(effort);
     }
@@ -108,7 +109,7 @@ pub(crate) fn session(config: &EffectiveConfig, plan: &SessionPlan) -> Result<Va
     if !mcp.is_empty() {
         thread_config["mcp_servers"] = Value::Object(mcp);
     }
-    let hooks = hooks(config)?;
+    let hooks = hooks(config, &attempt)?;
     if !hooks.is_empty() {
         // Hooks given to a thread run only with the bypass (experiment 2).
         thread_config["hooks"] = Value::Object(hooks);
@@ -147,15 +148,21 @@ fn mcp(config: &EffectiveConfig) -> Result<Map<String, Value>, Failure> {
     Ok(servers)
 }
 
-/// `config.hooks` of the thread: the `hooks.json` form, the same as claude's.
-fn hooks(config: &EffectiveConfig) -> Result<Map<String, Value>, Failure> {
+/// `config.hooks` of the thread: the `hooks.json` form, the same as claude's. A hook runs with the process
+/// environment, not the thread's (experiment 2), so its command exports the attempt environment `vars` first.
+fn hooks(config: &EffectiveConfig, vars: &Map<String, Value>) -> Result<Map<String, Value>, Failure> {
+    let quote = |v: &str| format!("'{}'", v.replace('\'', r"'\''"));
+    let exports: Vec<String> = (vars.iter())
+        .map(|(k, v)| format!("{k}={}", quote(v.as_str().unwrap_or_default())))
+        .collect();
+    let export = format!("export {}; ", exports.join(" "));
     let mut events = Map::new();
     for (name, hook) in config.hooks.iter().filter(|(_, h)| h.value.enabled) {
         let hook = &hook.value;
         let (Some(event), Some(command)) = (&hook.event, &hook.command) else {
             return Err(config_error(format!("hook `{name}` needs an event and a command")));
         };
-        let mut entry = json!({ "type": "command", "command": command });
+        let mut entry = json!({ "type": "command", "command": format!("{export}{command}") });
         if let Some(timeout) = &hook.timeout {
             let timeout =
                 aae_core::config::duration(timeout).map_err(|e| config_error(format!("hook `{name}`: {e}")))?;

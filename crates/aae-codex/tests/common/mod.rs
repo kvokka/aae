@@ -16,7 +16,7 @@ use std::{
 };
 use tokio::sync::mpsc;
 
-fn sourced<T>(value: T) -> Sourced<T> {
+pub(crate) fn sourced<T>(value: T) -> Sourced<T> {
     Sourced {
         value,
         from: Layer::Agent,
@@ -38,7 +38,9 @@ pub(crate) struct Live {
 impl Live {
     pub(crate) async fn start(plan: Vec<Reply>, dir: &Path, retries: u32, approval: &str) -> Self {
         let provider = Arc::new(Provider::start(plan).await);
-        Self::open(provider, dir, retries, approval, None).await.unwrap()
+        Self::open(provider, dir, retries, approval, None, Default::default())
+            .await
+            .unwrap()
     }
 
     /// `resume` binds another live app-server's thread (a second writer): one provider and state, one `CODEX_HOME`.
@@ -48,6 +50,7 @@ impl Live {
         retries: u32,
         approval: &str,
         resume: Option<SessionRef>,
+        hooks: std::collections::BTreeMap<String, aae_core::config::Sourced<aae_core::config::Hook>>,
     ) -> Result<Self, Failure> {
         let id = if resume.is_some() { "i2" } else { "i1" };
         let driver = Codex::new("codex".into(), dir.join("state"), None, 8);
@@ -84,7 +87,7 @@ impl Live {
             inherit_host: Some(sourced(false)),
             env: Default::default(),
             mcp: Default::default(),
-            hooks: Default::default(),
+            hooks,
             skills: Default::default(),
             plugins: Vec::new(),
             // The host forbids user namespaces, so the codex sandbox cannot run here (docs/design/experiments.md).

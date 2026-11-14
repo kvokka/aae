@@ -214,7 +214,15 @@ async fn s15_a_second_writer_is_refused_as_a_divergence() {
         .await;
     assert!(started.is_some(), "{:?}", first.seen);
     let provider = first.provider.clone();
-    let second = Live::open(provider, dir.path(), 0, "never", Some(first.session.clone())).await;
+    let second = Live::open(
+        provider,
+        dir.path(),
+        0,
+        "never",
+        Some(first.session.clone()),
+        Default::default(),
+    )
+    .await;
     let refused = second.err().expect("the second writer is refused");
     assert_eq!(refused.kind, FailureKind::TranscriptDivergence, "{}", refused.raw);
     assert!(refused.raw.contains("active writer"), "{}", refused.raw);
@@ -235,4 +243,36 @@ async fn an_unanswered_thread_read_fails_the_attempt() {
         rustix::process::kill_process(pid, rustix::process::Signal::KILL).unwrap();
     });
     assert_eq!(read.err().map(|f| f.kind), Some(FailureKind::HarnessCrash));
+}
+
+/// A hook of the thread runs with the process environment, so the adapter puts the attempt environment on its
+/// command line (contracts 4.6).
+#[tokio::test]
+async fn a_thread_hook_runs_with_the_attempt_environment() {
+    let dir = tempfile::tempdir().unwrap();
+    let provider = std::sync::Arc::new(aae_testkit::openai::Provider::start(vec![Reply::Text("Hi.".into())]).await);
+    let out = dir.path().join("hook-env");
+    let hook = aae_core::config::Hook {
+        enabled: true,
+        event: Some("Stop".into()),
+        matcher: None,
+        command: Some(format!(
+            "printf '%s %s' \"$AAE_RUN\" \"$AAE_ATTEMPT_TOKEN\" > '{}'",
+            out.display()
+        )),
+        timeout: None,
+    };
+    let hooks = [("record".to_owned(), common::sourced(hook))].into();
+    let mut live = Live::open(provider, dir.path(), 0, "never", None, hooks).await.unwrap();
+    assert_eq!(live.ended().await, StopReason::Completed, "{:?}", live.seen);
+    let until = std::time::Instant::now() + Duration::from_secs(5);
+    while !out.exists() && std::time::Instant::now() < until {
+        tokio::time::sleep(Duration::from_millis(50)).await;
+    }
+    assert_eq!(
+        std::fs::read_to_string(&out).unwrap(),
+        "r1 t",
+        "the Stop hook ran with the attempt's run and token"
+    );
+    live.stop().await;
 }

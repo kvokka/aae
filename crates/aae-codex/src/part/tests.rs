@@ -56,7 +56,9 @@ fn the_process_gets_the_native_block_and_the_thread_the_rest() {
         s["config"]["shell_environment_policy"]["set"],
         json!({ "AAE_RUN": "r", "AAE_ATTEMPT_TOKEN": "tok", "BD_ACTOR": "aae:r:1" })
     );
-    assert_eq!(s["config"]["hooks"]["Stop"][0]["hooks"][0]["command"], "true");
+    // A hook runs with the process environment: the attempt's goes on its command line.
+    let exports = "export AAE_ATTEMPT_TOKEN='tok' AAE_RUN='r' BD_ACTOR='aae:r:1'; true";
+    assert_eq!(s["config"]["hooks"]["Stop"][0]["hooks"][0]["command"], exports);
     assert_eq!(s["config"]["bypass_hook_trust"], true);
     assert_eq!(s["config"]["model_reasoning_effort"], "low");
     // The session part is not in the fingerprint: two runs of one agent share a process.
