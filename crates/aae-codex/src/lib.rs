@@ -5,7 +5,7 @@ mod part;
 mod rpc;
 mod stream;
 
-pub use part::host_key;
+pub use part::{host_key, unconfined};
 
 use aae_core::{
     BoxFuture,

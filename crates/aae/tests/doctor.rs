@@ -182,8 +182,11 @@ fn stdio_mcp_servers_of_the_host_are_warned_about() {
     assert!(passed, "{found:?}");
     assert_eq!(level(&found, "claude host mcp").0, "ok");
     assert_eq!(level(&found, "codex host mcp").0, "ok");
-    let (sandbox, why) = level(&found, "codex sandbox");
-    assert!(sandbox == "warning" && why.contains("danger-full-access"), "{found:?}");
+    assert_eq!(
+        level(&found, "codex sandbox").0,
+        "ok",
+        "a claude agent runs in no codex sandbox"
+    );
 
     let host = r#"{"mcpServers": {"deja": {"command": "deja"}, "web": {"type": "http", "url": "http://x"}},
         "projects": {"/p": {"mcpServers": {"local": {"type": "stdio", "command": "l"}}}}}"#;
@@ -200,4 +203,37 @@ fn stdio_mcp_servers_of_the_host_are_warned_about() {
     assert!(claude == "warning" && why.contains("deja, local;"), "{found:?}");
     let (codex, why) = level(&found, "codex host mcp");
     assert!(codex == "warning" && why.contains(": notes;"), "{found:?}");
+}
+
+#[test]
+fn the_sandbox_warning_names_each_codex_agent_that_sets_no_sandbox_mode() {
+    let dir = tree("");
+    let agent = dir.path().join("config/aae/shop/agents/fix/agent.toml");
+    fs::create_dir_all(agent.parent().unwrap()).unwrap();
+    fs::write(&agent, "harness = \"codex\"\n").unwrap();
+    let (_, found) = doctor(dir.path());
+    let (sandbox, why) = level(&found, "codex sandbox");
+    assert!(
+        sandbox == "warning" && why.contains("danger-full-access") && why.ends_with("shop/web@shop.fix"),
+        "{why}"
+    );
+    fs::create_dir_all(dir.path().join(".codex")).unwrap();
+    fs::write(
+        dir.path().join(".codex/config.toml"),
+        "sandbox_mode = \"workspace-write\"\n",
+    )
+    .unwrap();
+    assert_eq!(
+        level(&doctor(dir.path()).1, "codex sandbox").0,
+        "ok",
+        "the inherited host config sets it"
+    );
+    fs::remove_file(dir.path().join(".codex/config.toml")).unwrap();
+    let native = "harness = \"codex\"\n[native.codex]\nsandbox_mode = \"workspace-write\"\n";
+    fs::write(&agent, native).unwrap();
+    assert_eq!(
+        level(&doctor(dir.path()).1, "codex sandbox").0,
+        "ok",
+        "the native block sets it"
+    );
 }

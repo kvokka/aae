@@ -5,6 +5,7 @@ use crate::{
     daemon::Paths,
     harness::{binary, driver, load, tested},
 };
+use aae_core::config::{Config, Name};
 use aae_front::cli::Service;
 use serde_json::{Value, json};
 use std::{
@@ -56,13 +57,7 @@ fn findings(paths: &Paths) -> Vec<Value> {
                     found.push(host_mcp(name));
                 }
                 if name == "codex" {
-                    // Spec §2.1 item 1: the codex sandbox needs user namespaces, which many hosts lack.
-                    found.push(check(
-                        "codex sandbox",
-                        "warning",
-                        "codex agents run with sandbox_mode = \"danger-full-access\" unless their native block or \
-                         the host's codex config sets sandbox_mode: commands are not confined to the workdir",
-                    ));
+                    found.push(sandbox(&config));
                 }
             }
             if config.projects.iter().any(|p| p.root.join(".beads").is_dir()) {
@@ -85,6 +80,43 @@ fn findings(paths: &Paths) -> Vec<Value> {
     }
     found.push(state(&paths.state.join("state.db")));
     found
+}
+
+/// Spec §2.1 item 1: the codex sandbox needs user namespaces, which many hosts lack, so a codex agent whose config
+/// sets no `sandbox_mode` runs with none; the warning names every such agent, per rig.
+fn sandbox(config: &Config) -> Value {
+    let host = home("CODEX_HOME", ".codex");
+    let mut open = Vec::new();
+    for p in &config.projects {
+        let rigs: Vec<Option<&str>> = match p.rigs.is_empty() {
+            true => vec![None],
+            false => p.rigs.keys().map(|r| Some(r.as_str())).collect(),
+        };
+        let agents = (p.packs.iter()).flat_map(|pack| pack.agents.iter().map(|(a, agent)| (&pack.name, a, agent)));
+        for (pack, name, _) in agents.filter(|(_, _, agent)| agent.harness == "codex") {
+            let agent = Name {
+                pack: pack.clone(),
+                name: name.clone(),
+            };
+            for rig in &rigs {
+                let effective = config.effective(&p.name, *rig, &agent);
+                if effective.is_ok_and(|e| aae_codex::unconfined(&e, &host)) {
+                    open.push(format!("{}/{}@{agent}", p.name, rig.unwrap_or("-")));
+                }
+            }
+        }
+    }
+    match open.is_empty() {
+        true => check("codex sandbox", "ok", "every codex agent sets sandbox_mode"),
+        false => check(
+            "codex sandbox",
+            "warning",
+            format!(
+                "sandbox_mode = \"danger-full-access\", commands not confined to the workdir: {}",
+                open.join(", ")
+            ),
+        ),
+    }
 }
 
 /// The stdio MCP servers of the host's own settings (spec §6.4): with host inheritance on, each starts in every

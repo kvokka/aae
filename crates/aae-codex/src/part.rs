@@ -46,9 +46,7 @@ pub(crate) fn process(config: &EffectiveConfig, state: &Path, host: &Path) -> Re
             ));
         }
     };
-    // Spec §2.1 item 1: no sandbox unless the config, or the host's codex config a process inherits, sets one.
-    let host_sets = config.inherits_host() && host_config(host).is_some_and(|c| c.contains_key("sandbox_mode"));
-    if !overrides.iter().any(|o| o.starts_with("sandbox_mode=")) && !host_sets {
+    if unconfined(config, host) {
         overrides.push(format!("sandbox_mode={}", toml::Value::from(DEFAULT_SANDBOX)));
     }
     let env: BTreeMap<_, _> = config.env.iter().map(|(k, v)| (k.clone(), v.value.clone())).collect();
@@ -283,6 +281,14 @@ pub(crate) fn daemon_vars(p: &Value) -> impl Iterator<Item = &'static str> {
 }
 
 /// `config.toml` in `home`, if it is there and reads.
+/// Spec §2.1 item 1: a process runs with no sandbox unless the native block of its config, or the host's codex config
+/// in `home` it inherits, sets one.
+pub fn unconfined(config: &EffectiveConfig, home: &Path) -> bool {
+    let native = config.native.as_ref().and_then(|n| n.value.as_object());
+    let host_sets = config.inherits_host() && host_config(home).is_some_and(|c| c.contains_key("sandbox_mode"));
+    !native.is_some_and(|n| n.contains_key("sandbox_mode")) && !host_sets
+}
+
 fn host_config(home: &Path) -> Option<toml::Table> {
     toml::from_str(&std::fs::read_to_string(home.join("config.toml")).ok()?).ok()
 }

@@ -150,7 +150,7 @@ such an agent, and `HOME` stays the operator's.
 codex runs with `sandbox_mode = "danger-full-access"` unless the native block, or the host's `config.toml` of an
 inheriting process, sets `sandbox_mode` (spec §2.1 item 1): the codex sandbox needs unprivileged user namespaces,
 which many hosts forbid (`docs/design/experiments.md`). Commands are then not confined to the workdir; `aae doctor`
-warns about it.
+names each such agent, as `<project>/<rig>@<pack>.<agent>`, in a warning.
 
 With inheritance off, credentials still come from the host; a session whose `env` carries a credential of its
 own uses that one instead.
