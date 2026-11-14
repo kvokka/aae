@@ -82,6 +82,11 @@ impl Claude {
     }
 
     async fn start(&self, id: &str, p: &Value, sink: EventSink) -> Result<InstanceHandle, Failure> {
+        // The generated files are this process's alone and go with it: a resume writes them again.
+        let mut p = p.clone();
+        let files = PathBuf::from(p["files"].as_str().unwrap_or_default()).join(id);
+        p["files"] = json!(files);
+        let p = &p;
         let mut command = Command::new(&self.binary);
         command
             .args(part::args(p))
@@ -89,8 +94,7 @@ impl Claude {
             .envs(part::env(p, id, self.socket.as_deref(), &part::host_dir()))
             .current_dir(p["workdir"].as_str().unwrap_or("."));
         let config_error = |what: &Path, e: std::io::Error| child::config_error(format!("{}: {e}", what.display()));
-        let files = Path::new(p["files"].as_str().unwrap_or_default());
-        part::materialize(p).map_err(|e| config_error(files, e))?;
+        part::materialize(p).map_err(|e| config_error(&files, e))?;
         if let Some(dir) = p["config_dir"].as_str() {
             std::fs::create_dir_all(dir).map_err(|e| config_error(Path::new(dir), e))?;
         }
@@ -151,6 +155,7 @@ impl Claude {
             }
             let status = child.wait().await.ok();
             orphans::waited(u32::try_from(pid).ok());
+            let _ = std::fs::remove_dir_all(&files);
             instances.lock().unwrap_or_else(PoisonError::into_inner).remove(&id);
             let stderr = tokio::time::timeout(Duration::from_secs(1), stderr).await;
             let stderr = stderr.ok().and_then(Result::ok).unwrap_or_default();

@@ -261,8 +261,12 @@ async fn a_process_that_dies_in_a_turn_reports_its_stderr_and_is_forgotten() {
     let driver = Claude::new(script, dir.path().join("state"), None);
     let mut p = process(false, true);
     p["workdir"] = json!(dir.path());
+    p["files"] = json!(dir.path().join("state/claude/s1"));
+    p["mcp"] = json!({ "mcpServers": { "svc": { "type": "http", "url": "http://x", "headers": { "a": "secret" } } } });
     let (sink, mut events) = tokio::sync::mpsc::unbounded_channel();
     let instance = driver.start("i1", &p, sink).await.unwrap();
+    let mcp = dir.path().join("state/claude/s1/i1/mcp.json");
+    assert!(mcp.is_file(), "written for the process");
     let session = driver
         .start_session(&instance, &SessionPart(Value::Null))
         .await
@@ -277,6 +281,10 @@ async fn a_process_that_dies_in_a_turn_reports_its_stderr_and_is_forgotten() {
         }
     }
     let failure = failure.expect("a failure in the open turn");
+    assert!(
+        !mcp.parent().unwrap().exists(),
+        "the generated files, secrets included, go with the process"
+    );
     assert_eq!(failure.kind, FailureKind::HarnessCrash);
     assert!(
         failure.raw.ends_with("exited with code 1 in a turn: Error: boom"),
