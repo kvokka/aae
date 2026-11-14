@@ -44,9 +44,28 @@ Code: `crates/aae-front/src/cli/`. The CLI is a thin client of the HTTP API in t
 - An error exits 1 with `aae: <message>` on stderr; under `--json`, stderr is `{"error": {"code", "message", ...}}`:
   the API's error object, or for a local error the code `no_daemon`, `usage`, `config_error`, `not_found` or
   `internal`. Arguments that do not parse exit 2 with the usage text.
-- `aae run start` prints the run id; when a bead input finds nothing ready it says so on stderr and exits 3.
+- `aae run start` prints the run id; when a bead input finds nothing ready it says so on stderr and exits 3. Inside
+  an agent session (`AAE_RUN` and `AAE_ATTEMPT_TOKEN` set, as for `aae finish`) it sends them as `parent` of
+  `POST /v1/runs`: the run is a child of the session's run, with its correlation and one level deeper, at most 10
+  ([contracts](../design/contracts.md#61-states)); a token that is not that of the parent's live current
+  attempt is `rejected` ("stale attempt"). From a shell of its own the run starts a new correlation at depth 0.
+  `aae run list --parent <run>` lists a run's children; cancelling a run cancels the live runs its sessions
+  started (reason `parent_cancelled`), while its pass or failure leaves them alone.
 - `aae run watch <run>` prints the live view (a line per event, `-  harness  <type>` per session message) and exits
-  0 once the stream ends with the run; `aae run show` gives the outcome.
+  0 once the stream ends with the run; `aae run wait` gives the outcome.
+- `aae run wait <run>... [--timeout <dur>]` waits on the event stream (not by polling) until every named run is
+  terminal, then prints for each `id`, `state`, `class`, `reason` and the finisher's `summary` and `data` (with
+  `--json` an array of these objects). A run already terminal is answered at once. Exit codes: 0 when all passed,
+  1 when one did not (or a run is unknown), 124 when the timeout ran out first; then the current state of each run is
+  printed. A daemon restart in between is reconnected to with backoff and the states are read again.
+- An agent that waits for its children holds its turn open on one long tool call, and two clocks watch it. The
+  watchdog's silence budget while a tool runs is `[watchdog] tool_silence` (default 10 min); each
+  `Activity{tool_running}` from the adapter renews it. Claude sends a `tool_progress` heartbeat every 30 s, so a
+  long `aae run wait` in Bash never trips it, but claude moves a foreground Bash call to the background after 120 s
+  (`BASH_DEFAULT_TIMEOUT_MS`). Codex has no heartbeat: only the start of a command and its output renew the budget,
+  and `aae run wait` prints nothing until it ends, so a wait longer than `tool_silence` fails the attempt as
+  `stall`. Either way, wait in a loop of `aae run wait <runs> --timeout 100s` (exit 124: wait again), or raise
+  `tool_silence` above the longest wait. The whole wait still counts against the step's `timeout` (default 45 min).
 - `aae finish` reads the attempt token from the session environment, retries for 60 s under one idempotency key and
   exits 75 when the daemon stays unreachable (an attempt failure, not a failed run).
 - Without a daemon only `aae daemon`, `aae doctor`, `aae fetch`, `aae config check|explain` and `aae --version` work;

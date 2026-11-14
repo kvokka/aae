@@ -44,7 +44,7 @@ One envelope for the JSONL journal, the API event stream (SSE) and the stdin of 
 | `type` | string | one of 1.3 below |
 | `project`, `rig` | string or null | null for orchestrator-level events |
 | `run` | string or null | the run the event is about; for `bead.*` the run whose attempt made the change (§10.2 attribution), else null |
-| `correlation` | string or null | chain id: a run started by hand starts a chain, a run started by a trigger inherits the chain of the event that fired it; null for events outside any chain |
+| `correlation` | string or null | chain id: a run started by hand starts a chain, a run started by a trigger inherits the chain of the event that fired it, a run started from an agent session (§6.1) that of the session's run; null for events outside any chain |
 | `data` | object | payload of the type, see 1.3 |
 
 Version rules:
@@ -68,11 +68,12 @@ Shared objects:
 
 - `RunView`: `{id, formula, agent, step_kind: "prompt"|"exec", state, class, attempt, generation, bead, workdir, depth,
   parent_run, created_at, started_at}`. `agent` is null for `exec` steps, `class` is null until `failed`, `bead` is the
-  bead id or null, `depth` is the trigger depth of §9.5 (0 for a run started by hand). The read API (`GET
-  /v1/runs/{id}`, `aae run show`) gives the `RunView` with `project`, `rig`, `correlation`, `inputs`, `waiting_for`,
-  `outcome`, `attempts`, `usage` (`{input_tokens, output_tokens}`, summed over every attempt) and: `reason` (the veto
-  text, the cancel reason, `pass`, or the failure reason), `request` (the open request while in `requires_action`, else
-  null) and `gate` (the oldest closure of the run's keys while it waits on a gate or is `parked`, else null).
+  bead id or null, `depth` is the chain depth of §6.1 (0 for a run started by hand), `parent_run` the run whose event
+  triggered it or whose session started it. The read API (`GET /v1/runs/{id}`, `aae run show`) gives the `RunView` with
+  `project`, `rig`, `correlation`, `inputs`, `waiting_for`, `outcome`, `attempts`, `usage` (`{input_tokens,
+  output_tokens}`, summed over every attempt) and: `reason` (the veto text, the cancel reason, `pass`, or the failure
+  reason), `request` (the open request while in `requires_action`, else null) and `gate` (the oldest closure of the
+  run's keys while it waits on a gate or is `parked`, else null).
 - `Failure`: `{kind, text, scope, retry_at, retried_by_harness, source, raw, account, provider_model}`: `kind` from
   see 4.4, `text` set only for `unknown`, `scope` one of `session | instance | account | provider_model | run | rig`,
   `retry_at` time or null, `source` one of `harness | adapter | core`, `raw` the harness text cut to 4 KiB,
@@ -591,7 +592,13 @@ would give: `hollow_done` for `continue`, `check` for `remark`. Between turns (f
 prompt) the step `timeout` pauses like in `requires_action`. Trigger depth (§9.5): a trigger does not start a run deeper
 than 10 (`trigger.skipped{depth}`); the limit is fixed, with no setting. A run started on `bead.ready` keeps the depth
 of the run that caused it, with no level added: a bead made ready is the next work of the tracker, not a run the parent
-started, so a long epic stays legal.
+started, so a long epic stays legal. A run started from an agent session (`aae run start` with `AAE_RUN` and
+`AAE_ATTEMPT_TOKEN` in its environment, `parent` of `POST /v1/runs`) is a child of the session's run: the token must be
+that of the parent's live current attempt, as for the finisher (§6.3), else the start is `rejected` ("stale
+attempt"); the child takes the parent's correlation and `parent_run`, one level deeper, under the same ceiling of 10
+(`rejected` beyond it). Cancelling a run cancels its live children started from its sessions, with reason
+`parent_cancelled` (runs its events triggered are not its children to cancel); a pass or a failure of the parent leaves
+them alone.
 
 ### 6.2 Transitions
 
@@ -617,7 +624,7 @@ started, so a long epic stays legal.
 | `interrupted` | `fail`, no decision, attempts ceiling | `failed{infrastructure}` | gate closed if the decision carries one |
 | `parked` | every key of the run open, a concurrency slot free (in creation order with the queue) | `starting` (`then` of the park decision); `run.resumed` | new attempt |
 | `preparing`, `interrupted` | an attempt would start while a key of the run is closed (by anyone, invariant 18) or the daemon is stopping | `parked` (`then`: `new_session` from `preparing`, the decided kind from `interrupted`) | — |
-| any non-terminal | operator cancel | `cancelled` | stop the session, conditional release of the bead |
+| any non-terminal | operator cancel, or the cancel of the parent (§6.1, reason `parent_cancelled`) | `cancelled` | stop the session, conditional release of the bead |
 
 Every terminal transition releases the run's hold on its workdir and its ownership of its bead. A bead the run
 claimed is closed (`passed`) or released conditionally (`failed`, `cancelled`) by an effect on the queue

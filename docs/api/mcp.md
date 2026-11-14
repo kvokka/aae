@@ -18,6 +18,10 @@ request on the TCP listener needs `Authorization: Bearer <token>`; the daemon wr
 | `list_runs` | `project`?, `state`?, `limit`? | `GET /v1/runs` |
 | `cancel_run` | `id`, `reason`?, `idempotency_key`? | `POST /v1/runs/{id}/cancel` |
 
+An MCP session carries no attempt of an agent session, so `start_run` starts a run at depth 0 with a new
+correlation; an agent starts a child of its own run with `aae run start` from its session's shell
+([frontends](frontends.md#cli)).
+
 A tool result carries the API's JSON reply as text. An API error (`bad_request`, `not_found`, `rejected`, ...) is a
 result with `isError: true` and the text `<code>: <message>`; an unknown tool is the JSON-RPC error `-32602`.
 `idempotency_key` works as the API's `Idempotency-Key`: the same key and
