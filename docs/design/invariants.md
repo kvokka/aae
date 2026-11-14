@@ -29,7 +29,7 @@ times, how long) are config parameters with defaults; the choice of a reaction i
 | 13 | An interruption by the infrastructure (cancel, restart, limit) is not an outcome of the formula; when attempts run out the run fails with class `infrastructure`, distinct from a fail by the agent or by a veto | contracts 6.1, 6.2 |
 | 14 | Every transitional state has a deadline and a terminal exit | contracts 6.1 |
 | 15 | A watchdog on an issued run: a deadline to the first event and a silence budget that depends on the state. Waiting for a human is not silence; a running tool and background subagents have their own, longer budget. The core raises the failure `stall`, the policy chooses the reaction. The thresholds are `[watchdog]` of the orchestrator config (config.md) | contracts 6.1, 4.3 |
-| 16 | Attempt and restart counters live in the state and are bounded; the core has an absolute ceiling the policy cannot raise (20 attempts, 10 remarks per attempt); an attempt whose failure parked the run on an `account:` gate is outside the attempts ceiling (spec §2.1 item 12), its waits bounded by time instead | contracts 6.1 |
+| 16 | Attempt and restart counters live in the state and are bounded; the core has an absolute ceiling the policy cannot raise (20 attempts, 10 remarks per attempt); an attempt whose `auth_required` or `billing` failure parked the run on its own `account:` gate, closed by that decision, is outside the attempts ceiling (spec §2.1 item 12); any other park counts. Limit: a policy may still close that gate for a moment and retry at once — every such round is a real attempt of the harness | contracts 6.1 |
 | 17 | Resume is checked: only when the adapter confirmed the transcript exists. "New session keeping the ownership" is a core mechanism; after how many refused resumes to switch to it is policy | contracts 6.2, 6.4 |
 | 18 | An operator hold beats automation: a pause or cancel by a human is a record in the state read by every automatic decision | contracts 6.2, 7 |
 | 19 | A worktree has one owner and is removed only when its commits are reachable from refs (the `worktree` plugin) | `aae-plugins/src/worktree.rs` |
@@ -51,17 +51,21 @@ At daemon start ([contracts](contracts.md) 6.4 has the exact state rules):
 2. For every recorded harness instance check pid + start time, kill its process group, sweep every process with
    its marker and wait for the end. Instances that survived the restart are not reconnected in the first release:
    reconnection is an assumption left for later.
-3. Runs in `starting`, `running`, `requires_action` and `finishing` move to `interrupted` with the attempt failure
-   `daemon_crash`; the policy decides what follows. A `finishing` run loses its declared outcome and its deciding
-   hooks still queued; a decision on its old `run.finishing` is refused (contracts 6.4). A run in `preparing` or
-   `interrupted` keeps its state and its hooks run again.
-4. Re-arm deadlines and schedules (a missed schedule fires at most once) and resync, the process table included: what
-   carries the marker of an instance this state no longer records is swept.
+3. Runs with a live attempt — `starting`, `running` in a turn, `requires_action` — move to `interrupted` with the
+   attempt failure `daemon_crash`; the policy decides what follows. A run waiting for a decision on a deciding
+   event (`preparing`, `interrupted`, `finishing`, `running` after a turn without an outcome) keeps waiting for it:
+   its hooks run again, the declared outcome and an exec command's result stand. A `remark` or `continue` then
+   fails the attempt with `daemon_crash`, as the session it needs is gone (contracts 3.4, 6.4).
+4. The deadlines that wait for an effect's answer (a decision, the claim of a bead) count again from the start;
+   the deadlines of real time stay, and the schedules are armed (a missed schedule fires at most once). Resync, the
+   process table included: what carries the marker of an instance this state no longer records is swept.
 
 A planned restart drains first (`POST /v1/daemon/drain`, `POST /v1/daemon/restart`, `aae drain`, `aae restart`):
 no new run starts and no new attempt either (a retry decided meanwhile parks with `run.parked{gate: null}` and the
-next daemon starts it, `run.resumed{gate_key: "daemon_stopping"}`), the active runs go on until none is left or the
-drain timeout (default 300 s) passes, then the daemon stops (`daemon.stopping{reason}`) and recovery resumes what the
+next daemon starts it, `run.resumed{gate_key: "daemon_stopping"}`), the active runs — a run in a turn, a hook, a policy decision or a
+preparation — go on until none is left or the drain timeout (default 300 s) passes; a `remark` or `continue` at
+the turn boundary starts no turn but fails the attempt with `daemon_crash`, so its retry parks with the remark kept
+for the next daemon. Then the daemon stops (`daemon.stopping{reason}`) and recovery resumes what the
 drain cut.
 
 Prompt delivery is "at least once with an idempotent effect": the per-attempt record `intent → sent → acked →

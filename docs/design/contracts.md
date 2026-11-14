@@ -250,17 +250,24 @@ order); the bundled plugins come after all of them (docs/design/config.md, `[bui
 
 `deadline` of a deciding event = commit time + the sum of the timeouts of its hooks + 5 s (one hook can never
 hold a run longer than its own timeout; the runner reports before it unless it is lost). `run.requires_action` keeps waiting for a human after that deadline,
-until `human_timeout`.
+until `human_timeout`. After a daemon restart the deadline of a deciding event still pending counts again from the
+start of the new daemon, as the sum of the timeouts of the hooks queued on the run's deciding queue + 5 s: the
+hooks run again from their start, and the time the daemon was down is not theirs (the `deadline` in the event
+envelope keeps its first value).
 
 ### 3.4 Decisions and restarts
 
 The hook effect of a deciding event stays queued until its decision is committed (see 3.5). A decision message names the event
 `seq` and the run generation of the event; the core applies it only if the run is still in the state that emitted
 that event with that generation, else it is dropped as stale and nothing changes. After a restart the dispatcher
-runs the hooks of every deciding event still pending; the run waits in its state meanwhile. Recovery first drops
-the pending deciding hooks of every run it moves to `interrupted` (a run with a live attempt: `starting`, `running`,
-`requires_action`, `finishing`, see 6.4): they judge the lost attempt, and that attempt's `attempt_failed` queues
-its own hooks.
+runs the hooks of every deciding event still pending — on `run.preparing`, `run.finishing`, `run.attempt_failed`
+and `run.turn_ended_without_outcome` — and the run waits for the same decision meanwhile, its deadline counted
+again (3.3). The harness session of a run that ended its turn is gone with the dead daemon (no reconnection, 6.4):
+a decision that needs it — `remark` on `run.finishing`, `continue` on `run.turn_ended_without_outcome` — fails the
+attempt with `daemon_crash` in the transaction of the decision, and its text waits as the unsettled prompt of the
+attempt that resumes the session; the other decisions apply as they would have. Recovery drops the pending
+deciding hooks only of a run whose attempt was live (`starting`, `running` in a turn, `requires_action`, 6.4):
+they judge the lost attempt, and that attempt's `attempt_failed` queues its own hooks.
 
 ### 3.5 Outbox lifetime
 
@@ -559,7 +566,7 @@ so that the state machine has one place where `run.attempt_failed` is decided.
 - Concurrency is bounded per orchestrator (`max_runs`, default 8) and per agent (`max_runs` in `agent.toml`).
 - An attempt starts a new session or resumes the previous one, and has its own generation.
 
-Ceilings of the core (invariant 16): 20 attempts per run, not counting the attempts whose failure the decision parked on an `account:` gate (spec §2.1 item 12: a wait on the account does not spend the ceiling; the attempt is marked `waited` in the state), 10 remarks per attempt (`continue` after a hollow turn
+Ceilings of the core (invariant 16): 20 attempts per run, not counting the attempts whose `auth_required` or `billing` failure the decision parked on the run's own `account:` gate, closed by it (spec §2.1 item 12: a wait on the account does not spend the ceiling; the attempt is marked `waited` in the state; a park on a gate that does not close, `until` passed, or any other park counts), 10 remarks per attempt (`continue` after a hollow turn
 and `remark` after `run.finishing` both count). The eleventh fails the run with reason `remarks_ceiling` and the class
 the event would give: `hollow_done` for `continue`, `check` for `remark`. Between turns (from idle without background
 to the next prompt) the step `timeout` pauses like in `requires_action`. Trigger depth (§9.5): a trigger does not start a run deeper than 10 (`trigger.skipped{depth}`); the limit is fixed, with no setting.
@@ -646,15 +653,20 @@ for it is not.
   ([experiments](experiments.md)), so the transcript check finds it.
 - Daemon start (§5.6): open the state and drain the outbox; for every recorded instance check pid + start time,
   kill its process group and sweep every process carrying its marker `AAE_INSTANCE=<id>` in the environment, wait
-  for the end (invariants 6, 7); runs in `starting`, `running`, `requires_action`, `finishing` → `interrupted` with
-  `daemon_crash`, the launches, prompts, answers and deciding hooks they still had queued dropped, and the command
-  of an exec step killed by its `AAE_INSTANCE` marker (random per attempt) before any later attempt runs it (a
-  `finishing` run loses its declared outcome: the policy's retry runs the turn or the command again, at least once
-  as for a running one); runs in `preparing` and `interrupted` keep their state — their hook effect is still
-  queued and its hooks run again; every hook still queued is first killed by its `AAE_INSTANCE` marker, with what
-  it started, so a hook the dead daemon left running does not outlive it; re-arm deadlines and schedules; resync. Deadlines are wall-clock times:
-  the writer reads the wall clock at least every 30 s, so a deadline passed while the machine slept fires late by
-  at most that.
+  for the end (invariants 6, 7); every hook still queued is first killed by its `AAE_INSTANCE` marker, with what it
+  started, so a hook the dead daemon left running does not outlive it. Runs with a live attempt — `starting`,
+  `running` in a turn, `requires_action` — → `interrupted` with `daemon_crash`, the launches, prompts, answers and
+  deciding hooks they still had queued dropped, and the command of an exec step killed by its `AAE_INSTANCE` marker
+  (random per attempt) before any later attempt runs it. A run that waits for a decision on a deciding event keeps
+  its state and waits for the same decision (3.4): `preparing`, `interrupted` waiting for the policy, `finishing`,
+  and `running` after a turn that ended without an outcome. Its hook effect is still queued and its hooks run
+  again; the declared outcome and the result of an exec command stand, the turn and the command do not run again.
+  Recovery lets go of the handle of such an attempt, whose session died with its instance, and drops what it still
+  had queued for the session. The deadlines that wait for an effect's answer count again from the start: `decide`
+  (3.3) and the claim of a bead in `preparing` (`start_timeout`); those of real time — gate `until`, schedules
+  (a missed one fires at most once), the `after` of a retry, `queue_timeout`, `park_timeout` — stay. Then resync.
+  Deadlines are wall-clock times: the writer reads the wall clock at least every 30 s, so a deadline passed while
+  the machine slept fires late by at most that.
 - A resumed attempt after `daemon_crash` checks the transcript for the last unsettled key: `Absent` → send the
   same prompt with the same key; `Unanswered` or `Answered` → send the reconcile prompt (config text, default
   "Your previous turn was interrupted. Check the current state of the work and continue toward the goal.") with a
