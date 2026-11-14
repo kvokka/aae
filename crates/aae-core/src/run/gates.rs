@@ -57,8 +57,8 @@ fn gate_event(tx: &mut Tx<'_>, kind: &str, data: Value) -> Result<(), Error> {
 }
 
 impl RunHandler {
-    /// The gate keys of a run (contracts 7). The model key of its config is known from its config snapshot (or, in
-    /// `queued`, as its creation learned it); an attempt adds the account and a model its failure names.
+    /// The gate keys of a run (contracts 7). The model key is its config snapshot's (or, in `queued`, as its
+    /// creation learned it); an attempt adds the account.
     pub(super) fn keys(conn: &Connection, row: &Row) -> Result<Vec<String>, Error> {
         let mut keys = vec![
             "orchestrator".to_owned(),
@@ -71,15 +71,14 @@ impl RunHandler {
         if let Some(bead) = &row.bead {
             keys.push(format!("bead:{}/{bead}", row.project));
         }
-        let (account, model, configured): (Option<String>, Option<String>, Option<String>) = conn.query_row(
-            "SELECT account, model, 'model:' || json_extract(config, '$.provider.value') || '/' || \
-             json_extract(config, '$.model.value') FROM runs WHERE id = ?1",
+        let (account, model): (Option<String>, Option<String>) = conn.query_row(
+            "SELECT account, CASE WHEN config IS NULL THEN model ELSE 'model:' || json_extract(config, '$.harness') \
+             || '/' || json_extract(config, '$.model.value') END FROM runs WHERE id = ?1",
             [&row.id],
-            |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
+            |r| Ok((r.get(0)?, r.get(1)?)),
         )?;
         keys.extend(account);
-        keys.extend(configured.clone());
-        keys.extend(model.filter(|m| Some(m) != configured.as_ref()));
+        keys.extend(model);
         Ok(keys)
     }
 

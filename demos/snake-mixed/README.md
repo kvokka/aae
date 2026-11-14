@@ -1,12 +1,12 @@
 # Demo 2: the backend worker on codex
 
 The same pack and request as [demo 1](../snake-claude); only [`root/aae.toml`](root/aae.toml) differs. It declares a
-variant of the pack's coder on another provider and runs it on the rig `backend`:
+variant of the pack's coder on another harness and runs it on the rig `backend`:
 
 ```toml
 [agents.codex-coder]
 base = "dev.coder"
-provider = "openai"                   # aae picks the harness that serves it: codex
+harness = "codex"
 model = "luna"                        # the codex adapter expands it to the latest luna
 permission_mode = "never"
 
@@ -19,7 +19,7 @@ The other way to the same change, without a new agent name, is an override on th
 
 ```toml
 [rigs.backend.overrides.coder]
-provider = "openai"
+harness = "codex"
 model = "luna"
 permission_mode = "never"
 ```

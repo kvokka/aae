@@ -2,8 +2,8 @@
 
 The pack [`dev`](../dev-pack) with every agent on claude haiku. [`root/aae.toml`](root/aae.toml) is all the user
 configures: the rigs `root`, `backend`, `frontend`, and the cheapest model for both agents of the pack as an
-override (`[overrides.planner]`, `[overrides.coder]`) over the pack's defaults. The harness is not named anywhere: it
-follows from the pack's provider, `anthropic`.
+override (`[overrides.planner]`, `[overrides.coder]`) over the pack's defaults. The harness is the pack's default,
+`claude`; the user does not name it.
 
 - [`root/REQUEST.md`](root/REQUEST.md): what the user wants, in their words.
 - [`root/smoke.sh`](root/smoke.sh): how the user checks it; [`root/formulas/smoke.toml`](root/formulas/smoke.toml)

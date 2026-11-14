@@ -1,4 +1,4 @@
-//! The launch settings: harness and provider derived from each other, short model names, the pack and formula
+//! The launch settings: the harness of the strongest layer, short model names, the pack and formula
 //! layers and agent variants (docs/design/config.md).
 
 use super::config::load_for_adapters;
@@ -9,7 +9,6 @@ use crate::{
 
 static CLAUDE: Adapter = Adapter {
     name: "claude",
-    providers: &["anthropic"],
     models: &[],
     tested: [(0, 0, 0), (0, 0, 0)],
     new: |_| Err(String::new()),
@@ -17,7 +16,6 @@ static CLAUDE: Adapter = Adapter {
 };
 static CODEX: Adapter = Adapter {
     name: "codex",
-    providers: &["openai"],
     models: &[("luna", "gpt-6-luna")],
     tested: [(0, 0, 0), (0, 0, 0)],
     new: |_| Err(String::new()),
@@ -57,18 +55,14 @@ fn from(layer: Layer, value: &str) -> crate::config::Sourced<String> {
 }
 
 #[test]
-fn harness_and_provider_follow_from_each_other() {
+fn the_harness_is_the_strongest_layers() {
     let (_, e) = run(&load(&[]).unwrap());
     assert_eq!((e.harness.as_str(), &e.harness_from), ("claude", &Layer::Agent));
-    assert_eq!(e.provider, Some(from(Layer::Derived, "anthropic")));
-
-    let (_, e) = run(&load(&[(AGENT, "provider = \"openai\"\nplugins = [{ name = \"mail\" }]\n")]).unwrap());
-    assert_eq!((e.harness.as_str(), &e.harness_from), ("codex", &Layer::Derived));
-    assert_eq!(e.provider, Some(from(Layer::Agent, "openai")));
-    let text = e.explain();
-    assert!(
-        text.contains("harness = \"codex\"  # derived\nprovider = \"openai\"  # agent\n"),
-        "{text}"
+    assert_eq!(e.model_key().as_deref(), Some("model:claude/opus"));
+    // There is no `provider` setting: the harness's own settings say how it reaches its model (spec §6.2).
+    rejected(
+        &[(AGENT, "harness = \"claude\"\nprovider = \"openai\"\n")],
+        "unknown field `provider`",
     );
 }
 
@@ -78,10 +72,9 @@ fn an_override_changes_the_harness() {
                    [rigs.backend.overrides.implementer]\nharness = \"codex\"\nmodel = \"luna\"\n";
     let (_, e) = run(&load(&[("shop/aae.toml", project)]).unwrap());
     assert_eq!((e.harness.as_str(), &e.harness_from), ("codex", &Layer::RigOverride));
-    assert_eq!(e.provider, Some(from(Layer::Derived, "openai")));
     // The short name is the adapter's: the harness gets the full one, explain shows both.
     assert_eq!(e.model, Some(from(Layer::RigOverride, "gpt-6-luna")));
-    assert_eq!(e.model_key().as_deref(), Some("model:openai/gpt-6-luna"));
+    assert_eq!(e.model_key().as_deref(), Some("model:codex/gpt-6-luna"));
     assert!(
         e.explain()
             .contains("model = \"gpt-6-luna\"  # rig override, given as \"luna\"\n"),
@@ -91,28 +84,9 @@ fn an_override_changes_the_harness() {
 }
 
 #[test]
-fn launch_settings_that_do_not_go_together_are_load_errors() {
-    rejected(
-        &[(AGENT, "effort = \"high\"\n")],
-        "neither `harness` nor `provider` is set",
-    );
-    rejected(
-        &[(AGENT, "harness = \"claude\"\nprovider = \"openai\"\n")],
-        "`provider = \"openai\"` (agent) is not one that harness `claude` works with: anthropic",
-    );
-    rejected(
-        &[(AGENT, "provider = \"acme\"\n")],
-        "`provider = \"acme\"` (agent): no harness works with it",
-    );
-    let only_claude = (
-        "config.toml",
-        "projects = [\"shop\"]\n[harness.claude]\n[[plugin]]\npath = \"plugins/mail\"\n",
-    );
-    let errors = load(&[only_claude, (AGENT, "provider = \"openai\"\n")]).unwrap_err();
-    let error = errors.iter().find(|e| {
-        e.message
-            .contains("harness `codex` (derived) is not in the orchestrator")
-    });
+fn a_harness_no_layer_names_is_an_error_of_the_formula() {
+    let errors = load(&[(AGENT, "effort = \"high\"\n")]).unwrap_err();
+    let error = (errors.iter()).find(|e| e.message.contains("no layer sets `harness`"));
     // Said of the project file, with the formula and rig whose runs it is about.
     let error = error.unwrap_or_else(|| panic!("{errors:?}"));
     assert!(error.file.ends_with("shop/aae.toml") && error.message.starts_with("formula `kit.implement` on rig"));
@@ -161,7 +135,7 @@ fn run_agent() -> crate::config::Name {
 }
 
 const VARIANT: &str = "packs = [\"../kit\"]\n\
-    [agents.fast]\nbase = \"kit.implementer\"\nprovider = \"openai\"\nmodel = \"luna\"\n\
+    [agents.fast]\nbase = \"kit.implementer\"\nharness = \"codex\"\nmodel = \"luna\"\n\
     [overrides.fast]\neffort = \"low\"\n\
     [rigs.backend]\npath = \"backend\"\nagents = { implementer = \"fast\" }\n\
     [rigs.backend.overrides.implementer]\nmodel = \"opus\"\n";
@@ -176,9 +150,10 @@ fn a_rig_runs_a_variant_in_place_of_the_agent() {
         e.system_prompt.as_ref().map(|s| (s.value.as_str(), &s.from)),
         Some(("You implement.", &Layer::Agent))
     );
-    assert_eq!(e.provider, Some(from(Layer::Variant("fast".into()), "openai")));
-    // The agent's harness does not work with the variant's provider, which is stronger: the harness follows from it.
-    assert_eq!((e.harness.as_str(), &e.harness_from), ("codex", &Layer::Derived));
+    assert_eq!(
+        (e.harness.as_str(), &e.harness_from),
+        ("codex", &Layer::Variant("fast".into()))
+    );
     assert_eq!(e.model, Some(from(Layer::Variant("fast".into()), "gpt-6-luna")));
     assert_eq!(e.effort, Some(from(Layer::ProjectOverride, "low")));
     assert_eq!(config.max_runs("shop", "fast"), None);

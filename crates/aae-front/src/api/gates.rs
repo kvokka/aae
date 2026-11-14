@@ -25,7 +25,7 @@ pub(crate) async fn list(state: State) -> Reply {
 #[derive(Deserialize, ToSchema)]
 pub(crate) struct CloseGate {
     /// `orchestrator`, `project:<p>`, `rig:<p>/<r>`, `agent:<a>`, `bead:<p>/<id>`, `account:<h>/<id>`,
-    /// `model:<provider>/<model>`.
+    /// `model:<harness>/<model>`.
     key: String,
     /// `YYYY-MM-DDTHH:MM:SS[.fff]Z`; absent: until opened by hand.
     until: Option<String>,

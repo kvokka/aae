@@ -30,7 +30,7 @@ fn the_user_layers_of_the_demos_decide_what_the_workers_run_on() {
     assert_eq!(agent, "codex-coder");
     assert_eq!(
         (effective.harness.as_str(), effective.harness_from),
-        ("codex", Layer::Derived)
+        ("codex", Layer::Variant("codex-coder".into()))
     );
     let model = effective.model.unwrap();
     assert_eq!(model.value, "gpt-6-luna");

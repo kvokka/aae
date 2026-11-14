@@ -28,8 +28,6 @@ pub enum Layer {
     OrchestratorOverride,
     ProjectOverride,
     RigOverride,
-    /// What the adapters make of the other value: the harness of a provider, or the provider of a harness.
-    Derived,
     /// A value several layers make together, in the order they apply: tables merged by key, a prompt with fragments.
     Merged(Vec<Layer>),
 }
@@ -63,7 +61,6 @@ impl fmt::Display for Layer {
             Self::Pack(name) => write!(f, "pack {name}"),
             Self::Formula(name) => write!(f, "formula {name}"),
             Self::Variant(name) => write!(f, "variant {name}"),
-            Self::Derived => f.write_str("derived"),
             Self::OrchestratorOverride => f.write_str("orchestrator override"),
             Self::ProjectOverride => f.write_str("project override"),
             Self::RigOverride => f.write_str("rig override"),
@@ -86,13 +83,9 @@ pub struct Sourced<T> {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct EffectiveConfig {
     pub harness: String,
-    /// The layer that names the harness, [`Layer::Derived`] when the provider decides it. A snapshot taken before
-    /// the field has the agent's.
+    /// The layer that names the harness. A snapshot taken before the field has the agent's.
     #[serde(default = "agent")]
     pub harness_from: Layer,
-    /// `None` when no layer names it and the harness has no adapter that names its own.
-    #[serde(default)]
-    pub provider: Option<Sourced<String>>,
     /// The full model name the harness gets.
     pub model: Option<Sourced<String>>,
     /// The short name a layer gave for `model`, when the adapter expanded it.
@@ -121,16 +114,10 @@ fn agent() -> Layer {
 }
 
 impl EffectiveConfig {
-    pub(super) fn new(
-        harness: String,
-        harness_from: Layer,
-        provider: Option<Sourced<String>>,
-        model: Option<Sourced<String>>,
-    ) -> Self {
+    pub(super) fn new(harness: String, harness_from: Layer, model: Option<Sourced<String>>) -> Self {
         Self {
             harness,
             harness_from,
-            provider,
             model,
             model_given: None,
             effort: None,
@@ -147,10 +134,9 @@ impl EffectiveConfig {
         }
     }
 
-    /// The model gate key of its sessions, `model:<provider>/<model>` (contracts 7), when both are known.
+    /// The model gate key of its sessions, `model:<harness>/<model>` (contracts 7), when a model is set.
     pub fn model_key(&self) -> Option<String> {
-        let (provider, model) = (self.provider.as_ref()?, self.model.as_ref()?);
-        Some(format!("model:{}/{}", provider.value, model.value))
+        (self.model.as_ref()).map(|model| format!("model:{}/{}", self.harness, model.value))
     }
 
     pub fn inherits_host(&self) -> bool {
@@ -253,9 +239,6 @@ impl EffectiveConfig {
             let _ = writeln!(out, "{key} = {value}  # {from}");
         };
         line("harness", quoted(&self.harness), &self.harness_from);
-        if let Some(s) = &self.provider {
-            line("provider", quoted(&s.value), &s.from);
-        }
         for (key, slot) in [
             ("effort", &self.effort),
             ("system_prompt", &self.system_prompt),

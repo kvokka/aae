@@ -292,10 +292,9 @@ async fn the_config_from_the_cli_lists_explains_checks_and_reloads() {
     .await;
     assert_eq!(d.json(&["project", "list"])[0]["rigs"][0]["name"], "web");
     let agent = &d.json(&["agent", "list", "--project", "shop"])[0];
-    // The provider follows from the harness the agent names.
     assert_eq!(
-        (&agent["agent"], &agent["harness"], &agent["provider"]),
-        (&"shop.dev".into(), &"claude".into(), &"anthropic".into())
+        (&agent["agent"], &agent["harness"], agent.get("provider")),
+        (&"shop.dev".into(), &"claude".into(), None)
     );
     assert_eq!(d.json(&["formula", "list"]).as_array().unwrap().len(), 2);
     assert_eq!(d.json(&["pack", "list"])[0]["name"], "shop");

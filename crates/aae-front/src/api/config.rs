@@ -58,8 +58,8 @@ pub(crate) async fn list_projects(state: State, Param(Query(query)): Param<Query
     Ok(Json(out.into()))
 }
 
-/// Lists the agents, as `<pack>.<name>` with the harness and provider they run on in the project, outside any rig
-/// and formula; null where the agent's layers do not decide it.
+/// Lists the agents, as `<pack>.<name>` with the harness they run on in the project, outside any rig and formula;
+/// null where the agent's layers do not decide it.
 #[utoipa::path(get, path = "/v1/agents", params(ProjectQuery),
     responses((status = OK, body = [Agent]),
         (status = BAD_REQUEST, description = BAD_QUERY, body = ErrorReply),
@@ -77,7 +77,6 @@ pub(crate) async fn list_agents(state: State, Param(Query(query)): Param<Query<P
                 let launch = config.effective(&p.name, None, &agent).ok();
                 out.push(json!({ "project": p.name, "agent": agent.to_string(),
                     "harness": launch.as_ref().map(|e| &e.harness),
-                    "provider": launch.as_ref().and_then(|e| e.provider.as_ref()).map(|s| &s.value),
                     "max_runs": a.max_runs }));
             }
         }

@@ -40,8 +40,7 @@ pub struct Config {
     pub overrides: BTreeMap<String, Settings>,
     /// The agent variants every project sees, by name; a project's own of the same name replaces one.
     pub variants: BTreeMap<String, Variant>,
-    /// The adapters of the build: which providers each harness works with and its short model names. The
-    /// harnesses they name are the root's; a harness with none here has no provider of its own.
+    /// The adapters of the build: the short model names of each harness. The harnesses they name are the root's.
     pub adapters: &'static [&'static crate::driver::Adapter],
     pub plugins: Vec<Plugin>,
     /// The enabled bundled plugins with their parameters, run after every declared plugin.
@@ -302,7 +301,7 @@ pub fn load_for(
 }
 
 /// [`load_for`] a build with no adapters, as tests of the core on a scripted harness load: every agent names its
-/// harness, and none has a provider.
+/// harness, and no model name is expanded.
 pub fn load(orchestrator_file: &std::path::Path) -> Result<Config, Vec<ConfigError>> {
     load_for(orchestrator_file, &[])
 }

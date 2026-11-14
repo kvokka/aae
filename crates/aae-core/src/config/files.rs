@@ -8,10 +8,8 @@ use std::{collections::BTreeMap, num::NonZeroU32, path::PathBuf};
 #[derive(Clone, Debug, Default, Deserialize, PartialEq)]
 #[serde(deny_unknown_fields)]
 pub struct Settings {
-    /// The agent CLI; when absent, the one harness whose adapter lists `provider` (docs/design/config.md).
+    /// The agent CLI (docs/design/config.md "Harness and model").
     pub harness: Option<String>,
-    /// The model provider; when absent, the harness's own.
-    pub provider: Option<String>,
     pub model: Option<String>,
     pub effort: Option<String>,
     pub system_prompt: Option<String>,
@@ -362,7 +360,6 @@ pub(super) enum StepFile {
         prompt: PathBuf,
         timeout: Option<String>,
         harness: Option<String>,
-        provider: Option<String>,
         model: Option<String>,
         effort: Option<String>,
     },

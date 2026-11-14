@@ -254,13 +254,8 @@ impl RunHandler {
             )
             .optional()?;
         let account = (failure.account.as_ref().zip(harness)).map(|(a, h)| format!("account:{h}/{a}"));
-        // The provider is the config's: a harness with no adapter (a test's) has none.
-        let config: Value = (row.config.as_deref())
-            .and_then(|c| serde_json::from_str(c).ok())
-            .unwrap_or_default();
-        let provider = config["provider"]["value"].as_str().map(|p| format!("{p}/"));
-        let model = (failure.provider_model.as_ref()).map(|m| format!("model:{}{m}", provider.unwrap_or_default()));
-        Self::learn_keys(tx, &row, account, model)?;
+        // The model key is the config's alone (spec §5.7): a model the failure names stays data of the event.
+        Self::learn_keys(tx, &row, account, None)?;
         let failure = super::failure_json(&failure);
         self.end_attempt(tx, &row, Some(&failure))?;
         row.set_state(tx, "interrupted", failure["kind"].as_str())?;

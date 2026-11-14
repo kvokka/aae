@@ -10,7 +10,6 @@ use std::{num::NonZeroU32, path::Path, sync::Arc, time::Duration};
 
 pub const ADAPTER: Adapter = Adapter {
     name: "codex",
-    providers: &["openai"],
     models: MODELS,
     tested: TESTED,
     new,

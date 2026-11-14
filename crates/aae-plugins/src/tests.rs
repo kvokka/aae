@@ -17,7 +17,7 @@ fn failed(kind: &str, failure: Value, attempts: &[(&str, &str, i64)], gates: Val
     json!({ "type": "run.attempt_failed", "ts": "2026-11-13T12:00:00.000Z", "data": {
         "run": { "id": "r1" }, "failure": failure, "attempts": attempts, "gates": gates,
         "keys": ["orchestrator", "project:shop", "rig:shop/web", "agent:shop.dev",
-            "account:claude/a1", "model:anthropic/haiku"],
+            "account:claude/a1", "model:claude/haiku"],
     } })
 }
 
@@ -69,7 +69,7 @@ fn default_policy_follows_contracts_10() {
         ),
         (
             failed("overloaded", json!({"retried_by_harness": true}), &[], json!([])),
-            json!({"decision": "park", "then": "resume", "gate": {"key": "model:anthropic/haiku",
+            json!({"decision": "park", "then": "resume", "gate": {"key": "model:claude/haiku",
                 "until": "2026-11-13T12:10:00.000Z", "reason": "overloaded"}}),
         ),
         (
@@ -107,10 +107,10 @@ fn default_policy_follows_contracts_10() {
                 "rate_limited",
                 none.clone(),
                 &[("resume", "rate_limited", 9)],
-                json!([{"key": "model:anthropic/haiku", "until": "2026-11-13T12:30:00.000Z", "reason": "x",
+                json!([{"key": "model:claude/haiku", "until": "2026-11-13T12:30:00.000Z", "reason": "x",
                     "closed_at": "2026-11-13T11:00:05.000Z"}]),
             ),
-            json!({"decision": "park", "then": "resume", "gate": {"key": "model:anthropic/haiku",
+            json!({"decision": "park", "then": "resume", "gate": {"key": "model:claude/haiku",
                 "until": "2026-11-13T12:30:00.000Z", "reason": "x"}}),
         ),
     ];

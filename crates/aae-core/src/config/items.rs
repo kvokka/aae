@@ -105,16 +105,10 @@ impl Loader {
                 prompt,
                 timeout,
                 harness,
-                provider,
                 model,
                 effort,
             } => {
-                let launch = super::compose::Launch {
-                    harness,
-                    provider,
-                    model,
-                    effort,
-                };
+                let launch = super::compose::Launch { harness, model, effort };
                 let settings = self.settings(file, &parent(file), launch.into(), &[]);
                 let path = resolve(&parent(file), &prompt);
                 let text = self.text(file, &path)?;

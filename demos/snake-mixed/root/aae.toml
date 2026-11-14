@@ -13,10 +13,10 @@ model = "haiku"
 
 [rigs.root]
 path = "."                            # the planner works here and leaves the other rigs to the workers
-# A variant of the pack's coder on another provider; aae picks the harness that serves it (codex for openai).
+# A variant of the pack's coder on another harness.
 [agents.codex-coder]
 base = "dev.coder"
-provider = "openai"
+harness = "codex"
 model = "luna"                        # the adapter expands it to the latest luna
 permission_mode = "never"             # codex's approval policy: the demo runs unattended
 

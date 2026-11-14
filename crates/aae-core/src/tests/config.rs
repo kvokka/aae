@@ -261,10 +261,7 @@ fn files_reject_unknown_keys_and_undeclared_names() {
         &[(agent, "harness = \"codex\"\n")],
         "harness `codex` is not in the orchestrator config",
     );
-    fails(
-        &[(agent, "effort = \"high\"\n")],
-        "neither `harness` nor `provider` is set",
-    );
+    fails(&[(agent, "effort = \"high\"\n")], "no layer sets `harness`");
     fails(
         &[(agent, "harness = \"claude\"\nmax_runs = 0\n")],
         "`max_runs` must be a positive",

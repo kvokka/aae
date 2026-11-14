@@ -12,7 +12,7 @@
   "paths": {
     "/v1/agents": {
       "get": {
-        "summary": "Lists the agents, as `<pack>.<name>` with the harness and provider they run on in the project, outside any rig\nand formula; null where the agent's layers do not decide it.",
+        "summary": "Lists the agents, as `<pack>.<name>` with the harness they run on in the project, outside any rig and formula;\nnull where the agent's layers do not decide it.",
         "operationId": "list_agents",
         "parameters": [
           {
@@ -2321,7 +2321,7 @@
               "string",
               "null"
             ],
-            "description": "The harness and the provider it runs on in the project outside any rig and formula; null when its layers\ndo not decide it."
+            "description": "The harness it runs on in the project outside any rig and formula; null when its layers do not decide it."
           },
           "max_runs": {
             "type": [
@@ -2334,12 +2334,6 @@
           },
           "project": {
             "type": "string"
-          },
-          "provider": {
-            "type": [
-              "string",
-              "null"
-            ]
           }
         }
       },
@@ -2456,7 +2450,7 @@
         "properties": {
           "key": {
             "type": "string",
-            "description": "`orchestrator`, `project:<p>`, `rig:<p>/<r>`, `agent:<a>`, `bead:<p>/<id>`, `account:<h>/<id>`,\n`model:<provider>/<model>`."
+            "description": "`orchestrator`, `project:<p>`, `rig:<p>/<r>`, `agent:<a>`, `bead:<p>/<id>`, `account:<h>/<id>`,\n`model:<harness>/<model>`."
           },
           "reason": {
             "type": "string"
