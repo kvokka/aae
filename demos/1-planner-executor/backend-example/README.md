@@ -1,26 +1,11 @@
-# Snake high-score backend
+# Snake high-score API
 
-Run with `python3 backend/server.py` from the project directory, or with
-`cd backend && python3 server.py`. The server listens on `127.0.0.1:8000`;
-set `PORT` to use another port.
+Run the server with `python3 app.py` (default port 8000; set `PORT` to change it). Scores are stored in `scores.db` beside `app.py`.
 
-`GET /api/scores` returns up to 10 scores in descending order:
+Run tests with `python3 -m unittest -v`.
 
-```sh
-curl -i http://localhost:8000/api/scores
-```
+## API
 
-`POST /api/scores` adds a score. Names are trimmed and limited to 20 characters;
-scores must be non-negative integers.
-
-```sh
-curl -i -X POST http://localhost:8000/api/scores \
-  -H 'Content-Type: application/json' \
-  -d '{"name":"ann","score":12}'
-```
-
-`OPTIONS /api/scores` is supported for CORS preflight requests:
-
-```sh
-curl -i -X OPTIONS http://localhost:8000/api/scores
-```
+- `GET /api/scores?limit=10` returns scores ordered by score descending, then creation time ascending. `limit` must be 1–100.
+- `POST /api/scores` accepts JSON `{"name":"ann","score":12}`. Names are trimmed and must contain 1–20 characters; scores must be integers from 0 to 1,000,000. Returns the saved score.
+- Unknown paths return 404. Invalid requests return 400. All responses include CORS headers; `OPTIONS` returns 204.

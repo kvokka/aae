@@ -1,290 +1,378 @@
-// Snake: game logic and high-score API calls. Plain browser JavaScript, no build step.
+// Snake: canvas board, keyboard controls, and a high-score table served by the backend API.
+"use strict";
 
-// Backend base URL; change it here if the API runs elsewhere.
-const API_BASE_URL = "http://localhost:8000";
-const SCORES_URL = `${API_BASE_URL}/api/scores`;
+const API_BASE = "http://localhost:8000";
 
-const GRID_SIZE = 20; // cells per side
-const CELL_PX = 20; // 20 * 20 = 400 px canvas
-const STEP_MS = 120; // time between snake steps
-const POINTS_PER_FOOD = 10;
-const MAX_NAME_LENGTH = 20;
-const DEFAULT_NAME = "anonymous";
-const UNAVAILABLE_TEXT = "High scores unavailable";
+const COLS = 20;
+const ROWS = 20;
+const CELL = 24;
+const TICK_MS = 120;
+const NAME_KEY = "snake.name";
+const NAME_MAX = 20;
+const SCORE_LIMIT = 10;
+const REQUEST_TIMEOUT_MS = 5000;
 
 const UP = { x: 0, y: -1 };
 const DOWN = { x: 0, y: 1 };
 const LEFT = { x: -1, y: 0 };
 const RIGHT = { x: 1, y: 0 };
 
-// Keys are normalized to lower case for single characters, so "W" and "w" both work.
 const KEY_DIRECTIONS = {
-  ArrowUp: UP,
+  arrowup: UP,
   w: UP,
-  ArrowDown: DOWN,
+  arrowdown: DOWN,
   s: DOWN,
-  ArrowLeft: LEFT,
+  arrowleft: LEFT,
   a: LEFT,
-  ArrowRight: RIGHT,
+  arrowright: RIGHT,
   d: RIGHT,
 };
 
 const canvas = document.getElementById("board");
 const ctx = canvas.getContext("2d");
-const scoreElement = document.getElementById("score");
-const messageElement = document.getElementById("message");
-const startButton = document.getElementById("start-button");
-const scoresMessageElement = document.getElementById("scores-message");
-const scoresListElement = document.getElementById("scores-list");
+const scoreEl = document.getElementById("score");
+const gameOverPanel = document.getElementById("game-over");
+const finalScoreEl = document.getElementById("final-score");
+const nameInput = document.getElementById("name");
+const saveBtn = document.getElementById("save");
+const skipBtn = document.getElementById("skip");
+const saveStatusEl = document.getElementById("save-status");
+const scoresStatusEl = document.getElementById("scores-status");
+const scoresTable = document.getElementById("scores-table");
+const scoresBody = document.getElementById("scores-body");
 
-// phase: "idle" (before the first game), "playing", or "over".
-let phase = "idle";
-let state = createInitialState();
-let timerId = null;
+// state: "ready" (waiting to start) | "running" | "paused" | "over"
+let state = "ready";
+let snake = [];
+let dir = RIGHT;
+let nextDir = RIGHT;
+let food = null;
+// One record per game. Lets a late save response know whether its game is still on screen.
+let runCounter = 0;
+let run = makeRun();
 
-function createInitialState() {
-  const middle = Math.floor(GRID_SIZE / 2);
-  // Head first; the snake starts with length 3 and moves right.
-  const snake = [
-    { x: middle, y: middle },
-    { x: middle - 1, y: middle },
-    { x: middle - 2, y: middle },
-  ];
-  return {
-    snake,
-    dir: RIGHT,
-    nextDir: RIGHT,
-    food: randomFreeCell(snake),
-    score: 0,
-  };
+function makeRun() {
+  runCounter += 1;
+  return { id: runCounter, score: 0, saved: false, saving: false };
 }
 
-function randomFreeCell(snake) {
-  const occupied = new Set(snake.map((cell) => cell.y * GRID_SIZE + cell.x));
+function resetSnake() {
+  const midX = Math.floor(COLS / 2);
+  const midY = Math.floor(ROWS / 2);
+  snake = [
+    { x: midX, y: midY },
+    { x: midX - 1, y: midY },
+    { x: midX - 2, y: midY },
+  ];
+  dir = RIGHT;
+  nextDir = RIGHT;
+  food = randomFreeCell();
+}
+
+function newGame() {
+  run = makeRun();
+  resetSnake();
+  state = "running";
+  hideGameOver();
+  updateScore();
+  draw();
+}
+
+function endGame() {
+  state = "over";
+  draw();
+  showGameOver();
+}
+
+function updateScore() {
+  scoreEl.textContent = `Score: ${run.score}`;
+}
+
+function randomFreeCell() {
+  const occupied = new Set(snake.map((s) => s.y * COLS + s.x));
   const free = [];
-  for (let index = 0; index < GRID_SIZE * GRID_SIZE; index += 1) {
-    if (!occupied.has(index)) {
-      free.push(index);
+  for (let i = 0; i < COLS * ROWS; i += 1) {
+    if (!occupied.has(i)) {
+      free.push({ x: i % COLS, y: Math.floor(i / COLS) });
     }
   }
   if (free.length === 0) {
     return null;
   }
-  const index = free[Math.floor(Math.random() * free.length)];
-  return { x: index % GRID_SIZE, y: Math.floor(index / GRID_SIZE) };
-}
-
-function startGame() {
-  if (phase === "playing") {
-    return;
-  }
-  stopTimer();
-  state = createInitialState();
-  phase = "playing";
-  setMessage("");
-  startButton.disabled = true;
-  updateScore();
-  draw();
-  timerId = setInterval(tick, STEP_MS);
-}
-
-function stopTimer() {
-  if (timerId !== null) {
-    clearInterval(timerId);
-    timerId = null;
-  }
+  return free[Math.floor(Math.random() * free.length)];
 }
 
 function tick() {
-  const current = state;
-  current.dir = current.nextDir;
-  const head = current.snake[0];
-  const next = { x: head.x + current.dir.x, y: head.y + current.dir.y };
+  if (state !== "running") {
+    return;
+  }
+  dir = nextDir;
+  const head = snake[0];
+  const next = { x: head.x + dir.x, y: head.y + dir.y };
 
-  const hitWall =
-    next.x < 0 || next.y < 0 || next.x >= GRID_SIZE || next.y >= GRID_SIZE;
-  const ateFood =
-    current.food !== null && next.x === current.food.x && next.y === current.food.y;
-  // The tail moves away this step unless the snake grows, so its cell is free to enter.
-  const body = ateFood ? current.snake : current.snake.slice(0, -1);
-  const hitSelf = body.some((cell) => cell.x === next.x && cell.y === next.y);
-
-  if (hitWall || hitSelf) {
+  if (next.x < 0 || next.x >= COLS || next.y < 0 || next.y >= ROWS) {
     endGame();
     return;
   }
 
-  current.snake.unshift(next);
-  if (ateFood) {
-    current.score += POINTS_PER_FOOD;
-    current.food = randomFreeCell(current.snake);
+  const eats = food !== null && next.x === food.x && next.y === food.y;
+  // The tail moves away this tick unless the snake grows, so it is not a collision.
+  const body = eats ? snake : snake.slice(0, -1);
+  if (body.some((s) => s.x === next.x && s.y === next.y)) {
+    endGame();
+    return;
+  }
+
+  snake.unshift(next);
+  if (eats) {
+    run.score += 1;
     updateScore();
-    if (current.food === null) {
-      // The board is full; there is nowhere left to go.
+    food = randomFreeCell();
+    if (food === null) {
+      // The snake fills the whole board: nothing left to eat or move into.
       endGame();
       return;
     }
   } else {
-    current.snake.pop();
+    snake.pop();
   }
   draw();
 }
 
-function endGame() {
-  stopTimer();
-  phase = "over";
-  const finalScore = state.score;
-  startButton.textContent = "Restart";
-  startButton.disabled = false;
-  setMessage(`Game over. Final score: ${finalScore}.`);
-  draw();
-  if (finalScore > 0) {
-    // Let the browser paint the game-over frame before the blocking prompt opens.
-    setTimeout(() => saveScore(finalScore), 0);
-  }
-}
-
-function queueDirection(dir) {
-  // Compare with the direction the snake is actually moving, so a reversal into the body is ignored.
-  if (dir.x + state.dir.x === 0 && dir.y + state.dir.y === 0) {
+function setDirection(d) {
+  // A direct reversal would run the head into the neck, so it is ignored.
+  // nextDir is always perpendicular to dir, so checking against dir is enough.
+  if (d.x === -dir.x && d.y === -dir.y) {
     return;
   }
-  state.nextDir = dir;
+  nextDir = d;
 }
 
-function updateScore() {
-  scoreElement.textContent = String(state.score);
-}
-
-function setMessage(text) {
-  messageElement.textContent = text;
+function togglePause() {
+  if (state === "running") {
+    state = "paused";
+  } else if (state === "paused") {
+    state = "running";
+  }
+  draw();
 }
 
 function draw() {
-  ctx.fillStyle = "#101820";
+  ctx.fillStyle = "#101418";
   ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-  if (state.food !== null) {
-    ctx.fillStyle = "#e94560";
-    ctx.fillRect(
-      state.food.x * CELL_PX + 2,
-      state.food.y * CELL_PX + 2,
-      CELL_PX - 4,
-      CELL_PX - 4,
-    );
+  if (food !== null) {
+    ctx.fillStyle = "#ff5c5c";
+    ctx.fillRect(food.x * CELL + 4, food.y * CELL + 4, CELL - 8, CELL - 8);
   }
 
-  state.snake.forEach((cell, index) => {
-    ctx.fillStyle = index === 0 ? "#7bd389" : "#4caf50";
-    ctx.fillRect(cell.x * CELL_PX + 1, cell.y * CELL_PX + 1, CELL_PX - 2, CELL_PX - 2);
+  snake.forEach((s, i) => {
+    ctx.fillStyle = i === 0 ? "#b6f2a1" : "#4caf50";
+    ctx.fillRect(s.x * CELL + 1, s.y * CELL + 1, CELL - 2, CELL - 2);
   });
 
-  if (phase !== "playing") {
-    ctx.fillStyle = "rgba(0, 0, 0, 0.6)";
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-    ctx.fillStyle = "#ffffff";
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-    ctx.font = "bold 36px system-ui, sans-serif";
-    if (phase === "over") {
-      ctx.fillText("Game over", canvas.width / 2, canvas.height / 2 - 20);
-      ctx.font = "20px system-ui, sans-serif";
-      ctx.fillText(`Score: ${state.score}`, canvas.width / 2, canvas.height / 2 + 20);
-    } else {
-      ctx.font = "24px system-ui, sans-serif";
-      ctx.fillText("Press Space or Enter", canvas.width / 2, canvas.height / 2);
-    }
+  if (state === "ready") {
+    drawOverlay("Press Space or Enter to start");
+  } else if (state === "paused") {
+    drawOverlay("Paused: press P to resume");
+  } else if (state === "over") {
+    drawOverlay("Game over: Space or Enter to play again");
   }
 }
 
-// Turns the answer of window.prompt into a name: trimmed, at most 20 characters, never empty.
-// Characters are counted as code points so that the limit matches the backend.
-function normalizeName(rawName) {
-  const trimmed = (rawName ?? "").trim();
-  if (trimmed === "") {
-    return DEFAULT_NAME;
-  }
-  return Array.from(trimmed).slice(0, MAX_NAME_LENGTH).join("").trim();
+function drawOverlay(text) {
+  const width = canvas.width;
+  const height = canvas.height;
+  ctx.fillStyle = "rgba(16, 20, 24, 0.7)";
+  ctx.fillRect(0, height / 2 - 28, width, 56);
+  ctx.fillStyle = "#e6edf3";
+  ctx.font = "bold 18px system-ui, sans-serif";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillText(text, width / 2, height / 2);
 }
 
-async function saveScore(score) {
-  const name = normalizeName(
-    window.prompt("Game over! Enter your name for the high-score list:", ""),
-  );
+function showGameOver() {
+  finalScoreEl.textContent = String(run.score);
+  nameInput.value = loadName();
+  setSaveStatus("");
+  saveBtn.disabled = false;
+  skipBtn.disabled = false;
+  gameOverPanel.hidden = false;
+  nameInput.focus();
+}
+
+function hideGameOver() {
+  gameOverPanel.hidden = true;
+}
+
+function setSaveStatus(text) {
+  saveStatusEl.textContent = text;
+}
+
+function loadName() {
   try {
-    const response = await fetch(SCORES_URL, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name, score }),
-    });
-    if (response.status !== 201) {
-      throw new Error(`Unexpected status ${response.status}`);
-    }
-  } catch (error) {
-    console.error("Could not save the score:", error);
-    setScoresMessage(UNAVAILABLE_TEXT);
+    return (localStorage.getItem(NAME_KEY) || "").slice(0, NAME_MAX);
+  } catch {
+    return "";
+  }
+}
+
+function storeName(name) {
+  try {
+    localStorage.setItem(NAME_KEY, name);
+  } catch {
+    // Storage may be disabled (private mode); the name is simply not remembered.
+  }
+}
+
+async function saveScore() {
+  const game = run;
+  if (state !== "over" || game.saved || game.saving) {
     return;
   }
-  await loadScores();
+  const name = nameInput.value.trim();
+  if (name.length < 1 || name.length > NAME_MAX) {
+    setSaveStatus(`Enter a name of 1 to ${NAME_MAX} characters.`);
+    nameInput.focus();
+    return;
+  }
+
+  game.saving = true;
+  saveBtn.disabled = true;
+  skipBtn.disabled = true;
+  setSaveStatus("Saving...");
+
+  let saved = false;
+  let errorText = "";
+  try {
+    const res = await fetch(`${API_BASE}/api/scores`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name, score: game.score }),
+      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+    });
+    let data = null;
+    try {
+      data = await res.json();
+    } catch {
+      data = null;
+    }
+    if (res.status === 201) {
+      saved = true;
+    } else {
+      errorText = data && typeof data.error === "string" ? data.error : `server responded ${res.status}`;
+    }
+  } catch {
+    errorText = "backend unreachable";
+  }
+
+  game.saving = false;
+  if (saved) {
+    game.saved = true;
+    storeName(name);
+    if (game.id === run.id) {
+      hideGameOver();
+    }
+    loadScores();
+  } else if (game.id === run.id) {
+    setSaveStatus(`Could not save score (${errorText}). Your score is kept: try again.`);
+    saveBtn.disabled = false;
+    skipBtn.disabled = false;
+  }
+}
+
+function skipScore() {
+  if (state === "over" && !run.saving) {
+    newGame();
+  }
 }
 
 async function loadScores() {
   try {
-    const response = await fetch(SCORES_URL);
-    if (!response.ok) {
-      throw new Error(`Unexpected status ${response.status}`);
+    const res = await fetch(`${API_BASE}/api/scores?limit=${SCORE_LIMIT}`, {
+      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+    });
+    if (!res.ok) {
+      throw new Error(`HTTP ${res.status}`);
     }
-    const scores = await response.json();
-    if (!Array.isArray(scores)) {
-      throw new Error("Scores response is not an array");
+    const rows = await res.json();
+    if (!Array.isArray(rows)) {
+      throw new Error("unexpected payload");
     }
-    renderScores(scores);
-  } catch (error) {
-    console.error("Could not load high scores:", error);
-    renderScores([]);
-    setScoresMessage(UNAVAILABLE_TEXT);
+    renderScores(rows);
+  } catch {
+    scoresBody.replaceChildren();
+    scoresTable.hidden = true;
+    scoresStatusEl.textContent = "High scores unavailable (backend offline)";
   }
 }
 
-function renderScores(scores) {
-  scoresListElement.replaceChildren();
-  for (const entry of scores) {
-    const item = document.createElement("li");
-    item.textContent = `${entry.name}: ${entry.score}`;
-    scoresListElement.appendChild(item);
+function renderScores(rows) {
+  scoresBody.replaceChildren();
+  rows.slice(0, SCORE_LIMIT).forEach((row, i) => {
+    const tr = document.createElement("tr");
+    const cells = [String(i + 1), String(row.name ?? ""), String(row.score ?? "")];
+    for (const text of cells) {
+      const td = document.createElement("td");
+      // textContent, never innerHTML: names come from users.
+      td.textContent = text;
+      tr.append(td);
+    }
+    scoresBody.append(tr);
+  });
+  scoresTable.hidden = rows.length === 0;
+  scoresStatusEl.textContent = rows.length === 0 ? "No scores yet. Be the first!" : "";
+}
+
+document.addEventListener("keydown", (e) => {
+  // The name input handles its own keys (typing, Enter = save).
+  if (e.target === nameInput) {
+    return;
   }
-  setScoresMessage(scores.length === 0 ? "No scores yet." : "");
-}
+  const isButton = e.target instanceof HTMLButtonElement;
 
-function setScoresMessage(text) {
-  scoresMessageElement.textContent = text;
-}
-
-window.addEventListener("keydown", (event) => {
-  const key = event.key.length === 1 ? event.key.toLowerCase() : event.key;
-
-  const dir = KEY_DIRECTIONS[key];
-  if (dir !== undefined) {
-    event.preventDefault();
-    if (phase === "playing") {
-      queueDirection(dir);
+  if (e.key === " " || e.key === "Enter") {
+    // A focused button handles Space/Enter as a click; do not also start a game.
+    if (isButton) {
+      return;
+    }
+    e.preventDefault();
+    if (state === "ready" || state === "over") {
+      newGame();
     }
     return;
   }
 
-  if (key === " " || key === "Enter") {
-    event.preventDefault();
-    if (phase !== "playing") {
-      startGame();
+  const key = e.key.toLowerCase();
+  if (key === "p") {
+    togglePause();
+    return;
+  }
+
+  const d = KEY_DIRECTIONS[key];
+  if (d) {
+    e.preventDefault();
+    if (state === "ready") {
+      newGame();
+    }
+    if (state === "running") {
+      setDirection(d);
     }
   }
 });
 
-startButton.addEventListener("click", () => {
-  startGame();
-  startButton.blur();
+nameInput.addEventListener("keydown", (e) => {
+  if (e.key === "Enter") {
+    e.preventDefault();
+    saveScore();
+  }
 });
 
-updateScore();
+saveBtn.addEventListener("click", saveScore);
+skipBtn.addEventListener("click", skipScore);
+
+resetSnake();
 draw();
+setInterval(tick, TICK_MS);
 loadScores();

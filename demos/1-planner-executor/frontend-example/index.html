@@ -1,31 +1,51 @@
 <!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Snake</title>
-    <link rel="stylesheet" href="style.css" />
-  </head>
-  <body>
-    <main>
-      <h1>Snake</h1>
-      <div class="layout">
-        <section class="game" aria-label="Game">
-          <div class="hud">
-            <span>Score: <strong id="score">0</strong></span>
-            <button id="start-button" type="button">Start</button>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Snake</title>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <main class="layout">
+    <section class="game">
+      <header class="game-header">
+        <h1>Snake</h1>
+        <p id="score" class="score">Score: 0</p>
+      </header>
+
+      <div class="board-wrap">
+        <canvas id="board" width="480" height="480" aria-label="Snake game board"></canvas>
+
+        <div id="game-over" class="panel" hidden>
+          <h2>Game over</h2>
+          <p>Final score: <strong id="final-score">0</strong></p>
+          <label for="name">Name</label>
+          <input id="name" type="text" maxlength="20" autocomplete="off" placeholder="Your name">
+          <div class="actions">
+            <button id="save" type="button">Save score</button>
+            <button id="skip" type="button">Skip</button>
           </div>
-          <canvas id="board" width="400" height="400"></canvas>
-          <p id="message" role="status"></p>
-          <p class="hint">Arrow keys or WASD to move. Space or Enter to start.</p>
-        </section>
-        <aside class="scores" aria-label="High scores">
-          <h2>High scores</h2>
-          <p id="scores-message" role="status"></p>
-          <ol id="scores-list"></ol>
-        </aside>
+          <p id="save-status" class="status" role="status"></p>
+        </div>
       </div>
-    </main>
-    <script type="module" src="game.js"></script>
-  </body>
+
+      <p class="hint">Arrows or WASD to move. P to pause. Space or Enter to start.</p>
+    </section>
+
+    <aside class="scores">
+      <h2>High scores</h2>
+      <p id="scores-status" class="status" role="status">Loading...</p>
+      <table id="scores-table" hidden>
+        <thead>
+          <tr><th>#</th><th>Name</th><th>Score</th></tr>
+        </thead>
+        <tbody id="scores-body"></tbody>
+      </table>
+    </aside>
+  </main>
+
+  <script src="game.js"></script>
+</body>
 </html>
