@@ -1,3 +1,2 @@
 scores.json
-scores.json.*
-__pycache__/
+scores.json.*.tmp

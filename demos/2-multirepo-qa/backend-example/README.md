@@ -1,51 +1,41 @@
-# Snake high-score backend
+# Snake high-score API
 
-Requires Python 3. Start the backend from this rig with:
+## Prerequisites
+
+Node.js 18 or newer and npm. The service uses only Node.js built-in modules; no install step is needed.
+
+## Start
+
+From this directory, run:
 
 ```sh
-python3 server.py
+npm start
 ```
 
-The API listens at `http://127.0.0.1:8000`.
+The API listens on `0.0.0.0:3000`, available locally at `http://localhost:3000`. Its JSON data file is `scores.json` in this backend directory, independent of the shell's current directory. The file is created on first access and persists across restarts. It is ignored by git.
 
 ## API
 
-Fetch the current top ten:
+`GET /api/high-scores` returns HTTP 200 with the top ten scores, in descending score order:
 
 ```sh
-curl http://127.0.0.1:8000/api/scores
+curl http://localhost:3000/api/high-scores
 ```
 
-Submit a score (names are trimmed; scores must be non-negative integers):
+```json
+{"scores":[{"name":"Ada","score":12}]}
+```
+
+An empty store returns `{"scores":[]}`. Submit a score with JSON:
 
 ```sh
-curl -X POST http://127.0.0.1:8000/api/scores \
+curl -X POST http://localhost:3000/api/high-scores \
   -H 'Content-Type: application/json' \
   -d '{"name":"Ada","score":12}'
 ```
 
-Both successful responses contain `{"scores":[{"name":"Ada","score":12}]}`. Invalid submissions return HTTP 400 with an `error` message.
+Successful persistence returns HTTP 201 in the same response format, with the updated top ten. Names are trimmed and must contain 1 to 20 characters; scores must be nonnegative safe integers. Invalid requests return HTTP 400 with `{"error":"human-readable message"}`. Cross-origin GET, POST, and OPTIONS requests are allowed for the frontend at `http://localhost:5173`.
 
-Scores are stored in `scores.json` beside `server.py`. To reset the leaderboard, stop the server and remove that file:
+## Checks
 
-```sh
-rm scores.json
-```
-
-## Frontend and verification
-
-The separately served frontend connects to `http://127.0.0.1:8000`. From the frontend rig, start it with:
-
-```sh
-python3 -m http.server 5173 --bind 127.0.0.1
-```
-
-Then open `http://127.0.0.1:5173` in a browser. The API permits browser requests from `127.0.0.1:5173` and `localhost:5173`.
-
-Run the repeatable API, validation, CORS, ordering, top-ten, and restart persistence checks with:
-
-```sh
-python3 -m unittest test_api.py
-```
-
-The check uses a temporary score file and removes it when finished.
+Run `npm run check` to exercise empty GET, valid and invalid submissions, CORS preflight, sorting and top-ten limits, and persistence across a server restart. The check starts and stops its own server and removes its generated score file.

@@ -4,46 +4,41 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Snake</title>
-  <link rel="icon" href="data:,">
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
   <main class="layout">
-    <section class="game">
-      <header class="game-header">
-        <h1>Snake</h1>
-        <p id="score" class="score">Score: 0</p>
-      </header>
+    <section class="game" aria-labelledby="game-title">
+      <h1 id="game-title">Snake</h1>
+      <p class="score-line">Score: <span id="score">0</span></p>
+      <canvas id="board" width="400" height="400" aria-label="Snake game board"></canvas>
+      <p id="status" class="status" role="status">Press Space or Enter to start. Steer with arrow keys or WASD.</p>
 
-      <div class="board-wrap">
-        <canvas id="board" width="480" height="480" aria-label="Snake game board"></canvas>
-
-        <div id="game-over" class="panel" hidden>
-          <h2>Game over</h2>
-          <p>Final score: <strong id="final-score">0</strong></p>
-          <label for="name">Name</label>
-          <input id="name" type="text" maxlength="20" autocomplete="off" placeholder="Your name">
-          <div class="actions">
-            <button id="save" type="button">Save score</button>
-            <button id="skip" type="button">Skip</button>
-          </div>
-          <p id="save-status" class="status" role="status"></p>
+      <form id="save-form" class="save-form" hidden>
+        <label for="player-name">Enter your name to save this score:</label>
+        <div class="save-row">
+          <input id="player-name" type="text" maxlength="20" autocomplete="off" placeholder="Player">
+          <button id="save-button" type="submit">Save score</button>
         </div>
-      </div>
-
-      <p class="hint">Arrows or WASD to move. P to pause. Space or Enter to start.</p>
+        <p id="save-message" class="message" role="alert"></p>
+      </form>
     </section>
 
-    <aside class="scores">
-      <h2>High scores</h2>
-      <p id="scores-status" class="status" role="status">Loading...</p>
-      <table id="scores-table" hidden>
+    <section class="leaderboard" aria-labelledby="leaderboard-title">
+      <h2 id="leaderboard-title">High scores</h2>
+      <p id="leaderboard-message" class="message" role="status"></p>
+      <table id="leaderboard-table" hidden>
         <thead>
-          <tr><th>#</th><th>Name</th><th>Score</th></tr>
+          <tr>
+            <th scope="col">#</th>
+            <th scope="col">Name</th>
+            <th scope="col">Score</th>
+            <th scope="col">Date</th>
+          </tr>
         </thead>
-        <tbody id="scores-body"></tbody>
+        <tbody id="leaderboard-body"></tbody>
       </table>
-    </aside>
+    </section>
   </main>
 
   <script src="game.js"></script>
