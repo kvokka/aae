@@ -38,13 +38,18 @@ impl Reader {
         let Some(row) = Row::read(&conn, id)? else {
             return Ok(None);
         };
-        let (waiting_for, reason, outcome, request): (Option<String>, Option<String>, Option<String>, Option<String>) =
-            conn.query_row(
-                "SELECT waiting_for, reason, outcome, request FROM runs \
-                 LEFT JOIN attempts ON attempts.run = runs.id AND attempts.n = runs.attempt WHERE id = ?1",
-                [id],
-                |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?)),
-            )?;
+        let (waiting_for, reason, outcome, request, round): (
+            Option<String>,
+            Option<String>,
+            Option<String>,
+            Option<String>,
+            u32,
+        ) = conn.query_row(
+            "SELECT waiting_for, reason, outcome, request, round FROM runs \
+             LEFT JOIN attempts ON attempts.run = runs.id AND attempts.n = runs.attempt WHERE id = ?1",
+            [id],
+            |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?)),
+        )?;
         let request = request.filter(|_| row.state == "requires_action");
         let gate = match (waiting_for.as_deref(), row.state.as_str()) {
             (Some("gate"), _) | (_, "parked") => {
@@ -65,6 +70,7 @@ impl Reader {
         view["reason"] = json!(reason);
         view["request"] = request.and_then(|r| serde_json::from_str(&r).ok()).unwrap_or_default();
         view["gate"] = json!(gate);
+        view["round"] = json!(round);
         view["attempts"] = json!(row::attempts(&conn, id)?);
         view["usage"] = row::usage(&conn, id)?;
         Ok(Some(view))

@@ -28,6 +28,8 @@ pub(crate) struct Run {
     reason: Option<String>,
     attempt: u32,
     generation: u32,
+    /// The round of the formula's checks the run is in: 1, and one more each time a check sends it back.
+    round: u32,
     bead: Option<String>,
     workdir: String,
     depth: i64,

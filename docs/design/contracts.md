@@ -74,8 +74,9 @@ Shared objects:
   it. The read API (`GET /v1/runs/{id}`, `aae run show`) gives the `RunView` with `project`, `rig`, `correlation`,
   `inputs`, `waiting_for`, `outcome`, `attempts`, `usage` (`{input_tokens, output_tokens}`, summed over every attempt)
   and: `reason` (the veto text, the cancel reason, `pass`, or the failure reason), `request` (the open request while in
-  `requires_action`, else null) and `gate` (the oldest closure of the run's keys while it waits on a gate or is
-  `parked`, else null).
+  `requires_action`, else null), `gate` (the oldest closure of the run's keys while it waits on a gate or is
+  `parked`, else null) and `round` (the round of the formula's checks, 6.1: 1, and one more each time a check sends
+  the run back).
 - `Failure`: `{kind, text, scope, retry_at, retried_by_harness, source, raw, account, provider_model}`: `kind` from
   see 4.4, `text` set only for `unknown`, `scope` one of `session | instance | account | provider_model | run | rig`,
   `retry_at` time or null, `source` one of `harness | adapter | core`, `raw` the harness text cut to 4 KiB,

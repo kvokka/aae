@@ -3133,6 +3133,7 @@
           "state",
           "attempt",
           "generation",
+          "round",
           "workdir",
           "depth",
           "correlation",
@@ -3245,6 +3246,12 @@
           },
           "rig": {
             "type": "string"
+          },
+          "round": {
+            "type": "integer",
+            "format": "int32",
+            "description": "The round of the formula's checks the run is in: 1, and one more each time a check sends it back.",
+            "minimum": 0
           },
           "started_at": {
             "type": [

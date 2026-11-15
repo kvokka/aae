@@ -162,6 +162,7 @@ async fn the_step_gone_back_to_sees_the_remarks_in_its_prompt() {
     assert_eq!(sent, ["Plan. Remarks: []", "Plan. Remarks: [check: exit 1\nadd tests]"]);
     let reader = aae_core::run::Reader::open(&w.dir.path().join("state.db")).unwrap();
     let view = reader.run(&run).unwrap().unwrap();
+    assert_eq!(view["round"], 2, "one return makes the second round: {view}");
     let plans: Vec<&Value> = view["attempts"]
         .as_array()
         .unwrap()
