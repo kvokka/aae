@@ -3,7 +3,7 @@
 
 mod common;
 
-use aae_core::run::{GateSpec, Msg, Outcome, Verdict};
+use aae_core::run::{Create, GateSpec, Msg, Outcome, Verdict};
 use common::{World, beads::slow_turn, world};
 use serde_json::{Value, json};
 use std::{collections::BTreeSet, time::Duration};
@@ -222,6 +222,30 @@ async fn a_refused_bead_gets_no_run_and_a_reason() {
         assert_eq!(w.tracker.bead(&bead).unwrap().assignee, None);
     }
     assert_eq!(w.wrap(&run).await, "Wrap up: 0 closed, 0 failed, 2 refused.");
+}
+
+/// A child of a drain is one level deeper than its run, under the common depth limit (spec §9.3).
+#[tokio::test(start_paused = true)]
+async fn a_drain_at_the_depth_limit_gives_no_bead_a_run() {
+    let w = world(SWEEP);
+    let root = w.tracker.add(&[], None);
+    let bead = w.tracker.add(&["rig:web"], Some(&root));
+    let create = Create {
+        project: "shop".into(),
+        rig: Some("web".into()),
+        formula: "sweep".into(),
+        inputs: [("bead".to_owned(), json!(root))].into_iter().collect(),
+        correlation: None,
+        depth: 10,
+        parent_run: None,
+        token: None,
+        continue_from: None,
+    };
+    let reply = w.core.send(None, Msg::Create(create)).await.unwrap();
+    let run = reply["run"].as_str().unwrap();
+    let outcome = w.settle(run, &[], &[], &mut BTreeSet::new()).await;
+    assert_eq!(outcome["data"]["refused"][&bead], "depth 11 is over 10", "{outcome}");
+    assert!(w.kids(run).is_empty());
 }
 
 /// `kill -9` while one bead is done, one has a live run and one waits in the queue (decision 10).
