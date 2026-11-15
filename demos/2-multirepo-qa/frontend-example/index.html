@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Snake — High Scores</title>
+  <style>
+    :root { color-scheme: dark; font-family: system-ui, sans-serif; background: #101916; color: #edf5ec; }
+    * { box-sizing: border-box; }
+    body { margin: 0; min-height: 100vh; display: grid; place-items: center; padding: 24px; background: radial-gradient(ellipse at 50% 5%, #244235, #101916 68%); }
+    main { width: min(920px, 100%); display: grid; grid-template-columns: minmax(0, 600px) minmax(210px, 1fr); gap: 24px; align-items: start; }
+    h1 { margin: 0 0 14px; letter-spacing: .08em; color: #c7fb75; font-size: 2rem; }
+    .game, aside { border: 1px solid #3d5c4c; background: #17241e; border-radius: 16px; padding: 18px; box-shadow: 0 16px 45px #0005; }
+    .topline { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+    .score { font-size: 1.2rem; font-weight: 700; } .score strong { color: #c7fb75; font-variant-numeric: tabular-nums; }
+    canvas { display: block; width: 100%; aspect-ratio: 1; border-radius: 10px; background: #0c1511; border: 1px solid #30483a; }
+    .actions { display: flex; gap: 10px; margin: 14px 0 8px; }
+    button { border: 0; border-radius: 8px; background: #c7fb75; color: #17241e; padding: 10px 18px; font: inherit; font-weight: 750; cursor: pointer; }
+    button:hover { background: #dcff9e; } button:disabled { opacity: .55; cursor: wait; }
+    .secondary { background: #31483b; color: #f1f7ee; }
+    .status, .controls, .feedback { min-height: 1.5em; color: #b7c8bb; font-size: .92rem; }
+    .controls { margin-top: 8px; }
+    aside h2 { color: #c7fb75; margin: 0 0 12px; font-size: 1.25rem; }
+    ol { list-style: none; padding: 0; margin: 0; counter-reset: rank; }
+    li { counter-increment: rank; display: grid; grid-template-columns: 28px 1fr auto; gap: 8px; padding: 9px 0; border-bottom: 1px solid #314238; overflow-wrap: anywhere; }
+    li::before { content: counter(rank) "."; color: #8fa795; } li strong { color: #c7fb75; font-variant-numeric: tabular-nums; }
+    .empty { color: #a4b5a9; }
+    .submit { display: none; border-top: 1px solid #314238; margin-top: 16px; padding-top: 14px; }
+    .submit.visible { display: block; } .submit label { display: block; font-size: .9rem; margin-bottom: 7px; }
+    .submit-row { display: flex; gap: 8px; } input { min-width: 0; width: 100%; background: #0e1712; border: 1px solid #4c6856; border-radius: 7px; padding: 9px; color: white; font: inherit; }
+    .submit button { padding: 9px 12px; white-space: nowrap; }
+    @media (max-width: 700px) { main { grid-template-columns: 1fr; } aside { order: 2; } body { padding: 12px; } .game, aside { padding: 14px; } }
+  </style>
+</head>
+<body>
+  <main>
+    <section>
+      <h1>SNAKE</h1>
+      <div class="game">
+        <div class="topline"><div class="score">Score <strong id="score">0</strong></div><div id="status" class="status" role="status">Press Start when ready.</div></div>
+        <canvas id="board" width="480" height="480" aria-label="Snake game board"></canvas>
+        <div class="actions"><button id="start">Start</button><button id="restart" class="secondary">Restart</button></div>
+        <div class="controls">Use the arrow keys to steer. Eat the green food; avoid walls and yourself.</div>
+        <div id="submit" class="submit">
+          <label for="playerName">Game over — submit your score</label>
+          <div class="submit-row"><input id="playerName" maxlength="24" autocomplete="name" placeholder="Your name"><button id="send">Submit</button></div>
+          <div id="feedback" class="feedback" role="status"></div>
+        </div>
+      </div>
+    </section>
+    <aside><h2>High Scores</h2><div id="leaderboard" aria-live="polite" class="empty">Loading scores…</div></aside>
+  </main>
+  <script>
+    (() => {
+      const API = 'http://localhost:3000/api/scores';
+      const canvas = document.querySelector('#board');
+      const ctx = canvas.getContext('2d');
+      const cells = 24, size = canvas.width / cells;
+      const scoreEl = document.querySelector('#score'), statusEl = document.querySelector('#status');
+      const submitPanel = document.querySelector('#submit'), nameInput = document.querySelector('#playerName');
+      const sendButton = document.querySelector('#send'), feedback = document.querySelector('#feedback');
+      let snake, direction, queuedDirection, food, score, timer = null, playing = false, gameOver = false, submitted = false;
+
+      function draw() {
+        ctx.fillStyle = '#0c1511'; ctx.fillRect(0, 0, 480, 480);
+        ctx.strokeStyle = '#18271f'; ctx.lineWidth = 1;
+        for (let n = 0; n <= cells; n++) { ctx.beginPath(); ctx.moveTo(n * size, 0); ctx.lineTo(n * size, 480); ctx.stroke(); ctx.beginPath(); ctx.moveTo(0, n * size); ctx.lineTo(480, n * size); ctx.stroke(); }
+        if (food) { ctx.fillStyle = '#ffcb67'; ctx.beginPath(); ctx.arc((food.x + .5) * size, (food.y + .5) * size, size * .36, 0, Math.PI * 2); ctx.fill(); }
+        snake.forEach((part, index) => { ctx.fillStyle = index === 0 ? '#d7ff91' : '#84d05d'; ctx.beginPath(); ctx.roundRect(part.x * size + 2, part.y * size + 2, size - 4, size - 4, 5); ctx.fill(); });
+      }
+      function placeFood() {
+        const open = [];
+        for (let y = 0; y < cells; y++) for (let x = 0; x < cells; x++) if (!snake.some(p => p.x === x && p.y === y)) open.push({ x, y });
+        food = open.length ? open[Math.floor(Math.random() * open.length)] : null;
+      }
+      function reset() {
+        clearInterval(timer); timer = null; playing = false; gameOver = false; submitted = false;
+        snake = [{ x: 12, y: 12 }, { x: 11, y: 12 }, { x: 10, y: 12 }]; direction = { x: 1, y: 0 }; queuedDirection = direction;
+        score = 0; scoreEl.textContent = score; placeFood(); submitPanel.classList.remove('visible');
+        feedback.textContent = ''; sendButton.disabled = false; statusEl.textContent = 'Press Start when ready.'; draw();
+      }
+      function endGame() {
+        playing = false; gameOver = true; clearInterval(timer); timer = null;
+        statusEl.textContent = 'Game over — score ' + score + '.'; submitPanel.classList.add('visible');
+        feedback.textContent = ''; sendButton.disabled = false; nameInput.focus();
+      }
+      function tick() {
+        direction = queuedDirection;
+        const head = { x: snake[0].x + direction.x, y: snake[0].y + direction.y };
+        const eating = food && head.x === food.x && head.y === food.y;
+        if (head.x < 0 || head.x >= cells || head.y < 0 || head.y >= cells || snake.slice(0, eating ? snake.length : -1).some(p => p.x === head.x && p.y === head.y)) { endGame(); return; }
+        snake.unshift(head);
+        if (eating) { score++; scoreEl.textContent = score; placeFood(); if (!food) { draw(); endGame(); return; } } else snake.pop();
+        draw();
+      }
+      function start() { if (playing) return; if (gameOver) reset(); playing = true; statusEl.textContent = 'Playing'; timer = setInterval(tick, 125); }
+      document.querySelector('#start').addEventListener('click', start);
+      document.querySelector('#restart').addEventListener('click', reset);
+      const keyDirs = { ArrowUp: { x: 0, y: -1 }, ArrowDown: { x: 0, y: 1 }, ArrowLeft: { x: -1, y: 0 }, ArrowRight: { x: 1, y: 0 } };
+      document.addEventListener('keydown', event => {
+        if (keyDirs[event.key] && playing) { event.preventDefault(); const next = keyDirs[event.key]; if (next.x !== -queuedDirection.x || next.y !== -queuedDirection.y) queuedDirection = next; }
+      });
+      async function loadScores() {
+        const target = document.querySelector('#leaderboard'); target.textContent = 'Loading scores…'; target.className = 'empty';
+        try { const response = await fetch(API); if (!response.ok) throw new Error('Could not load scores.'); renderScores(await response.json()); }
+        catch { target.textContent = 'Leaderboard unavailable. Start a game anyway.'; }
+      }
+      function renderScores(data) {
+        const target = document.querySelector('#leaderboard'); target.replaceChildren();
+        if (!data.scores || data.scores.length === 0) { target.textContent = 'No scores yet. Be the first!'; target.className = 'empty'; return; }
+        const list = document.createElement('ol');
+        data.scores.slice(0, 10).forEach(row => { const item = document.createElement('li'); const player = document.createElement('span'); player.textContent = row.name; const points = document.createElement('strong'); points.textContent = row.score; item.append(player, points); list.append(item); });
+        target.append(list); target.className = '';
+      }
+      sendButton.addEventListener('click', async () => {
+        const name = nameInput.value.trim();
+        if (!gameOver || submitted || sendButton.disabled) return;
+        if (name.length < 1 || name.length > 24) { feedback.textContent = 'Enter a name from 1 to 24 characters.'; return; }
+        sendButton.disabled = true; feedback.textContent = 'Saving score…';
+        try {
+          const response = await fetch(API, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name, score }) });
+          const data = await response.json(); if (!response.ok) throw new Error(data.error || 'Score could not be saved.');
+          submitted = true; renderScores(data); feedback.textContent = 'Score saved to the leaderboard.';
+        } catch (error) { sendButton.disabled = false; feedback.textContent = error.message === 'Failed to fetch' ? 'Could not reach the score server. Check it and retry.' : error.message; }
+      });
+      loadScores(); reset();
+    })();
+  </script>
+</body>
+</html>
