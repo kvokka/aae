@@ -9,7 +9,7 @@ demo=$(basename "$here")
 aae=$(command -v "${AAE:-aae}") || { echo "no aae: install it or set AAE"; exit 1; }
 request="Create me snake game in browser and a simple backend which store the high-scores, KISS"
 cd "$here"
-if [ -n "$(ls -A frontend backend root/.beads .aae 2>/dev/null | grep -v -e '^\.gitkeep$' -e ':$' -e '^$')" ]; then
+if [ -n "$(ls -A frontend backend root/.beads .aae 2>/dev/null | grep -v -e '^\.gitkeep$' -e '^\.git$' -e ':$' -e '^$')" ]; then
   echo "$demo: a run is left over; start clean with: git clean -ffdX -- $here"
   exit 1
 fi
@@ -20,8 +20,12 @@ export XDG_STATE_HOME="$here/.aae/state" XDG_CONFIG_HOME="$here/.aae/config" XDG
 AAE_SOCKET="$(mktemp -d)/aae.sock"
 export AAE_SOCKET
 (cd root && br init -q >/dev/null)
-# Each rig is a repository of its own: a coder's commit stays in it, not in the repository the demo sits in.
-for rig in frontend backend; do git -C "$rig" init -q; done
+# Each rig is a repository of its own: a coder's commit stays in it, not in the repository the demo sits in. The one
+# of a previous run goes: `git clean` leaves a repository in a directory with a tracked file.
+for rig in frontend backend; do
+  find "$rig/.git" -delete 2>/dev/null || true
+  git -C "$rig" init -q
+done
 # The commit of the demo and of aae, before the coders' work can change the tree.
 sha=$(git describe --always --dirty 2>/dev/null || echo unknown)
 # The agents call `aae`: the binary goes first on the PATH the daemon hands them.
