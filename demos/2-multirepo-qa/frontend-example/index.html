@@ -11,7 +11,7 @@
     main { width: min(920px, 100%); display: grid; grid-template-columns: minmax(0, 600px) minmax(210px, 1fr); gap: 24px; align-items: start; }
     h1 { margin: 0 0 14px; letter-spacing: .08em; color: #c7fb75; font-size: 2rem; }
     .game, aside { border: 1px solid #3d5c4c; background: #17241e; border-radius: 16px; padding: 18px; box-shadow: 0 16px 45px #0005; }
-    .topline { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+    .topline { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-bottom: 12px; }
     .score { font-size: 1.2rem; font-weight: 700; } .score strong { color: #c7fb75; font-variant-numeric: tabular-nums; }
     canvas { display: block; width: 100%; aspect-ratio: 1; border-radius: 10px; background: #0c1511; border: 1px solid #30483a; }
     .actions { display: flex; gap: 10px; margin: 14px 0 8px; }
@@ -40,10 +40,10 @@
         <div class="topline"><div class="score">Score <strong id="score">0</strong></div><div id="status" class="status" role="status">Press Start when ready.</div></div>
         <canvas id="board" width="480" height="480" aria-label="Snake game board"></canvas>
         <div class="actions"><button id="start">Start</button><button id="restart" class="secondary">Restart</button></div>
-        <div class="controls">Use the arrow keys to steer. Eat the green food; avoid walls and yourself.</div>
+        <div class="controls">Use the arrow keys to steer. Eat the gold food; avoid walls and yourself.</div>
         <div id="submit" class="submit">
-          <label for="playerName">Game over — submit your score</label>
-          <div class="submit-row"><input id="playerName" maxlength="24" autocomplete="name" placeholder="Your name"><button id="send">Submit</button></div>
+          <label for="playerName">Game finished — submit your score</label>
+          <div class="submit-row"><input id="playerName" maxlength="20" autocomplete="name" placeholder="Your name"><button id="send">Submit</button></div>
           <div id="feedback" class="feedback" role="status"></div>
         </div>
       </div>
@@ -52,9 +52,8 @@
   </main>
   <script>
     (() => {
-      const API = 'http://localhost:3000/api/scores';
-      const canvas = document.querySelector('#board');
-      const ctx = canvas.getContext('2d');
+      const API = 'http://127.0.0.1:8000/api/scores';
+      const canvas = document.querySelector('#board'), ctx = canvas.getContext('2d');
       const cells = 24, size = canvas.width / cells;
       const scoreEl = document.querySelector('#score'), statusEl = document.querySelector('#status');
       const submitPanel = document.querySelector('#submit'), nameInput = document.querySelector('#playerName');
@@ -79,10 +78,10 @@
         score = 0; scoreEl.textContent = score; placeFood(); submitPanel.classList.remove('visible');
         feedback.textContent = ''; sendButton.disabled = false; statusEl.textContent = 'Press Start when ready.'; draw();
       }
-      function endGame() {
+      function endGame(won = false) {
         playing = false; gameOver = true; clearInterval(timer); timer = null;
-        statusEl.textContent = 'Game over — score ' + score + '.'; submitPanel.classList.add('visible');
-        feedback.textContent = ''; sendButton.disabled = false; nameInput.focus();
+        statusEl.textContent = won ? `You filled the board! Score ${score}.` : `Game over — score ${score}.`;
+        submitPanel.classList.add('visible'); feedback.textContent = ''; sendButton.disabled = false;
       }
       function tick() {
         direction = queuedDirection;
@@ -90,7 +89,7 @@
         const eating = food && head.x === food.x && head.y === food.y;
         if (head.x < 0 || head.x >= cells || head.y < 0 || head.y >= cells || snake.slice(0, eating ? snake.length : -1).some(p => p.x === head.x && p.y === head.y)) { endGame(); return; }
         snake.unshift(head);
-        if (eating) { score++; scoreEl.textContent = score; placeFood(); if (!food) { draw(); endGame(); return; } } else snake.pop();
+        if (eating) { score++; scoreEl.textContent = score; placeFood(); if (!food) { draw(); endGame(true); return; } } else snake.pop();
         draw();
       }
       function start() { if (playing) return; if (gameOver) reset(); playing = true; statusEl.textContent = 'Playing'; timer = setInterval(tick, 125); }
@@ -103,11 +102,11 @@
       async function loadScores() {
         const target = document.querySelector('#leaderboard'); target.textContent = 'Loading scores…'; target.className = 'empty';
         try { const response = await fetch(API); if (!response.ok) throw new Error('Could not load scores.'); renderScores(await response.json()); }
-        catch { target.textContent = 'Leaderboard unavailable. Start a game anyway.'; }
+        catch { target.textContent = 'Leaderboard unavailable. You can still play.'; target.className = 'empty'; }
       }
       function renderScores(data) {
         const target = document.querySelector('#leaderboard'); target.replaceChildren();
-        if (!data.scores || data.scores.length === 0) { target.textContent = 'No scores yet. Be the first!'; target.className = 'empty'; return; }
+        if (!Array.isArray(data.scores) || data.scores.length === 0) { target.textContent = 'No scores yet. Be the first!'; target.className = 'empty'; return; }
         const list = document.createElement('ol');
         data.scores.slice(0, 10).forEach(row => { const item = document.createElement('li'); const player = document.createElement('span'); player.textContent = row.name; const points = document.createElement('strong'); points.textContent = row.score; item.append(player, points); list.append(item); });
         target.append(list); target.className = '';
@@ -115,7 +114,7 @@
       sendButton.addEventListener('click', async () => {
         const name = nameInput.value.trim();
         if (!gameOver || submitted || sendButton.disabled) return;
-        if (name.length < 1 || name.length > 24) { feedback.textContent = 'Enter a name from 1 to 24 characters.'; return; }
+        if (name.length < 1 || name.length > 20) { feedback.textContent = 'Enter a name from 1 to 20 characters.'; return; }
         sendButton.disabled = true; feedback.textContent = 'Saving score…';
         try {
           const response = await fetch(API, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name, score }) });
