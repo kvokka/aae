@@ -1,6 +1,7 @@
 //! The br tracker adapter (spec §10.2, docs/design/contracts.md 5): every call is one `br` process (0.7.6) on the
 //! project's database named explicitly by `BEADS_DIR`, with the caller's actor; the writes come from br's `events`
 //! table, read-only, and a watcher on `.beads/` says when to read them (docs/design/experiments.md, experiment 3).
+//! A created bead is an epic whose `external_ref` is its key.
 
 use aae_core::{
     BoxFuture,
@@ -194,7 +195,11 @@ impl Tracker for Br {
             // shortcut: br 0.7.6 `close` has no `--if-unchanged`, so a claim between this read and the close is
             // overwritten; only the daemon claims (invariant 3), so only a human could; use it once br has it.
             self.held(owner, id).await?;
-            Ok(self.br(owner, &["close", id, "-r", reason]).await.map(drop)?)
+            match self.br(owner, &["close", id, "-r", reason]).await {
+                // Exit 3 after `held` found the bead: br skips a parent with open children; it goes back open.
+                Err(Fail(Some(3), _)) => self.release(owner, id).await,
+                other => Ok(other.map(drop)?),
+            }
         })
     }
 
@@ -256,6 +261,38 @@ impl Tracker for Br {
                 });
             }
             Ok(out)
+        })
+    }
+
+    fn create<'a>(
+        &'a self,
+        actor: &'a str,
+        key: &'a str,
+        title: &'a str,
+        description: &'a str,
+    ) -> BoxFuture<'a, Result<Bead, TrackerError>> {
+        Box::pin(async move {
+            // `br show` does not find an external ref: the whole list, closed beads too, is searched.
+            let all = self.br(READER, &["list", "-a", "--limit", "0"]).await?;
+            let listed = all["issues"].as_array().or(all.as_array()).into_iter().flatten();
+            if let Some(id) = listed
+                .filter(|b| b["external_ref"] == key)
+                .find_map(|b| b["id"].as_str())
+            {
+                return self.one(id).await;
+            }
+            let args = [
+                "create",
+                "--title",
+                title,
+                "-t",
+                "epic",
+                "-d",
+                description,
+                "--external-ref",
+                key,
+            ];
+            bead(&self.br(actor, &args).await?)
         })
     }
 }

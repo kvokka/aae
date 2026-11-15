@@ -55,6 +55,10 @@ tracker interface and its errors are in [contracts.md](contracts.md) §5; the be
   gives `tracker.sync_failed{op: "watch"}` with no retry: that tracker is then read only by the periodic resync (every 5
   min).
 - The agent uses `br` itself for the content of its work: child beads, comments, dependencies.
+- The daemon creates one kind of bead: the root of a run started from a request, an epic without labels whose
+  `external_ref` is the key of the creation (`aae-` and 16 hex digits). The adapter first looks the key up in
+  `br list -a`, so a creation repeated after a restart returns the same bead. The children of a claimed root are
+  ready; a released root with open children is not.
 
 ## Generated from the project configs
 
@@ -69,7 +73,9 @@ tracker interface and its errors are in [contracts.md](contracts.md) §5; the be
 - A rig name obeys the label rules: ASCII letters, digits, `-`, `_`.
 - A bead's JSON has no epic field: the adapter computes the parent.
 - br 0.7.6 has no conditional close and no "give the bead back" command: release and close check the owner first
-  (`--if-unchanged` on release).
+  (`--if-unchanged` on release). br refuses to close a parent with open children (exit 3); the adapter releases it
+  instead, so `passed` leaves such a bead open without an assignee.
+- `br show` does not find a bead by `external_ref`: the key of a creation is looked up in the whole list.
 - The exit code of a busy claim differs between versions: the adapter branches on the exit code (4), not on text.
 - br has no events. Changes made through aae raise events at once; changes made by hand are caught by a watcher on
   `.beads/` and read from br's `events` table read-only, under br's `.write.lock` held shared (a stock SQLite
@@ -84,4 +90,4 @@ tracker interface and its errors are in [contracts.md](contracts.md) §5; the be
   (`aae_br::TESTED`); the daemon at start and `aae doctor` warn about a version outside them.
 - br has had regressions between patch versions, so the adapter has its own contract tests on the pinned br
   (`crates/aae-br/tests/contract.rs`): claim under concurrency, conditional release, close, ready in an epic, the
-  changes of each command, the watcher.
+  changes of each command, the watcher, creation once per key, the close of a parent with an open child.

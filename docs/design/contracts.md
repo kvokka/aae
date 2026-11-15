@@ -503,7 +503,7 @@ tests of §7.8.
 
 ### 5.1 Operations
 
-The trait has the five operations the core calls (spec §2, decision 52: an operation is added when a caller needs it).
+The trait has the six operations the core calls (spec §2, decision 52: an operation is added when a caller needs it).
 Every call names the actor: `aae:<run id>` when the daemon acts for a run, `aae` for
 the daemon's own reads. Sessions and exec steps get `BD_ACTOR=aae:<run id>:<attempt n>` and the database path in
 their environment ([experiments](experiments.md#br-as-an-event-source-experiment-3)). An actor of any other form is a
@@ -516,6 +516,8 @@ trait Tracker: Send + Sync {
     fn close(&self, owner: &str, id: &str, reason: &str) -> BoxFuture<Result<(), TrackerError>>; // conditional
     fn ready(&self) -> BoxFuture<Result<Vec<Bead>, TrackerError>>;          // every ready bead, tracker order
     fn changes(&self, after: i64) -> BoxFuture<Result<Vec<Change>, TrackerError>>;           // after a seq
+    fn create(&self, actor: &str, key: &str, title: &str, description: &str)
+        -> BoxFuture<Result<Bead, TrackerError>>;                               // once per key
 }
 ```
 
@@ -523,6 +525,9 @@ trait Tracker: Send + Sync {
 because a run id is not reused within one state directory (it is a counter there: a fresh state directory counts from
 `run_1` again) and a run owns at most one bead once. A claim answer carries the generation it was made for and is
 dropped unless the run still owns the bead in that generation and still waits for it in `preparing`.
+
+`create` makes an open epic without labels: the root bead of a run started from a request. It is idempotent by `key`:
+a repeat (an effect run again after a restart) returns the bead of the first call, never a second bead.
 
 `changes` is pull-only; the adapter also owns a watcher that sends a "changed" message to the core, and the core
 then calls `changes` from its stored cursor (and on start and after recovery without waiting for a signal). One
@@ -550,7 +555,8 @@ core sets the actor of an exec step and hands that of a session to the adapter i
   found another owner, nothing changed); `Unavailable { text }` (transient: retried by the effect queue with
   backoff, `tracker.sync_failed` on every failure); `Invalid { text }` (permanent).
 - `release` and `close` are conditional on `assignee == owner`; br 0.7.6 has neither a conditional close nor a
-  release, so the adapter reads, compares and writes. The window between read and write is open only to humans
+  release, so the adapter reads, compares and writes. A `close` of a parent with open children leaves it open: br
+  refuses it, and the adapter releases the bead instead, so it does not stay `in_progress` behind a terminal run. The window between read and write is open only to humans
   (the daemon is the only claimer, invariant 3). An owner found changed before the write is `OwnerMismatch`,
   reported as `resync.diverged`; a human write that lands inside the window shows up only as a `bead.updated` of
   the next `changes` batch, until the resync of the tracker compares owners.

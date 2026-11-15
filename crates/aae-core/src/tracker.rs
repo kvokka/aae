@@ -80,4 +80,12 @@ pub trait Tracker: Send + Sync {
     fn ready(&self) -> BoxFuture<'_, Result<Vec<Bead>, TrackerError>>;
     /// The writes after `after` (a `seq`, 0 for all), oldest first.
     fn changes(&self, after: i64) -> BoxFuture<'_, Result<Vec<Change>, TrackerError>>;
+    /// Creates an open epic without labels as `actor`, once per `key`: a repeat returns the bead of the first call.
+    fn create<'a>(
+        &'a self,
+        actor: &'a str,
+        key: &'a str,
+        title: &'a str,
+        description: &'a str,
+    ) -> BoxFuture<'a, Result<Bead, TrackerError>>;
 }

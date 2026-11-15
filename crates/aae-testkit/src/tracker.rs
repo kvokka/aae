@@ -1,5 +1,6 @@
 //! A tracker in memory (contracts 5) for core tests: claims, conditional release and close, the ready set in
-//! creation order, and an outage switch.
+//! creation order, creation once per key, and an outage switch. As in br, a parent with open children is not ready
+//! and is released, not closed.
 
 use aae_core::{
     BoxFuture,
@@ -16,6 +17,8 @@ pub struct MemoryTracker {
 struct State {
     beads: Vec<Bead>,
     log: Vec<Change>,
+    /// The beads of `create`, by key.
+    keys: Vec<(String, String)>,
     down: bool,
 }
 
@@ -26,23 +29,7 @@ impl MemoryTracker {
 
     /// Adds an open bead with `labels` in `epic`; returns its id (`b-<n>`).
     pub fn add(&self, labels: &[&str], epic: Option<&str>) -> String {
-        let mut state = self.lock();
-        let id = format!("b-{}", state.beads.len() + 1);
-        state.beads.push(Bead {
-            id: id.clone(),
-            title: format!("Task {id}"),
-            description: String::new(),
-            status: "open".to_owned(),
-            priority: 2,
-            labels: labels.iter().map(|l| (*l).to_owned()).collect(),
-            assignee: None,
-            epic: epic.map(str::to_owned),
-            created_at: "2026-11-13T00:00:00Z".to_owned(),
-            updated_at: "2026-11-13T00:00:00Z".to_owned(),
-            closed_at: None,
-        });
-        state.record(&id, "created", "human", &[]);
-        id
+        self.lock().push(None, "", labels, epic, "human")
     }
 
     pub fn bead(&self, id: &str) -> Option<Bead> {
@@ -92,6 +79,40 @@ impl MemoryTracker {
 }
 
 impl State {
+    /// Adds an open bead (titled `Task <id>` without `title`) and logs its creation by `actor`; returns its id.
+    fn push(
+        &mut self,
+        title: Option<&str>,
+        description: &str,
+        labels: &[&str],
+        epic: Option<&str>,
+        actor: &str,
+    ) -> String {
+        let id = format!("b-{}", self.beads.len() + 1);
+        self.beads.push(Bead {
+            id: id.clone(),
+            title: title.map_or_else(|| format!("Task {id}"), str::to_owned),
+            description: description.to_owned(),
+            status: "open".to_owned(),
+            priority: 2,
+            labels: labels.iter().map(|l| (*l).to_owned()).collect(),
+            assignee: None,
+            epic: epic.map(str::to_owned),
+            created_at: "2026-11-13T00:00:00Z".to_owned(),
+            updated_at: "2026-11-13T00:00:00Z".to_owned(),
+            closed_at: None,
+        });
+        self.record(&id, "created", actor, &[]);
+        id
+    }
+
+    /// Whether `id` is the parent of a bead not closed.
+    fn has_open_children(&self, id: &str) -> bool {
+        self.beads
+            .iter()
+            .any(|c| c.epic.as_deref() == Some(id) && c.status != "closed")
+    }
+
     fn record(&mut self, id: &str, kind: &str, actor: &str, changed: &[&str]) {
         let Some(bead) = self.beads.iter().find(|b| b.id == id).cloned() else {
             return;
@@ -148,6 +169,9 @@ impl Tracker for MemoryTracker {
 
     fn close<'a>(&'a self, owner: &'a str, id: &'a str, _reason: &'a str) -> BoxFuture<'a, Result<(), TrackerError>> {
         Box::pin(async move {
+            if self.lock().has_open_children(id) {
+                return self.release(owner, id).await;
+            }
             self.with(id, ("closed", owner), |b| {
                 held(b, owner)?;
                 b.status = "closed".to_owned();
@@ -168,7 +192,7 @@ impl Tracker for MemoryTracker {
             let open = state
                 .beads
                 .iter()
-                .filter(|b| b.status == "open" && b.assignee.is_none());
+                .filter(|b| b.status == "open" && b.assignee.is_none() && !state.has_open_children(&b.id));
             Ok(open.cloned().collect())
         })
     }
@@ -183,5 +207,56 @@ impl Tracker for MemoryTracker {
             }
             Ok(state.log.iter().filter(|c| c.seq > after).cloned().collect())
         })
+    }
+
+    fn create<'a>(
+        &'a self,
+        actor: &'a str,
+        key: &'a str,
+        title: &'a str,
+        description: &'a str,
+    ) -> BoxFuture<'a, Result<Bead, TrackerError>> {
+        Box::pin(async move {
+            let mut state = self.lock();
+            if state.down {
+                return Err(TrackerError::Unavailable {
+                    text: "down".to_owned(),
+                });
+            }
+            let id = match state.keys.iter().find(|(k, _)| k == key) {
+                Some((_, id)) => id.clone(),
+                None => {
+                    let id = state.push(Some(title), description, &[], None, actor);
+                    state.keys.push((key.to_owned(), id.clone()));
+                    id
+                }
+            };
+            state
+                .beads
+                .iter()
+                .find(|b| b.id == id)
+                .cloned()
+                .ok_or(TrackerError::NotFound)
+        })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn a_key_creates_one_bead_whose_parent_is_released_while_a_child_is_open() {
+        let t = MemoryTracker::new();
+        let root = t.create("aae:r1", "k1", "Ship it", "text").await.unwrap();
+        assert_eq!(t.create("aae:r1", "k1", "Other", "").await.unwrap(), root);
+        assert_ne!(t.create("aae:r1", "k2", "Two", "").await.unwrap().id, root.id);
+        let child = t.add(&[], Some(&root.id));
+        t.claim("aae:r1", &root.id).await.unwrap();
+        assert!(t.ready().await.unwrap().iter().any(|b| b.id == child));
+        t.close("aae:r1", &root.id, "passed").await.unwrap();
+        let root = t.bead(&root.id).unwrap();
+        assert_eq!((root.status.as_str(), root.assignee), ("open", None));
+        assert!(t.ready().await.unwrap().iter().all(|b| b.id != root.id));
     }
 }

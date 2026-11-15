@@ -168,3 +168,49 @@ async fn each_command_is_one_change_with_its_actor_and_the_watcher_signals_it() 
     let last = changes[2].seq;
     assert!(t.changes(last).await.unwrap().is_empty(), "nothing after the cursor");
 }
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_key_creates_one_epic_whose_children_run_and_which_is_released_while_they_are_open() {
+    let (dir, t) = tracker();
+    let root = t
+        .create("aae:run_1", "aae-k1", "Ship it", "Ship it\nwhole text")
+        .await
+        .unwrap();
+    let again = t.create("aae:run_1", "aae-k1", "Other", "other").await.unwrap();
+    assert_eq!(again.id, root.id, "a repeated key gives the first bead");
+    assert_eq!(
+        (
+            root.title.as_str(),
+            root.description.as_str(),
+            root.labels.len(),
+            root.epic.as_ref()
+        ),
+        ("Ship it", "Ship it\nwhole text", 0, None)
+    );
+    let listed = br(dir.path(), &["list", "-a", "--limit", "0", "--json"]);
+    let listed: serde_json::Value = serde_json::from_str(&listed).unwrap();
+    let issues = listed["issues"].as_array().unwrap();
+    assert_eq!(issues.len(), 1, "one bead per key");
+    assert_eq!(issues[0]["issue_type"], "epic");
+    assert_ne!(t.create("aae:run_2", "aae-k2", "Two", "").await.unwrap().id, root.id);
+
+    let child = create(dir.path(), "Child", &["--parent", &root.id]);
+    t.claim("aae:run_1", &root.id).await.unwrap();
+    let ready = t.ready().await.unwrap();
+    assert!(
+        ready.iter().any(|b| b.id == child),
+        "the children of a claimed root are ready"
+    );
+    t.close("aae:run_1", &root.id, "passed: done").await.unwrap();
+    let shown = t.ready().await.unwrap();
+    assert!(
+        shown.iter().all(|b| b.id != root.id),
+        "an epic with open children is not ready"
+    );
+    let shown: serde_json::Value = serde_json::from_str(&br(dir.path(), &["show", &root.id, "--json"])).unwrap();
+    assert_eq!(
+        (shown[0]["status"].as_str(), shown[0]["assignee"].as_str()),
+        (Some("open"), None),
+        "a parent with an open child is released, not closed"
+    );
+}

@@ -44,6 +44,15 @@ impl Tracker for Chain {
     fn changes(&self, after: i64) -> BoxFuture<'_, Result<Vec<Change>, TrackerError>> {
         self.0.changes(after)
     }
+    fn create<'a>(
+        &'a self,
+        actor: &'a str,
+        key: &'a str,
+        title: &'a str,
+        text: &'a str,
+    ) -> BoxFuture<'a, Result<Bead, TrackerError>> {
+        self.0.create(actor, key, title, text)
+    }
 }
 
 #[tokio::test]
