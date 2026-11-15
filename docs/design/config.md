@@ -16,7 +16,8 @@ error in every file.
   (it loads the file itself, so it needs no daemon).
 - A reload is taken by new runs and by the schedules (a schedule whose `cron`/`every` changed, and every `cron` when
   `timezone` changed, is set again from the reload; a removed one is dropped); the snapshot is per step: a running
-  step keeps the one it prepared with, and the next step of the run prepares with the config of that moment; an idle instance stops with reason `config` only when no agent of the new config, on any rig, starts
+  step keeps the one it prepared with, and the next step of the run prepares with the config of that moment; an idle
+  instance stops with reason `config` only when no agent of the new config, on any rig, starts
   sessions on its fingerprint (a changed MCP restarts only the instances it is part of). It emits `config.reloaded`
   with the generation (1 at daemon start). A change of the set of harnesses, a harness `binary` or any adapter setting
   such as `max_sessions` (a harness `model` is fine), or of which projects have a `.beads` tracker is refused: drivers
@@ -484,7 +485,8 @@ continued.
 
 A run start checks the inputs: no undeclared one, every `required` one present (`null` is no value), an `integer` input
 a JSON integer or its text, a `boolean` one a JSON boolean or `true`/`false` as text, a `string` one a string (the CLI
-sends `--input` values as text). A `bead` input is a bead id, `{ next_ready = true, epic = <id> }` or `{ request = "<text>" }`: a
+sends `--input` values as text). A `bead` input is a bead id, `{ next_ready = true, epic = <id> }` or `{ request =
+"<text>" }`: a
 request (only that key, a text that is not blank; the rig must be named) has the tracker create the run's root bead as
 the run prepares, titled with the first line of the text and described by all of it, and the input then holds its id
 ([tracker-br.md](tracker-br.md#beads-and-runs)); a bead named by id
@@ -622,7 +624,8 @@ no external runtime, and are counted on their own budget line (`plugins` in `scr
 release total.
 
 Postmortem 0001 (`docs/postmortems/0001-loop-stalled-after-transient-auth-error.md`) and the owner's decision of
-2026-11-14 (spec §2, decisions 49, 50) shaped `auth_required` and `billing`: a proxy or WAF 403 passes by itself, so every
+2026-11-14 (spec §2, decisions 49, 50) shaped `auth_required` and `billing`: a proxy or WAF 403 passes by itself, so
+every
 such failure parks the account gate for a wait that grows with each failure in a row up to an hour, and the next
 attempt is the probe. Nothing goes to an operator and there is no alerting: the journal and the logs tell it. The
 core does not count these attempts against its ceiling, so a long outage never ends in `failed{attempts_ceiling}`.

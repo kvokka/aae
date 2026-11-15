@@ -66,9 +66,11 @@ elsewhere `run` is the envelope's run id. Examples: `bead.labels` and `bead.epic
 
 Shared objects:
 
-- `RunView`: `{id, formula, step, agent, step_kind: "prompt"|"exec"|"drain", state, class, attempt, generation, bead, workdir,
+- `RunView`: `{id, formula, step, agent, step_kind: "prompt"|"exec"|"drain", state, class, attempt, generation, bead,
+  workdir,
   depth, parent_run, created_at, started_at}`. `step` is the name of the formula step the run is at (6.1); `agent` and
-  `step_kind` are of that step, `agent` is null for `exec` and `drain` steps, `class` is null until `failed`, `bead` is the
+  `step_kind` are of that step, `agent` is null for `exec` and `drain` steps, `class` is null until `failed`, `bead` is
+  the
   bead id or null, `depth` is the chain depth of §6.1 (0 for a run started by hand), `parent_run` the run whose event
   triggered it or whose session started it. The read API (`GET /v1/runs/{id}`, `aae run show`) gives the `RunView` with
   `project`, `rig`, `correlation`, `inputs`, `waiting_for`, `outcome`, `attempts`, `usage` (`{input_tokens,
@@ -557,7 +559,8 @@ core sets the actor of an exec step and hands that of a session to the adapter i
   backoff, `tracker.sync_failed` on every failure); `Invalid { text }` (permanent).
 - `release` and `close` are conditional on `assignee == owner`; br 0.7.6 has neither a conditional close nor a
   release, so the adapter reads, compares and writes. A `close` of a parent with open children leaves it open: br
-  refuses it, and the adapter releases the bead instead, so it does not stay `in_progress` behind a terminal run. The window between read and write is open only to humans
+  refuses it, and the adapter releases the bead instead, so it does not stay `in_progress` behind a terminal run. The
+  window between read and write is open only to humans
   (the daemon is the only claimer, invariant 3). An owner found changed before the write is `OwnerMismatch`,
   reported as `resync.diverged`; a human write that lands inside the window shows up only as a `bead.updated` of
   the next `changes` batch, until the resync of the tracker compares owners.
@@ -592,7 +595,8 @@ so that the state machine has one place where `run.attempt_failed` is decided.
 - A run belongs to a project and a rig, named when it is created (API, CLI, MCP) or by the trigger that fires on the
   rig. A start that names no rig takes it from the one `rig:` label of the bead an input names by id; only a bead of
   the ready list has known labels, so for any other the start is refused with "name the rig". No rig, an unknown rig,
-  or a bead with no or several `rig:` labels is refused before the run exists. Its workdir is the rig's directory, or a worktree of it with
+  or a bead with no or several `rig:` labels is refused before the run exists. Its workdir is the rig's directory, or a
+  worktree of it with
   `worktree = true` in the formula (config.md). One live run holds a workdir: a second run in the same directory
   waits in `queued` (`waiting_for: workdir`); parallel work in one rig is the worktree's job.
 - Concurrency is bounded per orchestrator (`max_runs`, default 8) and per agent (`max_runs` in `agent.toml`).
@@ -717,7 +721,8 @@ for it is not.
   without waiting for its death, so the hook that runs again may start before the old process is gone: hooks must
   be idempotent (spec §11.3). Runs with a live attempt — `starting`, `running` in a turn, `requires_action` — →
   `interrupted` with `daemon_crash` (not a `drain` attempt: it has no process, stays `running` and goes on with the
-  next read of the tracker, the beads it gave out still counted), the launches, prompts, answers and deciding hooks they still had queued
+  next read of the tracker, the beads it gave out still counted), the launches, prompts, answers and deciding hooks they
+  still had queued
   dropped, and the command of an exec step killed by its `AAE_INSTANCE` marker (random per attempt) before any
   later attempt runs it. A run that waits for a decision on a deciding event keeps its state and waits for the
   same decision (3.4): `preparing`, `interrupted` waiting for the policy, `finishing`, and `running` after a turn
