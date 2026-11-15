@@ -10,13 +10,14 @@ code assessed. Updated at the end of every work session.
 them: one with a `FAIL` row (or, in a full run, a row not run) holds the score at 6, a 10 needs criterion 20 green,
 and the marker below must name a commit at or after the last change of `crates/`.
 
-Assessed 2026-11-15 at `7fdca97`, after an effect the writer took before the core handle was set stopped being
-dropped as done (the cause of the two red CI runs of criterion 8). The full `mise run acceptance` ran on this code with
-the cheapest real models (claude haiku, codex gpt-5.6-luna): every row of criteria 1–23 passed, the live rows of 2, 4a,
-8 and 17 and both demos of criterion 20 included; row 22 is checked by `acceptance-ci` on the commit of this file.
-Every component scores 8. None scores 10 though both demos passed: criterion 22 checks this file on every commit
-without the demos (CI runs no model), and a 10 needs criterion 20 green in the run that checks it.
-<!-- MEASURE id=readiness date=2026-11-15 ver=7fdca97 env=linux-arm64-orbstack src=docs/READINESS.md note="assessed against the letter of the scale after a full run with real models on this code" -->
+Assessed 2026-11-15 at `6b39f7a`, after the writer started handing its handle to the executor before it runs (no
+effect can be taken without it). The full `mise run acceptance` ran on this code with the cheapest real models (claude
+haiku, codex gpt-5.6-luna): every other row of criteria 1–23 passed, the live rows of 2, 4a, 8 and 17 and both demos
+of criterion 20 included; row 22 failed only on the marker of this file, which named the code before, and is checked by
+`acceptance-ci` on the commit of this file. Every component scores 8. None scores 10 though both demos passed:
+criterion 22 checks this file on every commit without the demos (CI runs no model), and a 10 needs criterion 20 green
+in the run that checks it.
+<!-- MEASURE id=readiness date=2026-11-15 ver=6b39f7a env=linux-arm64-orbstack src=docs/READINESS.md note="assessed against the letter of the scale after a full run with real models on this code" -->
 
 | Component | Criteria | Score | Missing for the next point |
 |---|---|---|---|
