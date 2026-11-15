@@ -10,22 +10,14 @@ code assessed. Updated at the end of every work session.
 them: one with a `FAIL` row (or, in a full run, a row not run) holds the score at 6, a 10 needs criterion 20 green,
 and the marker below must name a commit at or after the last change of `crates/`.
 
-Assessed 2026-11-15 at `6b39f7a`, after the writer started handing its handle to the executor before it runs (no
-effect can be taken without it). The full `mise run acceptance` ran on this code with the cheapest real models (claude
-haiku, codex gpt-5.6-luna): every other row of criteria 1–23 passed, the live rows of 2, 4a, 8 and 17 and both demos
-of criterion 20 included; row 22 failed only on the marker of this file, which named the code before, and is checked by
-`acceptance-ci` on the commit of this file. Every component scores 8. None scores 10 though both demos passed:
-criterion 22 checks this file on every commit without the demos (CI runs no model), and a 10 needs criterion 20 green
-in the run that checks it.
-
-Re-assessed at `9631c6a`: the changes of `crates/` after `6b39f7a` are a deadline on a test's wait for the journal,
-an explicit busy timeout in `store::open` equal to rusqlite's default (5 s), and `IMMEDIATE` transactions on the
-daemon's connection, so a message under a lock held by another process waits it out instead of failing at once. No
-path a model takes changes, so the scores carry over; the model-free rows are re-run by `acceptance-ci` on this commit.
-
-Re-assessed at `20f8d4c`: the only change of `crates/` after `9631c6a` makes the schema migrations at open begin
-`IMMEDIATE` too. Every migration already began with a write, so behaviour is the same; the scores carry over.
-<!-- MEASURE id=readiness date=2026-11-15 ver=20f8d4c env=linux-arm64-orbstack src=docs/READINESS.md note="assessed against the letter of the scale after a full run with real models on 6b39f7a; 9631c6a and 20f8d4c change only how an outside lock is waited out" -->
+Assessed 2026-11-15 at `96dd606`, the code of `crates/` since `20f8d4c`. The full `mise run acceptance` ran on it
+with the cheapest real models (claude haiku, codex gpt-5.6-luna): 30 of 32 rows passed, the live rows of 2, 4a and 17
+and both demos of criterion 20 included. The codex row of criterion 8 failed once because codex could not reach its
+backend (`run.retrying` "Reconnecting... waiting for network" three times, so the model never started the command),
+and row 22 failed only because criterion 8 was then open; a rerun of criterion 8 passed all three rows (claude 5 of 5,
+codex 5 of 5). Every component scores 8. None scores 10 though both demos passed: criterion 22 checks this file on
+every commit without the demos (CI runs no model), and a 10 needs criterion 20 green in the run that checks it.
+<!-- MEASURE id=readiness date=2026-11-15 ver=96dd606 env=linux-arm64-orbstack src=docs/READINESS.md note="assessed against the letter of the scale after a full run with real models on 96dd606 and a rerun of criterion 8" -->
 
 | Component | Criteria | Score | Missing for the next point |
 |---|---|---|---|
