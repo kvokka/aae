@@ -11,6 +11,7 @@ use aae_testkit::Step;
 use common::{World, world_with};
 use serde_json::{Value, json};
 use std::{sync::Arc, time::Duration};
+use tokio::sync::Notify;
 
 /// `sh -c <script>` as an exec step named `name`, a check when it goes `back` to a step.
 fn exec(name: &str, script: &str, back: Option<&str>) -> String {
@@ -55,8 +56,8 @@ impl World {
     }
 
     /// The kind and data of the event that ended `run`; each attempt of a prompt step declares `pass` on the way,
-    /// but the attempts `fails` declare `fail`.
-    async fn end(&self, run: &str, fails: &[u32]) -> (String, Value) {
+    /// but the attempts `fails` declare `fail`. The n-th declaration lets the n-th of `turns` end.
+    async fn end(&self, run: &str, fails: &[u32], turns: &[Arc<Notify>]) -> (String, Value) {
         let mut done = Vec::new();
         for _ in 0..500 {
             for kind in ["run.passed", "run.failed"] {
@@ -83,6 +84,9 @@ impl World {
                     outcome,
                 };
                 self.core.send(None, msg).await.unwrap();
+                if let Some(turn) = turns.get(done.len()) {
+                    turn.notify_one();
+                }
                 done.push(attempt);
             }
             tokio::time::sleep(Duration::from_millis(20)).await;
@@ -103,7 +107,7 @@ async fn failed_checks_send_the_run_back_with_their_remarks_and_the_next_round_p
     ];
     let w = flow("", &steps, &[]);
     let run = w.start_flow().await;
-    let (kind, data) = w.end(&run, &[]).await;
+    let (kind, data) = w.end(&run, &[], &[]).await;
     assert_eq!(kind, "run.passed", "{data}");
     let remarks = "totals: exit 1\nfix the totals\n\nlint: exit 1\nline too long";
     assert_eq!(
@@ -123,7 +127,7 @@ async fn a_check_that_keeps_failing_fails_the_run_after_the_last_round() {
     ];
     let w = flow("rounds = 2\n", &steps, &[]);
     let run = w.start_flow().await;
-    let (kind, data) = w.end(&run, &[]).await;
+    let (kind, data) = w.end(&run, &[], &[]).await;
     assert_eq!(
         (kind.as_str(), &data["class"]),
         ("run.failed", &json!("agent")),
@@ -146,11 +150,9 @@ async fn the_step_gone_back_to_sees_the_remarks_in_its_prompt() {
         &steps,
         &[("shop/formulas/plan.md", "Plan. Remarks: [{{ remarks }}]")],
     );
-    for _ in 0..2 {
-        w.driver.script(turn());
-    }
+    let turns = turns(&w, 2);
     let run = w.start_flow().await;
-    let (kind, data) = w.end(&run, &[]).await;
+    let (kind, data) = w.end(&run, &[], &turns).await;
     assert_eq!(kind, "run.passed", "{data}");
     let sent: Vec<String> = w
         .driver
@@ -195,9 +197,7 @@ async fn a_step_gone_back_to_on_another_harness_starts_a_new_session() {
         &steps,
         &[("config.toml", config), ("shop/formulas/plan.md", "Plan.")],
     );
-    for _ in 0..2 {
-        w.driver.script(turn());
-    }
+    let turns = turns(&w, 2);
     let run = w.start_flow().await;
     let web = w.dir.path().join("shop/web");
     let reload = async {
@@ -210,7 +210,7 @@ async fn a_step_gone_back_to_on_another_harness_starts_a_new_session() {
         w.core.send(None, Msg::Reload(Arc::new(config))).await.unwrap();
         std::fs::write(web.join("go"), "").unwrap();
     };
-    let ((kind, data), ()) = tokio::join!(w.end(&run, &[]), reload);
+    let ((kind, data), ()) = tokio::join!(w.end(&run, &[], &turns), reload);
     assert_eq!(kind, "run.passed", "{data}");
     let reader = aae_core::run::Reader::open(&w.dir.path().join("state.db")).unwrap();
     let view = reader.run(&run).unwrap().unwrap();
@@ -244,11 +244,9 @@ async fn a_prompt_check_that_declares_fail_sends_the_run_back() {
             ("shop/formulas/review.md", "Review."),
         ],
     );
-    for _ in 0..4 {
-        w.driver.script(turn());
-    }
+    let turns = turns(&w, 4);
     let run = w.start_flow().await;
-    let (kind, data) = w.end(&run, &[2]).await;
+    let (kind, data) = w.end(&run, &[2], &turns).await;
     assert_eq!(kind, "run.passed", "{data}");
     let sent: Vec<String> = w
         .driver
@@ -260,17 +258,22 @@ async fn a_prompt_check_that_declares_fail_sends_the_run_back() {
     assert_eq!(sent, ["Plan. Remarks: []", "Plan. Remarks: [review: planned]"]);
 }
 
-/// A turn that leaves 1 s for the finisher.
-fn turn() -> Vec<Step> {
-    vec![
-        Step::Emit(Normalized::TurnStarted),
-        Step::Wait(Duration::from_secs(1)),
-        Step::Emit(Normalized::TurnEnded {
-            stop_reason: StopReason::Completed,
-        }),
-        Step::Emit(Normalized::State {
-            state: SessionState::Idle,
-            background: false,
-        }),
-    ]
+/// `n` scripted turns, each ending only once its attempt has declared: the order of a declaration and the turn's
+/// end does not race the wall clock.
+fn turns(w: &World, n: usize) -> Vec<Arc<Notify>> {
+    let turns: Vec<Arc<Notify>> = (0..n).map(|_| Arc::new(Notify::new())).collect();
+    for declared in &turns {
+        w.driver.script(vec![
+            Step::Emit(Normalized::TurnStarted),
+            Step::Await(declared.clone()),
+            Step::Emit(Normalized::TurnEnded {
+                stop_reason: StopReason::Completed,
+            }),
+            Step::Emit(Normalized::State {
+                state: SessionState::Idle,
+                background: false,
+            }),
+        ]);
+    }
+    turns
 }
