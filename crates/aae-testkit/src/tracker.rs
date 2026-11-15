@@ -197,6 +197,21 @@ impl Tracker for MemoryTracker {
         })
     }
 
+    fn under<'a>(&'a self, root: &'a str) -> BoxFuture<'a, Result<Vec<String>, TrackerError>> {
+        Box::pin(async move {
+            let ready = self.ready().await?;
+            let state = self.lock();
+            let parent = |id: &String| state.beads.iter().find(|b| &b.id == id)?.epic.clone();
+            if !state.beads.iter().any(|b| b.id == root) {
+                return Err(TrackerError::NotFound);
+            }
+            let ids = ready.into_iter().map(|b| b.id);
+            Ok(ids
+                .filter(|id| std::iter::successors(parent(id), parent).any(|e| e == root))
+                .collect())
+        })
+    }
+
     fn changes(&self, after: i64) -> BoxFuture<'_, Result<Vec<Change>, TrackerError>> {
         Box::pin(async move {
             let state = self.lock();
@@ -258,5 +273,16 @@ mod tests {
         let root = t.bead(&root.id).unwrap();
         assert_eq!((root.status.as_str(), root.assignee), ("open", None));
         assert!(t.ready().await.unwrap().iter().all(|b| b.id != root.id));
+    }
+
+    #[tokio::test]
+    async fn under_gives_the_ready_beads_at_any_depth_below_the_root() {
+        let t = MemoryTracker::new();
+        let (root, other) = (t.add(&[], None), t.add(&[], None));
+        let epic = t.add(&[], Some(&root));
+        let (kid, outside) = (t.add(&[], Some(&epic)), t.add(&[], Some(&other)));
+        assert_eq!(t.under(&root).await.unwrap(), [kid]);
+        assert_eq!(t.under(&other).await.unwrap(), [outside]);
+        assert_eq!(t.under("b-404").await, Err(TrackerError::NotFound));
     }
 }

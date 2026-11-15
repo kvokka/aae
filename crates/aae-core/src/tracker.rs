@@ -78,6 +78,8 @@ pub trait Tracker: Send + Sync {
     fn close<'a>(&'a self, owner: &'a str, id: &'a str, reason: &'a str) -> BoxFuture<'a, Result<(), TrackerError>>;
     /// Every ready bead, in the tracker's order (the core picks within an epic itself).
     fn ready(&self) -> BoxFuture<'_, Result<Vec<Bead>, TrackerError>>;
+    /// The ids of the ready beads under `root`, at any depth, in the tracker's order; `NotFound` with no `root`.
+    fn under<'a>(&'a self, root: &'a str) -> BoxFuture<'a, Result<Vec<String>, TrackerError>>;
     /// The writes after `after` (a `seq`, 0 for all), oldest first.
     fn changes(&self, after: i64) -> BoxFuture<'_, Result<Vec<Change>, TrackerError>>;
     /// Creates an open epic without labels as `actor`, once per `key`: a repeat returns the bead of the first call.

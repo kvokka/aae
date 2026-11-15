@@ -506,7 +506,7 @@ tests of §7.8.
 
 ### 5.1 Operations
 
-The trait has the six operations the core calls (spec §2, decision 52: an operation is added when a caller needs it).
+The trait has the seven operations the core calls (spec §2, decision 52: an operation is added when a caller needs it).
 Every call names the actor: `aae:<run id>` when the daemon acts for a run, `aae` for
 the daemon's own reads. Sessions and exec steps get `BD_ACTOR=aae:<run id>:<attempt n>` and the database path in
 their environment ([experiments](experiments.md#br-as-an-event-source-experiment-3)). An actor of any other form is a
@@ -518,6 +518,7 @@ trait Tracker: Send + Sync {
     fn release(&self, owner: &str, id: &str) -> BoxFuture<Result<(), TrackerError>>;   // conditional
     fn close(&self, owner: &str, id: &str, reason: &str) -> BoxFuture<Result<(), TrackerError>>; // conditional
     fn ready(&self) -> BoxFuture<Result<Vec<Bead>, TrackerError>>;          // every ready bead, tracker order
+    fn under(&self, root: &str) -> BoxFuture<Result<Vec<String>, TrackerError>>;     // ready ids below root
     fn changes(&self, after: i64) -> BoxFuture<Result<Vec<Change>, TrackerError>>;           // after a seq
     fn create(&self, actor: &str, key: &str, title: &str, description: &str)
         -> BoxFuture<Result<Bead, TrackerError>>;                               // once per key
@@ -532,17 +533,22 @@ dropped unless the run still owns the bead in that generation and still waits fo
 `create` makes an open epic without labels: the root bead of a run started from a request. It is idempotent by `key`:
 a repeat (an effect run again after a restart) returns the bead of the first call, never a second bead.
 
-`changes` is pull-only; the adapter also owns a watcher that sends a "changed" message to the core, and the core
-then calls `changes` from its stored cursor (and on start and after recovery without waiting for a signal). One
-effect on the queue `tracker:<project>` reads `changes(cursor)` and then `ready()`; the core turns the writes
-past the cursor into events, moves the cursor (table `tracker_cursors`, never back) and diffs the ready set. The
-first read of a project's tracker takes its whole history as the starting cursor and raises no `bead.created|
-updated|closed` for it; every bead ready at that read is new to the set and raises `bead.ready`. A write whose actor
-is `aae:<run id>[:<attempt n>]` carries that run and its correlation; `bead.ready` carries those of the last such
-write in the same read (the write that freed the bead is usually that one); the rig of a bead event is the bead's
-`rig:` label, absent without one. The daemon gives a project a tracker when `<project>/.beads` exists, and every
-session and exec step of the project gets `BEADS_DIR` (layer: project) and `BD_ACTOR=aae:<run id>:<attempt n>`; the
-core sets the actor of an exec step and hands that of a session to the adapter in the session plan.
+`under` gives the ids of the ready beads below `root` at any depth, in the tracker's order: the beads a `drain` step
+gives out (spec §9.1). A bead's `epic` names only its parent, and an epic with open children is not ready, so the
+ancestors of a grandchild cannot be told from `ready()`; the tracker answers for the whole subtree. An epic becomes a
+member once its own children are closed and it is ready itself. A `root` the tracker does not have is `NotFound`.
+
+`changes` is pull-only; the adapter also owns a watcher that sends a "changed" message to the core, and the core then
+calls `changes` from its stored cursor (and on start and after recovery without waiting for a signal). One effect on the
+queue `tracker:<project>` reads `changes(cursor)`, then `ready()`, then `under` for the root of each run in a `drain`
+step; the core turns the writes past the cursor into events, moves the cursor (table `tracker_cursors`, never back) and
+diffs the ready set. The first read of a project's tracker takes its whole history as the starting cursor and raises no
+`bead.created|updated|closed` for it; every bead ready at that read is new to the set and raises `bead.ready`. A write
+whose actor is `aae:<run id>[:<attempt n>]` carries that run and its correlation; `bead.ready` carries those of the last
+such write in the same read (the write that freed the bead is usually that one); the rig of a bead event is the bead's
+`rig:` label, absent without one. The daemon gives a project a tracker when `<project>/.beads` exists, and every session
+and exec step of the project gets `BEADS_DIR` (layer: project) and `BD_ACTOR=aae:<run id>:<attempt n>`; the core sets
+the actor of an exec step and hands that of a session to the adapter in the session plan.
 
 ### 5.2 Types and errors
 

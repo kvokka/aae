@@ -62,6 +62,9 @@ tracker interface and its errors are in [contracts.md](contracts.md) §5; the be
   `external_ref` is the key of the creation (`aae-` and 16 hex digits). The adapter first looks the key up in
   `br list -a`, so a creation repeated after a restart returns the same bead. The children of a claimed root are
   ready; a released root with open children is not.
+- The ready beads under a root, at any depth (`under`, for `drain`), are one command:
+  `br ready --unassigned --limit 0 --parent <root> --recursive`. br does not call an epic with open children ready,
+  so an inner epic joins that list only once its own children are closed. A root br does not have is exit 3.
 - The root is created when a run with the input `{ request = "<text>" }` leaves `queued`, as an effect on the queue
   `tracker:<project>`: title the first line of the text that is not blank (at most 80 characters), description the
   whole text. The key is drawn once and kept in the effect, so a repeat after `kill -9` creates nothing new; a repeated
@@ -103,4 +106,5 @@ tracker interface and its errors are in [contracts.md](contracts.md) §5; the be
   (`aae_br::TESTED`); the daemon at start and `aae doctor` warn about a version outside them.
 - br has had regressions between patch versions, so the adapter has its own contract tests on the pinned br
   (`crates/aae-br/tests/contract.rs`): claim under concurrency, conditional release, close, ready in an epic, the
-  changes of each command, the watcher, creation once per key, the close of a parent with an open child.
+  ready beads under a root, the changes of each command, the watcher, creation once per key, the close of a parent
+  with an open child.

@@ -135,6 +135,20 @@ async fn the_ready_set_carries_the_epic_rig_labels_and_description() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
+async fn under_gives_the_ready_beads_at_any_depth_and_an_epic_once_its_children_close() {
+    let (dir, t) = tracker();
+    let root = create(dir.path(), "Root", &["-t", "epic"]);
+    let epic = create(dir.path(), "Epic", &["-t", "epic", "--parent", &root]);
+    let kids = [1, 2].map(|_| create(dir.path(), "Grandchild", &["--parent", &epic]));
+    let lone = create(dir.path(), "Lone", &[]);
+    assert_eq!(t.under(&root).await.unwrap(), kids);
+    assert!(t.ready().await.unwrap().iter().any(|b| b.id == lone));
+    br(dir.path(), &["close", &kids[0], &kids[1]]);
+    assert_eq!(t.under(&root).await.unwrap(), [epic]);
+    assert_eq!(t.under("t-none").await, Err(TrackerError::NotFound));
+}
+
+#[tokio::test(flavor = "multi_thread")]
 async fn each_command_is_one_change_with_its_actor_and_the_watcher_signals_it() {
     let (dir, t) = tracker();
     let (tx, rx) = mpsc::channel();

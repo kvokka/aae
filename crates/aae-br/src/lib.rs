@@ -221,6 +221,19 @@ impl Tracker for Br {
         })
     }
 
+    fn under<'a>(&'a self, root: &'a str) -> BoxFuture<'a, Result<Vec<String>, TrackerError>> {
+        Box::pin(async move {
+            let args = ["ready", "--unassigned", "--limit", "0", "--parent", root, "--recursive"];
+            let ready = self.br(READER, &args).await?;
+            Ok(ready
+                .as_array()
+                .into_iter()
+                .flatten()
+                .filter_map(|b| b["id"].as_str().map(str::to_owned))
+                .collect())
+        })
+    }
+
     fn changes(&self, after: i64) -> BoxFuture<'_, Result<Vec<Change>, TrackerError>> {
         Box::pin(async move {
             let rows = self.rows(after).await?;

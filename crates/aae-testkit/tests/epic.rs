@@ -41,6 +41,9 @@ impl Tracker for Chain {
             Ok(self.0.ready().await?.into_iter().filter(unblocked).collect())
         })
     }
+    fn under<'a>(&'a self, root: &'a str) -> BoxFuture<'a, Result<Vec<String>, TrackerError>> {
+        self.0.under(root)
+    }
     fn changes(&self, after: i64) -> BoxFuture<'_, Result<Vec<Change>, TrackerError>> {
         self.0.changes(after)
     }
