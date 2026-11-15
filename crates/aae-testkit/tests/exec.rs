@@ -20,9 +20,14 @@ fn check(script: &str) -> (World, Create) {
 
 /// [`check`] with the `[inputs]` table `inputs`, run by `hooks`.
 fn check_with(inputs: &str, script: &str, hooks: ExecHooks) -> (World, Create) {
+    check_within("2s", inputs, script, hooks)
+}
+
+/// [`check_with`] with the step timeout `timeout`.
+fn check_within(timeout: &str, inputs: &str, script: &str, hooks: ExecHooks) -> (World, Create) {
     let formula = format!(
         "name = \"check\"\n[inputs]\n{inputs}[[step]]\nkind = \"exec\"\ncommand = [\"sh\", \"-c\", {}]\n\
-         timeout = \"2s\"\n",
+         timeout = \"{timeout}\"\n",
         json!(script)
     );
     let w = world_with(&[("shop/formulas/check.toml", &formula)], Arc::new(hooks));
@@ -183,7 +188,8 @@ async fn a_command_past_its_timeout_is_a_runaway() {
 
 #[tokio::test]
 async fn cancelling_the_run_stops_the_command() {
-    let (w, create) = check("echo $$ > pid; exec sleep 30");
+    // Far past the wait below: the command's own timeout must not stand in for the stop.
+    let (w, create) = check_within("60s", "", "echo $$ > pid; exec sleep 30", ExecHooks::default());
     let pid_file = w.journal.parent().unwrap().join("shop/web/pid");
     let run = w.start(create).await;
     let started = Instant::now();
@@ -199,6 +205,7 @@ async fn cancelling_the_run_stops_the_command() {
         reason: "enough".into(),
     };
     w.core.send(None, cancel).await.unwrap();
+    let cancelled = Instant::now();
     assert_eq!(w.end(&run).await.0, "run.cancelled");
     let alive = || {
         std::process::Command::new("kill")
@@ -208,7 +215,7 @@ async fn cancelling_the_run_stops_the_command() {
     };
     while alive() {
         assert!(
-            started.elapsed() < Duration::from_secs(5),
+            cancelled.elapsed() < Duration::from_secs(5),
             "the command outlived the run"
         );
         tokio::time::sleep(Duration::from_millis(50)).await;

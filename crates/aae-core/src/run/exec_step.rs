@@ -171,8 +171,7 @@ pub(super) async fn run(running: &Running, payload: &Value, socket: Option<&Path
     env.extend(socket.map(|s| ("AAE_SOCKET".to_owned(), s.to_string_lossy().into_owned())));
     let stop = Arc::new(Notify::new());
     let lock = || running.lock().unwrap_or_else(PoisonError::into_inner);
-    // By attempt: a late stop of the run's last attempt must not end the command of its next one.
-    let key = format!("{run}:{}", super::exec::attempt(payload));
+    let key = key(payload);
     lock().insert(key.clone(), stop.clone());
     let out = process::run(Spec {
         command: &command,
@@ -194,11 +193,29 @@ pub(super) async fn run(running: &Running, payload: &Value, socket: Option<&Path
     }
 }
 
-/// Ends the running command of attempt `key` (`<run>:<attempt>`), if any.
+/// Ends the running command of the attempt a `stop_exec` effect names, if any. A `stop_exec` queued by a daemon
+/// before attempts were named in it finds nothing: its command runs to its timeout, or recovery sweeps it.
 // shortcut: a stop that comes between the commit of the `exec` effect and its start finds nothing, and the command
 // runs to its end with its result dropped; the window is one task spawn — close it if recovery (WP-20) widens it.
-pub(super) fn stop(running: &Running, key: &str) {
-    if let Some(stop) = running.lock().unwrap_or_else(PoisonError::into_inner).get(key) {
+pub(super) fn stop(running: &Running, payload: &Value) {
+    if let Some(stop) = running
+        .lock()
+        .unwrap_or_else(PoisonError::into_inner)
+        .get(&key(payload))
+    {
         stop.notify_one();
     }
 }
+
+/// The key of an attempt in [`Running`]: by attempt, so a late stop of the run's last attempt cannot end the
+/// command of its next one.
+fn key(payload: &Value) -> String {
+    format!(
+        "{}:{}",
+        payload["run"].as_str().unwrap_or_default(),
+        super::exec::attempt(payload)
+    )
+}
+
+#[cfg(test)]
+mod tests;
