@@ -3,7 +3,7 @@
 //! it when the run ends. The tracker calls are effects on the queue `tracker:<project>`, so the calls of one project
 //! keep their order.
 
-use super::{GateSpec, Msg, RunHandler, rejected, row::Row};
+use super::{GateSpec, Msg, RunHandler, drain::DRAINING, rejected, row::Row};
 use crate::{
     tracker::{Bead, Tracker, TrackerError},
     writer::{CoreHandle, Error, Event, Tx},
@@ -315,7 +315,8 @@ pub(super) fn tracker_key(project: &str) -> String {
     format!("tracker:{project}")
 }
 
-/// Reads the tracker's writes after the project's cursor, then its ready set.
+/// Reads the tracker's writes after the project's cursor, then its ready set, then the ready beads under the root
+/// bead of each run of the project in a drain step.
 pub(super) fn sync(tx: &Tx<'_>, project: &str) -> Result<Value, Error> {
     let after: Option<i64> = tx
         .sql()
@@ -323,7 +324,13 @@ pub(super) fn sync(tx: &Tx<'_>, project: &str) -> Result<Value, Error> {
             r.get(0)
         })
         .optional()?;
-    Ok(json!({ "op": "tracker", "call": "sync", "project": project, "after": after.unwrap_or_default() }))
+    let sql = format!("SELECT bead FROM runs WHERE project = ?1 AND bead IS NOT NULL AND {DRAINING}");
+    let mut stmt = tx.sql().prepare(&sql)?;
+    let under: Vec<String> = stmt.query_map([project], |r| r.get(0))?.collect::<Result<_, _>>()?;
+    Ok(
+        json!({ "op": "tracker", "call": "sync", "project": project, "after": after.unwrap_or_default(),
+            "under": under }),
+    )
 }
 
 /// Runs one tracker call of an effect and reports it; `false` retries it (the tracker was unavailable).
@@ -342,26 +349,36 @@ pub(super) async fn execute(trackers: &Trackers, core: &CoreHandle<Msg>, payload
         "close" => tracker.close(&owner, bead, text("reason")).await.map(|()| None),
         "release" => tracker.release(&owner, bead).await.map(|()| None),
         _ => {
-            let after = payload["after"].as_i64().unwrap_or_default();
-            match tracker.changes(after).await {
-                Ok(changes) => match tracker.ready().await {
-                    Ok(beads) => {
-                        let project = text("project").to_owned();
-                        // A stopped writer drops the message; the next start reads from the cursor again.
-                        let _ = core
-                            .send(
-                                None,
-                                Msg::Ready {
-                                    project,
-                                    beads,
-                                    changes,
-                                },
-                            )
-                            .await;
-                        return true;
-                    }
-                    Err(e) => Err(e),
-                },
+            let read = async {
+                let changes = tracker.changes(payload["after"].as_i64().unwrap_or_default()).await?;
+                let beads = tracker.ready().await?;
+                let mut under = BTreeMap::new();
+                for root in payload["under"]
+                    .as_array()
+                    .into_iter()
+                    .flatten()
+                    .filter_map(Value::as_str)
+                {
+                    let found = match tracker.under(root).await {
+                        // A root gone from the tracker has nothing under it.
+                        Err(TrackerError::NotFound) => Vec::new(),
+                        found => found?,
+                    };
+                    under.insert(root.to_owned(), found);
+                }
+                Ok(Msg::Ready {
+                    project: text("project").to_owned(),
+                    beads,
+                    changes,
+                    under,
+                })
+            };
+            match read.await {
+                Ok(msg) => {
+                    // A stopped writer drops the message; the next start reads from the cursor again.
+                    let _ = core.send(None, msg).await;
+                    return true;
+                }
                 Err(e) => Err(e),
             }
         }

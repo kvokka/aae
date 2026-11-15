@@ -1,8 +1,8 @@
 //! Criterion 24 on the real br and the real `claude` against a fake Anthropic API: a request becomes the root bead of
 //! a run of `ship`; its exec step `plan` creates four beads under the root with rig, agent and harness labels; the
 //! drain step gives each a run of `work` (an exec step, then a prompt step on the agent of the bead): A on `web`, B on
-//! `api` once A is closed, F fails, H names another harness and gets no run; the exec step `report` sees what was
-//! closed, failed and refused. A `kill -9` of the daemon in each step: no step and no bead runs twice.
+//! `api` once A is closed, F under the epic S fails, H names another harness and gets no run; the exec step `report`
+//! sees what was closed, failed and refused. A `kill -9` of the daemon in each step: no step and no bead runs twice.
 
 use super::{br, claude_agent, tracker};
 use crate::{
@@ -29,13 +29,16 @@ const WORK: &str = "name = \"work\"\n[inputs]\nbead = { type = \"bead\", require
     [[step]]\nname = \"do\"\nkind = \"exec\"\ncommand = [\"sh\", \"{dir}/work.sh\"]\ntimeout = \"120s\"\n\
     [[step]]\nname = \"sign\"\nkind = \"prompt\"\nagent = \"ops\"\nprompt = \"sign.md\"\n";
 
-/// The first attempt holds until the daemon dies; the second creates the beads and keeps their ids.
+/// The first attempt holds until the daemon dies; the second creates the beads and keeps their ids. F is a grandchild
+/// of the root, under the epic S: S keeps an open child and is never ready.
 const PLAN: &str = "set -e\nD={dir}\nif [ ! -e $D/plan.held ]; then touch $D/plan.held; exec sleep 60; fi\n\
     new() { br create \"$1\" --parent \"$AAE_BEAD\" -l \"$2\" --silent; }\n\
     a=$(new A rig:web,agent:dev,harness:claude)\n\
     b=$(br create B --parent \"$AAE_BEAD\" -l rig:api,agent:dev,harness:claude --deps \"blocks:$a\" --silent)\n\
-    f=$(new F rig:web,agent:dev,harness:claude)\nh=$(new H rig:web,agent:dev,harness:codex)\n\
-    printf '%s %s %s %s' \"$a\" \"$b\" \"$f\" \"$h\" > $D/ids\n";
+    s=$(br create S -t epic --parent \"$AAE_BEAD\" --silent)\n\
+    f=$(br create F --parent \"$s\" -l rig:api,agent:dev,harness:claude --silent)\n\
+    h=$(new H rig:web,agent:dev,harness:codex)\n\
+    printf '%s %s %s %s %s' \"$a\" \"$b\" \"$f\" \"$h\" \"$s\" > $D/ids\n";
 
 /// The first attempt on A holds until the daemon dies; a command that ran to its end is in the log; F fails.
 const WORK_SH: &str = "D={dir}\nset -- $(cat $D/ids)\n\
@@ -96,6 +99,9 @@ pub(crate) async fn run(env: Arc<Env>) -> String {
     let ship = reply["run"].as_str().expect("a run").to_owned();
     for held in ["plan.held", "a.held", "report.held"] {
         until_file(&at(held)).await;
+        if held == "a.held" {
+            until_failed(&d, &ship, &at("ids")).await;
+        }
         d.restart().await;
     }
     let view = d.until_state(&ship, "passed", WITHIN).await;
@@ -105,24 +111,45 @@ pub(crate) async fn run(env: Arc<Env>) -> String {
         })
         .await;
     let ids = std::fs::read_to_string(at("ids")).unwrap();
-    let [a, b, f, h]: [&str; 4] = ids.split(' ').collect::<Vec<_>>().try_into().unwrap();
-    checked(&d, &ship, &view, &journal, [a, b, f, h]).await;
-    format!("ship: plan, drain, report, each through a kill -9; {a}, {b} closed, {f} failed once, {h} refused")
+    let [a, b, f, h, s]: [&str; 5] = ids.split(' ').collect::<Vec<_>>().try_into().unwrap();
+    checked(&d, &ship, &view, &journal, [a, b, f, h, s]).await;
+    format!(
+        "ship: plan, drain, report, each through a kill -9; {a}, {b} closed, {f} under {s} failed once, {h} refused"
+    )
 }
 
-/// The checks of criterion 24 on the run `ship` that passed and the beads A, B, F and H.
-async fn checked(d: &Daemon, ship: &str, view: &Value, journal: &[(String, Value)], [a, b, f, h]: [&str; 4]) {
+/// Waits until the run on F, the third bead of `ids`, has failed: the restart in the drain step comes after it, so a
+/// drain that gave F again in its next attempt would show a second run on F.
+async fn until_failed(d: &Daemon, ship: &str, ids: &Path) {
+    let ids = std::fs::read_to_string(ids).unwrap();
+    let f = ids.split(' ').nth(2).expect("F");
+    let deadline = Instant::now() + WITHIN;
+    loop {
+        let kids = d.get(&format!("/v1/runs?parent={ship}")).await;
+        let kids = kids.as_array().expect("runs");
+        if kids.iter().any(|k| k["bead"] == f && k["state"] == "failed") {
+            return;
+        }
+        assert!(Instant::now() < deadline, "the run on {f} has not failed: {kids:?}");
+        tokio::time::sleep(Duration::from_millis(50)).await;
+    }
+}
+
+/// The checks of criterion 24 on the run `ship` that passed and the beads A, B, F, H and the epic S.
+async fn checked(d: &Daemon, ship: &str, view: &Value, journal: &[(String, Value)], beads: [&str; 5]) {
+    let [a, b, f, h, s] = beads;
     let root = d.dir.path();
-    // One epic: the root, from the request.
+    // Two epics: the root, from the request, and S.
     let listed: Value = serde_json::from_str(&br(root, &["list", "--all", "--json", "-t", "epic"])).unwrap();
     let epics = listed["issues"].as_array().expect("issues");
-    assert_eq!(epics.len(), 1, "{listed}");
-    let epic = epics[0]["id"].as_str().unwrap();
-    assert_eq!(
-        (epics[0]["title"].as_str(), view["bead"].as_str()),
-        (Some("Ship it"), Some(epic))
-    );
-    // Each step finished once; the drain step had one attempt, through the restart in it.
+    let mut titles: Vec<&str> = epics.iter().map(|e| e["title"].as_str().unwrap()).collect();
+    titles.sort_unstable();
+    assert_eq!(titles, ["S", "Ship it"], "{listed}");
+    let epic = epics.iter().find(|e| e["title"] == "Ship it").unwrap()["id"]
+        .as_str()
+        .unwrap();
+    assert_eq!(view["bead"].as_str(), Some(epic), "{view}");
+    // Each step finished once; the restart in the drain step ended its attempt, the next attempt finished it.
     let of = |run: &str, kind: &str| -> Vec<&Value> {
         let mine = journal.iter().filter(|(k, e)| k == kind && e["run"] == run);
         mine.map(|(_, e)| e).collect()
@@ -132,16 +159,17 @@ async fn checked(d: &Daemon, ship: &str, view: &Value, journal: &[(String, Value
         .map(|e| e["data"]["run"]["step"].as_str().unwrap())
         .collect();
     assert_eq!(finished, ["plan", "drain"], "{finished:?}");
-    // A kill in each exec step ends its attempt; the drain step goes on with its one attempt.
+    // A kill in each step ends its attempt; the policy resumes the step in a new attempt.
     let crash = Some("daemon_crash");
     let steps = [
         ("plan", crash, "exec"),
         ("plan", None, "exec"),
+        ("drain", crash, "drain"),
         ("drain", None, "drain"),
     ];
     let report = [("report", crash, "exec"), ("report", None, "exec")];
     assert_eq!(tried(view), [&steps[..], &report].concat(), "{view}");
-    // Three children, one per bead but H; each in the root's correlation one level down.
+    // Three children, one per bead but H and S; each in the root's correlation one level down.
     let kids = d.get(&format!("/v1/runs?parent={ship}")).await;
     let kids = kids.as_array().expect("runs");
     let kid = |bead: &str| -> Vec<&Value> { kids.iter().filter(|k| k["bead"] == bead).collect() };
@@ -149,7 +177,7 @@ async fn checked(d: &Daemon, ship: &str, view: &Value, journal: &[(String, Value
     assert!(kid(h).is_empty(), "{h} refused, no run: {kids:?}");
     let correlation = &of(ship, "run.queued")[0]["correlation"];
     let mut runs = Vec::new();
-    for (bead, rig, state) in [(a, "web", "passed"), (b, "api", "passed"), (f, "web", "failed")] {
+    for (bead, rig, state) in [(a, "web", "passed"), (b, "api", "passed"), (f, "api", "failed")] {
         let [run] = kid(bead)[..] else {
             panic!("one run on {bead}: {kids:?}")
         };
@@ -202,8 +230,15 @@ async fn checked(d: &Daemon, ship: &str, view: &Value, journal: &[(String, Value
     );
     let why = data["refused"][h].as_str().unwrap_or_default();
     assert!(why.contains("codex") && why.contains("claude"), "{data}");
-    // br: A and B closed; F, H and the root open with no assignee.
-    for (bead, status) in [(a, "closed"), (b, "closed"), (f, "open"), (h, "open"), (epic, "open")] {
+    // br: A and B closed; F, H, S and the root open with no assignee.
+    for (bead, status) in [
+        (a, "closed"),
+        (b, "closed"),
+        (f, "open"),
+        (h, "open"),
+        (s, "open"),
+        (epic, "open"),
+    ] {
         until_shown(root, bead, status).await;
     }
 }

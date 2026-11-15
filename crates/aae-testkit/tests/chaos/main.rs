@@ -243,7 +243,8 @@ fn seeds(nth: u64) {
     // under 100 seeds (a replay, a short share) is not asked to; a full one plays on past its count until every kind
     // landed, so a rare kind missing from these random seeds is not a failure, and a kind that never lands is.
     // `step`: a run was past the first step of its formula, so a restart went on from the step it was at; `drain`:
-    // a run was in a drain step, so a restart went on with its attempt and the children it had given.
+    // a run was in a drain step, so a restart ended its attempt with `daemon_crash` and the next one went on with the
+    // children it had given.
     const KINDS: [&str; 5] = ["tracker", "harness", "hooks", "step", "drain"];
     let landed = || {
         let kills = steps::KILLS.lock().unwrap();

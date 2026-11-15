@@ -116,7 +116,8 @@ impl Reader {
             conn.query_row("SELECT COUNT(*), MIN(ts_ms) FROM outbox", [], |r| {
                 Ok((r.get(0)?, r.get(1)?))
             })?;
-        // A run in a drain step has no process: a restart keeps its attempt, so a drain does not wait for it.
+        // A run in a drain step has no process: a restart costs it an attempt but no work, so a drain does not wait
+        // for it.
         let active: i64 = conn.query_row(
             &format!(
                 "SELECT COUNT(*) FROM runs \

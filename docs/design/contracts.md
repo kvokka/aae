@@ -652,8 +652,8 @@ of the parent leaves them alone.
 | `preparing` (exec) | decision `proceed` (or no hooks) | `running` (no session to start: the command is spawned at once) | the command runs in the workdir with `PATH`, `HOME`, `LANG` of the daemon, the `env` of `run.preparing`, `AAE_SOCKET` (the API socket), `AAE_INPUT_<NAME>` per input and, per earlier step, `AAE_STEP_<NAME>_RESULT` (`pass`\|`fail`), `AAE_STEP_<NAME>_SUMMARY` and `AAE_STEP_<NAME>_DATA` (the `data` as JSON, when there is one); `<NAME>` is formed as for inputs (config.md, "Formula") |
 | `running` (exec) | exit 0 / other code or a signal | `finishing` with outcome `pass` / `fail`, `summary` `exit <code>` or `signal <n>`, `data` `{exit_code, stdout, stderr}` (last 4 KiB each) | `run.finishing` hooks |
 | `preparing` (drain) | decision `proceed` (or no hooks) | `running` (an attempt with no process, `harness = drain`) | a read of the tracker; the config snapshot is `{drain: <formula>}` |
-| `running` (drain) | a read of the tracker (`Ready`) | `running` | each ready bead under the run's bead not given in this attempt: the create of the first row with the bead as input, no rig, the run's correlation, `depth + 1`, `parent_run` the run (a refusal leaves the bead without a run); a run in a drain step holds no concurrency slot and does not hold its workdir from its children |
-| `running` (drain) | a read that gave nothing, with no child alive and no later read queued | `finishing` with outcome `pass`, `summary` `<n> closed, <n> failed, <n> refused`, `data` `{closed, failed, refused: {<bead>: <reason>}}` of this attempt's beads | `run.finishing` hooks |
+| `running` (drain) | a read of the tracker (`Ready`) | `running` | each ready bead under the run's bead, at any depth, not given in this entry of the step (a restart starts a new attempt, not a new entry): the create of the first row with the bead as input, no rig, the run's correlation, `depth + 1`, `parent_run` the run (a refusal leaves the bead without a run); a run in a drain step holds no concurrency slot and does not hold its workdir from its children |
+| `running` (drain) | a read that gave nothing, with no child alive and no later read queued | `finishing` with outcome `pass`, `summary` `<n> closed, <n> failed, <n> refused`, `data` `{closed, failed, refused: {<bead>: <reason>}}` of this entry's beads | `run.finishing` hooks |
 | `running` (exec) | exit 75 / timeout / spawn error | `interrupted` with failure `unknown` (`text` `exit 75 (EX_TEMPFAIL)`, scope `run`) / `runaway_turn` / `workspace_failure` | `run.attempt_failed` hooks; every attempt runs the command again |
 | `starting`, `running`, `requires_action` | `failure`, `exited`, deadline, exec exit 75 | `interrupted` | stop the session (cancel, then stop the instance if it is the session's own, then sweep descendants); `run.attempt_failed` hooks |
 | `finishing` | accept of a `pass` of a step that is not the last | `preparing` of the next step | `run.step_finished`; the next step's prompt renders (the workdir and the bead claim stay) and its `run.preparing` hooks run |
@@ -727,11 +727,9 @@ for it is not.
   it started, so a hook the dead daemon left running does not outlive it. A hook process is killed with SIGKILL
   without waiting for its death, so the hook that runs again may start before the old process is gone: hooks must
   be idempotent (spec §11.3). Runs with a live attempt — `starting`, `running` in a turn, `requires_action` — →
-  `interrupted` with `daemon_crash` (not a `drain` attempt: it has no process, stays `running` and goes on with the
-  next read of the tracker, the beads it gave out still counted), the launches, prompts, answers and deciding hooks they
-  still had queued
-  dropped, and the command of an exec step killed by its `AAE_INSTANCE` marker (random per attempt) before any
-  later attempt runs it. A run that waits for a decision on a deciding event keeps its state and waits for the
+  `interrupted` with `daemon_crash` (a `drain` attempt too: its next attempt gives no bead its entry of the step gave
+  out), the launches, prompts, answers and deciding hooks they still had queued dropped, and the command of an exec
+  step killed by its `AAE_INSTANCE` marker (random per attempt) before any later attempt runs it. A run that waits for a decision on a deciding event keeps its state and waits for the
   same decision (3.4): `preparing`, `interrupted` waiting for the policy, `finishing`, and `running` after a turn
   that ended without an outcome. Its hook effect is still queued and its hooks run again; the declared outcome and
   the result of an exec command stand, the turn and the command do not run again. A run goes on from the step it is

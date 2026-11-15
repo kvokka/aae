@@ -38,6 +38,8 @@ pub(crate) struct Play {
     pub(crate) steps: BTreeMap<String, Vec<String>>,
     /// The runs whose drain step finished.
     pub(crate) drained: BTreeSet<String>,
+    /// The attempts of drain steps a kill of the daemon caught, by run and number.
+    pub(crate) caught: BTreeSet<(String, i64)>,
 }
 
 /// The run of the idempotency key `key`: of `build` (0, 1), of the three steps of `ship` (2, 3), of `fix` on the
@@ -204,6 +206,14 @@ pub(crate) async fn step(w: &mut World, rng: &mut Rng, play: &mut Play, calm: bo
     };
     killer.await.unwrap();
     let undone = undone(w);
+    {
+        let conn = state(w);
+        let mut stmt = conn
+            .prepare("SELECT id, attempt FROM runs WHERE step_kind = 'drain' AND state = 'running'")
+            .unwrap();
+        let caught = stmt.query_map([], |r| Ok((r.get(0)?, r.get(1)?))).unwrap();
+        play.caught.extend(caught.map(Result::unwrap));
+    }
     for at in &undone {
         *KILLS.lock().unwrap().entry(at).or_default() += 1;
     }

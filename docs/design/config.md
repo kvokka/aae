@@ -484,16 +484,16 @@ call `aae`) and `AAE_INPUT_<NAME>` per input (the name upper-cased, other charac
 string as it is, any other value as JSON). Two inputs that give one variable (`note-text` and `note_text`) are a
 config error.
 
-A `drain` step gives every ready bead under the run's bead (its direct children) a run of `formula`, on each read of
+A `drain` step gives every ready bead under the run's bead, at any depth, a run of `formula`, on each read of
 the tracker, until none is left: the same start as `aae run start` with the bead as the formula's `bead` input, no rig
 named (the bead's `rig:` label gives it, and its `agent:`/`harness:` labels apply as to any run), the run's correlation,
-one level deeper, the run as `parent_run`. A bead goes out once per attempt of the step: a child that failed is not run
-again in it. A bead whose start is refused (no `rig:` label, a `harness:` label the config does not give) gets no run
+one level deeper, the run as `parent_run`. A bead goes out once per entry of the step: a child that failed is not run
+again in it, and an attempt cut by a restart (`daemon_crash`) starts no new entry; a round back to the step does. A bead whose start is refused (no `rig:` label, a `harness:` label the config does not give) gets no run
 and stays open. The step has no process (contracts 6.2): it ends once nothing was given, no child is alive and no later
 read of the tracker is queued, always `pass`, with `data = {closed, failed, refused}` — the beads whose runs passed,
 those whose runs failed or were cancelled, and the refused ones with the reason. `formula` must take exactly one
-`bead` input and need no other; a formula with a `drain` step needs a required `bead` input. Beads deeper than the
-direct children are not given out.
+`bead` input and need no other; a formula with a `drain` step needs a required `bead` input. An epic under the root is
+not ready while it has open beads; once they are closed it is given out as any bead (with no `rig:` label: refused).
 
 A step with `back_to` is a check. When it fails the run does not fail: the steps after it that are checks too run
 as well, and after the last of them every failed check of the row sends the run back together, to the earliest

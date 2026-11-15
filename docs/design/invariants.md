@@ -42,8 +42,8 @@ checks invariants 2, 3, 10, 12, 13, 14, 15, 16 and 17 on the state and the journ
 have several steps, and one starts with a `drain` step over a root bead with two children; besides the invariants
 the stand checks the steps (S1–S4: each step finishes once and in order, attempts follow the steps, no session
 serves two steps, a run passes from its last step) and the drain step (D1: a bead gets at most one child run per
-attempt of the step; D2: once the step finished, no child run on a bead is alive; D3: the attempt of a drain step
-never fails with `daemon_crash`). Each full share of seeds kills the daemon mid-drain at least once. Every run
+entry into the step; D2: once the step finished, no child run on a bead is alive; D3: the attempt of a drain step
+that a crash of the daemon caught ends with `daemon_crash`). Each full share of seeds kills the daemon mid-drain at least once. Every run
 plays new seeds from a random base it prints; a failure names its seed and `AAE_CHAOS_SEED=<n>` replays it.
 Invariant 6 runs real marked processes (`aae-testkit/tests/old_instances.rs`, `process::tests::wait_gone_*`). The
 others are covered by the integration suites of `aae-testkit/tests` and by the acceptance scenarios (criterion 8:
@@ -68,8 +68,8 @@ At daemon start ([contracts](contracts.md) 6.4 has the exact state rules):
    fails the attempt with `daemon_crash`, as the session it needs is gone (contracts 3.4, 6.4). A run goes on from
    the step it is at: the move to the next step commits with the accepted outcome of the step before, so a finished
    step never runs again, and an exec command the restart killed runs again in a new attempt of its step. The
-   attempt of a `drain` step has no process and is not interrupted: it goes on with the next read of the tracker,
-   and the beads it gave out before the restart are not given again (their runs recover as any run).
+   attempt of a `drain` step is interrupted as any: its next attempt gives out no bead the entry into the step has
+   already given (their runs recover as any run).
 4. The deadlines that wait for an effect's answer (a decision, the claim of a bead) count again from the start;
    the deadlines of real time stay, and the schedules are armed (a missed schedule fires at most once). Resync, the
    process table included: what carries the marker of an instance this state no longer records is swept.

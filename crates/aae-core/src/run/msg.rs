@@ -142,11 +142,13 @@ pub enum Msg {
         payload: Value,
         result: Result<Option<Bead>, TrackerError>,
     },
-    /// The writes to the tracker of `project` after its cursor and its ready set.
+    /// The writes to the tracker of `project` after its cursor, its ready set and, for the root bead of each run in
+    /// a drain step when the read was asked, the ready beads under it at any depth.
     Ready {
         project: String,
         beads: Vec<Bead>,
         changes: Vec<Change>,
+        under: BTreeMap<String, Vec<String>>,
     },
     /// The tracker of the project changed: its ready set is read again.
     TrackerChanged(String),

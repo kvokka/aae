@@ -2,7 +2,8 @@
 //! tracker create an epic for the run as it prepares, once per key, and the run then claims it as any bead.
 //!
 //! The drain step (spec §9.1): an attempt with no process that, on every read of the tracker, gives each ready bead
-//! under the run's bead a run of the step's formula — the one creation every start goes through — once per attempt.
+//! under the run's bead, at any depth, a run of the step's formula — the one creation every start goes through —
+//! once per entry of the step.
 
 use super::{
     Create, Outcome, RunHandler, Verdict,
@@ -19,17 +20,18 @@ use crate::{
 };
 use rusqlite::params;
 use serde_json::{Map, Value, json};
+use std::collections::BTreeMap;
 
 /// The longest title of a root bead, in characters.
 const TITLE_CHARS: usize = 80;
 
-/// A run in a drain step: its attempt has no process, so it holds no slot, does not hold the workdir from its own
-/// children and is not interrupted by a restart.
+/// A run in a drain step: its attempt has no process, so it holds no slot and does not hold the workdir from its own
+/// children.
 pub(super) const DRAINING: &str = "(step_kind = 'drain' AND state = 'running')";
 
 impl RunHandler {
     /// The attempt of a drain step: the read of the tracker it asks for makes the first pass; its deadline is the
-    /// step's timeout.
+    /// step's timeout. A run that held a slot before (an attempt cut by a restart) frees it here.
     pub(super) fn start_drain(&mut self, tx: &mut Tx<'_>, mut row: Row) -> Result<(), Error> {
         if row.bead.is_none() || !self.trackers.contains_key(&row.project) {
             let reason = "a drain step needs the bead of the run";
@@ -39,27 +41,39 @@ impl RunHandler {
         let dedupe = format!("sync:drain:{}:{}", row.id, row.attempt);
         tx.effect(&tracker_key(&row.project), &dedupe, &sync(tx, &row.project)?)?;
         let timeout_ms = row.timeout_ms.unwrap_or(DRAIN_TIMEOUT_MS);
-        tx.set_deadline(&row.deadline("state"), tx.now_ms().saturating_add(timeout_ms))
+        tx.set_deadline(&row.deadline("state"), tx.now_ms().saturating_add(timeout_ms))?;
+        self.schedule(tx)
     }
 
-    /// One pass of every run of `project` in a drain step, after a read of its tracker.
-    pub(super) fn drained(&mut self, tx: &mut Tx<'_>, project: &str) -> Result<(), Error> {
+    /// One pass of every run of `project` in a drain step, after a read of its tracker that found the ready beads
+    /// `under` each root.
+    pub(super) fn drained(
+        &mut self,
+        tx: &mut Tx<'_>,
+        project: &str,
+        under: &BTreeMap<String, Vec<String>>,
+    ) -> Result<(), Error> {
         let runs: Vec<String> = {
             let sql = format!("SELECT id FROM runs WHERE project = ?1 AND {DRAINING} ORDER BY n");
             let mut stmt = tx.sql().prepare(&sql)?;
             stmt.query_map([project], |r| r.get(0))?.collect::<Result<_, _>>()?
         };
         for id in runs {
-            self.pass(tx, Row::load(tx, &id)?)?;
+            self.pass(tx, Row::load(tx, &id)?, under)?;
         }
         Ok(())
     }
 
-    /// Gives each ready bead under the run's bead that this attempt has not given yet a run of the step's formula;
-    /// a refused bead gets no run and stays open. The step passes once nothing was given, no child is alive and no
-    /// later read is queued, with `{closed, failed, refused}` of the beads of this attempt.
-    fn pass(&mut self, tx: &mut Tx<'_>, row: Row) -> Result<(), Error> {
+    /// Gives each ready bead under the run's bead that this entry of the step has not given yet a run of the step's
+    /// formula; a refused bead gets no run and stays open. The step passes once nothing was given, no child is alive
+    /// and no later read is queued, with `{closed, failed, refused}` of the beads of this entry. A restart starts a
+    /// new attempt, not a new entry; a round does.
+    fn pass(&mut self, tx: &mut Tx<'_>, row: Row, under: &BTreeMap<String, Vec<String>>) -> Result<(), Error> {
         let Some(root) = row.bead.clone().filter(|_| row.state == "running") else {
+            return Ok(());
+        };
+        // A read asked before this attempt began does not know the root and decides nothing.
+        let Some(under) = under.get(&root) else {
             return Ok(());
         };
         let config: Value = (row.config.as_deref())
@@ -74,19 +88,21 @@ impl RunHandler {
             let reason = format!("formula `{formula}` of the drain step is gone or takes no bead");
             return self.terminal(tx, row, "failed", Some("infrastructure"), &reason);
         };
-        // `(bead, state, given by this attempt)` of every child on a bead.
+        // `(bead, state, given by this entry)` of every child on a bead. The entry is the tail of the run's attempts
+        // on this step: a round back to it always passes through an attempt of another step.
         let kids: Vec<(String, String, bool)> = {
             let mut stmt = tx.sql().prepare(
-                "SELECT r.bead, r.state, r.created_ms >= a.started_ms FROM runs r JOIN attempts a \
-                 ON a.run = ?1 AND a.n = ?2 WHERE r.parent_run = ?1 AND r.bead IS NOT NULL ORDER BY r.n",
+                "SELECT r.bead, r.state, r.created_ms >= (SELECT MIN(a.started_ms) FROM attempts a WHERE a.run = ?1 \
+                 AND a.n > (SELECT COALESCE(MAX(n), 0) FROM attempts WHERE run = ?1 AND step != ?2)) \
+                 FROM runs r WHERE r.parent_run = ?1 AND r.bead IS NOT NULL ORDER BY r.n",
             )?;
-            let rows = stmt.query_map(params![row.id, row.attempt], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)))?;
+            let rows = stmt.query_map(params![row.id, row.step], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)))?;
             rows.collect::<Result<_, _>>()?
         };
         let depth = row.depth + 1;
         let (mut given, mut refused) = (0, Map::new());
-        for bead in Self::ready_in(tx, &row.project, Some(&root), None)? {
-            if kids.iter().any(|(b, _, mine)| *mine && *b == bead) {
+        for bead in Self::ready_in(tx, &row.project, None, None)? {
+            if !under.contains(&bead) || kids.iter().any(|(b, _, mine)| *mine && *b == bead) {
                 continue;
             }
             if depth > MAX_DEPTH {
