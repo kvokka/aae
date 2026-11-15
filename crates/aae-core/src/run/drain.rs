@@ -6,11 +6,7 @@
 //! once per entry of the step.
 
 use super::{
-    Create, Outcome, RunHandler, Verdict,
-    beads::{sync, tracker_key},
-    new_token, rejected,
-    render::DRAIN_TIMEOUT_MS,
-    row::Row,
+    Create, Outcome, RunHandler, Verdict, beads::tracker_key, new_token, rejected, render::DRAIN_TIMEOUT_MS, row::Row,
     triggers::MAX_DEPTH,
 };
 use crate::{
@@ -18,7 +14,7 @@ use crate::{
     tracker::{Bead, TrackerError},
     writer::{Error, Tx},
 };
-use rusqlite::params;
+use rusqlite::{OptionalExtension, params};
 use serde_json::{Map, Value, json};
 use std::collections::BTreeMap;
 
@@ -236,6 +232,24 @@ impl RunHandler {
         )?;
         self.claim(tx, &Row::load(tx, run)?, &bead)
     }
+}
+
+/// Reads the tracker's writes after the project's cursor, then its ready set, then the ready beads under the root
+/// bead of each run of the project in a drain step.
+pub(super) fn sync(tx: &Tx<'_>, project: &str) -> Result<Value, Error> {
+    let after: Option<i64> = tx
+        .sql()
+        .query_row("SELECT seq FROM tracker_cursors WHERE project = ?1", [project], |r| {
+            r.get(0)
+        })
+        .optional()?;
+    let sql = format!("SELECT bead FROM runs WHERE project = ?1 AND bead IS NOT NULL AND {DRAINING}");
+    let mut stmt = tx.sql().prepare(&sql)?;
+    let under: Vec<String> = stmt.query_map([project], |r| r.get(0))?.collect::<Result<_, _>>()?;
+    Ok(
+        json!({ "op": "tracker", "call": "sync", "project": project, "after": after.unwrap_or_default(),
+            "under": under }),
+    )
 }
 
 /// The text of the request among the inputs of a run (as JSON), and its input; only a bead input holds an object.

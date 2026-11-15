@@ -3,7 +3,7 @@
 //! it when the run ends. The tracker calls are effects on the queue `tracker:<project>`, so the calls of one project
 //! keep their order.
 
-use super::{GateSpec, Msg, RunHandler, drain::DRAINING, rejected, row::Row};
+use super::{GateSpec, Msg, RunHandler, drain::sync, rejected, row::Row};
 use crate::{
     tracker::{Bead, Tracker, TrackerError},
     writer::{CoreHandle, Error, Event, Tx},
@@ -313,24 +313,6 @@ impl RunHandler {
 
 pub(super) fn tracker_key(project: &str) -> String {
     format!("tracker:{project}")
-}
-
-/// Reads the tracker's writes after the project's cursor, then its ready set, then the ready beads under the root
-/// bead of each run of the project in a drain step.
-pub(super) fn sync(tx: &Tx<'_>, project: &str) -> Result<Value, Error> {
-    let after: Option<i64> = tx
-        .sql()
-        .query_row("SELECT seq FROM tracker_cursors WHERE project = ?1", [project], |r| {
-            r.get(0)
-        })
-        .optional()?;
-    let sql = format!("SELECT bead FROM runs WHERE project = ?1 AND bead IS NOT NULL AND {DRAINING}");
-    let mut stmt = tx.sql().prepare(&sql)?;
-    let under: Vec<String> = stmt.query_map([project], |r| r.get(0))?.collect::<Result<_, _>>()?;
-    Ok(
-        json!({ "op": "tracker", "call": "sync", "project": project, "after": after.unwrap_or_default(),
-            "under": under }),
-    )
 }
 
 /// Runs one tracker call of an effect and reports it; `false` retries it (the tracker was unavailable).
