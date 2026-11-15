@@ -22,7 +22,10 @@ Re-assessed at `9631c6a`: the changes of `crates/` after `6b39f7a` are a deadlin
 an explicit busy timeout in `store::open` equal to rusqlite's default (5 s), and `IMMEDIATE` transactions on the
 daemon's connection, so a message under a lock held by another process waits it out instead of failing at once. No
 path a model takes changes, so the scores carry over; the model-free rows are re-run by `acceptance-ci` on this commit.
-<!-- MEASURE id=readiness date=2026-11-15 ver=9631c6a env=linux-arm64-orbstack src=docs/READINESS.md note="assessed against the letter of the scale after a full run with real models on 6b39f7a; 9631c6a changes only how an outside lock is waited out" -->
+
+Re-assessed at `20f8d4c`: the only change of `crates/` after `9631c6a` makes the schema migrations at open begin
+`IMMEDIATE` too. Every migration already began with a write, so behaviour is the same; the scores carry over.
+<!-- MEASURE id=readiness date=2026-11-15 ver=20f8d4c env=linux-arm64-orbstack src=docs/READINESS.md note="assessed against the letter of the scale after a full run with real models on 6b39f7a; 9631c6a and 20f8d4c change only how an outside lock is waited out" -->
 
 | Component | Criteria | Score | Missing for the next point |
 |---|---|---|---|
