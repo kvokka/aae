@@ -12,7 +12,7 @@ mise is a convenience, not a requirement: install the same tools any way you lik
   tokei 15.0.0 (`scripts/budget.sh`).
 - zig 0.17.1 and cargo-zigbuild 0.24.1: only for the release cross-build (`build-all`, `acceptance-release`).
 - br 0.7.6, claude (line `2.1`), codex (line `0`): for the acceptance scenarios that run them; jq 1.8.2 for the
-  demos' `run.sh`, which `mise run acceptance` runs; jq and rumdl 0.3.2 also for the CI scenario of demo 2's format
+  demos' `run.sh`, which `mise run acceptance` runs; jq and rumdl 0.3.4 also for the CI scenario of demo 2's format
   step.
 
 Each task is a list of plain commands in `[tasks.<name>]` of `mise.toml`; run them by hand in that order:
