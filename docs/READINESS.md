@@ -18,10 +18,11 @@ of criterion 20 included; row 22 failed only on the marker of this file, which n
 criterion 22 checks this file on every commit without the demos (CI runs no model), and a 10 needs criterion 20 green
 in the run that checks it.
 
-Re-assessed at `65d8ab8`: the changes of `crates/` after `6b39f7a` are a deadline on a test's wait for the journal
-and an explicit busy timeout in `store::open` equal to rusqlite's default (5 s), so the product behaves the same and
-the scores carry over; the model-free rows are re-run by `acceptance-ci` on this commit.
-<!-- MEASURE id=readiness date=2026-11-15 ver=65d8ab8 env=linux-arm64-orbstack src=docs/READINESS.md note="assessed against the letter of the scale after a full run with real models on 6b39f7a; 65d8ab8 changes no product behaviour" -->
+Re-assessed at `9631c6a`: the changes of `crates/` after `6b39f7a` are a deadline on a test's wait for the journal,
+an explicit busy timeout in `store::open` equal to rusqlite's default (5 s), and `IMMEDIATE` transactions on the
+daemon's connection, so a message under a lock held by another process waits it out instead of failing at once. No
+path a model takes changes, so the scores carry over; the model-free rows are re-run by `acceptance-ci` on this commit.
+<!-- MEASURE id=readiness date=2026-11-15 ver=9631c6a env=linux-arm64-orbstack src=docs/READINESS.md note="assessed against the letter of the scale after a full run with real models on 6b39f7a; 9631c6a changes only how an outside lock is waited out" -->
 
 | Component | Criteria | Score | Missing for the next point |
 |---|---|---|---|
