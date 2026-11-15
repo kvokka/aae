@@ -198,6 +198,14 @@ fn a_tracker_project_gets_the_br_version_and_its_license_warning() {
 }
 
 #[test]
+fn without_a_runtime_directory_the_state_directory_is_checked_once() {
+    let dir = tree("");
+    let (_, found) = doctor_env(dir.path(), &[("XDG_RUNTIME_DIR", "")]);
+    let dirs = found.iter().filter(|(name, ..)| name.starts_with("dir ")).count();
+    assert_eq!(dirs, 1, "{found:?}");
+}
+
+#[test]
 fn a_directory_others_can_read_and_a_broken_config_are_errors() {
     let dir = tree("");
     let state = dir.path().join("state/aae");

@@ -78,10 +78,9 @@ pub(crate) fn findings(paths: &Paths) -> Vec<Value> {
             }
         }
     }
-    for dir in [Some(paths.state.as_path()), paths.socket.parent()]
-        .into_iter()
-        .flatten()
-    {
+    // Without a runtime directory the socket lives in the state directory: one line for it, not two.
+    let socket_dir = paths.socket.parent().filter(|d| *d != paths.state);
+    for dir in [Some(paths.state.as_path()), socket_dir].into_iter().flatten() {
         found.push(private(dir));
     }
     found.push(state(&paths.state.join("state.db")));
