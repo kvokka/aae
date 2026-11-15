@@ -131,12 +131,17 @@ pub(crate) fn command(dir: &std::path::Path) -> Command {
 pub(crate) async fn lock_once_journalled(dir: &std::path::Path) -> rusqlite::Connection {
     let db = rusqlite::Connection::open(dir.join("state/aae/state.db")).unwrap();
     let behind = "SELECT EXISTS (SELECT 1 FROM outbox WHERE seq > (SELECT seq FROM consumers WHERE name = 'journal'))";
+    let deadline = Instant::now() + WAIT;
     loop {
         db.execute_batch("BEGIN EXCLUSIVE").unwrap();
         if !db.query_row(behind, [], |r| r.get::<_, bool>(0)).unwrap() {
             return db;
         }
         db.execute_batch("ROLLBACK").unwrap();
-        tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+        assert!(
+            Instant::now() < deadline,
+            "the journal did not catch up with the outbox in {WAIT:?}"
+        );
+        tokio::time::sleep(Duration::from_millis(10)).await;
     }
 }
