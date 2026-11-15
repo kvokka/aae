@@ -1,0 +1,63 @@
+diff --git a/CLAUDE.md b/CLAUDE.md
+index ce7e0a9..c120056 100644
+--- a/CLAUDE.md
++++ b/CLAUDE.md
+@@ -48,7 +48,7 @@ coder → reviewer под мастером (`overseer`), без оператор
+   без версии, `Cargo.lock` в git; инструменты — точные версии в `mise.toml` (`mise use <tool>@<x.y.z>`), claude и
+   codex — линией (`2.1`, `0`); `mise.lock` нет.
+   Без причины не обновлять; обновление — отдельным коммитом.
+-- Тулчейн — `mise.toml`: Rust 1.99.1 (clippy, rustfmt, rust-analyzer, цели linux-musl и apple-darwin под обе
++- Тулчейн — `mise.toml`: Rust 1.100 (clippy, rustfmt, rust-analyzer, цели linux-musl и apple-darwin под обе
+   архитектуры), cargo-nextest, cargo-deny, cargo-machete, tokei (счётчик строк для бюджетов §14), zig и
+   cargo-zigbuild для кросс-сборки. Если команда не находится — `mise exec -- <команда>`.
+ - Внешние бинарники (claude, codex, br) закрепляются в `mise.toml` проекта, как требует спека §13.
+diff --git a/Cargo.toml b/Cargo.toml
+index 355668d..0eb136e 100644
+--- a/Cargo.toml
++++ b/Cargo.toml
+@@ -7,7 +7,7 @@ version = "0.1.0"
+ edition = "2024"
+ license = "MIT"
+ repository = "https://github.com/kvokka/aae"
+-rust-version = "1.99"
++rust-version = "1.100"
+
+ [workspace.lints.rust]
+ unsafe_code = "forbid"
+diff --git a/docs/guide/development.md b/docs/guide/development.md
+index 2c899e1..27d3857 100644
+--- a/docs/guide/development.md
++++ b/docs/guide/development.md
+@@ -6,7 +6,7 @@ Every check below is a mise task (`mise.toml`).
+
+ mise is a convenience, not a requirement: install the same tools any way you like.
+
+-- Rust 1.99.1 with the components `clippy`, `rustfmt`, `rust-src`, `rust-analyzer`; for the release builds also the
++- Rust 1.100 with the components `clippy`, `rustfmt`, `rust-src`, `rust-analyzer`; for the release builds also the
+   targets `x86_64-unknown-linux-musl`, `aarch64-unknown-linux-musl`, `x86_64-apple-darwin`, `aarch64-apple-darwin`.
+ - cargo-nextest 0.9.151, cargo-deny 0.20.2, cargo-machete 0.9.2 (`cargo install --locked <crate>@<version>`) and
+   tokei 15.0.0 (`scripts/budget.sh`).
+diff --git a/docs/guide/install.md b/docs/guide/install.md
+index 699ee96..a70eb20 100644
+--- a/docs/guide/install.md
++++ b/docs/guide/install.md
+@@ -14,7 +14,7 @@ cargo build --release --locked -p aae
+ install -m 0755 target/release/aae ~/.local/bin/aae
+ ```
+
+-mise is a convenience, not a requirement. Without it, install Rust 1.99.1 any way you like (for example with
++mise is a convenience, not a requirement. Without it, install Rust 1.100 any way you like (for example with
+ rustup); `cargo build` then works as above.
+
+ `mise run build-all` builds all four release targets with `cargo zigbuild` into
+diff --git a/mise.toml b/mise.toml
+index 2287ea7..afccc5b 100644
+--- a/mise.toml
++++ b/mise.toml
+@@ -1,5 +1,5 @@
+ [tools]
+-rust = { version = "1.99.1", components = "clippy,rustfmt,rust-src,rust-analyzer", targets = "aarch64-unknown-linux-musl,x86_64-unknown-linux-musl,aarch64-apple-darwin,x86_64-apple-darwin" }
++rust = { version = "1.100", components = "clippy,rustfmt,rust-src,rust-analyzer", targets = "aarch64-unknown-linux-musl,x86_64-unknown-linux-musl,aarch64-apple-darwin,x86_64-apple-darwin" }
+ "cargo:cargo-nextest" = "0.9.151"
+ "cargo:cargo-deny" = "0.20.2"
+ "cargo:cargo-machete" = "0.9.2"
