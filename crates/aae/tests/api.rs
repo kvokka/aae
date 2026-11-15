@@ -381,9 +381,8 @@ async fn the_daemon_exits_with_an_error_once_its_core_stops() {
     .await;
     let run = d.create("long", None).await;
     d.until_state(&run, "running").await;
-    // Another writer holds the database: the step's deadline cannot be written, and the core stops on the error.
-    let db = rusqlite::Connection::open(d.dir.path().join("state/aae/state.db")).unwrap();
-    db.execute_batch("BEGIN EXCLUSIVE").unwrap();
+    // Another writer holds the database: the end of the step cannot be written, and the core stops on the error.
+    let _db = common::lock_once_journalled(d.dir.path()).await;
     let deadline = std::time::Instant::now() + WAIT;
     let status = loop {
         if let Some(status) = d.child.try_wait().unwrap() {

@@ -125,3 +125,18 @@ pub(crate) fn command(dir: &std::path::Path) -> Command {
         .env("XDG_RUNTIME_DIR", dir.join("run"));
     command
 }
+
+/// Holds the database of the daemon in `dir` in an exclusive transaction, taken once the journal has every event:
+/// its retried writes would otherwise each wait out the busy timeout before the core's next write fails.
+pub(crate) async fn lock_once_journalled(dir: &std::path::Path) -> rusqlite::Connection {
+    let db = rusqlite::Connection::open(dir.join("state/aae/state.db")).unwrap();
+    let behind = "SELECT EXISTS (SELECT 1 FROM outbox WHERE seq > (SELECT seq FROM consumers WHERE name = 'journal'))";
+    loop {
+        db.execute_batch("BEGIN EXCLUSIVE").unwrap();
+        if !db.query_row(behind, [], |r| r.get::<_, bool>(0)).unwrap() {
+            return db;
+        }
+        db.execute_batch("ROLLBACK").unwrap();
+        tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+    }
+}
