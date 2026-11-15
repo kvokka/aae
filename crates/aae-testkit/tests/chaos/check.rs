@@ -91,7 +91,7 @@ pub(crate) fn check(w: &World, play: &mut Play) -> Result<(), String> {
         // Attempts that parked on an account gate are outside the ceiling (spec §2, decisions 49, 50).
         let counted: u32 = conn
             .query_row(
-                "SELECT COUNT(*) FROM attempts WHERE run = ?1 AND waited = 0",
+                "SELECT COUNT(*) FROM attempts WHERE run = ?1 AND waited = 0 AND failure IS NOT NULL",
                 [run],
                 |r| r.get(0),
             )

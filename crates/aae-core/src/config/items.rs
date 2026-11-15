@@ -1,7 +1,7 @@
 //! The content of a pack: agents (spec §8.1), formulas (§9.1) and triggers (§9.5), each checked on its own.
 
 use super::{
-    Agent, Formula, Settings, Source, Step, Trigger, duration,
+    Agent, Formula, Settings, Source, Step, StepKind, Trigger, duration,
     files::{FormulaFile, InputType, StepFile, TriggerFile},
     load::{Loader, reference},
     schema::{bead_path, event_path, run_path},
@@ -18,7 +18,7 @@ use std::{
 };
 
 /// The roots of a prompt template (contracts 2.3).
-const PROMPT_ROOTS: &[&str] = &["inputs", "bead", "rig", "run", "project"];
+const PROMPT_ROOTS: &[&str] = &["inputs", "bead", "rig", "run", "project", "steps"];
 
 impl Loader {
     pub(super) fn agent(&mut self, dir: &Path, plugins: &[&str]) -> Option<Agent> {
@@ -99,7 +99,64 @@ impl Loader {
     pub(super) fn formula(&mut self, file: &Path) -> Option<(String, Formula)> {
         let raw: FormulaFile = self.read(file)?;
         self.name(file, "formula", &raw.name);
-        let step = match raw.step {
+        if raw.step.is_empty() {
+            return self.none(file, "a formula has at least one `[[step]]`");
+        }
+        let mut steps: Vec<Step> = Vec::new();
+        let mut variables = BTreeMap::new();
+        for name in raw.inputs.keys() {
+            variables.insert(super::input_variable(name), format!("input `{name}`"));
+        }
+        for (at, step) in raw.step.into_iter().enumerate() {
+            let name = match &step {
+                StepFile::Prompt { name, .. } | StepFile::Exec { name, .. } => name.clone(),
+            };
+            let name = name.unwrap_or_else(|| (at + 1).to_string());
+            self.name(file, "step", &name);
+            if steps.iter().any(|s| s.name == name) {
+                self.fail(file, format!("two steps are named `{name}`"));
+            }
+            let variable = format!("AAE_STEP_{}_", super::upper(&name));
+            if let Some(other) = variables.insert(variable.clone(), format!("step `{name}`")) {
+                self.fail(file, format!("{other} and step `{name}` are both `{variable}*`"));
+            }
+            let kind = self.step(file, &raw.inputs, &steps, step)?;
+            steps.push(Step { name, kind });
+        }
+        if steps.iter().any(|s| matches!(s.kind, StepKind::Exec { .. })) {
+            let mut seen = BTreeMap::new();
+            for name in raw.inputs.keys() {
+                if let Some(other) = seen.insert(super::input_variable(name), name) {
+                    self.fail(
+                        file,
+                        format!(
+                            "inputs `{other}` and `{name}` are both `{}`",
+                            super::input_variable(name)
+                        ),
+                    );
+                }
+            }
+        }
+        Some((
+            raw.name,
+            Formula {
+                description: raw.description,
+                inputs: raw.inputs,
+                worktree: raw.worktree,
+                steps,
+            },
+        ))
+    }
+
+    /// A step of formula `file`, after the steps `before`.
+    fn step(
+        &mut self,
+        file: &Path,
+        inputs: &BTreeMap<String, super::Input>,
+        before: &[Step],
+        raw: StepFile,
+    ) -> Option<StepKind> {
+        Some(match raw {
             StepFile::Prompt {
                 agent,
                 prompt,
@@ -107,6 +164,7 @@ impl Loader {
                 harness,
                 model,
                 effort,
+                ..
             } => {
                 let launch = super::compose::Launch { harness, model, effort };
                 let settings = self.settings(file, &parent(file), launch.into(), &[]);
@@ -115,51 +173,30 @@ impl Loader {
                 let template = Template::parse(&text, PROMPT_ROOTS)
                     .map_err(|e| self.fail(&path, e.0))
                     .ok()?;
-                for bad in template.paths().filter(|p| !prompt_path(p, &raw.inputs)) {
+                for bad in template.paths().filter(|p| !prompt_path(p, inputs, before)) {
                     self.fail(
                         &path,
                         format!("`{{{{ {bad} }}}}` is not a value of this formula's runs"),
                     );
                 }
                 let timeout = self.timeout(file, timeout.as_deref());
-                Step::Prompt {
+                StepKind::Prompt {
                     agent: reference(&agent),
                     prompt: template,
                     timeout,
                     settings: Box::new(settings),
                 }
             }
-            StepFile::Exec { command, timeout } => {
+            StepFile::Exec { command, timeout, .. } => {
                 if command.is_empty() {
                     self.fail(file, "`command` is empty");
                 }
-                let mut seen = BTreeMap::new();
-                for name in raw.inputs.keys() {
-                    if let Some(other) = seen.insert(super::input_variable(name), name) {
-                        self.fail(
-                            file,
-                            format!(
-                                "inputs `{other}` and `{name}` are both `{}`",
-                                super::input_variable(name)
-                            ),
-                        );
-                    }
-                }
-                Step::Exec {
+                StepKind::Exec {
                     command,
                     timeout: self.timeout(file, timeout.as_deref()),
                 }
             }
-        };
-        Some((
-            raw.name,
-            Formula {
-                description: raw.description,
-                inputs: raw.inputs,
-                worktree: raw.worktree,
-                step,
-            },
-        ))
+        })
     }
 
     pub(super) fn trigger(&mut self, file: &Path, raw: TriggerFile, project: bool) -> Option<Trigger> {
@@ -244,7 +281,7 @@ pub(super) fn agent_keys(mut table: toml::Table) -> Result<(Settings, Option<u32
 }
 
 /// Whether a prompt template path can be resolved for a run of a formula with `inputs` (contracts 2.3).
-fn prompt_path(path: &str, inputs: &BTreeMap<String, super::Input>) -> bool {
+fn prompt_path(path: &str, inputs: &BTreeMap<String, super::Input>, before: &[Step]) -> bool {
     let (root, rest) = path.split_once('.').unwrap_or((path, ""));
     let first = rest.split('.').next().unwrap_or_default();
     match root {
@@ -252,6 +289,15 @@ fn prompt_path(path: &str, inputs: &BTreeMap<String, super::Input>) -> bool {
         "bead" => inputs.values().any(|i| i.kind == InputType::Bead) && bead_path(rest),
         "run" => run_path(rest),
         "project" => matches!(rest, "name" | "path"),
+        // The outcome of an earlier step: `steps.<name>.result`, `.summary` or `.data` and below.
+        "steps" => {
+            let mut fields = rest.split('.').skip(1);
+            let field = matches!(
+                (fields.next(), fields.next()),
+                (Some("result" | "summary"), None) | (Some("data"), _)
+            );
+            field && before.iter().any(|s| s.name == first)
+        }
         // `name`, `path` or a variable of the rig, which is known only when the run starts.
         _ => !rest.is_empty() && !rest.contains('.'),
     }

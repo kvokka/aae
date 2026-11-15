@@ -78,11 +78,46 @@ impl RunHandler {
     pub(super) fn finished(&mut self, tx: &mut Tx<'_>, row: Row, veto: Option<&str>) -> Result<(), Error> {
         let outcome = Self::outcome(tx, &row)?;
         match (outcome.map(|o| (o.result, o.summary)), veto) {
-            (Some((Verdict::Pass, _)), None) => self.terminal(tx, row, "passed", None, "pass"),
+            (Some((Verdict::Pass, _)), None) => self.advance(tx, row),
             (Some((Verdict::Pass, _)), Some(reason)) => self.terminal(tx, row, "failed", Some("check"), reason),
             (Some((Verdict::Fail, summary)), _) => self.terminal(tx, row, "failed", Some("agent"), &summary),
             (None, _) => self.terminal(tx, row, "failed", Some("infrastructure"), "outcome lost"),
         }
+    }
+
+    /// After a passed step: the next step of the formula starts at once (spec §9.1); after the last, the run passes.
+    fn advance(&mut self, tx: &mut Tx<'_>, mut row: Row) -> Result<(), Error> {
+        let project = self.config.projects.iter().find(|p| p.name == row.project);
+        let formula = project.map(|p| p.formula(&row.formula)).transpose();
+        let next = match formula {
+            Ok(Some((_, f))) if f.step(&row.step).is_some() => f.next(&row.step).cloned(),
+            _ => {
+                let reason = format!("step `{}` is gone from `{}`", row.step, row.formula);
+                return self.terminal(tx, row, "failed", Some("infrastructure"), &reason);
+            }
+        };
+        let Some(next) = next else {
+            return self.terminal(tx, row, "passed", None, "pass");
+        };
+        let agent = self.step_agent(&row.project, &row.rig, &row.formula, &next);
+        let agent = match agent {
+            Ok((agent, _)) => agent,
+            Err(reason) => return self.terminal(tx, row, "failed", Some("infrastructure"), &reason),
+        };
+        let outcome = Self::outcome(tx, &row)?;
+        self.end_attempt(tx, &row, None)?;
+        row.emit(
+            tx,
+            "run.step_finished",
+            json!({ "run": row.view(), "outcome": outcome }),
+        )?;
+        tx.sql().execute(
+            "UPDATE runs SET step = ?2, agent = ?3 WHERE id = ?1",
+            params![row.id, next.name, agent],
+        )?;
+        (row.step, row.agent) = (next.name, agent);
+        row.set_state(tx, "preparing", None)?;
+        self.render_and_prepare(tx, row)
     }
 
     /// Sends `text` as the next prompt of the current attempt: the declared outcome is cleared, the token stays

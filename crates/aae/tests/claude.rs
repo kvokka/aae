@@ -38,12 +38,12 @@ async fn daemon_with(provider: &Provider, orchestrator: &str, agent: &str) -> Da
             ),
             (
                 shop.join("formulas/build.toml"),
-                "name = \"build\"\n[step]\nkind = \"prompt\"\nagent = \"dev\"\nprompt = \"build.md\"\n".to_owned(),
+                "name = \"build\"\n[[step]]\nkind = \"prompt\"\nagent = \"dev\"\nprompt = \"build.md\"\n".to_owned(),
             ),
             (shop.join("formulas/build.md"), "Build {{ rig.name }}.".to_owned()),
             (
                 shop.join("formulas/fix.toml"),
-                "name = \"fix\"\n[inputs]\nbead = { type = \"bead\", required = true }\n[step]\nkind = \"prompt\"\n\
+                "name = \"fix\"\n[inputs]\nbead = { type = \"bead\", required = true }\n[[step]]\nkind = \"prompt\"\n\
                  agent = \"dev\"\nprompt = \"build.md\"\n"
                     .to_owned(),
             ),

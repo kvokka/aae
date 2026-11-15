@@ -35,7 +35,7 @@ fn worktree_is_on_for_the_formulas_that_ask_for_it() {
         names(&config.projects[0].bundled),
         [("default-policy", "{}".to_owned())]
     );
-    let audit = "name = \"audit\"\nworktree = true\n[step]\nkind = \"exec\"\ncommand = [\"true\"]\n";
+    let audit = "name = \"audit\"\nworktree = true\n[[step]]\nkind = \"exec\"\ncommand = [\"true\"]\n";
     let config = load_with(&[("kit/formulas/audit.toml", audit)]).unwrap();
     assert!(config.projects[0].packs[1].formulas["audit"].worktree);
     assert_eq!(

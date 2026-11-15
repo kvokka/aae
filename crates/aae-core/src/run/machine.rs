@@ -38,7 +38,7 @@ impl RunHandler {
 
     /// Renders the prompt and asks the `run.preparing` hooks.
     pub(super) fn render_and_prepare(&mut self, tx: &mut Tx<'_>, mut row: Row) -> Result<(), Error> {
-        let prepared = self.render(&row);
+        let prepared = self.render(tx, &row);
         let (prompt, timeout_ms, config) = match prepared {
             Ok(p) => p,
             Err(reason) => return self.terminal(tx, row, "failed", Some("infrastructure"), &reason),
@@ -119,23 +119,35 @@ impl RunHandler {
             let reason = format!("the workdir `{}` does not exist", row.workdir);
             return self.terminal(tx, row, "failed", Some("infrastructure"), &reason);
         }
-        let last_session = |tx: &Tx<'_>, run: &str| {
+        // Of one step: each prompt step of a formula has a session of its own (spec §9.3).
+        let last_session = |tx: &Tx<'_>, run: &str, step: Option<&str>| {
             tx.sql()
                 .query_row(
                     "SELECT session, harness FROM attempts WHERE run = ?1 AND session IS NOT NULL \
-                    ORDER BY n DESC LIMIT 1",
-                    [run],
+                    AND (?2 IS NULL OR step = ?2) ORDER BY n DESC LIMIT 1",
+                    params![run, step],
                     |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?)),
                 )
                 .optional()
         };
-        let own = last_session(tx, &row.id)?;
-        // A run that continues the session of another run (spec §9.3) starts there, and resumes there while it has
-        // no session of its own.
-        let continued: Option<String> =
-            tx.sql()
-                .query_row("SELECT continue_from FROM runs WHERE id = ?1", [&row.id], |r| r.get(0))?;
-        let from = continued.as_ref().map(|f| last_session(tx, f)).transpose()?.flatten();
+        let own = last_session(tx, &row.id, Some(&row.step))?;
+        // A run that continues the session of another run (spec §9.3) starts there, and its first step resumes there
+        // while it has no session of its own.
+        let continued: Option<String> = tx
+            .sql()
+            .query_row(
+                "SELECT continue_from FROM runs WHERE id = ?1 \
+                 AND NOT EXISTS (SELECT 1 FROM attempts WHERE run = ?1 AND step != ?2)",
+                params![row.id, row.step],
+                |r| r.get(0),
+            )
+            .optional()?
+            .flatten();
+        let from = continued
+            .as_ref()
+            .map(|f| last_session(tx, f, None))
+            .transpose()?
+            .flatten();
         if let Some((_, harness)) = from.as_ref().filter(|(_, h)| *h != config.harness) {
             let reason = format!("the continued session is of harness `{harness}`");
             return self.terminal(tx, row, "failed", Some("infrastructure"), &reason);
@@ -193,7 +205,8 @@ impl RunHandler {
             params![row.id, row.attempt],
         )?;
         tx.sql().execute(
-            "INSERT INTO attempts (run, n, kind, harness, started_ms, token_sha256) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+            "INSERT INTO attempts (run, n, kind, harness, started_ms, token_sha256, step) \
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
             // The kind that happens: a resume with no session to resume is a new session.
             params![
                 row.id,
@@ -201,7 +214,8 @@ impl RunHandler {
                 if resume.is_some() { "resume" } else { "new_session" },
                 config.harness,
                 tx.now_ms(),
-                token_sha256
+                token_sha256,
+                row.step
             ],
         )?;
         row.set_state(tx, "starting", None)?;
@@ -279,7 +293,7 @@ impl RunHandler {
     }
 
     /// Closes the live attempt of `row`, if any: records its end and stops its session and instance.
-    fn end_attempt(&mut self, tx: &mut Tx<'_>, row: &Row, failure: Option<&Value>) -> Result<(), Error> {
+    pub(super) fn end_attempt(&mut self, tx: &mut Tx<'_>, row: &Row, failure: Option<&Value>) -> Result<(), Error> {
         for what in ["state", "silence", "human"] {
             tx.clear_deadline(&row.deadline(what))?;
         }

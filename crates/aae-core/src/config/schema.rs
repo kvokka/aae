@@ -28,6 +28,7 @@ const BEAD: Shape = Obj(&[
 const RUN: Shape = Obj(&[
     ("id", Leaf),
     ("formula", Leaf),
+    ("step", Leaf),
     ("agent", Leaf),
     ("step_kind", Leaf),
     ("state", Leaf),
@@ -116,6 +117,7 @@ fn payload(event_type: &str) -> Option<&'static [(&'static str, Shape)]> {
         ],
         "run.parked" => &[("gate", GATE), ("then", Leaf)],
         "run.resumed" => &[("gate_key", Leaf)],
+        "run.step_finished" => &[("run", RUN), ("outcome", OUTCOME)],
         "run.passed" => &[("run", RUN), ("outcome", OUTCOME), ("usage", USAGE)],
         "run.failed" => &[
             ("run", RUN),

@@ -232,7 +232,7 @@ impl Live {
 /// Writes an exec formula `name` of `command` (TOML array items) into project `shop` under `root`.
 pub(crate) fn exec_formula(root: &Path, name: &str, inputs: &str, command: &str) {
     let text = format!(
-        "name = \"{name}\"\n[inputs]\n{inputs}\n[step]\nkind = \"exec\"\ncommand = [{command}]\ntimeout = \"30s\"\n"
+        "name = \"{name}\"\n[inputs]\n{inputs}\n[[step]]\nkind = \"exec\"\ncommand = [{command}]\ntimeout = \"30s\"\n"
     );
     write(root.join(format!("config/aae/shop/formulas/{name}.toml")), text);
 }
@@ -254,7 +254,7 @@ pub(crate) fn claude_agent(root: &Path, name: &str, base_url: &str) {
     );
     write(
         root.join(format!("config/aae/shop/formulas/{name}.toml")),
-        format!("name = \"{name}\"\n[step]\nkind = \"prompt\"\nagent = \"{name}\"\nprompt = \"{name}.md\"\n"),
+        format!("name = \"{name}\"\n[[step]]\nkind = \"prompt\"\nagent = \"{name}\"\nprompt = \"{name}.md\"\n"),
     );
     write(
         root.join(format!("config/aae/shop/formulas/{name}.md")),
@@ -281,7 +281,7 @@ pub(crate) fn codex_agent(root: &Path, name: &str, base_url: &str) {
     );
     write(
         root.join(format!("config/aae/shop/formulas/{name}.toml")),
-        format!("name = \"{name}\"\n[step]\nkind = \"prompt\"\nagent = \"{name}\"\nprompt = \"{name}.md\"\n"),
+        format!("name = \"{name}\"\n[[step]]\nkind = \"prompt\"\nagent = \"{name}\"\nprompt = \"{name}.md\"\n"),
     );
     write(
         root.join(format!("config/aae/shop/formulas/{name}.md")),

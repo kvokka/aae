@@ -172,7 +172,7 @@ fn the_config_is_checked_and_explained_without_a_daemon() {
     )
     .unwrap();
     fs::create_dir_all(files.join("shop/formulas")).unwrap();
-    let formula = "name = \"go\"\n[step]\nkind = \"prompt\"\nagent = \"dev\"\nprompt = \"go.md\"\neffort = \"low\"\n";
+    let formula = "name = \"go\"\n[[step]]\nkind = \"prompt\"\nagent = \"dev\"\nprompt = \"go.md\"\neffort = \"low\"\n";
     fs::write(files.join("shop/formulas/go.toml"), formula).unwrap();
     fs::write(files.join("shop/formulas/go.md"), "Go.\n").unwrap();
     let broken = files.join("broken.toml");
@@ -214,7 +214,7 @@ fn the_config_is_checked_and_explained_without_a_daemon() {
     let reply: Value = serde_json::from_slice(&out.stdout).unwrap();
     let text = reply["text"].as_str().unwrap_or_default();
     assert!(text.contains("effort = \"low\"  # formula shop.go"), "{reply}");
-    assert_eq!(reply["agent"], "shop.dev", "{reply}");
+    assert_eq!(reply["steps"][0]["agent"], "shop.dev", "{reply}");
     assert!(
         !aae(&["config", "explain", "--project", "shop", "--formula", "go"])
             .status

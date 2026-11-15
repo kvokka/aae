@@ -102,11 +102,13 @@ impl RunHandler {
         };
         let mut out = HashSet::new();
         for p in &self.config.projects {
-            let formulas =
-                (p.packs.iter()).flat_map(|pack| pack.formulas.keys().map(move |f| format!("{}.{f}", pack.name)));
-            for formula in formulas {
+            let formulas = (p.packs.iter()).flat_map(|pack| pack.formulas.iter().map(move |(n, f)| (pack, n, f)));
+            // Every step: a reload must not stop the instance a later step of a live run is to use.
+            let steps =
+                formulas.flat_map(|(pack, n, f)| f.steps.iter().map(move |s| (format!("{}.{n}", pack.name), s)));
+            for (formula, step) in steps {
                 for rig in p.rigs.keys() {
-                    let Ok((_, config)) = self.config.for_run(&p.name, rig, &formula) else {
+                    let Ok((_, config)) = self.config.for_run(&p.name, rig, &formula, &step.name) else {
                         continue;
                     };
                     let split = (self.drivers.get(&config.harness)).map(|d| d.split(&config, &plan));

@@ -131,7 +131,7 @@ layers, weakest first:
 5. the `[agent]` contributions of the plugins attached to the agent, in attachment order;
 6. the agent's own `agent.toml`: the defaults of the role;
 7. `[settings]` of the pack of the run's formula (launch settings only);
-8. the `[step]` of the run's formula (launch settings only);
+8. the `[[step]]` of the run's formula (launch settings only);
 9. the agent variant the rig runs in place of the agent (`[agents.<name>]`, see "Agent variants");
 10. `[overrides.<agent>]` of the orchestrator, then the project, then the rig: they fix an agent of an outside pack
    without forking the pack. A variant takes the overrides named after it, not those of its base agent.
@@ -417,7 +417,7 @@ worktree = true                     # optional (default false): each run works i
 [inputs]
 bead = { type = "bead", required = true }   # bead | string | integer | boolean
 
-[step]
+[[step]]
 kind = "prompt"                     # prompt: agent + prompt template; exec: command
 agent = "implementer"
 prompt = "implement.md"             # relative to the formula file

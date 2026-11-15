@@ -21,7 +21,7 @@ fn check(script: &str) -> (World, Create) {
 /// [`check`] with the `[inputs]` table `inputs`.
 fn check_with(inputs: &str, script: &str) -> (World, Create) {
     let formula = format!(
-        "name = \"check\"\n[inputs]\n{inputs}[step]\nkind = \"exec\"\ncommand = [\"sh\", \"-c\", {}]\n\
+        "name = \"check\"\n[inputs]\n{inputs}[[step]]\nkind = \"exec\"\ncommand = [\"sh\", \"-c\", {}]\n\
          timeout = \"2s\"\n",
         json!(script)
     );

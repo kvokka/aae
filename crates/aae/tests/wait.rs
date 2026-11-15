@@ -13,9 +13,9 @@ use std::{
 /// `nap` sleeps 2 s; `broken` fails at once.
 fn formulas(dir: &std::path::Path) {
     let formulas = dir.join("config/aae/shop/formulas");
-    let nap = "name = \"nap\"\n[step]\nkind = \"exec\"\ncommand = [\"sleep\", \"2\"]\ntimeout = \"60s\"\n";
+    let nap = "name = \"nap\"\n[[step]]\nkind = \"exec\"\ncommand = [\"sleep\", \"2\"]\ntimeout = \"60s\"\n";
     fs::write(formulas.join("nap.toml"), nap).unwrap();
-    let broken = "name = \"broken\"\n[step]\nkind = \"exec\"\ncommand = [\"false\"]\ntimeout = \"10s\"\n";
+    let broken = "name = \"broken\"\n[[step]]\nkind = \"exec\"\ncommand = [\"false\"]\ntimeout = \"10s\"\n";
     fs::write(formulas.join("broken.toml"), broken).unwrap();
 }
 

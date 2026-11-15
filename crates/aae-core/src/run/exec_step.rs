@@ -36,8 +36,9 @@ impl RunHandler {
             params![row.id, row.attempt],
         )?;
         tx.sql().execute(
-            "INSERT INTO attempts (run, n, kind, harness, started_ms) VALUES (?1, ?2, 'new_session', 'exec', ?3)",
-            params![row.id, row.attempt, tx.now_ms()],
+            "INSERT INTO attempts (run, n, kind, harness, started_ms, step) \
+             VALUES (?1, ?2, 'new_session', 'exec', ?3, ?4)",
+            params![row.id, row.attempt, tx.now_ms(), row.step],
         )?;
         // No session to start: the command runs from the first moment.
         row.set_state(tx, "running", None)?;
@@ -60,6 +61,16 @@ impl RunHandler {
         for (name, value) in inputs {
             let text = value.as_str().map_or_else(|| value.to_string(), str::to_owned);
             context.push((crate::config::input_variable(&name), json!(text)));
+        }
+        // The outcomes of the earlier steps (spec §9.1): `AAE_STEP_<NAME>_RESULT`, `_SUMMARY` and `_DATA` (JSON).
+        for (step, outcome) in super::render::step_results(tx.sql(), &row)? {
+            let prefix = format!("AAE_STEP_{}_", crate::config::upper(&step));
+            for (field, value) in [("RESULT", &outcome["result"]), ("SUMMARY", &outcome["summary"])] {
+                context.push((format!("{prefix}{field}"), value.clone()));
+            }
+            if !outcome["data"].is_null() {
+                context.push((format!("{prefix}DATA"), json!(outcome["data"].to_string())));
+            }
         }
         env.retain(|(k, _)| !context.iter().any(|(c, _)| c == k));
         env.extend(context);

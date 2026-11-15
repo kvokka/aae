@@ -47,7 +47,7 @@ fn a_rig_var_may_not_hide_a_field_of_the_rig() {
 
 #[test]
 fn a_formula_in_a_subdirectory_is_loaded() {
-    let formula = "name = \"deep\"\n[step]\nkind = \"exec\"\ncommand = [\"true\"]\ntimeout = \"1s\"\n";
+    let formula = "name = \"deep\"\n[[step]]\nkind = \"exec\"\ncommand = [\"true\"]\ntimeout = \"1s\"\n";
     let config = load_with(&[("kit/formulas/more/deep.toml", formula)]).unwrap();
     let shop = config.projects.iter().find(|p| p.name == "shop").unwrap();
     assert!(shop.packs[1].formulas.contains_key("deep"));

@@ -49,7 +49,7 @@ const FIX: &[(&str, &str)] = &[
     (
         "shop/formulas/fix.toml",
         "name = \"fix\"\n[inputs]\nbead = { type = \"bead\", required = true }\n\
-         [step]\nkind = \"prompt\"\nagent = \"dev\"\nprompt = \"fix.md\"\n",
+         [[step]]\nkind = \"prompt\"\nagent = \"dev\"\nprompt = \"fix.md\"\n",
     ),
     ("shop/formulas/fix.md", "Fix {{ bead.title }}."),
 ];

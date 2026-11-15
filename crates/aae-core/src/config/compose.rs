@@ -3,7 +3,7 @@
 //! expands.
 
 use super::{
-    Agent, Config, EffectiveConfig, Layer, Name, Pack, PluginUse, Project, Rig, Settings, Sourced, Step,
+    Agent, Config, EffectiveConfig, Layer, Name, Pack, PluginUse, Project, Rig, Settings, Sourced, StepKind,
     check::resolve, load::Loader, load::reference,
 };
 use serde::Deserialize;
@@ -42,19 +42,28 @@ impl Config {
         self.assemble(p, r, a, Vec::new(), &named)
     }
 
-    /// The agent a run of `formula` on `rig` is of — the rig's variant of the step's agent, else that agent — and its
-    /// effective config, with the layers of the formula's pack and step and of the variant.
-    pub fn for_run(&self, project: &str, rig: &str, formula: &str) -> Result<(String, EffectiveConfig), String> {
+    /// The agent step `step` of a run of `formula` on `rig` is of — the rig's variant of the step's agent, else that
+    /// agent — and its effective config, with the layers of the formula's pack and step and of the variant.
+    pub fn for_run(
+        &self,
+        project: &str,
+        rig: &str,
+        formula: &str,
+        step: &str,
+    ) -> Result<(String, EffectiveConfig), String> {
         let (p, r) = self.place(project, Some(rig))?;
         let (name, f) = p.formula(formula)?;
-        let Step::Prompt { agent, settings, .. } = &f.step else {
-            return Err(format!("`{name}` is an exec step: it has no agent"));
+        let kind = f.step(step).map(|s| &s.kind);
+        let Some(StepKind::Prompt { agent, settings, .. }) = kind else {
+            return Err(format!(
+                "step `{step}` of `{name}` is not a prompt step: it has no agent"
+            ));
         };
         let pack = p.packs.iter().find(|pack| pack.name == name.pack);
         let mut middle: Vec<(Layer, Settings)> = (pack.into_iter())
             .map(|pack| (Layer::Pack(pack.name.clone()), pack.settings.clone()))
             .collect();
-        middle.push((Layer::Formula(name.to_string()), (**settings).clone()));
+        middle.push((Layer::Formula(format!("{name} step {step}")), (**settings).clone()));
         let Some(variant) = r.and_then(|r| r.agents.get(agent)) else {
             let a = agent_of(p, agent)?;
             let own = p.packs.first().map(|pack| pack.name.as_str()).unwrap_or_default();
@@ -196,10 +205,11 @@ pub(super) fn check_runs(loader: &mut Loader, config: &Config) {
     for p in &config.projects {
         let file = p.root.join("aae.toml");
         let formulas = (p.packs.iter()).flat_map(|pack| pack.formulas.iter().map(move |(f, x)| (pack, f, x)));
-        for (pack, name, _) in formulas.filter(|(.., f)| matches!(f.step, Step::Prompt { .. })) {
+        for (pack, name, f) in formulas {
             let formula = format!("{}.{name}", pack.name);
-            for rig in p.rigs.keys() {
-                if let Err(e) = config.for_run(&p.name, rig, &formula) {
+            let prompts = f.steps.iter().filter(|s| matches!(s.kind, StepKind::Prompt { .. }));
+            for (step, rig) in prompts.flat_map(|s| p.rigs.keys().map(move |r| (&s.name, r))) {
+                if let Err(e) = config.for_run(&p.name, rig, &formula, step) {
                     loader.fail(&file, format!("formula `{formula}` on rig `{rig}`: {e}"));
                 }
             }

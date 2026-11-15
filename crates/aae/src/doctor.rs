@@ -113,10 +113,10 @@ fn agents(config: &Config, harness: &str) -> Vec<(String, Option<EffectiveConfig
                     }
                 }
             }
-            for formula in pack.formulas.keys().map(|f| format!("{}.{f}", pack.name)) {
-                for rig in p.rigs.keys() {
+            for (formula, f) in pack.formulas.iter().map(|(n, f)| (format!("{}.{n}", pack.name), f)) {
+                for (rig, step) in p.rigs.keys().flat_map(|r| f.steps.iter().map(move |s| (r, &s.name))) {
                     // An exec step has no agent.
-                    if let Ok((agent, c)) = config.for_run(&p.name, rig, &formula)
+                    if let Ok((agent, c)) = config.for_run(&p.name, rig, &formula, step)
                         && c.harness == harness
                     {
                         found.insert(format!("{}/{rig}@{agent}", p.name), Some(c));

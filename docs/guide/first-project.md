@@ -47,7 +47,7 @@ one step is either `exec` (a command) or `prompt` (an agent working through a pr
 name = "check"
 description = "The rig has a README"
 
-[step]
+[[step]]
 kind = "exec"
 command = ["test", "-f", "README.md"]   # runs in the rig's directory
 timeout = "30s"

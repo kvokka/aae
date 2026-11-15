@@ -3,13 +3,31 @@
 
 use super::{Create, RunHandler, events::attempt_live, rejected, row::Row, token_sha256, triggers::MAX_DEPTH};
 use crate::{
-    config::{InputType, Step},
+    config::{InputType, Step, StepKind},
     writer::{Error, Tx},
 };
 use rusqlite::{OptionalExtension, params};
 use serde_json::{Value, json};
 
 impl RunHandler {
+    /// The agent of `step` of a run of `formula` on `rig` — the one the rig runs for it, a variant by its name — and
+    /// the model key of its config; an exec step has none, and the runs table keeps an empty name.
+    pub(super) fn step_agent(
+        &self,
+        project: &str,
+        rig: &str,
+        formula: &str,
+        step: &Step,
+    ) -> Result<(String, Option<String>), String> {
+        match step.kind {
+            StepKind::Prompt { .. } => {
+                let (agent, config) = self.config.for_run(project, rig, formula, &step.name)?;
+                Ok((agent, config.model_key()))
+            }
+            StepKind::Exec { .. } => Ok((String::new(), None)),
+        }
+    }
+
     pub(super) fn create(&mut self, tx: &mut Tx<'_>, mut c: Create) -> Result<Value, Error> {
         if let Some(token) = c.token.take() {
             Self::child_of(tx, &mut c, &token)?;
@@ -27,21 +45,15 @@ impl RunHandler {
         };
         let rig = project.rigs.get(&rig_name);
         let rig = rig.ok_or_else(|| rejected(format!("no rig `{rig_name}` in `{}`", c.project)))?;
-        // An exec step has no agent; the runs table keeps it as an empty name. The agent of a prompt step is the one
-        // the rig runs for it (a variant by its name), and the model key of its config is known before it starts.
-        let (agent, model) = match &formula.step {
-            Step::Prompt { .. } => {
-                let (agent, config) =
-                    (self.config.for_run(&c.project, &rig_name, &name.to_string())).map_err(rejected)?;
-                (agent, config.model_key())
-            }
-            Step::Exec { .. } if c.continue_from.is_some() => {
-                return Err(rejected(format!(
-                    "`{name}` is an exec step: it has no session to continue"
-                )));
-            }
-            Step::Exec { .. } => (String::new(), None),
-        };
+        let first = &formula.steps[0];
+        if c.continue_from.is_some() && matches!(first.kind, StepKind::Exec { .. }) {
+            return Err(rejected(format!(
+                "`{name}` starts with an exec step: it has no session to continue"
+            )));
+        }
+        let (agent, model) = self
+            .step_agent(&c.project, &rig_name, &name.to_string(), first)
+            .map_err(rejected)?;
         if let Some(extra) = c.inputs.keys().find(|k| !formula.inputs.contains_key(*k)) {
             return Err(rejected(format!("`{name}` has no input `{extra}`")));
         }
@@ -125,8 +137,8 @@ impl RunHandler {
         }
         tx.sql().execute(
             "INSERT INTO runs (n, id, project, rig, formula, agent, inputs, correlation, depth, parent_run, \
-             workdir, state, created_ms, continue_from, bead) \
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, 'queued', ?12, ?13, ?14)",
+             workdir, state, created_ms, continue_from, bead, step) \
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, 'queued', ?12, ?13, ?14, ?15)",
             params![
                 n,
                 id,
@@ -141,7 +153,8 @@ impl RunHandler {
                 workdir,
                 tx.now_ms(),
                 c.continue_from,
-                bead
+                bead,
+                first.name
             ],
         )?;
         let row = Row::load(tx, &id)?;

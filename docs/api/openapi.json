@@ -129,7 +129,7 @@
           {
             "name": "formula",
             "in": "path",
-            "description": "A formula: the agent its run on `rig` is of, with the layers of its pack, its step and the rig's variant.",
+            "description": "A formula: step by step, the agent each prompt step of its run on `rig` is of, with the layers of its pack, its\nstep and the rig's variant.",
             "required": true,
             "schema": {
               "type": [
@@ -2359,6 +2359,7 @@
           "n",
           "generation",
           "kind",
+          "step",
           "started_at",
           "harness",
           "input_tokens",
@@ -2413,6 +2414,10 @@
           },
           "started_at": {
             "type": "string"
+          },
+          "step": {
+            "type": "string",
+            "description": "The step of the formula the attempt ran."
           }
         }
       },
@@ -2605,21 +2610,54 @@
       "Explained": {
         "type": "object",
         "required": [
-          "agent",
+          "steps",
           "text",
           "inherits_host"
         ],
         "properties": {
           "agent": {
-            "type": "string",
-            "description": "`<pack>.<name>`, or the rig's variant that a run of the formula is of."
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "`<pack>.<name>` of an explained agent; null for a formula."
           },
           "inherits_host": {
             "type": "boolean"
           },
+          "steps": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ExplainedStep"
+            },
+            "description": "The steps of an explained formula, in order; empty for an agent."
+          },
           "text": {
             "type": "string",
             "description": "One line per value with its layer."
+          }
+        }
+      },
+      "ExplainedStep": {
+        "type": "object",
+        "required": [
+          "step",
+          "kind"
+        ],
+        "properties": {
+          "agent": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "The pack agent or the rig's variant a prompt step runs; null for an exec step."
+          },
+          "kind": {
+            "type": "string",
+            "description": "`prompt` or `exec`."
+          },
+          "step": {
+            "type": "string"
           }
         }
       },
@@ -3090,6 +3128,7 @@
           "project",
           "rig",
           "formula",
+          "step",
           "step_kind",
           "state",
           "attempt",
@@ -3215,6 +3254,10 @@
           },
           "state": {
             "type": "string"
+          },
+          "step": {
+            "type": "string",
+            "description": "The step of the formula the run is at (spec §9.1); `agent` and `step_kind` are of it."
           },
           "step_kind": {
             "type": "string",

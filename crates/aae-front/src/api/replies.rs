@@ -14,6 +14,8 @@ pub(crate) struct Run {
     project: String,
     rig: String,
     formula: String,
+    /// The step of the formula the run is at (spec §9.1); `agent` and `step_kind` are of it.
+    step: String,
     /// Absent for an exec step.
     agent: Option<String>,
     /// `prompt` or `exec`.
@@ -74,6 +76,8 @@ pub(crate) struct Attempt {
     generation: u32,
     /// `new_session` or `resume`.
     kind: String,
+    /// The step of the formula the attempt ran.
+    step: String,
     started_at: String,
     ended_at: Option<String>,
     failure_kind: Option<String>,
@@ -171,11 +175,22 @@ pub(crate) struct Checked {
 
 #[derive(ToSchema)]
 pub(crate) struct Explained {
-    /// `<pack>.<name>`, or the rig's variant that a run of the formula is of.
-    agent: String,
+    /// `<pack>.<name>` of an explained agent; null for a formula.
+    agent: Option<String>,
+    /// The steps of an explained formula, in order; empty for an agent.
+    steps: Vec<ExplainedStep>,
     /// One line per value with its layer.
     text: String,
     inherits_host: bool,
+}
+
+#[derive(ToSchema)]
+pub(crate) struct ExplainedStep {
+    step: String,
+    /// `prompt` or `exec`.
+    kind: String,
+    /// The pack agent or the rig's variant a prompt step runs; null for an exec step.
+    agent: Option<String>,
 }
 
 #[derive(ToSchema)]

@@ -19,14 +19,14 @@ fn demo(name: &str) -> Config {
 fn the_user_layers_of_the_demos_decide_what_the_workers_run_on() {
     let config = demo("snake-claude");
     for (formula, rig) in [("dev.plan", "root"), ("dev.code", "backend"), ("dev.code", "frontend")] {
-        let (_, effective) = config.for_run("snake-claude", rig, formula).unwrap();
+        let (_, effective) = config.for_run("snake-claude", rig, formula, "1").unwrap();
         let model = effective.model.unwrap();
         assert_eq!((effective.harness.as_str(), model.value.as_str()), ("claude", "haiku"));
         assert_eq!(model.from, Layer::ProjectOverride, "{formula} on {rig}");
     }
 
     let config = demo("snake-mixed");
-    let (agent, effective) = config.for_run("snake-mixed", "backend", "dev.code").unwrap();
+    let (agent, effective) = config.for_run("snake-mixed", "backend", "dev.code", "1").unwrap();
     assert_eq!(agent, "codex-coder");
     assert_eq!(
         (effective.harness.as_str(), effective.harness_from),
@@ -35,14 +35,14 @@ fn the_user_layers_of_the_demos_decide_what_the_workers_run_on() {
     let model = effective.model.unwrap();
     assert_eq!(model.value, "gpt-6-luna");
     assert_eq!(effective.model_given.as_deref(), Some("luna"));
-    let (agent, effective) = config.for_run("snake-mixed", "frontend", "dev.code").unwrap();
+    let (agent, effective) = config.for_run("snake-mixed", "frontend", "dev.code", "1").unwrap();
     assert_eq!((agent.as_str(), effective.harness.as_str()), ("dev.coder", "claude"));
 }
 
 #[test]
 fn the_role_prompt_of_the_demo_agent_reaches_both_adapters() {
     let config = demo("snake-mixed");
-    let (_, mut effective) = config.for_run("snake-mixed", "frontend", "dev.code").unwrap();
+    let (_, mut effective) = config.for_run("snake-mixed", "frontend", "dev.code", "1").unwrap();
     let role = std::fs::read_to_string(demos().join("dev-pack/agents/coder/prompt.md")).unwrap();
     let prompt = effective.system_prompt.clone().unwrap();
     assert_eq!((prompt.value.as_str(), prompt.from), (role.as_str(), Layer::Agent));

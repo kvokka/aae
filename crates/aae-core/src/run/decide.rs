@@ -146,7 +146,7 @@ impl RunHandler {
         after: Option<std::time::Duration>,
     ) -> Result<(), Error> {
         let counted: u32 = tx.sql().query_row(
-            "SELECT COUNT(*) FROM attempts WHERE run = ?1 AND waited = 0",
+            "SELECT COUNT(*) FROM attempts WHERE run = ?1 AND waited = 0 AND failure IS NOT NULL",
             [&row.id],
             |r| r.get(0),
         )?;

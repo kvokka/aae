@@ -181,7 +181,7 @@ pub(crate) async fn on_live(env: Arc<Env>, live: Live) -> String {
         );
         write(
             root.join("config/aae/shop/formulas/work.toml"),
-            "name = \"work\"\n[step]\nkind = \"prompt\"\nagent = \"dev\"\nprompt = \"work.md\"\n",
+            "name = \"work\"\n[[step]]\nkind = \"prompt\"\nagent = \"dev\"\nprompt = \"work.md\"\n",
         );
         write(
             root.join("config/aae/shop/formulas/work.md"),

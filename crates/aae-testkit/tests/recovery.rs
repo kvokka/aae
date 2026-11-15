@@ -99,7 +99,7 @@ async fn a_restart_with_nothing_running_changes_no_run() {
 #[cfg(target_os = "linux")]
 #[tokio::test]
 async fn a_restart_kills_the_command_of_an_exec_step_the_dead_daemon_left() {
-    let formula = "name = \"check\"\n[step]\nkind = \"exec\"\n\
+    let formula = "name = \"check\"\n[[step]]\nkind = \"exec\"\n\
         command = [\"sh\", \"-c\", \"echo $$ > pid; exec sleep 60\"]\ntimeout = \"120s\"\n";
     let mut w = world_with(&[("shop/formulas/check.toml", formula)], Arc::new(ExecHooks::default()));
     let create = aae_core::run::Create {

@@ -223,6 +223,12 @@ pub fn open(path: &Path) -> rusqlite::Result<Connection> {
         (16, "ALTER TABLE instances ADD COLUMN degraded TEXT;"),
         // The `seq` of the last driver event taken from the instance (contracts 4.3).
         (17, "ALTER TABLE instances ADD COLUMN seq INTEGER NOT NULL DEFAULT 0;"),
+        // The step of the formula a run is at and the one an attempt ran (spec §9.1).
+        (
+            18,
+            "ALTER TABLE runs ADD COLUMN step TEXT NOT NULL DEFAULT '1'; \
+             ALTER TABLE attempts ADD COLUMN step TEXT NOT NULL DEFAULT '1';",
+        ),
     ]
     .into_iter()
     .filter(|(to, _)| *to > version)

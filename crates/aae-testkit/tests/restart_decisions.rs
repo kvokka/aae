@@ -162,7 +162,7 @@ async fn a_continue_after_a_restart_fails_the_attempt_with_daemon_crash() {
 #[cfg(target_os = "linux")]
 #[tokio::test]
 async fn an_exec_step_in_finishing_passes_after_a_restart_with_its_command_run_once() {
-    let formula = "name = \"check\"\n[step]\nkind = \"exec\"\ncommand = [\"sh\", \"-c\", \"echo ran >> runs.log\"]\n";
+    let formula = "name = \"check\"\n[[step]]\nkind = \"exec\"\ncommand = [\"sh\", \"-c\", \"echo ran >> runs.log\"]\n";
     let hooks = Arc::new(Hanging::default());
     let mut w = hooked_in("run.finishing", hooks.clone(), &[("shop/formulas/check.toml", formula)]);
     let create = Create {

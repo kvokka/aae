@@ -74,7 +74,7 @@ fn fetch_pins_checks_out_and_updates_only_when_asked() {
             ("pack.toml", "name = \"remote\"\nversion = \"0.1.0\"\n"),
             (
                 "formulas/check.toml",
-                "name = \"check\"\n[step]\nkind = \"exec\"\ncommand = [\"true\"]\n",
+                "name = \"check\"\n[[step]]\nkind = \"exec\"\ncommand = [\"true\"]\n",
             ),
         ],
     );
@@ -120,7 +120,7 @@ fn fetch_pins_checks_out_and_updates_only_when_asked() {
         &d.join("remote/pack"),
         &[(
             "formulas/later.toml",
-            "name = \"later\"\n[step]\nkind = \"exec\"\ncommand = [\"true\"]\n",
+            "name = \"later\"\n[[step]]\nkind = \"exec\"\ncommand = [\"true\"]\n",
         )],
     );
     let (ok, out) = fetch(d, &[]);

@@ -177,11 +177,32 @@ pub struct Formula {
     pub inputs: BTreeMap<String, Input>,
     /// `worktree = true`: each run gets a git worktree of its own (spec §11.5).
     pub worktree: bool,
-    pub step: Step,
+    /// At least one; a run goes through them in order (spec §9.1).
+    pub steps: Vec<Step>,
+}
+
+impl Formula {
+    /// The step named `name`.
+    pub fn step(&self, name: &str) -> Option<&Step> {
+        self.steps.iter().find(|s| s.name == name)
+    }
+
+    /// The step after the one named `name`; `None` after the last.
+    pub fn next(&self, name: &str) -> Option<&Step> {
+        let at = self.steps.iter().position(|s| s.name == name)?;
+        self.steps.get(at + 1)
+    }
 }
 
 #[derive(Clone, Debug)]
-pub enum Step {
+pub struct Step {
+    /// `name` in the file, or the position from 1.
+    pub name: String,
+    pub kind: StepKind,
+}
+
+#[derive(Clone, Debug)]
+pub enum StepKind {
     Prompt {
         agent: Name,
         prompt: Template,
@@ -311,6 +332,11 @@ pub fn load(orchestrator_file: &std::path::Path) -> Result<Config, Vec<ConfigErr
 
 /// The environment variable an exec step gets input `name` in: `note-text` → `AAE_INPUT_NOTE_TEXT`.
 pub(crate) fn input_variable(name: &str) -> String {
+    format!("AAE_INPUT_{}", upper(name))
+}
+
+/// The name part of an environment variable: `note-text` → `NOTE_TEXT`.
+pub(crate) fn upper(name: &str) -> String {
     let upper = name.chars().map(|c| {
         if c.is_ascii_alphanumeric() {
             c.to_ascii_uppercase()
@@ -318,7 +344,7 @@ pub(crate) fn input_variable(name: &str) -> String {
             '_'
         }
     });
-    format!("AAE_INPUT_{}", upper.collect::<String>())
+    upper.collect()
 }
 
 /// A duration with one unit: `"500ms"`, `"30s"`, `"45m"`, `"2h"` (contracts conventions).

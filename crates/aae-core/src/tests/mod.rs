@@ -4,6 +4,7 @@ mod config_launch;
 mod config_layers;
 mod config_services;
 mod config_sources;
+mod config_steps;
 mod config_strict;
 mod config_triggers;
 mod cron;

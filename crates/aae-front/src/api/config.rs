@@ -7,7 +7,7 @@ use super::{
     runs::{BAD_QUERY, REJECTED},
 };
 use aae_core::{
-    config::{Config, Name, Project},
+    config::{Config, Name, Project, StepKind},
     run::Msg,
 };
 use axum::{Json, extract::Query, http::HeaderMap, http::StatusCode};
@@ -150,7 +150,8 @@ pub(crate) struct ExplainQuery {
     project: String,
     /// `<pack>.<name>`, or a bare name of the project's own pack; or else `formula`.
     agent: Option<String>,
-    /// A formula: the agent its run on `rig` is of, with the layers of its pack, its step and the rig's variant.
+    /// A formula: step by step, the agent each prompt step of its run on `rig` is of, with the layers of its pack, its
+    /// step and the rig's variant.
     formula: Option<String>,
     /// The rig of the run; its layer counts when given. A `formula` needs it.
     rig: Option<String>,
@@ -190,12 +191,30 @@ pub(crate) fn explained(config: &Config, project: &str, of: &Explain, rig: Optio
         Explain::Agent(agent) => agent,
         Explain::Formula(formula) => {
             let rig = rig.ok_or("the explain of a formula needs its rig")?;
-            let (agent, effective) = config.for_run(project, rig, formula)?;
-            let text = format!(
-                "# the agent of `{formula}` on `{rig}`: {agent}\n{}",
-                effective.explain()
-            );
-            return Ok(json!({ "agent": agent, "text": text, "inherits_host": effective.inherits_host() }));
+            let p = (config.projects.iter()).find(|p| p.name == project);
+            let (_, f) = p.ok_or_else(|| format!("no project `{project}`"))?.formula(formula)?;
+            let (mut text, mut steps, mut host) = (String::new(), Vec::new(), false);
+            for step in &f.steps {
+                let name = &step.name;
+                let agent = match &step.kind {
+                    StepKind::Exec { command, .. } => {
+                        text += &format!("# step `{name}` of `{formula}`: exec `{}`\n", command.join(" "));
+                        None
+                    }
+                    StepKind::Prompt { .. } => {
+                        let (agent, effective) = config.for_run(project, rig, formula, name)?;
+                        text += &format!("# step `{name}` of `{formula}` on `{rig}`: agent {agent}\n");
+                        text += &effective.explain();
+                        host |= effective.inherits_host();
+                        Some(agent)
+                    }
+                };
+                steps.push(
+                    json!({ "step": name, "kind": if agent.is_some() { "prompt" } else { "exec" },
+                    "agent": agent }),
+                );
+            }
+            return Ok(json!({ "agent": null, "steps": steps, "text": text, "inherits_host": host }));
         }
     };
     let agent = match agent.split_once('.') {
@@ -214,7 +233,10 @@ pub(crate) fn explained(config: &Config, project: &str, of: &Explain, rig: Optio
         },
     };
     let effective = config.effective(project, rig, &agent)?;
-    Ok(json!({ "agent": agent.to_string(), "text": effective.explain(), "inherits_host": effective.inherits_host() }))
+    Ok(
+        json!({ "agent": agent.to_string(), "steps": [], "text": effective.explain(),
+        "inherits_host": effective.inherits_host() }),
+    )
 }
 
 /// Loads the config file as a reload would and reports its errors; changes nothing.

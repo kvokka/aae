@@ -4,7 +4,7 @@ description = "Do one task in the rig, test it and report what the neighbours ne
 [inputs]
 task = { type = "string", required = true }      # the whole task: the worker sees nothing else
 
-[step]
+[[step]]
 kind = "prompt"
 agent = "coder"
 prompt = "code.md"

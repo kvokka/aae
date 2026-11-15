@@ -28,11 +28,11 @@ const FILES: &[(&str, &str)] = &[
     ),
     (
         "shop/formulas/same.toml",
-        "name = \"same\"\n[step]\nkind = \"prompt\"\nagent = \"same\"\nprompt = \"build.md\"\n",
+        "name = \"same\"\n[[step]]\nkind = \"prompt\"\nagent = \"same\"\nprompt = \"build.md\"\n",
     ),
     (
         "shop/formulas/other.toml",
-        "name = \"other\"\n[step]\nkind = \"prompt\"\nagent = \"other\"\nprompt = \"build.md\"\n",
+        "name = \"other\"\n[[step]]\nkind = \"prompt\"\nagent = \"other\"\nprompt = \"build.md\"\n",
     ),
 ];
 

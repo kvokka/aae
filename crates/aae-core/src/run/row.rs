@@ -14,6 +14,8 @@ pub(super) struct Row {
     pub(super) project: String,
     pub(super) rig: String,
     pub(super) formula: String,
+    /// The step of the formula the run is at; `agent` is that step's.
+    pub(super) step: String,
     pub(super) agent: String,
     pub(super) inputs: String,
     pub(super) correlation: String,
@@ -35,7 +37,7 @@ pub(super) struct Row {
 }
 
 const COLUMNS: &str = "id, project, rig, formula, agent, inputs, correlation, depth, parent_run, workdir, state, \
-    class, attempt, prompt, timeout_ms, config, next, created_ms, started_ms, bead, bead_data";
+    class, attempt, prompt, timeout_ms, config, next, created_ms, started_ms, bead, bead_data, step";
 
 impl Row {
     pub(super) fn load(tx: &Tx<'_>, run: &str) -> Result<Self, Error> {
@@ -67,6 +69,7 @@ impl Row {
                 started_ms: r.get(18)?,
                 bead: r.get(19)?,
                 bead_data: r.get(20)?,
+                step: r.get(21)?,
             })
         })
         .optional()
@@ -89,7 +92,7 @@ impl Row {
             (Some(&self.agent), "prompt")
         };
         json!({
-            "id": self.id, "formula": self.formula, "agent": agent, "step_kind": step_kind,
+            "id": self.id, "formula": self.formula, "step": self.step, "agent": agent, "step_kind": step_kind,
             "state": self.state, "class": self.class, "attempt": self.attempt, "generation": self.attempt,
             "bead": self.bead, "workdir": self.workdir, "depth": self.depth, "parent_run": self.parent_run,
             "created_at": rfc3339_ms(self.created_ms), "started_at": self.started_ms.map(rfc3339_ms),
@@ -125,12 +128,13 @@ impl Row {
 pub(super) fn attempts(conn: &Connection, run: &str) -> Result<Vec<Value>, Error> {
     let mut stmt = conn.prepare(
         "SELECT n, kind, started_ms, ended_ms, json_extract(failure, '$.kind'), harness, session, input_tokens, \
-         output_tokens FROM \
+         output_tokens, step FROM \
          (SELECT * FROM attempts WHERE run = ?1 ORDER BY n DESC LIMIT 20) ORDER BY n",
     )?;
     let rows = stmt.query_map([run], |r| {
         Ok(json!({
             "n": r.get::<_, i64>(0)?, "generation": r.get::<_, i64>(0)?, "kind": r.get::<_, String>(1)?,
+            "step": r.get::<_, String>(9)?,
             "started_at": rfc3339_ms(r.get(2)?), "ended_at": r.get::<_, Option<i64>>(3)?.map(rfc3339_ms),
             "failure_kind": r.get::<_, Option<String>>(4)?, "harness": r.get::<_, String>(5)?,
             // The session reference (spec §7.7): the harness's own tools open the conversation by it.

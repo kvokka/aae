@@ -1,4 +1,4 @@
-use crate::config::{Config, ConfigError, Name, Source, Step};
+use crate::config::{Config, ConfigError, Name, Source, StepKind};
 use std::{fs, time::Duration};
 
 /// A valid config: an orchestrator with a plugin, a project with a rig and a project trigger, and one pack.
@@ -70,7 +70,7 @@ plugins = [{ name = "mail" }]
         r#"name = "implement"
 [inputs]
 bead = { type = "bead", required = true }
-[step]
+[[step]]
 kind = "prompt"
 agent = "implementer"
 prompt = "implement.md"
@@ -84,7 +84,7 @@ timeout = "45m"
     (
         "kit/formulas/audit.toml",
         r#"name = "audit"
-[step]
+[[step]]
 kind = "exec"
 command = ["sh", "-c", "true"]
 "#,
@@ -157,14 +157,16 @@ fn a_valid_config_loads_with_every_reference_resolved() {
         (Some("claude"), Some("You implement."))
     );
     assert_eq!(agent.settings.effort.as_deref(), Some("high"));
-    match &kit.formulas["implement"].step {
-        Step::Prompt { agent, timeout, .. } => {
+    match &kit.formulas["implement"].steps[0].kind {
+        StepKind::Prompt { agent, timeout, .. } => {
             assert_eq!(*agent, name("kit", "implementer"));
             assert_eq!(*timeout, Some(Duration::from_secs(45 * 60)));
         }
-        Step::Exec { .. } => panic!("implement is a prompt step"),
+        StepKind::Exec { .. } => panic!("implement is a prompt step"),
     }
-    assert!(matches!(&kit.formulas["audit"].step, Step::Exec { command, timeout: None } if command.len() == 3));
+    assert!(
+        matches!(&kit.formulas["audit"].steps[0].kind, StepKind::Exec { command, timeout: None } if command.len() == 3)
+    );
 }
 
 #[test]
@@ -188,7 +190,7 @@ fn a_rig_path_has_no_dot_and_no_dot_dot() {
 const OTHER_PACK: (&str, &str) = ("other/pack.toml", "name = \"other\"\nversion = \"1.0.0\"\n");
 const OTHER_FORMULA: (&str, &str) = (
     "other/formulas/implement.toml",
-    "name = \"implement\"\n[step]\nkind = \"exec\"\ncommand = [\"true\"]\n",
+    "name = \"implement\"\n[[step]]\nkind = \"exec\"\ncommand = [\"true\"]\n",
 );
 
 #[test]
@@ -209,9 +211,9 @@ fn a_bare_name_prefers_the_own_pack() {
     // The project root pack has its own `implementer`; the pack's formula still gets the pack's one.
     let own = ("shop/agents/implementer/agent.toml", "harness = \"claude\"\n");
     let config = load_with(&[own]).unwrap();
-    match &config.projects[0].packs[1].formulas["implement"].step {
-        Step::Prompt { agent, .. } => assert_eq!(*agent, name("kit", "implementer")),
-        Step::Exec { .. } => panic!("implement is a prompt step"),
+    match &config.projects[0].packs[1].formulas["implement"].steps[0].kind {
+        StepKind::Prompt { agent, .. } => assert_eq!(*agent, name("kit", "implementer")),
+        StepKind::Exec { .. } => panic!("implement is a prompt step"),
     }
 }
 
@@ -228,7 +230,7 @@ fn names_are_unique_within_a_pack_and_a_project() {
     fails(
         &[(
             "kit/formulas/audit.toml",
-            "name = \"a.b\"\n[step]\nkind = \"exec\"\ncommand = [\"true\"]\n",
+            "name = \"a.b\"\n[[step]]\nkind = \"exec\"\ncommand = [\"true\"]\n",
         )],
         "formula name `a.b`",
     );
@@ -237,7 +239,7 @@ fn names_are_unique_within_a_pack_and_a_project() {
 #[test]
 fn two_inputs_of_an_exec_step_may_not_share_a_variable() {
     let inputs = "[inputs]\nnote-text = { type = \"string\" }\nnote_text = { type = \"string\" }\n";
-    let audit = format!("name = \"audit\"\n{inputs}[step]\nkind = \"exec\"\ncommand = [\"true\"]\n");
+    let audit = format!("name = \"audit\"\n{inputs}[[step]]\nkind = \"exec\"\ncommand = [\"true\"]\n");
     fails(
         &[("kit/formulas/audit.toml", audit.as_str())],
         "inputs `note-text` and `note_text` are both `AAE_INPUT_NOTE_TEXT`",

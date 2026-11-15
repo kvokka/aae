@@ -33,7 +33,7 @@ async fn a_signal_stop_ends_the_step_processes_and_prints_no_panic() {
         fs::create_dir_all(path.parent().unwrap()).unwrap();
         fs::write(path, text).unwrap();
     }
-    let hold = "name = \"hold\"\n[step]\nkind = \"exec\"\ncommand = [\"sh\", \"-c\", \"sleep 611 & sleep 611; wait\"]\n\
+    let hold = "name = \"hold\"\n[[step]]\nkind = \"exec\"\ncommand = [\"sh\", \"-c\", \"sleep 611 & sleep 611; wait\"]\n\
                 timeout = \"20m\"\n";
     fs::write(dir.path().join("config/aae/shop/formulas/hold.toml"), hold).unwrap();
     let log = fs::File::create(dir.path().join("daemon.log")).unwrap();

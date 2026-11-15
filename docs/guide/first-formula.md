@@ -61,7 +61,7 @@ description = "Write a one-paragraph summary of a file"
 [inputs]
 file = { type = "string", required = true }   # bead | string | integer | boolean
 
-[step]
+[[step]]
 kind = "prompt"
 agent = "helper"
 prompt = "summarize.md"               # relative to this file

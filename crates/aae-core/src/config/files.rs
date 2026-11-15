@@ -330,7 +330,7 @@ pub(super) struct FormulaFile {
     /// Each run works in a git worktree of its own that aae makes and removes (spec §11.5).
     #[serde(default)]
     pub worktree: bool,
-    pub step: StepFile,
+    pub step: Vec<StepFile>,
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq)]
@@ -356,6 +356,7 @@ pub struct Input {
 #[serde(tag = "kind", rename_all = "lowercase", deny_unknown_fields)]
 pub(super) enum StepFile {
     Prompt {
+        name: Option<String>,
         agent: String,
         prompt: PathBuf,
         timeout: Option<String>,
@@ -364,6 +365,7 @@ pub(super) enum StepFile {
         effort: Option<String>,
     },
     Exec {
+        name: Option<String>,
         command: Vec<String>,
         timeout: Option<String>,
     },

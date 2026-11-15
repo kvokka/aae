@@ -39,7 +39,7 @@ async fn until_event(events: &mut aae_front::client::Events, kind: &str, id: &st
 #[tokio::test]
 async fn a_bead_written_by_hand_is_seen_and_a_run_on_it_claims_and_closes_it_in_br() {
     let fix = "name = \"fix\"\n[inputs]\nbead = { type = \"bead\", required = true }\n\
-               [step]\nkind = \"exec\"\ncommand = [\"true\"]\ntimeout = \"10s\"\n";
+               [[step]]\nkind = \"exec\"\ncommand = [\"true\"]\ntimeout = \"10s\"\n";
     let seed = std::cell::RefCell::new(String::new());
     let d = Daemon::start(|dir| {
         let project = dir.join("config/aae/shop");

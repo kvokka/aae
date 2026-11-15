@@ -1,7 +1,7 @@
 //! References between files: names resolved to their packs (spec §8.2), trigger inputs against their formula,
 //! rigs and overrides against what the project has; the tables of the bundled plugins; the watchdog table.
 
-use super::{BUNDLED, Bundled, Name, Pack, Project, Step, Variant, Watchdog, load::Loader};
+use super::{BUNDLED, Bundled, Name, Pack, Project, StepKind, Variant, Watchdog, load::Loader};
 use crate::template::Inputs;
 use serde_json::{Map, Value};
 use std::{collections::BTreeMap, path::Path};
@@ -27,10 +27,12 @@ pub(super) fn project(loader: &mut Loader, project: &mut Project, variants: &BTr
             "aae.toml"
         });
         for (name, formula) in &mut pack.formulas {
-            if let Step::Prompt { agent, .. } = &mut formula.step {
-                match resolve(&index, &own, agent, has_agent, "agent") {
-                    Ok(found) => *agent = found,
-                    Err(e) => loader.fail(&manifest, format!("formula `{name}`: {e}")),
+            for step in &mut formula.steps {
+                if let StepKind::Prompt { agent, .. } = &mut step.kind {
+                    match resolve(&index, &own, agent, has_agent, "agent") {
+                        Ok(found) => *agent = found,
+                        Err(e) => loader.fail(&manifest, format!("formula `{name}`: {e}")),
+                    }
                 }
             }
         }

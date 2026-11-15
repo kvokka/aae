@@ -313,7 +313,7 @@ async fn a_restart_starts_the_daemon_again_in_the_same_process() {
         // A binary of its own, to replace on disk before the restart, as an upgrade does.
         fs::create_dir_all(dir.join("bin")).unwrap();
         fs::copy(env!("CARGO_BIN_EXE_aae"), dir.join("bin/aae")).unwrap();
-        let brief = "name = \"brief\"\n[step]\nkind = \"exec\"\ncommand = [\"sleep\", \"1\"]\ntimeout = \"10s\"\n";
+        let brief = "name = \"brief\"\n[[step]]\nkind = \"exec\"\ncommand = [\"sleep\", \"1\"]\ntimeout = \"10s\"\n";
         fs::write(dir.join("config/aae/shop/formulas/brief.toml"), brief).unwrap();
     })
     .await;
@@ -375,7 +375,7 @@ async fn a_restart_starts_the_daemon_again_in_the_same_process() {
 #[tokio::test]
 async fn the_daemon_exits_with_an_error_once_its_core_stops() {
     let mut d = Daemon::start(|dir| {
-        let long = "name = \"long\"\n[step]\nkind = \"exec\"\ncommand = [\"sleep\", \"30\"]\ntimeout = \"1s\"\n";
+        let long = "name = \"long\"\n[[step]]\nkind = \"exec\"\ncommand = [\"sleep\", \"30\"]\ntimeout = \"1s\"\n";
         fs::write(dir.join("config/aae/shop/formulas/long.toml"), long).unwrap();
     })
     .await;

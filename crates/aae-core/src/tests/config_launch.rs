@@ -36,7 +36,7 @@ fn load(changes: &[(&str, &str)]) -> Result<Config, Vec<ConfigError>> {
 }
 
 fn run(config: &Config) -> (String, EffectiveConfig) {
-    config.for_run("shop", "backend", "kit.implement").unwrap()
+    config.for_run("shop", "backend", "kit.implement", "1").unwrap()
 }
 
 fn rejected(changes: &[(&str, &str)], needle: &str) {
@@ -97,13 +97,16 @@ fn the_pack_and_the_formula_step_are_layers() {
     let pack = "name = \"kit\"\nversion = \"0.3.0\"\nrequires_plugins = [\"mail\"]\n\
                 [[trigger]]\nname = \"nightly\"\ncron = \"0 3 * * *\"\nrun = \"audit\"\n[settings]\nmodel = \"haiku\"\neffort = \"low\"\n";
     let formula = "name = \"implement\"\n[inputs]\nbead = { type = \"bead\", required = true }\n\
-                   [step]\nkind = \"prompt\"\nagent = \"implementer\"\nprompt = \"implement.md\"\neffort = \"max\"\n";
+                   [[step]]\nkind = \"prompt\"\nagent = \"implementer\"\nprompt = \"implement.md\"\neffort = \"max\"\n";
     let config = load(&[("kit/pack.toml", pack), ("kit/formulas/implement.toml", formula)]).unwrap();
     let (agent, e) = run(&config);
     assert_eq!(agent, "kit.implementer");
     // The rig override of BASE is stronger than both.
     assert_eq!(e.model, Some(from(Layer::RigOverride, "opus")));
-    assert_eq!(e.effort, Some(from(Layer::Formula("kit.implement".into()), "max")));
+    assert_eq!(
+        e.effort,
+        Some(from(Layer::Formula("kit.implement step 1".into()), "max"))
+    );
     let project = "packs = [\"../kit\"]\n[rigs.backend]\npath = \"backend\"\n";
     let config = load(&[("kit/pack.toml", pack), ("shop/aae.toml", project)]).unwrap();
     let (_, e) = run(&config);
@@ -123,7 +126,7 @@ fn the_pack_and_the_formula_step_are_layers() {
         &[("kit/pack.toml", &format!("{pack}system_prompt = \"x\"\n"))],
         "unknown field `system_prompt`",
     );
-    let exec = "name = \"audit\"\n[step]\nkind = \"exec\"\ncommand = [\"true\"]\nmodel = \"opus\"\n";
+    let exec = "name = \"audit\"\n[[step]]\nkind = \"exec\"\ncommand = [\"true\"]\nmodel = \"opus\"\n";
     rejected(&[("kit/formulas/audit.toml", exec)], "unknown field `model`");
 }
 

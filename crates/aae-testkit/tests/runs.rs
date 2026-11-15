@@ -302,7 +302,7 @@ async fn a_run_whose_workdir_is_gone_fails_with_the_reason_and_no_launch() {
 #[tokio::test(start_paused = true)]
 async fn a_prompt_empty_after_substitution_fails_the_run_before_a_launch() {
     let formula = "name = \"build\"\n[inputs.goal]\ntype = \"string\"\n\
-                   [step]\nkind = \"prompt\"\nagent = \"dev\"\nprompt = \"build.md\"\n";
+                   [[step]]\nkind = \"prompt\"\nagent = \"dev\"\nprompt = \"build.md\"\n";
     let w = world(&[
         ("shop/formulas/build.toml", formula),
         ("shop/formulas/build.md", "{{ inputs.goal }}\n"),

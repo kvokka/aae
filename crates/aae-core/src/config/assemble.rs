@@ -21,7 +21,7 @@ pub enum Layer {
     Agent,
     /// `[settings]` of the pack of the run's formula.
     Pack(String),
-    /// The `[step]` of the run's formula.
+    /// The `[[step]]` of the run's formula.
     Formula(String),
     /// The agent variant of the run (`[agents.<name>]`).
     Variant(String),

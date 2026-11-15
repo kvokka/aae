@@ -59,7 +59,7 @@ async fn a_claude_session_of_a_worktree_formula_works_in_its_worktree() {
             ),
             (
                 shop.join("formulas/build.toml"),
-                "name = \"build\"\nworktree = true\n[step]\nkind = \"prompt\"\nagent = \"dev\"\nprompt = \"build.md\"\n"
+                "name = \"build\"\nworktree = true\n[[step]]\nkind = \"prompt\"\nagent = \"dev\"\nprompt = \"build.md\"\n"
                     .to_owned(),
             ),
             (shop.join("formulas/build.md"), "Build {{ rig.name }}.".to_owned()),

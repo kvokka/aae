@@ -32,7 +32,7 @@ pub(crate) const FILES: &[(&str, &str)] = &[
     ("shop/agents/dev/agent.toml", "harness = \"scripted\"\n"),
     (
         "shop/formulas/build.toml",
-        "name = \"build\"\n[step]\nkind = \"prompt\"\nagent = \"dev\"\nprompt = \"build.md\"\n",
+        "name = \"build\"\n[[step]]\nkind = \"prompt\"\nagent = \"dev\"\nprompt = \"build.md\"\n",
     ),
     ("shop/formulas/build.md", "Build {{ rig.name }}."),
 ];
