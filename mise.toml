@@ -30,6 +30,8 @@ run = [
   "scripts/select-biased.sh",
   "scripts/budget-selftest.sh",
   "scripts/budget.sh",
+  # The repository is public: no absolute home paths of the machine the demos or tests ran on.
+  "! git grep -nE '/(home|Users)/[A-Za-z]' -- . ':!.loop' ':!docs/init'",
 ]
 
 [tasks.build-all]

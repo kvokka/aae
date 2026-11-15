@@ -17,7 +17,7 @@ Open <http://127.0.0.1:5173> in a desktop browser.
 Start the high-score backend separately from its rig:
 
 ```sh
-cd /home/ubuntu/proj/work/aae/demos/2-multirepo-qa/backend
+cd ../backend
 python3 server.py
 ```
 

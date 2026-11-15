@@ -20,7 +20,8 @@ Each task is a list of plain commands in `[tasks.<name>]` of `mise.toml`; run th
 - `test`: `cargo nextest run --locked`.
 - `ci`: `cargo fmt --all --check`, `cargo clippy --all-targets --locked -q -- -D warnings`,
   `cargo nextest run --locked --no-tests=warn`, `cargo deny check`, `cargo machete`, then `scripts/unused-pub.sh`,
-  `scripts/core-boundary.sh`, `scripts/select-biased.sh`, `scripts/budget-selftest.sh`, `scripts/budget.sh`.
+  `scripts/core-boundary.sh`, `scripts/select-biased.sh`, `scripts/budget-selftest.sh`, `scripts/budget.sh`, and a
+  `git grep` that fails on an absolute home path (`/home/…`, `/Users/…`) outside `.loop/` and `docs/init/`.
 - `acceptance-ci`: `cargo build -q --locked -p aae`, then `cargo run -q --locked -p aae-acceptance -- --ci`.
 - `acceptance`: the same without `--ci`.
 - `acceptance-release`: `cargo run -q --locked -p aae-acceptance -- 1`.
@@ -31,7 +32,7 @@ Each task is a list of plain commands in `[tasks.<name>]` of `mise.toml`; run th
 | Task | What it runs | Where | Wall time |
 |---|---|---|---|
 | `mise run test` | unit and integration tests (`cargo nextest run`), the chaos stand among them | locally, the everyday loop; CI too | 29 s (2026-11-14, `1a732a4`) |
-| `mise run ci` | the above plus formatting, clippy, `cargo deny`, `cargo machete`, the unused-`pub` check, the line budgets and the core boundary (`scripts/core-boundary.sh`: no harness name, `br`, `max_sessions`, `instance_idle_s`, `beads_dir` or `.beads` in the code of `aae-core`) and the fixed branch order of its `select!` (`scripts/select-biased.sh`: `biased;` with a comment on the order) | locally before a commit; CI on every commit | 62 s (2026-11-14, `75a5ee0`) |
+| `mise run ci` | the above plus formatting, clippy, `cargo deny`, `cargo machete`, the unused-`pub` check, the line budgets and the core boundary (`scripts/core-boundary.sh`: no harness name, `br`, `max_sessions`, `instance_idle_s`, `beads_dir` or `.beads` in the code of `aae-core`) and the fixed branch order of its `select!` (`scripts/select-biased.sh`: `biased;` with a comment on the order), no absolute home paths in the repository | locally before a commit; CI on every commit | 62 s (2026-11-14, `75a5ee0`) |
 | `mise run acceptance-ci` | the acceptance scenarios without a model, each on a real `aae daemon`, then the checks of criteria 9, 11, 17, 22 and 23 | CI on every commit (job `acceptance`); locally optional | 71 s warm (2026-11-14, `75a5ee0`) |
 | `mise run acceptance-release` | criterion 1: `cargo zigbuild --release` for the four targets, then this host's binary runs | locally, the full acceptance run; no tag is made for it | 169 s cold (2026-11-14, `a070cd6`+WP-52) |
 | `mise run acceptance` | all acceptance scenarios, including those on a real model; the rows of criterion 20 run `demos/<demo>/run.sh`, whose result stays in the demo's directory, ignored by git | by hand: they cost money and need a harness login | not measured |
