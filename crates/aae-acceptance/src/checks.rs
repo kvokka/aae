@@ -90,6 +90,13 @@ pub(crate) const ALL: &[Scenario] = &[
         run: |env| Box::pin(demo(env, "1-planner-executor")),
     },
     Scenario {
+        criterion: "20",
+        title: "demo 2: demo 1 on openai models, then a rumdl check and a qa agent in a browser send the work back to \
+            the planner until both pass, in at most three rounds, unattended",
+        launch: Launch::Request,
+        run: |env| Box::pin(demo(env, "2-multirepo-qa")),
+    },
+    Scenario {
         criterion: "22",
         title: "line budgets, MEASURE markers, a current readiness file whose scores the rows allow, all 8 or more",
         launch: Launch::Ci,
@@ -184,7 +191,7 @@ async fn tests(env: Arc<Env>, filter: &str, want: u32) -> String {
 
 async fn demos_load(env: Arc<Env>) -> String {
     let aae = env.aae.to_string_lossy().into_owned();
-    for demo in ["1-planner-executor"] {
+    for demo in ["1-planner-executor", "2-multirepo-qa"] {
         let config = format!("demos/{demo}/root/config.toml");
         command(&env, &aae, &["config", "check", "--config", &config]).await;
     }

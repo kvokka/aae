@@ -1,0 +1,37 @@
+name = "deliver"
+description = "A request becomes beads per rig, coders do them, and checks send the work back until it holds"
+rounds = 3                                  # at most three rounds of checks and returns
+
+[inputs]
+bead = { type = "bead", required = true }   # `{ request = "<text>" }`: the request becomes the root bead
+
+[[step]]
+name = "plan"
+kind = "prompt"
+agent = "planner"
+prompt = "plan.md"
+timeout = "20m"
+
+[[step]]
+name = "work"
+kind = "drain"
+formula = "implement"                       # a run per ready bead under the root, on the rig of its `rig:` label
+
+# The format of the Markdown in every rig: rumdl fixes what it can; what it cannot goes back to the planner.
+[[step]]
+name = "format"
+kind = "exec"
+command = ["sh", "-c", """
+project=$(aae --json run show "$AAE_RUN" | jq -r .project)
+aae --json project list --project "$project" | jq -j '.[].rigs[].path + "\\u0000"' | xargs -0 rumdl check --fix
+"""]
+back_to = "plan"
+
+# The project's own conditions, tried as a user would; a failure goes back to the planner with what failed.
+[[step]]
+name = "qa"
+kind = "prompt"
+agent = "qa"
+prompt = "qa.md"
+timeout = "20m"
+back_to = "plan"

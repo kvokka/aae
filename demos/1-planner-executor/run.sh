@@ -73,7 +73,7 @@ tokens=$(jq -rs '[.[] | select(.type == "run.passed" or .type == "run.failed") |
   echo
   echo '| run | formula | step | rig | agent | state |'
   echo '|---|---|---|---|---|---|'
-  "$aae" --json run list --project planner-executor | jq -r 'sort_by(.created_at) | .[] |
+  "$aae" --json run list --project planner-executor | jq -r 'sort_by(.created_at, (.id | length), .id) | .[] |
     "| \(.id) | \(.formula) | \(.step // "") | \(.workdir | split("/") | last) | \(.agent // "") | \(.state) |"'
   echo
   echo "The outcome of the run (\`aae run wait\`):"

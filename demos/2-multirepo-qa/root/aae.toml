@@ -1,0 +1,29 @@
+name = "multirepo-qa"
+packs = ["../pack"]                   # the agents and the formulas; the request comes from the user at the start
+
+# The user's settings: what the agents of the pack run on here, and how.
+[settings]
+inherit_host = false                  # only what this config sets reaches the agents; the logins come from the host
+permission_mode = "never"             # codex's approval policy: the demo runs unattended
+
+[overrides.planner]
+model = "sol"
+[overrides.coder]
+model = "luna"
+[overrides.qa]
+model = "terra"
+
+[rigs.root]
+path = "."                            # the planner and qa work here, next to the beads
+[rigs.root.vars]
+# The conditions of the qa check: the project's, not the pack's, which knows nothing of the task.
+checks = """
+- The backend starts as its README says and keeps high scores across a restart of it.
+- The game opens from the frontend in a browser (`agent-browser`, headless) and is a snake game that plays: take a
+  screenshot, press arrow keys for a few seconds, take another, and look at both; the snake has moved.
+- A finished game can send its score, and the high scores the backend keeps show in the page."""
+
+[rigs.frontend]
+path = "../frontend"
+[rigs.backend]
+path = "../backend"

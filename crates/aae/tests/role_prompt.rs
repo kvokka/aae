@@ -14,6 +14,18 @@ fn load(demo: &Path) -> Config {
     load_for(&demo.join("root/config.toml"), ADAPTERS, Default::default()).unwrap()
 }
 
+/// The pack of the demo, its project files and its empty rigs into `to`: not what a run of it left behind.
+fn copy_demo(to: &Path) {
+    let demo = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../demos").join(DEMO);
+    copy(&demo.join("pack"), &to.join("pack"));
+    for dir in ["root", "frontend", "backend"] {
+        std::fs::create_dir_all(to.join(dir)).unwrap();
+    }
+    for file in ["root/config.toml", "root/aae.toml"] {
+        std::fs::copy(demo.join(file), to.join(file)).unwrap();
+    }
+}
+
 /// `from` into `to`, recursively.
 fn copy(from: &Path, to: &Path) {
     std::fs::create_dir_all(to).unwrap();
@@ -51,10 +63,7 @@ fn the_user_layers_of_the_demo_decide_what_the_agents_run_on() {
 #[test]
 fn the_role_prompt_of_a_pack_agent_reaches_both_adapters() {
     let demo = tempfile::tempdir().unwrap();
-    copy(
-        &Path::new(env!("CARGO_MANIFEST_DIR")).join("../../demos").join(DEMO),
-        demo.path(),
-    );
+    copy_demo(demo.path());
     let role = "You write code. Before you say it works, you test what you wrote.";
     std::fs::write(demo.path().join("pack/agents/coder/prompt.md"), role).unwrap();
     let config = load(demo.path());
