@@ -18,6 +18,7 @@ mod c16_beads;
 mod c17_mcp;
 mod c18_journal;
 mod c19_gates;
+mod c20_demo2;
 mod c20_format;
 mod c24_drain;
 mod c25_return;
@@ -168,6 +169,13 @@ pub(crate) const ALL: &[Scenario] = &[
         with rumdl's findings",
         launch: Launch::Ci,
         run: |env| Box::pin(c20_format::run(env)),
+    },
+    Scenario {
+        criterion: "20",
+        title: "demo 2's pack in a second round: format fails, the planner gets rumdl's findings and files a fix, the \
+        drain runs only the new bead, format and qa pass",
+        launch: Launch::Ci,
+        run: |env| Box::pin(c20_demo2::run(env)),
     },
     Scenario {
         criterion: "24",
