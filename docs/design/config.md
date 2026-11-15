@@ -15,8 +15,8 @@ error in every file.
   error the previous config stays in force, and `aae config check` reports the errors without applying anything
   (it loads the file itself, so it needs no daemon).
 - A reload is taken by new runs and by the schedules (a schedule whose `cron`/`every` changed, and every `cron` when
-  `timezone` changed, is set again from the reload; a removed one is dropped); running runs keep the snapshot they
-  prepared with; an idle instance stops with reason `config` only when no agent of the new config, on any rig, starts
+  `timezone` changed, is set again from the reload; a removed one is dropped); the snapshot is per step: a running
+  step keeps the one it prepared with, and the next step of the run prepares with the config of that moment; an idle instance stops with reason `config` only when no agent of the new config, on any rig, starts
   sessions on its fingerprint (a changed MCP restarts only the instances it is part of). It emits `config.reloaded`
   with the generation (1 at daemon start). A change of the set of harnesses, a harness `binary` or any adapter setting
   such as `max_sessions` (a harness `model` is fine), or of which projects have a `.beads` tracker is refused: drivers
