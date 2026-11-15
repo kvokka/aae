@@ -118,7 +118,7 @@ todo | doing | done | blocked | split (разбит, работа — в доч�
 - Цикл 80: `29d2541`. План — `.loop/cycles/80/notes/wp69-plan.md` (expert), реализация — subcoder; тесты
   `crates/aae/tests/git_cache.rs`, `config_sources.rs`, строка §15 `c26_git.rs`.
 
-### WP-70 · Демо 1: `demos/1-planner-executor/` · размер M · статус: todo
+### WP-70 · Демо 1: `demos/1-planner-executor/` · размер M · статус: done
 - Спека: §15 «Демо»; решения 39, 86, 87; критерий 20. Зависит от: WP-66, WP-67.
 - Сделать: убрать старые демо (`git rm -r -q`, раздел 8 правил). Новая раскладка: `pack/` (агенты `planner` и `coder`;
   формула: `prompt` планировщика → `drain` → `exec`-проверка, что биды закрыты), `root/` (`config.toml` с подсказкой,
