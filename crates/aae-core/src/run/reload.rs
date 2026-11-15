@@ -104,8 +104,8 @@ impl RunHandler {
         for p in &self.config.projects {
             let formulas = (p.packs.iter()).flat_map(|pack| pack.formulas.iter().map(move |(n, f)| (pack, n, f)));
             // Every step: a reload must not stop the instance a later step of a live run is to use.
-            // shortcut: an agent a bead's `agent:` label names is not among them, so its idle instance may stop and start
-            // cold; add the live runs' `as_agent` if cold starts show.
+            // shortcut: an agent a bead's `agent:` label names is not among them, so its idle instance may stop and
+            // start cold; add the live runs' `as_agent` if cold starts show.
             let steps =
                 formulas.flat_map(|(pack, n, f)| f.steps.iter().map(move |s| (format!("{}.{n}", pack.name), s)));
             for (formula, step) in steps {

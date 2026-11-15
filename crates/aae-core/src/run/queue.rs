@@ -129,7 +129,8 @@ impl RunHandler {
                 if &config.harness != harness {
                     let bead = bead.as_deref().unwrap_or_default();
                     return Err(rejected(format!(
-                        "bead `{bead}` is labelled `harness:{harness}`: the config gives `{}` to `{agent}` on `{rig_name}`",
+                        "bead `{bead}` is labelled `harness:{harness}`: the config gives `{}` to `{agent}` on \
+                         `{rig_name}`",
                         config.harness
                     )));
                 }
