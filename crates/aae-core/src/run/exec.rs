@@ -45,7 +45,14 @@ impl Executor for RunExecutor {
     /// A driver failure is an attempt failure reported to the writer, never a retry of the effect.
     fn execute<'a>(&'a self, _key: &'a str, payload: &'a Value) -> BoxFuture<'a, bool> {
         Box::pin(async move {
-            let Some(core) = self.core.get() else { return true };
+            // The writer may take its first effect (a recovery sweep, a deciding hook) before `start` has set the
+            // handle right after spawning it: the effect waits for it, it is never dropped as done.
+            let core = loop {
+                if let Some(core) = self.core.get() {
+                    break core;
+                }
+                tokio::task::yield_now().await;
+            };
             match payload["op"].as_str() {
                 Some("hooks") => self.hooks.run(core, payload).await,
                 Some("tracker") => return super::beads::execute(&self.trackers, core, payload).await,
