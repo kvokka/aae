@@ -59,4 +59,7 @@ fn bad_steps_are_errors() {
     ] {
         fails(&[(FLOW, &flow)], error);
     }
+    let twice = format!("name = \"flow\"\n{}{}", exec(Some("a")), exec(Some("a")));
+    let errors = load_with(&[(FLOW, &twice)]).unwrap_err();
+    assert_eq!(errors.len(), 1, "one error for one cause: {errors:?}");
 }

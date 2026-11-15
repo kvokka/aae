@@ -113,11 +113,10 @@ impl Loader {
             };
             let name = name.unwrap_or_else(|| (at + 1).to_string());
             self.name(file, "step", &name);
+            let variable = format!("AAE_STEP_{}_", super::upper(&name));
             if steps.iter().any(|s| s.name == name) {
                 self.fail(file, format!("two steps are named `{name}`"));
-            }
-            let variable = format!("AAE_STEP_{}_", super::upper(&name));
-            if let Some(other) = variables.insert(variable.clone(), format!("step `{name}`")) {
+            } else if let Some(other) = variables.insert(variable.clone(), format!("step `{name}`")) {
                 self.fail(file, format!("{other} and step `{name}` are both `{variable}*`"));
             }
             let kind = self.step(file, &raw.inputs, &steps, step)?;
