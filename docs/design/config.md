@@ -413,7 +413,8 @@ declared by the orchestrator or the project.
 `prompt` (role prompt file, default `prompt.md`
 when it exists; its text is the agent layer's `system_prompt`, so an override may still replace it, and setting
 `system_prompt` in `agent.toml` too is an error), `max_runs` (optional positive integer: runs of this agent
-started at once in its project; the orchestrator's `max_runs` still applies), then the settings keys above. Its
+started at once in its project; the orchestrator's `max_runs` still applies; known limit: it is checked when a run
+leaves the queue or a park, so a run whose next step is of this agent enters that step past the limit), then the settings keys above. Its
 `harness`, `model` and `effort` are the defaults of the role: a pack, a formula, a variant or an override may change
 any of them, and an agent that names no `harness` needs a layer that does.
 A role prompt file that is empty or only whitespace is a load error naming the file.
