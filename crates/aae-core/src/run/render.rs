@@ -34,7 +34,8 @@ impl RunHandler {
             (StepKind::Prompt { prompt, timeout, .. }, false) => (prompt, timeout),
             _ => return Err(format!("step `{}` of `{}` changed its kind", row.step, row.formula)),
         };
-        let (agent, config) = self.config.for_run(&row.project, &row.rig, &row.formula, &row.step)?;
+        let (agent, config) =
+            (self.config).for_run_as(&row.project, &row.rig, &row.formula, &row.step, row.as_agent.as_deref())?;
         if agent != row.agent {
             return Err(format!("`{}` now runs agent `{agent}`", row.formula));
         }

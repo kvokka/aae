@@ -70,10 +70,22 @@ impl RunHandler {
                 "bead `{id}` is not in the ready list of `{project}`: name the rig"
             ))
         })?;
-        match rigs(&body)[..] {
+        match labelled(&body, "rig")[..] {
             [rig] => Ok(rig.to_owned()),
             [] => Err(rejected(format!("bead `{id}` has no `rig:` label: name the rig"))),
             _ => Err(rejected(format!("bead `{id}` is labelled for several rigs: name one"))),
+        }
+    }
+
+    /// The value of the one `<prefix>:` label of `bead`; `None`: it has none, or it is not in the ready list (only a
+    /// bead of the ready list has known labels).
+    pub(super) fn label(tx: &Tx<'_>, project: &str, bead: &str, prefix: &str) -> Result<Option<String>, Error> {
+        let sql = "SELECT body FROM ready_beads WHERE project = ?1 AND id = ?2";
+        let body: Option<Value> = tx.sql().query_row(sql, [project, bead], |r| r.get(0)).optional()?;
+        match body.as_ref().map(|b| labelled(b, prefix)).unwrap_or_default()[..] {
+            [] => Ok(None),
+            [value] => Ok(Some(value.to_owned())),
+            _ => Err(rejected(format!("bead `{bead}` has several `{prefix}:` labels"))),
         }
     }
 
@@ -347,13 +359,13 @@ pub(super) async fn execute(trackers: &Trackers, core: &CoreHandle<Msg>, payload
 
 /// A bead (as JSON) with a `rig:` label, none of them `rig:<rig>`, belongs to another rig (spec §2, decision 52).
 fn other_rig(bead: &Value, rig: &str) -> bool {
-    let rigs = rigs(bead);
+    let rigs = labelled(bead, "rig");
     !rigs.is_empty() && !rigs.contains(&rig)
 }
 
-/// The rigs of the `rig:` labels of a bead (as JSON).
-fn rigs(bead: &Value) -> Vec<&str> {
+/// The values of the `<prefix>:` labels of a bead (as JSON).
+fn labelled<'a>(bead: &'a Value, prefix: &str) -> Vec<&'a str> {
     (bead["labels"].as_array().into_iter().flatten())
-        .filter_map(|l| l.as_str()?.strip_prefix("rig:"))
+        .filter_map(|l| l.as_str()?.strip_prefix(prefix)?.strip_prefix(':'))
         .collect()
 }

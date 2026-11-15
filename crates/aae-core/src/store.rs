@@ -229,6 +229,8 @@ pub fn open(path: &Path) -> rusqlite::Result<Connection> {
             "ALTER TABLE runs ADD COLUMN step TEXT NOT NULL DEFAULT '1'; \
              ALTER TABLE attempts ADD COLUMN step TEXT NOT NULL DEFAULT '1';",
         ),
+        // The agent the `agent:` label of a run's bead names for its prompt steps (spec §9.1).
+        (19, "ALTER TABLE runs ADD COLUMN as_agent TEXT;"),
     ]
     .into_iter()
     .filter(|(to, _)| *to > version)

@@ -14,7 +14,11 @@ use std::time::Duration;
 
 impl World {
     async fn finish(&self, run: &str, result: Verdict, summary: &str) {
-        let token = self.driver.token(run, 1).unwrap();
+        self.finish_attempt(run, 1, result, summary).await;
+    }
+
+    async fn finish_attempt(&self, run: &str, attempt: u32, result: Verdict, summary: &str) {
+        let token = self.driver.token(run, attempt).unwrap();
         let outcome = Outcome {
             result,
             summary: summary.into(),
@@ -335,4 +339,49 @@ async fn a_start_without_a_rig_takes_it_from_the_label_of_the_bead() {
     );
     // A refused start leaves the bead free: named with a rig, it is taken.
     w.fix(json!(none)).await.unwrap();
+}
+
+/// The labels of a bead name the agent of every prompt step of its run and the harness it is for (spec §9.1).
+#[tokio::test(start_paused = true)]
+async fn a_bead_names_the_agent_of_its_run_and_the_harness_it_is_for() {
+    let pair = "name = \"pair\"\n[inputs]\nbead = { type = \"bead\", required = true }\n\
+        [[step]]\nname = \"one\"\nkind = \"prompt\"\nagent = \"dev\"\nprompt = \"fix.md\"\n\
+        [[step]]\nname = \"two\"\nkind = \"prompt\"\nagent = \"dev\"\nprompt = \"fix.md\"\n";
+    let extra = [
+        ("shop/agents/qa/agent.toml", "harness = \"scripted\"\n"),
+        ("shop/formulas/pair.toml", pair),
+    ];
+    let w = world(&[FIX, &extra].concat());
+    let [qa, codex, twice] = [
+        w.tracker.add(&["agent:qa", "harness:scripted"], None),
+        w.tracker.add(&["harness:codex"], None),
+        w.tracker.add(&["agent:qa", "agent:dev"], None),
+    ];
+    w.changed().await;
+    let refused = async |bead: &str| w.fix(json!(bead)).await.unwrap_err().to_string();
+    let why = refused(&codex).await;
+    assert!(
+        why.contains("labelled `harness:codex`: the config gives `scripted` to `shop.dev` on `web`"),
+        "{why}"
+    );
+    assert!(refused(&twice).await.contains("has several `agent:` labels"));
+    w.driver.script(slow_turn());
+    w.driver.script(slow_turn());
+    let run = w.start_bead("pair", Some("web"), json!(qa)).await.unwrap()["run"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+    for attempt in [1, 2] {
+        for _ in 0..60 {
+            if w.driver.token(&run, attempt).is_some() {
+                break;
+            }
+            tokio::time::sleep(Duration::from_secs(1)).await;
+        }
+        w.finish_attempt(&run, attempt, Verdict::Pass, "done").await;
+    }
+    tokio::time::sleep(Duration::from_secs(20)).await;
+    let events = w.events(&run, Duration::ZERO).await;
+    assert_eq!(last(&events, "run.queued")["run"]["agent"], "shop.qa");
+    assert_eq!(last(&events, "run.passed")["run"]["agent"], "shop.qa", "step two");
 }

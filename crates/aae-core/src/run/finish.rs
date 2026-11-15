@@ -101,7 +101,7 @@ impl RunHandler {
         };
         // shortcut: the agent's `max_runs` is read when a run leaves the queue or a park, not here; check it at the
         // step boundary once formulas mix agents with tight limits.
-        let agent = self.step_agent(&row.project, &row.rig, &row.formula, &next);
+        let agent = self.step_agent(&row.project, &row.rig, &row.formula, &next, row.as_agent.as_deref());
         let agent = match agent {
             Ok((agent, _)) => agent,
             Err(reason) => return self.terminal(tx, row, "failed", Some("infrastructure"), &reason),

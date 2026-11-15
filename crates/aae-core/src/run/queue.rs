@@ -11,17 +11,19 @@ use serde_json::{Value, json};
 
 impl RunHandler {
     /// The agent of `step` of a run of `formula` on `rig` — the one the rig runs for it, a variant by its name — and
-    /// the model key of its config; an exec step has none, and the runs table keeps an empty name.
+    /// the model key of its config; an exec step has none, and the runs table keeps an empty name. `as_agent`: the
+    /// agent the run's bead names in place of the step's.
     pub(super) fn step_agent(
         &self,
         project: &str,
         rig: &str,
         formula: &str,
         step: &Step,
+        as_agent: Option<&str>,
     ) -> Result<(String, Option<String>), String> {
         match step.kind {
             StepKind::Prompt { .. } => {
-                let (agent, config) = self.config.for_run(project, rig, formula, &step.name)?;
+                let (agent, config) = self.config.for_run_as(project, rig, formula, &step.name, as_agent)?;
                 Ok((agent, config.model_key()))
             }
             StepKind::Exec { .. } => Ok((String::new(), None)),
@@ -51,9 +53,6 @@ impl RunHandler {
                 "`{name}` starts with an exec step: it has no session to continue"
             )));
         }
-        let (agent, model) = self
-            .step_agent(&c.project, &rig_name, &name.to_string(), first)
-            .map_err(rejected)?;
         if let Some(extra) = c.inputs.keys().find(|k| !formula.inputs.contains_key(*k)) {
             return Err(rejected(format!("`{name}` has no input `{extra}`")));
         }
@@ -106,6 +105,39 @@ impl RunHandler {
             },
             None => None,
         };
+        // The bead names the agent of the run and the harness it is for (spec §9.1).
+        let label = |prefix| {
+            bead.as_deref()
+                .map_or(Ok(None), |id| Self::label(tx, &c.project, id, prefix))
+        };
+        let (as_agent, harness) = (label("agent")?, label("harness")?);
+        if let Some(harness) = &harness {
+            let prompts = formula
+                .steps
+                .iter()
+                .filter(|s| matches!(s.kind, StepKind::Prompt { .. }));
+            for step in prompts {
+                let (agent, config) = (self.config)
+                    .for_run_as(
+                        &c.project,
+                        &rig_name,
+                        &name.to_string(),
+                        &step.name,
+                        as_agent.as_deref(),
+                    )
+                    .map_err(rejected)?;
+                if &config.harness != harness {
+                    let bead = bead.as_deref().unwrap_or_default();
+                    return Err(rejected(format!(
+                        "bead `{bead}` is labelled `harness:{harness}`: the config gives `{}` to `{agent}` on `{rig_name}`",
+                        config.harness
+                    )));
+                }
+            }
+        }
+        let (agent, model) = self
+            .step_agent(&c.project, &rig_name, &name.to_string(), first, as_agent.as_deref())
+            .map_err(rejected)?;
         // A continued session resumes in the workdir it ran in (a harness may find its transcript by the cwd).
         let mut workdir = rig.path.to_string_lossy().into_owned();
         if let Some(from) = &c.continue_from {
@@ -137,8 +169,8 @@ impl RunHandler {
         }
         tx.sql().execute(
             "INSERT INTO runs (n, id, project, rig, formula, agent, inputs, correlation, depth, parent_run, \
-             workdir, state, created_ms, continue_from, bead, step) \
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, 'queued', ?12, ?13, ?14, ?15)",
+             workdir, state, created_ms, continue_from, bead, step, as_agent) \
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, 'queued', ?12, ?13, ?14, ?15, ?16)",
             params![
                 n,
                 id,
@@ -154,7 +186,8 @@ impl RunHandler {
                 tx.now_ms(),
                 c.continue_from,
                 bead,
-                first.name
+                first.name,
+                as_agent
             ],
         )?;
         let row = Row::load(tx, &id)?;

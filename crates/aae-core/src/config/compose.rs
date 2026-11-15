@@ -51,6 +51,19 @@ impl Config {
         formula: &str,
         step: &str,
     ) -> Result<(String, EffectiveConfig), String> {
+        self.for_run_as(project, rig, formula, step, None)
+    }
+
+    /// [`Self::for_run`] with the agent `as_agent` (a variant's name, else an agent's) in place of the step's: the
+    /// one the `agent:` label of a run's bead names (spec §9.1).
+    pub fn for_run_as(
+        &self,
+        project: &str,
+        rig: &str,
+        formula: &str,
+        step: &str,
+        as_agent: Option<&str>,
+    ) -> Result<(String, EffectiveConfig), String> {
         let (p, r) = self.place(project, Some(rig))?;
         let (name, f) = p.formula(formula)?;
         let kind = f.step(step).map(|s| &s.kind);
@@ -64,21 +77,31 @@ impl Config {
             .map(|pack| (Layer::Pack(pack.name.clone()), pack.settings.clone()))
             .collect();
         middle.push((Layer::Formula(format!("{name} step {step}")), (**settings).clone()));
-        let Some(variant) = r.and_then(|r| r.agents.get(agent)) else {
-            let a = agent_of(p, agent)?;
-            let own = p.packs.first().map(|pack| pack.name.as_str()).unwrap_or_default();
-            let has_agent = |pack: &Pack, n: &str| pack.agents.contains_key(n);
+        let own = p.packs.first().map(|pack| pack.name.as_str()).unwrap_or_default();
+        let has_agent = |pack: &Pack, n: &str| pack.agents.contains_key(n);
+        let is_variant = |n: &str| p.variants.contains_key(n) || self.variants.contains_key(n);
+        let (agent, variant) = match as_agent {
+            Some(n) if is_variant(n) => (agent.clone(), Some(n.to_owned())),
+            Some(n) => {
+                let agent = resolve(&p.packs, own, &reference(n), has_agent, "agent")?;
+                let variant = r.and_then(|r| r.agents.get(&agent)).cloned();
+                (agent, variant)
+            }
+            None => (agent.clone(), r.and_then(|r| r.agents.get(agent)).cloned()),
+        };
+        let Some(variant) = variant else {
+            let a = agent_of(p, &agent)?;
             let named =
-                |key: &String| resolve(&p.packs, own, &reference(key), has_agent, "agent").as_ref() == Ok(agent);
+                |key: &String| resolve(&p.packs, own, &reference(key), has_agent, "agent").as_ref() == Ok(&agent);
             return Ok((agent.to_string(), self.assemble(p, r, a, middle, &named)?));
         };
-        let v = (p.variants.get(variant).or_else(|| self.variants.get(variant)))
+        let v = (p.variants.get(&variant).or_else(|| self.variants.get(&variant)))
             .ok_or_else(|| format!("no agent variant `{variant}`"))?;
         let a = agent_of(p, &super::variants::base(p, v)?)?;
         middle.push((Layer::Variant(variant.clone()), v.settings.clone()));
         // The overrides of a variant are those that name it: the base agent's are for the base agent.
-        let config = self.assemble(p, r, a, middle, &|key| key == variant)?;
-        Ok((variant.clone(), config))
+        let config = self.assemble(p, r, a, middle, &|key| key == &variant)?;
+        Ok((variant, config))
     }
 
     /// Runs of `agent` (a pack agent's qualified name or a variant's) started at once in `project`: a variant's own

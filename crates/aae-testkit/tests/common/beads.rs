@@ -22,10 +22,20 @@ impl World {
 
     /// A start of `fix` on `bead` on `rig`; `None` names no rig.
     pub(crate) async fn fix_on(&self, rig: Option<&str>, bead: Value) -> Result<Value, aae_core::Error> {
+        self.start_bead("fix", rig, bead).await
+    }
+
+    /// A start of `formula` with the input `bead` on `rig`.
+    pub(crate) async fn start_bead(
+        &self,
+        formula: &str,
+        rig: Option<&str>,
+        bead: Value,
+    ) -> Result<Value, aae_core::Error> {
         let create = Create {
             project: "shop".into(),
             rig: rig.map(Into::into),
-            formula: "fix".into(),
+            formula: formula.into(),
             inputs: [("bead".to_owned(), bead)].into_iter().collect(),
             correlation: None,
             depth: 0,

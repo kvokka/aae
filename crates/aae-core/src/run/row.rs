@@ -34,10 +34,12 @@ pub(super) struct Row {
     pub(super) bead: Option<String>,
     /// The bead as the claim returned it (contracts 5.2).
     pub(super) bead_data: Option<String>,
+    /// The agent of every prompt step, as the `agent:` label of the bead names it; `None`: each step's own.
+    pub(super) as_agent: Option<String>,
 }
 
 const COLUMNS: &str = "id, project, rig, formula, agent, inputs, correlation, depth, parent_run, workdir, state, \
-    class, attempt, prompt, timeout_ms, config, next, created_ms, started_ms, bead, bead_data, step";
+    class, attempt, prompt, timeout_ms, config, next, created_ms, started_ms, bead, bead_data, step, as_agent";
 
 impl Row {
     pub(super) fn load(tx: &Tx<'_>, run: &str) -> Result<Self, Error> {
@@ -70,6 +72,7 @@ impl Row {
                 bead: r.get(19)?,
                 bead_data: r.get(20)?,
                 step: r.get(21)?,
+                as_agent: r.get(22)?,
             })
         })
         .optional()
