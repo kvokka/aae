@@ -26,6 +26,8 @@ command = ["sh", "-c", """
 set -e
 run=$(aae --json run show "$AAE_RUN")
 rigs=$(aae --json project list --project "$(printf '%s' "$run" | jq -r .project)")
+n=$(printf '%s' "$rigs" | jq '[.[].rigs[]] | length')
+[ "$n" -gt 0 ] || { echo "format: the project has no rigs" >&2; exit 1; }
 printf '%s' "$rigs" | jq -j '.[].rigs[].path + "\\u0000"' |
   xargs -0 rumdl check --fix --respect-gitignore=false --exclude '.git,node_modules,.venv'
 """]

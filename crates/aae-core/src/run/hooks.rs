@@ -113,7 +113,7 @@ impl RunHandler {
 pub trait HookRunner: Send + Sync + 'static {
     fn run<'a>(&'a self, core: &'a CoreHandle<Msg>, payload: &'a Value) -> BoxFuture<'a, ()>;
 
-    /// The API socket the daemon's commands, hooks and exec steps, get in `AAE_SOCKET`.
+    /// The API socket the daemon's commands, hooks and exec steps get in `AAE_SOCKET`.
     fn socket(&self) -> Option<&Path> {
         None
     }

@@ -15,20 +15,17 @@ use std::{
 
 /// A world with the exec formula `check` running `sh -c <script>` with a 2 s timeout.
 fn check(script: &str) -> (World, Create) {
-    check_with("", script)
+    check_with("", script, ExecHooks::default())
 }
 
-/// [`check`] with the `[inputs]` table `inputs`.
-fn check_with(inputs: &str, script: &str) -> (World, Create) {
+/// [`check`] with the `[inputs]` table `inputs`, run by `hooks`.
+fn check_with(inputs: &str, script: &str, hooks: ExecHooks) -> (World, Create) {
     let formula = format!(
         "name = \"check\"\n[inputs]\n{inputs}[[step]]\nkind = \"exec\"\ncommand = [\"sh\", \"-c\", {}]\n\
          timeout = \"2s\"\n",
         json!(script)
     );
-    let w = world_with(
-        &[("shop/formulas/check.toml", &formula)],
-        Arc::new(ExecHooks::default()),
-    );
+    let w = world_with(&[("shop/formulas/check.toml", &formula)], Arc::new(hooks));
     let create = Create {
         project: "shop".into(),
         rig: Some("web".into()),
@@ -96,6 +93,7 @@ async fn the_command_gets_the_run_and_its_inputs_in_the_environment_and_inputs_a
     let (w, _) = check_with(
         inputs,
         "echo \"$AAE_RUN $AAE_INPUT_N $AAE_INPUT_FLAG $AAE_INPUT_NOTE_TEXT ${AAE_BEAD-none}\"",
+        ExecHooks::default(),
     );
     let with = |inputs: Value| Create {
         project: "shop".into(),
@@ -140,6 +138,7 @@ async fn the_command_gets_the_bead_its_run_took_not_the_request_for_one() {
     let (w, mut create) = check_with(
         "bead = { type = \"bead\", required = true }\n",
         "echo \"$AAE_BEAD $AAE_INPUT_BEAD\"",
+        ExecHooks::default(),
     );
     let bead = w.tracker.add(&[], None);
     w.core.send(None, Msg::TrackerChanged("shop".into())).await.unwrap();
@@ -214,4 +213,17 @@ async fn cancelling_the_run_stops_the_command() {
         );
         tokio::time::sleep(Duration::from_millis(50)).await;
     }
+}
+
+#[tokio::test]
+async fn the_command_gets_the_daemon_socket_so_it_can_call_aae() {
+    let hooks = ExecHooks {
+        socket: Some("/run/aae/aae.sock".into()),
+        bundled: None,
+    };
+    let (w, create) = check_with("", "echo \"$AAE_SOCKET\"", hooks);
+    let run = w.start(create).await;
+    let (kind, data) = w.end(&run).await;
+    assert_eq!(kind, "run.passed", "{data}");
+    assert_eq!(data["outcome"]["data"]["stdout"], json!("/run/aae/aae.sock\n"));
 }
