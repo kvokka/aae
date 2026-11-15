@@ -289,6 +289,12 @@ park_timeout = "168h"               # a parked run on a gate without `until`
 Each `[watchdog]` value is a duration with one unit (`ms`, `s`, `m`, `h`) from 1 ms to 8760 h; an unknown key is an
 error. A reload applies to the deadlines set from then on: a deadline already set keeps its time.
 
+The file need not live in `~/.config/aae`: `aae daemon`, `aae doctor` and `aae config check|explain` take another
+one with `--config <file>`. A demo keeps its own orchestrator config, `root/config.toml`, next to its project's
+`root/aae.toml` for that reason: its `run.sh` starts a daemon of the demo's own with `--config root/config.toml`, so
+the demo neither reads nor changes the user's `~/.config/aae/config.toml` ([demos](../../demos/README.md)). The two
+files stay separate: `config.toml` lists the projects and the harnesses of the host, `aae.toml` is the project.
+
 ## Project: `<project>/aae.toml`
 
 ```toml

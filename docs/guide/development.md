@@ -4,6 +4,27 @@ The repository pins its toolchain with [mise](https://mise.jdx.dev); `mise insta
 tools, br (an exact version) and claude and codex (a release line: `2.1`, `0`; there is no `mise.lock`).
 Every check below is a mise task (`mise.toml`).
 
+mise is a convenience, not a requirement: install the same tools any way you like.
+
+- Rust 1.99.1 with the components `clippy`, `rustfmt`, `rust-src`, `rust-analyzer`; for the release builds also the
+  targets `x86_64-unknown-linux-musl`, `aarch64-unknown-linux-musl`, `x86_64-apple-darwin`, `aarch64-apple-darwin`.
+- cargo-nextest 0.9.151, cargo-deny 0.20.2, cargo-machete 0.9.2 (`cargo install --locked <crate>@<version>`) and
+  tokei 15.0.0 (`scripts/budget.sh`).
+- zig 0.17.1 and cargo-zigbuild 0.24.1: only for the release cross-build (`build-all`, `acceptance-release`).
+- br 0.7.6, claude (line `2.1`), codex (line `0`): for the acceptance scenarios that run them; jq 1.8.2 for the
+  demos' `run.sh`, which `mise run acceptance` runs.
+
+Each task is a list of plain commands in `[tasks.<name>]` of `mise.toml`; run them by hand in that order:
+
+- `test`: `cargo nextest run --locked`.
+- `ci`: `cargo fmt --all --check`, `cargo clippy --all-targets --locked -q -- -D warnings`,
+  `cargo nextest run --locked --no-tests=warn`, `cargo deny check`, `cargo machete`, then `scripts/unused-pub.sh`,
+  `scripts/core-boundary.sh`, `scripts/select-biased.sh`, `scripts/budget-selftest.sh`, `scripts/budget.sh`.
+- `acceptance-ci`: `cargo build -q --locked -p aae`, then `cargo run -q --locked -p aae-acceptance -- --ci`.
+- `acceptance`: the same without `--ci`.
+- `acceptance-release`: `cargo run -q --locked -p aae-acceptance -- 1`.
+- `build-all`: `cargo zigbuild --release --locked --target <target>` for each of the four targets.
+
 ## Where each kind of test runs
 
 | Task | What it runs | Where | Wall time |

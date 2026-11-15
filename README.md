@@ -18,8 +18,9 @@ finisher and by plugins.
 ## Running the daemon
 
 `aae daemon` runs in the foreground. It finds the `claude`, `codex` and `br` binaries through mise (`mise which
-<name>`), since a daemon under systemd or launchd has no mise shims on its `PATH`; a harness may name its binary in
-the config instead (`[harness.claude] binary = "/path/to/claude"`).
+<name>`) when mise has them, since a daemon under systemd or launchd has no mise shims on its `PATH`, and otherwise
+on its `PATH`; a harness may name its binary in the config instead (`[harness.claude] binary = "/path/to/claude"`).
+mise is a convenience, not a requirement: install these binaries any way you like.
 
 - `aae doctor` checks, without a daemon, what the daemon needs: the config, each harness binary with its source,
   version and login, br and its license, the mode of the state and socket directories, the state and its outbox.
@@ -60,7 +61,8 @@ Claude or Codex agents running `br` inside an aae session has not been assessed.
 - `mise run acceptance-ci` runs the model-free acceptance scenarios on real daemons; CI runs it on every commit,
   locally it is optional. The release builds for the four targets run on a `v*` tag (`mise run acceptance-release`).
 
-Wall times and the replay of a seed: [docs/guide/development.md](docs/guide/development.md).
+mise is optional here too: the tasks are plain commands in `mise.toml`. The tool versions to install without it,
+the commands of each task, wall times and the replay of a seed: [docs/guide/development.md](docs/guide/development.md).
 
 ## Acceptance spec
 

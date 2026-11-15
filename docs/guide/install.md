@@ -14,9 +14,15 @@ cargo build --release --locked -p aae
 install -m 0755 target/release/aae ~/.local/bin/aae
 ```
 
+mise is a convenience, not a requirement. Without it, install Rust 1.99.1 any way you like (for example with
+rustup); `cargo build` then works as above.
+
 `mise run build-all` builds all four release targets with `cargo zigbuild` into
 `target/<target>/release/aae`; take the one for your machine (for example `aarch64-unknown-linux-musl` on a Linux
-arm64 host). The Linux binaries need no runtime besides the kernel.
+arm64 host). The Linux binaries need no runtime besides the kernel. Without mise, this needs zig 0.17.1,
+cargo-zigbuild 0.24.1 and the Rust targets `x86_64-unknown-linux-musl`, `aarch64-unknown-linux-musl`,
+`x86_64-apple-darwin` and `aarch64-apple-darwin`; then run `cargo zigbuild --release --locked --target <target>`
+for each.
 
 ## What aae runs
 
@@ -29,8 +35,8 @@ aae starts agents through their own command-line harnesses and never downloads o
 - `br` (beads_rust): only for projects that keep their tasks in a `.beads` tracker. Read
   [its license](../../README.md#the-br-tracker-and-its-license) before you install it.
 
-Install them through mise so the daemon finds the same versions you test with, for example in your global
-`~/.config/mise/config.toml`:
+Install them any way you like. With mise, the daemon finds the same versions you test with, for example from your
+global `~/.config/mise/config.toml`:
 
 ```toml
 [tools]
@@ -45,7 +51,8 @@ claude 2.1.322 to 2.1.325 and codex 0.167.2 to 0.168.0; outside these, `aae doct
 warning and still run the harness. The daemon resolves each
 binary in this order: `binary` in the config (`[harness.claude] binary = "/path/to/claude"`; harnesses only, br has
 no such key), then `mise which <name>`, then `PATH`. A daemon under systemd or launchd has no mise shims on its
-`PATH`, which is why mise is asked directly.
+`PATH`, which is why mise is asked directly. Without mise, or when mise does not know the tool, the bare name is
+looked up on the daemon's `PATH`; `aae doctor` shows which source each binary came from.
 
 ## Check the setup
 

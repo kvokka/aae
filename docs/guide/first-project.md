@@ -21,6 +21,10 @@ model = "haiku"           # its default model
 A relative project path is relative to the config file; `~/` is your home directory. Add `[harness.codex]` to let
 agents use codex as well. The full list of keys is in [the config reference](../design/config.md).
 
+An orchestrator config may also sit elsewhere, for example beside a project's `aae.toml`, and be passed with
+`aae daemon --config <file>`. The [demos](../../demos/README.md) do this, so they run on a daemon of their own and
+leave `~/.config/aae/config.toml` alone.
+
 ## 2. The project
 
 ```sh
