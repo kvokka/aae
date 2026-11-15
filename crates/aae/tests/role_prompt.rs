@@ -1,56 +1,66 @@
-//! The demos as the daemon loads them: the user's layers decide what the pack's agents run on, and the role prompt of
-//! an agent (`agents/<a>/prompt.md`, spec §8.1) reaches what both adapters start a session with.
+//! Demo 1 as the daemon loads it: the user's layers decide what the pack's agents run on, and the role prompt of an
+//! agent (`agents/<a>/prompt.md`, spec §8.1) reaches what both adapters start a session with.
 
 use aae_core::config::{Config, EffectiveConfig, Layer, load_for};
 use aae_core::driver::{Adapter, Driver, SessionPlan};
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 const ADAPTERS: &[&Adapter] = &[&aae_claude::ADAPTER, &aae_codex::ADAPTER];
 
-fn demos() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../demos")
+const DEMO: &str = "1-planner-executor";
+const PROJECT: &str = "planner-executor";
+
+fn load(demo: &Path) -> Config {
+    load_for(&demo.join("root/config.toml"), ADAPTERS, Default::default()).unwrap()
 }
 
-fn demo(name: &str) -> Config {
-    load_for(
-        &demos().join(name).join("root/config.toml"),
-        ADAPTERS,
-        Default::default(),
-    )
-    .unwrap()
+/// `from` into `to`, recursively.
+fn copy(from: &Path, to: &Path) {
+    std::fs::create_dir_all(to).unwrap();
+    for entry in std::fs::read_dir(from).unwrap() {
+        let path = entry.unwrap().path();
+        let target = to.join(path.file_name().unwrap());
+        if path.is_dir() {
+            copy(&path, &target)
+        } else {
+            std::fs::copy(&path, &target).map(drop).unwrap()
+        }
+    }
 }
 
 #[test]
-fn the_user_layers_of_the_demos_decide_what_the_workers_run_on() {
-    let config = demo("snake-claude");
-    for (formula, rig) in [("dev.plan", "root"), ("dev.code", "backend"), ("dev.code", "frontend")] {
-        let (_, effective) = config.for_run("snake-claude", rig, formula, "1").unwrap();
+fn the_user_layers_of_the_demo_decide_what_the_agents_run_on() {
+    let config = load(&Path::new(env!("CARGO_MANIFEST_DIR")).join("../../demos").join(DEMO));
+    let runs = [("dev.deliver", "plan", "root"), ("dev.implement", "code", "frontend")];
+    for (formula, step, rig) in runs {
+        let (_, effective) = config.for_run(PROJECT, rig, formula, step).unwrap();
         let model = effective.model.unwrap();
         assert_eq!((effective.harness.as_str(), model.value.as_str()), ("claude", "haiku"));
         assert_eq!(model.from, Layer::ProjectOverride, "{formula} on {rig}");
     }
-
-    let config = demo("snake-mixed");
-    let (agent, effective) = config.for_run("snake-mixed", "backend", "dev.code", "1").unwrap();
-    assert_eq!(agent, "codex-coder");
+    let (agent, effective) = config.for_run(PROJECT, "backend", "dev.implement", "code").unwrap();
+    assert_eq!(agent, "dev.coder");
     assert_eq!(
         (effective.harness.as_str(), effective.harness_from),
-        ("codex", Layer::Variant("codex-coder".into()))
+        ("codex", Layer::RigOverride)
     );
-    let model = effective.model.unwrap();
-    assert_eq!(model.value, "gpt-6-luna");
+    assert_eq!(effective.model.unwrap().value, "gpt-6-luna");
     assert_eq!(effective.model_given.as_deref(), Some("luna"));
-    let (agent, effective) = config.for_run("snake-mixed", "frontend", "dev.code", "1").unwrap();
-    assert_eq!((agent.as_str(), effective.harness.as_str()), ("dev.coder", "claude"));
 }
 
 #[test]
-fn the_role_prompt_of_the_demo_agent_reaches_both_adapters() {
-    let config = demo("snake-mixed");
-    let (_, mut effective) = config.for_run("snake-mixed", "frontend", "dev.code", "1").unwrap();
-    let role = std::fs::read_to_string(demos().join("dev-pack/agents/coder/prompt.md")).unwrap();
+fn the_role_prompt_of_a_pack_agent_reaches_both_adapters() {
+    let demo = tempfile::tempdir().unwrap();
+    copy(
+        &Path::new(env!("CARGO_MANIFEST_DIR")).join("../../demos").join(DEMO),
+        demo.path(),
+    );
+    let role = "You write code. Before you say it works, you test what you wrote.";
+    std::fs::write(demo.path().join("pack/agents/coder/prompt.md"), role).unwrap();
+    let config = load(demo.path());
+    let (_, mut effective) = config.for_run(PROJECT, "frontend", "dev.implement", "code").unwrap();
     let prompt = effective.system_prompt.clone().unwrap();
-    assert_eq!((prompt.value.as_str(), prompt.from), (role.as_str(), Layer::Agent));
+    assert_eq!((prompt.value.as_str(), prompt.from), (role, Layer::Agent));
     assert!(effective.explain().contains("system_prompt = \"You write code."));
 
     let state = tempfile::tempdir().unwrap();
