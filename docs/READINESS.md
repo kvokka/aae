@@ -10,13 +10,13 @@ code assessed. Updated at the end of every work session.
 them: one with a `FAIL` row (or, in a full run, a row not run) holds the score at 6, a 10 needs criterion 20 green,
 and the marker below must name a commit at or after the last change of `crates/`.
 
-Assessed 2026-11-16 at `bebf8f5`, after the return with a rounds limit (spec §9.1). The model-free rows run on it in the
-cycle's checks. The full run with real models last ran on `96dd606` (30 of 32, the codex row of criterion 8 lost to
-the provider's network and green on a rerun); its live rows were not rerun on the steps. Criteria 24 (steps, the root
-bead and `drain`) and 25 (the return) have their model-free rows; 26 (packs from git) has no row yet, so config
-assembly scores 6; the new demos of criterion 20 replace the old ones later in this round. None scores 10: a 10 needs
-criterion 20 green in the run that checks this file.
-<!-- MEASURE id=readiness date=2026-11-16 ver=bebf8f5 env=linux-arm64-orbstack src=docs/READINESS.md note="assessed against the letter of the scale on the model-free rows at bebf8f5; the last full run with real models is of 96dd606" -->
+Assessed 2026-11-16 at `29d2541`, after the return with a rounds limit (spec §9.1) and packs from git (§8.2). The
+model-free rows run on it in the cycle's checks. The full run with real models last ran on `96dd606` (30 of 32, the
+codex row of criterion 8 lost to the provider's network and green on a rerun); its live rows were not rerun on the
+steps. Criteria 24 (steps, the root bead and `drain`), 25 (the return) and 26 (packs from git) have their model-free
+rows; the new demos of criterion 20 replace the old ones later in this round. None scores 10: a 10 needs criterion 20
+green in the run that checks this file.
+<!-- MEASURE id=readiness date=2026-11-16 ver=29d2541 env=linux-arm64-orbstack src=docs/READINESS.md note="assessed against the letter of the scale on the model-free rows at 29d2541; the last full run with real models is of 96dd606" -->
 
 | Component | Criteria | Score | Missing for the next point |
 |---|---|---|---|
@@ -25,7 +25,7 @@ criterion 20 green in the run that checks this file.
 | Triggers and schedules | 5a, 5b, 6 | 8 | 10: criterion 20 in the run that checks this file |
 | Issue gates | 10, 19 | 8 | 10: criterion 20 in the run that checks this file; the claude half of criterion 10 is unverified (no claude quota limit seen live) |
 | Recovery | 8, 9, 24 | 8 | 10: criterion 20 in the run that checks this file |
-| Config assembly | 12, 13, 26 | 6 | 8: criterion 26 (packs from git by sha, tag or the latest) |
+| Config assembly | 12, 13, 26 | 8 | 10: criterion 20 in the run that checks this file |
 | Instance and service registry | 13, 14 | 8 | 10: criterion 20 in the run that checks this file |
 | claude adapter | 2, 4a, 9, 11 | 8 | 10: criterion 20 in the run that checks this file |
 | codex adapter | 2, 10, 11, 13 | 8 | 10: criterion 20 in the run that checks this file |
