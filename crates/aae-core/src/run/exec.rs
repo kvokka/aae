@@ -62,7 +62,10 @@ impl Executor for RunExecutor {
                     // A stopped writer drops the message; recovery (WP-20) finds the record on restart.
                     let _ = core.send(None, Msg::ServiceStopped { id, reason }).await;
                 }
-                Some("stop_exec") => super::exec_step::stop(&self.running, payload["run"].as_str().unwrap_or_default()),
+                Some("stop_exec") => {
+                    let key = format!("{}:{}", payload["run"].as_str().unwrap_or_default(), attempt(payload));
+                    super::exec_step::stop(&self.running, &key);
+                }
                 Some("check_instances") => {
                     for instance in payload["instances"].as_array().into_iter().flatten() {
                         let driver = instance["harness"].as_str().and_then(|h| self.drivers.get(h));

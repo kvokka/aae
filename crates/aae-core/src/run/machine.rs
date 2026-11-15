@@ -330,7 +330,7 @@ impl RunHandler {
             tx.effect(
                 &row.id,
                 &format!("stop:{}", row.attempt),
-                &json!({ "op": "stop_exec", "run": row.id }),
+                &json!({ "op": "stop_exec", "run": row.id, "attempt": row.attempt }),
             )?;
         }
         tx.sql().execute(

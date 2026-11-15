@@ -155,7 +155,7 @@ impl RunHandler {
     }
 }
 
-/// The running commands of exec steps by run, for `stop_exec`.
+/// The running commands of exec steps by `<run>:<attempt>`, for `stop_exec`.
 pub(super) type Running = Arc<Mutex<HashMap<String, Arc<Notify>>>>;
 
 /// Runs the command of an `exec` effect to its end and tells the core how it ended.
@@ -171,7 +171,9 @@ pub(super) async fn run(running: &Running, payload: &Value, socket: Option<&Path
     env.extend(socket.map(|s| ("AAE_SOCKET".to_owned(), s.to_string_lossy().into_owned())));
     let stop = Arc::new(Notify::new());
     let lock = || running.lock().unwrap_or_else(PoisonError::into_inner);
-    lock().insert(run.clone(), stop.clone());
+    // By attempt: a late stop of the run's last attempt must not end the command of its next one.
+    let key = format!("{run}:{}", super::exec::attempt(payload));
+    lock().insert(key.clone(), stop.clone());
     let out = process::run(Spec {
         command: &command,
         cwd: Path::new(payload["cwd"].as_str().unwrap_or("/")),
@@ -182,7 +184,7 @@ pub(super) async fn run(running: &Running, payload: &Value, socket: Option<&Path
         stop: Some(&stop),
     })
     .await;
-    lock().remove(&run);
+    lock().remove(&key);
     Msg::ExecDone {
         run,
         attempt: super::exec::attempt(payload),
@@ -192,11 +194,11 @@ pub(super) async fn run(running: &Running, payload: &Value, socket: Option<&Path
     }
 }
 
-/// Ends the running command of `run`, if any.
+/// Ends the running command of attempt `key` (`<run>:<attempt>`), if any.
 // shortcut: a stop that comes between the commit of the `exec` effect and its start finds nothing, and the command
 // runs to its end with its result dropped; the window is one task spawn — close it if recovery (WP-20) widens it.
-pub(super) fn stop(running: &Running, run: &str) {
-    if let Some(stop) = running.lock().unwrap_or_else(PoisonError::into_inner).get(run) {
+pub(super) fn stop(running: &Running, key: &str) {
+    if let Some(stop) = running.lock().unwrap_or_else(PoisonError::into_inner).get(key) {
         stop.notify_one();
     }
 }
