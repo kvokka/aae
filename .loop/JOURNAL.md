@@ -2647,3 +2647,26 @@ backend коду на codex 0.168.0 `gpt-6-luna`, frontend — claude haiku; rep
 `demos/1-planner-executor/` в git-репозитории в /tmp, `AAE=target/debug/aae ./run.sh` на коде `76ac8eb` — passed за
 182 с без вмешательства, 2 бида под корневым закрыты, токены: ввод 92 818, вывод 36 055; `git status` после прогона
 чист. Мутация «без фильтра по харнессу» в `machine.rs:173` выжила на всём наборе — жел. 1 ревью 81.
+
+## 2026-11-16T02:00 · цикл 82 · coder · НАХОДКА
+
+Живой прогон демо 2 (WP-71; модели по назначению владельца в спеке §15: codex sol — planner, luna — coder, terra — qa),
+1 прогон: `EXAMPLE=1 AAE=target/debug/aae ./run.sh` в чистом worktree на `6bbf1f1`. Проверяется: проверки `rumdl` и
+`qa` (agent-browser) возвращают формулу планировщику, итог — зелёные проверки не позже 3-го раунда (критерий 20).
+Для agent-browser на linux-arm64 Chrome for Testing нет: на хосте поставлен Chromium Playwright и путь к нему записан
+в `~/.agent-browser/config.json` (вне репозитория; README демо говорит об этом).
+
+## 2026-11-16T02:40 · цикл 82 · coder · НАХОДКА
+
+Итог живого прогона демо 2 (1 прогон, codex sol/luna/terra): passed за 529 с, проверки `format` (rumdl) и `qa`
+(agent-browser: снимки до и после, змейка двигается, счёт доходит до бэкенда) зелёные в первом раунде — возврата
+вживую не было. Токены: ввод 1 164 614, вывод 14 976. Критерий 20 («зелёные не позже третьего раунда») выполнен;
+сам возврат покрыт без модели (`crates/aae-testkit/tests/returns.rs`). Результат — `demos/2-multirepo-qa/*-example`.
+
+## 2026-11-16T02:30 · цикл 82 · reviewer · НАХОДКА
+
+Шаг `format` демо 2 (`demos/2-multirepo-qa/pack/formulas/deliver.toml`) у пользователя пустой: `rumdl check --fix`
+уважает `.gitignore` демо (`/frontend/*`, `/backend/*`), отбрасывает все файлы ригов и выходит с 0, если агент не
+сделал `git init` в риге. Проверено вживую на копии демо в /tmp. Результат автора (`*-example`) по rumdl чист — он не
+ложный. Обяз. 1 ревью 82: `--respect-gitignore=false` + тест без модели. Живых моделей ревьюер не запускал.
+Мутации `machine.rs:173` (фильтр харнесса) и `read.rs:73` (`round`) убиты.
