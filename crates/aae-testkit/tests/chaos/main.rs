@@ -12,6 +12,7 @@
 mod check;
 #[path = "../common/mod.rs"]
 mod common;
+mod drain;
 mod steps;
 
 use aae_core::{
@@ -65,6 +66,17 @@ const SHIP: &[(&str, &str)] = &[
     ),
     ("shop/formulas/ship.md", "Ship {{ rig.name }}."),
 ];
+
+/// A drain step that gives every bead under the root a run of `fix`, then a prompt step.
+const SWEEP: &[(&str, &str)] = &[(
+    "shop/formulas/sweep.toml",
+    "name = \"sweep\"\n[inputs]\nbead = { type = \"bead\", required = true }\n\
+     [[step]]\nkind = \"drain\"\nformula = \"fix\"\n\
+     [[step]]\nkind = \"prompt\"\nagent = \"dev\"\nprompt = \"ship.md\"\n",
+)];
+
+/// The beads of the tracker: `b-1` and `b-2` for runs of `fix`, the root `b-3` of `sweep` and its children.
+const BEADS: [&str; 5] = ["b-1", "b-2", "b-3", "b-4", "b-5"];
 
 /// Seeds in all, unless `AAE_CHAOS_SEEDS` says otherwise; the tests split them so that nextest runs them side by side.
 const SEEDS: u64 = 1_000;
@@ -132,12 +144,16 @@ async fn play(seed: u64) -> Result<Played, String> {
         seed,
         ran: Mutex::default(),
     });
-    let mut w = world_with(&[POLICY, FIX, SHIP].concat(), hooks.clone());
+    let mut w = world_with(&[POLICY, FIX, SHIP, SWEEP].concat(), hooks.clone());
     w.tracker.add(&[], None);
     w.tracker.add(&[], None);
+    let root = w.tracker.add(&[], None);
+    w.tracker.add(&["rig:web"], Some(&root));
+    w.tracker.add(&["rig:web"], Some(&root));
     let mut play = Play::default();
-    // A run of `ship` from the start: under the faults a run seldom gets past its first step otherwise.
+    // Runs of `ship` and `sweep` from the start: under the faults a run seldom gets past its first step otherwise.
     create_keyed(&w, &mut play, 2).await;
+    create_keyed(&w, &mut play, 6).await;
     let report = |play: &Play, why: String| {
         format!(
             "seed {seed}: {why}\nreplay: AAE_CHAOS_SEED={seed} cargo nextest run -p aae-testkit --test chaos\n\
@@ -182,7 +198,7 @@ async fn play(seed: u64) -> Result<Played, String> {
     }
     // Every run ended and the tracker is up: no open bead is left assigned to a run (invariants 4, 5).
     tokio::time::sleep(Duration::from_secs(3_600)).await;
-    for id in ["b-1", "b-2"] {
+    for id in BEADS {
         let bead = w.tracker.bead(id).unwrap();
         if bead.status != "closed" && bead.assignee.as_deref().is_some_and(|a| a.starts_with("aae:")) {
             return Err(report(
@@ -226,8 +242,9 @@ fn seeds(nth: u64) {
     // The kills land between every kind of record and its call, not only between quiet transactions. A share
     // under 100 seeds (a replay, a short share) is not asked to; a full one plays on past its count until every kind
     // landed, so a rare kind missing from these random seeds is not a failure, and a kind that never lands is.
-    // `step`: a run was past the first step of its formula, so a restart went on from the step it was at.
-    const KINDS: [&str; 4] = ["tracker", "harness", "hooks", "step"];
+    // `step`: a run was past the first step of its formula, so a restart went on from the step it was at; `drain`:
+    // a run was in a drain step, so a restart went on with its attempt and the children it had given.
+    const KINDS: [&str; 5] = ["tracker", "harness", "hooks", "step", "drain"];
     let landed = || {
         let kills = steps::KILLS.lock().unwrap();
         KINDS.iter().all(|at| kills.contains_key(at))

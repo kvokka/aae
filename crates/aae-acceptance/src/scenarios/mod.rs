@@ -18,6 +18,7 @@ mod c16_beads;
 mod c17_mcp;
 mod c18_journal;
 mod c19_gates;
+mod c24_drain;
 
 use crate::{
     Launch, Scenario,
@@ -157,6 +158,13 @@ pub(crate) const ALL: &[Scenario] = &[
         title: "operator gates stop dispatch, survive a restart and stay until opened by hand",
         launch: Launch::Ci,
         run: |env| Box::pin(c19_gates::run(env)),
+    },
+    Scenario {
+        criterion: "24",
+        title: "a request's root gets beads with rig, agent and harness labels; drain gives each a run; kill -9 in \
+        every step: no step and no bead runs twice",
+        launch: Launch::Ci,
+        run: |env| Box::pin(c24_drain::run(env)),
     },
 ];
 

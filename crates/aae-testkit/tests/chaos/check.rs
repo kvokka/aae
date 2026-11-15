@@ -82,12 +82,12 @@ pub(crate) fn check(w: &World, play: &mut Play) -> Result<(), String> {
     }
     let conn = state(w);
     let all = runs(w);
-    if all.len() != play.runs.len() {
-        return Err(format!(
-            "{} runs for {} creates (invariant 10)",
-            all.len(),
-            play.runs.len()
-        ));
+    // The children of drain steps come from no create of the test.
+    let created: u32 = conn
+        .query_row("SELECT COUNT(*) FROM runs WHERE parent_run IS NULL", [], |r| r.get(0))
+        .unwrap();
+    if usize::try_from(created) != Ok(play.runs.len()) {
+        return Err(format!("{created} runs for {} creates (invariant 10)", play.runs.len()));
     }
     for (run, state, attempt, waiting) in &all {
         // Attempts that parked on an account gate are outside the ceiling (spec §2, decisions 49, 50).
@@ -153,6 +153,7 @@ pub(crate) fn check(w: &World, play: &mut Play) -> Result<(), String> {
         }
     }
     stepped(&conn, play)?;
+    crate::drain::drained(&conn, play)?;
     // One live owner per bead, and the owner the state records is a live run on that bead (invariants 2, 3).
     let owners: Vec<(String, Option<String>, i64)> = conn
         .prepare(
@@ -174,10 +175,13 @@ pub(crate) fn check(w: &World, play: &mut Play) -> Result<(), String> {
     Ok(())
 }
 
-/// The steps of each formula of the stand (`shop.ship` and the like), in order: `ship` has three, named by position.
+/// The steps of each formula of the stand (`shop.ship` and the like), in order: `ship` has three, named by position,
+/// `sweep` two, the first of them a drain step.
 fn formula_steps(formula: &str) -> &'static [&'static str] {
     if formula.ends_with(".ship") {
         &["1", "2", "3"]
+    } else if formula.ends_with(".sweep") {
+        &["1", "2"]
     } else {
         &["1"]
     }
@@ -194,6 +198,9 @@ fn step_finished(run: &str, kind: &str, view: &Value, play: &mut Play) -> Result
             return Err(format!("{run}: the step {step} finished after {done:?} (S1)"));
         }
         done.push(step.to_owned());
+        if view["formula"].as_str().is_some_and(|f| f.ends_with(".sweep")) && step == "1" {
+            play.drained.insert(run.to_owned());
+        }
     }
     if kind == "run.passed" && (done.len() + 1 != steps.len() || steps.last() != Some(&step)) {
         return Err(format!("{run} passed at the step {step} after {done:?} finished (S4)"));
@@ -277,8 +284,15 @@ fn failed(run: &str, data: &Value, play: &Play) -> Result<(), String> {
 /// A started run that waits for nobody has a watchdog: a first-event deadline while it starts, a silence deadline
 /// while it runs, a human deadline while it asks (invariant 15).
 fn watched(conn: &rusqlite::Connection, run: &str, state: &str, waiting: bool) -> Result<(), String> {
+    let draining: bool = conn
+        .query_row("SELECT step_kind = 'drain' FROM runs WHERE id = ?1", [run], |r| {
+            r.get(0)
+        })
+        .unwrap();
     let what = match (state, waiting) {
         ("starting", _) => "state",
+        // A drain step has no session: the step's timeout is its deadline.
+        ("running", false) if draining => "state",
         ("running", false) => "silence",
         ("requires_action", _) => "human",
         _ => return Ok(()),
@@ -327,6 +341,16 @@ pub(crate) fn undone(w: &World) -> Vec<&'static str> {
     }
     if past_first(&conn) {
         undone.insert("step");
+    }
+    let draining: bool = conn
+        .query_row(
+            "SELECT EXISTS (SELECT 1 FROM runs WHERE step_kind = 'drain' AND state = 'running')",
+            [],
+            |r| r.get(0),
+        )
+        .unwrap();
+    if draining {
+        undone.insert("drain");
     }
     undone.into_iter().collect()
 }

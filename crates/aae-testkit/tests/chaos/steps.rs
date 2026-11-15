@@ -36,16 +36,20 @@ pub(crate) struct Play {
     pub(crate) ended: BTreeMap<String, String>,
     /// The steps the journal says each run finished, in order.
     pub(crate) steps: BTreeMap<String, Vec<String>>,
+    /// The runs whose drain step finished.
+    pub(crate) drained: BTreeSet<String>,
 }
 
-/// A run of `fix` on `bead`, or else of `build` or of the three steps of `ship`.
-fn create(bead: Option<&str>, ship: bool) -> Create {
-    let inputs = bead.map(|b| ("bead".to_owned(), serde_json::json!(b)));
-    let formula = match (bead, ship) {
-        (Some(_), _) => "fix",
-        (None, true) => "ship",
-        (None, false) => "build",
+/// The run of the idempotency key `key`: of `build` (0, 1), of the three steps of `ship` (2, 3), of `fix` on the
+/// beads b-1 and b-2 (4, 5), of `sweep` on the root b-3 (6).
+fn create(key: u64) -> Create {
+    let (formula, bead) = match key {
+        0 | 1 => ("build", None),
+        2 | 3 => ("ship", None),
+        4 | 5 => ("fix", Some(format!("b-{}", key - 3))),
+        _ => ("sweep", Some("b-3".to_owned())),
     };
+    let inputs = bead.map(|b| ("bead".to_owned(), serde_json::json!(b)));
     Create {
         project: "shop".into(),
         rig: Some("web".into()),
@@ -215,11 +219,10 @@ pub(crate) async fn step(w: &mut World, rng: &mut Rng, play: &mut Play, calm: bo
 
 type Run = (String, String, u32, Option<i64>);
 
-/// A create with the idempotency key `key`, which may come again: the client retried (invariant 10). Keys 4 and 5
-/// are runs on the beads b-1 and b-2: refused while another live run holds the bead; keys 2 and 3 are runs of `ship`.
+/// A create with the idempotency key `key` ([`create`]), which may come again: the client retried (invariant 10).
+/// A run on a bead is refused while another live run holds the bead.
 pub(crate) async fn create_keyed(w: &World, play: &mut Play, key: u64) {
-    let bead = (key >= 4).then(|| format!("b-{}", key - 3));
-    let msg = Msg::Create(create(bead.as_deref(), key >= 2));
+    let msg = Msg::Create(create(key));
     let run = match w.core.send(Some(&format!("create-{key}")), msg).await {
         Ok(reply) => reply["run"].as_str().unwrap().to_owned(),
         Err(e) => {
@@ -246,7 +249,7 @@ async fn act(w: &mut World, rng: &mut Rng, play: &mut Play, op: u64, natural: bo
             w.tracker.set_down(down);
             play.log.push(format!("tracker down={down}"));
         }
-        0..=2 => create_keyed(w, play, rng.below(6)).await,
+        0..=2 => create_keyed(w, play, rng.below(7)).await,
         3..=6 => {
             let (name, steps) = scenario(rng, natural);
             w.driver.script(steps);
@@ -301,7 +304,14 @@ async fn act(w: &mut World, rng: &mut Rng, play: &mut Play, op: u64, natural: bo
             };
             let journal = Journal::new(&w.journal).read_from(seq, 1).unwrap_or_default();
             let kind = journal.first().and_then(|e| e["type"].as_str()).unwrap_or_default();
-            let decision = decision(rng, kind, natural);
+            // The hook runner drops a remark on a step with no session before it reaches the core (contracts 6.2).
+            let sessionless = journal
+                .first()
+                .is_some_and(|e| e["data"]["run"]["step_kind"] != "prompt");
+            let decision = match decision(rng, kind, natural) {
+                Decision::Remark { .. } if sessionless => Decision::Abstain,
+                decision => decision,
+            };
             let times = if !natural && rng.below(6) == 0 {
                 0
             } else {

@@ -38,11 +38,17 @@ times, how long) are config parameters with defaults; the choice of a reaction i
 
 How they are checked: the deterministic chaos stand (`aae-testkit/tests/chaos`) plays seeded sequences of
 commands, harness behaviour, policy hooks, operator actions, lost and repeated deliveries and daemon crashes, and
-checks invariants 2, 3, 10, 12, 13, 14, 15, 16 and 17 on the state and the journal after every step. Every run
+checks invariants 2, 3, 10, 12, 13, 14, 15, 16 and 17 on the state and the journal after every step. Its formulas
+have several steps, and one starts with a `drain` step over a root bead with two children; besides the invariants
+the stand checks the steps (S1–S4: each step finishes once and in order, attempts follow the steps, no session
+serves two steps, a run passes from its last step) and the drain step (D1: a bead gets at most one child run per
+attempt of the step; D2: once the step finished, no child run on a bead is alive; D3: the attempt of a drain step
+never fails with `daemon_crash`). Each full share of seeds kills the daemon mid-drain at least once. Every run
 plays new seeds from a random base it prints; a failure names its seed and `AAE_CHAOS_SEED=<n>` replays it.
 Invariant 6 runs real marked processes (`aae-testkit/tests/old_instances.rs`, `process::tests::wait_gone_*`). The
 others are covered by the integration suites of `aae-testkit/tests` and by the acceptance scenarios (criterion 8:
-20 `kill -9` of the daemon mid-turn in CI and 5 on each real harness).
+20 `kill -9` of the daemon mid-turn in CI and 5 on each real harness; criterion 24: a `kill -9` of the daemon in
+each step of a formula of `exec`, `drain` and `exec` steps on the real br, no step and no bead run twice).
 
 ## Recovery
 
