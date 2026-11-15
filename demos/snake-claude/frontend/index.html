@@ -7,250 +7,311 @@
 <style>
   body {
     font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-    background: #1b1b1f;
+    background: #1b1d23;
     color: #eee;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
     margin: 0;
-    padding: 16px;
+    padding: 24px;
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+    gap: 32px;
+    flex-wrap: wrap;
   }
-  h1 { margin: 8px 0; }
-  canvas {
-    background: #000;
-    border: 2px solid #444;
-    display: block;
-  }
-  #score { font-weight: bold; font-size: 1.2em; }
-  #message { min-height: 1.5em; text-align: center; }
-  #nameForm { display: flex; gap: 8px; align-items: center; }
-  #nameForm[hidden] { display: none; }
-  #error { color: #ff6b6b; min-height: 1.5em; text-align: center; }
-  button { padding: 6px 14px; font-size: 1em; cursor: pointer; }
-  #scoresBox { width: 400px; max-width: 100%; }
-  #scores { padding-left: 2em; }
-  #scores li { font-family: monospace; padding: 2px 0; }
+  #game { display: flex; flex-direction: column; align-items: center; gap: 10px; }
+  canvas { background: #0d0f14; border: 2px solid #444; display: block; }
+  #score-line { font-size: 1.2rem; }
+  #score-line span { font-weight: bold; }
+  .hint { color: #999; font-size: 0.9rem; }
+  button { font-size: 1rem; padding: 6px 16px; cursor: pointer; }
+  #status { min-height: 1.4em; color: #f1c40f; }
+  #side { min-width: 260px; }
+  #side h2 { margin: 0 0 8px 0; font-size: 1.3rem; }
+  #scores { min-height: 2em; }
+  table { border-collapse: collapse; width: 100%; }
+  th, td { text-align: left; padding: 4px 8px; border-bottom: 1px solid #333; }
+  th.num, td.num { text-align: right; }
 </style>
 </head>
 <body>
-<h1>Snake</h1>
-<p>Score: <span id="score">0</span></p>
-<canvas id="board" width="400" height="400"></canvas>
-<p id="message">Use the arrow keys to steer.</p>
-
-<form id="nameForm" hidden>
-  <label for="nameInput">Your name:</label>
-  <input id="nameInput" type="text" maxlength="30" autocomplete="off">
-  <button type="submit">Save score</button>
-</form>
-
-<p><button id="newGame" type="button">New game</button></p>
-<p id="error" role="alert"></p>
-
-<div id="scoresBox">
-  <h2>Top 10</h2>
-  <ol id="scores"></ol>
+<div id="game">
+  <canvas id="board" width="400" height="400"></canvas>
+  <div id="score-line">Score: <span id="score">0</span></div>
+  <div class="hint">Arrow keys steer. Space or Enter starts / restarts.</div>
+  <button id="restart" type="button">Start / Restart</button>
+  <div id="status" role="status" aria-live="polite"></div>
+</div>
+<div id="side">
+  <h2>Top 10 scores</h2>
+  <div id="scores">Loading…</div>
 </div>
 
 <script>
-// Backend endpoint. Change here if the backend moves.
-const SCORES_URL = 'http://127.0.0.1:8765/scores';
+'use strict';
+
+// Backend base address. Change here if the backend moves.
+const API = 'http://127.0.0.1:8765';
 
 const COLS = 20;
 const ROWS = 20;
-const CELL = 20;
-const TICK_MS = 120;
+const CELL = 20;          // canvas is COLS*CELL x ROWS*CELL = 400x400
+const TICK_MS = 120;      // snake moves every TICK_MS milliseconds
+const MAX_NAME = 20;
 
-const DIRS = {
-  ArrowLeft:  { x: -1, y: 0 },
-  ArrowRight: { x: 1,  y: 0 },
-  ArrowUp:    { x: 0,  y: -1 },
-  ArrowDown:  { x: 0,  y: 1 }
-};
+const DIRS = new Map([
+  ['ArrowLeft',  { x: -1, y: 0 }],
+  ['ArrowRight', { x: 1,  y: 0 }],
+  ['ArrowUp',    { x: 0,  y: -1 }],
+  ['ArrowDown',  { x: 0,  y: 1 }],
+]);
 
 const canvas = document.getElementById('board');
 const ctx = canvas.getContext('2d');
 const scoreEl = document.getElementById('score');
-const messageEl = document.getElementById('message');
-const nameForm = document.getElementById('nameForm');
-const nameInput = document.getElementById('nameInput');
-const newGameBtn = document.getElementById('newGame');
-const errorEl = document.getElementById('error');
-const scoresList = document.getElementById('scores');
+const statusEl = document.getElementById('status');
+const scoresEl = document.getElementById('scores');
+const restartBtn = document.getElementById('restart');
 
-let snake, dir, pending, food, score, gameOver, submitting, timer;
+// state: 'ready' (before first game), 'playing', 'over' (after game over)
+let state = 'ready';
+let snake = [];          // array of {x, y}; snake[0] is the head
+let dir = { x: 1, y: 0 };// direction currently applied
+let queue = [];          // pending direction changes (max 2), applied one per tick
+let food = null;
+let score = 0;
+let timer = null;
+
+function setStatus(msg) {
+  statusEl.textContent = msg;
+}
+
+function sameCell(a, b) {
+  return a.x === b.x && a.y === b.y;
+}
 
 function placeFood() {
-  // Pick a random free cell (the snake never fills the board in practice).
-  let cell;
-  do {
-    cell = { x: Math.floor(Math.random() * COLS), y: Math.floor(Math.random() * ROWS) };
-  } while (snake.some(s => s.x === cell.x && s.y === cell.y));
-  return cell;
+  const free = [];
+  for (let y = 0; y < ROWS; y++) {
+    for (let x = 0; x < COLS; x++) {
+      if (!snake.some(s => s.x === x && s.y === y)) free.push({ x, y });
+    }
+  }
+  food = free.length ? free[Math.floor(Math.random() * free.length)] : null;
 }
 
-function newGame() {
-  snake = [{ x: 10, y: 10 }, { x: 9, y: 10 }, { x: 8, y: 10 }];
+function resetGame() {
+  const cx = Math.floor(COLS / 2);
+  const cy = Math.floor(ROWS / 2);
+  snake = [{ x: cx, y: cy }, { x: cx - 1, y: cy }, { x: cx - 2, y: cy }];
   dir = { x: 1, y: 0 };
-  pending = [];
+  queue = [];
   score = 0;
-  gameOver = false;
-  submitting = false;
-  food = placeFood();
-
   scoreEl.textContent = '0';
-  messageEl.textContent = 'Use the arrow keys to steer.';
-  errorEl.textContent = '';
-  nameForm.hidden = true;
-
-  clearInterval(timer);
-  timer = setInterval(tick, TICK_MS);
-  draw();
+  placeFood();
 }
 
-function endGame() {
-  gameOver = true;
+function startGame() {
+  if (state === 'playing') return;
   clearInterval(timer);
+  resetGame();
+  state = 'playing';
+  setStatus('');
   draw();
-  messageEl.textContent = `Game over! Score: ${score}. Enter your name to save it.`;
-  nameInput.value = '';
-  nameForm.hidden = false;
-  nameInput.focus();
+  timer = setInterval(tick, TICK_MS);
+}
+
+// Accept a direction change unless it repeats or reverses the last queued/applied direction.
+function queueDir(d) {
+  const base = queue.length ? queue[queue.length - 1] : dir;
+  if (d.x === base.x && d.y === base.y) return;      // same direction
+  if (d.x === -base.x && d.y === -base.y) return;    // reverse into itself
+  if (queue.length < 2) queue.push(d);
 }
 
 function tick() {
-  if (gameOver) return;
-  if (pending.length) dir = pending.shift();
+  if (queue.length) dir = queue.shift();
 
   const head = { x: snake[0].x + dir.x, y: snake[0].y + dir.y };
-
-  // Wall collision.
   if (head.x < 0 || head.y < 0 || head.x >= COLS || head.y >= ROWS) {
     endGame();
     return;
   }
 
-  const eating = head.x === food.x && head.y === food.y;
-
-  // Self collision. The tail moves away this tick unless we are eating.
+  const eating = food !== null && sameCell(head, food);
+  // The tail cell moves away this tick unless we are growing, so it is not a collision.
   const body = eating ? snake : snake.slice(0, -1);
-  if (body.some(s => s.x === head.x && s.y === head.y)) {
+  if (body.some(s => sameCell(s, head))) {
     endGame();
     return;
   }
 
   snake.unshift(head);
   if (eating) {
-    score += 1;
+    score++;
     scoreEl.textContent = String(score);
-    food = placeFood();
+    placeFood();
+    if (!food) {          // board completely filled
+      endGame();
+      return;
+    }
   } else {
     snake.pop();
   }
   draw();
 }
 
-function draw() {
-  ctx.fillStyle = '#000';
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
+function endGame() {
+  clearInterval(timer);
+  timer = null;
+  state = 'over';
+  draw();
+  setStatus('Game over. Press Space, Enter or the button to play again.');
 
-  ctx.fillStyle = '#e33';
-  ctx.fillRect(food.x * CELL + 2, food.y * CELL + 2, CELL - 4, CELL - 4);
-
-  ctx.fillStyle = '#3c3';
-  for (const s of snake) {
-    ctx.fillRect(s.x * CELL + 1, s.y * CELL + 1, CELL - 2, CELL - 2);
+  const name = askName(score);
+  if (name === null) {
+    setStatus('Game over. Score not sent. Press Space, Enter or the button to play again.');
+    loadScores();
+    return;
   }
-
-  if (gameOver) {
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-    ctx.fillStyle = '#fff';
-    ctx.font = 'bold 32px sans-serif';
-    ctx.textAlign = 'center';
-    ctx.fillText('GAME OVER', canvas.width / 2, canvas.height / 2);
-    ctx.textAlign = 'start';
-  }
+  submitScore(name, score);
 }
 
-document.addEventListener('keydown', e => {
-  // Leave arrow keys alone while the user is typing their name.
-  if (e.target && e.target.tagName === 'INPUT') return;
-  const d = DIRS[e.key];
-  if (!d) return;
-  e.preventDefault();
-  if (gameOver) return;
+// Simple prompt. Spaces are replaced by underscores; empty names become "anonymous".
+function askName(finalScore) {
+  const raw = window.prompt(
+    'Game over! Your score: ' + finalScore + '\nEnter your name (no spaces):', '');
+  if (raw == null) return null;
+  const name = raw.trim().replace(/\s+/g, '_').slice(0, MAX_NAME);
+  return name || 'anonymous';
+}
 
-  const last = pending.length ? pending[pending.length - 1] : dir;
-  // Reject reversing into the body and repeating the same direction.
-  if (d.x === -last.x && d.y === -last.y) return;
-  if (d.x === last.x && d.y === last.y) return;
-  if (pending.length < 3) pending.push(d);
-});
-
-function sanitizeName(raw) {
-  const cleaned = String(raw).replace(/\s+/g, '');
-  return cleaned || 'anon';
+async function submitScore(name, value) {
+  setStatus('Sending score…');
+  try {
+    const res = await fetch(API + '/scores', {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain' },
+      body: name + ' ' + value,
+    });
+    if (res.status === 204 || res.ok) {
+      setStatus('Score saved.');
+    } else {
+      setStatus('Server rejected the score (HTTP ' + res.status + ').');
+    }
+  } catch (err) {
+    setStatus('backend unreachable: score not saved.');
+  }
+  await loadScores();
 }
 
 async function loadScores() {
-  scoresList.innerHTML = '';
+  let res;
   try {
-    const res = await fetch(SCORES_URL);
-    if (!res.ok) throw new Error(`server responded with HTTP ${res.status}`);
-    const text = await res.text();
-    const lines = text.split('\n').map(l => l.trim()).filter(l => l.length > 0).slice(0, 10);
-    if (lines.length === 0) {
-      const li = document.createElement('li');
-      li.textContent = 'No scores yet.';
-      scoresList.appendChild(li);
-    }
-    for (const line of lines) {
-      const li = document.createElement('li');
-      li.textContent = line;
-      scoresList.appendChild(li);
-    }
+    res = await fetch(API + '/scores');
   } catch (err) {
-    errorEl.textContent = `Could not load scores from ${SCORES_URL} (${err.message}).`;
+    scoresEl.textContent = 'backend unreachable';
+    return;
+  }
+  if (!res.ok) {
+    scoresEl.textContent = 'Could not load scores (HTTP ' + res.status + ').';
+    return;
+  }
+  let text;
+  try {
+    text = await res.text();
+  } catch (err) {
+    scoresEl.textContent = 'backend unreachable';
+    return;
+  }
+  const lines = text.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+  renderScores(lines.slice(0, 10));
+}
+
+// Each line is "<name> <score>". Built with textContent, never innerHTML.
+function renderScores(lines) {
+  scoresEl.textContent = '';
+  if (lines.length === 0) {
+    scoresEl.textContent = 'No scores yet.';
+    return;
+  }
+  const table = document.createElement('table');
+  const thead = document.createElement('thead');
+  const headRow = document.createElement('tr');
+  ['#', 'Name', 'Score'].forEach((title, i) => {
+    const th = document.createElement('th');
+    th.textContent = title;
+    if (i === 2) th.className = 'num';
+    headRow.appendChild(th);
+  });
+  thead.appendChild(headRow);
+  table.appendChild(thead);
+
+  const tbody = document.createElement('tbody');
+  lines.forEach((line, i) => {
+    const m = line.match(/^(.*\S)\s+(\S+)$/);
+    const name = m ? m[1] : line;
+    const value = m ? m[2] : '';
+    const tr = document.createElement('tr');
+    const cells = [String(i + 1), name, value];
+    cells.forEach((text, j) => {
+      const td = document.createElement('td');
+      td.textContent = text;
+      if (j === 2) td.className = 'num';
+      tr.appendChild(td);
+    });
+    tbody.appendChild(tr);
+  });
+  table.appendChild(tbody);
+  scoresEl.appendChild(table);
+}
+
+function draw() {
+  ctx.fillStyle = '#0d0f14';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  if (food) {
+    ctx.fillStyle = '#e74c3c';
+    ctx.fillRect(food.x * CELL + 3, food.y * CELL + 3, CELL - 6, CELL - 6);
+  }
+  snake.forEach((s, i) => {
+    ctx.fillStyle = i === 0 ? '#2ecc71' : '#27ae60';
+    ctx.fillRect(s.x * CELL + 1, s.y * CELL + 1, CELL - 2, CELL - 2);
+  });
+
+  if (state !== 'playing') {
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.55)';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.fillStyle = '#fff';
+    ctx.textAlign = 'center';
+    ctx.font = 'bold 24px sans-serif';
+    if (state === 'ready') {
+      ctx.fillText('Press Space or Enter', canvas.width / 2, canvas.height / 2 - 10);
+      ctx.fillText('to start', canvas.width / 2, canvas.height / 2 + 24);
+    } else {
+      ctx.fillText('Game over', canvas.width / 2, canvas.height / 2 - 10);
+      ctx.fillText('Score: ' + score, canvas.width / 2, canvas.height / 2 + 24);
+    }
   }
 }
 
-nameForm.addEventListener('submit', async e => {
-  e.preventDefault();
-  if (submitting) return;
-  submitting = true;
-  errorEl.textContent = '';
-
-  const name = sanitizeName(nameInput.value);
-  nameForm.hidden = true;
-  messageEl.textContent = 'Saving score...';
-
-  try {
-    const res = await fetch(SCORES_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'text/plain' },
-      body: `${name} ${score}`
-    });
-    if (!res.ok) throw new Error(`server responded with HTTP ${res.status}`);
-  } catch (err) {
-    errorEl.textContent = `Could not save score to ${SCORES_URL} (${err.message}). Try again.`;
-    messageEl.textContent = `Game over! Score: ${score}.`;
-    nameForm.hidden = false;
-    submitting = false;
+document.addEventListener('keydown', (e) => {
+  const d = DIRS.get(e.key);
+  if (d) {
+    e.preventDefault();
+    if (state === 'ready') startGame();
+    if (state === 'playing') queueDir(d);
     return;
   }
-
-  messageEl.textContent = `Saved ${name} ${score}. Press "New game" to play again.`;
-  await loadScores();
-  submitting = false;
+  if (e.key === ' ' || e.key === 'Spacebar' || e.key === 'Enter') {
+    e.preventDefault();
+    if (state !== 'playing' && !e.repeat) startGame();
+  }
 });
 
-newGameBtn.addEventListener('click', () => {
-  newGame();
-  loadScores();
+restartBtn.addEventListener('click', () => {
+  if (state !== 'playing') startGame();
 });
 
-newGame();
+draw();
 loadScores();
 </script>
 </body>

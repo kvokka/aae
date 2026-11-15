@@ -1,64 +1,49 @@
-# Snake backend
+# Snake high-score backend
 
-A small score server for the browser snake game. Standard library only
-(Python 3, no packages, no build step).
+A single-file HTTP service for snake high scores. Python 3 standard library only.
 
 ## Run
 
 ```sh
-python3 server.py                 # listens on 127.0.0.1:8765
-PORT=8799 python3 server.py       # or pick another port
+python3 server.py                 # listens on http://127.0.0.1:8765
+PORT=9000 python3 server.py       # or pick another port
 ```
 
-The server binds to `127.0.0.1` only.
-
-## Storage
-
-Scores live in `scores.txt`, next to `server.py`. One line per score:
-
-```
-<name> <score>
-```
-
-The file is created on the first write. A missing file means no scores.
+The server binds to 127.0.0.1 only. Scores are stored in `scores.txt`, created
+next to `server.py` on the first write (the file is git-ignored).
 
 ## API
 
-All responses carry `Access-Control-Allow-Origin: *`.
+Every response carries `Access-Control-Allow-Origin: *`.
 
 ### `POST /scores`
 
-Plain-text body: `<name> <score>`
+Plain-text body: `<name> <score>`, e.g. `alice 4200`.
 
-- `name`: non-empty, contains no whitespace.
-- `score`: whole number, digits only (`0`, `4242`, ...).
+- `name`: one or more non-whitespace characters.
+- `score`: whole number, digits only (non-negative).
+- Surrounding whitespace/newlines are ignored.
 
-Responses:
-- `204 No Content` — valid; the line is appended to `scores.txt`.
-- `400 Bad Request` — anything else (missing or extra parts, empty name,
-  non-integer or negative score, bad encoding).
+Responses: `204` (no body) when stored; `400` for any other body.
 
 ### `GET /scores`
 
-Returns `200 OK`, `Content-Type: text/plain`. The body is the ten best lines
-from `scores.txt`, highest score first, one per line. Ties keep file order
-(earlier-written first). With no scores the body is empty.
+Returns the ten best entries as plain text, highest score first, one
+`<name> <score>` per line. Empty body (status `200`) when there are no scores.
 
-### `OPTIONS /scores`
+### `OPTIONS <any path>`
 
-Returns `204 No Content` with:
-- `Access-Control-Allow-Methods: GET, POST, OPTIONS`
-- `Access-Control-Allow-Headers: Content-Type`
+`204` with `Access-Control-Allow-Origin: *`,
+`Access-Control-Allow-Methods: GET, POST, OPTIONS` and
+`Access-Control-Allow-Headers: Content-Type`.
 
-### Other paths and methods
+### Other requests
 
-Unknown paths return `404`. `PUT`, `PATCH` and `DELETE` return `405`. Other
-unsupported methods return `501` from the standard library. Error responses
-carry the CORS header too.
+Unknown paths answer `404`; wrong methods on `/scores` answer `405`.
 
 ## Example
 
 ```sh
-curl -i -X POST --data 'alice 120' http://127.0.0.1:8765/scores
-curl -i http://127.0.0.1:8765/scores
+curl -i -X POST --data 'alice 4200' http://127.0.0.1:8765/scores
+curl http://127.0.0.1:8765/scores
 ```
