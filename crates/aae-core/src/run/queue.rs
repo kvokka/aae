@@ -291,18 +291,29 @@ impl RunHandler {
         if Self::workdir_busy(tx, row)? {
             return Ok(Some(("workdir", Value::Null)));
         }
-        let started = format!("state NOT IN ('queued', 'parked', 'passed', 'failed', 'cancelled') AND NOT {DRAINING}");
         let all: u32 = tx
             .sql()
-            .query_row(&format!("SELECT COUNT(*) FROM runs WHERE {started}"), [], |r| r.get(0))?;
-        let agent: u32 = tx.sql().query_row(
-            &format!("SELECT COUNT(*) FROM runs WHERE project = ?1 AND agent = ?2 AND {started}"),
-            params![row.project, row.agent],
+            .query_row(&format!("SELECT COUNT(*) FROM runs WHERE {}", started()), [], |r| {
+                r.get(0)
+            })?;
+        let full = all >= self.config.max_runs || self.agent_full(tx, row)?;
+        Ok(full.then_some(("concurrency", Value::Null)))
+    }
+
+    /// Whether the other started runs of the agent of `row` are as many as its `max_runs` allows (spec §9.3).
+    pub(super) fn agent_full(&self, tx: &Tx<'_>, row: &Row) -> Result<bool, Error> {
+        let Some(limit) = self.config.max_runs(&row.project, &row.agent) else {
+            return Ok(false);
+        };
+        let others: u32 = tx.sql().query_row(
+            &format!(
+                "SELECT COUNT(*) FROM runs WHERE project = ?1 AND agent = ?2 AND id != ?3 AND {}",
+                started()
+            ),
+            params![row.project, row.agent, row.id],
             |r| r.get(0),
         )?;
-        let limit = self.config.max_runs(&row.project, &row.agent);
-        let full = all >= self.config.max_runs || limit.is_some_and(|l| agent >= l);
-        Ok(full.then_some(("concurrency", Value::Null)))
+        Ok(others >= limit)
     }
 
     /// Emits `run.queued` on creation (`first`) and whenever the reason the run waits for changes.
@@ -343,6 +354,11 @@ impl RunHandler {
         }
         Ok(())
     }
+}
+
+/// The runs that hold a concurrency slot: a parked run, or one in a drain step, has no process and holds none.
+fn started() -> String {
+    format!("state NOT IN ('queued', 'parked', 'passed', 'failed', 'cancelled') AND NOT {DRAINING}")
 }
 
 /// `reply` with the beads a pick passed over and why, when there are any.

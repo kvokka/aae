@@ -5,13 +5,14 @@ mod common;
 
 use aae_core::{
     Error,
-    driver::{Normalized, SessionState},
-    run::{Create, Decision, MAX_ATTEMPTS, Msg},
+    driver::{Normalized, SessionState, StopReason},
+    run::{Create, Decision, MAX_ATTEMPTS, Msg, Outcome, Verdict},
 };
 use aae_testkit::Step;
-use common::{POLICY, hollow_turn, last, world};
+use common::{POLICY, World, hollow_turn, last, world};
 use serde_json::{Value, json};
-use std::time::Duration;
+use std::{sync::Arc, time::Duration};
+use tokio::sync::Notify;
 
 #[tokio::test(start_paused = true)]
 async fn a_turn_that_ends_without_an_outcome_is_hollow_done() {
@@ -225,6 +226,86 @@ async fn the_orchestrator_and_the_agent_limit_started_runs() {
         w.core.send(None, cancel).await.unwrap();
         assert_eq!(w.states(&second).await, ["preparing", "starting", "running"]);
     }
+}
+
+/// A turn that ends once the test notifies: it holds its run until then.
+fn held_turn(world: &World) -> Arc<Notify> {
+    let release = Arc::new(Notify::new());
+    world.driver.script(vec![
+        Step::Emit(Normalized::TurnStarted),
+        Step::Await(release.clone()),
+        Step::Emit(Normalized::TurnEnded {
+            stop_reason: StopReason::Completed,
+        }),
+        Step::Emit(Normalized::State {
+            state: SessionState::Idle,
+            background: false,
+        }),
+    ]);
+    release
+}
+
+/// Declares `pass` for attempt `attempt` of `run`, then lets its turn end.
+async fn pass(w: &World, run: &str, attempt: u32, turn: &Notify) {
+    let token = loop {
+        match w.driver.token(run, attempt) {
+            Some(token) => break token,
+            None => tokio::time::sleep(Duration::from_millis(20)).await,
+        }
+    };
+    let outcome = Outcome {
+        result: Verdict::Pass,
+        summary: "done".into(),
+        data: None,
+    };
+    let msg = Msg::Finish {
+        run: run.into(),
+        token,
+        outcome,
+    };
+    assert_eq!(w.core.send(None, msg).await.unwrap()["answer"], "accepted");
+    turn.notify_one();
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_step_of_an_agent_at_its_limit_parks_until_a_slot_frees() {
+    let step = |name: &str, agent: &str| {
+        format!("[[step]]\nname = \"{name}\"\nkind = \"prompt\"\nagent = \"{agent}\"\nprompt = \"build.md\"\n")
+    };
+    let formula = format!("name = \"build\"\n{}{}", step("plan", "lead"), step("work", "dev"));
+    let w = world(&[
+        (
+            "shop/aae.toml",
+            "[rigs.web]\npath = \"web\"\n[rigs.api]\npath = \"api\"\n",
+        ),
+        ("shop/api/.keep", ""),
+        ("shop/agents/dev/agent.toml", "harness = \"scripted\"\nmax_runs = 1\n"),
+        ("shop/agents/lead/agent.toml", "harness = \"scripted\"\n"),
+        ("shop/formulas/build.toml", &formula),
+    ]);
+    let (plan, work) = (held_turn(&w), held_turn(&w));
+    let first = w.create_on("web").await;
+    pass(&w, &first, 1, &plan).await;
+    // A script goes to the next prompt sent: `work` to the first run's second step, not to the second run.
+    while w.driver.sent(&first, 2).1.len() < 2 {
+        tokio::time::sleep(Duration::from_millis(20)).await;
+    }
+    let plan = held_turn(&w);
+    let second = w.create_on("api").await;
+    pass(&w, &second, 1, &plan).await;
+    let events = w.events(&second, Duration::from_millis(200)).await;
+    assert_eq!(last(&events, "run.parked")["then"], "new_session");
+    assert_eq!(
+        w.states(&second).await.last().unwrap(),
+        "parked",
+        "dev already runs `{first}`"
+    );
+    w.driver.script(hollow_turn());
+    work.notify_one();
+    let states = w.states(&second).await;
+    assert_eq!(states[states.len() - 4..], ["parked", "starting", "running", "failed"]);
+    let events = w.events(&second, Duration::ZERO).await;
+    assert_eq!(last(&events, "run.resumed")["gate_key"], "concurrency");
 }
 
 #[tokio::test(start_paused = true)]

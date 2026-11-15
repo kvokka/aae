@@ -103,8 +103,8 @@ Observed events (plugins and clients read them and cannot change what happens):
 | `run.started` | `{run}`; once per run, when it first leaves `queued` |
 | `run.step_finished` | `{run, outcome: Outcome}`; a step that is not the last passed, `run` is still at that step (6.1) |
 | `run.state_changed` | `{from, to, attempt, generation, reason}` |
-| `run.parked` | `{gate: Gate\|null, then: "resume"\|"new_session"}` (`null`: the daemon is stopping) |
-| `run.resumed` | `{gate_key}` (`"daemon_stopping"` after a park for a stopping daemon) |
+| `run.parked` | `{gate: Gate\|null, then: "resume"\|"new_session"}` (`null`: the daemon is stopping, or the run's agent has as many other started runs as its `max_runs`) |
+| `run.resumed` | `{gate_key}` (`"daemon_stopping"` after a park for a stopping daemon, `"concurrency"` after one for the agent's `max_runs`) |
 | `run.passed` | `{run, outcome: Outcome, usage}` |
 | `run.failed` | `{run, class: "agent"\|"check"\|"hollow_done"\|"infrastructure", reason, outcome, usage}`; `outcome` null unless the agent declared one |
 | `run.cancelled` | `{run, reason, usage}` |
@@ -578,7 +578,7 @@ core sets the actor of an exec step and hands that of a session to the adapter i
 | `requires_action` | waits for an answer to a permission request or question; not silence; the step `timeout` of `running` pauses here and resumes with the time it had left | `human_timeout` 1 h | answer `deny`, back to `running` |
 | `finishing` | outcome declared and the session idle without background; `run.finishing` hooks running | hook deadline | the hooks count as failed → veto → `failed{check, hook_deadline}` (a declared `fail` stays `failed{agent}`) |
 | `interrupted` | the current attempt ended with a failure (or by a daemon restart); `run.attempt_failed` is deciding | hook deadline, then the decision's `after` | no decision → `failed{infrastructure}` |
-| `parked` | a started run waits for a gate; no harness process | `park_timeout` 7 d from parking, or the gate's `until` if later (a gate with `until` opens by its timer first) | `failed{infrastructure, park_timeout}` |
+| `parked` | a started run waits for a gate or a slot of its agent; no harness process | `park_timeout` 7 d from parking, or the gate's `until` if later (a gate with `until` opens by its timer first) | `failed{infrastructure, park_timeout}` |
 | `passed`, `failed{class}`, `cancelled` | terminal | — | — |
 
 The thresholds named here (`queue_timeout`, `start_timeout`, the silence budgets, `human_timeout`, `park_timeout`)
@@ -590,14 +590,16 @@ so that the state machine has one place where `run.attempt_failed` is decided.
 - The class of `failed` tells the cause: `agent` (the finisher said `fail`), `check` (a plugin's veto or deny),
   `hollow_done` (the turn ended without an outcome), `infrastructure` (attempts ran out or the policy ended the run).
 - `queued` has not started: it waits for a concurrency slot, a free workdir or an open gate. `parked` has started and
-  waits for a gate with no harness process.
+  waits for a gate or a slot of its agent with no harness process.
 - A run belongs to a project and a rig, named when it is created (API, CLI, MCP) or by the trigger that fires on the
   rig. A start that names no rig takes it from the one `rig:` label of the bead an input names by id; only a bead of the
   ready list has known labels, so for any other the start is refused with "name the rig". No rig, an unknown rig, or a
   bead with no or several `rig:` labels is refused before the run exists. Its workdir is the rig's directory, or a
   worktree of it with `worktree = true` in the formula (config.md). One live run holds a workdir: a second run in the
   same directory waits in `queued` (`waiting_for: workdir`); parallel work in one rig is the worktree's job.
-- Concurrency is bounded per orchestrator (`max_runs`, default 8) and per agent (`max_runs` in `agent.toml`).
+- Concurrency is bounded per orchestrator (`max_runs`, default 8) and per agent (`max_runs` in `agent.toml`). A run
+  that started keeps its orchestrator slot from step to step; a step of an agent at its limit parks until a run of
+  that agent ends.
 - A run goes through the steps of its formula in order (config.md, "Formula"); `preparing` to `finishing` are
   states of the current step, named by `step` of the `RunView`. A `pass` of a step that is not the last, once
   accepted, ends the attempt with `run.step_finished` and moves the run from `finishing` to `preparing` of the next
@@ -654,7 +656,7 @@ of the parent leaves them alone.
 | `interrupted` | `park` | `parked` | gate closed in the same transaction |
 | `interrupted` | `fail`, no decision, attempts ceiling | `failed{infrastructure}` | gate closed if the decision carries one |
 | `parked` | every key of the run open, a concurrency slot free (in creation order with the queue) | `starting` (`then` of the park decision); `run.resumed` | new attempt |
-| `preparing`, `interrupted` | an attempt would start while a key of the run is closed (by anyone, invariant 18) or the daemon is stopping | `parked` (`then`: `new_session` from `preparing`, the decided kind from `interrupted`) | — |
+| `preparing`, `interrupted` | an attempt would start while a key of the run is closed (by anyone, invariant 18), the daemon is stopping, or the run's agent has as many other started runs as its `max_runs` (not in a drain step) | `parked` (`then`: `new_session` from `preparing`, the decided kind from `interrupted`) | — |
 | any non-terminal | operator cancel, or the cancel of the parent (§6.1, reason `parent_cancelled`) | `cancelled` | stop the session, conditional release of the bead |
 
 Every terminal transition releases the run's hold on its workdir and its ownership of its bead. A bead the run

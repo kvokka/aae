@@ -92,12 +92,18 @@ impl RunHandler {
         Ok(Self::gates_of(tx, row)?.into_iter().next())
     }
 
-    /// What keeps `row` from starting an attempt: the stopping daemon (`null`, spec §5.6) or its oldest closed gate.
+    /// What keeps `row` from starting an attempt: the stopping daemon (`null`, spec §5.6), its oldest closed gate, or
+    /// its agent's `max_runs` reached by other runs (`null`; e.g. a step of another agent, spec §9.3). A drain step
+    /// holds no slot.
     pub(super) fn held(&self, tx: &Tx<'_>, row: &Row) -> Result<Option<Value>, Error> {
         if self.stopping.is_some() {
             return Ok(Some(Value::Null));
         }
-        Self::closed_gate(tx, row)
+        if let Some(gate) = Self::closed_gate(tx, row)? {
+            return Ok(Some(gate));
+        }
+        let full = row.step_kind != "drain" && self.agent_full(tx, row)?;
+        Ok(full.then_some(Value::Null))
     }
 
     /// Remembers the account and model keys an attempt of `row` reported. The model column counts only until the
@@ -224,10 +230,15 @@ impl RunHandler {
         }
     }
 
-    /// A started run waits for `gate` (`null`: for the stopping daemon) without a process; the attempt `then` starts
-    /// when its keys are all open.
+    /// A started run waits for `gate` (`null`: for the stopping daemon or a slot of its agent) without a process; the
+    /// attempt `then` starts when its keys are all open and a slot is free.
     pub(super) fn park(&mut self, tx: &mut Tx<'_>, mut row: Row, gate: Value, then: &str) -> Result<(), Error> {
-        let key = gate["key"].as_str().unwrap_or("daemon_stopping");
+        let unkeyed = if self.stopping.is_some() {
+            "daemon_stopping"
+        } else {
+            "concurrency"
+        };
+        let key = gate["key"].as_str().unwrap_or(unkeyed);
         tx.sql().execute(
             "UPDATE runs SET next = ?2, waiting_for = ?3 WHERE id = ?1",
             params![row.id, then, key],

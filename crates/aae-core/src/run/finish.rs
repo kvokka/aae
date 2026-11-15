@@ -149,8 +149,6 @@ impl RunHandler {
 
     /// The run ends its step and starts `next` at once.
     fn enter(&mut self, tx: &mut Tx<'_>, mut row: Row, next: Step) -> Result<(), Error> {
-        // shortcut: the agent's `max_runs` is read when a run leaves the queue or a park, not here; check it at the
-        // step boundary once formulas mix agents with tight limits.
         let agent = self.step_agent(&row.project, &row.rig, &row.formula, &next, row.as_agent.as_deref());
         let agent = match agent {
             Ok((agent, _)) => agent,
