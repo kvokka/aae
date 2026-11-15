@@ -12,12 +12,14 @@ run (a CI run cannot run the demos and refuses a 10 only on a failed row of it),
 at or after the last change of `crates/`.
 
 Assessed 2026-11-16 at `15c7d3a`, the last change of `crates/` (a test that exec steps get `AAE_SOCKET`; criterion 22
-judges a 10 like the other caps), for the full run with real models on the commit after it: the scores of 10 below stand
-only if that run is green, criterion 20 with both demos included; row 22 of the run checks them. A 10 goes to a
-component the demos run through end to end: a request, the planner's beads, `drain` to coders on claude and codex, demo
-2's `format` and `qa` checks, which send the work back when one fails. A component the demos do not reach stays at 8:
-its own criteria are green, but no unattended demo run goes through it.
-<!-- MEASURE id=readiness date=2026-11-16 ver=15c7d3a env=linux-arm64-orbstack src=docs/READINESS.md note="scored for the full run with real models after 15c7d3a, both demos included" -->
+judges a 10 like the other caps). The full run with real models on `ffaccea`, the same `crates/`, passed 37 of 37 rows,
+both demos and row 22 on these scores included. The authors' runs of the demos, `*-example`, came after it on the same
+`crates/`, once `run.sh` made each rig a git repository of its own: demo 1 passed at `f8eb07f` on claude haiku and codex
+luna, demo 2 at `4829f4c` on codex sol, luna and terra, its `format` and `qa` checks green in the first round. A 10 goes
+to a component the demos run through end to end: a request, the planner's beads, `drain` to coders on claude and codex,
+demo 2's `format` and `qa` checks, which send the work back when one fails. A component the demos do not reach stays at
+8: its own criteria are green, but no unattended demo run goes through it.
+<!-- MEASURE id=readiness date=2026-11-16 ver=15c7d3a env=linux-arm64-orbstack src=docs/READINESS.md note="the full run with real models on ffaccea, the crates/ of 15c7d3a: 37 of 37 rows, both demos included" -->
 
 | Component | Criteria | Score | Missing for the next point |
 |---|---|---|---|
