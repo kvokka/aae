@@ -1,0 +1,27 @@
+name = "planner-executor"
+packs = ["../pack"]                   # the agents and the formulas; the request comes from the user at the start
+
+# The user's settings: what the agents of the pack run on here, and how.
+[settings]
+inherit_host = false                  # only what this config sets reaches the agents; the logins come from the host
+permission_mode = "bypassPermissions" # the demo runs unattended, each agent in a directory of its own
+
+[overrides.planner]                   # over the pack's defaults: the cheapest claude model
+model = "haiku"
+[overrides.coder]
+model = "haiku"
+
+[rigs.root]
+path = "."                            # the planner works here, next to the beads
+# `vars.harness` tells the planner what the coder of the rig runs on, for the `harness:` label of its beads; a bead
+# whose label disagrees with the config gets no run.
+[rigs.frontend]
+path = "../frontend"
+vars = { harness = "claude" }         # the coder runs on claude here, as in the whole project
+[rigs.backend]
+path = "../backend"
+vars = { harness = "codex" }
+[rigs.backend.overrides.coder]        # on this rig the same coder runs on codex
+harness = "codex"
+model = "luna"                        # the adapter expands it to the latest luna
+permission_mode = "never"             # codex's approval policy: the demo runs unattended

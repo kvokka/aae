@@ -1,0 +1,9 @@
+# What a run creates: the work of the coders, the beads and the daemon's state; the author's run is in *-example.
+/frontend/*
+!/frontend/.gitkeep
+/backend/*
+!/backend/.gitkeep
+/root/.beads/
+/root/.bv/
+/.aae/
+/RESULT.md

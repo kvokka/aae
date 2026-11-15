@@ -1,0 +1,28 @@
+name = "deliver"
+description = "A request becomes beads per rig, coders do them, and the report says what got done"
+
+[inputs]
+bead = { type = "bead", required = true }   # `{ request = "<text>" }`: the request becomes the root bead
+
+[[step]]
+name = "plan"
+kind = "prompt"
+agent = "planner"
+prompt = "plan.md"
+timeout = "20m"
+
+[[step]]
+name = "work"
+kind = "drain"
+formula = "implement"                       # a run per bead under the root, on the rig of its `rig:` label
+
+# The beads under the root as they are, and whether all of them are closed.
+[[step]]
+name = "report"
+kind = "exec"
+command = ["sh", "-c", """
+br list --all --tree --no-color
+echo "drain: $AAE_STEP_WORK_DATA"
+br list --all --limit 0 --json | jq -e --arg root "$AAE_BEAD." \
+  '[.issues[] | select(.id | startswith($root))] | length > 0 and all(.status == "closed")' >/dev/null
+"""]

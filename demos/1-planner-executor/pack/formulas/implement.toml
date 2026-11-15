@@ -1,0 +1,12 @@
+name = "implement"
+description = "A coder does one bead in its rig and tests it"
+
+[inputs]
+bead = { type = "bead", required = true }
+
+[[step]]
+name = "code"
+kind = "prompt"
+agent = "coder"
+prompt = "implement.md"
+timeout = "20m"

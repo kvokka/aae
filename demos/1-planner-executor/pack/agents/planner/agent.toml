@@ -1,0 +1,4 @@
+# The defaults of the role; the user's config may run it on another harness, model or effort.
+harness = "claude"
+model = "sonnet"
+effort = "medium"

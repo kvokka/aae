@@ -78,21 +78,16 @@ pub(crate) const ALL: &[Scenario] = &[
     },
     Scenario {
         criterion: "20",
-        title: "the pack and both demo projects of demos/ load",
+        title: "the pack and the project of each demo in demos/ load",
         launch: Launch::Ci,
         run: |env| Box::pin(demos_load(env)),
     },
     Scenario {
         criterion: "20",
-        title: "demo 1, a planner and its workers on claude, passes from a request to a green smoke test unattended",
+        title: "demo 1: a request, a planner that files beads, a drain to coders on claude and codex, a report that \
+            every bead under the root is closed, unattended",
         launch: Launch::Request,
-        run: |env| Box::pin(demo(env, "snake-claude")),
-    },
-    Scenario {
-        criterion: "20",
-        title: "demo 2, the backend worker on codex, passes from a request to a green smoke test unattended",
-        launch: Launch::Request,
-        run: |env| Box::pin(demo(env, "snake-mixed")),
+        run: |env| Box::pin(demo(env, "1-planner-executor")),
     },
     Scenario {
         criterion: "22",
@@ -189,17 +184,17 @@ async fn tests(env: Arc<Env>, filter: &str, want: u32) -> String {
 
 async fn demos_load(env: Arc<Env>) -> String {
     let aae = env.aae.to_string_lossy().into_owned();
-    for demo in ["snake-claude", "snake-mixed"] {
+    for demo in ["1-planner-executor"] {
         let config = format!("demos/{demo}/root/config.toml");
         command(&env, &aae, &["config", "check", "--config", &config]).await;
     }
-    "`aae config check` of both demos' demos/<demo>/root/config.toml is clean".into()
+    "`aae config check` of demos/<demo>/root/config.toml is clean for each demo".into()
 }
 
-/// One demo on real models (spec §15 "Demo"); `demos/run.sh` keeps its rigs as the snapshot in `demos/<demo>/`.
+/// One demo on real models (spec §15 "Demo"); its `run.sh` leaves the result in the demo's directory, ignored by git.
 async fn demo(env: Arc<Env>, name: &str) -> String {
     let aae = format!("AAE={}", env.aae.display());
-    let out = command(&env, "env", &[&aae, "demos/run.sh", name]).await;
+    let out = command(&env, "env", &[&aae, &format!("demos/{name}/run.sh")]).await;
     line_with(&out, name)
 }
 
