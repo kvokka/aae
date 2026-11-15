@@ -6,390 +6,252 @@
 <title>Snake</title>
 <style>
   body {
-    margin: 0;
-    min-height: 100vh;
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    background: #1b1b1f;
+    color: #eee;
     display: flex;
     flex-direction: column;
     align-items: center;
-    justify-content: center;
-    background: #1b1d22;
-    color: #e8e8e8;
-    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    margin: 0;
+    padding: 16px;
   }
-  h1 { margin: 0 0 16px; font-weight: 600; }
-  #wrap {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 24px;
-    align-items: flex-start;
-    justify-content: center;
-    padding: 0 16px;
-  }
+  h1 { margin: 8px 0; }
   canvas {
-    background: #0e0f12;
-    border: 2px solid #3a3e47;
-    border-radius: 4px;
+    background: #000;
+    border: 2px solid #444;
     display: block;
   }
-  #side { min-width: 220px; max-width: 280px; }
-  #score { font-size: 20px; margin: 0 0 8px; }
-  #status { min-height: 1.4em; margin: 0 0 12px; color: #c9d1d9; }
-  #again {
-    font: inherit;
-    padding: 8px 16px;
-    border: 0;
-    border-radius: 4px;
-    background: #2ea043;
-    color: #fff;
-    cursor: pointer;
-    margin-bottom: 16px;
-  }
-  #again:hover { background: #3fb950; }
-  #again[hidden] { display: none; }
-  h2 { font-size: 16px; margin: 0 0 8px; font-weight: 600; }
-  #scores { margin: 0; padding-left: 24px; min-height: 2em; }
-  #scores li { margin: 2px 0; font-variant-numeric: tabular-nums; }
-  #scores .sc { float: right; margin-left: 12px; }
-  #net { color: #f0883e; min-height: 1.2em; margin: 8px 0 0; }
+  #score { font-weight: bold; font-size: 1.2em; }
+  #message { min-height: 1.5em; text-align: center; }
+  #nameForm { display: flex; gap: 8px; align-items: center; }
+  #nameForm[hidden] { display: none; }
+  #error { color: #ff6b6b; min-height: 1.5em; text-align: center; }
+  button { padding: 6px 14px; font-size: 1em; cursor: pointer; }
+  #scoresBox { width: 400px; max-width: 100%; }
+  #scores { padding-left: 2em; }
+  #scores li { font-family: monospace; padding: 2px 0; }
 </style>
 </head>
 <body>
 <h1>Snake</h1>
-<div id="wrap">
-  <canvas id="board" width="400" height="400" aria-label="Snake game board"></canvas>
-  <div id="side">
-    <p id="score">Score: 0</p>
-    <p id="status" role="status"></p>
-    <button id="again" type="button" hidden>Play again</button>
-    <h2>Top 10</h2>
-    <ol id="scores"></ol>
-    <p id="net" role="alert"></p>
-  </div>
+<p>Score: <span id="score">0</span></p>
+<canvas id="board" width="400" height="400"></canvas>
+<p id="message">Use the arrow keys to steer.</p>
+
+<form id="nameForm" hidden>
+  <label for="nameInput">Your name:</label>
+  <input id="nameInput" type="text" maxlength="30" autocomplete="off">
+  <button type="submit">Save score</button>
+</form>
+
+<p><button id="newGame" type="button">New game</button></p>
+<p id="error" role="alert"></p>
+
+<div id="scoresBox">
+  <h2>Top 10</h2>
+  <ol id="scores"></ol>
 </div>
 
 <script>
-(function () {
-  'use strict';
+// Backend endpoint. Change here if the backend moves.
+const SCORES_URL = 'http://127.0.0.1:8765/scores';
 
-  // ---- Configuration ------------------------------------------------------
-  // Base URL of the scores backend. Change this single constant if needed.
-  const API_BASE = 'http://127.0.0.1:8765';
+const COLS = 20;
+const ROWS = 20;
+const CELL = 20;
+const TICK_MS = 120;
 
-  const GRID = 20;          // board is GRID x GRID cells
-  const CELL = 20;          // pixels per cell (GRID * CELL = canvas size)
-  const TICK_MS = 120;      // snake moves every TICK_MS milliseconds
+const DIRS = {
+  ArrowLeft:  { x: -1, y: 0 },
+  ArrowRight: { x: 1,  y: 0 },
+  ArrowUp:    { x: 0,  y: -1 },
+  ArrowDown:  { x: 0,  y: 1 }
+};
 
-  const DIRS = {
-    ArrowUp:    { x: 0,  y: -1 },
-    ArrowDown:  { x: 0,  y: 1 },
-    ArrowLeft:  { x: -1, y: 0 },
-    ArrowRight: { x: 1,  y: 0 }
-  };
+const canvas = document.getElementById('board');
+const ctx = canvas.getContext('2d');
+const scoreEl = document.getElementById('score');
+const messageEl = document.getElementById('message');
+const nameForm = document.getElementById('nameForm');
+const nameInput = document.getElementById('nameInput');
+const newGameBtn = document.getElementById('newGame');
+const errorEl = document.getElementById('error');
+const scoresList = document.getElementById('scores');
 
-  // ---- DOM ----------------------------------------------------------------
-  const canvas = document.getElementById('board');
-  const ctx = canvas.getContext('2d');
-  const scoreEl = document.getElementById('score');
-  const statusEl = document.getElementById('status');
-  const againBtn = document.getElementById('again');
-  const scoresEl = document.getElementById('scores');
-  const netEl = document.getElementById('net');
+let snake, dir, pending, food, score, gameOver, submitting, timer;
 
-  // ---- Game state ---------------------------------------------------------
-  // state: 'ready'      - waiting for the first arrow key
-  //        'playing'    - snake is moving
-  //        'over'       - game ended, name prompt about to appear
-  //        'submitting' - score being posted / leaderboard being loaded
-  //        'done'       - finished; arrow key or button starts a new game
-  let state = 'ready';
-  let snake = [];
-  let dir = DIRS.ArrowRight;   // direction applied on the last tick
-  let nextDir = DIRS.ArrowRight; // direction to apply on the next tick
-  let food = null;
-  let score = 0;
-  let timer = null;
-  let lastName = '';
+function placeFood() {
+  // Pick a random free cell (the snake never fills the board in practice).
+  let cell;
+  do {
+    cell = { x: Math.floor(Math.random() * COLS), y: Math.floor(Math.random() * ROWS) };
+  } while (snake.some(s => s.x === cell.x && s.y === cell.y));
+  return cell;
+}
 
-  function isOpposite(a, b) {
-    return a.x === -b.x && a.y === -b.y;
+function newGame() {
+  snake = [{ x: 10, y: 10 }, { x: 9, y: 10 }, { x: 8, y: 10 }];
+  dir = { x: 1, y: 0 };
+  pending = [];
+  score = 0;
+  gameOver = false;
+  submitting = false;
+  food = placeFood();
+
+  scoreEl.textContent = '0';
+  messageEl.textContent = 'Use the arrow keys to steer.';
+  errorEl.textContent = '';
+  nameForm.hidden = true;
+
+  clearInterval(timer);
+  timer = setInterval(tick, TICK_MS);
+  draw();
+}
+
+function endGame() {
+  gameOver = true;
+  clearInterval(timer);
+  draw();
+  messageEl.textContent = `Game over! Score: ${score}. Enter your name to save it.`;
+  nameInput.value = '';
+  nameForm.hidden = false;
+  nameInput.focus();
+}
+
+function tick() {
+  if (gameOver) return;
+  if (pending.length) dir = pending.shift();
+
+  const head = { x: snake[0].x + dir.x, y: snake[0].y + dir.y };
+
+  // Wall collision.
+  if (head.x < 0 || head.y < 0 || head.x >= COLS || head.y >= ROWS) {
+    endGame();
+    return;
   }
 
-  function sameCell(a, b) {
-    return a.x === b.x && a.y === b.y;
+  const eating = head.x === food.x && head.y === food.y;
+
+  // Self collision. The tail moves away this tick unless we are eating.
+  const body = eating ? snake : snake.slice(0, -1);
+  if (body.some(s => s.x === head.x && s.y === head.y)) {
+    endGame();
+    return;
   }
 
-  function placeFood() {
-    const occupied = new Set(snake.map(s => s.y * GRID + s.x));
-    const free = [];
-    for (let i = 0; i < GRID * GRID; i++) {
-      if (!occupied.has(i)) free.push(i);
-    }
-    if (free.length === 0) return null;
-    const idx = free[Math.floor(Math.random() * free.length)];
-    return { x: idx % GRID, y: Math.floor(idx / GRID) };
-  }
-
-  function resetBoard() {
-    const cx = Math.floor(GRID / 2);
-    const cy = Math.floor(GRID / 2);
-    snake = [{ x: cx, y: cy }, { x: cx - 1, y: cy }, { x: cx - 2, y: cy }];
-    dir = DIRS.ArrowRight;
-    nextDir = DIRS.ArrowRight;
-    score = 0;
+  snake.unshift(head);
+  if (eating) {
+    score += 1;
+    scoreEl.textContent = String(score);
     food = placeFood();
-    updateScore();
+  } else {
+    snake.pop();
+  }
+  draw();
+}
+
+function draw() {
+  ctx.fillStyle = '#000';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  ctx.fillStyle = '#e33';
+  ctx.fillRect(food.x * CELL + 2, food.y * CELL + 2, CELL - 4, CELL - 4);
+
+  ctx.fillStyle = '#3c3';
+  for (const s of snake) {
+    ctx.fillRect(s.x * CELL + 1, s.y * CELL + 1, CELL - 2, CELL - 2);
   }
 
-  function startGame() {
-    clearInterval(timer);
-    resetBoard();
-    state = 'playing';
-    againBtn.hidden = true;
-    setStatus('');
-    setNet('');
-    timer = setInterval(tick, TICK_MS);
-    draw();
+  if (gameOver) {
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 32px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('GAME OVER', canvas.width / 2, canvas.height / 2);
+    ctx.textAlign = 'start';
   }
+}
 
-  function tick() {
-    dir = nextDir;
-    const head = { x: snake[0].x + dir.x, y: snake[0].y + dir.y };
+document.addEventListener('keydown', e => {
+  // Leave arrow keys alone while the user is typing their name.
+  if (e.target && e.target.tagName === 'INPUT') return;
+  const d = DIRS[e.key];
+  if (!d) return;
+  e.preventDefault();
+  if (gameOver) return;
 
-    if (head.x < 0 || head.x >= GRID || head.y < 0 || head.y >= GRID) {
-      gameOver();
-      return;
-    }
+  const last = pending.length ? pending[pending.length - 1] : dir;
+  // Reject reversing into the body and repeating the same direction.
+  if (d.x === -last.x && d.y === -last.y) return;
+  if (d.x === last.x && d.y === last.y) return;
+  if (pending.length < 3) pending.push(d);
+});
 
-    const eating = food !== null && sameCell(head, food);
-    // When not growing, the tail cell will vacate this tick, so it is free.
-    const body = eating ? snake : snake.slice(0, -1);
-    if (body.some(s => sameCell(s, head))) {
-      gameOver();
-      return;
-    }
+function sanitizeName(raw) {
+  const cleaned = String(raw).replace(/\s+/g, '');
+  return cleaned || 'anon';
+}
 
-    snake.unshift(head);
-    if (eating) {
-      score += 1;
-      food = placeFood();
-      updateScore();
-      if (food === null) {
-        // Board is full: nothing left to place, treat as the end of the game.
-        draw();
-        gameOver();
-        return;
-      }
-    } else {
-      snake.pop();
-    }
-    draw();
-  }
-
-  function gameOver() {
-    clearInterval(timer);
-    timer = null;
-    state = 'over';
-    draw();
-    setStatus('Game over! Your score: ' + score);
-    // Let the canvas repaint before the blocking prompt appears.
-    setTimeout(submitFlow, 50);
-  }
-
-  async function submitFlow() {
-    const name = askName();
-    state = 'submitting';
-    draw();
-
-    const problems = [];
-    if (name !== null) {
-      setStatus('Saving score...');
-      const err = await postScore(name, score);
-      if (err) {
-        problems.push(err);
-        setStatus('Score not saved.');
-      } else {
-        setStatus('Score saved for ' + name + '.');
-      }
-    } else {
-      setStatus('Score not saved.');
-    }
-
-    const loadErr = await loadScores();
-    if (loadErr) problems.push(loadErr);
-    setNet(problems.join(' '));
-    state = 'done';
-    againBtn.hidden = false;
-    draw();
-  }
-
-  // Ask for a name until a non-empty one is given, or the player cancels.
-  // Returns the sanitised name (no spaces), or null if cancelled.
-  function askName() {
-    for (;;) {
-      const raw = window.prompt('Game over! Your score: ' + score + '\nEnter your name:', lastName);
-      if (raw === null) return null;
-      const cleaned = raw.trim().replace(/\s+/g, '_');
-      if (cleaned !== '') {
-        lastName = cleaned;
-        return cleaned;
-      }
-    }
-  }
-
-  // Returns null on success, or an error message for the page.
-  async function postScore(name, value) {
-    try {
-      const res = await fetch(API_BASE + '/scores', {
-        method: 'POST',
-        headers: { 'Content-Type': 'text/plain' },
-        body: name + ' ' + value
-      });
-      if (!res.ok) throw new Error('HTTP ' + res.status);
-      return null;
-    } catch (err) {
-      return 'Could not save score: backend unreachable at ' + API_BASE + '.';
-    }
-  }
-
-  // Returns null on success, or an error message for the page.
-  async function loadScores() {
-    let entries = [];
-    let problem = null;
-    try {
-      const res = await fetch(API_BASE + '/scores', { cache: 'no-store' });
-      if (!res.ok) throw new Error('HTTP ' + res.status);
-      entries = parseScores(await res.text());
-    } catch (err) {
-      problem = 'Could not load scores: backend unreachable at ' + API_BASE + '.';
-    }
-    renderScores(entries);
-    return problem;
-  }
-
-  // Backend format: up to ten lines, each "<name> <score>", highest first.
-  function parseScores(text) {
-    return text
-      .split(/\r?\n/)
-      .map(line => line.trim())
-      .filter(line => line !== '')
-      .slice(0, 10)
-      .map(line => {
-        const parts = line.split(/\s+/);
-        const score = parts.pop();
-        return { name: parts.join(' '), score: score };
-      });
-  }
-
-  function renderScores(entries) {
-    scoresEl.textContent = '';
-    if (entries.length === 0) {
+async function loadScores() {
+  scoresList.innerHTML = '';
+  try {
+    const res = await fetch(SCORES_URL);
+    if (!res.ok) throw new Error(`server responded with HTTP ${res.status}`);
+    const text = await res.text();
+    const lines = text.split('\n').map(l => l.trim()).filter(l => l.length > 0).slice(0, 10);
+    if (lines.length === 0) {
       const li = document.createElement('li');
       li.textContent = 'No scores yet.';
-      li.style.listStyle = 'none';
-      scoresEl.appendChild(li);
-      return;
+      scoresList.appendChild(li);
     }
-    for (const e of entries) {
+    for (const line of lines) {
       const li = document.createElement('li');
-      const sc = document.createElement('span');
-      sc.className = 'sc';
-      sc.textContent = e.score;
-      li.appendChild(sc);
-      li.appendChild(document.createTextNode(e.name));
-      scoresEl.appendChild(li);
+      li.textContent = line;
+      scoresList.appendChild(li);
     }
+  } catch (err) {
+    errorEl.textContent = `Could not load scores from ${SCORES_URL} (${err.message}).`;
   }
+}
 
-  // ---- Input --------------------------------------------------------------
-  document.addEventListener('keydown', function (e) {
-    const d = DIRS[e.key];
-    if (!d) return;
-    e.preventDefault();
+nameForm.addEventListener('submit', async e => {
+  e.preventDefault();
+  if (submitting) return;
+  submitting = true;
+  errorEl.textContent = '';
 
-    if (state === 'playing') {
-      // Never allow reversing into the neck: compare against the applied direction.
-      if (!isOpposite(d, dir)) nextDir = d;
-    } else if (state === 'ready' || state === 'done') {
-      startGame();
-      if (!isOpposite(d, dir)) nextDir = d;
-    }
-    // 'over' and 'submitting' ignore arrow keys.
-  });
+  const name = sanitizeName(nameInput.value);
+  nameForm.hidden = true;
+  messageEl.textContent = 'Saving score...';
 
-  againBtn.addEventListener('click', function () {
-    if (state === 'done') startGame();
-  });
-
-  // ---- Rendering ----------------------------------------------------------
-  function draw() {
-    ctx.fillStyle = '#0e0f12';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-    ctx.strokeStyle = '#16181d';
-    ctx.lineWidth = 1;
-    for (let i = 1; i < GRID; i++) {
-      ctx.beginPath();
-      ctx.moveTo(i * CELL + 0.5, 0);
-      ctx.lineTo(i * CELL + 0.5, canvas.height);
-      ctx.moveTo(0, i * CELL + 0.5);
-      ctx.lineTo(canvas.width, i * CELL + 0.5);
-      ctx.stroke();
-    }
-
-    if (food) {
-      ctx.fillStyle = '#e5534b';
-      ctx.beginPath();
-      ctx.arc(food.x * CELL + CELL / 2, food.y * CELL + CELL / 2, CELL / 2 - 3, 0, Math.PI * 2);
-      ctx.fill();
-    }
-
-    snake.forEach(function (s, i) {
-      ctx.fillStyle = i === 0 ? '#7ee787' : '#2ea043';
-      ctx.fillRect(s.x * CELL + 1, s.y * CELL + 1, CELL - 2, CELL - 2);
+  try {
+    const res = await fetch(SCORES_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain' },
+      body: `${name} ${score}`
     });
-
-    if (state !== 'playing') {
-      ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
-      ctx.fillStyle = '#ffffff';
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.font = 'bold 22px system-ui, sans-serif';
-      const lines = overlayLines();
-      lines.forEach(function (text, i) {
-        ctx.font = (i === 0 ? 'bold 22px' : '15px') + ' system-ui, sans-serif';
-        ctx.fillText(text, canvas.width / 2, canvas.height / 2 - 14 + i * 26);
-      });
-    }
+    if (!res.ok) throw new Error(`server responded with HTTP ${res.status}`);
+  } catch (err) {
+    errorEl.textContent = `Could not save score to ${SCORES_URL} (${err.message}). Try again.`;
+    messageEl.textContent = `Game over! Score: ${score}.`;
+    nameForm.hidden = false;
+    submitting = false;
+    return;
   }
 
-  function overlayLines() {
-    switch (state) {
-      case 'ready':      return ['Snake', 'Press an arrow key to start'];
-      case 'over':       return ['Game over', 'Score: ' + score];
-      case 'submitting': return ['Game over', 'Saving score...'];
-      case 'done':       return ['Game over', 'Press an arrow key to restart'];
-      default:           return [];
-    }
-  }
+  messageEl.textContent = `Saved ${name} ${score}. Press "New game" to play again.`;
+  await loadScores();
+  submitting = false;
+});
 
-  function updateScore() {
-    scoreEl.textContent = 'Score: ' + score;
-  }
+newGameBtn.addEventListener('click', () => {
+  newGame();
+  loadScores();
+});
 
-  function setStatus(text) {
-    statusEl.textContent = text;
-  }
-
-  function setNet(text) {
-    netEl.textContent = text;
-  }
-
-  // ---- Init ---------------------------------------------------------------
-  resetBoard();
-  draw();
-  loadScores().then(function (err) { setNet(err || ''); });
-})();
+newGame();
+loadScores();
 </script>
 </body>
 </html>
