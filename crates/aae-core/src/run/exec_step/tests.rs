@@ -41,6 +41,6 @@ async fn a_stop_of_an_attempt_ends_its_command() {
 #[tokio::test]
 async fn a_late_stop_of_the_last_attempt_leaves_the_next_one_running() {
     let stop = json!({ "op": "stop_exec", "run": "r", "attempt": 1 });
-    let (exit, stdout) = stopped(exec(2, "sleep 0.3; echo done"), stop).await;
+    let (exit, stdout) = stopped(exec(2, "sleep 1; echo done"), stop).await;
     assert_eq!((exit, stdout.as_str()), (Exit::Code(0), "done\n"));
 }
