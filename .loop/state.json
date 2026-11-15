@@ -1,12 +1,12 @@
 {
   "max_cycles": 117,
-  "status": "halted",
+  "status": "running",
   "cycle": 69,
-  "phase": "coder",
-  "attempt": 1,
+  "phase": null,
+  "attempt": 0,
   "base": "87d76f1a585e23e38143eda7563c645ccca1e245",
   "started": "2026-11-15T01:17:48+0700",
-  "coder_status": "done",
+  "coder_status": "partial",
   "history_round1": [
     {
       "cycle": 1,
@@ -623,6 +623,15 @@
       "score": 8.0,
       "verdict": "continue",
       "ended": "2026-11-15T01:17:38+0700"
+    },
+    {
+      "cycle": 69,
+      "base": "87d76f1a585e23e38143eda7563c645ccca1e245",
+      "head": "97c986bf198d15bb436f25c7f7d40ef75e73e59c",
+      "coder_status": "partial",
+      "score": null,
+      "verdict": null,
+      "ended": "2026-11-15T16:08:06+0700"
     }
   ],
   "halt_reason": "пауза по просьбе оператора после цикла 68"
