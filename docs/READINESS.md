@@ -23,7 +23,7 @@ luna, demo 2 at `4829f4c` on codex sol, luna and terra, its `format` and `qa` ch
 to a component the demos run through end to end: a request, the planner's beads, `drain` to coders on claude and codex,
 demo 2's `format` and `qa` checks, which send the work back when one fails. A component the demos do not reach stays at
 8: its own criteria are green, but no unattended demo run goes through it.
-<!-- MEASURE id=readiness date=2026-11-16 ver=2ef45f0 env=linux-arm64-orbstack src=docs/READINESS.md note="the full run with real models on ffaccea, the crates/ of 15c7d3a: 37 of 37 rows, both demos included; since then tests, and an agent max_runs check and its wake-up at a step change, which no demo agent reaches, and a stop of an exec attempt that no longer ends the next one: on the path of both demos exec steps, it only removes a false stop the ffaccea run did not hit" -->
+<!-- MEASURE id=readiness date=2026-11-16 ver=0107d00 env=linux-arm64-orbstack src=docs/READINESS.md note="the full run with real models on ffaccea, the crates/ of 15c7d3a: 37 of 37 rows, both demos included; since then tests, and an agent max_runs check and its wake-up at a step change, which no demo agent reaches, and a stop of an exec attempt that no longer ends the next one: on the path of both demos exec steps, it only removes a false stop the ffaccea run did not hit; a unit test of it waits longer" -->
 
 | Component | Criteria | Score | Missing for the next point |
 |---|---|---|---|
