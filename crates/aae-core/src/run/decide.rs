@@ -125,7 +125,9 @@ impl RunHandler {
             ("running", Some(Decision::Continue { message })) => self.next_prompt(tx, row, &message, "hollow_done"),
             ("finishing", None | Some(Decision::Accept)) => self.finished(tx, row, None),
             ("finishing", Some(Decision::Veto { reason })) => self.finished(tx, row, Some(&reason)),
-            ("finishing", Some(Decision::Remark { message })) => self.next_prompt(tx, row, &message, "check"),
+            ("finishing", Some(Decision::Remark { message })) if row.step_kind == "prompt" => {
+                self.next_prompt(tx, row, &message, "check")
+            }
             (state, Some(d)) => Err(rejected(format!("{d:?} does not apply to a run in `{state}`"))),
             (state, None) => Err(rejected(format!("a run in `{state}` waits for no decision"))),
         }

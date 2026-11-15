@@ -300,6 +300,39 @@ timeout = "10s"
     assert_eq!(w.attempts().len(), 1 + last as usize);
 }
 
+/// A remark asks the agent of a prompt step again: an exec step has none, so a remark on it is refused.
+#[cfg(target_os = "linux")]
+#[tokio::test]
+async fn a_remark_on_an_exec_step_is_refused() {
+    let plugin = "name = \"policy\"\nversion = \"0.1.0\"\n\
+        [[hook]]\non = \"run.finishing\"\ncommand = [\"true\"]\ntimeout = \"10s\"\n";
+    let hooks = Arc::new(Hanging::default());
+    let w = flow(
+        &[exec("a", "true")],
+        &[POLICY[0], ("policy/plugin.toml", plugin)],
+        hooks,
+    );
+    let run = w.start_flow().await;
+    w.until(Some(&run), "run.finishing", 0).await;
+    let seq = w.seq_of(&run, "run.finishing", 0).await;
+    let message = "again".to_owned();
+    let decision = Decision::Remark { message };
+    let refused = w
+        .core
+        .send(
+            None,
+            Msg::Decide {
+                run: run.clone(),
+                seq,
+                decision,
+            },
+        )
+        .await;
+    assert!(refused.unwrap_err().to_string().contains("does not apply"));
+    w.decide(&run, "run.finishing", 0, Decision::Abstain).await;
+    assert_eq!(w.end(&run).await.0, "run.passed");
+}
+
 /// The daemon dies at every step boundary — a step in `finishing`, the next in `preparing`, a command in flight —
 /// and the run goes on from the step it was at: no finished step runs again.
 #[cfg(target_os = "linux")]
