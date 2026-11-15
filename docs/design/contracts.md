@@ -608,8 +608,9 @@ so that the state machine has one place where `run.attempt_failed` is decided.
   step is a check (`back_to`): then the run goes on to the next check of a row, or back to an earlier step for the
   next round, the same way from `finishing` to `preparing` (config.md, "Formula").
 - An attempt starts a new session or resumes the previous one of its step, and has its own generation. Each prompt
-  step has a session of its own; attempt numbers run on across the steps of the run, so the token of an attempt of an
-  earlier step is stale.
+  step has a session of its own: the first attempt of a step the run went back to resumes it with the step's rendered
+  prompt (6.4 is the prompt of a resumed retry). Attempt numbers run on across the steps of the run, so the token of
+  an attempt of an earlier step is stale.
 
 Ceilings of the core (invariant 16): 20 failed attempts per run (the attempts of every step together), not counting the
 attempts whose `auth_required`, `billing` or `quota_exhausted` failure the decision parked on the run's own `account:`

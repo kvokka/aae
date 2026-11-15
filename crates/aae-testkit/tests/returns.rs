@@ -54,8 +54,9 @@ impl World {
         std::fs::read_to_string(self.dir.path().join("shop/web/log")).unwrap_or_default()
     }
 
-    /// The kind and data of the event that ended `run`; each attempt of a prompt step declares `pass` on the way.
-    async fn end(&self, run: &str) -> (String, Value) {
+    /// The kind and data of the event that ended `run`; each attempt of a prompt step declares `pass` on the way,
+    /// but the attempts `fails` declare `fail`.
+    async fn end(&self, run: &str, fails: &[u32]) -> (String, Value) {
         let mut done = Vec::new();
         for _ in 0..500 {
             for kind in ["run.passed", "run.failed"] {
@@ -68,7 +69,11 @@ impl World {
                     continue;
                 };
                 let outcome = Outcome {
-                    result: Verdict::Pass,
+                    result: if fails.contains(&attempt) {
+                        Verdict::Fail
+                    } else {
+                        Verdict::Pass
+                    },
                     summary: "planned".into(),
                     data: None,
                 };
@@ -98,7 +103,7 @@ async fn failed_checks_send_the_run_back_with_their_remarks_and_the_next_round_p
     ];
     let w = flow("", &steps, &[]);
     let run = w.start_flow().await;
-    let (kind, data) = w.end(&run).await;
+    let (kind, data) = w.end(&run, &[]).await;
     assert_eq!(kind, "run.passed", "{data}");
     let remarks = "totals: exit 1\nfix the totals\n\nlint: exit 1\nline too long";
     assert_eq!(
@@ -118,7 +123,7 @@ async fn a_check_that_keeps_failing_fails_the_run_after_the_last_round() {
     ];
     let w = flow("rounds = 2\n", &steps, &[]);
     let run = w.start_flow().await;
-    let (kind, data) = w.end(&run).await;
+    let (kind, data) = w.end(&run, &[]).await;
     assert_eq!(
         (kind.as_str(), &data["class"]),
         ("run.failed", &json!("agent")),
@@ -128,7 +133,8 @@ async fn a_check_that_keeps_failing_fails_the_run_after_the_last_round() {
     assert_eq!(w.log(), "plan\ncheck\nplan\ncheck\n");
 }
 
-/// The prompt of the step the run went back to shows the remarks; the first round shows none.
+/// The step the run went back to continues its session (spec §9.3), and its prompt shows the remarks; the first
+/// round shows none.
 #[tokio::test]
 async fn the_step_gone_back_to_sees_the_remarks_in_its_prompt() {
     let steps = [
@@ -144,7 +150,7 @@ async fn the_step_gone_back_to_sees_the_remarks_in_its_prompt() {
         w.driver.script(turn());
     }
     let run = w.start_flow().await;
-    let (kind, data) = w.end(&run).await;
+    let (kind, data) = w.end(&run, &[]).await;
     assert_eq!(kind, "run.passed", "{data}");
     let sent: Vec<String> = w
         .driver
@@ -154,6 +160,51 @@ async fn the_step_gone_back_to_sees_the_remarks_in_its_prompt() {
         .filter(|t| t.starts_with("Plan"))
         .collect();
     assert_eq!(sent, ["Plan. Remarks: []", "Plan. Remarks: [check: exit 1\nadd tests]"]);
+    let reader = aae_core::run::Reader::open(&w.dir.path().join("state.db")).unwrap();
+    let view = reader.run(&run).unwrap().unwrap();
+    let plans: Vec<&Value> = view["attempts"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|a| a["step"] == "plan")
+        .collect();
+    assert_eq!(plans.len(), 2, "{view}");
+    assert_eq!(
+        (&plans[0]["kind"], &plans[1]["kind"]),
+        (&json!("new_session"), &json!("resume"))
+    );
+    assert_eq!(plans[1]["session"], plans[0]["session"], "{view}");
+}
+
+/// A prompt check: the agent declares `fail`, and the run goes back with its summary as the remark.
+#[tokio::test]
+async fn a_prompt_check_that_declares_fail_sends_the_run_back() {
+    let prompt = |name: &str, back: &str| {
+        format!("[[step]]\nname = \"{name}\"\nkind = \"prompt\"\nagent = \"dev\"\nprompt = \"{name}.md\"\n{back}")
+    };
+    let steps = [prompt("plan", ""), prompt("review", "back_to = \"plan\"\n")];
+    let w = flow(
+        "",
+        &steps,
+        &[
+            ("shop/formulas/plan.md", "Plan. Remarks: [{{ remarks }}]"),
+            ("shop/formulas/review.md", "Review."),
+        ],
+    );
+    for _ in 0..4 {
+        w.driver.script(turn());
+    }
+    let run = w.start_flow().await;
+    let (kind, data) = w.end(&run, &[2]).await;
+    assert_eq!(kind, "run.passed", "{data}");
+    let sent: Vec<String> = w
+        .driver
+        .sent(&run, 1)
+        .1
+        .into_iter()
+        .filter(|t| t.starts_with("Plan"))
+        .collect();
+    assert_eq!(sent, ["Plan. Remarks: []", "Plan. Remarks: [review: planned]"]);
 }
 
 /// A turn that leaves 1 s for the finisher.

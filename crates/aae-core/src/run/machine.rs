@@ -135,6 +135,16 @@ impl RunHandler {
                 .optional()
         };
         let own = last_session(tx, &row.id, Some(&row.step))?;
+        // The first attempt of a step, at its start or when a check sends the run back to it (spec §9.3).
+        let previous: Option<String> = tx
+            .sql()
+            .query_row(
+                "SELECT step FROM attempts WHERE run = ?1 AND n = ?2",
+                params![row.id, row.attempt],
+                |r| r.get(0),
+            )
+            .optional()?;
+        let entering = previous.as_deref() != Some(row.step.as_str());
         // A run that continues the session of another run (spec §9.3) starts there, and its first step resumes there
         // while it has no session of its own.
         let continued: Option<String> = tx
@@ -159,6 +169,8 @@ impl RunHandler {
         let session = match (row.attempt, kind) {
             (0, _) => from,
             (_, "resume") => own.or(from),
+            // A step gone back to continues its session, with its prompt and the remarks (spec §9.3).
+            _ if entering => own.filter(|(_, h)| *h == config.harness),
             _ => None,
         };
         let resume = session.and_then(|(s, _)| serde_json::from_str::<SessionRef>(&s).ok());
@@ -238,14 +250,14 @@ impl RunHandler {
         Self::use_services(tx, &row.id, row.attempt, &services)?;
         let after = Self::old_instances(tx, &row.id, continued.as_deref())?;
         let prompt = match resume {
-            Some(_) if row.attempt > 1 => RECONCILE.to_owned(),
+            Some(_) if !entering => RECONCILE.to_owned(),
             _ => row.prompt.clone().unwrap_or_default(),
         };
         let key = PromptKey::new(&row.id, row.attempt, 1);
         super::prompts::intent(tx, &row.id, row.attempt, 1, key, &prompt)?;
         let retry = match resume {
-            Some(_) => super::prompts::unsettled(tx, &row.id, row.attempt)?,
-            None => None,
+            Some(_) if !entering => super::prompts::unsettled(tx, &row.id, row.attempt)?,
+            _ => None,
         };
         let payload = json!({
             "op": "launch", "run": row.id, "attempt": row.attempt, "harness": config.harness,

@@ -489,7 +489,9 @@ A step with `back_to` is a check. When it fails the run does not fail: the steps
 as well, and after the last of them every failed check of the row sends the run back together, to the earliest
 step they name, which starts at once as the next round. Their remarks — per check its name, its summary and, for an
 exec check, the output it kept — reach the steps of the new round as `{{ remarks }}` in a prompt template and
-`AAE_REMARKS` in the environment of an exec step (empty and absent in the first round). A check that fails in the
+`AAE_REMARKS` in the environment of an exec step (empty and absent in the first round). A prompt step of the new
+round that already has a session goes on in it (spec §9.3): its first attempt resumes the session and gets the
+rendered prompt with the remarks, not the reconcile prompt of a resumed retry. A check that fails in the
 last of the formula's `rounds` fails the run (class `agent`) with the reason `still failing after <n> rounds:
 <remarks>`. `back_to` must name a step before the check; a `drain` step is no check.
 
