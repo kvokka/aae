@@ -729,9 +729,9 @@ for it is not.
   be idempotent (spec §11.3). Runs with a live attempt — `starting`, `running` in a turn, `requires_action` — →
   `interrupted` with `daemon_crash` (a `drain` attempt too: its next attempt gives no bead its entry of the step gave
   out), the launches, prompts, answers and deciding hooks they still had queued dropped, and the command of an exec
-  step killed by its `AAE_INSTANCE` marker (random per attempt) before any later attempt runs it. A run that waits for a decision on a deciding event keeps its state and waits for the
-  same decision (3.4): `preparing`, `interrupted` waiting for the policy, `finishing`, and `running` after a turn
-  that ended without an outcome. Its hook effect is still queued and its hooks run again; the declared outcome and
+  step killed by its `AAE_INSTANCE` marker (random per attempt) before any later attempt runs it. A run that waits
+  for a decision on a deciding event keeps its state and waits for the same decision (3.4): `preparing`,
+  `interrupted` waiting for the policy, `finishing`, and `running` after a turn that ended without an outcome. Its hook effect is still queued and its hooks run again; the declared outcome and
   the result of an exec command stand, the turn and the command do not run again. A run goes on from the step it is
   at: the move to the next step is in the transaction that accepted the outcome (6.1), so a finished step never runs
   again, and an exec command killed by the restart runs again in a new attempt of the same step. Recovery lets go of the

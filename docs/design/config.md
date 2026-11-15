@@ -488,8 +488,9 @@ A `drain` step gives every ready bead under the run's bead, at any depth, a run 
 the tracker, until none is left: the same start as `aae run start` with the bead as the formula's `bead` input, no rig
 named (the bead's `rig:` label gives it, and its `agent:`/`harness:` labels apply as to any run), the run's correlation,
 one level deeper, the run as `parent_run`. A bead goes out once per entry of the step: a child that failed is not run
-again in it, and an attempt cut by a restart (`daemon_crash`) starts no new entry; a round back to the step does. A bead whose start is refused (no `rig:` label, a `harness:` label the config does not give) gets no run
-and stays open. The step has no process (contracts 6.2): it ends once nothing was given, no child is alive and no later
+again in it, and an attempt cut by a restart (`daemon_crash`) starts no new entry; a round back to the step does. A
+bead whose start is refused (no `rig:` label, a `harness:` label the config does not give) gets no run and stays
+open. The step has no process (contracts 6.2): it ends once nothing was given, no child is alive and no later
 read of the tracker is queued, always `pass`, with `data = {closed, failed, refused}` — the beads whose runs passed,
 those whose runs failed or were cancelled, and the refused ones with the reason. `formula` must take exactly one
 `bead` input and need no other; a formula with a `drain` step needs a required `bead` input. An epic under the root is
