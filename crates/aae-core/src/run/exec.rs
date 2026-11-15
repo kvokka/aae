@@ -12,7 +12,7 @@ use crate::{
 use serde_json::Value;
 use std::{
     collections::{BTreeSet, HashMap},
-    sync::{Arc, Mutex, OnceLock, PoisonError},
+    sync::{Arc, Mutex, PoisonError},
     time::Duration,
 };
 use tokio::sync::OnceCell;
@@ -31,7 +31,7 @@ pub(super) type Starts = Arc<Mutex<HashMap<String, Arc<OnceCell<Result<InstanceH
 pub(super) struct RunExecutor {
     pub drivers: Drivers,
     pub trackers: super::beads::Trackers,
-    pub core: Arc<OnceLock<CoreHandle<Msg>>>,
+    pub core: CoreHandle<Msg>,
     pub sink: EventSink,
     pub hooks: Arc<dyn super::HookRunner>,
     pub running: super::exec_step::Running,
@@ -45,14 +45,7 @@ impl Executor for RunExecutor {
     /// A driver failure is an attempt failure reported to the writer, never a retry of the effect.
     fn execute<'a>(&'a self, _key: &'a str, payload: &'a Value) -> BoxFuture<'a, bool> {
         Box::pin(async move {
-            // The writer may take its first effect (a recovery sweep, a deciding hook) before `start` has set the
-            // handle right after spawning it: the effect waits for it, it is never dropped as done.
-            let core = loop {
-                if let Some(core) = self.core.get() {
-                    break core;
-                }
-                tokio::task::yield_now().await;
-            };
+            let core = &self.core;
             match payload["op"].as_str() {
                 Some("hooks") => self.hooks.run(core, payload).await,
                 Some("tracker") => return super::beads::execute(&self.trackers, core, payload).await,
@@ -313,9 +306,7 @@ impl RunExecutor {
                         return;
                     }
                 };
-                if degraded != told
-                    && let Some(core) = core.get()
-                {
+                if degraded != told {
                     told.clone_from(&degraded);
                     let msg = Msg::InstanceHealth {
                         id: handle.id.clone(),

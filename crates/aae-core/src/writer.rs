@@ -205,17 +205,23 @@ impl<M: Send + 'static> CoreHandle<M> {
     }
 }
 
-/// Starts the writer on `conn` (opened by `store::open`). It stops when every handle is dropped.
+/// Starts the writer on `conn` (opened by `store::open`). It stops when every handle is dropped. `executor` is built
+/// from a handle of its own before the writer runs.
 pub fn start<H: Handler, E: Executor>(
     conn: Connection,
     clock: Clock,
     handler: H,
-    executor: E,
+    executor: impl FnOnce(CoreHandle<H::Msg>) -> E,
     journal: Journal,
 ) -> (CoreHandle<H::Msg>, JoinHandle<Result<(), Error>>) {
     let (tx, inbox) = mpsc::channel(256);
-    let task = tokio::spawn(run(conn, clock, handler, Arc::new(executor), journal, inbox));
-    (CoreHandle { tx }, task)
+    let handle = CoreHandle { tx };
+    // The executor holds the handle before the writer runs, so no effect can be taken without it.
+    let executor = Arc::new(executor(handle.clone()));
+    (
+        handle,
+        tokio::spawn(run(conn, clock, handler, executor, journal, inbox)),
+    )
 }
 
 async fn run<H: Handler, E: Executor>(

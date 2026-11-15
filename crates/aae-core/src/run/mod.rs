@@ -36,7 +36,7 @@ use rusqlite::Connection;
 use serde_json::{Value, json};
 use std::{
     collections::BTreeMap,
-    sync::{Arc, OnceLock, PoisonError},
+    sync::{Arc, PoisonError},
 };
 use tokio::{sync::mpsc, task::JoinHandle};
 
@@ -64,19 +64,20 @@ pub fn start(
 ) -> (CoreHandle<Msg>, JoinHandle<Result<(), Error>>) {
     let drivers: Drivers = Arc::new(drivers.into_iter().map(|d| (d.harness().to_owned(), d)).collect());
     let trackers = Arc::new(trackers);
-    let core = Arc::new(OnceLock::new());
     let (sink, mut events) = mpsc::unbounded_channel();
     let starts = exec::Starts::default();
-    let executor = exec::RunExecutor {
-        drivers: drivers.clone(),
-        trackers: trackers.clone(),
-        core: core.clone(),
+    let (exec_drivers, exec_trackers, exec_starts, service_wait) =
+        (drivers.clone(), trackers.clone(), starts.clone(), config.service_wait);
+    let executor = move |core| exec::RunExecutor {
+        drivers: exec_drivers,
+        trackers: exec_trackers,
+        core,
         sink,
         hooks,
         running: exec_step::Running::default(),
         services: service_proc::Running::default(),
-        service_wait: config.service_wait,
-        starts: starts.clone(),
+        service_wait,
+        starts: exec_starts,
     };
     let (handle, task) = writer::start(
         conn,
@@ -91,7 +92,6 @@ pub fn start(
         executor,
         journal,
     );
-    let _ = core.set(handle.clone());
     let forward = handle.clone();
     tokio::spawn(async move {
         while let Some(event) = events.recv().await {

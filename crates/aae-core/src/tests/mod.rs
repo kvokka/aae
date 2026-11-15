@@ -165,7 +165,7 @@ fn rig_with(db: &Path, clock: Clock, fail_first: usize, hold: Duration, journal:
         open(db).unwrap(),
         clock,
         TestHandler { fired: fired.clone() },
-        executor,
+        |_| executor,
         journal,
     );
     Rig {
