@@ -17,9 +17,9 @@ changed (a scripted turn ends on a signal from the test, not after a second of w
 of an agent at its `max_runs`. No agent of either demo sets `max_runs`, so on their path the new check finds no limit
 and the run machine does what it did in the full run; the scores stand. The full run with
 real models on `ffaccea`, the `crates/` of `15c7d3a`, passed 37 of 37 rows,
-both demos and row 22 on these scores included. The authors' runs of the demos, `*-example`, came after it on the same
-`crates/`, once `run.sh` made each rig a git repository of its own: demo 1 passed at `f8eb07f` on claude haiku and codex
-luna, demo 2 at `4829f4c` on codex sol, luna and terra, its `format` and `qa` checks green in the first round. A 10 goes
+both demos and row 22 on these scores included. The authors' runs of the demos, `*-example`, are the live runs on
+`c1fa9bc`, after the drain change: demo 1 passed on claude haiku and codex luna, demo 2 on codex sol, luna and terra,
+on its second attempt and in two rounds of its `format` and `qa` checks (the first attempt: the note below). A 10 goes
 to a component the demos run through end to end: a request, the planner's beads, `drain` to coders on claude and codex,
 demo 2's `format` and `qa` checks, which send the work back when one fails. A component the demos do not reach stays at
 8: its own criteria are green, but no unattended demo run goes through it.
