@@ -19,6 +19,7 @@ use std::{
 use tokio::task::JoinHandle;
 
 pub(crate) mod beads;
+pub(crate) mod drain;
 pub(crate) mod services;
 pub(crate) mod triggers;
 

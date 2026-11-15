@@ -44,6 +44,11 @@ impl MemoryTracker {
         }
     }
 
+    /// Deletes `id`, as a human does with `br delete`; its children keep it as their parent.
+    pub fn remove(&self, id: &str) {
+        self.lock().beads.retain(|b| b.id != id);
+    }
+
     /// While down, every call fails as `Unavailable`.
     pub fn set_down(&self, down: bool) {
         self.lock().down = down;
