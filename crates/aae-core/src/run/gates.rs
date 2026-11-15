@@ -93,8 +93,8 @@ impl RunHandler {
     }
 
     /// What keeps `row` from starting an attempt: the stopping daemon (`null`, spec §5.6), its oldest closed gate, or
-    /// its agent's `max_runs` reached by other runs (`null`; e.g. a step of another agent, spec §9.3). A drain step
-    /// holds no slot.
+    /// its agent's `max_runs` reached by other runs (`null`; e.g. a step of another agent, spec §9.3). A step with no
+    /// agent (drain, exec) has no such limit.
     pub(super) fn held(&self, tx: &Tx<'_>, row: &Row) -> Result<Option<Value>, Error> {
         if self.stopping.is_some() {
             return Ok(Some(Value::Null));
@@ -102,8 +102,7 @@ impl RunHandler {
         if let Some(gate) = Self::closed_gate(tx, row)? {
             return Ok(Some(gate));
         }
-        let full = row.step_kind != "drain" && self.agent_full(tx, row)?;
-        Ok(full.then_some(Value::Null))
+        Ok(self.agent_full(tx, row)?.then_some(Value::Null))
     }
 
     /// Remembers the account and model keys an attempt of `row` reported. The model column counts only until the

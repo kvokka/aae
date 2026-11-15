@@ -165,9 +165,13 @@ impl RunHandler {
             "UPDATE runs SET step = ?2, agent = ?3, step_kind = ?4 WHERE id = ?1",
             params![row.id, next.name, agent, next.kind.name()],
         )?;
-        (row.step, row.agent, row.step_kind) = (next.name, agent, next.kind.name().to_owned());
+        let left = std::mem::replace(&mut row.agent, agent);
+        (row.step, row.step_kind) = (next.name, next.kind.name().to_owned());
+        let frees = left != row.agent && self.config.max_runs(&row.project, &left).is_some();
         row.set_state(tx, "preparing", None)?;
-        self.render_and_prepare(tx, row)
+        self.render_and_prepare(tx, row)?;
+        // The step left gives up a slot of its agent's `max_runs`: a run parked for it may go (spec §9.3).
+        if frees { self.schedule(tx) } else { Ok(()) }
     }
 
     /// Sends `text` as the next prompt of the current attempt: the declared outcome is cleared, the token stays

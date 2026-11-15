@@ -656,7 +656,7 @@ of the parent leaves them alone.
 | `interrupted` | `park` | `parked` | gate closed in the same transaction |
 | `interrupted` | `fail`, no decision, attempts ceiling | `failed{infrastructure}` | gate closed if the decision carries one |
 | `parked` | every key of the run open, a concurrency slot free (in creation order with the queue) | `starting` (`then` of the park decision); `run.resumed` | new attempt |
-| `preparing`, `interrupted` | an attempt would start while a key of the run is closed (by anyone, invariant 18), the daemon is stopping, or the run's agent has as many other started runs as its `max_runs` (not in a drain step) | `parked` (`then`: `new_session` from `preparing`, the decided kind from `interrupted`) | — |
+| `preparing`, `interrupted` | an attempt would start while a key of the run is closed (by anyone, invariant 18), the daemon is stopping, or the run's agent has as many other started runs as its `max_runs` (a step with no agent, drain or exec, has no such limit) | `parked` (`then`: `new_session` from `preparing`, the decided kind from `interrupted`) | — |
 | any non-terminal | operator cancel, or the cancel of the parent (§6.1, reason `parent_cancelled`) | `cancelled` | stop the session, conditional release of the bead |
 
 Every terminal transition releases the run's hold on its workdir and its ownership of its bead. A bead the run
