@@ -20,6 +20,10 @@ export XDG_STATE_HOME="$here/.aae/state" XDG_CONFIG_HOME="$here/.aae/config" XDG
 AAE_SOCKET="$(mktemp -d)/aae.sock"
 export AAE_SOCKET
 (cd root && br init -q >/dev/null)
+# Each rig is a repository of its own: a coder's commit stays in it, not in the repository the demo sits in.
+for rig in frontend backend; do git -C "$rig" init -q; done
+# The commit of the demo and of aae, before the coders' work can change the tree.
+sha=$(git describe --always --dirty 2>/dev/null || echo unknown)
 # The agents call `aae`: the binary goes first on the PATH the daemon hands them.
 PATH="$(dirname "$aae"):$PATH" "$aae" daemon --config root/config.toml 2>.aae/daemon.log &
 daemon=$!
@@ -36,7 +40,6 @@ result=passed
 "$aae" run wait "$run" --timeout 60m >.aae/outcome.txt || result=failed
 seconds=$(($(date +%s) - started))
 
-sha=$(git describe --always --dirty 2>/dev/null || echo unknown)
 versions="aae-$("$aae" --version | cut -d' ' -f2)@$sha"
 for harness in claude codex; do
   versions="$versions,$harness-$("$harness" --version 2>/dev/null | grep -Eo '[0-9]+\.[0-9]+\.[0-9]+' | head -1)"
@@ -90,6 +93,7 @@ if [ "${EXAMPLE:-}" = 1 ]; then
     find "$rig-example" -delete 2>/dev/null || true
     cp -R "$rig" "$rig-example"
     find "$rig-example" -name .gitkeep -delete
+    find "$rig-example/.git" -delete
   done
   cp RESULT.md RESULT-example.md
 fi

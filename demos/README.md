@@ -11,7 +11,8 @@ and spend tokens; CI only checks that each demo's pack and project load.
 
 A demo is four directories: `pack/` (agents and formulas, not a word about the task), `root/` (the orchestrator
 config of the demo, the project and its tracker) and the two repositories `frontend/` and `backend/`, empty before a
-run. `run.sh` of a demo runs it on a daemon of its own; what it creates is in `.gitignore`, and the author's run is
+run; `run.sh` makes each a git repository of its own, so a coder's commit stays in it. `run.sh` of a demo runs it on a
+daemon of its own; what it creates is in `.gitignore`, and the author's run is
 next to it as `*-example`, with when and on what it ran. `cargo run -p aae-acceptance -- 20` runs the demos as rows
 of the acceptance report.
 
