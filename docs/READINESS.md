@@ -16,9 +16,11 @@ model-free rows run on it in the cycle's checks. The full run with real models l
 codex row of criterion 8 lost to the provider's network and green on a rerun); its live rows were not rerun on the
 steps. Criteria 24 (steps, the root bead and `drain`), 25 (the return) and 26 (packs from git) have their model-free
 rows. Demo 1 (`demos/1-planner-executor/`) passed live on claude haiku and codex luna; demo 2
-(`demos/2-multirepo-qa/`) passed live once on codex sol, luna and terra, its checks green in the first round. None
-scores 10: a 10 needs criterion 20 green in the run that checks this file.
-<!-- MEASURE id=readiness date=2026-11-16 ver=a6cab12 env=linux-arm64-orbstack src=docs/READINESS.md note="assessed against the letter of the scale on the model-free rows at a6cab12; the last full run with real models is of 96dd606" -->
+(`demos/2-multirepo-qa/`) passed live once on codex sol, luna and terra, its checks green in the first round, but
+its `format` check then reached no rig: exec steps did not get `AAE_SOCKET`, and rumdl honoured the user's
+`.gitignore`. Both are fixed and covered by model-free rows of criterion 20, one of them a second round of demo 2's
+pack; demo 2 is to run live again. None scores 10: a 10 needs criterion 20 green in the run that checks this file.
+<!-- MEASURE id=readiness date=2026-11-16 ver=915a844 env=linux-arm64-orbstack src=docs/READINESS.md note="assessed against the letter of the scale on the model-free rows at 915a844; the last full run with real models is of 96dd606" -->
 
 | Component | Criteria | Score | Missing for the next point |
 |---|---|---|---|
