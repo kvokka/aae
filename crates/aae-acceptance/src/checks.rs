@@ -225,17 +225,16 @@ async fn no_stubs(env: Arc<Env>) -> String {
 
 /// Criterion 22 against the rest of the report (spec §14, §2, decision 53), the report's rows as `(criterion, mark)`.
 /// A score of 8 is "the component's §15 criteria green", so one of its criteria (the `Criteria` column of
-/// docs/READINESS.md) open caps it at 6: a `FAIL` row, or in a full run a row not run or left out. A 10 needs every
-/// row of criterion 20 green in this run. A full run also needs every component at 8 or more, the letter of
-/// criterion 22; a CI run cannot judge the rows with a model and checks only the caps. `Ok`: the components below 8.
+/// docs/READINESS.md) open caps it at 6: a `FAIL` row, or in a full run a row not run or left out. A 10 needs
+/// criterion 20 not open the same way: in a full run every row of it green. A full run also needs every component at
+/// 8 or more, the letter of criterion 22; a CI run cannot judge the rows with a model and checks only the caps.
+/// `Ok`: the components below 8.
 pub(crate) fn readiness_verdict(readiness: &str, rows: &[(&str, &str)], full: bool) -> Result<String, String> {
     let marks = |c: &str| -> Vec<&str> { rows.iter().filter(|(r, _)| *r == c).map(|(_, m)| *m).collect() };
     let open = |c: &&str| {
         let marks = marks(c);
         (full && marks.is_empty()) || marks.iter().any(|m| *m == "FAIL" || (full && *m == "not run"))
     };
-    let twenty = marks("20");
-    let twenty = !twenty.is_empty() && twenty.iter().all(|m| *m == "pass");
     let (mut low, mut wrong) = (Vec::new(), Vec::new());
     let mut table = readiness.lines().filter(|l| l.starts_with("| "));
     let header: Vec<&str> = table.next().unwrap_or_default().split('|').map(str::trim).collect();
@@ -261,10 +260,8 @@ pub(crate) fn readiness_verdict(readiness: &str, rows: &[(&str, &str)], full: bo
         {
             wrong.push(format!("{name} scores {score} with criterion {c} open: at most 6"));
         }
-        if score >= 10.0 && !twenty {
-            wrong.push(format!(
-                "{name} scores {score} while criterion 20 is not green in this run"
-            ));
+        if score >= 10.0 && open(&"20") {
+            wrong.push(format!("{name} scores {score} with criterion 20 open"));
         }
         if score < 8.0 {
             low.push(format!("{name} {score}"));
@@ -351,19 +348,19 @@ mod tests {
             readiness_verdict(&table("6"), &failed, false),
             Ok("below 8: CLI 6".into())
         );
-        // A full run needs 8 everywhere; a 10 needs criterion 20 green.
-        let all = [("3", "pass"), ("17", "pass"), ("20", "pass")];
+        // A full run needs 8 everywhere; a 10 needs criterion 20 green in it, and no FAIL of it in CI.
+        let all = [("3", "pass"), ("17", "pass"), ("20", "pass"), ("20", "not run")];
         assert!(
-            readiness_verdict(&table("6"), &all, true)
+            readiness_verdict(&table("6"), &all[..3], true)
                 .unwrap_err()
                 .contains("at 8 or more: CLI 6")
         );
-        assert!(readiness_verdict(&table("10"), &all, true).is_ok());
-        assert!(
-            readiness_verdict(&table("10"), &all[..2], false)
-                .unwrap_err()
-                .contains("criterion 20")
-        );
+        assert!(readiness_verdict(&table("10"), &all[..3], true).is_ok());
+        assert!(readiness_verdict(&table("10"), &all, false).is_ok());
+        for (rows, full) in [(&all[..], true), (&all[..2], true), (&[("20", "FAIL")][..], false)] {
+            let err = readiness_verdict(&table("10"), rows, full).unwrap_err();
+            assert!(err.contains("criterion 20 open"), "{err}");
+        }
         assert!(readiness_verdict("| Component | Score |\n| CLI | 8 |\n", &all, false).is_err());
     }
 
