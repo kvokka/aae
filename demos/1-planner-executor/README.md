@@ -29,9 +29,9 @@ aae config check --config root/config.toml   # the pack and the project load
 ```
 
 `run.sh` takes a few minutes and writes `RESULT.md`: when and on what it ran, the bead tree, the runs and the
-outcome. Everything a run creates is in `.gitignore`; `git clean -fdX -- .` clears it for the next run. Compare with
-the author's run: `frontend-example/`, `backend-example/` and `RESULT-example.md`, with its date, versions and models.
-Your result differs: the agents decide anew each time.
+outcome. Everything a run creates is in `.gitignore`; `git clean -ffdX -- .` clears it for the next run. Compare
+with the author's run: `frontend-example/`, `backend-example/` and `RESULT-example.md`, with its date, versions and
+models. Your result differs: the agents decide anew each time.
 
 ## The harness of a coder
 

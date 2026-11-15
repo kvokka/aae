@@ -10,7 +10,7 @@ aae=$(command -v "${AAE:-aae}") || { echo "no aae: install it or set AAE"; exit 
 request="Create me snake game in browser and a simple backend which store the high-scores, KISS"
 cd "$here"
 if [ -n "$(ls -A frontend backend root/.beads .aae 2>/dev/null | grep -v -e '^\.gitkeep$' -e ':$' -e '^$')" ]; then
-  echo "$demo: a run is left over; start clean with: git clean -fdX -- $here"
+  echo "$demo: a run is left over; start clean with: git clean -ffdX -- $here"
   exit 1
 fi
 
