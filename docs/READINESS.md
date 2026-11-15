@@ -23,12 +23,12 @@ luna, demo 2 at `4829f4c` on codex sol, luna and terra, its `format` and `qa` ch
 to a component the demos run through end to end: a request, the planner's beads, `drain` to coders on claude and codex,
 demo 2's `format` and `qa` checks, which send the work back when one fails. A component the demos do not reach stays at
 8: its own criteria are green, but no unattended demo run goes through it.
-<!-- MEASURE id=readiness date=2026-11-16 ver=520e02a env=linux-arm64-orbstack src=docs/READINESS.md note="the full run with real models on ffaccea, the crates/ of 15c7d3a: 37 of 37 rows, both demos included; 918884b and 520e02a change the drain step on the path of both demos (every bead under the root, a restart fails its attempt), so the components it touches are back at 8 until the demos run again on it" -->
+<!-- MEASURE id=readiness date=2026-11-16 ver=520e02a env=linux-arm64-orbstack src=docs/READINESS.md note="the full run with real models on ffaccea, the crates/ of 15c7d3a: 37 of 37 rows; the drain change of 918884b and 520e02a lies on the path of both demos, so both ran again live on c1fa9bc: demo 1 passed in 347 s; demo 2 failed once (a coder left a background http.server running, so its turn never went idle without background, spec 7.5) and passed on its next run in 1070 s" -->
 
 | Component | Criteria | Score | Missing for the next point |
 |---|---|---|---|
 | Event loop and state | 6, 7, 8, 18 | 10 | - |
-| Runs and finisher | 2, 3, 4, 4a, 24, 25 | 8 | 10: the demos have not run on the drain step of 918884b |
+| Runs and finisher | 2, 3, 4, 4a, 24, 25 | 10 | - |
 | Triggers and schedules | 5a, 5b, 6 | 8 | 10: the demos run no subscription or schedule; their own rows are green |
 | Issue gates | 10, 19 | 8 | 10: the demos hit no gate; the claude half of criterion 10 is unverified (no claude quota limit seen live) |
 | Recovery | 8, 9, 24 | 8 | 10: the demos run without a crash; criterion 8 kills the daemon under real models |
@@ -36,7 +36,7 @@ demo 2's `format` and `qa` checks, which send the work back when one fails. A co
 | Instance and service registry | 13, 14 | 10 | - |
 | claude adapter | 2, 4a, 9, 11 | 10 | - |
 | codex adapter | 2, 10, 11, 13 | 10 | - |
-| br adapter | 5a, 11, 16, 24 | 8 | 10: the demos have not run on the beads-under-a-root read of 918884b |
+| br adapter | 5a, 11, 16, 24 | 10 | - |
 | Plugin hook execution | 4, 15 | 10 | - |
 | `default-policy` | 8, 10 | 10 | - |
 | `worktree` | - | 8 | 10: the demos use no worktree; no §15 criterion of its own, its tests are model-free |
