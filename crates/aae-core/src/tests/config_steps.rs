@@ -99,3 +99,43 @@ fn a_drain_step_names_a_formula_that_takes_one_bead() {
         "a formula with a `drain` step needs a required input of type `bead`",
     );
 }
+
+/// A check names an earlier step to go back to; the formula bounds the rounds (spec §9.1).
+#[test]
+fn a_check_goes_back_to_an_earlier_step() {
+    let back = |to: &str| format!("back_to = \"{to}\"\n");
+    let flow = |rounds: &str, to: &str| {
+        format!(
+            "name = \"flow\"\n{rounds}{}[[step]]\nname = \"work\"\nkind = \"prompt\"\nagent = \"implementer\"\n\
+             prompt = \"flow.md\"\n{}{}",
+            exec(Some("plan")),
+            exec(Some("check")) + &back(to),
+            exec(Some("post"))
+        )
+    };
+    let text = ("kit/formulas/flow.md", "Remarks: {{ remarks }}");
+    let config = load_with(&[(FLOW, &flow("", "plan")), text]).unwrap();
+    let formula = &config.projects[0].packs[1].formulas["flow"];
+    assert_eq!(formula.rounds, 3, "the default");
+    assert_eq!(formula.steps[2].back_to.as_deref(), Some("plan"));
+    let config = load_with(&[(FLOW, &flow("rounds = 5\n", "work")), text]).unwrap();
+    assert_eq!(config.projects[0].packs[1].formulas["flow"].rounds, 5);
+    for (to, rounds, error) in [
+        (
+            "post",
+            "",
+            "step `check` goes back to `post`, which is no step before it",
+        ),
+        (
+            "check",
+            "",
+            "step `check` goes back to `check`, which is no step before it",
+        ),
+        ("plan", "rounds = 0\n", "nonzero"),
+    ] {
+        fails(&[(FLOW, &flow(rounds, to)), text], error);
+    }
+    let drain = "name = \"flow\"\n[inputs]\nb = { type = \"bead\", required = true }\n[[step]]\nname = \"a\"\n\
+                 kind = \"drain\"\nformula = \"implement\"\nback_to = \"a\"\n";
+    fails(&[(FLOW, drain)], "unknown field `back_to`");
+}

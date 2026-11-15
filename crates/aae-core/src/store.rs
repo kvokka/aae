@@ -237,6 +237,12 @@ pub fn open(path: &Path) -> rusqlite::Result<Connection> {
             "ALTER TABLE runs ADD COLUMN step_kind TEXT NOT NULL DEFAULT 'prompt'; \
              UPDATE runs SET step_kind = 'exec' WHERE agent = '';",
         ),
+        // The round of a run and the remarks of the checks that sent it back (spec §9.1).
+        (
+            21,
+            "ALTER TABLE runs ADD COLUMN round INTEGER NOT NULL DEFAULT 1; \
+             ALTER TABLE runs ADD COLUMN remarks TEXT;",
+        ),
     ]
     .into_iter()
     .filter(|(to, _)| *to > version)

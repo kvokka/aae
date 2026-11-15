@@ -2,7 +2,8 @@
 
 use super::{
     Agent, Formula, Settings, Source, Step, StepKind, Trigger, duration,
-    files::{FormulaFile, InputType, StepFile, TriggerFile},
+    files::TriggerFile,
+    formula_file::{FormulaFile, InputType, StepFile},
     load::{Loader, reference},
     schema::{bead_path, event_path, run_path},
 };
@@ -18,7 +19,7 @@ use std::{
 };
 
 /// The roots of a prompt template (contracts 2.3).
-const PROMPT_ROOTS: &[&str] = &["inputs", "bead", "rig", "run", "project", "steps"];
+const PROMPT_ROOTS: &[&str] = &["inputs", "bead", "rig", "run", "project", "steps", "remarks"];
 
 impl Loader {
     pub(super) fn agent(&mut self, dir: &Path, plugins: &[&str]) -> Option<Agent> {
@@ -108,12 +109,19 @@ impl Loader {
             variables.insert(super::input_variable(name), format!("input `{name}`"));
         }
         for (at, step) in raw.step.into_iter().enumerate() {
-            let name = match &step {
-                StepFile::Prompt { name, .. } | StepFile::Exec { name, .. } | StepFile::Drain { name, .. } => {
-                    name.clone()
+            let (name, back_to) = match &step {
+                StepFile::Prompt { name, back_to, .. } | StepFile::Exec { name, back_to, .. } => {
+                    (name.clone(), back_to.clone())
                 }
+                StepFile::Drain { name, .. } => (name.clone(), None),
             };
             let name = name.unwrap_or_else(|| (at + 1).to_string());
+            if let Some(to) = back_to.as_ref().filter(|to| !steps.iter().any(|s| &s.name == *to)) {
+                self.fail(
+                    file,
+                    format!("step `{name}` goes back to `{to}`, which is no step before it"),
+                );
+            }
             self.name(file, "step", &name);
             let variable = format!("AAE_STEP_{}_", super::upper(&name));
             if steps.iter().any(|s| s.name == name) {
@@ -122,7 +130,7 @@ impl Loader {
                 self.fail(file, format!("{other} and step `{name}` are both `{variable}*`"));
             }
             let kind = self.step(file, &raw.inputs, &steps, step)?;
-            steps.push(Step { name, kind });
+            steps.push(Step { name, kind, back_to });
         }
         // The bead a drain step gives out beads under (spec §9.1).
         let drains = steps.iter().any(|s| matches!(s.kind, StepKind::Drain { .. }));
@@ -152,6 +160,7 @@ impl Loader {
                 description: raw.description,
                 inputs: raw.inputs,
                 worktree: raw.worktree,
+                rounds: raw.rounds.map_or(3, std::num::NonZeroU32::get),
                 steps,
             },
         ))
@@ -302,6 +311,8 @@ fn prompt_path(path: &str, inputs: &BTreeMap<String, super::Input>, before: &[St
         "bead" => inputs.values().any(|i| i.kind == InputType::Bead) && bead_path(rest),
         "run" => run_path(rest),
         "project" => matches!(rest, "name" | "path"),
+        // The remarks of the checks that sent the run back; empty in the first round (spec §9.1).
+        "remarks" => rest.is_empty(),
         // The outcome of an earlier step: `steps.<name>.result`, `.summary` or `.data` and below.
         "steps" => {
             let mut fields = rest.split('.').skip(1);

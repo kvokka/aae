@@ -183,7 +183,8 @@ spaces, nothing else — no filters, conditions or loops.
 - Tables and arrays in `inputs` are mapped recursively.
 - An unresolved path in `inputs` (absent or null at fire time) skips the firing:
   `trigger.skipped{reason: "input_unresolved", detail: <path>}`.
-- In a prompt template the roots are `inputs`, `bead` (when the run has one), `rig`, `run`, `project` and `steps`; an
+- In a prompt template the roots are `inputs`, `bead` (when the run has one), `rig`, `run`, `project`, `steps` and
+  `remarks` (the remarks of the checks that last sent the run back, empty before; config.md, "Formula"); an
   unresolved path is an error before the run starts and fails the run with class `infrastructure`. `steps` holds the
   outcome of each step before the current one: `steps.<name>.result`, `.summary`, `.data.<key>` (the last attempt of
   that step; `data` of an exec step is `{exit_code, stdout, stderr}`); a path to the current or a later step, or to
@@ -599,7 +600,9 @@ so that the state machine has one place where `run.attempt_failed` is decided.
   states of the current step, named by `step` of the `RunView`. A `pass` of a step that is not the last, once
   accepted, ends the attempt with `run.step_finished` and moves the run from `finishing` to `preparing` of the next
   step in the same transaction, so `run.preparing` is decided for every step and `run.started` comes once. The `pass`
-  of the last step is `passed`; a failure of any step fails the run, whose outcome is that of its last step.
+  of the last step is `passed`; a failure of a step fails the run, whose outcome is that of its last step, unless the
+  step is a check (`back_to`): then the run goes on to the next check of a row, or back to an earlier step for the
+  next round, the same way from `finishing` to `preparing` (config.md, "Formula").
 - An attempt starts a new session or resumes the previous one of its step, and has its own generation. Each prompt
   step has a session of its own; attempt numbers run on across the steps of the run, so the token of an attempt of an
   earlier step is stale.

@@ -5,6 +5,7 @@ mod assemble;
 mod check;
 mod compose;
 mod files;
+mod formula_file;
 mod items;
 mod load;
 pub(crate) mod schema;
@@ -14,7 +15,8 @@ mod variants;
 
 use crate::template::{Filter, Inputs, Template};
 pub use assemble::{EffectiveConfig, Layer, Sourced};
-pub use files::{Harness, Hook, Input, InputType, Mcp, McpScope, PluginUse, Settings, Skill};
+pub use files::{Harness, Hook, Mcp, McpScope, PluginUse, Settings, Skill};
+pub use formula_file::{Input, InputType};
 pub use service::{Health, Service, ServiceScope};
 pub use sources::{GitSource, Lock, Pinned, checkout, commit_id, git_sources};
 use std::{collections::BTreeMap, fmt, path::PathBuf, time::Duration};
@@ -177,6 +179,8 @@ pub struct Formula {
     pub inputs: BTreeMap<String, Input>,
     /// `worktree = true`: each run gets a git worktree of its own (spec §11.5).
     pub worktree: bool,
+    /// The most rounds of a run: a failed check with `back_to` starts the next one, past the last the run fails.
+    pub rounds: u32,
     /// At least one; a run goes through them in order (spec §9.1).
     pub steps: Vec<Step>,
 }
@@ -199,6 +203,8 @@ pub struct Step {
     /// `name` in the file, or the position from 1.
     pub name: String,
     pub kind: StepKind,
+    /// A check: when it fails, the run goes back to this earlier step with its remarks (spec §9.1).
+    pub back_to: Option<String>,
 }
 
 #[derive(Clone, Debug)]

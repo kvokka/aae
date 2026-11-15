@@ -3,6 +3,7 @@
 
 use super::{Outcome, RunHandler, Verdict, events::attempt_live, row::Row, token_sha256};
 use crate::{
+    config::Step,
     driver::{Failure, FailureKind, PromptKey, Source},
     writer::{Error, Tx},
 };
@@ -78,27 +79,76 @@ impl RunHandler {
     pub(super) fn finished(&mut self, tx: &mut Tx<'_>, row: Row, veto: Option<&str>) -> Result<(), Error> {
         let outcome = Self::outcome(tx, &row)?;
         match (outcome.map(|o| (o.result, o.summary)), veto) {
-            (Some((Verdict::Pass, _)), None) => self.advance(tx, row),
+            (Some((Verdict::Pass, _)), None) => self.advance(tx, row, None),
             (Some((Verdict::Pass, _)), Some(reason)) => self.terminal(tx, row, "failed", Some("check"), reason),
-            (Some((Verdict::Fail, summary)), _) => self.terminal(tx, row, "failed", Some("agent"), &summary),
+            (Some((Verdict::Fail, summary)), _) => self.advance(tx, row, Some(&summary)),
             (None, _) => self.terminal(tx, row, "failed", Some("infrastructure"), "outcome lost"),
         }
     }
 
-    /// After a passed step: the next step of the formula starts at once (spec §9.1); after the last, the run passes.
-    fn advance(&mut self, tx: &mut Tx<'_>, mut row: Row) -> Result<(), Error> {
+    /// After a step that passed, or failed with the summary `failed` (spec §9.1): the next step starts at once; the
+    /// run passes after the last. A failed step fails the run unless it is a check (`back_to`). Checks in a row all
+    /// run; after the last of them, any that failed send the run back together, to the earliest step they name, for
+    /// the next round; past the formula's last round the run fails with their remarks.
+    fn advance(&mut self, tx: &mut Tx<'_>, row: Row, failed: Option<&str>) -> Result<(), Error> {
         let project = self.config.projects.iter().find(|p| p.name == row.project);
-        let formula = project.map(|p| p.formula(&row.formula)).transpose();
-        let next = match formula {
-            Ok(Some((_, f))) if f.step(&row.step).is_some() => f.next(&row.step).cloned(),
-            _ => {
-                let reason = format!("step `{}` is gone from `{}`", row.step, row.formula);
-                return self.terminal(tx, row, "failed", Some("infrastructure"), &reason);
+        let formula = project.and_then(|p| p.formula(&row.formula).ok()).map(|(_, f)| f);
+        let at = formula.and_then(|f| f.steps.iter().position(|s| s.name == row.step));
+        let (Some(f), Some(at)) = (formula, at) else {
+            let reason = format!("step `{}` is gone from `{}`", row.step, row.formula);
+            return self.terminal(tx, row, "failed", Some("infrastructure"), &reason);
+        };
+        let checks: Vec<_> = f.steps[..=at]
+            .iter()
+            .rev()
+            .take_while(|s| s.back_to.is_some())
+            .collect();
+        let next = f.steps.get(at + 1);
+        if let Some(summary) = failed.filter(|_| checks.is_empty()) {
+            return self.terminal(tx, row, "failed", Some("agent"), summary);
+        }
+        if !checks.is_empty() && next.is_none_or(|n| n.back_to.is_none()) {
+            let mut sent_back = Vec::new();
+            for check in checks.iter().rev() {
+                let outcome: Option<String> = tx
+                    .sql()
+                    .query_row(
+                        "SELECT outcome FROM attempts WHERE run = ?1 AND step = ?2 AND outcome IS NOT NULL \
+                         ORDER BY n DESC LIMIT 1",
+                        params![row.id, check.name],
+                        |r| r.get(0),
+                    )
+                    .optional()?;
+                let outcome: Option<Outcome> = outcome.and_then(|o| serde_json::from_str(&o).ok());
+                if let Some(o) = outcome.filter(|o| o.result == Verdict::Fail) {
+                    sent_back.push((check.back_to.clone().unwrap_or_default(), remark(&check.name, &o)));
+                }
             }
-        };
-        let Some(next) = next else {
-            return self.terminal(tx, row, "passed", None, "pass");
-        };
+            let to = f.steps.iter().find(|s| sent_back.iter().any(|(to, _)| *to == s.name));
+            if let Some(to) = to {
+                let remarks = sent_back.into_iter().map(|(_, r)| r).collect::<Vec<_>>().join("\n\n");
+                let round: u32 = tx
+                    .sql()
+                    .query_row("SELECT round FROM runs WHERE id = ?1", [&row.id], |r| r.get(0))?;
+                if round >= f.rounds {
+                    let reason = format!("still failing after {round} rounds: {remarks}");
+                    return self.terminal(tx, row, "failed", Some("agent"), &reason);
+                }
+                tx.sql().execute(
+                    "UPDATE runs SET round = round + 1, remarks = ?2 WHERE id = ?1",
+                    params![row.id, remarks],
+                )?;
+                return self.enter(tx, row, to.clone());
+            }
+        }
+        match next {
+            Some(next) => self.enter(tx, row, next.clone()),
+            None => self.terminal(tx, row, "passed", None, "pass"),
+        }
+    }
+
+    /// The run ends its step and starts `next` at once.
+    fn enter(&mut self, tx: &mut Tx<'_>, mut row: Row, next: Step) -> Result<(), Error> {
         // shortcut: the agent's `max_runs` is read when a run leaves the queue or a park, not here; check it at the
         // step boundary once formulas mix agents with tight limits.
         let agent = self.step_agent(&row.project, &row.rig, &row.formula, &next, row.as_agent.as_deref());
@@ -163,4 +213,15 @@ impl RunHandler {
         });
         tx.effect(&row.id, &format!("prompt:{}:{}", row.attempt, prompts + 1), &payload)
     }
+}
+
+/// The remark of a failed check: its name and summary, and the output of an exec check.
+fn remark(step: &str, outcome: &Outcome) -> String {
+    let data = outcome.data.as_ref();
+    let output = ["stdout", "stderr"].map(|k| data.and_then(|d| d[k].as_str()).unwrap_or_default().trim());
+    let mut text = format!("{step}: {}", outcome.summary);
+    for part in output.into_iter().filter(|p| !p.is_empty()) {
+        text = format!("{text}\n{part}");
+    }
+    text
 }

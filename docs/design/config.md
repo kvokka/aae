@@ -416,6 +416,7 @@ variant named like an agent of a pack of the project.
 name = "implement"
 description = "Implement the task of a bead"
 worktree = true                     # optional (default false): each run works in a git worktree of its own
+rounds = 3                          # optional (default 3): the most rounds a check may send the run through
 
 [inputs]
 bead = { type = "bead", required = true }   # bead | string | integer | boolean
@@ -433,6 +434,7 @@ model = "opus"                      # optional, prompt steps only: layer 8, the 
 name = "test"
 kind = "exec"
 command = ["cargo", "test"]
+back_to = "implement"               # optional, prompt and exec steps: a check; on fail, back to this earlier step
 
 [[step]]
 name = "children"
@@ -442,16 +444,16 @@ timeout = "24h"                     # optional (default 24h)
 ```
 
 A formula has a name, a description, declared inputs and one or more steps, which a run goes through in order
-(contracts 6.1): the next step starts when the one before passed, the first failed step fails the run, and the run's
-outcome is that of its last step. Step names are unique in the formula and contain no `.`. A `prompt` step is a turn of
-the agent in a harness session, and its outcome comes from the finisher (`aae finish`, contracts 6.3). An `exec` step is
-a command with no model that the daemon runs in the run's workdir, in a process group of its own, under the step
-timeout; exit 0 is `pass`, 75 (`EX_TEMPFAIL`) a failed attempt (not an outcome), any other `fail`, and a bounded tail of
-its output is kept in the result (contracts 6.2). An `exec` step has `command = ["prog", "arg", ..]` (non-empty) and
-`timeout` instead of `agent` and `prompt`. Nothing is substituted into the command; it gets the run in its environment:
-`AAE_RUN`, `AAE_BEAD` (when the run has a bead) and `AAE_INPUT_<NAME>` per input (the name upper-cased, other characters
-than letters and digits as `_`; a string as it is, any other value as JSON). Two inputs that give one variable
-(`note-text` and `note_text`) are a config error.
+(contracts 6.1): the next step starts when the one before ended, a failed step that is no check fails the run, and
+the run's outcome is that of its last step. Step names are unique in the formula and contain no `.`. A `prompt` step
+is a turn of the agent in a harness session, and its outcome comes from the finisher (`aae finish`, contracts 6.3). An
+`exec` step is a command with no model that the daemon runs in the run's workdir, in a process group of its own, under
+the step timeout; exit 0 is `pass`, 75 (`EX_TEMPFAIL`) a failed attempt (not an outcome), any other `fail`, and a
+bounded tail of its output is kept in the result (contracts 6.2). An `exec` step has `command = ["prog", "arg", ..]`
+(non-empty) and `timeout` instead of `agent` and `prompt`. Nothing is substituted into the command; it gets the run in
+its environment: `AAE_RUN`, `AAE_BEAD` (when the run has a bead) and `AAE_INPUT_<NAME>` per input (the name upper-cased,
+other characters than letters and digits as `_`; a string as it is, any other value as JSON). Two inputs that give one
+variable (`note-text` and `note_text`) are a config error.
 
 A `drain` step gives every ready bead under the run's bead (its direct children) a run of `formula`, on each read of
 the tracker, until none is left: the same start as `aae run start` with the bead as the formula's `bead` input, no rig
@@ -463,6 +465,14 @@ read of the tracker is queued, always `pass`, with `data = {closed, failed, refu
 those whose runs failed or were cancelled, and the refused ones with the reason. `formula` must take exactly one
 `bead` input and need no other; a formula with a `drain` step needs a required `bead` input. Beads deeper than the
 direct children are not given out.
+
+A step with `back_to` is a check. When it fails the run does not fail: the steps after it that are checks too run
+as well, and after the last of them every failed check of the row sends the run back together, to the earliest
+step they name, which starts at once as the next round. Their remarks — per check its name, its summary and, for an
+exec check, the output it kept — reach the steps of the new round as `{{ remarks }}` in a prompt template and
+`AAE_REMARKS` in the environment of an exec step (empty and absent in the first round). A check that fails in the
+last of the formula's `rounds` fails the run (class `agent`) with the reason `still failing after <n> rounds:
+<remarks>`. `back_to` must name a step before the check; a `drain` step is no check.
 
 A step sees the outcomes of the steps before it, by name (the last attempt of each): a prompt template as
 `{{ steps.<name>.result }}`, `.summary` and `.data.<key>` (contracts 2.3; `data` of an exec step is `{exit_code,

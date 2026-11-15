@@ -56,6 +56,7 @@ impl RunHandler {
             "bead": row.bead_data.as_deref().map(serde_json::from_str::<Value>).transpose().ok().flatten(),
             "project": { "name": project.name, "path": project.root },
             "steps": step_results(tx.sql(), row).map_err(|e| e.to_string())?,
+            "remarks": remarks(tx.sql(), &row.id).map_err(|e| e.to_string())?,
         });
         let text = prompt.render(&context).map_err(|e| format!("prompt: {e}"))?;
         if text.trim().is_empty() {
@@ -77,4 +78,11 @@ pub(super) fn step_results(conn: &Connection, row: &Row) -> rusqlite::Result<Map
         Ok((r.get(0)?, serde_json::from_str(&outcome).unwrap_or_default()))
     })?;
     rows.collect()
+}
+
+/// The remarks of the checks that last sent `run` back to an earlier step; empty in its first round (spec §9.1).
+pub(super) fn remarks(conn: &Connection, run: &str) -> rusqlite::Result<String> {
+    conn.query_row("SELECT COALESCE(remarks, '') FROM runs WHERE id = ?1", [run], |r| {
+        r.get(0)
+    })
 }

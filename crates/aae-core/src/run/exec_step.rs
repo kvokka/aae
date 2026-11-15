@@ -62,6 +62,8 @@ impl RunHandler {
                 context.push((format!("{prefix}DATA"), json!(outcome["data"].to_string())));
             }
         }
+        let remarks = super::render::remarks(tx.sql(), &row.id)?;
+        context.extend((!remarks.is_empty()).then(|| ("AAE_REMARKS".to_owned(), json!(remarks))));
         env.retain(|(k, _)| !context.iter().any(|(c, _)| c == k));
         env.extend(context);
         let timeout_ms = row.timeout_ms.unwrap_or(super::render::STEP_TIMEOUT_MS);

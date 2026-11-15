@@ -147,8 +147,13 @@ command = ["test", "-s", "SUMMARY.md"]  # gets AAE_STEP_COUNT_* and AAE_STEP_WRI
 A prompt template reads an earlier step as `{{ steps.<name>.result }}` (`pass` or `fail`), `.summary` and
 `.data.<key>`; an exec step's `data` is `{exit_code, stdout, stderr}`. An exec step gets the same as
 `AAE_STEP_<NAME>_RESULT`, `AAE_STEP_<NAME>_SUMMARY` and `AAE_STEP_<NAME>_DATA` (JSON). Each prompt step has a session
-of its own. `aae run show` names the step the run is at, and `run.step_finished` marks each passed step but the
-last. `config explain` goes step by step:
+of its own. `aae run show` names the step the run is at, and `run.step_finished` marks each ended step but the
+last.
+
+A check can send the work back instead of failing the run: with `back_to = "write"` on the step `check`, a failed
+check starts `write` again, and its prompt can show why with `{{ remarks }}` (empty the first time). `rounds = 2`
+next to `name` caps the rounds; the default is 3, and a check still failing in the last one fails the run with its
+remarks as the reason. `config explain` goes step by step:
 
 ```sh
 aae config explain --project hello --formula summarize-checked --rig main
