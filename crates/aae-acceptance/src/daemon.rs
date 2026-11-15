@@ -215,7 +215,18 @@ fn spawn(env: &Env, dir: &Path, home: &Path) -> Child {
         .append(true)
         .open(dir.join("daemon.log"))
         .unwrap();
-    command(env, dir, home).arg("daemon").stderr(log).spawn().unwrap()
+    // Steps call `aae`, as a demo's do: the binary under test goes first on the PATH the daemon hands them.
+    let bin = env.aae.parent().expect("the directory of aae");
+    let path = std::env::join_paths(
+        std::iter::once(bin.to_owned()).chain(std::env::split_paths(&std::env::var_os("PATH").unwrap_or_default())),
+    )
+    .unwrap();
+    command(env, dir, home)
+        .arg("daemon")
+        .env("PATH", path)
+        .stderr(log)
+        .spawn()
+        .unwrap()
 }
 
 /// `aae` with the XDG directories in `dir`.

@@ -18,12 +18,14 @@ kind = "drain"
 formula = "implement"                       # a run per ready bead under the root, on the rig of its `rig:` label
 
 # The format of the Markdown in every rig: rumdl fixes what it can; what it cannot goes back to the planner.
+# A rig may sit in a repository that ignores it, so the check does not respect .gitignore and skips what tools fetch.
 [[step]]
 name = "format"
 kind = "exec"
 command = ["sh", "-c", """
 project=$(aae --json run show "$AAE_RUN" | jq -r .project)
-aae --json project list --project "$project" | jq -j '.[].rigs[].path + "\\u0000"' | xargs -0 rumdl check --fix
+aae --json project list --project "$project" | jq -j '.[].rigs[].path + "\\u0000"' |
+  xargs -0 rumdl check --fix --respect-gitignore=false --exclude '.git,node_modules,.venv'
 """]
 back_to = "plan"
 

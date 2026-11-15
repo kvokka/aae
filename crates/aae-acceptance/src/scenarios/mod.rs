@@ -18,6 +18,7 @@ mod c16_beads;
 mod c17_mcp;
 mod c18_journal;
 mod c19_gates;
+mod c20_format;
 mod c24_drain;
 mod c25_return;
 mod c26_git;
@@ -160,6 +161,13 @@ pub(crate) const ALL: &[Scenario] = &[
         title: "operator gates stop dispatch, survive a restart and stay until opened by hand",
         launch: Launch::Ci,
         run: |env| Box::pin(c19_gates::run(env)),
+    },
+    Scenario {
+        criterion: "20",
+        title: "demo 2's format step on a rig its repository ignores: rumdl fixes what it can; the rest fails the step \
+        with rumdl's findings",
+        launch: Launch::Ci,
+        run: |env| Box::pin(c20_format::run(env)),
     },
     Scenario {
         criterion: "24",
