@@ -177,4 +177,32 @@ tracker. A formula input of `type = "bead"` takes a bead id, or `{ next_ready = 
 the prompt then reads its fields as `{{ bead.title }}`, `{{ bead.description }}` and so on, and the run holds the
 bead's claim until it ends. A trigger on `bead.ready` starts such runs as beads become ready.
 
+A run can also start from a request in plain words: `--input 'bead={"request":"Add a dark mode"}'` creates a root
+bead (an epic titled by the first line) and the run works on it. A planner step files the work as beads under that
+root, each with a `rig:` label and, if it wants, `agent:` and `harness:` labels; a `drain` step then gives every
+ready bead under the root a run of its own formula and ends when none is ready or running:
+
+```toml
+name = "deliver"
+[inputs]
+bead = { type = "bead", required = true }
+
+[[step]]
+name = "plan"
+kind = "prompt"
+agent = "planner"
+prompt = "plan.md"                    # files the beads under {{ bead.id }}
+
+[[step]]
+name = "work"
+kind = "drain"
+formula = "implement"                 # takes one `bead` input; one run per bead, on the rig of its `rig:` label
+
+[[step]]
+name = "verify"
+kind = "exec"
+command = ["make", "check"]           # sees AAE_STEP_WORK_DATA: {closed, failed, refused}
+back_to = "plan"                      # a failure sends the run back to `plan`, whose prompt shows {{ remarks }}
+```
+
 Next: [writing a plugin](plugin.md).

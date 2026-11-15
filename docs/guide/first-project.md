@@ -40,8 +40,9 @@ The project is named after its directory (`hello`); `name = "..."` in `aae.toml`
 ## 3. A formula without a model
 
 A **formula** says how a run works: the process, never the particular task, which comes in as the run's inputs. It is a
-list of steps, run in order; each is either `exec` (a command) or `prompt` (an agent working through a prompt
-template). This one has a single step.
+list of steps, run in order; each is `exec` (a command), `prompt` (an agent working through a prompt template) or
+`drain` (a run for every bead under the run's bead, see [Runs over a tracker](first-formula.md#runs-over-a-tracker)).
+This one has a single step.
 `~/work/hello/formulas/check.toml`:
 
 ```toml
