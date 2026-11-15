@@ -227,7 +227,7 @@ pub fn open(path: &Path) -> rusqlite::Result<Connection> {
     .into_iter()
     .filter(|(to, _)| *to > version)
     {
-        conn.execute_batch(&format!("BEGIN; {sql} PRAGMA user_version = {to}; COMMIT;"))?;
+        conn.execute_batch(&format!("BEGIN IMMEDIATE; {sql} PRAGMA user_version = {to}; COMMIT;"))?;
     }
     Ok(conn)
 }

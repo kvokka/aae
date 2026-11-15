@@ -26,9 +26,11 @@ all of them share.
   `bundled`). The daemon is its only writer (`crates/aae-core/src/store.rs` opens it, the writer changes it). The CLI,
   plugins and agents change the state only through the API. A lock held by another connection is waited out for
   5 s (`BUSY` in `store.rs`). Every transaction of the daemon's connection takes the write lock at `BEGIN`
-  (`IMMEDIATE`), so the wait covers it whatever its first statement, then it fails: a journal drain is retried with
-  backoff, a message fails back to its sender, and any other write (the start-up transaction, a deadline's, the
-  record of a finished effect) stops the core.
+  (`IMMEDIATE`; the migrations at open begin `IMMEDIATE` too), so the wait covers it whatever its first statement.
+  The writer calls SQLite synchronously, so while it waits it holds one runtime worker thread; the API's reads go
+  on, through their own read-only connections. When the wait runs out the transaction fails: a journal drain is
+  retried with backoff, a message fails back to its sender, and any other write (the start-up transaction, a
+  deadline's, the record of a finished effect) stops the core.
   A deadline whose own handler fails is not such a failure: it is rolled back and fires again a minute later.
 - The state holds runtime only: runs, attempts, session references, harness instances (the process part and the handle:
   pid, start time, pgid), bead ownership with its generation and failure count, ready sets and tracker cursors,
