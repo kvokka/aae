@@ -1,7 +1,8 @@
 # Core invariants and recovery
 
 The rules the core keeps whatever the harness, the policy, the operator or a crash does. They are numbered; code,
-tests and the other design documents cite them as "invariant N". The list is distilled from the fix
+tests and the other design documents cite them as "invariant N", so the numbers are stable: an invariant is never
+renumbered and its number is never reused. The list is distilled from the fix
 history of an earlier orchestrator of the same kind, where about half of the commits were fixes: 1 609 of 3 156
 since 2026-07-01 (counted 2026-11-10 at its commit `f1f75f53c`).
 <!-- MEASURE id=prior-orchestrator-fix-commits date=2026-11-10 ver=f1f75f53c env=linux-arm64-orbstack src=reports/21 note="git log --since=2026-07-01: 3156 commits, 1609 of them fixes; one manual pass over the subjects" -->

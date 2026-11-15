@@ -6,7 +6,7 @@ mod common;
 
 use aae_core::{
     driver::{Normalized, SessionState, StopReason},
-    run::{Create, Decision, ExecHooks, HookRunner, Msg, Outcome, Verdict},
+    run::{Create, Decision, ExecHooks, HookRunner, MAX_ATTEMPTS, Msg, Outcome, Verdict},
 };
 use aae_testkit::Step;
 use common::{Hanging, POLICY, World, world_with};
@@ -87,10 +87,15 @@ impl World {
 
     /// Declares `pass` with `data` for the attempt `attempt` of `run` once its session has the token.
     async fn pass(&self, run: &str, attempt: u32, data: Value) -> Value {
+        let started = std::time::Instant::now();
         let token = loop {
             if let Some(token) = self.driver.token(run, attempt) {
                 break token;
             }
+            assert!(
+                started.elapsed() < Duration::from_secs(10),
+                "attempt {attempt} of `{run}` got no token"
+            );
             tokio::time::sleep(Duration::from_millis(20)).await;
         };
         let outcome = Outcome {
@@ -226,6 +231,73 @@ async fn each_prompt_step_has_a_session_of_its_own() {
         "{attempts:?}"
     );
     assert_eq!(w.driver.sent(&run, 2).1, ["One.", "Two."]);
+}
+
+/// A step resumed before it ever had a session starts a new one: it never takes the session of an earlier step.
+#[tokio::test]
+async fn a_resumed_step_never_takes_the_session_of_an_earlier_step() {
+    let texts = [("shop/formulas/one.md", "One."), ("shop/formulas/two.md", "Two.")];
+    let mut w = flow(
+        &[prompt("one"), prompt("two")],
+        &[POLICY, &texts].concat(),
+        Arc::new(Hanging::default()),
+    );
+    w.driver.script(turn());
+    let run = w.start_flow().await;
+    assert_eq!(w.pass(&run, 1, json!(1)).await, "accepted");
+    // Step `two` starts its attempt, its harness never reports a session, and the daemon dies.
+    w.driver.stall_sessions();
+    let started = std::time::Instant::now();
+    while w.attempts().len() < 2 {
+        assert!(started.elapsed() < Duration::from_secs(10), "step `two` did not start");
+        tokio::time::sleep(Duration::from_millis(20)).await;
+    }
+    w.restart().await;
+    w.driver.script(turn());
+    let resume = Decision::Resume {
+        after: Duration::ZERO,
+        gate: None,
+    };
+    w.decide(&run, "run.attempt_failed", 0, resume).await;
+    assert_eq!(w.pass(&run, 3, json!(3)).await, "accepted");
+    let (kind, data) = w.end(&run).await;
+    assert_eq!(kind, "run.passed", "{data}");
+    let attempts = w.attempts();
+    assert_eq!(attempts[1], ("two".to_owned(), None), "{attempts:?}");
+    assert!(
+        attempts[2].1.is_some() && attempts[2].1 != attempts[0].1,
+        "{attempts:?}"
+    );
+}
+
+/// The ceiling counts failed attempts only (invariant 16): a passed step does not use it up for the later ones.
+#[tokio::test]
+async fn the_attempts_ceiling_counts_no_passed_step() {
+    let plugin = r#"name = "policy"
+version = "0.1.0"
+[[hook]]
+on = "run.attempt_failed"
+command = ["sh", "-c", "echo '{\"decision\":\"new_session\"}'"]
+timeout = "10s"
+"#;
+    let last = MAX_ATTEMPTS;
+    let steps = [
+        exec("a", "true"),
+        // Fails with `EX_TEMPFAIL` until its attempt `last`: 1 passed and `last - 1` failed attempts in all.
+        exec(
+            "b",
+            &format!("n=$(($(cat n 2>/dev/null || echo 0) + 1)); echo $n > n; [ $n -ge {last} ] || exit 75"),
+        ),
+    ];
+    let w = flow(
+        &steps,
+        &[POLICY[0], ("policy/plugin.toml", plugin)],
+        Arc::new(ExecHooks::default()),
+    );
+    let run = w.start_flow().await;
+    let (kind, data) = w.end(&run).await;
+    assert_eq!(kind, "run.passed", "{data}");
+    assert_eq!(w.attempts().len(), 1 + last as usize);
 }
 
 /// The daemon dies at every step boundary — a step in `finishing`, the next in `preparing`, a command in flight —

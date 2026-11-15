@@ -24,12 +24,12 @@ later in this round. None scores 10: a 10 needs criterion 20 green in the run th
 | Runs and finisher | 2, 3, 4, 4a, 24, 25 | 6 | 8: criteria 24 (beads and `drain`) and 25 (the return) |
 | Triggers and schedules | 5a, 5b, 6 | 8 | 10: criterion 20 in the run that checks this file |
 | Issue gates | 10, 19 | 8 | 10: criterion 20 in the run that checks this file; the claude half of criterion 10 is unverified (no claude quota limit seen live) |
-| Recovery | 8, 9 | 8 | 10: criterion 20 in the run that checks this file |
+| Recovery | 8, 9, 24 | 6 | 8: criterion 24 (`kill -9` of the daemon on every step, no step and no bead run twice) |
 | Config assembly | 12, 13, 26 | 6 | 8: criterion 26 (packs from git by sha, tag or the latest) |
 | Instance and service registry | 13, 14 | 8 | 10: criterion 20 in the run that checks this file |
 | claude adapter | 2, 4a, 9, 11 | 8 | 10: criterion 20 in the run that checks this file |
 | codex adapter | 2, 10, 11, 13 | 8 | 10: criterion 20 in the run that checks this file |
-| br adapter | 5a, 11, 16 | 8 | 10: criterion 20 in the run that checks this file |
+| br adapter | 5a, 11, 16, 24 | 6 | 8: criterion 24 (beads with rig, agent and harness labels; `drain` over the tracker) |
 | Plugin hook execution | 4, 15 | 8 | 10: criterion 20 in the run that checks this file |
 | `default-policy` | 8, 10 | 8 | 10: criterion 20 in the run that checks this file |
 | `worktree` | - | 8 | 10: criterion 20 in the run that checks this file; no §15 criterion of its own, its tests are model-free |
