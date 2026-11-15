@@ -23,8 +23,10 @@ formula = "implement"                       # a run per ready bead under the roo
 name = "format"
 kind = "exec"
 command = ["sh", "-c", """
-project=$(aae --json run show "$AAE_RUN" | jq -r .project)
-aae --json project list --project "$project" | jq -j '.[].rigs[].path + "\\u0000"' |
+set -e
+run=$(aae --json run show "$AAE_RUN")
+rigs=$(aae --json project list --project "$(printf '%s' "$run" | jq -r .project)")
+printf '%s' "$rigs" | jq -j '.[].rigs[].path + "\\u0000"' |
   xargs -0 rumdl check --fix --respect-gitignore=false --exclude '.git,node_modules,.venv'
 """]
 back_to = "plan"

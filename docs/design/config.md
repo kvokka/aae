@@ -478,9 +478,10 @@ is a turn of the agent in a harness session, and its outcome comes from the fini
 the step timeout; exit 0 is `pass`, 75 (`EX_TEMPFAIL`) a failed attempt (not an outcome), any other `fail`, and a
 bounded tail of its output is kept in the result (contracts 6.2). An `exec` step has `command = ["prog", "arg", ..]`
 (non-empty) and `timeout` instead of `agent` and `prompt`. Nothing is substituted into the command; it gets the run in
-its environment: `AAE_RUN`, `AAE_BEAD` (when the run has a bead) and `AAE_INPUT_<NAME>` per input (the name upper-cased,
-other characters than letters and digits as `_`; a string as it is, any other value as JSON). Two inputs that give one
-variable (`note-text` and `note_text`) are a config error.
+its environment: `AAE_RUN`, `AAE_BEAD` (when the run has a bead), `AAE_SOCKET` (the API socket, so the command can
+call `aae`) and `AAE_INPUT_<NAME>` per input (the name upper-cased, other characters than letters and digits as `_`; a
+string as it is, any other value as JSON). Two inputs that give one variable (`note-text` and `note_text`) are a
+config error.
 
 A `drain` step gives every ready bead under the run's bead (its direct children) a run of `formula`, on each read of
 the tracker, until none is left: the same start as `aae run start` with the bead as the formula's `bead` input, no rig

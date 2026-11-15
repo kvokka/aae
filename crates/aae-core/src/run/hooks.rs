@@ -112,6 +112,11 @@ impl RunHandler {
 /// they decided (contracts 3.1, 3.3). The daemon uses [`ExecHooks`].
 pub trait HookRunner: Send + Sync + 'static {
     fn run<'a>(&'a self, core: &'a CoreHandle<Msg>, payload: &'a Value) -> BoxFuture<'a, ()>;
+
+    /// The API socket the daemon's commands, hooks and exec steps, get in `AAE_SOCKET`.
+    fn socket(&self) -> Option<&Path> {
+        None
+    }
 }
 
 /// A bundled plugin's hook: `(plugin, event, params)` to its decision, `None` for none, or why it failed.
@@ -128,6 +133,10 @@ pub struct ExecHooks {
 impl HookRunner for ExecHooks {
     fn run<'a>(&'a self, core: &'a CoreHandle<Msg>, payload: &'a Value) -> BoxFuture<'a, ()> {
         Box::pin(run(core, payload, self))
+    }
+
+    fn socket(&self) -> Option<&Path> {
+        self.socket.as_deref()
     }
 }
 

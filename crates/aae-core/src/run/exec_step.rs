@@ -159,7 +159,7 @@ impl RunHandler {
 pub(super) type Running = Arc<Mutex<HashMap<String, Arc<Notify>>>>;
 
 /// Runs the command of an `exec` effect to its end and tells the core how it ended.
-pub(super) async fn run(running: &Running, payload: &Value) -> Msg {
+pub(super) async fn run(running: &Running, payload: &Value, socket: Option<&Path>) -> Msg {
     let run = payload["run"].as_str().unwrap_or_default().to_owned();
     let command: Vec<String> = serde_json::from_value(payload["command"].clone()).unwrap_or_default();
     let mut env = process::base_env();
@@ -168,6 +168,7 @@ pub(super) async fn run(running: &Running, payload: &Value) -> Msg {
     env.extend(pairs);
     let marker = payload["marker"].as_str().unwrap_or_default();
     env.push((crate::orphans::INSTANCE_ENV.to_owned(), marker.to_owned()));
+    env.extend(socket.map(|s| ("AAE_SOCKET".to_owned(), s.to_string_lossy().into_owned())));
     let stop = Arc::new(Notify::new());
     let lock = || running.lock().unwrap_or_else(PoisonError::into_inner);
     lock().insert(run.clone(), stop.clone());
