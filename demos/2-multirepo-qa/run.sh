@@ -49,7 +49,7 @@ versions="aae-$("$aae" --version | cut -d' ' -f2)@$sha"
 for tool in codex rumdl agent-browser; do
   versions="$versions,$tool-$("$tool" --version 2>/dev/null | grep -Eo '[0-9]+\.[0-9]+\.[0-9]+' | head -1)"
 done
-models=$(for pair in planner:root coder:frontend qa:root; do
+models=$(for pair in planner:root coder:frontend coder:backend qa:root; do
   agent=${pair%:*} rig=${pair#*:}
   "$aae" config explain --config root/config.toml --project multirepo-qa --agent "dev.$agent" --rig "$rig" |
     awk -v who="$agent on $rig" '/^(model|harness) =/ {gsub(/"/, "", $3); v[$1] = $3}

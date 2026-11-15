@@ -4,7 +4,7 @@
 
 Run on 2026-11-15 with aae-0.1.0@4829f4c,codex-0.168.0,rumdl-0.3.4,agent-browser-0.39.0 (`Linux aarch64`): passed in 704 s from the request,
 after 1 round(s) of the checks (at most 3).
-Models: planner on root: codex gpt-6.1-sol; coder on frontend: codex gpt-6-luna; qa on root: codex gpt-6.1-terra.
+Models: planner on root: codex gpt-6.1-sol; coder on frontend: codex gpt-6-luna; coder on backend: codex gpt-6-luna; qa on root: codex gpt-6.1-terra.
 Tokens the harnesses reported for the runs: input 1431997, output 23271.
 
 The request: "Create me snake game in browser and a simple backend which store the high-scores, KISS".
