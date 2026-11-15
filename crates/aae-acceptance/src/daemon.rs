@@ -224,6 +224,7 @@ fn command(env: &Env, dir: &Path, home: &Path) -> Command {
     command
         .env("HOME", home)
         .env("XDG_CONFIG_HOME", dir.join("config"))
+        .env("XDG_CACHE_HOME", dir.join("cache"))
         .env("XDG_STATE_HOME", dir.join("state"))
         .env("XDG_RUNTIME_DIR", dir.join("run"));
     command

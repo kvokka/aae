@@ -20,6 +20,7 @@ mod c18_journal;
 mod c19_gates;
 mod c24_drain;
 mod c25_return;
+mod c26_git;
 
 use crate::{
     Launch, Scenario,
@@ -172,6 +173,13 @@ pub(crate) const ALL: &[Scenario] = &[
         title: "a failing check sends the run back with its remarks; past the formula's rounds the run fails",
         launch: Launch::Ci,
         run: |env| Box::pin(c25_return::run(env)),
+    },
+    Scenario {
+        criterion: "26",
+        title: "a pack from git by tag, by sha and unpinned: aae downloads it; a cached tag or sha needs no network; \
+                `cache clear` makes it download again",
+        launch: Launch::Ci,
+        run: |env| Box::pin(c26_git::run(env)),
     },
 ];
 

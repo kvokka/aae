@@ -18,7 +18,7 @@ pub use assemble::{EffectiveConfig, Layer, Sourced};
 pub use files::{Harness, Hook, Mcp, McpScope, PluginUse, Settings, Skill};
 pub use formula_file::{Input, InputType};
 pub use service::{Health, Service, ServiceScope};
-pub use sources::{GitSource, Lock, Pinned, checkout, commit_id, git_sources};
+pub use sources::{Checkouts, GitSource, commit_id, git_sources};
 use std::{collections::BTreeMap, fmt, path::PathBuf, time::Duration};
 
 /// The whole configuration of one daemon. Loading it is all or nothing: the caller keeps its previous `Config`
@@ -330,14 +330,16 @@ impl fmt::Display for ConfigError {
 }
 
 /// Loads the orchestrator file (absent means empty), the projects it lists and everything they use, for a build
-/// with `adapters` (see [`Config::adapters`]). Every error found is returned; a config with any error is never
-/// returned in part.
+/// with `adapters` (see [`Config::adapters`]) and the git sources downloaded to `checkouts`. Every error found is
+/// returned; a config with any error is never returned in part.
 pub fn load_for(
     orchestrator_file: &std::path::Path,
     adapters: &'static [&'static crate::driver::Adapter],
+    checkouts: Checkouts,
 ) -> Result<Config, Vec<ConfigError>> {
     let loader = load::Loader {
         adapters,
+        checkouts,
         ..load::Loader::default()
     };
     loader.run(orchestrator_file)
@@ -346,7 +348,7 @@ pub fn load_for(
 /// [`load_for`] a build with no adapters, as tests of the core on a scripted harness load: every agent names its
 /// harness, and no model name is expanded.
 pub fn load(orchestrator_file: &std::path::Path) -> Result<Config, Vec<ConfigError>> {
-    load_for(orchestrator_file, &[])
+    load_for(orchestrator_file, &[], Checkouts::new())
 }
 
 /// The environment variable an exec step gets input `name` in: `note-text` → `AAE_INPUT_NOTE_TEXT`.

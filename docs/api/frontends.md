@@ -70,7 +70,9 @@ Code: `crates/aae-front/src/cli/`. The CLI is a thin client of the HTTP API in t
   `tool_silence` above the longest wait. The whole wait still counts against the step's `timeout` (default 45 min).
 - `aae finish` reads the attempt token from the session environment, retries for 60 s under one idempotency key and
   exits 75 when the daemon stays unreachable (an attempt failure, not a failed run).
-- Without a daemon only `aae daemon`, `aae doctor`, `aae fetch`, `aae config check|explain` and `aae --version` work;
+- Without a daemon only `aae daemon`, `aae doctor`, `aae cache clear`, `aae config check|explain` and `aae --version`
+  work; `aae cache clear` removes the packs and plugins downloaded from git, and the next load of the config downloads
+  them again;
   any other command says that no daemon listens on the socket and how to start one. `aae config check` and
   `aae config explain` load the config file themselves as the daemon would (`--config <file>`, default
   `$XDG_CONFIG_HOME/aae/config.toml`) and print what the API would answer for it.

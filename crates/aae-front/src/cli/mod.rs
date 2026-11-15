@@ -1,5 +1,5 @@
 //! The CLI (spec §12): a thin client of the API, one command per API operation, JSON output with `--json`.
-//! Without a daemon only `aae daemon`, `aae doctor`, `aae fetch`, `aae config check|explain` and `aae --version`
+//! Without a daemon only `aae daemon`, `aae doctor`, `aae cache clear`, `aae config check|explain` and `aae --version`
 //! work.
 
 mod commands;
@@ -67,6 +67,12 @@ pub struct Cli {
 }
 
 #[derive(Subcommand)]
+pub enum CacheCommand {
+    /// Remove every downloaded pack and plugin; the next load of the config downloads them again.
+    Clear,
+}
+
+#[derive(Subcommand)]
 pub enum Command {
     /// Run the daemon in the foreground.
     Daemon {
@@ -83,15 +89,9 @@ pub enum Command {
         #[arg(long)]
         config: Option<PathBuf>,
     },
-    /// Pin the git packs and plugins of the config to commits in `aae.lock` and check them out.
-    Fetch {
-        /// The orchestrator config (default: `$XDG_CONFIG_HOME/aae/config.toml`).
-        #[arg(long)]
-        config: Option<PathBuf>,
-        /// Resolve every revision again instead of keeping the commit the lock pins.
-        #[arg(long)]
-        update: bool,
-    },
+    /// The cache of packs and plugins downloaded from git.
+    #[command(subcommand)]
+    Cache(CacheCommand),
     /// Runs of formulas.
     #[command(subcommand)]
     Run(RunCommand),
@@ -234,13 +234,13 @@ async fn execute(client: &Client, cli: Cli) -> Result<ExitCode, ClientError> {
     match cli.command {
         Command::Daemon { .. }
         | Command::Doctor { .. }
-        | Command::Fetch { .. }
+        | Command::Cache(_)
         | Command::McpBridge { .. }
         | Command::Config(ConfigCommand::Check { .. } | ConfigCommand::Explain { .. }) => {
             return Ok(fail(
                 json,
                 "usage",
-                "`daemon`, `doctor`, `fetch`, `mcp-bridge` and `config check|explain` run without a daemon, not as its \
+                "`daemon`, `doctor`, `cache clear`, `mcp-bridge` and `config check|explain` run without a daemon, not as its \
                  client",
             ));
         }

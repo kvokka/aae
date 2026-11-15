@@ -111,7 +111,7 @@ pub(super) fn load_for_adapters(
         fs::create_dir_all(path.parent().unwrap()).unwrap();
         fs::write(path, text).unwrap();
     }
-    crate::config::load_for(&dir.path().join("config.toml"), adapters)
+    crate::config::load_for(&dir.path().join("config.toml"), adapters, Default::default())
 }
 
 /// Asserts that loading fails and one error mentions `needle`.

@@ -69,6 +69,7 @@ aae follows XDG:
 | config | `$XDG_CONFIG_HOME/aae/config.toml` (`~/.config/aae/config.toml`) |
 | state (database, journal) | `$XDG_STATE_HOME/aae` (`~/.local/state/aae`) |
 | API socket | `$XDG_RUNTIME_DIR/aae/aae.sock` |
+| packs and plugins from git | `$XDG_CACHE_HOME/aae/git` (`~/.cache/aae/git`); emptied by `aae cache clear` |
 
 ## Run the daemon
 

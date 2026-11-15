@@ -12,7 +12,12 @@ fn demos() -> PathBuf {
 }
 
 fn demo(name: &str) -> Config {
-    load_for(&demos().join(name).join("root/config.toml"), ADAPTERS).unwrap()
+    load_for(
+        &demos().join(name).join("root/config.toml"),
+        ADAPTERS,
+        Default::default(),
+    )
+    .unwrap()
 }
 
 #[test]

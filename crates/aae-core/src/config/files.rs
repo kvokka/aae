@@ -240,7 +240,7 @@ pub(super) struct PluginDecl {
     pub config: Map<String, Value>,
 }
 
-/// Where a pack or plugin lives: a directory, or a git repository at a revision pinned in `aae.lock`.
+/// Where a pack or plugin lives: a directory, or a git repository at a tag, a commit or its latest revision.
 #[derive(Debug, Deserialize)]
 #[serde(untagged, expecting = "a pack is a path or `{ git, rev }`")]
 pub(super) enum Source {

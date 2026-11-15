@@ -77,7 +77,8 @@ fn harness_error(name: &str, harness: &config::Harness, paths: &Paths) -> Option
 /// The config of `paths` with the parameters of the bundled plugins checked, or every error in it.
 pub(crate) fn load(paths: &Paths) -> Result<config::Config, Vec<String>> {
     let file = &paths.config;
-    let mut config = config::load_for(file, ADAPTERS)
+    let checkouts = crate::git_cache::checkouts(&paths.cache, file);
+    let mut config = config::load_for(file, ADAPTERS, checkouts)
         .map_err(|errors| errors.iter().map(ToString::to_string).collect::<Vec<_>>())?;
     // br is the tracker of a project with a `.beads` directory, always named by an explicit path: its own search
     // would climb to another project's (spec §10.2).

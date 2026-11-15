@@ -1,80 +1,94 @@
-//! Packs and plugins from git, pinned in `aae.lock` and checked out by `aae fetch` (spec §8.2, §11.6).
+//! Packs and plugins from git: the core loads them from the directories the caller downloaded them to (spec §8.2,
+//! §11.6).
 
-use super::config::{BASE, fails, load_with};
+use super::config::{BASE, fails};
+use crate::config::{Checkouts, Config, ConfigError, GitSource, git_sources, load_for};
+use std::{fs, path::Path};
 
-const PACK: &str = "1111111111111111111111111111111111111111";
-const PLUGIN: &str = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
-const CONFIG: &str =
-    "projects = [\"shop\"]\n[harness.claude]\n[[plugin]]\ngit = \"https://example.com/mail.git\"\nrev = \"v1\"\n";
+const KIT: &str = "https://example.com/kit.git";
+const MAIL: &str = "https://example.com/mail.git";
 
-/// BASE with the pack and the plugin declared from git; `fetched` adds their locks and checkouts.
-fn files(fetched: bool) -> Vec<(String, String)> {
-    let project = BASE[3].1.replace(
-        r#"packs = ["../kit"]"#,
-        r#"packs = [{ git = "https://example.com/kit.git", rev = "main" }]"#,
-    );
-    let mut files = vec![
-        ("config.toml".to_owned(), CONFIG.to_owned()),
-        ("shop/aae.toml".to_owned(), project),
-    ];
-    if fetched {
-        let lock = |git: &str, rev: &str, commit: &str| {
-            format!("[[source]]\ngit = \"https://example.com/{git}.git\"\nrev = \"{rev}\"\ncommit = \"{commit}\"\n")
+/// BASE with the pack and the plugin declared from git, their files moved to `dl/kit` and `dl/mail`.
+fn write(dir: &Path, project: &str) {
+    for (path, text) in BASE {
+        let path = (path.strip_prefix("kit/").map(|p| format!("dl/kit/{p}")))
+            .or_else(|| path.strip_prefix("plugins/mail/").map(|p| format!("dl/mail/{p}")))
+            .unwrap_or_else(|| path.to_string());
+        let text = match path.as_str() {
+            "config.toml" => text.replace("path = \"plugins/mail\"", &format!("git = \"{MAIL}\"\nrev = \"v1\"")),
+            "shop/aae.toml" => text.replace(r#"packs = ["../kit"]"#, project),
+            _ => text.to_string(),
         };
-        files.push(("aae.lock".to_owned(), lock("mail", "v1", PLUGIN)));
-        files.push(("shop/aae.lock".to_owned(), lock("kit", "main", PACK)));
-        for (path, text) in BASE {
-            let moved = (path.strip_prefix("kit/").map(|p| format!("shop/.aae/git/{PACK}/{p}"))).or_else(|| {
-                path.strip_prefix("plugins/mail/")
-                    .map(|p| format!(".aae/git/{PLUGIN}/{p}"))
-            });
-            files.extend(moved.map(|p| (p, text.to_string())));
-        }
-        files.push((format!("shop/.aae/git/{PACK}/.git/HEAD"), format!("{PACK}\n")));
-        files.push((format!(".aae/git/{PLUGIN}/.git/HEAD"), format!("{PLUGIN}\n")));
+        let path = dir.join(path);
+        fs::create_dir_all(path.parent().unwrap()).unwrap();
+        fs::write(path, text).unwrap();
     }
-    files
 }
 
-fn load(files: &[(String, String)]) -> Result<crate::config::Config, Vec<crate::config::ConfigError>> {
-    let changes: Vec<(&str, &str)> = files.iter().map(|(p, t)| (p.as_str(), t.as_str())).collect();
-    load_with(&changes)
+fn source(git: &str, rev: Option<&str>) -> GitSource {
+    GitSource {
+        git: git.to_owned(),
+        rev: rev.map(str::to_owned),
+    }
+}
+
+/// The config in `dir` with the pack `{ git = KIT }` and the plugin `MAIL` at `v1` where `found` says.
+fn load(dir: &Path, found: [Option<Result<&str, &str>>; 2]) -> Result<Config, Vec<ConfigError>> {
+    write(dir, &format!(r#"packs = [{{ git = "{KIT}" }}]"#));
+    let mut checkouts = Checkouts::new();
+    let sources = [source(KIT, None), source(MAIL, Some("v1"))];
+    for (s, f) in sources.into_iter().zip(found) {
+        if let Some(f) = f {
+            checkouts.insert(s, f.map(|d| dir.join(d)).map_err(str::to_owned));
+        }
+    }
+    load_for(&dir.join("config.toml"), &[], checkouts)
 }
 
 #[test]
-fn a_git_source_loads_from_its_pinned_checkout() {
-    let errors = load(&files(false)).expect_err("nothing is fetched");
-    let unfetched = errors
-        .iter()
-        .filter(|e| e.message.contains("is not fetched: run `aae fetch`"));
-    assert_eq!(unfetched.count(), 2, "the plugin and the pack: {errors:?}");
-
-    let config = load(&files(true)).unwrap();
-    assert!(config.plugins[0].root.ends_with(format!(".aae/git/{PLUGIN}")));
+fn a_git_source_loads_from_the_directory_it_was_downloaded_to() {
+    let dir = tempfile::tempdir().unwrap();
+    let d = dir.path();
+    let config = load(d, [Some(Ok("dl/kit")), Some(Ok("dl/mail"))]).unwrap();
+    assert_eq!(config.plugins[0].root, d.join("dl/mail"));
     let pack = &config.projects[0].packs[1];
-    assert_eq!(pack.name, "kit");
-    assert!(pack.root.ends_with(format!("shop/.aae/git/{PACK}")));
+    assert_eq!((pack.name.as_str(), &pack.root), ("kit", &d.join("dl/kit")));
     assert!(pack.formulas.contains_key("implement"));
+
+    let errors = load(d, [None, None]).expect_err("nothing is downloaded");
+    let missing = errors.iter().filter(|e| e.message.ends_with("is not downloaded"));
+    assert_eq!(missing.count(), 2, "the plugin and the pack: {errors:?}");
+
+    let errors = load(d, [Some(Err("boom")), Some(Ok("dl/mail"))]).expect_err("the pack failed to download");
+    let expected = format!("`{KIT}`: boom");
+    assert!(errors.iter().any(|e| e.message == expected), "{errors:?}");
 }
 
 #[test]
-fn a_pin_without_its_checkout_or_a_bad_lock_is_an_error() {
-    let mut no_checkout = files(true);
-    no_checkout.retain(|(p, _)| !p.starts_with(".aae/"));
-    let errors = load(&no_checkout).expect_err("the plugin is not checked out");
-    assert!(errors.iter().any(|e| {
-        e.message
-            .contains("`https://example.com/mail.git` at `v1` is not fetched")
-    }));
+fn a_plugin_from_git_must_be_pinned() {
+    fails(
+        &[("config.toml", "[[plugin]]\ngit = \"x\"\n")],
+        "a plugin from git needs `rev`",
+    );
+    let dir = tempfile::tempdir().unwrap();
+    let errors = load(dir.path(), [None, None]).expect_err("nothing is downloaded");
+    assert!(errors.iter().all(|e| !e.message.contains("needs `rev`")), "{errors:?}");
+}
 
-    let mut bad = files(true);
-    bad[2].1 = bad[2].1.replace(PLUGIN, "../../etc");
-    let errors = load(&bad).expect_err("a commit names a directory");
-    assert!(
-        errors
-            .iter()
-            .any(|e| e.message.contains("`../../etc` is not a full commit id")),
-        "{errors:?}"
+#[test]
+fn git_sources_names_every_declared_source() {
+    let dir = tempfile::tempdir().unwrap();
+    let d = dir.path();
+    write(d, &format!(r#"packs = [{{ git = "{KIT}" }}]"#));
+    let found = git_sources(&d.join("config.toml"));
+    assert_eq!(found, [source(KIT, None), source(MAIL, Some("v1"))].into());
+
+    fs::write(d.join("shop/aae.toml"), "packs = [").unwrap();
+    let found = git_sources(&d.join("config.toml"));
+    assert_eq!(
+        found,
+        [source(MAIL, Some("v1"))].into(),
+        "a broken project hides only its own"
     );
 }
 
@@ -88,7 +102,6 @@ fn a_plugin_has_a_path_or_a_git_source() {
         )],
         either,
     );
-    fails(&[("config.toml", "[[plugin]]\ngit = \"x\"\n")], either);
     fails(
         &[("config.toml", "[[plugin]]\npath = \"plugins/mail\"\nrev = \"v1\"\n")],
         either,
@@ -102,17 +115,4 @@ fn a_pack_with_an_unknown_key_says_what_a_pack_is() {
         r#"packs = [{ git = "x", rev = "main", extra = 1 }]"#,
     );
     fails(&[("shop/aae.toml", &project)], "a pack is a path or `{ git, rev }`");
-}
-
-#[test]
-fn a_checkout_moved_off_its_pin_is_an_error() {
-    let mut moved = files(true);
-    let head = moved
-        .iter_mut()
-        .find(|(p, _)| p.ends_with(&format!("{PACK}/.git/HEAD")))
-        .unwrap();
-    head.1 = "ref: refs/heads/main\n".to_owned();
-    let errors = load(&moved).expect_err("the pack checkout is not at its pin");
-    let expected = format!("HEAD is `ref: refs/heads/main`, not the pinned `{PACK}`");
-    assert!(errors.iter().any(|e| e.message.contains(&expected)), "{errors:?}");
 }

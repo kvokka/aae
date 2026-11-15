@@ -27,6 +27,8 @@ pub(super) struct Loader {
     pub(super) errors: Vec<ConfigError>,
     pub(super) harnesses: BTreeSet<String>,
     pub(super) adapters: &'static [&'static crate::driver::Adapter],
+    /// Where the git sources were downloaded to, by whoever loads the config.
+    pub(super) checkouts: super::Checkouts,
 }
 
 impl Loader {

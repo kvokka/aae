@@ -34,6 +34,8 @@ pub(crate) struct Paths {
     pub(crate) config: PathBuf,
     pub(crate) state: PathBuf,
     pub(crate) socket: PathBuf,
+    /// The packs and plugins downloaded from git.
+    pub(crate) cache: PathBuf,
     /// This binary, taken at start: once it is replaced on disk, Linux names the running one `<path> (deleted)`.
     pub(crate) exe: PathBuf,
 }
@@ -58,6 +60,7 @@ impl Paths {
             config,
             state: dirs::state()?,
             socket,
+            cache: dirs::cache()?,
             exe: std::env::current_exe().unwrap_or_else(|_| "aae".into()),
         })
     }
@@ -195,7 +198,8 @@ pub(crate) async fn run(paths: Paths) -> Result<bool, String> {
         load: Box::new({
             let paths = paths.clone();
             move || {
-                let mut loaded = load(&paths);
+                // git may take seconds, and reload and check call this from a handler.
+                let mut loaded = tokio::task::block_in_place(|| load(&paths));
                 if let Ok(config) = &mut loaded {
                     config.api_token.clone_from(&token);
                 }

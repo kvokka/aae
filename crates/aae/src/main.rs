@@ -3,10 +3,10 @@
 mod bridge;
 mod daemon;
 mod doctor;
-mod fetch;
+mod git_cache;
 mod harness;
 
-use aae_front::cli::{self, Cli, Command, ConfigCommand};
+use aae_front::cli::{self, CacheCommand, Cli, Command, ConfigCommand};
 use clap::Parser;
 use std::process::ExitCode;
 
@@ -28,10 +28,10 @@ fn main() -> ExitCode {
                 Err(e) => cli::fail(cli.json, "config_error", &format!("doctor: {e}")),
             };
         }
-        Command::Fetch { config, update } => {
-            return match daemon::Paths::resolve(config, cli.socket) {
-                Ok(paths) => fetch::run(&paths.config, update),
-                Err(e) => cli::fail(cli.json, "config_error", &format!("fetch: {e}")),
+        Command::Cache(CacheCommand::Clear) => {
+            return match aae_front::dirs::cache() {
+                Ok(dir) => git_cache::clear(&dir, cli.json),
+                Err(e) => cli::fail(cli.json, "config_error", &format!("cache clear: {e}")),
             };
         }
         Command::McpBridge { command, timeout } => {

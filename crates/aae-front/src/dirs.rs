@@ -16,6 +16,11 @@ pub fn state() -> Result<PathBuf, String> {
     Ok(xdg("XDG_STATE_HOME", ".local/state")?.join("aae"))
 }
 
+/// The packs and plugins downloaded from git.
+pub fn cache() -> Result<PathBuf, String> {
+    Ok(xdg("XDG_CACHE_HOME", ".cache")?.join("aae/git"))
+}
+
 /// The API socket: in `$XDG_RUNTIME_DIR/aae`, or in the state directory without one.
 pub fn socket() -> Result<PathBuf, String> {
     let runtime = std::env::var_os("XDG_RUNTIME_DIR")

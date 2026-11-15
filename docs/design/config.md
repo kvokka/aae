@@ -9,7 +9,10 @@ error in every file.
 ## Loading
 
 - The daemon loads everything at once from the orchestrator file: the projects it lists, their packs, agents,
-  formulas, triggers and the plugins they declare. A missing orchestrator file is an empty config.
+  formulas, triggers and the plugins they declare. A missing orchestrator file is an empty config. Before reading,
+  `aae` downloads the packs and plugins from git into its cache (see [below](#packs-and-plugins-from-git)), as do
+  `aae config check|explain`, `aae doctor` and `POST /v1/config/check`; the latest revision of an unpinned pack is
+  asked for at every load.
 - Load is all or nothing: every error found is reported with its file, and an invalid config is never applied.
   The daemon re-reads only on an explicit command: `aae config reload` (`POST /v1/config/reload`); on
   error the previous config stays in force, and `aae config check` reports the errors without applying anything
@@ -290,7 +293,8 @@ error. A reload applies to the deadlines set from then on: a deadline already se
 name = "shop"                       # optional, defaults to the directory name; unique among projects
 packs = [
   "../packs/kit",                    # a local pack directory
-  { git = "https://github.com/acme/aae-pack-review", rev = "v1.2.0" },  # a pack from git: branch, tag or commit
+  { git = "https://github.com/acme/aae-pack-review", rev = "v1.2.0" },  # pinned to a tag or a full commit id
+  { git = "https://github.com/acme/aae-pack-tools" },  # no pin: the latest revision of the default branch
 ]
 
 [[plugin]]
@@ -322,34 +326,48 @@ rig = "backend"
 The project root is itself a pack named after the project: `agents/` and `formulas/` next to `aae.toml` belong to
 it, and its triggers are the `[[trigger]]` of `aae.toml`.
 
-### Packs and plugins from git: `aae.lock` and `aae fetch`
+### Packs and plugins from git
 
 A pack in `packs` and a `[[plugin]]` (in the orchestrator file or a project's) is a local directory, or a git
-repository with `pack.toml` / `plugin.toml` at its root: `{ git = "<url>", rev = "<branch|tag|commit>" }` for a pack,
-`git = ".."` and `rev = ".."` instead of `path` for a plugin (exactly one of `path` and `git`; `rev` goes with `git`).
+repository with `pack.toml` / `plugin.toml` at its root: `{ git = "<url>", rev = "<tag or commit>" }` for a pack,
+`git = ".."` and `rev = ".."` instead of `path` for a plugin (exactly one of `path` and `git`).
 
-`aae fetch [--config <file>] [--update]` runs without a daemon. For every git source of the orchestrator file and
-its projects' `aae.toml` it pins the revision to a commit in `aae.lock`, next to the file that declares the source,
-and checks that commit out (detached) in `.aae/git/<commit>/` next to it:
+- `rev` is a full commit id (40 or 64 lowercase hex digits) or the name of a tag, looked up only as
+  `refs/tags/<rev>`: a branch or a short commit id is a config error ("no tag ... in the repository").
+- A pack without `rev` follows the latest revision: the remote's `HEAD`, the tip of its default branch, asked for at
+  every load of the config. A plugin must be pinned: a `[[plugin]]` from git without `rev` is a config error.
 
-```toml
-[[source]]
-git = "https://github.com/acme/aae-pack-review"
-rev = "v1.2.0"                      # as written in the config
-commit = "4f1c…"                    # the full commit id it named when fetched
-```
+Whoever loads the config downloads first: the daemon at start and at `aae config reload`, `aae config check|explain`,
+`aae doctor` and `POST /v1/config/check`. The core reads only the finished directories and never runs git. The cache
+is one per user, `$XDG_CACHE_HOME/aae/git` (`~/.cache/aae/git` without it):
 
-A pinned source keeps its commit; only `--update` resolves the revision again. Pins of sources no longer declared
-are dropped. It prints `<url> <rev> -> <commit> (fetched|kept|updated)` per source and exits non-zero when any
-source fails (that source keeps its old pin). Loading the config never runs git and never moves a pin, so there are
-no automatic updates: a git source with no pin in `aae.lock`, or with no checkout of its pin, is a config error that
-says to run `aae fetch`. A checkout whose `.git/HEAD` is not its pinned commit (someone checked out another
-revision in it) is an error too: remove the directory and run `aae fetch`. Edits to the files of a checkout are not
-detected. Commit `aae.lock` with the project; `.aae/` is a cache to ignore.
+- `<cache>/<url>/<commit>/` is a detached checkout of the commit, never changed once in place;
+- `<cache>/<url>/tag-<tag>` names the commit a tag pointed at when it was downloaded;
+- `<cache>/<url>/head` names the commit of the latest revision last seen.
+
+The url and the tag are written as one file name: letters, digits, `_`, `-` and `.` (not first) as they are, any
+other byte as `%XX`. Something not in the cache is cloned in full into a temporary directory next to its place,
+checked out detached at its commit and renamed into place. The network:
+
+- a commit whose checkout is in the cache: git is not run at all;
+- a tag the cache names, with its checkout there: git is not run either. Tags are taken as immutable: a tag moved on
+  the remote is not seen until the cache is cleared;
+- no pin: `git ls-remote <url> HEAD` at every load; a commit already in the cache is used as is, any other is cloned.
+  When the remote cannot be asked (any failure of `ls-remote`) and the cache names a last seen revision, that
+  checkout is used with a warning on the stderr of the process that loaded the config (the daemon's log, the output
+  of `aae config check`); with none, it is a config error.
+
+`aae cache clear` runs without a daemon and removes the whole cache; the next load downloads everything again. A
+running daemon keeps reading the removed directories until `aae config reload`, so reload right after clearing.
+
+There is no lock file and no command that pins: a pin is only what the config writes in `rev`. Edits to the files
+of a checkout in the cache are not detected. git must be in `PATH`; access to the remote (ssh keys, credential
+helpers) is git's own, and git never asks for a password (`GIT_TERMINAL_PROMPT=0`). Each git command is killed after
+30 s, which fails the load that ran it.
 
 A plugin runs any command with the user's rights, so nothing installs or enables one implicitly: its orchestrator
 side runs only once a `[[plugin]]` declares it, its agent side only for the agents that attach it in `plugins`, and a
-plugin from git runs only at the commit pinned in `aae.lock`.
+plugin from git runs only at the tag or commit its declaration pins.
 
 ## Pack: `<pack>/pack.toml`
 
