@@ -205,8 +205,9 @@ impl<M: Send + 'static> CoreHandle<M> {
     }
 }
 
-/// Starts the writer on `conn` (opened by `store::open`). It stops when every handle is dropped. `executor` is built
-/// from a handle of its own before the writer runs.
+/// Starts the writer on `conn` (opened by `store::open`). `executor` is built from a handle of its own before the
+/// writer runs. The writer stops on an error or once every handle is dropped; the executor lives as long as the writer,
+/// so one that keeps its handle keeps the writer running until an error or the runtime's shutdown.
 pub fn start<H: Handler, E: Executor>(
     conn: Connection,
     clock: Clock,

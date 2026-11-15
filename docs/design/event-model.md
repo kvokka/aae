@@ -24,7 +24,9 @@ all of them share.
 
 - One SQLite database, `$XDG_STATE_HOME/aae/state.db`, in WAL mode; SQLite is linked statically (rusqlite
   `bundled`). The daemon is its only writer (`crates/aae-core/src/store.rs` opens it, the writer changes it). The CLI,
-  plugins and agents change the state only through the API.
+  plugins and agents change the state only through the API. A lock held by another connection is waited out for
+  5 s (`BUSY` in `store.rs`), then the statement fails: a journal drain is retried with backoff, a message fails
+  back to its sender, and any other write stops the core.
 - The state holds runtime only: runs, attempts, session references, harness instances (the process part and the handle:
   pid, start time, pgid), bead ownership with its generation and failure count, ready sets and tracker cursors,
   deadlines (timers and schedules), gates (operator holds among them), idempotency keys, the outbox and the effects
