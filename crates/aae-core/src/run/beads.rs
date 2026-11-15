@@ -39,24 +39,37 @@ impl RunHandler {
                 "a bead input is a bead id, `{ next_ready = true, epic = <id> }` or `{ request = \"<text>\" }`",
             ));
         }
-        let epic = input["epic"].as_str();
+        Ok(Self::ready_in(tx, project, input["epic"].as_str(), Some(rig))?
+            .into_iter()
+            .next())
+    }
+
+    /// The ready beads, in the tracker's order, that are in `epic`, belong to `rig` (or to no rig), have no owner
+    /// and no closed gate; `None` takes any epic, or any rig.
+    pub(super) fn ready_in(
+        tx: &Tx<'_>,
+        project: &str,
+        epic: Option<&str>,
+        rig: Option<&str>,
+    ) -> Result<Vec<String>, Error> {
         let mut stmt = tx.sql().prepare(
             "SELECT r.id, r.body FROM ready_beads r WHERE r.project = ?1 AND NOT EXISTS \
              (SELECT 1 FROM beads b WHERE b.project = r.project AND b.id = r.id AND b.owner IS NOT \
              NULL) ORDER BY r.pos",
         )?;
         let ready = stmt.query_map([project], |r| Ok((r.get::<_, String>(0)?, r.get::<_, Value>(1)?)))?;
+        let mut found = Vec::new();
         for bead in ready {
             let (id, body) = bead?;
-            if epic.is_some_and(|e| body["epic"] != e) || other_rig(&body, rig) {
+            if epic.is_some_and(|e| body["epic"] != e) || rig.is_some_and(|r| other_rig(&body, r)) {
                 continue;
             }
             let key = [format!("bead:{project}/{id}")];
             if super::gates::closures(tx.sql(), tx.now_ms(), Some(&key))?.is_empty() {
-                return Ok(Some(id));
+                found.push(id);
             }
         }
-        Ok(None)
+        Ok(found)
     }
 
     /// The rig of a start that names none: the one `rig:` label of the bead `id` an input names. Only a bead of the
@@ -232,14 +245,18 @@ impl RunHandler {
             "UPDATE beads SET owner = NULL WHERE project = ?1 AND id = ?2 AND owner = ?3",
             params![row.project, bead, row.id],
         )? > 0;
-        // The claim was asked for once the run prepared; a refused claim has already dropped the ownership.
+        let key = tracker_key(&row.project);
+        // The claim was asked for once the run prepared; a refused claim has already dropped the ownership. A drain
+        // over the bead learns of the end of its run from the next read all the same.
         if row.started_ms.is_none() || !owned {
-            return Ok(());
+            return match row.parent_run {
+                Some(_) => tx.effect(&key, &format!("sync:end:{}", row.id), &sync(tx, &row.project)?),
+                None => Ok(()),
+            };
         }
         let call = if state == "passed" { "close" } else { "release" };
         let payload = json!({ "op": "tracker", "call": call, "project": row.project, "bead": bead, "run": row.id,
             "reason": format!("{state}: {reason}") });
-        let key = tracker_key(&row.project);
         tx.effect(&key, &format!("{call}:{}", row.id), &payload)?;
         tx.effect(&key, &format!("sync:{call}:{}", row.id), &sync(tx, &row.project)?)?;
         let failures = match state {
@@ -301,7 +318,7 @@ pub(super) fn tracker_key(project: &str) -> String {
 }
 
 /// Reads the tracker's writes after the project's cursor, then its ready set.
-fn sync(tx: &Tx<'_>, project: &str) -> Result<Value, Error> {
+pub(super) fn sync(tx: &Tx<'_>, project: &str) -> Result<Value, Error> {
     let after: Option<i64> = tx
         .sql()
         .query_row("SELECT seq FROM tracker_cursors WHERE project = ?1", [project], |r| {

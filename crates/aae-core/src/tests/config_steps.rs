@@ -63,3 +63,39 @@ fn bad_steps_are_errors() {
     let errors = load_with(&[(FLOW, &twice)]).unwrap_err();
     assert_eq!(errors.len(), 1, "one error for one cause: {errors:?}");
 }
+
+/// A drain step names the formula of its runs: one that takes the bead and needs nothing else; its own formula
+/// takes the bead the beads are under.
+#[test]
+fn a_drain_step_names_a_formula_that_takes_one_bead() {
+    let ship = |inputs: &str, each: &str| {
+        format!(
+            "name = \"flow\"\n[inputs]\n{inputs}\n[[step]]\nname = \"all\"\nkind = \"drain\"\nformula = \"{each}\"\n"
+        )
+    };
+    let bead = "root = { type = \"bead\", required = true }";
+    let config = load_with(&[(FLOW, &ship(bead, "implement"))]).unwrap();
+    let step = &config.projects[0].packs[1].formulas["flow"].steps[0];
+    let crate::config::StepKind::Drain { formula, timeout: None } = &step.kind else {
+        panic!("{step:?}");
+    };
+    assert_eq!(
+        (formula.to_string().as_str(), step.kind.name()),
+        ("kit.implement", "drain")
+    );
+    fails(&[(FLOW, &ship(bead, "nothing"))], "step `all`: no formula `nothing`");
+    fails(
+        &[(FLOW, &ship(bead, "audit"))],
+        "`kit.audit` needs exactly one input of type `bead`",
+    );
+    let two = "name = \"two\"\n[inputs]\nbead = { type = \"bead\" }\nwhy = { type = \"string\", required = true }\n\
+               [[step]]\nkind = \"exec\"\ncommand = [\"true\"]\n";
+    fails(
+        &[(FLOW, &ship(bead, "two")), ("kit/formulas/two.toml", two)],
+        "`kit.two` requires input `why`",
+    );
+    fails(
+        &[(FLOW, &ship("root = { type = \"bead\" }", "implement"))],
+        "a formula with a `drain` step needs a required input of type `bead`",
+    );
+}

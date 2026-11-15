@@ -3,7 +3,7 @@
 //! on a deciding event goes on waiting for it, its hooks run again with their full time. Effects and the outbox are
 //! in the state, so they carry on by themselves; schedules are armed after this.
 
-use super::{RunHandler, decide::DECIDE_SLACK_MS, row::Row};
+use super::{RunHandler, decide::DECIDE_SLACK_MS, drain::DRAINING, row::Row};
 use crate::{
     driver::{Failure, FailureKind, Source},
     writer::{Error, Event, Tx},
@@ -37,12 +37,12 @@ impl RunHandler {
             crate::orphans::sweep_all(&hooks);
         }
         // A run whose turn ended waits for the decision on it (`waiting`) and keeps waiting; the others had an attempt
-        // going, which is lost.
+        // going, which is lost — but for a drain step's, which has no process: it goes on with the next read.
         let caught: Vec<(String, bool)> = {
-            let mut stmt = tx.sql().prepare(
+            let mut stmt = tx.sql().prepare(&format!(
                 "SELECT id, state IN ('running', 'finishing') AND waiting IS NOT NULL FROM runs \
-                 WHERE state IN ('starting', 'running', 'requires_action', 'finishing') ORDER BY n",
-            )?;
+                 WHERE state IN ('starting', 'running', 'requires_action', 'finishing') AND NOT {DRAINING} ORDER BY n"
+            ))?;
             let rows = stmt.query_map([], |r| Ok((r.get(0)?, r.get(1)?)))?;
             rows.collect::<Result<_, _>>()?
         };

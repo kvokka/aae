@@ -114,10 +114,10 @@ impl RunHandler {
             json!({ "run": row.view(), "outcome": outcome }),
         )?;
         tx.sql().execute(
-            "UPDATE runs SET step = ?2, agent = ?3 WHERE id = ?1",
-            params![row.id, next.name, agent],
+            "UPDATE runs SET step = ?2, agent = ?3, step_kind = ?4 WHERE id = ?1",
+            params![row.id, next.name, agent, next.kind.name()],
         )?;
-        (row.step, row.agent) = (next.name, agent);
+        (row.step, row.agent, row.step_kind) = (next.name, agent, next.kind.name().to_owned());
         row.set_state(tx, "preparing", None)?;
         self.render_and_prepare(tx, row)
     }

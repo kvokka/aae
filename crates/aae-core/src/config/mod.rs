@@ -214,6 +214,19 @@ pub enum StepKind {
         command: Vec<String>,
         timeout: Option<Duration>,
     },
+    /// Every ready bead under the run's bead gets a run of `formula` (spec §9.1, §10.1).
+    Drain { formula: Name, timeout: Option<Duration> },
+}
+
+impl StepKind {
+    /// `prompt`, `exec` or `drain`, as the state and the API name the kind.
+    pub fn name(&self) -> &'static str {
+        match self {
+            Self::Prompt { .. } => "prompt",
+            Self::Exec { .. } => "exec",
+            Self::Drain { .. } => "drain",
+        }
+    }
 }
 
 #[derive(Clone, Debug)]

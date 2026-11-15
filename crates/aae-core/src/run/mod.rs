@@ -173,7 +173,7 @@ impl Handler for RunHandler {
                 project,
                 beads,
                 changes,
-            } => Self::ready(tx, &project, &beads, &changes),
+            } => Self::ready(tx, &project, &beads, &changes).and_then(|()| self.drained(tx, &project)),
             Msg::TrackerChanged(project) => self.sync_trackers(tx, Some(&project), "changed"),
             Msg::Reload(config) => return self.reload(tx, config),
             Msg::Stopping { reason } => return self.stopping(tx, reason),

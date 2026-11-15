@@ -109,7 +109,9 @@ impl Loader {
         }
         for (at, step) in raw.step.into_iter().enumerate() {
             let name = match &step {
-                StepFile::Prompt { name, .. } | StepFile::Exec { name, .. } => name.clone(),
+                StepFile::Prompt { name, .. } | StepFile::Exec { name, .. } | StepFile::Drain { name, .. } => {
+                    name.clone()
+                }
             };
             let name = name.unwrap_or_else(|| (at + 1).to_string());
             self.name(file, "step", &name);
@@ -121,6 +123,14 @@ impl Loader {
             }
             let kind = self.step(file, &raw.inputs, &steps, step)?;
             steps.push(Step { name, kind });
+        }
+        // The bead a drain step gives out beads under (spec §9.1).
+        let drains = steps.iter().any(|s| matches!(s.kind, StepKind::Drain { .. }));
+        if drains && !raw.inputs.values().any(|i| i.kind == InputType::Bead && i.required) {
+            self.fail(
+                file,
+                "a formula with a `drain` step needs a required input of type `bead`",
+            );
         }
         if steps.iter().any(|s| matches!(s.kind, StepKind::Exec { .. })) {
             let mut seen = BTreeMap::new();
@@ -195,6 +205,10 @@ impl Loader {
                     timeout: self.timeout(file, timeout.as_deref()),
                 }
             }
+            StepFile::Drain { formula, timeout, .. } => StepKind::Drain {
+                formula: reference(&formula),
+                timeout: self.timeout(file, timeout.as_deref()),
+            },
         })
     }
 

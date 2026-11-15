@@ -16,9 +16,9 @@ pub(crate) struct Run {
     formula: String,
     /// The step of the formula the run is at (spec §9.1); `agent` and `step_kind` are of it.
     step: String,
-    /// Absent for an exec step.
+    /// Absent for an exec or a drain step.
     agent: Option<String>,
-    /// `prompt` or `exec`.
+    /// `prompt`, `exec` or `drain`.
     step_kind: String,
     state: String,
     /// Set once `failed`: `agent`, `check`, `hollow_done` or `infrastructure`.
@@ -187,9 +187,9 @@ pub(crate) struct Explained {
 #[derive(ToSchema)]
 pub(crate) struct ExplainedStep {
     step: String,
-    /// `prompt` or `exec`.
+    /// `prompt`, `exec` or `drain`.
     kind: String,
-    /// The pack agent or the rig's variant a prompt step runs; null for an exec step.
+    /// The pack agent or the rig's variant a prompt step runs; null for another kind.
     agent: Option<String>,
 }
 

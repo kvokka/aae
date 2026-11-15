@@ -28,11 +28,25 @@ pub(super) fn project(loader: &mut Loader, project: &mut Project, variants: &BTr
         });
         for (name, formula) in &mut pack.formulas {
             for step in &mut formula.steps {
-                if let StepKind::Prompt { agent, .. } = &mut step.kind {
-                    match resolve(&index, &own, agent, has_agent, "agent") {
+                match &mut step.kind {
+                    StepKind::Prompt { agent, .. } => match resolve(&index, &own, agent, has_agent, "agent") {
                         Ok(found) => *agent = found,
                         Err(e) => loader.fail(&manifest, format!("formula `{name}`: {e}")),
+                    },
+                    StepKind::Drain { formula: run, .. } => {
+                        let what = format!("formula `{name}`, step `{}`", step.name);
+                        match resolve(&index, &own, run, has_formula, "formula") {
+                            Ok(found) => {
+                                let pack = index.iter().find(|p| p.name == found.pack).expect("resolved");
+                                if let Err(e) = executor(&pack.formulas[&found.name]) {
+                                    loader.fail(&manifest, format!("{what}: `{found}` {e}"));
+                                }
+                                *run = found;
+                            }
+                            Err(e) => loader.fail(&manifest, format!("{what}: {e}")),
+                        }
                     }
+                    StepKind::Exec { .. } => {}
                 }
             }
         }
@@ -157,6 +171,23 @@ pub(super) fn resolve(
                 forms.join(", ")
             ))
         }
+    }
+}
+
+/// A formula a drain step runs takes the bead and nothing else it needs: one input of type `bead`, no other
+/// required one (spec §9.1).
+fn executor(formula: &super::Formula) -> Result<(), String> {
+    let beads = formula.inputs.iter().filter(|(_, i)| i.kind == super::InputType::Bead);
+    if beads.count() != 1 {
+        return Err("needs exactly one input of type `bead` to run a drained bead".to_owned());
+    }
+    match formula
+        .inputs
+        .iter()
+        .find(|(_, i)| i.required && i.kind != super::InputType::Bead)
+    {
+        Some((input, _)) => Err(format!("requires input `{input}` that a drain step does not give")),
+        None => Ok(()),
     }
 }
 

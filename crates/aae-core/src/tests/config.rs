@@ -162,7 +162,7 @@ fn a_valid_config_loads_with_every_reference_resolved() {
             assert_eq!(*agent, name("kit", "implementer"));
             assert_eq!(*timeout, Some(Duration::from_secs(45 * 60)));
         }
-        StepKind::Exec { .. } => panic!("implement is a prompt step"),
+        _ => panic!("implement is a prompt step"),
     }
     assert!(
         matches!(&kit.formulas["audit"].steps[0].kind, StepKind::Exec { command, timeout: None } if command.len() == 3)
@@ -213,7 +213,7 @@ fn a_bare_name_prefers_the_own_pack() {
     let config = load_with(&[own]).unwrap();
     match &config.projects[0].packs[1].formulas["implement"].steps[0].kind {
         StepKind::Prompt { agent, .. } => assert_eq!(*agent, name("kit", "implementer")),
-        StepKind::Exec { .. } => panic!("implement is a prompt step"),
+        _ => panic!("implement is a prompt step"),
     }
 }
 

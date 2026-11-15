@@ -66,9 +66,9 @@ elsewhere `run` is the envelope's run id. Examples: `bead.labels` and `bead.epic
 
 Shared objects:
 
-- `RunView`: `{id, formula, step, agent, step_kind: "prompt"|"exec", state, class, attempt, generation, bead, workdir,
+- `RunView`: `{id, formula, step, agent, step_kind: "prompt"|"exec"|"drain", state, class, attempt, generation, bead, workdir,
   depth, parent_run, created_at, started_at}`. `step` is the name of the formula step the run is at (6.1); `agent` and
-  `step_kind` are of that step, `agent` is null for `exec` steps, `class` is null until `failed`, `bead` is the
+  `step_kind` are of that step, `agent` is null for `exec` and `drain` steps, `class` is null until `failed`, `bead` is the
   bead id or null, `depth` is the chain depth of §6.1 (0 for a run started by hand), `parent_run` the run whose event
   triggered it or whose session started it. The read API (`GET /v1/runs/{id}`, `aae run show`) gives the `RunView` with
   `project`, `rig`, `correlation`, `inputs`, `waiting_for`, `outcome`, `attempts`, `usage` (`{input_tokens,
@@ -571,7 +571,7 @@ core sets the actor of an exec step and hands that of a session to the adapter i
 | `queued` | not started: waits for a concurrency slot, a free workdir or an open gate; the reason is visible (`run.queued`) | `queue_timeout` 7 d | `failed{infrastructure, queue_timeout}` |
 | `preparing` | the bead claim confirmed, `run.preparing` hooks running, workdir and environment being fixed, snapshot of the effective config written | `start_timeout` for the claim, then the hook deadline (see 3.3) | the hooks count as failed → deny → `failed{check, hook_deadline}` |
 | `starting` | an attempt: instance acquired, session started or resumed, first prompt sent, waiting for `prompt.acked` | `start_timeout` 120 s | attempt failure `stall` |
-| `running` | the agent works (or the `exec` command runs) | step `timeout` of the formula (default 45 m) per attempt → `runaway_turn`; silence budgets (an announced `retrying` pause adds to the limit): first event after ack 5 min, model thinking 5 min, tool running 10 min, background work after the turn 30 min → `stall` | attempt failure |
+| `running` | the agent works (or the `exec` command runs, or the `drain` step gives out beads) | step `timeout` of the formula (default 45 m; `drain` 24 h) per attempt → `runaway_turn`; silence budgets (an announced `retrying` pause adds to the limit): first event after ack 5 min, model thinking 5 min, tool running 10 min, background work after the turn 30 min → `stall` | attempt failure |
 | `requires_action` | waits for an answer to a permission request or question; not silence; the step `timeout` of `running` pauses here and resumes with the time it had left | `human_timeout` 1 h | answer `deny`, back to `running` |
 | `finishing` | outcome declared and the session idle without background; `run.finishing` hooks running | hook deadline | the hooks count as failed → veto → `failed{check, hook_deadline}` (a declared `fail` stays `failed{agent}`) |
 | `interrupted` | the current attempt ended with a failure (or by a daemon restart); `run.attempt_failed` is deciding | hook deadline, then the decision's `after` | no decision → `failed{infrastructure}` |
@@ -626,7 +626,7 @@ of the parent leaves them alone.
 | From | On | To | Effects after commit |
 |---|---|---|---|
 | — | create (API, CLI, MCP, trigger) with an idempotency key | `queued` | — (with a bead input the run is recorded as the bead's owner in this transaction, invariant 3: a bead another live run holds refuses; `{ next_ready = true, epic }` takes the first bead of the last ready set, in the tracker's order, that is in the epic, of the run's rig or of no rig, without an owner and without a closed gate; none → the reply `{"nothing_ready": true}`, for a trigger `trigger.skipped{nothing_ready}`; the input then holds the bead id) |
-| — | create with `continue_from: <run>` (a terminal run with a session; a session is never reused implicitly) | `queued` | in the workdir of that run; the first attempt resumes that run's last session with the formula prompt; a later `resume` uses the run's own session, or that one while it has none; a harness other than the agent's → `failed{infrastructure}`. Only the first step continues that session: a formula whose first step is `exec` cannot be continued, and the later steps start sessions of their own |
+| — | create with `continue_from: <run>` (a terminal run with a session; a session is never reused implicitly) | `queued` | in the workdir of that run; the first attempt resumes that run's last session with the formula prompt; a later `resume` uses the run's own session, or that one while it has none; a harness other than the agent's → `failed{infrastructure}`. Only the first step continues that session: a formula whose first step is not `prompt` cannot be continued, and the later steps start sessions of their own |
 | `queued` | slot free, workdir free, no gate of the run closed | `preparing` | with a request: the tracker creates the root bead (`create`, key kept in the effect), the run owns it and its input takes the id; with a bead: the tracker claim as owner `aae:<run>` (queue `tracker:<project>`), and the prompt renders once the claim returned the bead; `run.preparing` hooks |
 | `preparing` | decision `proceed` (or no hooks) | `starting` | attempt 1: instance acquire, `start_session`, `send_prompt` |
 | `preparing` | `deny`, template error, claim error `Claimed` / `NotFound` / `Invalid`, `create` error other than `Unavailable`, no claim or `create` answer within `start_timeout` | `failed{check}`, `failed{infrastructure}`, `failed{infrastructure, bead_claimed / bead_not_found / bead_invalid}`, `failed{infrastructure, bead_not_created: <error>}`, `failed{infrastructure, tracker_unavailable}` | — |
@@ -637,10 +637,13 @@ of the parent leaves them alone.
 | `running` | turn ended, idle without background, no outcome | `running` | `run.turn_ended_without_outcome` hooks; `continue` → next prompt in the same attempt; `fail` or no decision → `failed{hollow_done}` (with the hook reason for `fail`) |
 | `preparing` (exec) | decision `proceed` (or no hooks) | `running` (no session to start: the command is spawned at once) | the command runs in the workdir with `PATH`, `HOME`, `LANG` of the daemon, the `env` of `run.preparing`, `AAE_INPUT_<NAME>` per input and, per earlier step, `AAE_STEP_<NAME>_RESULT` (`pass`\|`fail`), `AAE_STEP_<NAME>_SUMMARY` and `AAE_STEP_<NAME>_DATA` (the `data` as JSON, when there is one); `<NAME>` is formed as for inputs (config.md, "Formula") |
 | `running` (exec) | exit 0 / other code or a signal | `finishing` with outcome `pass` / `fail`, `summary` `exit <code>` or `signal <n>`, `data` `{exit_code, stdout, stderr}` (last 4 KiB each) | `run.finishing` hooks |
+| `preparing` (drain) | decision `proceed` (or no hooks) | `running` (an attempt with no process, `harness = drain`) | a read of the tracker; the config snapshot is `{drain: <formula>}` |
+| `running` (drain) | a read of the tracker (`Ready`) | `running` | each ready bead under the run's bead not given in this attempt: the create of the first row with the bead as input, no rig, the run's correlation, `depth + 1`, `parent_run` the run (a refusal leaves the bead without a run); a run in a drain step holds no concurrency slot and does not hold its workdir from its children |
+| `running` (drain) | a read that gave nothing, with no child alive and no later read queued | `finishing` with outcome `pass`, `summary` `<n> closed, <n> failed, <n> refused`, `data` `{closed, failed, refused: {<bead>: <reason>}}` of this attempt's beads | `run.finishing` hooks |
 | `running` (exec) | exit 75 / timeout / spawn error | `interrupted` with failure `unknown` (`text` `exit 75 (EX_TEMPFAIL)`, scope `run`) / `runaway_turn` / `workspace_failure` | `run.attempt_failed` hooks; every attempt runs the command again |
 | `starting`, `running`, `requires_action` | `failure`, `exited`, deadline, exec exit 75 | `interrupted` | stop the session (cancel, then stop the instance if it is the session's own, then sweep descendants); `run.attempt_failed` hooks |
 | `finishing` | accept of a `pass` of a step that is not the last | `preparing` of the next step | `run.step_finished`; the next step's prompt renders (the workdir and the bead claim stay) and its `run.preparing` hooks run |
-| `finishing` | accept / veto / remark | `passed` or `failed{agent}` / `failed{check}` / `running` | bead close or conditional release; on remark the message goes as the next prompt of the same attempt, the declared outcome is cleared, the token stays valid. A remark for an exec step is not allowed (hook failure) |
+| `finishing` | accept / veto / remark | `passed` or `failed{agent}` / `failed{check}` / `running` | bead close or conditional release; on remark the message goes as the next prompt of the same attempt, the declared outcome is cleared, the token stays valid. A remark for an exec or a drain step is not allowed (hook failure) |
 | `interrupted` | `resume` / `new_session` | `starting` after `after` | new attempt: `generation + 1`, new token; `resume` first checks the transcript (invariant 17), `Missing` → attempt failure `transcript_divergence` |
 | `interrupted` | `park` | `parked` | gate closed in the same transaction |
 | `interrupted` | `fail`, no decision, attempts ceiling | `failed{infrastructure}` | gate closed if the decision carries one |
@@ -710,7 +713,8 @@ for it is not.
   it started, so a hook the dead daemon left running does not outlive it. A hook process is killed with SIGKILL
   without waiting for its death, so the hook that runs again may start before the old process is gone: hooks must
   be idempotent (spec §11.3). Runs with a live attempt — `starting`, `running` in a turn, `requires_action` — →
-  `interrupted` with `daemon_crash`, the launches, prompts, answers and deciding hooks they still had queued
+  `interrupted` with `daemon_crash` (not a `drain` attempt: it has no process, stays `running` and goes on with the
+  next read of the tracker, the beads it gave out still counted), the launches, prompts, answers and deciding hooks they still had queued
   dropped, and the command of an exec step killed by its `AAE_INSTANCE` marker (random per attempt) before any
   later attempt runs it. A run that waits for a decision on a deciding event keeps its state and waits for the
   same decision (3.4): `preparing`, `interrupted` waiting for the policy, `finishing`, and `running` after a turn

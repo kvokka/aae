@@ -36,10 +36,13 @@ pub(super) struct Row {
     pub(super) bead_data: Option<String>,
     /// The agent of every prompt step, as the `agent:` label of the bead names it; `None`: each step's own.
     pub(super) as_agent: Option<String>,
+    /// `prompt`, `exec` or `drain`: the kind of `step`.
+    pub(super) step_kind: String,
 }
 
 const COLUMNS: &str = "id, project, rig, formula, agent, inputs, correlation, depth, parent_run, workdir, state, \
-    class, attempt, prompt, timeout_ms, config, next, created_ms, started_ms, bead, bead_data, step, as_agent";
+    class, attempt, prompt, timeout_ms, config, next, created_ms, started_ms, bead, bead_data, step, as_agent, \
+    step_kind";
 
 impl Row {
     pub(super) fn load(tx: &Tx<'_>, run: &str) -> Result<Self, Error> {
@@ -73,6 +76,7 @@ impl Row {
                 bead_data: r.get(20)?,
                 step: r.get(21)?,
                 as_agent: r.get(22)?,
+                step_kind: r.get(23)?,
             })
         })
         .optional()
@@ -82,20 +86,16 @@ impl Row {
         !matches!(self.state.as_str(), "passed" | "failed" | "cancelled")
     }
 
-    /// A run of an exec step: it has no agent.
+    /// A run of an exec or a drain step: it has no agent.
     pub(super) fn exec(&self) -> bool {
         self.agent.is_empty()
     }
 
     /// `RunView` of contracts 1.3; the generation is the attempt number.
     pub(super) fn view(&self) -> Value {
-        let (agent, step_kind) = if self.exec() {
-            (None, "exec")
-        } else {
-            (Some(&self.agent), "prompt")
-        };
+        let agent = (!self.exec()).then_some(&self.agent);
         json!({
-            "id": self.id, "formula": self.formula, "step": self.step, "agent": agent, "step_kind": step_kind,
+            "id": self.id, "formula": self.formula, "step": self.step, "agent": agent, "step_kind": self.step_kind,
             "state": self.state, "class": self.class, "attempt": self.attempt, "generation": self.attempt,
             "bead": self.bead, "workdir": self.workdir, "depth": self.depth, "parent_run": self.parent_run,
             "created_at": rfc3339_ms(self.created_ms), "started_at": self.started_ms.map(rfc3339_ms),

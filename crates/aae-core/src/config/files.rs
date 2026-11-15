@@ -369,6 +369,11 @@ pub(super) enum StepFile {
         command: Vec<String>,
         timeout: Option<String>,
     },
+    Drain {
+        name: Option<String>,
+        formula: String,
+        timeout: Option<String>,
+    },
 }
 
 #[derive(Debug, Deserialize)]

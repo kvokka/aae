@@ -1,7 +1,9 @@
 //! Creation and the queue (spec §9.3, docs/design/contracts.md 6.1–6.2): a run waits in `queued` for a free
 //! workdir and a concurrency slot, then leaves for `preparing`, oldest first.
 
-use super::{Create, RunHandler, events::attempt_live, rejected, row::Row, token_sha256, triggers::MAX_DEPTH};
+use super::{
+    Create, RunHandler, drain::DRAINING, events::attempt_live, rejected, row::Row, token_sha256, triggers::MAX_DEPTH,
+};
 use crate::{
     config::{InputType, Step, StepKind},
     writer::{Error, Tx},
@@ -26,7 +28,7 @@ impl RunHandler {
                 let (agent, config) = self.config.for_run_as(project, rig, formula, &step.name, as_agent)?;
                 Ok((agent, config.model_key()))
             }
-            StepKind::Exec { .. } => Ok((String::new(), None)),
+            StepKind::Exec { .. } | StepKind::Drain { .. } => Ok((String::new(), None)),
         }
     }
 
@@ -48,9 +50,10 @@ impl RunHandler {
         let rig = project.rigs.get(&rig_name);
         let rig = rig.ok_or_else(|| rejected(format!("no rig `{rig_name}` in `{}`", c.project)))?;
         let first = &formula.steps[0];
-        if c.continue_from.is_some() && matches!(first.kind, StepKind::Exec { .. }) {
+        if c.continue_from.is_some() && !matches!(first.kind, StepKind::Prompt { .. }) {
             return Err(rejected(format!(
-                "`{name}` starts with an exec step: it has no session to continue"
+                "`{name}` starts with a step of kind `{}`: it has no session to continue",
+                first.kind.name()
             )));
         }
         if let Some(extra) = c.inputs.keys().find(|k| !formula.inputs.contains_key(*k)) {
@@ -172,8 +175,8 @@ impl RunHandler {
         }
         tx.sql().execute(
             "INSERT INTO runs (n, id, project, rig, formula, agent, inputs, correlation, depth, parent_run, \
-             workdir, state, created_ms, continue_from, bead, step, as_agent) \
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, 'queued', ?12, ?13, ?14, ?15, ?16)",
+             workdir, state, created_ms, continue_from, bead, step, as_agent, step_kind) \
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, 'queued', ?12, ?13, ?14, ?15, ?16, ?17)",
             params![
                 n,
                 id,
@@ -190,7 +193,8 @@ impl RunHandler {
                 c.continue_from,
                 bead,
                 first.name,
-                as_agent
+                as_agent,
+                first.kind.name()
             ],
         )?;
         let row = Row::load(tx, &id)?;
@@ -238,21 +242,22 @@ impl RunHandler {
         Ok(())
     }
 
-    /// A workdir holds one live started run (spec §9.3).
+    /// A workdir holds one live started run (spec §9.3); a parent in a drain step does not hold it from its children.
     fn workdir_busy(tx: &Tx<'_>, row: &Row) -> Result<bool, Error> {
-        let busy = tx.sql().query_row(
+        let sql = format!(
             "SELECT EXISTS (SELECT 1 FROM runs WHERE workdir = ?1 AND id != ?2 \
-             AND state NOT IN ('queued', 'passed', 'failed', 'cancelled'))",
-            params![row.workdir, row.id],
-            |r| r.get(0),
-        )?;
+             AND state NOT IN ('queued', 'passed', 'failed', 'cancelled') AND NOT (id IS ?3 AND {DRAINING}))"
+        );
+        let busy = tx
+            .sql()
+            .query_row(&sql, params![row.workdir, row.id, row.parent_run], |r| r.get(0))?;
         Ok(busy)
     }
 
     /// Why a queued or parked run cannot start yet, `None` when it can: the daemon is stopping, a gate of the run is
     /// closed (with the
     /// closure), its workdir is busy, or the orchestrator or its agent has as many started runs as allowed (spec
-    /// §9.3; a parked run has no process and holds no slot).
+    /// §9.3; a parked run, or one in a drain step, has no process and holds no slot).
     fn blocker(&self, tx: &Tx<'_>, row: &Row) -> Result<Option<(&'static str, Value)>, Error> {
         if self.stopping.is_some() {
             return Ok(Some(("daemon_stopping", Value::Null)));
@@ -263,7 +268,7 @@ impl RunHandler {
         if Self::workdir_busy(tx, row)? {
             return Ok(Some(("workdir", Value::Null)));
         }
-        let started = "state NOT IN ('queued', 'parked', 'passed', 'failed', 'cancelled')";
+        let started = format!("state NOT IN ('queued', 'parked', 'passed', 'failed', 'cancelled') AND NOT {DRAINING}");
         let all: u32 = tx
             .sql()
             .query_row(&format!("SELECT COUNT(*) FROM runs WHERE {started}"), [], |r| r.get(0))?;

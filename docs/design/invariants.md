@@ -61,7 +61,9 @@ At daemon start ([contracts](contracts.md) 6.4 has the exact state rules):
    its hooks run again, the declared outcome and an exec command's result stand. A `remark` or `continue` then
    fails the attempt with `daemon_crash`, as the session it needs is gone (contracts 3.4, 6.4). A run goes on from
    the step it is at: the move to the next step commits with the accepted outcome of the step before, so a finished
-   step never runs again, and an exec command the restart killed runs again in a new attempt of its step.
+   step never runs again, and an exec command the restart killed runs again in a new attempt of its step. The
+   attempt of a `drain` step has no process and is not interrupted: it goes on with the next read of the tracker,
+   and the beads it gave out before the restart are not given again (their runs recover as any run).
 4. The deadlines that wait for an effect's answer (a decision, the claim of a bead) count again from the start;
    the deadlines of real time stay, and the schedules are armed (a missed schedule fires at most once). Resync, the
    process table included: what carries the marker of an instance this state no longer records is swept.

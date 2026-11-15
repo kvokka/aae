@@ -6,10 +6,12 @@ use rusqlite::Connection;
 use serde_json::{Map, Value, json};
 
 pub(super) const STEP_TIMEOUT_MS: i64 = 45 * 60_000;
+/// The time a drain step has for every bead under the run's bead (spec §9.1).
+pub(super) const DRAIN_TIMEOUT_MS: i64 = 24 * 3_600_000;
 
 impl RunHandler {
     /// The prompt, the step timeout and the config snapshot of a run, from the config of now: the effective config
-    /// of a prompt step; `{"command", "env"}` of an exec step.
+    /// of a prompt step; `{"command", "env"}` of an exec step; `{"drain"}`, the formula of its runs, of a drain step.
     pub(super) fn render(&self, tx: &Tx<'_>, row: &Row) -> Result<(Option<String>, i64, Value), String> {
         let project = self.config.projects.iter().find(|p| p.name == row.project);
         let project = project.ok_or(format!("project `{}` is gone from the config", row.project))?;
@@ -18,20 +20,25 @@ impl RunHandler {
             .get(&row.rig)
             .ok_or(format!("rig `{}` is gone from the config", row.rig))?;
         let (_, formula) = project.formula(&row.formula)?;
-        let timeout_ms = |t: &Option<std::time::Duration>| {
-            t.map_or(STEP_TIMEOUT_MS, |t| i64::try_from(t.as_millis()).unwrap_or(i64::MAX))
+        let timeout_ms = |t: &Option<std::time::Duration>, default| {
+            t.map_or(default, |t| i64::try_from(t.as_millis()).unwrap_or(i64::MAX))
         };
         let step = formula.step(&row.step).map(|s| &s.kind);
         let step = step.ok_or(format!("step `{}` is gone from `{}`", row.step, row.formula))?;
-        let (prompt, timeout) = match (step, row.exec()) {
-            (StepKind::Exec { command, timeout }, true) => {
+        let (prompt, timeout) = match (step, row.step_kind.as_str()) {
+            (StepKind::Exec { command, timeout }, "exec") => {
                 // The tracker by name, as in a session (spec §10.2).
                 let env: serde_json::Map<String, Value> = (project.tracker.env.iter())
                     .map(|(name, value)| (name.clone(), json!({ "value": value })))
                     .collect();
-                return Ok((None, timeout_ms(timeout), json!({ "command": command, "env": env })));
+                let config = json!({ "command": command, "env": env });
+                return Ok((None, timeout_ms(timeout, STEP_TIMEOUT_MS), config));
             }
-            (StepKind::Prompt { prompt, timeout, .. }, false) => (prompt, timeout),
+            (StepKind::Drain { formula, timeout }, "drain") => {
+                let config = json!({ "drain": formula.to_string() });
+                return Ok((None, timeout_ms(timeout, DRAIN_TIMEOUT_MS), config));
+            }
+            (StepKind::Prompt { prompt, timeout, .. }, "prompt") => (prompt, timeout),
             _ => return Err(format!("step `{}` of `{}` changed its kind", row.step, row.formula)),
         };
         let (agent, config) =
@@ -54,7 +61,7 @@ impl RunHandler {
         if text.trim().is_empty() {
             return Err("prompt: empty after substitution".to_owned());
         }
-        Ok((Some(text), timeout_ms(timeout), json!(config)))
+        Ok((Some(text), timeout_ms(timeout, STEP_TIMEOUT_MS), json!(config)))
     }
 }
 

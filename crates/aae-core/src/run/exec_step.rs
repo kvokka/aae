@@ -30,18 +30,8 @@ impl RunHandler {
             .as_deref()
             .and_then(|c| serde_json::from_str(c).ok())
             .unwrap_or_default();
-        row.attempt += 1;
-        tx.sql().execute(
-            "UPDATE runs SET attempt = ?2, next = NULL WHERE id = ?1",
-            params![row.id, row.attempt],
-        )?;
-        tx.sql().execute(
-            "INSERT INTO attempts (run, n, kind, harness, started_ms, step) \
-             VALUES (?1, ?2, 'new_session', 'exec', ?3, ?4)",
-            params![row.id, row.attempt, tx.now_ms(), row.step],
-        )?;
         // No session to start: the command runs from the first moment.
-        row.set_state(tx, "running", None)?;
+        Self::run_attempt(tx, &mut row, "exec")?;
         let mut env: Vec<(String, Value)> = config["env"]
             .as_object()
             .into_iter()
@@ -103,7 +93,7 @@ impl RunHandler {
         stdout: &str,
         stderr: &str,
     ) -> Result<(), Error> {
-        let mut row = Row::load(tx, run)?;
+        let row = Row::load(tx, run)?;
         if row.attempt != attempt || row.state != "running" {
             return Ok(());
         }
@@ -132,9 +122,29 @@ impl RunHandler {
             summary,
             data: Some(json!({ "exit_code": code, "stdout": stdout, "stderr": stderr })),
         };
+        self.step_done(tx, row, &outcome)
+    }
+
+    /// A new attempt of a step with no session (`harness` is `exec` or `drain`), `running` from its start.
+    pub(super) fn run_attempt(tx: &mut Tx<'_>, row: &mut Row, harness: &str) -> Result<(), Error> {
+        row.attempt += 1;
+        tx.sql().execute(
+            "UPDATE runs SET attempt = ?2, next = NULL WHERE id = ?1",
+            params![row.id, row.attempt],
+        )?;
+        tx.sql().execute(
+            "INSERT INTO attempts (run, n, kind, harness, started_ms, step) \
+             VALUES (?1, ?2, 'new_session', ?3, ?4, ?5)",
+            params![row.id, row.attempt, harness, tx.now_ms(), row.step],
+        )?;
+        row.set_state(tx, "running", None)
+    }
+
+    /// The step of a run with no session declared `outcome`: the run asks the hooks on `run.finishing`.
+    pub(super) fn step_done(&mut self, tx: &mut Tx<'_>, mut row: Row, outcome: &Outcome) -> Result<(), Error> {
         tx.sql().execute(
             "UPDATE attempts SET outcome = ?3 WHERE run = ?1 AND n = ?2",
-            params![run, attempt, json!(outcome).to_string()],
+            params![row.id, row.attempt, json!(outcome).to_string()],
         )?;
         tx.clear_deadline(&row.deadline("state"))?;
         row.set_state(tx, "finishing", None)?;

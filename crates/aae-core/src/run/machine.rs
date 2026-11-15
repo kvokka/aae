@@ -102,8 +102,10 @@ impl RunHandler {
         if let Some(gate) = self.held(tx, &row)? {
             return self.park(tx, row, gate, kind);
         }
-        if row.exec() {
-            return self.start_exec(tx, row);
+        match row.step_kind.as_str() {
+            "exec" => return self.start_exec(tx, row),
+            "drain" => return self.start_drain(tx, row),
+            _ => {}
         }
         let config = row
             .config
@@ -312,7 +314,7 @@ impl RunHandler {
         let Some((harness, handle, session, instance)) = live else {
             return Ok(());
         };
-        if row.exec() {
+        if harness == "exec" {
             tx.effect(
                 &row.id,
                 &format!("stop:{}", row.attempt),

@@ -234,8 +234,8 @@ pub(super) fn parse(kind: &str, v: &Value, plugin: &str, event: &Value) -> Optio
         ("run.finishing", "veto") => Decision::Veto {
             reason: text("reason")?,
         },
-        // An exec step has no session to take a remark (contracts 6.2).
-        ("run.finishing", "remark") if event["data"]["run"]["step_kind"] == "exec" => return None,
+        // An exec or a drain step has no session to take a remark (contracts 6.2).
+        ("run.finishing", "remark") if event["data"]["run"]["step_kind"] != "prompt" => return None,
         ("run.finishing", "remark") => Decision::Remark {
             message: text("message")?,
         },

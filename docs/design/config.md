@@ -161,7 +161,8 @@ off (`aae config explain --project <p> --agent <a> [--rig <r>]`, with no daemon,
 /v1/config/explain`, on the config the daemon holds). The pack, formula and variant layers count only for a run, so they
 show with `--formula <f> --rig <r>` in place of `--agent`, step by step: for a prompt step a header ``# step `<s>` of
 `<f>` on `<r>`: agent <a>`` (the rig's variant if it maps one) and its effective config, for an exec step one line ``#
-step `<s>` of `<f>`: exec `<command>` ``. The API answer then has `agent` null and `steps: [{step, kind, agent}]`. The
+step `<s>` of `<f>`: exec `<command>` ``, for a drain step ``# step `<s>` of `<f>`: drain, a run of `<formula>` per
+bead``. The API answer then has `agent` null and `steps: [{step, kind, agent}]`. The
 effective config serializes to JSON: a run keeps it as its snapshot, and `env` is the whole session environment besides
 what the adapter adds: a session does not inherit the daemon's environment wholesale. The core assembles it when the run
 prepares, right before the session starts; the adapter materializes it into launch flags, session parameters or a
@@ -421,7 +422,7 @@ bead = { type = "bead", required = true }   # bead | string | integer | boolean
 
 [[step]]
 name = "implement"                  # optional (default: the position, "1", "2", ..)
-kind = "prompt"                     # prompt: agent + prompt template; exec: command
+kind = "prompt"                     # prompt: agent + prompt template; exec: command; drain: formula
 agent = "implementer"
 prompt = "implement.md"             # relative to the formula file
 timeout = "45m"                     # optional
@@ -432,6 +433,12 @@ model = "opus"                      # optional, prompt steps only: layer 8, the 
 name = "test"
 kind = "exec"
 command = ["cargo", "test"]
+
+[[step]]
+name = "children"
+kind = "drain"
+formula = "fix"                     # the formula of each bead's run
+timeout = "24h"                     # optional (default 24h)
 ```
 
 A formula has a name, a description, declared inputs and one or more steps, which a run goes through in order
@@ -446,12 +453,23 @@ its output is kept in the result (contracts 6.2). An `exec` step has `command = 
 than letters and digits as `_`; a string as it is, any other value as JSON). Two inputs that give one variable
 (`note-text` and `note_text`) are a config error.
 
+A `drain` step gives every ready bead under the run's bead (its direct children) a run of `formula`, on each read of
+the tracker, until none is left: the same start as `aae run start` with the bead as the formula's `bead` input, no rig
+named (the bead's `rig:` label gives it, and its `agent:`/`harness:` labels apply as to any run), the run's correlation,
+one level deeper, the run as `parent_run`. A bead goes out once per attempt of the step: a child that failed is not run
+again in it. A bead whose start is refused (no `rig:` label, a `harness:` label the config does not give) gets no run
+and stays open. The step has no process (contracts 6.2): it ends once nothing was given, no child is alive and no later
+read of the tracker is queued, always `pass`, with `data = {closed, failed, refused}` — the beads whose runs passed,
+those whose runs failed or were cancelled, and the refused ones with the reason. `formula` must take exactly one
+`bead` input and need no other; a formula with a `drain` step needs a required `bead` input. Beads deeper than the
+direct children are not given out.
+
 A step sees the outcomes of the steps before it, by name (the last attempt of each): a prompt template as
 `{{ steps.<name>.result }}`, `.summary` and `.data.<key>` (contracts 2.3; `data` of an exec step is `{exit_code,
 stdout, stderr}`), an exec step as `AAE_STEP_<NAME>_RESULT` (`pass` or `fail`), `AAE_STEP_<NAME>_SUMMARY` and
 `AAE_STEP_<NAME>_DATA` (JSON, when there is data), `<NAME>` formed as for inputs; a step name whose variables collide
 with another step's or an input's is a config error. Each prompt step has a session of its own; a run that continues a
-session (`continue_from`) continues it in its first step only, so a formula whose first step is `exec` cannot be
+session (`continue_from`) continues it in its first step only, so a formula whose first step is not `prompt` cannot be
 continued.
 
 A run start checks the inputs: no undeclared one, every `required` one present (`null` is no value), an `integer` input

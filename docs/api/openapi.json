@@ -2650,11 +2650,11 @@
               "string",
               "null"
             ],
-            "description": "The pack agent or the rig's variant a prompt step runs; null for an exec step."
+            "description": "The pack agent or the rig's variant a prompt step runs; null for another kind."
           },
           "kind": {
             "type": "string",
-            "description": "`prompt` or `exec`."
+            "description": "`prompt`, `exec` or `drain`."
           },
           "step": {
             "type": "string"
@@ -3147,7 +3147,7 @@
               "string",
               "null"
             ],
-            "description": "Absent for an exec step."
+            "description": "Absent for an exec or a drain step."
           },
           "attempt": {
             "type": "integer",
@@ -3261,7 +3261,7 @@
           },
           "step_kind": {
             "type": "string",
-            "description": "`prompt` or `exec`."
+            "description": "`prompt`, `exec` or `drain`."
           },
           "usage": {
             "$ref": "#/components/schemas/Usage",

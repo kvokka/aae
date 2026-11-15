@@ -201,6 +201,10 @@ pub(crate) fn explained(config: &Config, project: &str, of: &Explain, rig: Optio
                         text += &format!("# step `{name}` of `{formula}`: exec `{}`\n", command.join(" "));
                         None
                     }
+                    StepKind::Drain { formula: each, .. } => {
+                        text += &format!("# step `{name}` of `{formula}`: drain, a run of `{each}` per bead\n");
+                        None
+                    }
                     StepKind::Prompt { .. } => {
                         let (agent, effective) = config.for_run(project, rig, formula, name)?;
                         text += &format!("# step `{name}` of `{formula}` on `{rig}`: agent {agent}\n");
@@ -209,10 +213,7 @@ pub(crate) fn explained(config: &Config, project: &str, of: &Explain, rig: Optio
                         Some(agent)
                     }
                 };
-                steps.push(
-                    json!({ "step": name, "kind": if agent.is_some() { "prompt" } else { "exec" },
-                    "agent": agent }),
-                );
+                steps.push(json!({ "step": name, "kind": step.kind.name(), "agent": agent }));
             }
             return Ok(json!({ "agent": null, "steps": steps, "text": text, "inherits_host": host }));
         }
