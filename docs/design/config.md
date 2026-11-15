@@ -131,7 +131,7 @@ layers, weakest first:
 5. the `[agent]` contributions of the plugins attached to the agent, in attachment order;
 6. the agent's own `agent.toml`: the defaults of the role;
 7. `[settings]` of the pack of the run's formula (launch settings only);
-8. the `[[step]]` of the run's formula (launch settings only);
+8. the `[[step]]` of the formula the run is at (launch settings only);
 9. the agent variant the rig runs in place of the agent (`[agents.<name>]`, see "Agent variants");
 10. `[overrides.<agent>]` of the orchestrator, then the project, then the rig: they fix an agent of an outside pack
    without forking the pack. A variant takes the overrides named after it, not those of its base agent.
@@ -148,24 +148,26 @@ whole (`inherit_host = false`), never one element by name. The harness config in
 
 `Config::effective(project, rig, agent)` merges the layers above for one agent alone: the harness default model,
 orchestrator, project and rig settings, then the contributions of the attached plugins in attachment order, the agent,
-and the overrides of the orchestrator, the project and the rig. `Config::for_run(project, rig, formula)` is what a run
-gets: the agent the rig runs for the formula's step (a variant by its name), and its config with the pack, step and
-variant layers too; a run keeps this one. Plugins attach first (the `plugins` key of every layer), so a stronger layer
-can detach a plugin and its whole contribution. An override applies when its key resolves (see Names) to the agent.
-Every value keeps its layer; a value several layers make together (`native` tables merged by key, a system prompt with
-plugin fragments, `PATH` with plugin `bin/` directories) names them all in order (`# agent + plugin mail`), and a
-model the adapter expanded keeps the short name it was given (`model = "gpt-6-luna"  # rig override, given as
-"luna"`). The new layers print as `pack <name>`, `formula <pack>.<name>` and `variant <name>`. `explain()` prints one
-line per value with its layer and one line for the host: inherited by the harness and invisible to aae, or off (`aae
-config explain --project <p> --agent <a> [--rig <r>]`, with no daemon, on the file on disk; `GET /v1/config/explain`,
-on the config the daemon holds). The pack, formula and variant layers count only for a run, so they show with
-`--formula <f> --rig <r>` in place of `--agent`: the agent a run of the formula on the rig is of, the rig's variant if
-it maps one, with its effective config. The effective config serializes to JSON: a run keeps it as its snapshot, and
-`env` is the whole session environment besides what the adapter adds: a session does not inherit the daemon's
-environment wholesale. The core assembles it when the run prepares, right before the session starts; the adapter
-materializes it into launch flags, session parameters or a generated harness config directory, which lives in the
-state directory, never in the rig or the harness's home directory. The adapter's `split` turns it into a process part,
-keyed by its fingerprint (contracts 8), and a session part.
+and the overrides of the orchestrator, the project and the rig. `Config::for_run(project, rig, formula, step)` is what a
+step of a run gets: the agent the rig runs for that step (a variant by its name), and its config with the pack, step and
+variant layers too; a run keeps the one of its current step. Plugins attach first (the `plugins` key of every layer), so
+a stronger layer can detach a plugin and its whole contribution. An override applies when its key resolves (see Names)
+to the agent. Every value keeps its layer; a value several layers make together (`native` tables merged by key, a system
+prompt with plugin fragments, `PATH` with plugin `bin/` directories) names them all in order (`# agent + plugin mail`),
+and a model the adapter expanded keeps the short name it was given (`model = "gpt-6-luna"  # rig override, given as
+"luna"`). The new layers print as `pack <name>`, `formula <pack>.<name> step <step>` and `variant <name>`. `explain()`
+prints one line per value with its layer and one line for the host: inherited by the harness and invisible to aae, or
+off (`aae config explain --project <p> --agent <a> [--rig <r>]`, with no daemon, on the file on disk; `GET
+/v1/config/explain`, on the config the daemon holds). The pack, formula and variant layers count only for a run, so they
+show with `--formula <f> --rig <r>` in place of `--agent`, step by step: for a prompt step a header ``# step `<s>` of
+`<f>` on `<r>`: agent <a>`` (the rig's variant if it maps one) and its effective config, for an exec step one line ``#
+step `<s>` of `<f>`: exec `<command>` ``. The API answer then has `agent` null and `steps: [{step, kind, agent}]`. The
+effective config serializes to JSON: a run keeps it as its snapshot, and `env` is the whole session environment besides
+what the adapter adds: a session does not inherit the daemon's environment wholesale. The core assembles it when the run
+prepares, right before the session starts; the adapter materializes it into launch flags, session parameters or a
+generated harness config directory, which lives in the state directory, never in the rig or the harness's home
+directory. The adapter's `split` turns it into a process part, keyed by its fingerprint (contracts 8), and a session
+part.
 
 ## Harness and model
 
@@ -418,24 +420,39 @@ worktree = true                     # optional (default false): each run works i
 bead = { type = "bead", required = true }   # bead | string | integer | boolean
 
 [[step]]
+name = "implement"                  # optional (default: the position, "1", "2", ..)
 kind = "prompt"                     # prompt: agent + prompt template; exec: command
 agent = "implementer"
 prompt = "implement.md"             # relative to the formula file
 timeout = "45m"                     # optional
 model = "opus"                      # optional, prompt steps only: layer 8, the launch settings `harness`,
                                     # `model`, `effort`
+
+[[step]]
+name = "test"
+kind = "exec"
+command = ["cargo", "test"]
 ```
 
-A formula has a name, a description, declared inputs and exactly one step. A `prompt` step is a turn of the agent in
-a harness session, and its outcome comes from the finisher (`aae finish`, contracts 6.3). An `exec` step is a command
-with no model that the daemon runs in the run's workdir, in a process group of its own, under the step timeout; exit 0
-is `pass`, 75 (`EX_TEMPFAIL`) a failed attempt (not an outcome), any other `fail`, and a bounded tail of its output is
-kept in the result (contracts 6.2). An `exec` step has `command = ["prog", "arg", ..]` (non-empty) and `timeout`
-instead of `agent` and `prompt`.
-Nothing is substituted into the command; it gets the run in its environment: `AAE_RUN`, `AAE_BEAD` (when the run has
-a bead) and `AAE_INPUT_<NAME>` per input (the name upper-cased, other characters than letters and digits as `_`; a
-string as it is, any other value as JSON). Two inputs that give one variable (`note-text` and `note_text`) are a
-config error.
+A formula has a name, a description, declared inputs and one or more steps, which a run goes through in order
+(contracts 6.1): the next step starts when the one before passed, the first failed step fails the run, and the run's
+outcome is that of its last step. Step names are unique in the formula and contain no `.`. A `prompt` step is a turn of
+the agent in a harness session, and its outcome comes from the finisher (`aae finish`, contracts 6.3). An `exec` step is
+a command with no model that the daemon runs in the run's workdir, in a process group of its own, under the step
+timeout; exit 0 is `pass`, 75 (`EX_TEMPFAIL`) a failed attempt (not an outcome), any other `fail`, and a bounded tail of
+its output is kept in the result (contracts 6.2). An `exec` step has `command = ["prog", "arg", ..]` (non-empty) and
+`timeout` instead of `agent` and `prompt`. Nothing is substituted into the command; it gets the run in its environment:
+`AAE_RUN`, `AAE_BEAD` (when the run has a bead) and `AAE_INPUT_<NAME>` per input (the name upper-cased, other characters
+than letters and digits as `_`; a string as it is, any other value as JSON). Two inputs that give one variable
+(`note-text` and `note_text`) are a config error.
+
+A step sees the outcomes of the steps before it, by name (the last attempt of each): a prompt template as
+`{{ steps.<name>.result }}`, `.summary` and `.data.<key>` (contracts 2.3; `data` of an exec step is `{exit_code,
+stdout, stderr}`), an exec step as `AAE_STEP_<NAME>_RESULT` (`pass` or `fail`), `AAE_STEP_<NAME>_SUMMARY` and
+`AAE_STEP_<NAME>_DATA` (JSON, when there is data), `<NAME>` formed as for inputs; a step name whose variables collide
+with another step's or an input's is a config error. Each prompt step has a session of its own; a run that continues a
+session (`continue_from`) continues it in its first step only, so a formula whose first step is `exec` cannot be
+continued.
 
 A run start checks the inputs: no undeclared one, every `required` one present (`null` is no value), an `integer` input
 a JSON integer or its text, a `boolean` one a JSON boolean or `true`/`false` as text, a `string` one a string (the CLI
@@ -566,12 +583,12 @@ or for a project).
 ### Where the bundled plugins end and the core begins
 
 The mechanisms live in the core: resuming an attempt, a new session that keeps ownership, issue gates, the counters
-the policy reads, the ceiling of 20 attempts per run (waits on an account gate not counted), the watchdog and every
-deadline. The bundled plugins only choose a reaction and its thresholds; they never change a harness. With
+the policy reads, the ceiling of 20 failed attempts per run (waits on an account gate not counted), the watchdog and
+every deadline. The bundled plugins only choose a reaction and its thresholds; they never change a harness. With
 `default-policy` off, the "no plugin decision" column of [contracts 1.3](contracts.md#13-payloads) applies: a failed
-attempt ends the run `failed` with class `infrastructure`. The bundled plugins are compiled into the same binary,
-need no external runtime, and are counted on their own budget line (`plugins` in `scripts/budget.sh`, 1500 lines)
-inside the release total.
+attempt ends the run `failed` with class `infrastructure`. The bundled plugins are compiled into the same binary, need
+no external runtime, and are counted on their own budget line (`plugins` in `scripts/budget.sh`, 1500 lines) inside the
+release total.
 
 Postmortem 0001 (`docs/postmortems/0001-loop-stalled-after-transient-auth-error.md`) and the owner's decision of
 2026-11-14 (spec §2, decisions 49, 50) shaped `auth_required` and `billing`: a proxy or WAF 403 passes by itself, so every

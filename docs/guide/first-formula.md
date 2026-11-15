@@ -117,6 +117,47 @@ working directory that cannot be used, `workspace_failure` in `aae events` — c
 (`rig:<project>/<rig>`), and every later run of the rig waits until you fix the cause and run
 `aae gate open rig:hello/main`. `aae gate list` shows the closed gates and why.
 
+## Several steps
+
+A formula may list several `[[step]]`s; a run goes through them in order, and the first one that fails ends it. A
+step is named by `name`, or by its position (`"1"`, `"2"`, ...), and sees the outcomes of the steps before it.
+`~/work/hello/formulas/summarize-checked.toml`:
+
+```toml
+name = "summarize-checked"
+description = "Summarize the README and check the summary is there"
+
+[[step]]
+name = "count"
+kind = "exec"
+command = ["wc", "-l", "README.md"]
+
+[[step]]
+name = "write"
+kind = "prompt"
+agent = "helper"
+prompt = "summarize-checked.md"       # may use {{ steps.count.data.stdout }}
+
+[[step]]
+name = "check"
+kind = "exec"
+command = ["test", "-s", "SUMMARY.md"]  # gets AAE_STEP_COUNT_* and AAE_STEP_WRITE_* in its environment
+```
+
+A prompt template reads an earlier step as `{{ steps.<name>.result }}` (`pass` or `fail`), `.summary` and
+`.data.<key>`; an exec step's `data` is `{exit_code, stdout, stderr}`. An exec step gets the same as
+`AAE_STEP_<NAME>_RESULT`, `AAE_STEP_<NAME>_SUMMARY` and `AAE_STEP_<NAME>_DATA` (JSON). Each prompt step has a session
+of its own. `aae run show` names the step the run is at, and `run.step_finished` marks each passed step but the
+last. `config explain` goes step by step:
+
+```sh
+aae config explain --project hello --formula summarize-checked --rig main
+# step `count` of `summarize-checked`: exec `wc -l README.md`
+# step `write` of `summarize-checked` on `main`: agent hello.helper
+# ...one line per value with its layer, e.g. model = "haiku"  # project override
+# step `check` of `summarize-checked`: exec `test -s SUMMARY.md`
+```
+
 ## A worktree per run
 
 With `worktree = true` next to `name` in the formula, each run works in its own git worktree of the rig, on the

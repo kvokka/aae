@@ -37,8 +37,8 @@ all of them share.
   deadlines (timers and schedules), gates (operator holds among them), idempotency keys, the outbox and the effects
   queue.
 - Definitions (projects, rigs, agents, formulas, triggers, plugins) live in config files. A run keeps only the
-  snapshot of its effective config (`runs.config`, the serialized `EffectiveConfig`), so it answers "what did this
-  run with" and is reproducible.
+  snapshot of its effective config (`runs.config`, the serialized `EffectiveConfig` of the step it is at), so it answers
+  "what did this run with" and is reproducible.
 - No status files, PID files or lock files. One daemon per state directory: the daemon holds an exclusive `flock`
   on the state directory itself (`crates/aae/src/daemon.rs`, `lock`); the OS drops it with the process, so a crash
   leaves nothing stale. Whether a process is alive is read from the process table: pid plus its kernel start time.
