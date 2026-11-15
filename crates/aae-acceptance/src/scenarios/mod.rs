@@ -19,6 +19,7 @@ mod c17_mcp;
 mod c18_journal;
 mod c19_gates;
 mod c24_drain;
+mod c25_return;
 
 use crate::{
     Launch, Scenario,
@@ -165,6 +166,12 @@ pub(crate) const ALL: &[Scenario] = &[
         every step: no step and no bead runs twice",
         launch: Launch::Ci,
         run: |env| Box::pin(c24_drain::run(env)),
+    },
+    Scenario {
+        criterion: "25",
+        title: "a failing check sends the run back with its remarks; past the formula's rounds the run fails",
+        launch: Launch::Ci,
+        run: |env| Box::pin(c25_return::run(env)),
     },
 ];
 
