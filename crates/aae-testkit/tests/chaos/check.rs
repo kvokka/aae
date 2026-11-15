@@ -5,6 +5,7 @@ use aae_core::run::MAX_ATTEMPTS;
 use rusqlite::OptionalExtension;
 use serde_json::Value;
 use std::{
+    collections::BTreeSet,
     fs::File,
     io::{Read, Seek, SeekFrom},
 };
@@ -77,6 +78,7 @@ pub(crate) fn check(w: &World, play: &mut Play) -> Result<(), String> {
                 failed(run, &e["data"], play)?;
             }
         }
+        step_finished(run, kind, &e["data"]["run"], play)?;
     }
     let conn = state(w);
     let all = runs(w);
@@ -150,6 +152,7 @@ pub(crate) fn check(w: &World, play: &mut Play) -> Result<(), String> {
             }
         }
     }
+    stepped(&conn, play)?;
     // One live owner per bead, and the owner the state records is a live run on that bead (invariants 2, 3).
     let owners: Vec<(String, Option<String>, i64)> = conn
         .prepare(
@@ -169,6 +172,87 @@ pub(crate) fn check(w: &World, play: &mut Play) -> Result<(), String> {
         }
     }
     Ok(())
+}
+
+/// The steps of each formula of the stand (`shop.ship` and the like), in order: `ship` has three, named by position.
+fn formula_steps(formula: &str) -> &'static [&'static str] {
+    if formula.ends_with(".ship") {
+        &["1", "2", "3"]
+    } else {
+        &["1"]
+    }
+}
+
+/// Each step but the last finishes once, in the order of the formula (S1); a run passes once every step before the
+/// last finished and from the last one (S4).
+fn step_finished(run: &str, kind: &str, view: &Value, play: &mut Play) -> Result<(), String> {
+    let steps = formula_steps(view["formula"].as_str().unwrap_or_default());
+    let step = view["step"].as_str().unwrap_or_default();
+    let done = play.steps.entry(run.to_owned()).or_default();
+    if kind == "run.step_finished" {
+        if done.len() + 1 >= steps.len() || steps[done.len()] != step {
+            return Err(format!("{run}: the step {step} finished after {done:?} (S1)"));
+        }
+        done.push(step.to_owned());
+    }
+    if kind == "run.passed" && (done.len() + 1 != steps.len() || steps.last() != Some(&step)) {
+        return Err(format!("{run} passed at the step {step} after {done:?} finished (S4)"));
+    }
+    Ok(())
+}
+
+/// `(run, formula, step of the run, step of an attempt, whether the attempt said pass)`.
+type StepRow = (String, String, String, Option<String>, Option<bool>);
+
+/// The attempts of a run go through the steps of its formula in order; the run is at the step of its last attempt or,
+/// once that attempt said pass, at the next one, and the journal says every step before it finished (S2). No session
+/// serves two steps (S3, spec §9.3).
+fn stepped(conn: &rusqlite::Connection, play: &Play) -> Result<(), String> {
+    let rows: Vec<StepRow> = conn
+        .prepare(
+            "SELECT r.id, r.formula, r.step, a.step, json_extract(a.outcome, '$.result') = 'pass' \
+             FROM runs r LEFT JOIN attempts a ON a.run = r.id ORDER BY r.n, a.n",
+        )
+        .unwrap()
+        .query_map([], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?)))
+        .unwrap()
+        .map(Result::unwrap)
+        .collect();
+    for of in rows.chunk_by(|a, b| a.0 == b.0) {
+        let (run, formula, at) = (&of[0].0, &of[0].1, &of[0].2);
+        let steps = formula_steps(formula);
+        let pos = |step: &str| steps.iter().position(|s| *s == step);
+        let mut last: Option<(usize, bool)> = None;
+        for (.., step, pass) in of {
+            let Some(step) = step else { continue };
+            let i = pos(step).ok_or_else(|| format!("{run}: an attempt at the step {step} of `{formula}` (S2)"))?;
+            if last.is_some_and(|(l, _)| i < l) {
+                return Err(format!("{run}: an attempt at the step {step} after a later one (S2)"));
+            }
+            last = Some((i, *pass == Some(true)));
+        }
+        let i = pos(at).ok_or_else(|| format!("{run} is at the step {at} of `{formula}` (S2)"))?;
+        let held = last.map_or(i == 0, |(l, pass)| i == l || pass && i == l + 1);
+        let finished = play.steps.get(run).map_or(0, Vec::len);
+        if !held || i != finished {
+            return Err(format!(
+                "{run} is at the step {at}, its last attempt at {last:?}, {finished} steps finished (S2)"
+            ));
+        }
+    }
+    let shared: Option<String> = conn
+        .query_row(
+            "SELECT session FROM attempts WHERE session IS NOT NULL GROUP BY session \
+             HAVING COUNT(DISTINCT run || ':' || step) > 1",
+            [],
+            |r| r.get(0),
+        )
+        .optional()
+        .unwrap();
+    match shared {
+        Some(session) => Err(format!("the session {session} serves two steps (S3)")),
+        None => Ok(()),
+    }
 }
 
 /// A failure says whose it is: the agent's only when its last accepted finisher said fail, the infrastructure's when
@@ -210,4 +294,49 @@ fn watched(conn: &rusqlite::Connection, run: &str, state: &str, waiting: bool) -
     } else {
         Err(format!("{run} is {state} without the deadline {id} (invariant 15)"))
     }
+}
+
+/// What the state recorded and the daemon had not done yet: tracker calls, harness calls, hooks, journal lines.
+pub(crate) fn undone(w: &World) -> Vec<&'static str> {
+    let conn = state(w);
+    let ops: Vec<String> = conn
+        .prepare("SELECT DISTINCT json_extract(payload, '$.op') FROM effects")
+        .unwrap()
+        .query_map([], |r| r.get(0))
+        .unwrap()
+        .map(Result::unwrap)
+        .collect();
+    let behind: bool = conn
+        .query_row(
+            "SELECT COALESCE((SELECT MAX(seq) FROM outbox), 0) > (SELECT seq FROM consumers WHERE name = 'journal')",
+            [],
+            |r| r.get(0),
+        )
+        .unwrap();
+    let mut undone: BTreeSet<_> = ops
+        .iter()
+        .map(|op| match op.as_str() {
+            "tracker" => "tracker",
+            "hooks" => "hooks",
+            "launch" | "prompt" | "respond" | "stop" | "stop_instance" => "harness",
+            _ => "other",
+        })
+        .collect();
+    if behind {
+        undone.insert("journal");
+    }
+    if past_first(&conn) {
+        undone.insert("step");
+    }
+    undone.into_iter().collect()
+}
+
+/// Whether a live run is past the first step of its formula.
+pub(crate) fn past_first(conn: &rusqlite::Connection) -> bool {
+    conn.query_row(
+        "SELECT EXISTS (SELECT 1 FROM runs WHERE step != '1' AND state NOT IN ('passed', 'failed', 'cancelled'))",
+        [],
+        |r| r.get(0),
+    )
+    .unwrap()
 }

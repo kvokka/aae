@@ -27,7 +27,7 @@ use std::{
     sync::{Arc, Mutex},
     time::Duration,
 };
-use steps::{Play, decision, step};
+use steps::{Play, create_keyed, decision, step};
 
 const POLICY: &[(&str, &str)] = &[
     (
@@ -52,6 +52,18 @@ const FIX: &[(&str, &str)] = &[
          [[step]]\nkind = \"prompt\"\nagent = \"dev\"\nprompt = \"fix.md\"\n",
     ),
     ("shop/formulas/fix.md", "Fix {{ bead.title }}."),
+];
+
+/// A formula of three prompt steps, named by their position: a run goes through them in order, one session each.
+const SHIP: &[(&str, &str)] = &[
+    (
+        "shop/formulas/ship.toml",
+        "name = \"ship\"\n\
+         [[step]]\nkind = \"prompt\"\nagent = \"dev\"\nprompt = \"ship.md\"\n\
+         [[step]]\nkind = \"prompt\"\nagent = \"dev\"\nprompt = \"ship.md\"\n\
+         [[step]]\nkind = \"prompt\"\nagent = \"dev\"\nprompt = \"ship.md\"\n",
+    ),
+    ("shop/formulas/ship.md", "Ship {{ rig.name }}."),
 ];
 
 /// Seeds in all, unless `AAE_CHAOS_SEEDS` says otherwise; the tests split them so that nextest runs them side by side.
@@ -120,10 +132,12 @@ async fn play(seed: u64) -> Result<Played, String> {
         seed,
         ran: Mutex::default(),
     });
-    let mut w = world_with(&[POLICY, FIX].concat(), hooks.clone());
+    let mut w = world_with(&[POLICY, FIX, SHIP].concat(), hooks.clone());
     w.tracker.add(&[], None);
     w.tracker.add(&[], None);
     let mut play = Play::default();
+    // A run of `ship` from the start: under the faults a run seldom gets past its first step otherwise.
+    create_keyed(&w, &mut play, 2).await;
     let report = |play: &Play, why: String| {
         format!(
             "seed {seed}: {why}\nreplay: AAE_CHAOS_SEED={seed} cargo nextest run -p aae-testkit --test chaos\n\
@@ -212,7 +226,8 @@ fn seeds(nth: u64) {
     // The kills land between every kind of record and its call, not only between quiet transactions. A share
     // under 100 seeds (a replay, a short share) is not asked to; a full one plays on past its count until every kind
     // landed, so a rare kind missing from these random seeds is not a failure, and a kind that never lands is.
-    const KINDS: [&str; 3] = ["tracker", "harness", "hooks"];
+    // `step`: a run was past the first step of its formula, so a restart went on from the step it was at.
+    const KINDS: [&str; 4] = ["tracker", "harness", "hooks", "step"];
     let landed = || {
         let kills = steps::KILLS.lock().unwrap();
         KINDS.iter().all(|at| kills.contains_key(at))

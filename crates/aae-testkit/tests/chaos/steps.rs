@@ -2,7 +2,7 @@
 
 use crate::{
     Rng, TERMINAL,
-    check::{runs, state},
+    check::{past_first, runs, state, undone},
     common::{World, hollow_turn},
 };
 use aae_core::{
@@ -15,38 +15,6 @@ use std::{collections::BTreeMap, collections::BTreeSet, sync::Mutex, time::Durat
 
 /// Where the kills of this test landed, by what the state had recorded and the dead daemon had not done yet.
 pub(crate) static KILLS: Mutex<BTreeMap<&str, u64>> = Mutex::new(BTreeMap::new());
-
-/// What the state recorded and the daemon had not done yet: tracker calls, harness calls, hooks, journal lines.
-fn undone(w: &World) -> Vec<&'static str> {
-    let conn = state(w);
-    let ops: Vec<String> = conn
-        .prepare("SELECT DISTINCT json_extract(payload, '$.op') FROM effects")
-        .unwrap()
-        .query_map([], |r| r.get(0))
-        .unwrap()
-        .map(Result::unwrap)
-        .collect();
-    let behind: bool = conn
-        .query_row(
-            "SELECT COALESCE((SELECT MAX(seq) FROM outbox), 0) > (SELECT seq FROM consumers WHERE name = 'journal')",
-            [],
-            |r| r.get(0),
-        )
-        .unwrap();
-    let mut undone: BTreeSet<_> = ops
-        .iter()
-        .map(|op| match op.as_str() {
-            "tracker" => "tracker",
-            "hooks" => "hooks",
-            "launch" | "prompt" | "respond" | "stop" | "stop_instance" => "harness",
-            _ => "other",
-        })
-        .collect();
-    if behind {
-        undone.insert("journal");
-    }
-    undone.into_iter().collect()
-}
 
 /// What a test step did, for the replay of a failure.
 #[derive(Default)]
@@ -66,15 +34,22 @@ pub(crate) struct Play {
     pub(crate) read: u64,
     pub(crate) seq: i64,
     pub(crate) ended: BTreeMap<String, String>,
+    /// The steps the journal says each run finished, in order.
+    pub(crate) steps: BTreeMap<String, Vec<String>>,
 }
 
-/// A run of `build`, or of `fix` on `bead`.
-fn create(bead: Option<&str>) -> Create {
+/// A run of `fix` on `bead`, or else of `build` or of the three steps of `ship`.
+fn create(bead: Option<&str>, ship: bool) -> Create {
     let inputs = bead.map(|b| ("bead".to_owned(), serde_json::json!(b)));
+    let formula = match (bead, ship) {
+        (Some(_), _) => "fix",
+        (None, true) => "ship",
+        (None, false) => "build",
+    };
     Create {
         project: "shop".into(),
         rig: Some("web".into()),
-        formula: if bead.is_some() { "fix" } else { "build" }.into(),
+        formula: formula.into(),
         inputs: inputs.into_iter().collect(),
         correlation: None,
         depth: 0,
@@ -193,8 +168,9 @@ pub(crate) async fn step(w: &mut World, rng: &mut Rng, play: &mut Play, calm: bo
         (false, _) => rng.below(24),
     };
     // kill -9 cuts a step short that sets work going: a killer task among the writer's and the effects' dies after
-    // a few turns of the scheduler, wherever the writer is then.
-    let kill = matches!(op, 19 | 22);
+    // a few turns of the scheduler, wherever the writer is then. A run past its first step is rare under the faults:
+    // every step that is anything kills then, so that a restart goes on from the step a run is at.
+    let kill = matches!(op, 19 | 22) || !natural && past_first(&state(w));
     let op = if kill {
         *rng.pick(&[0, 7, 7, 10, 10, 16, 17]).unwrap()
     } else {
@@ -239,6 +215,29 @@ pub(crate) async fn step(w: &mut World, rng: &mut Rng, play: &mut Play, calm: bo
 
 type Run = (String, String, u32, Option<i64>);
 
+/// A create with the idempotency key `key`, which may come again: the client retried (invariant 10). Keys 4 and 5
+/// are runs on the beads b-1 and b-2: refused while another live run holds the bead; keys 2 and 3 are runs of `ship`.
+pub(crate) async fn create_keyed(w: &World, play: &mut Play, key: u64) {
+    let bead = (key >= 4).then(|| format!("b-{}", key - 3));
+    let msg = Msg::Create(create(bead.as_deref(), key >= 2));
+    let run = match w.core.send(Some(&format!("create-{key}")), msg).await {
+        Ok(reply) => reply["run"].as_str().unwrap().to_owned(),
+        Err(e) => {
+            play.log.push(format!("create {key} refused: {e}"));
+            return;
+        }
+    };
+    if let Some(first) = play.keyed.get(&key) {
+        if *first != run {
+            play.broken = Some(format!("create {key} made {run} after {first} (invariant 10)"));
+        }
+    } else {
+        play.keyed.insert(key, run.clone());
+        play.runs.push(run.clone());
+    }
+    play.log.push(format!("create {key} -> {run}"));
+}
+
 /// Step `op`, one of [`step`]'s.
 async fn act(w: &mut World, rng: &mut Rng, play: &mut Play, op: u64, natural: bool, live: &[Run]) {
     match op {
@@ -247,29 +246,7 @@ async fn act(w: &mut World, rng: &mut Rng, play: &mut Play, op: u64, natural: bo
             w.tracker.set_down(down);
             play.log.push(format!("tracker down={down}"));
         }
-        0..=2 => {
-            // A keyed create may come again: the client retried (invariant 10).
-            // Keys 4 and 5 are runs on the beads b-1 and b-2: refused while another live run holds the bead.
-            let key = rng.below(6);
-            let bead = (key >= 4).then(|| format!("b-{}", key - 3));
-            let msg = Msg::Create(create(bead.as_deref()));
-            let run = match w.core.send(Some(&format!("create-{key}")), msg).await {
-                Ok(reply) => reply["run"].as_str().unwrap().to_owned(),
-                Err(e) => {
-                    play.log.push(format!("create {key} refused: {e}"));
-                    return;
-                }
-            };
-            if let Some(first) = play.keyed.get(&key) {
-                if *first != run {
-                    play.broken = Some(format!("create {key} made {run} after {first} (invariant 10)"));
-                }
-            } else {
-                play.keyed.insert(key, run.clone());
-                play.runs.push(run.clone());
-            }
-            play.log.push(format!("create {key} -> {run}"));
-        }
+        0..=2 => create_keyed(w, play, rng.below(6)).await,
         3..=6 => {
             let (name, steps) = scenario(rng, natural);
             w.driver.script(steps);
@@ -281,7 +258,10 @@ async fn act(w: &mut World, rng: &mut Rng, play: &mut Play, op: u64, natural: bo
             let Some((run, _, attempt, _)) = rng.pick(pool).cloned() else {
                 return;
             };
-            let token = w.driver.token(&run, attempt).unwrap_or_else(|| "forged".into());
+            // Now and then the finisher of the attempt before: it must be refused (contracts 6.3).
+            let stale = !natural && attempt > 1 && rng.below(4) == 0;
+            let of = if stale { attempt - 1 } else { attempt };
+            let token = w.driver.token(&run, of).unwrap_or_else(|| "forged".into());
             let result = if !natural && rng.below(3) == 0 {
                 Verdict::Fail
             } else {
@@ -302,13 +282,16 @@ async fn act(w: &mut World, rng: &mut Rng, play: &mut Play, op: u64, natural: bo
                 };
                 let answer = w.core.send(None, msg).await.map(|r| r["answer"].clone());
                 if matches!(&answer, Ok(a) if a == "accepted") {
+                    if stale {
+                        play.broken = Some(format!("{run}: the finisher of attempt {of} accepted after {attempt}"));
+                    }
                     play.said.insert(run.clone(), pass);
                     if pass {
                         play.finished.insert(run.clone());
                     }
                 }
             }
-            play.log.push(format!("finish {run}#{attempt} pass={pass} x{times}"));
+            play.log.push(format!("finish {run}#{of} pass={pass} x{times}"));
         }
         10..=15 => {
             // A decision on what a run waits for, once, twice or never (lost: its deadline decides).
