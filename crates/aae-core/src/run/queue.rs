@@ -5,7 +5,7 @@ use super::{
     Create, RunHandler, drain::DRAINING, events::attempt_live, rejected, row::Row, token_sha256, triggers::MAX_DEPTH,
 };
 use crate::{
-    config::{InputType, Step, StepKind},
+    config::{Formula, InputType, Step, StepKind},
     writer::{Error, Tx},
 };
 use rusqlite::{OptionalExtension, params};
@@ -30,6 +30,45 @@ impl RunHandler {
             }
             StepKind::Exec { .. } | StepKind::Drain { .. } => Ok((String::new(), None)),
         }
+    }
+
+    /// What the bead `bead` of a run of `formula` on `rig` makes of it: the bead, the agent its `agent:` label names,
+    /// and the agent and model key of the first step. Refused when a `harness:` label differs from the harness the
+    /// config gives a prompt step, or when the named agent does not resolve (spec §9.1).
+    #[expect(clippy::type_complexity, reason = "a private tuple read at its one call site")]
+    fn bead_agent(
+        &self,
+        tx: &Tx<'_>,
+        project: &str,
+        rig: &str,
+        name: &str,
+        formula: &Formula,
+        bead: Option<&str>,
+    ) -> Result<(Option<String>, Option<String>, (String, Option<String>)), Error> {
+        let label = |prefix| bead.map_or(Ok(None), |id| Self::label(tx, project, id, prefix));
+        let (as_agent, harness) = (label("agent")?, label("harness")?);
+        if let Some(harness) = &harness {
+            let prompts = formula
+                .steps
+                .iter()
+                .filter(|s| matches!(s.kind, StepKind::Prompt { .. }));
+            for step in prompts {
+                let (agent, config) = (self.config)
+                    .for_run_as(project, rig, name, &step.name, as_agent.as_deref())
+                    .map_err(rejected)?;
+                if &config.harness != harness {
+                    return Err(rejected(format!(
+                        "bead `{}` is labelled `harness:{harness}`: the config gives `{}` to `{agent}` on `{rig}`",
+                        bead.unwrap_or_default(),
+                        config.harness
+                    )));
+                }
+            }
+        }
+        let first = self
+            .step_agent(project, rig, name, &formula.steps[0], as_agent.as_deref())
+            .map_err(rejected)?;
+        Ok((bead.map(str::to_owned), as_agent, first))
     }
 
     pub(super) fn create(&mut self, tx: &mut Tx<'_>, mut c: Create) -> Result<Value, Error> {
@@ -95,55 +134,39 @@ impl RunHandler {
             .inputs
             .iter()
             .find(|(k, i)| i.kind == InputType::Bead && c.inputs.contains_key(*k));
-        let bead = match bead_input {
+        // A bead the run cannot take as labelled is passed over by a pick and refused when named (spec §10.3).
+        let mut passed_over = serde_json::Map::new();
+        let (bead, as_agent, (agent, model)) = match bead_input {
             Some(_) if !self.trackers.contains_key(&c.project) => {
                 return Err(rejected(format!("`{}` has no tracker", c.project)));
             }
             // A request gets its bead as the run prepares (spec §10.1).
-            Some((key, _)) if Self::request(&c.inputs[key])?.is_some() => None,
-            Some((key, _)) => match Self::pick_bead(tx, &c.project, &rig_name, &c.inputs[key])? {
-                Some(id) => {
-                    c.inputs.insert(key.clone(), json!(id));
-                    Some(id)
-                }
-                None => return Ok(json!({ "nothing_ready": true })),
-            },
-            None => None,
-        };
-        // The bead names the agent of the run and the harness it is for (spec §9.1).
-        let label = |prefix| {
-            bead.as_deref()
-                .map_or(Ok(None), |id| Self::label(tx, &c.project, id, prefix))
-        };
-        let (as_agent, harness) = (label("agent")?, label("harness")?);
-        if let Some(harness) = &harness {
-            let prompts = formula
-                .steps
-                .iter()
-                .filter(|s| matches!(s.kind, StepKind::Prompt { .. }));
-            for step in prompts {
-                let (agent, config) = (self.config)
-                    .for_run_as(
-                        &c.project,
-                        &rig_name,
-                        &name.to_string(),
-                        &step.name,
-                        as_agent.as_deref(),
-                    )
-                    .map_err(rejected)?;
-                if &config.harness != harness {
-                    let bead = bead.as_deref().unwrap_or_default();
-                    return Err(rejected(format!(
-                        "bead `{bead}` is labelled `harness:{harness}`: the config gives `{}` to `{agent}` on \
-                         `{rig_name}`",
-                        config.harness
-                    )));
-                }
+            Some((key, _)) if Self::request(&c.inputs[key])?.is_some() => {
+                self.bead_agent(tx, &c.project, &rig_name, &name.to_string(), formula, None)?
             }
-        }
-        let (agent, model) = self
-            .step_agent(&c.project, &rig_name, &name.to_string(), first, as_agent.as_deref())
-            .map_err(rejected)?;
+            Some((key, _)) => {
+                let named = c.inputs[key].is_string();
+                let mut picked = None;
+                for id in Self::pick_bead(tx, &c.project, &rig_name, &c.inputs[key])? {
+                    match self.bead_agent(tx, &c.project, &rig_name, &name.to_string(), formula, Some(&id)) {
+                        Ok(found) => {
+                            picked = Some(found);
+                            break;
+                        }
+                        Err(Error::Rejected(why)) if !named => {
+                            passed_over.insert(id, json!(why));
+                        }
+                        Err(e) => return Err(e),
+                    }
+                }
+                let Some(found) = picked else {
+                    return Ok(with_passed_over(json!({ "nothing_ready": true }), passed_over));
+                };
+                c.inputs.insert(key.clone(), json!(found.0));
+                found
+            }
+            None => self.bead_agent(tx, &c.project, &rig_name, &name.to_string(), formula, None)?,
+        };
         // A continued session resumes in the workdir it ran in (a harness may find its transcript by the cwd).
         let mut workdir = rig.path.to_string_lossy().into_owned();
         if let Some(from) = &c.continue_from {
@@ -206,7 +229,7 @@ impl RunHandler {
             tx.now_ms() + self.config.watchdog.queue_timeout_ms,
         )?;
         self.schedule(tx)?;
-        Ok(json!({ "run": id }))
+        Ok(with_passed_over(json!({ "run": id }), passed_over))
     }
 
     /// A run an agent session starts is a child of the session's run: the token must be that of the parent's live
@@ -320,4 +343,12 @@ impl RunHandler {
         }
         Ok(())
     }
+}
+
+/// `reply` with the beads a pick passed over and why, when there are any.
+fn with_passed_over(mut reply: Value, passed_over: serde_json::Map<String, Value>) -> Value {
+    if !passed_over.is_empty() {
+        reply["passed_over"] = Value::Object(passed_over);
+    }
+    reply
 }

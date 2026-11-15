@@ -41,8 +41,11 @@ tracker interface and its errors are in [contracts.md](contracts.md) §5; the be
 - Instead of an id the input may ask for the next ready bead, optionally in an epic: `{ next_ready = true, epic }`.
   The ready list comes from the adapter; the daemon picks and records the owner in one transaction, taking the first
   bead in the tracker's order that is in the epic, of the run's rig or of no rig, without an owner and without a
-  closed gate. With none ready no run is created: the caller gets the explicit answer `{"nothing_ready": true}`, a
-  trigger `trigger.skipped{nothing_ready}`.
+  closed gate. A bead whose labels the run cannot take (a `harness:` the config does not give its prompt steps, an
+  `agent:` that does not resolve) is passed over and the next one taken; the reply lists it with the reason in
+  `passed_over`. A bead named by id with such labels is refused. With none ready no run is created: the caller gets
+  the explicit answer `{"nothing_ready": true}`, a trigger `trigger.skipped{nothing_ready}` (its detail names the
+  beads passed over).
 - Work is cut into beads and the next one is taken by this ready pick, within an epic too. A chain of several
   formulas over one bead is not in the first release: `pass` always closes the bead.
 - The failure counter of a bead lives in the state of the orchestrator: every failed run that held the claim adds

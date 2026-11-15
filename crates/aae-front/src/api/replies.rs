@@ -118,11 +118,13 @@ pub(crate) enum Keyed {
 pub(crate) struct Failed(ErrorReply);
 
 /// A run started: `run` is its id; `nothing_ready` (and no `run`) when a bead input `{ next_ready = true }` found
-/// no ready bead.
+/// no ready bead the run can take; `passed_over`: the ready beads it skipped, each with why (a `harness:` label the
+/// config does not give, an `agent:` label that does not resolve).
 #[derive(ToSchema)]
 pub(crate) struct Started {
     run: Option<String>,
     nothing_ready: Option<bool>,
+    passed_over: Option<BTreeMap<String, String>>,
 }
 
 /// A trigger fired by hand: `run`, or `skipped` (`overlap`, `depth`, `nothing_ready`, `input_unresolved`,

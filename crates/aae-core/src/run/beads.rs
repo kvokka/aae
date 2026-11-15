@@ -15,10 +15,10 @@ use std::{collections::BTreeMap, sync::Arc};
 pub(super) type Trackers = Arc<BTreeMap<String, Arc<dyn Tracker>>>;
 
 impl RunHandler {
-    /// The bead a run created with `input` works on: the bead id it names, or the first ready bead (in the tracker's
-    /// order) that is in `epic`, belongs to `rig` (or to no rig), has no owner and no closed gate. `None`: nothing is
-    /// ready (§10.3).
-    pub(super) fn pick_bead(tx: &Tx<'_>, project: &str, rig: &str, input: &Value) -> Result<Option<String>, Error> {
+    /// The beads a run created with `input` may work on, the first it can take first: the bead id it names, or the
+    /// ready beads (in the tracker's order) that are in `epic`, belong to `rig` (or to no rig), have no owner and no
+    /// closed gate. Empty: nothing is ready (§10.3).
+    pub(super) fn pick_bead(tx: &Tx<'_>, project: &str, rig: &str, input: &Value) -> Result<Vec<String>, Error> {
         if let Some(id) = input.as_str() {
             // A bead that names another rig is refused here when the ready list knows it, else when it is claimed.
             let sql = "SELECT body FROM ready_beads WHERE project = ?1 AND id = ?2";
@@ -28,7 +28,7 @@ impl RunHandler {
                     "bead `{id}` is labelled for another rig than `{rig}`"
                 )));
             }
-            return Ok(Some(id.to_owned()));
+            return Ok(vec![id.to_owned()]);
         }
         if input["next_ready"] != json!(true)
             || input
@@ -39,9 +39,7 @@ impl RunHandler {
                 "a bead input is a bead id, `{ next_ready = true, epic = <id> }` or `{ request = \"<text>\" }`",
             ));
         }
-        Ok(Self::ready_in(tx, project, input["epic"].as_str(), Some(rig))?
-            .into_iter()
-            .next())
+        Self::ready_in(tx, project, input["epic"].as_str(), Some(rig))
     }
 
     /// The ready beads, in the tracker's order, that are in `epic`, belong to `rig` (or to no rig), have no owner

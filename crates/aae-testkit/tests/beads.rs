@@ -341,7 +341,8 @@ async fn a_start_without_a_rig_takes_it_from_the_label_of_the_bead() {
     w.fix(json!(none)).await.unwrap();
 }
 
-/// The labels of a bead name the agent of every prompt step of its run and the harness it is for (spec §9.1).
+/// The labels of a bead name the agent of every prompt step of its run and the harness it is for (spec §9.1); a pick
+/// passes over a bead its run cannot take (§10.3).
 #[tokio::test(start_paused = true)]
 async fn a_bead_names_the_agent_of_its_run_and_the_harness_it_is_for() {
     let pair = "name = \"pair\"\n[inputs]\nbead = { type = \"bead\", required = true }\n\
@@ -352,10 +353,10 @@ async fn a_bead_names_the_agent_of_its_run_and_the_harness_it_is_for() {
         ("shop/formulas/pair.toml", pair),
     ];
     let w = world(&[FIX, &extra].concat());
-    let [qa, codex, twice] = [
-        w.tracker.add(&["agent:qa", "harness:scripted"], None),
+    let [codex, twice, qa] = [
         w.tracker.add(&["harness:codex"], None),
         w.tracker.add(&["agent:qa", "agent:dev"], None),
+        w.tracker.add(&["agent:qa", "harness:scripted"], None),
     ];
     w.changed().await;
     let refused = async |bead: &str| w.fix(json!(bead)).await.unwrap_err().to_string();
@@ -367,10 +368,10 @@ async fn a_bead_names_the_agent_of_its_run_and_the_harness_it_is_for() {
     assert!(refused(&twice).await.contains("has several `agent:` labels"));
     w.driver.script(slow_turn());
     w.driver.script(slow_turn());
-    let run = w.start_bead("pair", Some("web"), json!(qa)).await.unwrap()["run"]
-        .as_str()
-        .unwrap()
-        .to_owned();
+    let picked = w.start_bead("pair", Some("web"), next_ready()).await.unwrap();
+    let passed_over = picked["passed_over"].as_object().unwrap();
+    assert_eq!(passed_over.keys().collect::<Vec<_>>(), [&codex, &twice], "{picked}");
+    let run = picked["run"].as_str().unwrap().to_owned();
     for attempt in [1, 2] {
         for _ in 0..60 {
             if w.driver.token(&run, attempt).is_some() {
@@ -382,6 +383,7 @@ async fn a_bead_names_the_agent_of_its_run_and_the_harness_it_is_for() {
     }
     tokio::time::sleep(Duration::from_secs(20)).await;
     let events = w.events(&run, Duration::ZERO).await;
+    assert_eq!(last(&events, "run.queued")["run"]["bead"], qa);
     assert_eq!(last(&events, "run.queued")["run"]["agent"], "shop.qa");
     assert_eq!(last(&events, "run.passed")["run"]["agent"], "shop.qa", "step two");
 }

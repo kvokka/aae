@@ -162,6 +162,9 @@ pub(super) async fn run(client: &Client, json: bool, command: RunCommand) -> Res
                 Some(run) => println!("{run}"),
                 None => eprintln!("aae: nothing ready: no ready bead to take, no run started"),
             }
+            for (bead, why) in reply["passed_over"].as_object().into_iter().flatten().filter(|_| !json) {
+                eprintln!("aae: passed over {bead}: {}", why.as_str().unwrap_or_default());
+            }
             if reply["nothing_ready"] == true {
                 return Ok(ExitCode::from(3));
             }
