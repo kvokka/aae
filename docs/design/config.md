@@ -163,7 +163,7 @@ off (`aae config explain --project <p> --agent <a> [--rig <r>]`, with no daemon,
 show with `--formula <f> --rig <r>` in place of `--agent`, step by step: for a prompt step a header ``# step `<s>` of
 `<f>` on `<r>`: agent <a>`` (the rig's variant if it maps one) and its effective config, for an exec step one line ``#
 step `<s>` of `<f>`: exec `<command>` ``, for a drain step ``# step `<s>` of `<f>`: drain, a run of `<formula>` per
-bead``. The API answer then has `agent` null and `steps: [{step, kind, agent}]`. The
+bead``, and after a check ``# a check: on fail, back to `<step>`, at most <n> rounds``. The API answer then has `agent` null and `steps: [{step, kind, agent}]`. The
 effective config serializes to JSON: a run keeps it as its snapshot, and `env` is the whole session environment besides
 what the adapter adds: a session does not inherit the daemon's environment wholesale. The core assembles it when the run
 prepares, right before the session starts; the adapter materializes it into launch flags, session parameters or a

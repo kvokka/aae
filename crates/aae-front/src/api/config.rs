@@ -213,6 +213,9 @@ pub(crate) fn explained(config: &Config, project: &str, of: &Explain, rig: Optio
                         Some(agent)
                     }
                 };
+                if let Some(to) = &step.back_to {
+                    text += &format!("# a check: on fail, back to `{to}`, at most {} rounds\n", f.rounds);
+                }
                 steps.push(json!({ "step": name, "kind": step.kind.name(), "agent": agent }));
             }
             return Ok(json!({ "agent": null, "steps": steps, "text": text, "inherits_host": host }));

@@ -42,6 +42,21 @@ pub(crate) async fn run(env: Arc<Env>) -> String {
     .await;
     let (mends, stubborn) = (d.create("mends").await, d.create("stubborn").await);
     let remark = "check: exit 1\ntotals are wrong";
+    let explain = d.cli(&[
+        "config",
+        "explain",
+        "--project",
+        "shop",
+        "--formula",
+        "stubborn",
+        "--rig",
+        "web",
+    ]);
+    let text = String::from_utf8_lossy(&explain.stdout);
+    assert!(
+        text.contains("# a check: on fail, back to `plan`, at most 2 rounds"),
+        "{text}"
+    );
 
     let view = d.until_state(&mends, "passed", WITHIN).await;
     let log = std::fs::read_to_string(d.path("mends.log")).expect("the log of plan");
