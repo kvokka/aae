@@ -10,14 +10,14 @@ code assessed. Updated at the end of every work session.
 them: one with a `FAIL` row (or, in a full run, a row not run) holds the score at 6, a 10 needs criterion 20 green,
 and the marker below must name a commit at or after the last change of `crates/`.
 
-Assessed 2026-11-16 at `3598d5b`, after the root bead and the `drain` step (spec §9.1, §10.3). The model-free rows
+Assessed 2026-11-16 at `7d188fa`, after the root bead and the `drain` step (spec §9.1, §10.3). The model-free rows
 run on it in the cycle's checks. The full run with real models last ran on
 `96dd606` (30 of 32, the codex row of criterion 8 lost to the provider's network and green on a rerun); its live rows
 were not rerun on the steps. Criterion 24 (steps, the root bead and `drain`) has
 its model-free row; 25 (the return with a rounds limit) and 26 (packs from git) have no rows yet, so the components
 they belong to score 6; the new demos of criterion 20 replace the old ones
 later in this round. None scores 10: a 10 needs criterion 20 green in the run that checks this file.
-<!-- MEASURE id=readiness date=2026-11-16 ver=3598d5b env=linux-arm64-orbstack src=docs/READINESS.md note="assessed against the letter of the scale on the model-free rows at 3598d5b; the last full run with real models is of 96dd606" -->
+<!-- MEASURE id=readiness date=2026-11-16 ver=7d188fa env=linux-arm64-orbstack src=docs/READINESS.md note="assessed against the letter of the scale on the model-free rows at 7d188fa; the last full run with real models is of 96dd606" -->
 
 | Component | Criteria | Score | Missing for the next point |
 |---|---|---|---|
