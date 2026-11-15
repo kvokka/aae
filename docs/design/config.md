@@ -158,21 +158,23 @@ variant layers too; a run keeps the one of its current step. Plugins attach firs
 a stronger layer can detach a plugin and its whole contribution. An override applies when its key resolves (see Names)
 to the agent. Every value keeps its layer; a value several layers make together (`native` tables merged by key, a system
 prompt with plugin fragments, `PATH` with plugin `bin/` directories) names them all in order (`# agent + plugin mail`),
-and a model the adapter expanded keeps the short name it was given (`model = "gpt-6-luna"  # rig override, given as
-"luna"`). The new layers print as `pack <name>`, `formula <pack>.<name> step <step>` and `variant <name>`. `explain()`
-prints one line per value with its layer and one line for the host: inherited by the harness and invisible to aae, or
-off (`aae config explain --project <p> --agent <a> [--rig <r>]`, with no daemon, on the file on disk; `GET
-/v1/config/explain`, on the config the daemon holds). The pack, formula and variant layers count only for a run, so they
-show with `--formula <f> --rig <r>` in place of `--agent`, step by step: for a prompt step a header ``# step `<s>` of
-`<f>` on `<r>`: agent <a>`` (the rig's variant if it maps one) and its effective config, for an exec step one line ``#
-step `<s>` of `<f>`: exec `<command>` ``, for a drain step ``# step `<s>` of `<f>`: drain, a run of `<formula>` per
-bead``, and after a check ``# a check: on fail, back to `<step>`, at most <n> rounds``. The API answer then has `agent` null and `steps: [{step, kind, agent}]`. The
-effective config serializes to JSON: a run keeps it as its snapshot, and `env` is the whole session environment besides
-what the adapter adds: a session does not inherit the daemon's environment wholesale. The core assembles it when the run
-prepares, right before the session starts; the adapter materializes it into launch flags, session parameters or a
-generated harness config directory, which lives in the state directory, never in the rig or the harness's home
-directory. The adapter's `split` turns it into a process part, keyed by its fingerprint (contracts 8), and a session
-part.
+and a model the adapter expanded keeps the short name it was given
+(`model = "gpt-6-luna"  # rig override, given as "luna"`). The new layers print as `pack <name>`,
+`formula <pack>.<name> step <step>` and `variant <name>`. `explain()` prints one line per value with its layer and one
+line for the host: inherited by the harness and invisible to aae, or off
+(`aae config explain --project <p> --agent <a> [--rig <r>]`, with no daemon, on the file on disk;
+`GET /v1/config/explain`, on the config the daemon holds). The pack, formula and variant layers count only for a run, so
+they show with `--formula <f> --rig <r>` in place of `--agent`, step by step: for a prompt step a header
+``# step `<s>` of `<f>` on `<r>`: agent <a>`` (the rig's variant if it maps one) and its effective config, for an exec
+step one line ``# step `<s>` of `<f>`: exec `<command>` ``, for a drain step
+``# step `<s>` of `<f>`: drain, a run of `<formula>` per bead``, and after a check
+``# a check: on fail, back to `<step>`, at most <n> rounds``. The API answer then has `agent` null and
+`steps: [{step, kind, agent}]`. The effective config serializes to JSON: a run keeps it as its snapshot, and `env` is
+the whole session environment besides what the adapter adds: a session does not inherit the daemon's environment
+wholesale. The core assembles it when the run prepares, right before the session starts; the adapter materializes it
+into launch flags, session parameters or a generated harness config directory, which lives in the state directory, never
+in the rig or the harness's home directory. The adapter's `split` turns it into a process part, keyed by its fingerprint
+(contracts 8), and a session part.
 
 ## Harness and model
 
@@ -505,14 +507,13 @@ continued.
 
 A run start checks the inputs: no undeclared one, every `required` one present (`null` is no value), an `integer` input
 a JSON integer or its text, a `boolean` one a JSON boolean or `true`/`false` as text, a `string` one a string (the CLI
-sends `--input` values as text). A `bead` input is a bead id, `{ next_ready = true, epic = <id> }` or `{ request =
-"<text>" }`: a
-request (only that key, a text that is not blank; the rig must be named) has the tracker create the run's root bead as
-the run prepares, titled with the first line of the text and described by all of it, and the input then holds its id
-([tracker-br.md](tracker-br.md#beads-and-runs)); a bead named by id
-that carries a `rig:` label of another rig is refused, at the start when the ready set knows the bead, else at its claim
-(the run fails with `bead_of_another_rig` and the claim is released). `worktree = true` gives each run of the formula,
-of either step kind, a git worktree that aae makes and removes (the bundled `worktree`, see below).
+sends `--input` values as text). A `bead` input is a bead id, `{ next_ready = true, epic = <id> }` or
+`{ request = "<text>" }`: a request (only that key, a text that is not blank; the rig must be named) has the tracker
+create the run's root bead as the run prepares, titled with the first line of the text and described by all of it, and
+the input then holds its id ([tracker-br.md](tracker-br.md#beads-and-runs)); a bead named by id that carries a `rig:`
+label of another rig is refused, at the start when the ready set knows the bead, else at its claim (the run fails with
+`bead_of_another_rig` and the claim is released). `worktree = true` gives each run of the formula, of either step kind,
+a git worktree that aae makes and removes (the bundled `worktree`, see below).
 
 A prompt template is checked at load (contracts 2.3): `inputs.<name>` must be a declared input; `bead.<field>` needs
 a `bead` input and a field of `Bead` (contracts 5.2); `run.<field>` a field of `RunView` (1.3); `project.name`,
@@ -645,9 +646,8 @@ release total.
 
 Postmortem 0001 (`docs/postmortems/0001-loop-stalled-after-transient-auth-error.md`) and the owner's decision of
 2026-11-14 (spec §2, decisions 49, 50) shaped `auth_required` and `billing`: a proxy or WAF 403 passes by itself, so
-every
-such failure parks the account gate for a wait that grows with each failure in a row up to an hour, and the next
-attempt is the probe. Nothing goes to an operator and there is no alerting: the journal and the logs tell it. The
-core does not count these attempts against its ceiling, so a long outage never ends in `failed{attempts_ceiling}`.
-The raw error stays in `failure.raw`. Not done: telling a real logout from a WAF page by the raw error; a real
-logout is probed once an hour until someone logs in.
+every such failure parks the account gate for a wait that grows with each failure in a row up to an hour, and the next
+attempt is the probe. Nothing goes to an operator and there is no alerting: the journal and the logs tell it. The core
+does not count these attempts against its ceiling, so a long outage never ends in `failed{attempts_ceiling}`. The raw
+error stays in `failure.raw`. Not done: telling a real logout from a WAF page by the raw error; a real logout is probed
+once an hour until someone logs in.

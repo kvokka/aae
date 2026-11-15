@@ -1,7 +1,0 @@
-name = "smoke"
-description = "The user's check of the snake game: the backend stores and serves a score, the frontend has the game"
-
-[[step]]
-kind = "exec"
-command = ["sh", "smoke.sh"]          # in the rig root, next to the rigs backend and frontend
-timeout = "2m"

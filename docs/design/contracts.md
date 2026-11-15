@@ -66,17 +66,16 @@ elsewhere `run` is the envelope's run id. Examples: `bead.labels` and `bead.epic
 
 Shared objects:
 
-- `RunView`: `{id, formula, step, agent, step_kind: "prompt"|"exec"|"drain", state, class, attempt, generation, bead,
-  workdir,
-  depth, parent_run, created_at, started_at}`. `step` is the name of the formula step the run is at (6.1); `agent` and
-  `step_kind` are of that step, `agent` is null for `exec` and `drain` steps, `class` is null until `failed`, `bead` is
-  the
-  bead id or null, `depth` is the chain depth of §6.1 (0 for a run started by hand), `parent_run` the run whose event
-  triggered it or whose session started it. The read API (`GET /v1/runs/{id}`, `aae run show`) gives the `RunView` with
-  `project`, `rig`, `correlation`, `inputs`, `waiting_for`, `outcome`, `attempts`, `usage` (`{input_tokens,
-  output_tokens}`, summed over every attempt) and: `reason` (the veto text, the cancel reason, `pass`, or the failure
-  reason), `request` (the open request while in `requires_action`, else null) and `gate` (the oldest closure of the
-  run's keys while it waits on a gate or is `parked`, else null).
+- `RunView`:
+  `{id, formula, step, agent, step_kind: "prompt"|"exec"|"drain", state, class, attempt, generation, bead, workdir, depth, parent_run, created_at, started_at}`.
+  `step` is the name of the formula step the run is at (6.1); `agent` and `step_kind` are of that step, `agent` is null
+  for `exec` and `drain` steps, `class` is null until `failed`, `bead` is the bead id or null, `depth` is the chain
+  depth of §6.1 (0 for a run started by hand), `parent_run` the run whose event triggered it or whose session started
+  it. The read API (`GET /v1/runs/{id}`, `aae run show`) gives the `RunView` with `project`, `rig`, `correlation`,
+  `inputs`, `waiting_for`, `outcome`, `attempts`, `usage` (`{input_tokens, output_tokens}`, summed over every attempt)
+  and: `reason` (the veto text, the cancel reason, `pass`, or the failure reason), `request` (the open request while in
+  `requires_action`, else null) and `gate` (the oldest closure of the run's keys while it waits on a gate or is
+  `parked`, else null).
 - `Failure`: `{kind, text, scope, retry_at, retried_by_harness, source, raw, account, provider_model}`: `kind` from
   see 4.4, `text` set only for `unknown`, `scope` one of `session | instance | account | provider_model | run | rig`,
   `retry_at` time or null, `source` one of `harness | adapter | core`, `raw` the harness text cut to 4 KiB,
@@ -557,13 +556,12 @@ core sets the actor of an exec step and hands that of a session to the adapter i
   bead after the call, not by the exit code text, §10.2); `OwnerMismatch { holder }` (conditional release or close
   found another owner, nothing changed); `Unavailable { text }` (transient: retried by the effect queue with
   backoff, `tracker.sync_failed` on every failure); `Invalid { text }` (permanent).
-- `release` and `close` are conditional on `assignee == owner`; br 0.7.6 has neither a conditional close nor a
-  release, so the adapter reads, compares and writes. A `close` of a parent with open children leaves it open: br
-  refuses it, and the adapter releases the bead instead, so it does not stay `in_progress` behind a terminal run. The
-  window between read and write is open only to humans
-  (the daemon is the only claimer, invariant 3). An owner found changed before the write is `OwnerMismatch`,
-  reported as `resync.diverged`; a human write that lands inside the window shows up only as a `bead.updated` of
-  the next `changes` batch, until the resync of the tracker compares owners.
+- `release` and `close` are conditional on `assignee == owner`; br 0.7.6 has neither a conditional close nor a release,
+  so the adapter reads, compares and writes. A `close` of a parent with open children leaves it open: br refuses it, and
+  the adapter releases the bead instead, so it does not stay `in_progress` behind a terminal run. The window between
+  read and write is open only to humans (the daemon is the only claimer, invariant 3). An owner found changed before the
+  write is `OwnerMismatch`, reported as `resync.diverged`; a human write that lands inside the window shows up only as a
+  `bead.updated` of the next `changes` batch, until the resync of the tracker compares owners.
 - The state of the orchestrator is the truth of ownership; the assignee in br mirrors it (6.2).
 
 ## 6. Run
@@ -593,12 +591,11 @@ so that the state machine has one place where `run.attempt_failed` is decided.
 - `queued` has not started: it waits for a concurrency slot, a free workdir or an open gate. `parked` has started and
   waits for a gate with no harness process.
 - A run belongs to a project and a rig, named when it is created (API, CLI, MCP) or by the trigger that fires on the
-  rig. A start that names no rig takes it from the one `rig:` label of the bead an input names by id; only a bead of
-  the ready list has known labels, so for any other the start is refused with "name the rig". No rig, an unknown rig,
-  or a bead with no or several `rig:` labels is refused before the run exists. Its workdir is the rig's directory, or a
-  worktree of it with
-  `worktree = true` in the formula (config.md). One live run holds a workdir: a second run in the same directory
-  waits in `queued` (`waiting_for: workdir`); parallel work in one rig is the worktree's job.
+  rig. A start that names no rig takes it from the one `rig:` label of the bead an input names by id; only a bead of the
+  ready list has known labels, so for any other the start is refused with "name the rig". No rig, an unknown rig, or a
+  bead with no or several `rig:` labels is refused before the run exists. Its workdir is the rig's directory, or a
+  worktree of it with `worktree = true` in the formula (config.md). One live run holds a workdir: a second run in the
+  same directory waits in `queued` (`waiting_for: workdir`); parallel work in one rig is the worktree's job.
 - Concurrency is bounded per orchestrator (`max_runs`, default 8) and per agent (`max_runs` in `agent.toml`).
 - A run goes through the steps of its formula in order (config.md, "Formula"); `preparing` to `finishing` are
   states of the current step, named by `step` of the `RunView`. A `pass` of a step that is not the last, once
