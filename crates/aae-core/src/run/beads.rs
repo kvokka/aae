@@ -36,7 +36,7 @@ impl RunHandler {
                 .is_some_and(|o| o.keys().any(|k| k != "next_ready" && k != "epic"))
         {
             return Err(rejected(
-                "a bead input is a bead id or `{ next_ready = true, epic = <id> }`",
+                "a bead input is a bead id, `{ next_ready = true, epic = <id> }` or `{ request = \"<text>\" }`",
             ));
         }
         let epic = input["epic"].as_str();
@@ -135,6 +135,9 @@ impl RunHandler {
     ) -> Result<(), Error> {
         let text = |key: &str| payload[key].as_str().unwrap_or_default().to_owned();
         let (call, project, bead, run) = (text("call"), text("project"), text("bead"), text("run"));
+        if call == "create" && !matches!(result, Err(TrackerError::Unavailable { .. })) {
+            return self.created(tx, &run, result);
+        }
         let current: Option<(Option<String>, i64)> = tx
             .sql()
             .query_row(
@@ -293,7 +296,7 @@ impl RunHandler {
     }
 }
 
-fn tracker_key(project: &str) -> String {
+pub(super) fn tracker_key(project: &str) -> String {
     format!("tracker:{project}")
 }
 
@@ -317,6 +320,10 @@ pub(super) async fn execute(trackers: &Trackers, core: &CoreHandle<Msg>, payload
     let (owner, bead) = (format!("aae:{}", text("run")), text("bead"));
     let result = match text("call") {
         "claim" => tracker.claim(&owner, bead).await.map(Some),
+        "create" => tracker
+            .create(&owner, text("key"), text("title"), text("description"))
+            .await
+            .map(Some),
         "close" => tracker.close(&owner, bead, text("reason")).await.map(|()| None),
         "release" => tracker.release(&owner, bead).await.map(|()| None),
         _ => {

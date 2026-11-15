@@ -29,9 +29,11 @@ impl RunHandler {
         )?;
         row.set_state(tx, "preparing", None)?;
         row.emit(tx, "run.started", json!({ "run": row.view() }))?;
-        match row.bead.clone() {
+        let mut inputs: Value = serde_json::from_str(&row.inputs).unwrap_or_default();
+        match (row.bead.clone(), super::drain::requested(&mut inputs)) {
             // The prompt may show the bead: it renders once the claim returned it.
-            Some(bead) if row.bead_data.is_none() => self.claim(tx, &row, &bead),
+            (Some(bead), _) if row.bead_data.is_none() => self.claim(tx, &row, &bead),
+            (None, Some((text, _))) => self.create_root(tx, row, &text),
             _ => self.render_and_prepare(tx, row),
         }
     }

@@ -190,7 +190,7 @@ spaces, nothing else — no filters, conditions or loops.
   another field, is a config error.
 - `{{` that is not a placeholder is written `{{"{{"}}`.
 
-A bead input is either a bead id (string) or `{ next_ready = true, epic = <id or absent> }`
+A bead input is a bead id (string), `{ next_ready = true, epic = <id or absent> }` or `{ request = "<text>" }`
 ([tracker-br.md](tracker-br.md#beads-and-runs)).
 
 ## 3. Orchestrator hooks: decisions and timeouts
@@ -627,9 +627,9 @@ of the parent leaves them alone.
 |---|---|---|---|
 | — | create (API, CLI, MCP, trigger) with an idempotency key | `queued` | — (with a bead input the run is recorded as the bead's owner in this transaction, invariant 3: a bead another live run holds refuses; `{ next_ready = true, epic }` takes the first bead of the last ready set, in the tracker's order, that is in the epic, of the run's rig or of no rig, without an owner and without a closed gate; none → the reply `{"nothing_ready": true}`, for a trigger `trigger.skipped{nothing_ready}`; the input then holds the bead id) |
 | — | create with `continue_from: <run>` (a terminal run with a session; a session is never reused implicitly) | `queued` | in the workdir of that run; the first attempt resumes that run's last session with the formula prompt; a later `resume` uses the run's own session, or that one while it has none; a harness other than the agent's → `failed{infrastructure}`. Only the first step continues that session: a formula whose first step is `exec` cannot be continued, and the later steps start sessions of their own |
-| `queued` | slot free, workdir free, no gate of the run closed | `preparing` | with a bead: the tracker claim as owner `aae:<run>` (queue `tracker:<project>`), and the prompt renders once the claim returned the bead; `run.preparing` hooks |
+| `queued` | slot free, workdir free, no gate of the run closed | `preparing` | with a request: the tracker creates the root bead (`create`, key kept in the effect), the run owns it and its input takes the id; with a bead: the tracker claim as owner `aae:<run>` (queue `tracker:<project>`), and the prompt renders once the claim returned the bead; `run.preparing` hooks |
 | `preparing` | decision `proceed` (or no hooks) | `starting` | attempt 1: instance acquire, `start_session`, `send_prompt` |
-| `preparing` | `deny`, template error, claim error `Claimed` / `NotFound` / `Invalid`, no claim answer within `start_timeout` | `failed{check}`, `failed{infrastructure}`, `failed{infrastructure, bead_claimed / bead_not_found / bead_invalid}`, `failed{infrastructure, tracker_unavailable}` | — |
+| `preparing` | `deny`, template error, claim error `Claimed` / `NotFound` / `Invalid`, `create` error other than `Unavailable`, no claim or `create` answer within `start_timeout` | `failed{check}`, `failed{infrastructure}`, `failed{infrastructure, bead_claimed / bead_not_found / bead_invalid}`, `failed{infrastructure, bead_not_created: <error>}`, `failed{infrastructure, tracker_unavailable}` | — |
 | `starting` | `prompt.acked` of the first prompt | `running` | — |
 | `running` | `permission.requested` | `requires_action` | `run.requires_action` hooks |
 | `requires_action` | answer from a hook or a human, or `human_timeout` | `running` | `respond` |

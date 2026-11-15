@@ -4,6 +4,7 @@
 mod bead_events;
 mod beads;
 mod decide;
+mod drain;
 mod events;
 mod exec;
 mod exec_step;

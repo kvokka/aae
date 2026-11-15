@@ -96,6 +96,8 @@ impl RunHandler {
             Some(_) if !self.trackers.contains_key(&c.project) => {
                 return Err(rejected(format!("`{}` has no tracker", c.project)));
             }
+            // A request gets its bead as the run prepares (spec §10.1).
+            Some((key, _)) if Self::request(&c.inputs[key])?.is_some() => None,
             Some((key, _)) => match Self::pick_bead(tx, &c.project, &rig_name, &c.inputs[key])? {
                 Some(id) => {
                     c.inputs.insert(key.clone(), json!(id));

@@ -59,6 +59,16 @@ tracker interface and its errors are in [contracts.md](contracts.md) §5; the be
   `external_ref` is the key of the creation (`aae-` and 16 hex digits). The adapter first looks the key up in
   `br list -a`, so a creation repeated after a restart returns the same bead. The children of a claimed root are
   ready; a released root with open children is not.
+- The root is created when a run with the input `{ request = "<text>" }` leaves `queued`, as an effect on the queue
+  `tracker:<project>`: title the first line of the text that is not blank (at most 80 characters), description the
+  whole text. The key is drawn once and kept in the effect, so a repeat after `kill -9` creates nothing new; a repeated
+  answer is dropped. The run then owns and claims the root as any bead, and its prompt sees the text as
+  `{{ bead.description }}`. Known limit: a tracker that answers after `start_timeout` leaves a root without a run.
+- Two labels of a bead shape every run on it. `agent:<name>` runs every prompt step with that agent (a variant by its
+  name, else the agent of that name) instead of the step's; the name has no pack prefix, as br refuses a dot in a label.
+  `harness:<name>` is checked against the effective config of each prompt step: a difference refuses the start with
+  both harness names. Without `agent:` each step runs its own agent, without `harness:` nothing is checked; several of
+  either label refuse the start.
 
 ## Generated from the project configs
 
