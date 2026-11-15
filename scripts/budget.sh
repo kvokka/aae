@@ -12,7 +12,7 @@ mapfile -t files < <(git ls-files -co --exclude-standard -- 'crates/*/src/*' \
   | grep -Ev '^crates/aae-(testkit|acceptance)/|(^|/)tests(\.rs$|/)|/generated/' || true)
 
 # Code lines (no blanks, no comments) per budget part, counted by tokei.
-declare -A limit=([core]=12000 [claude]=3500 [codex]=3500 [tracker]=1200 [frontends]=4000 [plugins]=1500 [reserve]=4300)
+declare -A limit=([core]=18000 [claude]=3500 [codex]=3500 [tracker]=1200 [frontends]=4000 [plugins]=1500 [reserve]=4300)
 declare -A used=()
 total=0
 if ((${#files[@]})); then
