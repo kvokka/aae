@@ -28,7 +28,7 @@ all of them share.
   5 s (`BUSY` in `store.rs`). Every transaction of the daemon's connection takes the write lock at `BEGIN`
   (`IMMEDIATE`; the migrations at open begin `IMMEDIATE` too), so the wait covers it whatever its first statement.
   The writer calls SQLite synchronously, so while it waits it holds one runtime worker thread; the API's reads go
-  on, through their own read-only connections. When the wait runs out the transaction fails: a journal drain is
+  on, through the daemon's one read-only connection. When the wait runs out the transaction fails: a journal drain is
   retried with backoff, a message fails back to its sender, and any other write (the start-up transaction, a
   deadline's, the record of a finished effect) stops the core.
   A deadline whose own handler fails is not such a failure: it is rolled back and fires again a minute later.
