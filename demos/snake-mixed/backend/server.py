@@ -1,85 +1,88 @@
 #!/usr/bin/env python3
-"""Small standard-library HTTP service for snake high scores."""
+"""Small standard-library HTTP backend for the browser snake game."""
 
-from http.server import BaseHTTPRequestHandler, HTTPServer
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import os
-import re
+from pathlib import Path
 
 
-HERE = os.path.dirname(os.path.abspath(__file__))
-SCORES_FILE = os.path.join(HERE, "scores.txt")
+SCORES_FILE = Path(__file__).resolve().parent / "scores.txt"
 
 
-class ScoreHandler(BaseHTTPRequestHandler):
-    def send_response(self, code, message=None):
-        super().send_response(code, message)
+class SnakeRequestHandler(BaseHTTPRequestHandler):
+    def _send_headers(self, status, content_type=None, extra_headers=None):
+        self.send_response(status)
         self.send_header("Access-Control-Allow-Origin", "*")
+        if content_type:
+            self.send_header("Content-Type", content_type)
+        if extra_headers:
+            for name, value in extra_headers.items():
+                self.send_header(name, value)
+        self.end_headers()
 
     def do_OPTIONS(self):
-        self.send_response(204)
-        self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-        self.send_header("Access-Control-Allow-Headers", "Content-Type")
-        self.end_headers()
-
-    def do_GET(self):
-        if self.path != "/scores":
-            self.send_error(404)
-            return
-
-        scores = []
-        try:
-            with open(SCORES_FILE, "r", encoding="utf-8") as score_file:
-                for line in score_file:
-                    parts = line.split()
-                    if len(parts) == 2 and re.fullmatch(r"\d+", parts[1]):
-                        scores.append((int(parts[1]), parts[0]))
-        except FileNotFoundError:
-            pass
-
-        scores.sort(key=lambda item: item[0], reverse=True)
-        body = "".join("{} {}\n".format(name, score) for score, name in scores[:10]).encode("utf-8")
-        self.send_response(200)
-        self.send_header("Content-Type", "text/plain; charset=utf-8")
-        self.send_header("Content-Length", str(len(body)))
-        self.end_headers()
-        if body:
-            self.wfile.write(body)
+        self._send_headers(
+            204,
+            extra_headers={
+                "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+                "Access-Control-Allow-Headers": "Content-Type",
+            },
+        )
 
     def do_POST(self):
         if self.path != "/scores":
-            self.send_error(404)
+            self._send_headers(404)
             return
 
         try:
             length = int(self.headers.get("Content-Length", ""))
             if length < 0:
-                raise ValueError
+                raise ValueError("negative content length")
             body = self.rfile.read(length).decode("utf-8")
-        except (ValueError, UnicodeDecodeError):
-            self.send_error(400)
+            parts = body.split()
+            if len(parts) != 2 or not parts[0] or not parts[1].isdigit():
+                raise ValueError("expected a name and a whole-number score")
+            name, score = parts
+            # Names cannot contain whitespace, and scores are non-negative integers.
+            with SCORES_FILE.open("a", encoding="utf-8") as scores:
+                scores.write(f"{name} {int(score)}\n")
+        except (ValueError, UnicodeDecodeError, OSError):
+            self._send_headers(400)
             return
 
-        parts = body.split()
-        if len(parts) != 2 or not parts[0] or not re.fullmatch(r"\d+", parts[1]):
-            self.send_error(400)
+        self._send_headers(204)
+
+    def do_GET(self):
+        if self.path != "/scores":
+            self._send_headers(404)
             return
 
+        entries = []
         try:
-            with open(SCORES_FILE, "a", encoding="utf-8") as score_file:
-                score_file.write("{} {}\n".format(parts[0], int(parts[1])))
-        except OSError:
-            self.send_error(500)
-            return
+            with SCORES_FILE.open("r", encoding="utf-8") as scores:
+                for line in scores:
+                    parts = line.split()
+                    if len(parts) == 2 and parts[1].isdigit():
+                        entries.append((int(parts[1]), line.strip()))
+        except FileNotFoundError:
+            pass
 
-        self.send_response(204)
-        self.send_header("Content-Length", "0")
-        self.end_headers()
+        entries.sort(key=lambda entry: entry[0], reverse=True)
+        body = "".join(f"{line}\n" for _, line in entries[:10]).encode("utf-8")
+        self._send_headers(200, "text/plain; charset=utf-8")
+        self.wfile.write(body)
 
-    def log_message(self, fmt, *args):
-        # Keep routine request logs out of the terminal.
+
+def main():
+    port = int(os.environ.get("PORT", "8765"))
+    server = ThreadingHTTPServer(("127.0.0.1", port), SnakeRequestHandler)
+    try:
+        server.serve_forever()
+    except KeyboardInterrupt:
         pass
+    finally:
+        server.server_close()
 
 
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", "8765"))
-    HTTPServer(("127.0.0.1", port), ScoreHandler).serve_forever()
+    main()

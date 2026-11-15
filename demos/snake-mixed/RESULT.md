@@ -1,9 +1,9 @@
 # snake-mixed: passed
 
-<!-- MEASURE id=demo-snake-mixed date=2026-11-14 ver=aae-0.1.0@5640682-dirty,claude-2.1.325,codex-0.168.0 env=Linux-aarch64 src=demos/run.sh note="passed in 119 s from the request, 2 runs started by the planner, n=1" -->
+<!-- MEASURE id=demo-snake-mixed date=2026-11-15 ver=aae-0.1.0@7fdca97-dirty,claude-2.1.325,codex-0.168.0 env=Linux-aarch64 src=demos/run.sh note="passed in 306 s from the request, 2 runs started by the planner, n=1" -->
 
-Run on 2026-11-14 with aae-0.1.0@5640682-dirty,claude-2.1.325,codex-0.168.0 (`Linux aarch64`): passed in 119 s from the request.
-Tokens the harnesses reported for the runs: input 112342, output 26738.
+Run on 2026-11-15 with aae-0.1.0@7fdca97-dirty,claude-2.1.325,codex-0.168.0 (`Linux aarch64`): passed in 306 s from the request.
+Tokens the harnesses reported for the runs: input 75899, output 23776.
 
 The runs, oldest first, with the run that started each:
 
@@ -17,19 +17,15 @@ The runs, oldest first, with the run that started each:
 The planner's outcome (`aae run wait`):
 
 ```
-data.backend.bad_post_status: 400
-data.backend.default_port: 8765
-data.backend.deliverable: server.py
-data.backend.get_status: 200
-data.backend.options_status: 204
-data.backend.post_status: 204
-data.backend.smoke_test_get_output: smoke 4242
-data.frontend.api_base: http://127.0.0.1:8765
-data.frontend.arrow_keys: ArrowUp, ArrowDown, ArrowLeft, ArrowRight
-data.frontend.deliverable: index.html
-data.frontend.uses_canvas: true
+data.backend.file: server.py
+data.backend.port_default: 8765
+data.backend.result: passed
+data.backend.start: PORT=8765 python3 server.py
+data.frontend.backend_url: http://127.0.0.1:8765
+data.frontend.file: index.html
+data.frontend.result: passed
 id: run_1
 reason: pass
 state: passed
-summary: Built the snake high-score game in two rigs. backend: server.py (stdlib HTTP service on 127.0.0.1, PORT default 8765, scores in scores.txt beside it, POST/GET /scores with CORS, OPTIONS 204). frontend: index.html (single-file plain-JS canvas snake, arrow keys, name prompt, POST to and GET top-ten from http://127.0.0.1:8765/scores). Both runs passed; the POST body format and endpoints match across the two.
+summary: Snake game split across two rigs: backend/server.py (stdlib Python score server on 127.0.0.1, PORT default 8765, scores.txt, CORS) and frontend/index.html (plain-JS canvas snake, arrow keys, name prompt on game over, POST/GET /scores to http://127.0.0.1:8765). Smoke test verified: POST smoke 4242 -> 204, line in scores.txt, GET returns it, OPTIONS -> 204.
 ```

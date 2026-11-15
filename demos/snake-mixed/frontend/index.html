@@ -5,388 +5,350 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Snake</title>
 <style>
-  :root { color-scheme: light dark; }
   body {
     font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    background: #1d1f27;
+    color: #e8e8e8;
     margin: 0;
     padding: 24px;
     display: flex;
-    justify-content: center;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
   }
-  main {
+  h1 { margin: 0; font-size: 28px; }
+  #layout {
     display: flex;
-    flex-wrap: wrap;
     gap: 24px;
     align-items: flex-start;
+    flex-wrap: wrap;
     justify-content: center;
   }
-  canvas {
-    border: 2px solid #333;
-    background: #f5f7f2;
+  #board {
+    background: #101217;
+    border: 2px solid #3a3f4b;
+    border-radius: 6px;
     display: block;
-    outline: none;
   }
-  .panel { min-width: 240px; max-width: 320px; }
-  h1 { margin: 0 0 8px; font-size: 1.6em; }
-  #score { font-size: 1.3em; margin: 4px 0 12px; }
-  #status { min-height: 1.4em; margin: 8px 0; }
-  .error { color: #b00020; }
-  .ok { color: #1b7f3b; }
-  #nameForm { margin: 12px 0; display: none; }
-  #nameForm.visible { display: block; }
-  #nameForm input { padding: 6px; width: 60%; font-size: 1em; }
-  button { padding: 6px 12px; font-size: 1em; cursor: pointer; margin-top: 6px; }
-  ol { padding-left: 1.5em; margin: 6px 0; }
-  li { font-family: ui-monospace, Menlo, Consolas, monospace; }
-  .hint { color: #666; font-size: 0.9em; }
+  #side {
+    min-width: 220px;
+    background: #272a34;
+    border-radius: 6px;
+    padding: 16px;
+  }
+  #score { font-size: 22px; margin: 0 0 12px; }
+  button {
+    font: inherit;
+    font-size: 16px;
+    padding: 8px 18px;
+    border: none;
+    border-radius: 4px;
+    background: #4caf50;
+    color: #fff;
+    cursor: pointer;
+  }
+  button:hover { background: #5cc160; }
+  #status { min-height: 1.4em; margin: 12px 0 0; color: #ffb74d; font-size: 14px; }
+  h2 { font-size: 18px; margin: 0 0 8px; }
+  #scores { margin: 0; padding-left: 24px; font-family: ui-monospace, Menlo, Consolas, monospace; }
+  #scores li { margin: 2px 0; }
+  #help { color: #9aa0ad; font-size: 13px; margin: 0; }
 </style>
 </head>
 <body>
-<main>
-  <canvas id="board" width="400" height="400" tabindex="0"></canvas>
-  <section class="panel">
-    <h1>Snake</h1>
-    <p class="hint">Arrow keys steer. Eat food to grow.</p>
-    <div id="score">Score: 0</div>
-    <div id="status" role="status"></div>
+<h1>Snake</h1>
 
-    <form id="nameForm" autocomplete="off">
-      <label for="playerName">Your name (no spaces):</label><br>
-      <input id="playerName" name="playerName" maxlength="20" required>
-      <br>
-      <button type="submit" id="saveBtn">Save score</button>
-    </form>
+<div id="layout">
+  <canvas id="board" width="400" height="400"></canvas>
 
-    <button type="button" id="newGameBtn">New game</button>
-    <p class="hint">After game over press Enter or Space (or the button) to play again.</p>
+  <div id="side">
+    <p id="score">Score: 0</p>
+    <button id="startBtn" type="button">Start</button>
+    <p id="help">Arrow keys to steer. Start with a key press or the button.
+      You cannot reverse into your own neck.</p>
+    <p id="status" role="status" aria-live="polite"></p>
 
     <h2>Top 10</h2>
-    <div id="scoresStatus" class="hint"></div>
-    <ol id="scoresList"></ol>
-  </section>
-</main>
+    <ol id="scores"></ol>
+  </div>
+</div>
 
 <script>
 (function () {
-  "use strict";
+  'use strict';
 
-  // ---- Configuration ------------------------------------------------------
-  const API_BASE = "http://127.0.0.1:8765";
-  const GRID = 20;          // cells per side
-  const CELL = 20;          // pixels per cell (canvas is GRID*CELL square)
-  const TICK_MS = 120;      // time between snake moves
-  const MAX_QUEUE = 3;      // buffered direction changes between ticks
-  const MAX_NAME_LEN = 20;
+  // ---- Configuration -------------------------------------------------------
+  // Backend base URL. Score endpoint: http://127.0.0.1:8765/scores
+  const BACKEND_URL = 'http://127.0.0.1:8765';
+  const SCORES_URL = BACKEND_URL + '/scores';
 
-  // ---- DOM ----------------------------------------------------------------
-  const canvas = document.getElementById("board");
-  const ctx = canvas.getContext("2d");
-  const scoreEl = document.getElementById("score");
-  const statusEl = document.getElementById("status");
-  const nameForm = document.getElementById("nameForm");
-  const nameInput = document.getElementById("playerName");
-  const saveBtn = document.getElementById("saveBtn");
-  const newGameBtn = document.getElementById("newGameBtn");
-  const scoresStatus = document.getElementById("scoresStatus");
-  const scoresList = document.getElementById("scoresList");
+  const COLS = 20;
+  const ROWS = 20;
+  const CELL = 20;          // px per cell; board is COLS*CELL x ROWS*CELL
+  const TICK_MS = 120;      // time per snake step
+  const MAX_TOP = 10;
 
-  // ---- Game state ---------------------------------------------------------
-  // state: "ready" (waiting for first key), "running", "over"
-  let state = "ready";
-  let snake = [];
-  let dir = { x: 1, y: 0 };
-  let queue = [];           // pending direction changes, applied one per tick
-  let food = null;
-  let score = 0;
-  let timer = null;
-  let saving = false;
-
-  const KEY_DIRS = {
-    ArrowUp:    { x: 0, y: -1 },
-    ArrowDown:  { x: 0, y: 1 },
+  const DIRS = {
+    ArrowUp:    { x: 0,  y: -1 },
+    ArrowDown:  { x: 0,  y: 1 },
     ArrowLeft:  { x: -1, y: 0 },
-    ArrowRight: { x: 1, y: 0 }
+    ArrowRight: { x: 1,  y: 0 }
   };
 
-  function same(a, b) { return a.x === b.x && a.y === b.y; }
+  // ---- DOM -----------------------------------------------------------------
+  const canvas = document.getElementById('board');
+  const ctx = canvas.getContext('2d');
+  const scoreEl = document.getElementById('score');
+  const startBtn = document.getElementById('startBtn');
+  const statusEl = document.getElementById('status');
+  const scoresEl = document.getElementById('scores');
 
-  function isOnSnake(cell) {
-    return snake.some(function (s) { return same(s, cell); });
+  // ---- Game state ----------------------------------------------------------
+  let snake = [];          // snake[0] is the head
+  let dir = DIRS.ArrowRight;
+  let pending = [];        // queued direction changes (max 2)
+  let food = { x: 0, y: 0 };
+  let score = 0;
+  let state = 'idle';      // 'idle' | 'running' | 'over'
+  let timer = null;
+  let message = 'Press an arrow key or Start to play.';
+
+  function setStatus(text) {
+    statusEl.textContent = text;
+  }
+
+  function sameCell(a, b) {
+    return a.x === b.x && a.y === b.y;
   }
 
   function placeFood() {
-    const free = [];
-    for (let y = 0; y < GRID; y++) {
-      for (let x = 0; x < GRID; x++) {
-        const c = { x: x, y: y };
-        if (!isOnSnake(c)) free.push(c);
+    for (;;) {
+      const c = { x: Math.floor(Math.random() * COLS), y: Math.floor(Math.random() * ROWS) };
+      if (!snake.some(function (s) { return sameCell(s, c); })) {
+        food = c;
+        return;
       }
     }
-    if (free.length === 0) return null;
-    return free[Math.floor(Math.random() * free.length)];
   }
 
-  function resetBoard() {
-    const cx = Math.floor(GRID / 2);
-    const cy = Math.floor(GRID / 2);
-    snake = [{ x: cx, y: cy }, { x: cx - 1, y: cy }, { x: cx - 2, y: cy }];
-    dir = { x: 1, y: 0 };
-    queue = [];
+  function resetGame() {
+    snake = [{ x: 10, y: 10 }, { x: 9, y: 10 }, { x: 8, y: 10 }];
+    dir = DIRS.ArrowRight;
+    pending = [];
     score = 0;
-    food = placeFood();
+    placeFood();
     updateScore();
   }
 
-  function startTimer() {
-    stopTimer();
-    timer = setInterval(tick, TICK_MS);
+  function updateScore() {
+    scoreEl.textContent = 'Score: ' + score;
   }
 
-  function stopTimer() {
-    if (timer !== null) {
-      clearInterval(timer);
-      timer = null;
+  // ---- Drawing -------------------------------------------------------------
+  function draw() {
+    const W = COLS * CELL;
+    const H = ROWS * CELL;
+    ctx.fillStyle = '#101217';
+    ctx.fillRect(0, 0, W, H);
+
+    // faint grid
+    ctx.strokeStyle = '#1a1d26';
+    ctx.lineWidth = 1;
+    for (let i = 1; i < COLS; i++) {
+      ctx.beginPath(); ctx.moveTo(i * CELL + 0.5, 0); ctx.lineTo(i * CELL + 0.5, H); ctx.stroke();
+    }
+    for (let j = 1; j < ROWS; j++) {
+      ctx.beginPath(); ctx.moveTo(0, j * CELL + 0.5); ctx.lineTo(W, j * CELL + 0.5); ctx.stroke();
+    }
+
+    // food
+    ctx.fillStyle = '#ef5350';
+    ctx.beginPath();
+    ctx.arc(food.x * CELL + CELL / 2, food.y * CELL + CELL / 2, CELL / 2 - 3, 0, Math.PI * 2);
+    ctx.fill();
+
+    // snake
+    for (let i = snake.length - 1; i >= 0; i--) {
+      const s = snake[i];
+      ctx.fillStyle = i === 0 ? '#a5d6a7' : '#4caf50';
+      ctx.fillRect(s.x * CELL + 1, s.y * CELL + 1, CELL - 2, CELL - 2);
+    }
+
+    // overlay when not running
+    if (state !== 'running') {
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.55)';
+      ctx.fillRect(0, 0, W, H);
+      ctx.fillStyle = '#ffffff';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.font = 'bold 24px system-ui, sans-serif';
+      ctx.fillText(state === 'over' ? 'Game over' : 'Snake', W / 2, H / 2 - 20);
+      ctx.font = '15px system-ui, sans-serif';
+      ctx.fillText(message, W / 2, H / 2 + 14);
     }
   }
 
-  function setStatus(text, cls) {
-    statusEl.textContent = text;
-    statusEl.className = cls || "";
-  }
-
-  function updateScore() {
-    scoreEl.textContent = "Score: " + score;
-  }
-
-  function newGame() {
-    stopTimer();
-    resetBoard();
-    state = "running";
-    nameForm.classList.remove("visible");
-    setStatus("");
+  // ---- Game loop -----------------------------------------------------------
+  function startGame(firstDir) {
+    if (state === 'running') return;
+    resetGame();
+    if (firstDir && !(firstDir.x === -dir.x && firstDir.y === -dir.y)) {
+      dir = firstDir;
+    }
+    state = 'running';
+    message = '';
+    setStatus('');
+    startBtn.textContent = 'Restart';
+    timer = setInterval(step, TICK_MS);
     draw();
-    startTimer();
   }
 
-  function tick() {
-    if (state !== "running") return;
-    if (queue.length > 0) dir = queue.shift();
-
+  function step() {
+    if (pending.length > 0) {
+      dir = pending.shift();
+    }
     const head = { x: snake[0].x + dir.x, y: snake[0].y + dir.y };
 
-    // Wall collision
-    if (head.x < 0 || head.y < 0 || head.x >= GRID || head.y >= GRID) {
-      gameOver();
-      return;
+    // wall collision
+    if (head.x < 0 || head.y < 0 || head.x >= COLS || head.y >= ROWS) {
+      return endGame();
     }
 
-    const eating = same(head, food);
-    // When not growing, the tail cell will vacate, so it is not a collision.
+    const eating = sameCell(head, food);
+    // when not eating, the tail cell will move away, so it is not a collision
     const body = eating ? snake : snake.slice(0, -1);
-    if (body.some(function (s) { return same(s, head); })) {
-      gameOver();
-      return;
+    if (body.some(function (s) { return sameCell(s, head); })) {
+      return endGame();
     }
 
     snake.unshift(head);
     if (eating) {
       score += 1;
       updateScore();
-      food = placeFood();
-      if (food === null) {          // board is full: nothing left to place
-        draw();
-        gameOver();
-        return;
-      }
+      placeFood();
     } else {
       snake.pop();
     }
     draw();
   }
 
-  function gameOver() {
-    stopTimer();
-    state = "over";
+  function endGame() {
+    clearInterval(timer);
+    timer = null;
+    state = 'over';
+    message = 'Final score: ' + score;
+    startBtn.textContent = 'Play again';
     draw();
-    setStatus("Game over! Score: " + score + ". Enter your name to save it.");
-    nameForm.classList.add("visible");
-    nameInput.focus();
+    // Let the browser paint the final frame before the blocking prompt.
+    setTimeout(askNameAndSubmit, 50);
   }
 
-  // Keep the name printable and free of spaces; fall back to "anonymous".
+  // ---- Name & score submission --------------------------------------------
   function sanitizeName(raw) {
-    let n = String(raw).trim().replace(/\s+/g, "_");
-    n = n.replace(/[^\p{L}\p{N}_.\-]/gu, "").slice(0, MAX_NAME_LEN);
-    return n || "anonymous";
+    const cleaned = String(raw == null ? '' : raw)
+      .replace(/[\u0000-\u001f\u007f]/g, ' ')
+      .trim()
+      .replace(/\s+/g, '_')
+      .slice(0, 32);
+    return cleaned || 'anonymous';
   }
 
-  // ---- Drawing ------------------------------------------------------------
-  function draw() {
-    const size = GRID * CELL;
-    ctx.fillStyle = "#f5f7f2";
-    ctx.fillRect(0, 0, size, size);
-
-    // faint grid
-    ctx.strokeStyle = "rgba(0,0,0,0.05)";
-    ctx.lineWidth = 1;
-    for (let i = 1; i < GRID; i++) {
-      ctx.beginPath();
-      ctx.moveTo(i * CELL + 0.5, 0);
-      ctx.lineTo(i * CELL + 0.5, size);
-      ctx.moveTo(0, i * CELL + 0.5);
-      ctx.lineTo(size, i * CELL + 0.5);
-      ctx.stroke();
-    }
-
-    if (food) {
-      ctx.fillStyle = "#d32f2f";
-      ctx.beginPath();
-      ctx.arc(food.x * CELL + CELL / 2, food.y * CELL + CELL / 2, CELL / 2 - 3, 0, Math.PI * 2);
-      ctx.fill();
-    }
-
-    snake.forEach(function (s, i) {
-      ctx.fillStyle = i === 0 ? "#1b5e20" : "#43a047";
-      ctx.fillRect(s.x * CELL + 1, s.y * CELL + 1, CELL - 2, CELL - 2);
-    });
-
-    if (state === "ready" || state === "over") {
-      ctx.fillStyle = "rgba(0,0,0,0.45)";
-      ctx.fillRect(0, 0, size, size);
-      ctx.fillStyle = "#ffffff";
-      ctx.textAlign = "center";
-      ctx.textBaseline = "middle";
-      ctx.font = "bold 22px system-ui, sans-serif";
-      if (state === "ready") {
-        ctx.fillText("Press an arrow key", size / 2, size / 2 - 12);
-        ctx.font = "16px system-ui, sans-serif";
-        ctx.fillText("to start", size / 2, size / 2 + 16);
-      } else {
-        ctx.fillText("GAME OVER", size / 2, size / 2 - 12);
-        ctx.font = "16px system-ui, sans-serif";
-        ctx.fillText("Score: " + score, size / 2, size / 2 + 16);
-      }
-    }
+  function askNameAndSubmit() {
+    const finalScore = score;
+    const raw = window.prompt('Game over! Your score: ' + finalScore + '\nEnter your name:', '');
+    const name = sanitizeName(raw);
+    submitScore(name, finalScore);
   }
 
-  // ---- Keyboard -----------------------------------------------------------
-  function queueDirection(nd) {
-    const current = queue.length > 0 ? queue[queue.length - 1] : dir;
-    if (same(nd, current)) return;                       // no change
-    if (nd.x === -current.x && nd.y === -current.y) return; // reversal: ignore
-    if (queue.length >= MAX_QUEUE) return;
-    queue.push(nd);
-  }
-
-  function isTypingTarget(el) {
-    return el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.tagName === "BUTTON");
-  }
-
-  document.addEventListener("keydown", function (e) {
-    const key = e.key;
-
-    if (KEY_DIRS[key]) {
-      if (isTypingTarget(e.target)) return;
-      e.preventDefault();
-      if (state === "over") return;
-      if (state === "ready") {
-        state = "running";
-        setStatus("");
-        startTimer();
-      }
-      queueDirection(KEY_DIRS[key]);
-      return;
-    }
-
-    if ((key === "Enter" || key === " ") && state === "over") {
-      if (isTypingTarget(e.target)) return;   // typing a name / pressing a button
-      e.preventDefault();
-      newGame();
-    }
-  });
-
-  newGameBtn.addEventListener("click", function () {
-    if (state === "over" || state === "ready") newGame();
-  });
-
-  // ---- Backend ------------------------------------------------------------
-  function saveScore(e) {
-    e.preventDefault();
-    if (saving || state !== "over") return;
-
-    const name = sanitizeName(nameInput.value);
-    const body = name + " " + score;
-    saving = true;
-    saveBtn.disabled = true;
-    setStatus("Saving...");
-
-    fetch(API_BASE + "/scores", {
-      method: "POST",
-      headers: { "Content-Type": "text/plain" },
-      body: body
-    }).then(function (res) {
-      if (res.status === 204) {
-        setStatus("Saved as " + name + ". Press Enter or Space or New game to play again.", "ok");
-        nameForm.classList.remove("visible");
-        nameInput.value = "";
-        if (document.activeElement) document.activeElement.blur();
-        loadScores();
-        return;
-      }
-      return res.text().then(function (t) {
-        setStatus("Server rejected the score (HTTP " + res.status + ")" +
-                  (t ? ": " + t.trim() : "") + ".", "error");
-      }, function () {
-        setStatus("Server rejected the score (HTTP " + res.status + ").", "error");
+  async function submitScore(name, value) {
+    setStatus('Saving score...');
+    try {
+      const res = await fetch(SCORES_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain' },
+        body: name + ' ' + value
       });
-    }).catch(function () {
-      setStatus("Could not reach the backend at " + API_BASE + ".", "error");
-    }).then(function () {
-      saving = false;
-      saveBtn.disabled = false;
-    });
+      if (!res.ok) {
+        throw new Error('HTTP ' + res.status);
+      }
+      setStatus('Score saved for ' + name + '.');
+    } catch (err) {
+      setStatus('Could not reach the score server');
+    }
+    state = 'idle';
+    message = 'Press an arrow key or Start to play again.';
+    startBtn.textContent = 'Start';
+    draw();
+    await loadScores();
   }
 
-  nameForm.addEventListener("submit", saveScore);
-
-  function loadScores() {
-    scoresStatus.textContent = "Loading...";
-    fetch(API_BASE + "/scores").then(function (res) {
-      if (!res.ok) throw new Error("HTTP " + res.status);
-      return res.text();
-    }).then(function (text) {
+  // ---- Top 10 --------------------------------------------------------------
+  async function loadScores() {
+    try {
+      const res = await fetch(SCORES_URL);
+      if (!res.ok) {
+        throw new Error('HTTP ' + res.status);
+      }
+      const text = await res.text();
       renderScores(text);
-    }).catch(function (err) {
-      scoresStatus.textContent = "";
-      scoresStatus.className = "error";
-      scoresStatus.textContent = "Could not load scores (" + err.message + ").";
-    });
+    } catch (err) {
+      renderScores(null);
+      setStatus('Could not reach the score server');
+    }
   }
 
   function renderScores(text) {
-    scoresList.textContent = "";
-    scoresStatus.className = "hint";
+    scoresEl.textContent = '';
+    if (text === null) {
+      const li = document.createElement('li');
+      li.textContent = '(scores unavailable)';
+      scoresEl.appendChild(li);
+      return;
+    }
     const lines = text.split(/\r?\n/)
       .map(function (l) { return l.trim(); })
       .filter(function (l) { return l.length > 0; })
-      .slice(0, 10);
-
+      .slice(0, MAX_TOP);
     if (lines.length === 0) {
-      scoresStatus.textContent = "No scores yet.";
+      const li = document.createElement('li');
+      li.textContent = '(no scores yet)';
+      scoresEl.appendChild(li);
       return;
     }
-    scoresStatus.textContent = "";
     lines.forEach(function (line) {
-      const parts = line.split(/\s+/);
-      const li = document.createElement("li");
-      li.textContent = parts[0] + " " + parts[parts.length - 1];
-      scoresList.appendChild(li);
+      const li = document.createElement('li');
+      li.textContent = line;   // textContent: never interpreted as HTML
+      scoresEl.appendChild(li);
     });
   }
 
-  // ---- Start --------------------------------------------------------------
-  resetBoard();
+  // ---- Input ---------------------------------------------------------------
+  window.addEventListener('keydown', function (e) {
+    if (Object.prototype.hasOwnProperty.call(DIRS, e.key)) {
+      e.preventDefault();
+      const want = DIRS[e.key];
+      if (state !== 'running') {
+        if (state === 'idle') startGame(want);
+        return;
+      }
+      const last = pending.length > 0 ? pending[pending.length - 1] : dir;
+      // reject reversing into the neck and no-op repeats
+      if (want.x === -last.x && want.y === -last.y) return;
+      if (want.x === last.x && want.y === last.y) return;
+      if (pending.length < 2) pending.push(want);
+    }
+  });
+
+  startBtn.addEventListener('click', function () {
+    if (state === 'running') return;
+    if (state === 'over') return;   // prompt/submission still pending
+    startGame(null);
+  });
+
+  // ---- Init ----------------------------------------------------------------
+  resetGame();
   draw();
+  setStatus('');
   loadScores();
 })();
 </script>
