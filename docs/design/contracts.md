@@ -721,25 +721,26 @@ for it is not.
   with the decision to send; `sent` after `send_prompt` returned; `acked` on `prompt.acked`; `settled` when the turn
   ended. No marker in the prompt text: both harnesses keep the key in the transcript natively
   ([experiments](experiments.md)), so the transcript check finds it.
-- Daemon start (§5.6): open the state and drain the outbox; for every recorded instance check pid + start time,
-  kill its process group and sweep every process carrying its marker `AAE_INSTANCE=<id>` in the environment, wait
-  for the end (invariants 6, 7); every hook still queued is first killed by its `AAE_INSTANCE` marker, with what
-  it started, so a hook the dead daemon left running does not outlive it. A hook process is killed with SIGKILL
-  without waiting for its death, so the hook that runs again may start before the old process is gone: hooks must
-  be idempotent (spec §11.3). Runs with a live attempt — `starting`, `running` in a turn, `requires_action` — →
-  `interrupted` with `daemon_crash` (a `drain` attempt too: its next attempt gives no bead its entry of the step gave
-  out), the launches, prompts, answers and deciding hooks they still had queued dropped, and the command of an exec
-  step killed by its `AAE_INSTANCE` marker (random per attempt) before any later attempt runs it. A run that waits
-  for a decision on a deciding event keeps its state and waits for the same decision (3.4): `preparing`,
-  `interrupted` waiting for the policy, `finishing`, and `running` after a turn that ended without an outcome. Its hook effect is still queued and its hooks run again; the declared outcome and
-  the result of an exec command stand, the turn and the command do not run again. A run goes on from the step it is
-  at: the move to the next step is in the transaction that accepted the outcome (6.1), so a finished step never runs
-  again, and an exec command killed by the restart runs again in a new attempt of the same step. Recovery lets go of the
-  handle of such an attempt, whose session died with its instance, and drops what it still had queued for the session.
-  The deadlines that wait for an effect's answer count again from the start: `decide` (3.3) and the claim of a bead in
-  `preparing` (`start_timeout`); those of real time — gate `until`, schedules (a missed one fires at most once), the
-  `after` of a retry, `queue_timeout`, `park_timeout` — stay. Then resync. Deadlines are wall-clock times: the writer
-  reads the wall clock at least every 30 s, so a deadline passed while the machine slept fires late by at most that.
+- Daemon start (§5.6): open the state and drain the outbox; for every recorded instance check pid + start time, kill its
+  process group and sweep every process carrying its marker `AAE_INSTANCE=<id>` in the environment, wait for the end
+  (invariants 6, 7); every hook still queued is first killed by its `AAE_INSTANCE` marker, with what it started, so a
+  hook the dead daemon left running does not outlive it. A hook process is killed with SIGKILL without waiting for its
+  death, so the hook that runs again may start before the old process is gone: hooks must be idempotent (spec §11.3).
+  Runs with a live attempt — `starting`, `running` in a turn, `requires_action` — → `interrupted` with `daemon_crash` (a
+  `drain` attempt too: its next attempt gives no bead its entry of the step gave out), the launches, prompts, answers
+  and deciding hooks they still had queued dropped, and the command of an exec step killed by its `AAE_INSTANCE` marker
+  (random per attempt) before any later attempt runs it. A run that waits for a decision on a deciding event keeps its
+  state and waits for the same decision (3.4): `preparing`, `interrupted` waiting for the policy, `finishing`, and
+  `running` after a turn that ended without an outcome. Its hook effect is still queued and its hooks run again; the
+  declared outcome and the result of an exec command stand, the turn and the command do not run again. A run goes on
+  from the step it is at: the move to the next step is in the transaction that accepted the outcome (6.1), so a finished
+  step never runs again, and an exec command killed by the restart runs again in a new attempt of the same step.
+  Recovery lets go of the handle of such an attempt, whose session died with its instance, and drops what it still had
+  queued for the session. The deadlines that wait for an effect's answer count again from the start: `decide` (3.3) and
+  the claim of a bead in `preparing` (`start_timeout`); those of real time — gate `until`, schedules (a missed one fires
+  at most once), the `after` of a retry, `queue_timeout`, `park_timeout` — stay. Then resync. Deadlines are wall-clock
+  times: the writer reads the wall clock at least every 30 s, so a deadline passed while the machine slept fires late by
+  at most that.
 - Daemon stop (a signal, the end of a drain, `restart`): the core stops first, then the daemon, a child subreaper,
   kills every descendant it still has — sessions, hooks, exec commands — before it exits.
 - A resumed attempt after `daemon_crash` checks the transcript for the last unsettled key: not delivered → send the
