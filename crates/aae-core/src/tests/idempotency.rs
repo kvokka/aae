@@ -4,6 +4,35 @@ use super::{Msg, T0, count, max_seq, rig, settle};
 use crate::Clock;
 use std::time::Duration;
 
+/// A keyed message reads its key before it writes: under a lock held by another connection it still waits the lock
+/// out instead of failing at the upgrade (docs/design/event-model.md, State).
+#[tokio::test]
+async fn a_keyed_message_waits_out_a_lock_held_by_another_connection() {
+    let dir = tempfile::tempdir().unwrap();
+    let db = dir.path().join("state.db");
+    let r = rig(&db, Clock::system(), 0, Duration::ZERO);
+    // The start-up transaction is behind this reply.
+    r.core
+        .send(Some("cmd-0"), Msg::ClearDeadline { id: "none" })
+        .await
+        .unwrap();
+    let lock = rusqlite::Connection::open(&db).unwrap();
+    lock.execute_batch("BEGIN IMMEDIATE").unwrap();
+    let held = Duration::from_millis(300);
+    let sent = std::time::Instant::now();
+    let release = std::thread::spawn(move || {
+        std::thread::sleep(held);
+        lock.execute_batch("COMMIT").unwrap();
+    });
+    let work = Msg::Work {
+        effect_key: "run-1",
+        dedupe: "start",
+    };
+    r.core.send(Some("cmd-1"), work).await.unwrap();
+    assert!(sent.elapsed() >= held, "the reply came before the lock was released");
+    release.join().unwrap();
+}
+
 #[tokio::test(start_paused = true)]
 async fn repeated_message_does_not_repeat_the_effect() {
     let dir = tempfile::tempdir().unwrap();

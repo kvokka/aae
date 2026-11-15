@@ -180,9 +180,12 @@ pub fn open(path: &Path) -> rusqlite::Result<Connection> {
         .append(true)
         .mode(0o600)
         .open(path);
-    let conn = Connection::open(path)?;
+    let mut conn = Connection::open(path)?;
     // The daemon is the only writer, so a busy database means an outside lock: wait it out this long, then fail.
     conn.busy_timeout(BUSY)?;
+    // A deferred transaction that reads first fails at once when it turns to write under that lock (SQLite does not
+    // wait on the upgrade); taking the write lock at BEGIN puts every transaction of this connection under the wait.
+    conn.set_transaction_behavior(rusqlite::TransactionBehavior::Immediate);
     conn.pragma_update(None, "journal_mode", "WAL")?;
     // NORMAL in WAL mode survives a process crash (kill -9, criterion 8); only power loss can drop a commit.
     conn.pragma_update(None, "synchronous", "NORMAL")?;
