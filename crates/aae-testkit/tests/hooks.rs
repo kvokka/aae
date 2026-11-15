@@ -13,6 +13,7 @@ use std::{
     sync::Arc,
     time::{Duration, Instant},
 };
+use tokio::sync::Notify;
 
 /// A world whose plugin `policy` has the hooks `(event, script)` with a timeout of 1 s.
 fn policy(hooks: &[(&str, &str)]) -> World {
@@ -44,7 +45,17 @@ fn policy_timed(hooks: &[(&str, &str, &str)]) -> World {
 }
 
 impl World {
-    async fn declare(&self, run: &str) -> Value {
+    /// Scripts a turn that ends only once `declare` is told its attempt has declared: no race with the wall clock.
+    fn slow_turn(&self) -> Arc<Notify> {
+        let declared = Arc::new(Notify::new());
+        let mut steps = hollow_turn();
+        steps.insert(1, Step::Await(declared.clone()));
+        self.driver.script(steps);
+        declared
+    }
+
+    /// Declares `pass` for the first attempt of `run`, then lets `turn` end.
+    async fn declare(&self, run: &str, turn: &Notify) -> Value {
         let started = Instant::now();
         let token = loop {
             if let Some(token) = self.driver.token(run, 1) {
@@ -63,15 +74,10 @@ impl World {
             token,
             outcome,
         };
-        self.core.send(None, msg).await.unwrap()["answer"].clone()
+        let answer = self.core.send(None, msg).await.unwrap()["answer"].clone();
+        turn.notify_one();
+        answer
     }
-}
-
-/// A turn that ends a second after the prompt: time to declare an outcome.
-fn slow_turn() -> Vec<Step> {
-    let mut steps = hollow_turn();
-    steps.insert(1, Step::Wait(Duration::from_secs(1)));
-    steps
 }
 
 #[tokio::test]
@@ -115,10 +121,9 @@ async fn a_remark_brings_a_second_pass_in_the_same_attempt() {
     let check = r#"read -r e
 case "$e" in *'"remarks":0'*) echo '{"decision":"remark","message":"again"}' ;; esac"#;
     let w = policy(&[("run.finishing", check)]);
-    w.driver.script(slow_turn());
-    w.driver.script(slow_turn());
+    let (one, two) = (w.slow_turn(), w.slow_turn());
     let run = w.create().await;
-    assert_eq!(w.declare(&run).await, "accepted");
+    assert_eq!(w.declare(&run, &one).await, "accepted");
     w.until(Some(&run), "run.finishing", 0).await;
     let changes = async |n| {
         let mut running = 0;
@@ -132,7 +137,7 @@ case "$e" in *'"remarks":0'*) echo '{"decision":"remark","message":"again"}' ;; 
         }
     };
     changes(2).await;
-    assert_eq!(w.declare(&run).await, "accepted");
+    assert_eq!(w.declare(&run, &two).await, "accepted");
     let passed = w.until(Some(&run), "run.passed", 0).await;
     assert_eq!(passed["run"]["attempt"], 1);
 }
@@ -140,9 +145,9 @@ case "$e" in *'"remarks":0'*) echo '{"decision":"remark","message":"again"}' ;; 
 #[tokio::test]
 async fn exit_2_on_finishing_is_a_veto_with_the_stderr_reason() {
     let w = policy(&[("run.finishing", "echo 'tests are red' >&2; exit 2")]);
-    w.driver.script(slow_turn());
+    let turn = w.slow_turn();
     let run = w.create().await;
-    assert_eq!(w.declare(&run).await, "accepted");
+    assert_eq!(w.declare(&run, &turn).await, "accepted");
     let failed = w.until(Some(&run), "run.failed", 0).await;
     assert_eq!(
         (&failed["class"], &failed["reason"]),
@@ -259,9 +264,9 @@ async fn one_veto_among_accepts_blocks_on_finishing() {
         ("run.finishing", r#"echo '{"decision":"accept"}'"#),
         ("run.finishing", r#"echo '{"decision":"veto","reason":"no"}'"#),
     ]);
-    w.driver.script(slow_turn());
+    let turn = w.slow_turn();
     let run = w.create().await;
-    assert_eq!(w.declare(&run).await, "accepted");
+    assert_eq!(w.declare(&run, &turn).await, "accepted");
     let failed = w.until(Some(&run), "run.failed", 0).await;
     assert_eq!((&failed["class"], &failed["reason"]), (&json!("check"), &json!("no")));
 }
@@ -299,14 +304,14 @@ async fn the_bundled_default_policy_resumes_a_crash_and_reminds_once() {
 /// What a hook on `on` the dead daemon left running is killed by its marker on restart, before the hook, still
 /// queued, runs again; `reach` brings the run to the event. Returns the run.
 #[cfg(target_os = "linux")]
-async fn a_restart_kills_the_hook_left_on(on: &str, reach: impl AsyncFn(&World, &str)) -> (World, String) {
+async fn a_restart_kills_the_hook_left_on(on: &str, reach: impl AsyncFn(&World, &str, &Notify)) -> (World, String) {
     // The test's restart drops the hook's future, which kills `sh` (a `kill -9` of the daemon would not): the
     // background `sleep` stands for what survives. The hook that runs again finds its pid file and says nothing.
     let gate = "[ -e hook.pid ] && exit 0\nsleep 60 &\necho $! > hook.pid\nwait";
     let mut w = policy_timed(&[(on, gate, "120s")]);
-    w.driver.script(slow_turn());
+    let turn = w.slow_turn();
     let run = w.create().await;
-    reach(&w, &run).await;
+    reach(&w, &run, &turn).await;
     let pid_file = w.dir.path().join("policy/hook.pid");
     let started = Instant::now();
     let pid: i32 = loop {
@@ -333,7 +338,7 @@ async fn a_restart_kills_the_hook_left_on(on: &str, reach: impl AsyncFn(&World, 
 #[cfg(target_os = "linux")]
 #[tokio::test]
 async fn a_restart_kills_the_preparing_hook_the_dead_daemon_left() {
-    let (w, run) = a_restart_kills_the_hook_left_on("run.preparing", async |_: &World, _: &str| {}).await;
+    let (w, run) = a_restart_kills_the_hook_left_on("run.preparing", async |_: &World, _: &str, _: &Notify| {}).await;
     assert_eq!(w.until(Some(&run), "run.state_changed", 1).await["to"], "starting");
 }
 
@@ -341,7 +346,7 @@ async fn a_restart_kills_the_preparing_hook_the_dead_daemon_left() {
 #[cfg(target_os = "linux")]
 #[tokio::test]
 async fn a_restart_kills_the_finishing_hook_the_dead_daemon_left() {
-    let declare = async |w: &World, run: &str| assert_eq!(w.declare(run).await, "accepted");
+    let declare = async |w: &World, run: &str, turn: &Notify| assert_eq!(w.declare(run, turn).await, "accepted");
     let (w, run) = a_restart_kills_the_hook_left_on("run.finishing", declare).await;
     w.until(Some(&run), "run.passed", 0).await;
 }

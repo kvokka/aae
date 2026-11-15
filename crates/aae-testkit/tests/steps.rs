@@ -12,6 +12,7 @@ use aae_testkit::Step;
 use common::{Hanging, POLICY, World, world_with};
 use serde_json::{Value, json};
 use std::{sync::Arc, time::Duration};
+use tokio::sync::Notify;
 
 /// `sh -c <script>` as an exec step named `name`.
 fn exec(name: &str, script: &str) -> String {
@@ -34,22 +35,24 @@ fn flow(steps: &[String], extra: &[(&str, &str)], hooks: Arc<dyn HookRunner>) ->
     world_with(&files, hooks)
 }
 
-/// A turn that leaves 1 s for the finisher.
-fn turn() -> Vec<Step> {
-    vec![
-        Step::Emit(Normalized::TurnStarted),
-        Step::Wait(Duration::from_secs(1)),
-        Step::Emit(Normalized::TurnEnded {
-            stop_reason: StopReason::Completed,
-        }),
-        Step::Emit(Normalized::State {
-            state: SessionState::Idle,
-            background: false,
-        }),
-    ]
-}
-
 impl World {
+    /// Scripts a turn that ends only once `pass` is told its attempt has declared: no race with the wall clock.
+    fn turn(&self) -> Arc<Notify> {
+        let declared = Arc::new(Notify::new());
+        self.driver.script(vec![
+            Step::Emit(Normalized::TurnStarted),
+            Step::Await(declared.clone()),
+            Step::Emit(Normalized::TurnEnded {
+                stop_reason: StopReason::Completed,
+            }),
+            Step::Emit(Normalized::State {
+                state: SessionState::Idle,
+                background: false,
+            }),
+        ]);
+        declared
+    }
+
     async fn start_flow(&self) -> String {
         let create = Create {
             project: "shop".into(),
@@ -85,8 +88,9 @@ impl World {
             .collect()
     }
 
-    /// Declares `pass` with `data` for the attempt `attempt` of `run` once its session has the token.
-    async fn pass(&self, run: &str, attempt: u32, data: Value) -> Value {
+    /// Declares `pass` with `data` for the attempt `attempt` of `run` once its session has the token, then lets
+    /// its turn end.
+    async fn pass(&self, run: &str, attempt: u32, data: Value, turn: &Notify) -> Value {
         let started = std::time::Instant::now();
         let token = loop {
             if let Some(token) = self.driver.token(run, attempt) {
@@ -108,7 +112,9 @@ impl World {
             token,
             outcome,
         };
-        self.core.send(None, msg).await.unwrap()["answer"].clone()
+        let answer = self.core.send(None, msg).await.unwrap()["answer"].clone();
+        turn.notify_one();
+        answer
     }
 
     async fn end(&self, run: &str) -> (String, Value) {
@@ -184,9 +190,9 @@ async fn exec_then_prompt_then_exec_pass_the_outcome_along() {
         )],
         Arc::new(ExecHooks::default()),
     );
-    w.driver.script(turn());
+    let turn = w.turn();
     let run = w.start_flow().await;
-    assert_eq!(w.pass(&run, 2, json!({ "commit": "abc" })).await, "accepted");
+    assert_eq!(w.pass(&run, 2, json!({ "commit": "abc" }), &turn).await, "accepted");
     let (kind, data) = w.end(&run).await;
     assert_eq!(kind, "run.passed", "{data}");
     let (_, prompts) = w.driver.sent(&run, 2);
@@ -217,11 +223,10 @@ async fn each_prompt_step_has_a_session_of_its_own() {
         &[("shop/formulas/one.md", "One."), ("shop/formulas/two.md", "Two.")],
         Arc::new(ExecHooks::default()),
     );
-    w.driver.script(turn());
-    w.driver.script(turn());
+    let (one, two) = (w.turn(), w.turn());
     let run = w.start_flow().await;
-    assert_eq!(w.pass(&run, 1, json!(1)).await, "accepted");
-    assert_eq!(w.pass(&run, 2, json!(2)).await, "accepted");
+    assert_eq!(w.pass(&run, 1, json!(1), &one).await, "accepted");
+    assert_eq!(w.pass(&run, 2, json!(2), &two).await, "accepted");
     let (kind, data) = w.end(&run).await;
     assert_eq!(kind, "run.passed", "{data}");
     let attempts = w.attempts();
@@ -242,9 +247,9 @@ async fn a_resumed_step_never_takes_the_session_of_an_earlier_step() {
         &[POLICY, &texts].concat(),
         Arc::new(Hanging::default()),
     );
-    w.driver.script(turn());
+    let one = w.turn();
     let run = w.start_flow().await;
-    assert_eq!(w.pass(&run, 1, json!(1)).await, "accepted");
+    assert_eq!(w.pass(&run, 1, json!(1), &one).await, "accepted");
     // Step `two` starts its attempt, its harness never reports a session, and the daemon dies.
     w.driver.stall_sessions();
     let started = std::time::Instant::now();
@@ -253,13 +258,13 @@ async fn a_resumed_step_never_takes_the_session_of_an_earlier_step() {
         tokio::time::sleep(Duration::from_millis(20)).await;
     }
     w.restart().await;
-    w.driver.script(turn());
+    let two = w.turn();
     let resume = Decision::Resume {
         after: Duration::ZERO,
         gate: None,
     };
     w.decide(&run, "run.attempt_failed", 0, resume).await;
-    assert_eq!(w.pass(&run, 3, json!(3)).await, "accepted");
+    assert_eq!(w.pass(&run, 3, json!(3), &two).await, "accepted");
     let (kind, data) = w.end(&run).await;
     assert_eq!(kind, "run.passed", "{data}");
     let attempts = w.attempts();

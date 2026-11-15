@@ -3,19 +3,14 @@
 mod common;
 
 use aae_core::run::{Create, ExecHooks, Msg};
-use aae_testkit::ScriptedDriver;
+use aae_testkit::{ScriptedDriver, Step};
 use common::{World, hollow_turn, world_on};
 use std::{
     path::{Path, PathBuf},
     sync::Arc,
     time::{Duration, Instant},
 };
-
-fn slow_turn() -> Vec<aae_testkit::Step> {
-    let mut steps = hollow_turn();
-    steps.insert(1, aae_testkit::Step::Wait(Duration::from_secs(1)));
-    steps
-}
+use tokio::sync::Notify;
 
 /// `git -C <dir> <args>` without the user's git config; its trimmed stdout.
 fn git(dir: &Path, args: &[&str]) -> String {
@@ -68,9 +63,16 @@ async fn gone(tree: &Path) {
 async fn two_runs_of_one_rig_work_at_once_each_in_its_worktree() {
     let w = world(&[BUILD]);
     let rig = w.dir.path().join("shop/web");
-    w.driver.script(slow_turn());
-    w.driver.script(slow_turn());
+    // Each turn holds until both runs have started, so the first still runs when the second starts.
+    let held = [Arc::new(Notify::new()), Arc::new(Notify::new())];
+    for turn in &held {
+        let mut steps = hollow_turn();
+        steps.insert(1, Step::Await(turn.clone()));
+        w.driver.script(steps);
+    }
     let (one, two) = (w.create().await, w.create().await);
+    w.until(Some(&two), "run.started", 0).await;
+    held.iter().for_each(|turn| turn.notify_one());
     let (failed_one, failed_two) = (
         w.until(Some(&one), "run.failed", 0).await,
         w.until(Some(&two), "run.failed", 0).await,
