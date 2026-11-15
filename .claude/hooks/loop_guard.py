@@ -57,6 +57,8 @@ BASH_DENY = [
     (re.compile(r"\bgit\s+config\s+--global\b"), "глобальный git config не трогаем"),
     (re.compile(r"\brm\s+-[a-zA-Z]*r[a-zA-Z]*f?\s+(/|~|\$HOME)(\s|$)"), "rm -r по корню/дому запрещён"),
 ]
+# `git rm -r` — не оно; любой другой rm с -r/-R/--recursive в цикле встаёт на запросе разрешения, которого некому дать.
+RM_RECURSIVE = re.compile(r"(?<!git )\brm\s+(?:-\S+\s+)*(?:-[a-zA-Z]*[rR][a-zA-Z]*|--recursive)\b")
 
 
 # ---------------------------------------------------------------- utils
@@ -272,6 +274,10 @@ def on_pre_tool(d):
         for rx, why in BASH_DENY:
             if rx.search(cmd):
                 deny(f"Запрещено правилами харнесса: {why}.")
+        if LOOP and RM_RECURSIVE.search(cmd):
+            deny("`rm -r…` в цикле запрещён: агент на нём встаёт намертво. Отслеживаемое — `git rm -r -q <путь>`, "
+                 "неотслеживаемое — `git clean -fdq -- <путь>` или `find <путь> -delete`; временное — в `mktemp -d` "
+                 "и не убирать. Текст, где `rm -r` только упомянут (heredoc, сообщение коммита), пиши через Write/Edit.")
         if LOOP and BASH_WRITE.search(cmd):
             deny("Файлы харнесса (.claude/, scripts/loop/, CLAUDE.md) в цикле не меняются. "
                  "Предложение — в .loop/JOURNAL.md.")
