@@ -13,12 +13,21 @@ impl ScriptedDriver {
     /// `instance_idle` is zero, as for a process per session; [`Self::idle`] sets it.
     pub fn new(sessions_per_instance: usize) -> Self {
         Self {
+            harness: "scripted",
             capabilities: Capabilities {
                 sessions_per_instance,
                 instance_idle: Duration::ZERO,
                 versions: [(0, 0, 0), (u32::MAX, u32::MAX, u32::MAX)],
             },
             state: Arc::default(),
+        }
+    }
+
+    /// The same driver, with its scenarios and sessions, as the harness `harness`.
+    pub fn named(&self, harness: &'static str) -> Self {
+        Self {
+            harness,
+            ..self.clone()
         }
     }
 
@@ -76,6 +85,7 @@ impl ScriptedDriver {
             ..State::default()
         };
         Self {
+            harness: self.harness,
             capabilities: self.capabilities,
             state: Arc::new(Mutex::new(state)),
         }

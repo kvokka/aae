@@ -164,11 +164,16 @@ fn core_on(
         p.tracker.present = true;
         p.tracker.actor = Some("TRACKER_ACTOR".to_owned());
     }
+    let mut drivers: Vec<Arc<dyn aae_core::driver::Driver>> = vec![Arc::new(driver.clone())];
+    // A world that declares the harness `other` has it on the same scripted driver.
+    if config.harnesses.contains_key("other") {
+        drivers.push(Arc::new(driver.named("other")));
+    }
     run::start(
         open(&dir.join("state.db")).unwrap(),
         clock,
         Arc::new(config),
-        vec![Arc::new(driver.clone())],
+        drivers,
         [(
             "shop".to_owned(),
             Arc::new(tracker.clone()) as Arc<dyn aae_core::tracker::Tracker>,

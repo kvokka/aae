@@ -35,6 +35,7 @@ pub use tracker::MemoryTracker;
 /// ends: a hang. A scenario without `turn.ended` is a hang too.
 #[derive(Clone)]
 pub struct ScriptedDriver {
+    harness: &'static str,
     capabilities: Capabilities,
     state: Arc<Mutex<State>>,
 }
@@ -99,7 +100,7 @@ fn ready<'a, T: Send + 'a>(value: T) -> BoxFuture<'a, T> {
 
 impl Driver for ScriptedDriver {
     fn harness(&self) -> &'static str {
-        "scripted"
+        self.harness
     }
 
     fn capabilities(&self, _process: &ProcessPart) -> Capabilities {
