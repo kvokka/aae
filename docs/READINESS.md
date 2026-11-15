@@ -23,7 +23,7 @@ luna, demo 2 at `4829f4c` on codex sol, luna and terra, its `format` and `qa` ch
 to a component the demos run through end to end: a request, the planner's beads, `drain` to coders on claude and codex,
 demo 2's `format` and `qa` checks, which send the work back when one fails. A component the demos do not reach stays at
 8: its own criteria are green, but no unattended demo run goes through it.
-<!-- MEASURE id=readiness date=2026-11-16 ver=c00f951 env=linux-arm64-orbstack src=docs/READINESS.md note="the full run with real models on ffaccea, the crates/ of 15c7d3a: 37 of 37 rows; the drain change of 918884b and 520e02a lies on the path of both demos, so both ran again live on c1fa9bc: demo 1 passed in 347 s; demo 2 failed once (a coder left a background http.server running, so its turn never went idle without background, spec 7.5) and passed on its next run in 1070 s; c00f951 only counts a new contract test in row 11" -->
+<!-- MEASURE id=readiness date=2026-11-16 ver=fbbae59 env=linux-arm64-orbstack src=docs/READINESS.md note="the full run with real models on ffaccea, the crates/ of 15c7d3a: 37 of 37 rows; the drain change of 918884b and 520e02a lies on the path of both demos, so both ran again live on c1fa9bc: demo 1 passed in 347 s; demo 2 failed once (a coder left a background http.server running, so its turn never went idle without background, spec 7.5) and passed on its next run in 1070 s; c00f951 only counts a new contract test in row 11; fbbae59 only adds drain tests (a round back to the step, a root gone mid-drain) and a test helper of the tracker in memory" -->
 
 | Component | Criteria | Score | Missing for the next point |
 |---|---|---|---|
