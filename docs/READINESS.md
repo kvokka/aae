@@ -10,32 +10,32 @@ code assessed. Updated at the end of every work session.
 them: one with a `FAIL` row (or, in a full run, a row not run) holds the score at 6, a 10 needs criterion 20 green,
 and the marker below must name a commit at or after the last change of `crates/`.
 
-Assessed 2026-11-15 at `67e8c07`, after the harness replaced the provider: the user names the harness, a run has one
-model gate key from its config, rig paths are normalized, `aae doctor` checks a codex host model provider's key. The
-model-free rows and the cargo tests are checked by the full `mise run ci` and `acceptance-ci` on this code. Both demos
-passed live on this code: `snake-claude` in 99 s, `snake-mixed` (its backend worker on codex) in 119 s. The rows with a
-real model (2, 4a, the live rows of 8 and 17) and the release builds (1) did not run on this code: the components with
-such a criterion stay at 6, and none reaches 10 while a row of criterion 20 has not run.
-<!-- MEASURE id=readiness date=2026-11-15 ver=67e8c07 env=linux-arm64-orbstack src=docs/READINESS.md note="assessed against the letter of the scale; the model rows are open until a full run on this code" -->
+Assessed 2026-11-15 at `7fdca97`, after an effect the writer took before the core handle was set stopped being
+dropped as done (the cause of the two red CI runs of criterion 8). The full `mise run acceptance` ran on this code with
+the cheapest real models (claude haiku, codex gpt-5.6-luna): every row of criteria 1–23 passed, the live rows of 2, 4a,
+8 and 17 and both demos of criterion 20 included; row 22 is checked by `acceptance-ci` on the commit of this file.
+Every component scores 8. None scores 10 though both demos passed: criterion 22 checks this file on every commit
+without the demos (CI runs no model), and a 10 needs criterion 20 green in the run that checks it.
+<!-- MEASURE id=readiness date=2026-11-15 ver=7fdca97 env=linux-arm64-orbstack src=docs/READINESS.md note="assessed against the letter of the scale after a full run with real models on this code" -->
 
 | Component | Criteria | Score | Missing for the next point |
 |---|---|---|---|
-| Event loop and state | 6, 7, 8, 18 | 6 | 8: the live rows of criterion 8 (`kill -9` mid-turn of claude and codex) on this code |
-| Runs and finisher | 2, 3, 4, 4a | 6 | 8: rows 2 and 4a with a real model on this code |
-| Triggers and schedules | 5a, 5b, 6 | 8 | 10: criterion 20 |
-| Issue gates | 10, 19 | 8 | 10: criterion 20 |
-| Recovery | 8, 9 | 6 | 8: the live rows of criterion 8 on this code (recovery changed in this session) |
-| Config assembly | 12, 13 | 8 | 10: criterion 20 |
-| Instance and service registry | 13, 14 | 8 | 10: criterion 20 |
-| claude adapter | 2, 4a, 9, 11 | 6 | 8: rows 2 and 4a on this code (the adapter changed in this session) |
-| codex adapter | 2, 10, 11, 13 | 6 | 8: row 2 on this code (the adapter changed in this session) |
-| br adapter | 5a, 11, 16 | 8 | 10: criterion 20 |
-| Plugin hook execution | 4, 15 | 8 | 10: criterion 20 |
-| `default-policy` | 8, 10 | 6 | 8: the live rows of criterion 8, where it decides the resume of a real turn |
-| `worktree` | - | 8 | 10: criterion 20; no §15 criterion of its own, its tests are model-free |
-| Shared MCP | 14 | 8 | 10: criterion 20; the bridge in front of a real claude session is not checked live |
-| HTTP API | 17, 18 | 6 | 8: the live row of criterion 17 on this code |
-| CLI | 17 | 6 | 8: the live row of criterion 17 on this code |
-| MCP frontend | 17 | 6 | 8: the live row of criterion 17 on this code |
-| Acceptance spec | - | 6 | 8: a full run of every row on this code; its checks of 8 and 22 could not fail before |
-| Delivery and `doctor` | 1, 23 | 6 | 8: the release builds of criterion 1 on this code; never run on GitHub (tags only) |
+| Event loop and state | 6, 7, 8, 18 | 8 | 10: criterion 20 in the run that checks this file |
+| Runs and finisher | 2, 3, 4, 4a | 8 | 10: criterion 20 in the run that checks this file |
+| Triggers and schedules | 5a, 5b, 6 | 8 | 10: criterion 20 in the run that checks this file |
+| Issue gates | 10, 19 | 8 | 10: criterion 20 in the run that checks this file; the claude half of criterion 10 is unverified (no claude quota limit seen live) |
+| Recovery | 8, 9 | 8 | 10: criterion 20 in the run that checks this file |
+| Config assembly | 12, 13 | 8 | 10: criterion 20 in the run that checks this file |
+| Instance and service registry | 13, 14 | 8 | 10: criterion 20 in the run that checks this file |
+| claude adapter | 2, 4a, 9, 11 | 8 | 10: criterion 20 in the run that checks this file |
+| codex adapter | 2, 10, 11, 13 | 8 | 10: criterion 20 in the run that checks this file |
+| br adapter | 5a, 11, 16 | 8 | 10: criterion 20 in the run that checks this file |
+| Plugin hook execution | 4, 15 | 8 | 10: criterion 20 in the run that checks this file |
+| `default-policy` | 8, 10 | 8 | 10: criterion 20 in the run that checks this file |
+| `worktree` | - | 8 | 10: criterion 20 in the run that checks this file; no §15 criterion of its own, its tests are model-free |
+| Shared MCP | 14 | 8 | 10: criterion 20 in the run that checks this file; the bridge in front of a real claude session is not checked live |
+| HTTP API | 17, 18 | 8 | 10: criterion 20 in the run that checks this file |
+| CLI | 17 | 8 | 10: criterion 20 in the run that checks this file |
+| MCP frontend | 17 | 8 | 10: criterion 20 in the run that checks this file |
+| Acceptance spec | - | 8 | 10: criterion 20 in the run that checks this file |
+| Delivery and `doctor` | 1, 23 | 8 | 10: criterion 20 in the run that checks this file; the release builds run on GitHub on tags only |
