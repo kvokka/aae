@@ -491,7 +491,7 @@ codex (`crates/aae-codex`):
 - app-server is marked `[experimental]` and codex ships often; see [harness updates](../harness-updates.md).
 
 The failure classification tables (harness wording → kind) are owned by the adapters and pinned by the contract
-tests of §7.8 (WP-28, WP-30).
+tests of §7.8.
 
 ## 5. Tracker interface
 
@@ -547,7 +547,7 @@ core sets the actor of an exec step and hands that of a session to the adapter i
   release, so the adapter reads, compares and writes. The window between read and write is open only to humans
   (the daemon is the only claimer, invariant 3). An owner found changed before the write is `OwnerMismatch`,
   reported as `resync.diverged`; a human write that lands inside the window shows up only as a `bead.updated` of
-  the next `changes` batch, until the resync of the tracker compares owners (WP-20b).
+  the next `changes` batch, until the resync of the tracker compares owners.
 - The state of the orchestrator is the truth of ownership; the assignee in br mirrors it (6.2).
 
 ## 6. Run
