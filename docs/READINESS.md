@@ -17,7 +17,11 @@ of criterion 20 included; row 22 failed only on the marker of this file, which n
 `acceptance-ci` on the commit of this file. Every component scores 8. None scores 10 though both demos passed:
 criterion 22 checks this file on every commit without the demos (CI runs no model), and a 10 needs criterion 20 green
 in the run that checks it.
-<!-- MEASURE id=readiness date=2026-11-15 ver=6b39f7a env=linux-arm64-orbstack src=docs/READINESS.md note="assessed against the letter of the scale after a full run with real models on this code" -->
+
+Re-assessed at `65d8ab8`: the changes of `crates/` after `6b39f7a` are a deadline on a test's wait for the journal
+and an explicit busy timeout in `store::open` equal to rusqlite's default (5 s), so the product behaves the same and
+the scores carry over; the model-free rows are re-run by `acceptance-ci` on this commit.
+<!-- MEASURE id=readiness date=2026-11-15 ver=65d8ab8 env=linux-arm64-orbstack src=docs/READINESS.md note="assessed against the letter of the scale after a full run with real models on 6b39f7a; 65d8ab8 changes no product behaviour" -->
 
 | Component | Criteria | Score | Missing for the next point |
 |---|---|---|---|
