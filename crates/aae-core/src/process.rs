@@ -209,9 +209,13 @@ pub(crate) async fn wait_gone(id: &str, leader: Option<(i32, u64)>, limit: Durat
         let marker = id.to_owned();
         // Walking `/proc` is synchronous.
         let found = tokio::task::spawn_blocking(move || crate::orphans::sweep(&marker)).await;
-        killed.extend(found.unwrap_or_default());
+        let found = found.unwrap_or_default();
+        // A walk that killed something is not empty, though all it killed died: what they started meanwhile may
+        // carry the marker by the next walk.
+        let any = !found.is_empty();
+        killed.extend(found);
         killed.retain(|&(pid, start)| crate::orphans::start_time(pid) == Some(start));
-        let (left, past) = (!killed.is_empty(), tokio::time::Instant::now() >= deadline);
+        let (left, past) = (any || !killed.is_empty(), tokio::time::Instant::now() >= deadline);
         if let Some(gone) = walks.after(left, past) {
             return gone;
         }
