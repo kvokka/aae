@@ -18,9 +18,11 @@ mise is a convenience, not a requirement: install the same tools any way you lik
 
 Each task is a list of plain commands in `[tasks.<name>]` of `mise.toml`; run them by hand in that order:
 
-- `test`: `cargo nextest run --locked -E 'not binary(chaos)'`.
-- `ci`: `cargo fmt --all --check`, `cargo clippy --all-targets --locked -q -- -D warnings`,
-  `cargo nextest run --locked --no-tests=warn -E 'not binary(chaos)'`, `cargo deny check`, `cargo machete`, then `scripts/unused-pub.sh`,
+- `test`: `cargo nextest run --locked -E 'not binary(chaos)'`. Without `-p` or `--workspace` cargo builds the
+  `default-members` of the workspace: every crate but the acceptance runner `aae-acceptance`.
+- `ci`: `cargo fmt --all --check`, `cargo clippy --workspace --all-targets --locked -q -- -D warnings`,
+  `cargo nextest run --workspace --locked --no-tests=warn -E 'not binary(chaos)'`, `cargo deny check`,
+  `cargo machete`, then `scripts/unused-pub.sh`,
   `scripts/core-boundary.sh`, `scripts/select-biased.sh`, `scripts/budget-selftest.sh`, `scripts/budget.sh`, and a
   `git grep` that fails on an absolute home path (`/home/…`, `/Users/…`) outside `.loop/`.
 - `acceptance-ci`: `cargo build -q --locked -p aae`, then `cargo run -q --locked -p aae-acceptance -- --ci`.

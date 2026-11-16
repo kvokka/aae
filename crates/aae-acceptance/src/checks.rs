@@ -368,7 +368,16 @@ async fn no_stubs(env: Arc<Env>) -> String {
     command(
         &env,
         "cargo",
-        &["clippy", "--all-targets", "--locked", "-q", "--", "-D", "warnings"],
+        &[
+            "clippy",
+            "--workspace",
+            "--all-targets",
+            "--locked",
+            "-q",
+            "--",
+            "-D",
+            "warnings",
+        ],
     )
     .await;
     // Not `cargo machete`: under `cargo run` it inherits `CARGO_PKG_NAME`, takes "machete" for a path and fails.

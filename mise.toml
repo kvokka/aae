@@ -20,9 +20,9 @@ run = "cargo nextest run --locked -E 'not binary(chaos)'"
 description = "Checks that CI runs on every commit"
 run = [
   "cargo fmt --all --check",
-  "cargo clippy --all-targets --locked -q -- -D warnings",
+  "cargo clippy --workspace --all-targets --locked -q -- -D warnings",
   # Without the chaos stand: its 1000 seeds are acceptance criterion 35 (docs/acceptance.md).
-  "cargo nextest run --locked --no-tests=warn -E 'not binary(chaos)'",
+  "cargo nextest run --workspace --locked --no-tests=warn -E 'not binary(chaos)'",
   "cargo deny check",
   "cargo machete",
   "scripts/unused-pub.sh",

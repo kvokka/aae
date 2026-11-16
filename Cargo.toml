@@ -1,6 +1,18 @@
 [workspace]
 resolver = "3"
 members = ["crates/*"]
+# Everything but the acceptance runner, which is needed only on request: `cargo build`, `clippy` and `nextest` without
+# `-p` or `--workspace` leave it out. The gate (`mise run ci`) checks the whole workspace.
+default-members = [
+  "crates/aae",
+  "crates/aae-br",
+  "crates/aae-claude",
+  "crates/aae-codex",
+  "crates/aae-core",
+  "crates/aae-front",
+  "crates/aae-plugins",
+  "crates/aae-testkit",
+]
 
 [workspace.package]
 version = "0.1.0"

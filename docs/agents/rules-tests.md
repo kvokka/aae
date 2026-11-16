@@ -16,6 +16,10 @@
   own judgement, however large the change. They run when the owner's request, the plan package or a journal entry of
   the owner names them, and only the part it names. You may say in your report that a change deserves a scenario; you
   do not run it.
+- `aae-acceptance` is not a default member of the workspace: plain `cargo build`, `clippy` and `nextest` skip it,
+  `mise run ci` checks it with `--workspace`. Check a change to it with `--workspace` too
+  (`cargo clippy --workspace --all-targets -q -- -D warnings`), not `-p aae-acceptance`: that package alone takes
+  other features of `tokio`, `mio` and `uuid`, and cargo builds a second copy of those dependencies.
 - The one exception is a scenario you edited yourself: run that criterion alone
   (`cargo build -q -p aae && cargo run -q -p aae-acceptance -- --ci <N>`), as the test of what you touched.
 - Acceptance is allowed to be slow, which is why it is kept out of the way: its model-free rows run in CI only, in
