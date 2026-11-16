@@ -56,8 +56,8 @@ pub(crate) struct Env {
     pub(crate) target: PathBuf,
 }
 
-/// A scenario that has not finished within this is failed.
-const SCENARIO_LIMIT: Duration = Duration::from_secs(20 * 60);
+/// A scenario that has not finished within this is failed; the longest, demo 2 twice in a row, takes about 25 min.
+const SCENARIO_LIMIT: Duration = Duration::from_secs(45 * 60);
 
 struct Args {
     ci: bool,
