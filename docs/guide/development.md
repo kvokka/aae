@@ -24,7 +24,8 @@ Each task is a list of plain commands in `[tasks.<name>]` of `mise.toml`; run th
   `scripts/core-boundary.sh`, `scripts/select-biased.sh`, `scripts/budget-selftest.sh`, `scripts/budget.sh`, and a
   `git grep` that fails on an absolute home path (`/home/…`, `/Users/…`) outside `.loop/` and `docs/init/`.
 - `acceptance-ci`: `cargo build -q --locked -p aae`, then `cargo run -q --locked -p aae-acceptance -- --ci`.
-- `acceptance`: the same without `--ci`.
+- `acceptance`: `cargo build -q --locked --release -p aae`, then `cargo run -q --locked -p aae-acceptance -- --aae
+  <repo>/target/release/aae`: every scenario, the demos among them, runs the release build a user installs.
 - `acceptance-release`: `cargo run -q --locked -p aae-acceptance -- --release 1`.
 - `build-all`: `cargo zigbuild --release --locked --target <target>` for each of the four targets.
 
