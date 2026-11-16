@@ -21,6 +21,7 @@ each heading; this file only marks it as decided.
 | 61 | Everything an adapter reports reaches the policy and the observer; the core drops nothing of it |
 | 62 | Safety timers are allowed; polling as a way to wait for a unit of work is forbidden |
 | 65 | A harness is an abstraction: all knowledge of one lives in its adapter; the root of the build holds the one table of adapters |
+| 114 | Before the first release the state database has one schema and no migrations: a state of another schema is refused (2026-11-17) |
 
 ## Harnesses — [adapters](../design/adapters.md), [contracts 4](../design/contracts.md#4-driver-interface)
 
@@ -69,6 +70,7 @@ each heading; this file only marks it as decided.
 | 85 | A pack comes from a directory or a git repository pinned by sha or tag, the latest revision without a pin; `aae` downloads it; tags are immutable; a CLI command clears the cache |
 | 93 | A step has optional `max_attempts` (default 1) and `step_check_script_path` (default: none); the script decides whether the step passed: 0 passed, 75 a failure with no repeat, anything else not passed |
 | 110 | `max_attempts` of a step is at most 20, the ceiling of a run's session attempts (2026-11-17) |
+| 111 | Exit 75 of a step's check script is a fatal failure with nothing to repair: the step is not repeated and a check step with `back_to` sends nothing back; the run fails at once (2026-11-17) |
 | 94 | An agent's turn is `kind = "ai"`; there is no step kind `prompt` |
 | 95 | An agent's `scope`: `rig` is bound to a rig and works in its directory; `root` is bound to no repository and works over all rigs and the shared bead space. Planning over several repositories is `root` only |
 | 97 | An agent's prompt template lies in its directory as `prompt.template.md`: an agent is self-contained. A project replaces it with `.aae/agents/<agent>/prompt.template.md` in its root, without forking the pack |
@@ -126,6 +128,8 @@ each heading; this file only marks it as decided.
 |---|---|
 | 10 | HTTP API, CLI and MCP are three adapters over one core. The API and the CLI are the full surface, MCP a small one |
 | 78 | The MCP tool set does not grow: a planner agent uses the CLI |
+| 112 | A request that names a thing that does not exist answers 404 `not_found` on every method; 409 `rejected` is for a thing that exists and may not do this now (2026-11-17) |
+| 113 | The daemon is the backend and the CLI its frontend: `config check`, `config explain` and `doctor` ask the daemon like every other command. Only with an explicit `--config <file>` do they work on that file without a daemon (2026-11-17) |
 
 ## Delivery — [install](../guide/install.md), [development](../guide/development.md)
 
@@ -158,6 +162,7 @@ each heading; this file only marks it as decided.
 | 79 | The averaging window of the idle-CPU check is 30 seconds |
 | 86 | Running a demo does not conflict with the files of the repository: what a run creates is in `.gitignore`; the author's result lies beside it with the suffix `-example` and the date it was made |
 | 88 | The core's budget is 18 000 lines |
+| 115 | The integration tests of the core and those of the binary are one test binary each (`crates/aae-testkit/tests/core`, `crates/aae/tests/e2e`): a new test is a module there, not one more binary (2026-11-17) |
 | 105 | `mise run ci` is the gate of every change. Acceptance scenarios, live models and the demos run only on the owner's explicit request, and are a criterion of done only when the owner says so (2026-11-17) |
 | 106 | There is no spec and no readiness file: `docs/` describes the product as it is, `docs/agents/` holds the rules for agents (2026-11-17) |
 | 107 | The chaos stand, with all its 1000 seeds, is an acceptance row, not a part of the gate. Acceptance may be slow: its model-free rows run only in CI, in a workflow started by hand, on the owner's request (2026-11-17) |
