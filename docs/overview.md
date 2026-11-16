@@ -69,7 +69,7 @@ only; the other three targets are built and trusted to the portability of the la
 | An ACP hub "up" for editors | Not planned |
 | A human gate as a formula step | A permission request and an operator hold do that job |
 | A web interface, a dashboard | The task board is `bv`; observation is the CLI and the event stream |
-| Alerting a human about a failure | Only the event journal and the logs |
+| Alerting a human about a failure | Only the event journal and the logs; a notice plugin is on the [roadmap](roadmap.md) |
 | Windows, several machines, several users | A local daemon of one user |
 | Checks on macOS and on x86_64 | Checked on Linux arm64 only; the other targets are built |
 | A bundled check "the work is really done" | A check is a formula step, a script or an agent, written by the author of the pack or the project |

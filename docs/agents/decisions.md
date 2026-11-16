@@ -37,6 +37,10 @@ each heading; this file only marks it as decided.
 | 59 | codex harness hooks get the attempt environment through an `export` at the start of the hook command; the attempt token visible in its argv is accepted |
 | 73 | Model short names are the adapter's knowledge: a short name expands to the latest model of its family, a full name is passed as is |
 | 109 | Mapping a short name to the current full name is the adapter's job, so that a user can say "the latest sonnet-class model". The claude adapter leaves it to the claude CLI, and its model gate key carries the name as the user wrote it (2026-11-17) |
+| 116 | A run is unattended, and its harness decides permissions itself: claude runs with `--permission-prompts none`, codex with `approval_policy = "never"` unless the config sets another policy; what the config does not allow, the harness denies. Nothing waits for an answer: there is no `requires_action`, no `human_timeout`, no answer by a human (2026-11-17) |
+| 117 | The default is permissive: unless the config says otherwise the claude adapter runs in `bypassPermissions` and the codex adapter with `approval_policy = "never"`, beside decision 38. A user's own policy is native permission rules and the harness hooks `PermissionRequest` and `PreToolUse`; restrictive presets come later (2026-11-17) |
+| 118 | An adapter classifies a failure by the harness's structured fields; text is a narrow fallback, and what nothing tells apart is `unknown` with the raw value kept (2026-11-17) |
+| 119 | An MCP server of a session that fails to start fails the attempt (`tool_failure`), in claude and codex alike, whoever configured it: aae, the rig or the host (2026-11-17) |
 
 ## Config — [config](../design/config.md)
 
@@ -46,12 +50,13 @@ each heading; this file only marks it as decided.
 | 7 | Config is layered; the effective config is assembled before a harness starts |
 | 8 | Host inheritance is an option, on by default |
 | 25 | External dependencies are managed through mise |
-| 71 | Launch settings are three layered scalars: `harness`, `model`, `effort`. The agent gives defaults, the pack and the formula change them, the user's explicit setting beats all |
+| 71 | Launch settings are three layered scalars: `harness`, `model`, `effort`. The agent gives defaults, the pack and the formula change them, the user's explicit setting beats all. A formula also sets its agents' native settings (`native.<harness>`, permissions among them) (revised 2026-11-17) |
 | 72 | The user names a harness (`claude`, `codex`), not a provider; there is no `provider` setting |
 | 89 | A harness the build has an adapter for works without a `[harness.<name>]` section; the section only sets its defaults |
 | 90 | There is no neutral `permission_mode`: it is a native setting of a harness and lives in `native.<harness>`. No common section has a key only one harness understands |
 | 91 | All a user says of an agent lives in `[agents.<name>]`: the name of a pack's agent edits it, a new name with `base` is a variant. There is no `[overrides.*]` |
 | 99 | The root of a project has a name (default `root`) and a path (default: the directory of `aae.toml`), both settings. It may be the only repository of the project, or a plain directory without git |
+| 120 | Everything a run needs is decided before its start, through the layers default → orchestrator config → project config → formula; after the start no human decides anything (2026-11-17) |
 
 ## Agents, packs, formulas — [config](../design/config.md)
 
@@ -96,6 +101,8 @@ each heading; this file only marks it as decided.
 | 77 | `aae run wait` waits for the terminal state of runs by events, not by polling |
 | 104 | Once the outcome is declared and the turn has ended, background processes the agent left do not hold the run: the daemon stops them |
 | 108 | The core does not hold a workdir. A run is bound to a directory, but aae neither locks it nor queues runs by it; keeping parallel writers apart in one rig (worktrees, limits, any other coordination) is the user's business (2026-11-17) |
+| 121 | The watchdog's defaults are `silence` 15 min, `tool_silence` 40 min, `background_silence` 120 min. Its keys are cut-offs only: observing and monitoring runs are plugins (2026-11-17) |
+| 122 | Recovery after a failure is by hand for now. aae gives the tools: continue the last session, a new session on the same task with or without a note, abandon the attempt. The user names the formula that recovers and the states of the runs it is for; aae ships a default formula with reasonable defaults and a skill that helps a user recover. Nothing recovers by itself; recovery formulas (a postmortem, an archive) are on the [roadmap](../roadmap.md) (2026-11-17) |
 
 ## Tracker — [tracker](../design/tracker-br.md)
 
@@ -121,6 +128,7 @@ each heading; this file only marks it as decided.
 | 42 | A service is any long-lived supervised process; MCP is optional for it |
 | 48 | A worktree is switched on by the formula setting `worktree = true`; there are no central lists and no agent-level switch |
 | 49 | `auth_required` and `billing`: repeats with a growing pause up to once an hour, never escalated to a human |
+| 123 | Compaction, metrics, budgets and a notice that a harness is unusable are plugins, not the core; they are on the [roadmap](../roadmap.md), which is a hint, not a work list. A loop without progress is no problem of the core (2026-11-17) |
 
 ## Frontends — [frontends](../api/frontends.md), [MCP](../api/mcp.md)
 

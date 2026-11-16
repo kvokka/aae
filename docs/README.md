@@ -8,6 +8,7 @@ references (`design/contracts.md`, `design/config.md`) are meant to be read by s
 | Document | What is in it |
 |---|---|
 | [overview.md](overview.md) | what aae is, the glossary, what the first release leaves out |
+| [roadmap.md](roadmap.md) | what lies ahead as plugins; a hint, not a work list |
 | [guide/install.md](guide/install.md) | installing, what aae runs, the daemon as a service, upgrading |
 | [guide/first-project.md](guide/first-project.md) | a project, its root and rigs |
 | [guide/first-formula.md](guide/first-formula.md) | a formula with an agent, from the config to a passed run |
