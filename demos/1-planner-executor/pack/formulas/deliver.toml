@@ -14,6 +14,7 @@ timeout = "20m"
 name = "work"
 kind = "drain"
 formula = "implement"                       # a run per bead under the root, on the rig of the prefix of its id
+pool = 2                                    # two beads in work at once
 
 # The beads under the root as they are, and whether all of them are closed.
 [[step]]
