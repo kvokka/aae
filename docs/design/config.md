@@ -580,8 +580,9 @@ child of that child may borrow it on. A child that cannot start (the start is re
 bead) fails the parent at once with class `infrastructure`, with no count toward `max_attempts`; a parent that fails in
 the step cancels its live child. The step has no process: it ends when the child does; a cancelled parent cancels the
 child, and a restart finds the child it made and makes no second one. `max_attempts` and `step_check_script_path`
-apply as to any step. A formula with `internal = true` runs only from such a step or a `drain` step: a start by hand, from the API, MCP or a session is refused (`` `<name>` is
-internal: only a step of another formula runs it ``), `GET /v1/formulas` marks each formula with `internal`, and
+apply as to any step. A formula with `internal = true` runs only from such a step or a `drain` step: a start by
+hand, from the API, MCP or a session is refused (`` `<name>` is internal: only a step of another formula runs
+it ``), `GET /v1/formulas` marks each formula with `internal`, and
 `aae formula list` hides the internal ones unless `--all`. Config errors: a step that neither gives nor inherits a
 required input of its formula (``needs input `goal`, which the step neither gives nor inherits``), one that gives an
 input the formula does not declare, a formula that runs itself through its `formula` steps, at any depth, and a
