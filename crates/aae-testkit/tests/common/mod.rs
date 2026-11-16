@@ -117,7 +117,8 @@ pub(crate) fn world_waiting(
 ) -> World {
     // The state and the journal sync every write: in memory, where the machine has it, that costs nothing.
     let shm = Path::new("/dev/shm");
-    let dir = if shm.is_dir() {
+    // A world with scripts to run stays off it: `/dev/shm` is often mounted `noexec`.
+    let dir = if shm.is_dir() && !extra.iter().any(|(p, _)| p.ends_with(".sh")) {
         tempfile::tempdir_in(shm)
     } else {
         tempfile::tempdir()
@@ -130,7 +131,12 @@ pub(crate) fn world_waiting(
     {
         let path = dir.path().join(path);
         fs::create_dir_all(path.parent().unwrap()).unwrap();
-        fs::write(path, text).unwrap();
+        fs::write(&path, text).unwrap();
+        // A check script must be executable to load (spec §9.1).
+        if path.extension().is_some_and(|e| e == "sh") {
+            let mode = std::os::unix::fs::PermissionsExt::from_mode(0o755);
+            fs::set_permissions(&path, mode).unwrap();
+        }
     }
     let tracker = MemoryTracker::new();
     let clock = Clock::managed(0);

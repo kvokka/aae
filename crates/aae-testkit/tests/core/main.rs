@@ -34,6 +34,7 @@ mod root;
 mod runs;
 mod service_ports;
 mod services;
+mod step_repeat;
 mod steps;
 mod trigger_scope;
 mod triggers;
