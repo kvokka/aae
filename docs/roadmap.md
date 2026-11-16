@@ -11,5 +11,5 @@ hooks and events.
 | Budget plugin | Limits a run, a formula or a correlation by tokens or cost, from the metrics; decides what to do on overrun | The metrics plugin | After metrics |
 | Compaction plugin | Decides what to do when a harness compacts the context: a handoff, a new session, nothing | Compaction reaching plugins as an event; the adapters do not report it today | Later |
 | Harness availability notice | Tells a human outside aae that a harness is unusable (`auth_required`, `billing`): the core only waits with a backoff up to once an hour, forever | Hooks on `run.attempt_failed` | Low |
-| Recovery formulas | Ready formulas for a failed run: a postmortem by another agent, an archive of the session, an automatic choice of how to go on | The recovery tools of the core and the default recovery formula | Later |
+| Recovery formulas | Formulas that recover a failed run by themselves along a set workflow: a postmortem by another agent, an archive of the session, a choice of how to go on | The recovery tools of the core and the recovery skill, used by hand first | Low |
 | Restrictive permission presets | Ready native permission rules for claude and codex narrower than the permissive default | Native permission rules and harness hooks | Later |

@@ -41,6 +41,7 @@ each heading; this file only marks it as decided.
 | 117 | The default is permissive: unless the config says otherwise the claude adapter runs in `bypassPermissions` and the codex adapter with `approval_policy = "never"`, beside decision 38. A user's own policy is native permission rules and the harness hooks `PermissionRequest` and `PreToolUse`; restrictive presets come later (2026-11-17) |
 | 118 | An adapter classifies a failure by the harness's structured fields; text is a narrow fallback, and what nothing tells apart is `unknown` with the raw value kept (2026-11-17) |
 | 119 | An MCP server of a session that fails to start fails the attempt (`tool_failure`), in claude and codex alike, whoever configured it: aae, the rig or the host (2026-11-17) |
+| 124 | A permission the harness denied is a run event of its own, `run.permission_denied`, from what the adapter reports (claude's `permission_denied` and `result.permission_denials`) (2026-11-17) |
 
 ## Config — [config](../design/config.md)
 
@@ -102,7 +103,7 @@ each heading; this file only marks it as decided.
 | 104 | Once the outcome is declared and the turn has ended, background processes the agent left do not hold the run: the daemon stops them |
 | 108 | The core does not hold a workdir. A run is bound to a directory, but aae neither locks it nor queues runs by it; keeping parallel writers apart in one rig (worktrees, limits, any other coordination) is the user's business (2026-11-17) |
 | 121 | The watchdog's defaults are `silence` 15 min, `tool_silence` 40 min, `background_silence` 120 min. Its keys are cut-offs only: observing and monitoring runs are plugins (2026-11-17) |
-| 122 | Recovery after a failure is by hand for now. aae gives the tools: continue the last session, a new session on the same task with or without a note, abandon the attempt. The user names the formula that recovers and the states of the runs it is for; aae ships a default formula with reasonable defaults and a skill that helps a user recover. Nothing recovers by itself; recovery formulas (a postmortem, an archive) are on the [roadmap](../roadmap.md) (2026-11-17) |
+| 122 | Inside a live run the default policy recovers by itself (`resume`, `new_session`). A run that failed for good is recovered by hand: no recovery scenario is predictable, so aae gives tools, not a scenario. A user sees which runs and sessions failed and with what failure kinds, and decides: continue a session, a new session on the same task with or without a note, or abandon it. A skill helps the user's agent sort out the aftermath. Formulas that recover by themselves are a low-priority [roadmap](../roadmap.md) item (revised 2026-11-17) |
 
 ## Tracker — [tracker](../design/tracker-br.md)
 
@@ -129,6 +130,7 @@ each heading; this file only marks it as decided.
 | 48 | A worktree is switched on by the formula setting `worktree = true`; there are no central lists and no agent-level switch |
 | 49 | `auth_required` and `billing`: repeats with a growing pause up to once an hour, never escalated to a human |
 | 123 | Compaction, metrics, budgets and a notice that a harness is unusable are plugins, not the core; they are on the [roadmap](../roadmap.md), which is a hint, not a work list. A loop without progress is no problem of the core (2026-11-17) |
+| 125 | aae's skills for a user's agent ship as a plugin of the harness's own plugin system, for Claude Code and Codex only (2026-11-17) |
 
 ## Frontends — [frontends](../api/frontends.md), [MCP](../api/mcp.md)
 
