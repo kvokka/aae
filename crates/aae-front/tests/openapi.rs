@@ -82,3 +82,27 @@ fn every_operation_lists_the_errors_it_can_return() {
         }
     }
 }
+
+#[test]
+fn the_path_parameters_of_each_operation_are_the_names_in_its_path() {
+    let doc = serde_json::to_value(aae_front::api::openapi()).unwrap();
+    for (path, item) in doc["paths"].as_object().unwrap() {
+        let mut named: Vec<&str> = path
+            .split('{')
+            .skip(1)
+            .filter_map(|s| s.split_once('}'))
+            .map(|(n, _)| n)
+            .collect();
+        named.sort_unstable();
+        for (method, op) in item.as_object().unwrap() {
+            let params = op["parameters"].as_array().cloned().unwrap_or_default();
+            let mut declared: Vec<String> = params
+                .iter()
+                .filter(|p| p["in"] == "path")
+                .filter_map(|p| p["name"].as_str().map(str::to_owned))
+                .collect();
+            declared.sort_unstable();
+            assert_eq!(declared, named, "{} {path}", method.to_uppercase());
+        }
+    }
+}
