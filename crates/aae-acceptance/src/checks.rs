@@ -185,7 +185,8 @@ pub(crate) const ALL: &[Scenario] = &[
     Scenario {
         criterion: "29",
         title: "a step runs again up to `max_attempts` while its check script fails, the script's output its remark in \
-            the same session; exit 75 fails it at once; a crash or a restart keeps the count; a round starts it again",
+            the same session; exit 75 fails it at once; a crash or a restart keeps the count; a round starts it again; a timeout, a signal or a lost answer of the script \
+            does not pass, a script that cannot start fails the run",
         launch: Launch::Ci,
         run: |env| {
             Box::pin(tests(
@@ -196,8 +197,10 @@ pub(crate) const ALL: &[Scenario] = &[
                  |a_check_script_cut_by_a_restart_runs_again_and_counts_once\
                  |a_check_script_gets_the_step_and_its_output_is_the_remark\
                  |a_repeat_stays_in_its_round_and_a_round_starts_the_count_again\
-                 |a_step_of_any_kind_takes_max_attempts_and_a_check_script|a_bad_max_attempts_or_check_script_is_one_line/)",
-                10,
+                 |a_step_of_any_kind_takes_max_attempts_and_a_check_script|a_bad_max_attempts_or_check_script_is_one_line\
+                 |a_check_script_past_the_step_timeout_does_not_pass_it|a_check_script_killed_by_a_signal_does_not_pass_it\
+                 |a_lost_check_script_is_a_timeout_at_the_deadline_of_finishing|a_check_script_that_cannot_start_fails_the_run/)",
+                14,
             ))
         },
     },

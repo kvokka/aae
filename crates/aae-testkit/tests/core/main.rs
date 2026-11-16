@@ -35,6 +35,7 @@ mod runs;
 mod service_ports;
 mod services;
 mod step_repeat;
+mod step_repeat_exits;
 mod step_repeat_more;
 mod steps;
 mod trigger_scope;

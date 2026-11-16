@@ -117,9 +117,9 @@ impl World {
 }
 
 /// The first prompt of the step, then each repeat: the template with the remark of the execution before.
-const FIRST: &str = "Build web.";
+pub(crate) const FIRST: &str = "Build web.";
 
-fn again(remark: &str) -> String {
+pub(crate) fn again(remark: &str) -> String {
     format!("{FIRST}\n\nwork: {remark}")
 }
 
