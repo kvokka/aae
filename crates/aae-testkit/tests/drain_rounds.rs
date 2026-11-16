@@ -14,7 +14,7 @@ const AGAIN: &[(&str, &str)] = &[
         "shop/formulas/again.toml",
         "name = \"again\"\n[inputs]\nbead = { type = \"bead\", required = true }\n\
          [[step]]\nname = \"all\"\nkind = \"drain\"\nformula = \"work\"\n\
-         [[step]]\nname = \"check\"\nkind = \"prompt\"\nagent = \"dev\"\nprompt = \"check.md\"\nback_to = \"all\"\n",
+         [[step]]\nname = \"check\"\nkind = \"ai\"\nagent = \"dev\"\nprompt = \"check.md\"\nback_to = \"all\"\n",
     ),
     ("shop/formulas/check.md", "Check {{ steps.all.summary }}."),
 ];

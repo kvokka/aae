@@ -14,12 +14,13 @@ This page sets up a project with one rig and runs a formula that needs no model.
 ```toml
 projects = ["~/work/hello"]
 
-[harness.claude]          # a harness the agents of every project may use
+[harness.claude]          # optional: claude is available without it; this sets its defaults
 model = "haiku"           # its default model
 ```
 
-A relative project path is relative to the config file; `~/` is your home directory. Add `[harness.codex]` to let
-agents use codex as well. The full list of keys is in [the config reference](../design/config.md).
+A relative project path is relative to the config file; `~/` is your home directory. Agents may use claude and codex with no
+section; a `[harness.<name>]` section only sets a harness's defaults. The full list of keys is in
+[the config reference](../design/config.md).
 
 An orchestrator config may also sit elsewhere, for example beside a project's `aae.toml`, and be passed with
 `aae daemon --config <file>`. The [demos](../../demos/README.md) do this, so they run on a daemon of their own and
@@ -44,7 +45,7 @@ The project is named after its directory (`hello`); `name = "..."` in `aae.toml`
 ## 3. A formula without a model
 
 A **formula** says how a run works: the process, never the particular task, which comes in as the run's inputs. It is a
-list of steps, run in order; each is `exec` (a command), `prompt` (an agent working through a prompt template) or
+list of steps, run in order; each is `exec` (a command), `ai` (an agent working through a prompt template) or
 `drain` (a run for every bead under the run's bead, see [Runs over a tracker](first-formula.md#runs-over-a-tracker)).
 This one has a single step.
 `~/work/hello/formulas/check.toml`:

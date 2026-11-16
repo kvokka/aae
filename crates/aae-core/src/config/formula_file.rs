@@ -41,7 +41,7 @@ pub struct Input {
 #[derive(Debug, Deserialize)]
 #[serde(tag = "kind", rename_all = "lowercase", deny_unknown_fields)]
 pub(super) enum StepFile {
-    Prompt {
+    Ai {
         name: Option<String>,
         agent: String,
         prompt: PathBuf,

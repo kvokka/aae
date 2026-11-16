@@ -129,7 +129,7 @@
           {
             "name": "formula",
             "in": "path",
-            "description": "A formula: step by step, the agent each prompt step of its run on `rig` is of, with the layers of its pack, its\nstep and the rig's variant.",
+            "description": "A formula: step by step, the agent each ai step of its run on `rig` is of, with the layers of its pack, its\nstep and the rig's variant.",
             "required": true,
             "schema": {
               "type": [
@@ -2650,11 +2650,11 @@
               "string",
               "null"
             ],
-            "description": "The pack agent or the rig's variant a prompt step runs; null for another kind."
+            "description": "The pack agent or the rig's variant an ai step runs; null for another kind."
           },
           "kind": {
             "type": "string",
-            "description": "`prompt`, `exec` or `drain`."
+            "description": "`ai`, `exec` or `drain`."
           },
           "step": {
             "type": "string"
@@ -3268,7 +3268,7 @@
           },
           "step_kind": {
             "type": "string",
-            "description": "`prompt`, `exec` or `drain`."
+            "description": "`ai`, `exec` or `drain`."
           },
           "usage": {
             "$ref": "#/components/schemas/Usage",

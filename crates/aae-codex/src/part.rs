@@ -18,6 +18,8 @@ pub(crate) const CREDENTIALS: [&str; 2] = ["OPENAI_API_KEY", "CODEX_API_KEY"];
 
 /// The sandbox a process runs in when no config sets one (spec §2, decision 38); `doctor` warns about it.
 pub(crate) const DEFAULT_SANDBOX: &str = "danger-full-access";
+/// The native key of the approval policy, codex's own config key.
+const APPROVAL: &str = "approval_policy";
 
 /// The process part: `{home, user_home, host, env, overrides, skills}`. An isolated process gets its own `CODEX_HOME`
 /// and `HOME` under the state directory, keyed by the rest of the part, so equal parts share one app-server and its
@@ -27,8 +29,9 @@ pub(crate) fn process(config: &EffectiveConfig, state: &Path, host: &Path) -> Re
     // The contributions of attached plugins are already merged into the config (layer 5 of spec §6.3).
     let mut overrides: Vec<String> = match config.native.as_ref().map(|n| &n.value) {
         None => Vec::new(),
-        Some(Value::Object(native)) => native
-            .iter()
+        // The approval policy is the thread's (`session`), not the process's.
+        Some(Value::Object(native)) => (native.iter())
+            .filter(|(key, _)| *key != APPROVAL)
             .map(|(key, value)| {
                 let value = toml::Value::try_from(value).map_err(|e| config_error(format!("native `{key}`: {e}")))?;
                 Ok(format!("{key}={value}"))
@@ -119,13 +122,15 @@ pub(crate) fn session(config: &EffectiveConfig, plan: &SessionPlan) -> Result<Va
     let fields = [
         ("model", value(&config.model)),
         ("developerInstructions", value(&config.system_prompt)),
-        // The codex approval policy: `untrusted`, `on-request` or `never`.
-        ("approvalPolicy", value(&config.permission_mode)),
     ];
     for (key, value) in fields {
         if let Some(value) = value {
             params[key] = json!(value);
         }
+    }
+    // The codex approval policy (`untrusted`, `on-request`, `never`, ...): the native `approval_policy`.
+    if let Some(policy) = config.native.as_ref().and_then(|n| n.value.get(APPROVAL)) {
+        params["approvalPolicy"] = policy.clone();
     }
     Ok(params)
 }

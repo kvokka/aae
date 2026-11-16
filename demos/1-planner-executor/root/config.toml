@@ -1,7 +1,5 @@
 # The orchestrator config of this demo, next to the project's aae.toml on purpose: run.sh starts a daemon of the demo's
 # own with `--config` on this file, so the demo neither reads nor changes the user's ~/.config/aae/config.toml.
+# claude and codex need no section here: a section only sets a harness's defaults (model, binary).
 # aae.toml beside it is the project: its rigs, its pack and what the agents run on.
 projects = ["."]
-
-[harness.claude]
-[harness.codex]

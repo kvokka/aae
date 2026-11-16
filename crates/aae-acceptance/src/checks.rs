@@ -108,6 +108,20 @@ pub(crate) const ALL: &[Scenario] = &[
         launch: Launch::Ci,
         run: |env| Box::pin(no_stubs(env)),
     },
+    Scenario {
+        criterion: "27",
+        title: "a harness of the build needs no section; `[agents.<name>]` edits an agent or declares a variant and \
+            explain names its layer; a retired key is one line that says where it went",
+        launch: Launch::Ci,
+        run: |env| {
+            Box::pin(tests(
+                env,
+                "-p aae-core -E test(/a_harness_of_the_build_needs_no_section|a_retired_key_is_one_line|variant_errors\
+                 |an_agents_table_changes_the_harness|a_rig_runs_a_variant_in_place_of_the_agent/)",
+                5,
+            ))
+        },
+    },
 ];
 
 /// The workspace this binary was built from.
@@ -311,7 +325,7 @@ mod tests {
     /// The rows of §15, criterion 21 withdrawn: the report shows each, run or not.
     const ROWS: &[&str] = &[
         "1", "2", "3", "4", "4a", "5a", "5b", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16", "17", "18",
-        "19", "20", "22", "23", "24", "25", "26",
+        "19", "20", "22", "23", "24", "25", "26", "27",
     ];
 
     #[test]

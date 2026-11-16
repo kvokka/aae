@@ -25,9 +25,10 @@ pub enum Layer {
     Formula(String),
     /// The agent variant of the run (`[agents.<name>]`).
     Variant(String),
-    OrchestratorOverride,
-    ProjectOverride,
-    RigOverride,
+    /// `[agents.<name>]` of the orchestrator, the project and the rig: the user's settings for the agent.
+    OrchestratorAgent,
+    ProjectAgent,
+    RigAgent,
     /// A value several layers make together, in the order they apply: tables merged by key, a prompt with fragments.
     Merged(Vec<Layer>),
 }
@@ -61,9 +62,9 @@ impl fmt::Display for Layer {
             Self::Pack(name) => write!(f, "pack {name}"),
             Self::Formula(name) => write!(f, "formula {name}"),
             Self::Variant(name) => write!(f, "variant {name}"),
-            Self::OrchestratorOverride => f.write_str("orchestrator override"),
-            Self::ProjectOverride => f.write_str("project override"),
-            Self::RigOverride => f.write_str("rig override"),
+            Self::OrchestratorAgent => f.write_str("orchestrator [agents]"),
+            Self::ProjectAgent => f.write_str("project [agents]"),
+            Self::RigAgent => f.write_str("rig [agents]"),
             Self::Merged(layers) => {
                 let names: Vec<String> = layers.iter().map(ToString::to_string).collect();
                 f.write_str(&names.join(" + "))
@@ -93,7 +94,6 @@ pub struct EffectiveConfig {
     pub model_given: Option<String>,
     pub effort: Option<Sourced<String>>,
     pub system_prompt: Option<Sourced<String>>,
-    pub permission_mode: Option<Sourced<String>>,
     /// `None`: no layer says, and host inheritance is on by default (spec §6.4).
     pub inherit_host: Option<Sourced<bool>>,
     pub env: BTreeMap<String, Sourced<String>>,
@@ -122,7 +122,6 @@ impl EffectiveConfig {
             model_given: None,
             effort: None,
             system_prompt: None,
-            permission_mode: None,
             inherit_host: None,
             env: BTreeMap::new(),
             mcp: BTreeMap::new(),
@@ -152,7 +151,6 @@ impl EffectiveConfig {
             (&mut self.model, &settings.model),
             (&mut self.effort, &settings.effort),
             (&mut self.system_prompt, &settings.system_prompt),
-            (&mut self.permission_mode, &settings.permission_mode),
         ] {
             if let Some(value) = value {
                 *slot = Some(sourced(value));
@@ -239,11 +237,7 @@ impl EffectiveConfig {
             let _ = writeln!(out, "{key} = {value}  # {from}");
         };
         line("harness", quoted(&self.harness), &self.harness_from);
-        for (key, slot) in [
-            ("effort", &self.effort),
-            ("system_prompt", &self.system_prompt),
-            ("permission_mode", &self.permission_mode),
-        ] {
+        for (key, slot) in [("effort", &self.effort), ("system_prompt", &self.system_prompt)] {
             if let Some(s) = slot {
                 line(key, quoted(&s.value), &s.from);
             }

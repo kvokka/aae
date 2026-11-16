@@ -6,7 +6,7 @@ bead = { type = "bead", required = true }
 
 [[step]]
 name = "code"
-kind = "prompt"
+kind = "ai"
 agent = "coder"
 prompt = "implement.md"
 timeout = "20m"

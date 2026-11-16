@@ -334,7 +334,7 @@ async fn two_projects(scope: &str) -> (usize, [bool; 2]) {
         "harness = \"scripted\"\n[mcp.notes]\ncommand = [\"{PROBE}\", \"{}\"]\nscope = \"{scope}\"\n",
         notes.display()
     );
-    let build = "name = \"build\"\n[[step]]\nkind = \"prompt\"\nagent = \"dev\"\nprompt = \"build.md\"\n";
+    let build = "name = \"build\"\n[[step]]\nkind = \"ai\"\nagent = \"dev\"\nprompt = \"build.md\"\n";
     let files = [
         ("config.toml", config.as_str()),
         ("mall/aae.toml", "[rigs.web]\npath = \"web\"\n"),

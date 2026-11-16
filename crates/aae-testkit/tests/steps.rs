@@ -1,5 +1,5 @@
 //! The steps of a formula (spec §9.1, §9.3; docs/design/contracts.md 6.1): in order, each once, a session of its own
-//! for each prompt step, the outcome of a step in the template and the environment of the later ones, and a kill of
+//! for each ai step, the outcome of a step in the template and the environment of the later ones, and a kill of
 //! the daemon at every step boundary. Exec steps run real commands, so real time.
 
 mod common;
@@ -22,9 +22,9 @@ fn exec(name: &str, script: &str) -> String {
     )
 }
 
-/// A prompt step named `name` of agent `dev` with the prompt file `<name>.md`.
+/// An ai step named `name` of agent `dev` with the prompt file `<name>.md`.
 fn prompt(name: &str) -> String {
-    format!("[[step]]\nname = \"{name}\"\nkind = \"prompt\"\nagent = \"dev\"\nprompt = \"{name}.md\"\n")
+    format!("[[step]]\nname = \"{name}\"\nkind = \"ai\"\nagent = \"dev\"\nprompt = \"{name}.md\"\n")
 }
 
 /// A world with formula `flow` of `steps` and the extra files `extra`, on `hooks`.
@@ -200,8 +200,8 @@ async fn exec_then_prompt_then_exec_pass_the_outcome_along() {
     assert_eq!(w.log(), "pass {\"commit\":\"abc\"}\n");
     let attempts = w.attempts();
     let sessions: Vec<bool> = attempts.iter().map(|(_, s)| s.is_some()).collect();
-    assert_eq!(sessions, [false, true, false], "only the prompt step has a session");
-    // The token of the prompt step is stale once the run moved on.
+    assert_eq!(sessions, [false, true, false], "only the ai step has a session");
+    // The token of the ai step is stale once the run moved on.
     let token = w.driver.token(&run, 2).unwrap();
     let outcome = Outcome {
         result: Verdict::Pass,
@@ -305,7 +305,7 @@ timeout = "10s"
     assert_eq!(w.attempts().len(), 1 + last as usize);
 }
 
-/// A remark asks the agent of a prompt step again: an exec step has none, so a remark on it is refused.
+/// A remark asks the agent of an ai step again: an exec step has none, so a remark on it is refused.
 #[cfg(target_os = "linux")]
 #[tokio::test]
 async fn a_remark_on_an_exec_step_is_refused() {

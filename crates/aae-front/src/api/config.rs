@@ -150,7 +150,7 @@ pub(crate) struct ExplainQuery {
     project: String,
     /// `<pack>.<name>`, or a bare name of the project's own pack; or else `formula`.
     agent: Option<String>,
-    /// A formula: step by step, the agent each prompt step of its run on `rig` is of, with the layers of its pack, its
+    /// A formula: step by step, the agent each ai step of its run on `rig` is of, with the layers of its pack, its
     /// step and the rig's variant.
     formula: Option<String>,
     /// The rig of the run; its layer counts when given. A `formula` needs it.
@@ -205,7 +205,7 @@ pub(crate) fn explained(config: &Config, project: &str, of: &Explain, rig: Optio
                         text += &format!("# step `{name}` of `{formula}`: drain, a run of `{each}` per bead\n");
                         None
                     }
-                    StepKind::Prompt { .. } => {
+                    StepKind::Ai { .. } => {
                         let (agent, effective) = config.for_run(project, rig, formula, name)?;
                         text += &format!("# step `{name}` of `{formula}` on `{rig}`: agent {agent}\n");
                         text += &effective.explain();

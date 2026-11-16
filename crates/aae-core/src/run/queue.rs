@@ -24,7 +24,7 @@ impl RunHandler {
         as_agent: Option<&str>,
     ) -> Result<(String, Option<String>), String> {
         match step.kind {
-            StepKind::Prompt { .. } => {
+            StepKind::Ai { .. } => {
                 let (agent, config) = self.config.for_run_as(project, rig, formula, &step.name, as_agent)?;
                 Ok((agent, config.model_key()))
             }
@@ -34,7 +34,7 @@ impl RunHandler {
 
     /// What the bead `bead` of a run of `formula` on `rig` makes of it: the bead, the agent its `agent:` label names,
     /// and the agent and model key of the first step. Refused when a `harness:` label differs from the harness the
-    /// config gives a prompt step, or when the named agent does not resolve (spec §9.1).
+    /// config gives an ai step, or when the named agent does not resolve (spec §9.1).
     #[expect(clippy::type_complexity, reason = "a private tuple read at its one call site")]
     fn bead_agent(
         &self,
@@ -48,10 +48,7 @@ impl RunHandler {
         let label = |prefix| bead.map_or(Ok(None), |id| Self::label(tx, project, id, prefix));
         let (as_agent, harness) = (label("agent")?, label("harness")?);
         if let Some(harness) = &harness {
-            let prompts = formula
-                .steps
-                .iter()
-                .filter(|s| matches!(s.kind, StepKind::Prompt { .. }));
+            let prompts = formula.steps.iter().filter(|s| matches!(s.kind, StepKind::Ai { .. }));
             for step in prompts {
                 let (agent, config) = (self.config)
                     .for_run_as(project, rig, name, &step.name, as_agent.as_deref())
@@ -89,7 +86,7 @@ impl RunHandler {
         let rig = project.rigs.get(&rig_name);
         let rig = rig.ok_or_else(|| rejected(format!("no rig `{rig_name}` in `{}`", c.project)))?;
         let first = &formula.steps[0];
-        if c.continue_from.is_some() && !matches!(first.kind, StepKind::Prompt { .. }) {
+        if c.continue_from.is_some() && !matches!(first.kind, StepKind::Ai { .. }) {
             return Err(rejected(format!(
                 "`{name}` starts with a step of kind `{}`: it has no session to continue",
                 first.kind.name()

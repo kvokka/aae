@@ -31,16 +31,16 @@ async fn daemon_with(provider: &Provider, orchestrator: &str, inherit_host: bool
                 shop.join("agents/dev/agent.toml"),
                 // The host forbids user namespaces, so the codex sandbox cannot run here (docs/design/experiments.md).
                 format!(
-                    "harness = \"codex\"\nmodel = \"gpt-fake\"\npermission_mode = \"never\"\ninherit_host = \
+                    "harness = \"codex\"\nmodel = \"gpt-fake\"\ninherit_host = \
                     {inherit_host}\n\
-                     [native.codex]\nmodel_provider = \"fake\"\nsandbox_mode = \"danger-full-access\"\n\
+                     [native.codex]\napproval_policy = \"never\"\nmodel_provider = \"fake\"\nsandbox_mode = \"danger-full-access\"\n\
                      [native.codex.model_providers.fake]\nname = \"fake\"\nbase_url = \"{base_url}\"\n\
                      wire_api = \"responses\"\n{agent}"
                 ),
             ),
             (
                 shop.join("formulas/build.toml"),
-                "name = \"build\"\n[[step]]\nkind = \"prompt\"\nagent = \"dev\"\nprompt = \"build.md\"\n".to_owned(),
+                "name = \"build\"\n[[step]]\nkind = \"ai\"\nagent = \"dev\"\nprompt = \"build.md\"\n".to_owned(),
             ),
             (shop.join("formulas/build.md"), "Build {{ rig.name }}.".to_owned()),
         ];
@@ -85,7 +85,7 @@ async fn a_codex_thread_that_calls_the_finisher_passes_its_run() {
     let d = daemon(&provider).await;
     let run = d.create("build", None).await;
     let view = d.until_state(&run, "passed").await;
-    assert_eq!(view["step_kind"], "prompt");
+    assert_eq!(view["step_kind"], "ai");
     // Only the finisher passes a prompt run: the second model request carries the output of its command.
     let requests = provider.requests();
     let output = requests[1].body["input"].to_string();

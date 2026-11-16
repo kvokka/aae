@@ -1,5 +1,5 @@
 //! The layers of one agent put together (spec §6.3, docs/design/config.md "Layers"): the agent or its variant, the
-//! pack and step of the formula of a run, the overrides; the harness they come to, and the model name the adapter
+//! pack and step of the formula of a run, the edits; the harness they come to, and the model name the adapter
 //! expands.
 
 use super::{
@@ -7,9 +7,9 @@ use super::{
     check::resolve, load::Loader, load::reference,
 };
 use serde::Deserialize;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
-/// The three launch settings, all that a pack's `[settings]` and a prompt step may set.
+/// The three launch settings, all that a pack's `[settings]` and an ai step may set.
 #[derive(Debug, Default, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub(super) struct Launch {
@@ -35,7 +35,7 @@ impl Config {
         let (p, r) = self.place(project, rig)?;
         let a = agent_of(p, agent)?;
         let own = p.packs.first().map(|pack| pack.name.as_str()).unwrap_or_default();
-        // An override names its agent as written in the project; one that names an agent of another project or
+        // An edit names its agent as written in the project; one that names an agent of another project or
         // nobody here does not apply.
         let has_agent = |pack: &Pack, n: &str| pack.agents.contains_key(n);
         let named = |key: &String| resolve(&p.packs, own, &reference(key), has_agent, "agent").as_ref() == Ok(agent);
@@ -67,10 +67,8 @@ impl Config {
         let (p, r) = self.place(project, Some(rig))?;
         let (name, f) = p.formula(formula)?;
         let kind = f.step(step).map(|s| &s.kind);
-        let Some(StepKind::Prompt { agent, settings, .. }) = kind else {
-            return Err(format!(
-                "step `{step}` of `{name}` is not a prompt step: it has no agent"
-            ));
+        let Some(StepKind::Ai { agent, settings, .. }) = kind else {
+            return Err(format!("step `{step}` of `{name}` is not an ai step: it has no agent"));
         };
         let pack = p.packs.iter().find(|pack| pack.name == name.pack);
         let mut middle: Vec<(Layer, Settings)> = (pack.into_iter())
@@ -99,7 +97,7 @@ impl Config {
             .ok_or_else(|| format!("no agent variant `{variant}`"))?;
         let a = agent_of(p, &super::variants::base(p, v)?)?;
         middle.push((Layer::Variant(variant.clone()), v.settings.clone()));
-        // The overrides of a variant are those that name it: the base agent's are for the base agent.
+        // The edits of a variant are those that name it: the base agent's are for the base agent.
         let config = self.assemble(p, r, a, middle, &|key| key == &variant)?;
         Ok((variant, config))
     }
@@ -123,7 +121,7 @@ impl Config {
         Ok((p, r))
     }
 
-    /// The layers of spec §6.3 merged, weakest first; `middle` goes between the agent and the overrides, of which
+    /// The layers of spec §6.3 merged, weakest first; `middle` goes between the agent and the edits, of which
     /// those whose key `named` accepts apply.
     fn assemble(
         &self,
@@ -133,7 +131,7 @@ impl Config {
         middle: Vec<(Layer, Settings)>,
         named: &dyn Fn(&String) -> bool,
     ) -> Result<EffectiveConfig, String> {
-        let overrides = |map: &BTreeMap<String, Settings>| {
+        let edits = |map: &BTreeMap<String, Settings>| {
             (map.iter().filter(|(k, _)| named(k)).map(|(_, s)| s.clone())).collect::<Vec<_>>()
         };
         let mut layers: Vec<(Layer, Settings)> = vec![
@@ -145,13 +143,9 @@ impl Config {
         agent.harness.clone_from(&a.harness);
         let mut stronger = vec![(Layer::Agent, agent)];
         stronger.extend(middle);
-        stronger.extend(
-            overrides(&self.overrides)
-                .into_iter()
-                .map(|s| (Layer::OrchestratorOverride, s)),
-        );
-        stronger.extend(overrides(&p.overrides).into_iter().map(|s| (Layer::ProjectOverride, s)));
-        stronger.extend((r.into_iter().flat_map(|r| overrides(&r.overrides))).map(|s| (Layer::RigOverride, s)));
+        stronger.extend(edits(&self.edits).into_iter().map(|s| (Layer::OrchestratorAgent, s)));
+        stronger.extend(edits(&p.edits).into_iter().map(|s| (Layer::ProjectAgent, s)));
+        stronger.extend((r.into_iter().flat_map(|r| edits(&r.edits))).map(|s| (Layer::RigAgent, s)));
 
         // Plugins attach first: their contributions are a layer between the rig and the agent.
         let mut plugins: Vec<Sourced<PluginUse>> = Vec::new();
@@ -219,23 +213,26 @@ fn agent_of<'a>(p: &'a Project, agent: &Name) -> Result<&'a Agent, String> {
         .ok_or(format!("no agent `{agent}` in `{}`", p.name))
 }
 
-/// Every prompt formula of a project on every rig assembles: the harness of its runs is known. Said once the
-/// references resolve, of the project file, with the layer of each value.
-pub(super) fn check_runs(loader: &mut Loader, config: &Config) {
+/// Every ai step of a project on every rig assembles: the harness of its runs is known. Said once the references
+/// resolve, of the project file, with the layer of each value. The harnesses the steps run on are returned.
+pub(super) fn check_runs(loader: &mut Loader, config: &Config) -> BTreeSet<String> {
+    let mut used = BTreeSet::new();
     if !loader.errors.is_empty() {
-        return;
+        return used;
     }
     for p in &config.projects {
         let file = p.root.join("aae.toml");
         let formulas = (p.packs.iter()).flat_map(|pack| pack.formulas.iter().map(move |(f, x)| (pack, f, x)));
         for (pack, name, f) in formulas {
             let formula = format!("{}.{name}", pack.name);
-            let prompts = f.steps.iter().filter(|s| matches!(s.kind, StepKind::Prompt { .. }));
-            for (step, rig) in prompts.flat_map(|s| p.rigs.keys().map(move |r| (&s.name, r))) {
-                if let Err(e) = config.for_run(&p.name, rig, &formula, step) {
-                    loader.fail(&file, format!("formula `{formula}` on rig `{rig}`: {e}"));
+            let steps = f.steps.iter().filter(|s| matches!(s.kind, StepKind::Ai { .. }));
+            for (step, rig) in steps.flat_map(|s| p.rigs.keys().map(move |r| (&s.name, r))) {
+                match config.for_run(&p.name, rig, &formula, step) {
+                    Ok((_, e)) => drop(used.insert(e.harness)),
+                    Err(e) => loader.fail(&file, format!("formula `{formula}` on rig `{rig}`: {e}")),
                 }
             }
         }
     }
+    used
 }

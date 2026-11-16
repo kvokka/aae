@@ -6,7 +6,7 @@ bead = { type = "bead", required = true }   # `{ request = "<text>" }`: the requ
 
 [[step]]
 name = "plan"
-kind = "prompt"
+kind = "ai"
 agent = "planner"
 prompt = "plan.md"
 timeout = "20m"

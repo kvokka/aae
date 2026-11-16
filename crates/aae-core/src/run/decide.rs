@@ -125,7 +125,7 @@ impl RunHandler {
             ("running", Some(Decision::Continue { message })) => self.next_prompt(tx, row, &message, "hollow_done"),
             ("finishing", None | Some(Decision::Accept)) => self.finished(tx, row, None),
             ("finishing", Some(Decision::Veto { reason })) => self.finished(tx, row, Some(&reason)),
-            ("finishing", Some(Decision::Remark { message })) if row.step_kind == "prompt" => {
+            ("finishing", Some(Decision::Remark { message })) if row.step_kind == "ai" => {
                 self.next_prompt(tx, row, &message, "check")
             }
             (state, Some(d)) => Err(rejected(format!("{d:?} does not apply to a run in `{state}`"))),
@@ -237,7 +237,7 @@ pub(super) fn parse(kind: &str, v: &Value, plugin: &str, event: &Value) -> Optio
             reason: text("reason")?,
         },
         // An exec or a drain step has no session to take a remark (contracts 6.2).
-        ("run.finishing", "remark") if event["data"]["run"]["step_kind"] != "prompt" => return None,
+        ("run.finishing", "remark") if event["data"]["run"]["step_kind"] != "ai" => return None,
         ("run.finishing", "remark") => Decision::Remark {
             message: text("message")?,
         },

@@ -48,13 +48,13 @@ fn the_user_layers_of_the_demo_decide_what_the_agents_run_on() {
         let (_, effective) = config.for_run(PROJECT, rig, formula, step).unwrap();
         let model = effective.model.unwrap();
         assert_eq!((effective.harness.as_str(), model.value.as_str()), ("claude", "haiku"));
-        assert_eq!(model.from, Layer::ProjectOverride, "{formula} on {rig}");
+        assert_eq!(model.from, Layer::ProjectAgent, "{formula} on {rig}");
     }
     let (agent, effective) = config.for_run(PROJECT, "backend", "dev.implement", "code").unwrap();
     assert_eq!(agent, "dev.coder");
     assert_eq!(
         (effective.harness.as_str(), effective.harness_from),
-        ("codex", Layer::RigOverride)
+        ("codex", Layer::RigAgent)
     );
     assert_eq!(effective.model.unwrap().value, "gpt-6-luna");
     assert_eq!(effective.model_given.as_deref(), Some("luna"));

@@ -38,8 +38,8 @@ pub struct Config {
     pub harnesses: BTreeMap<String, Harness>,
     /// Layer 2 of spec §6.3.
     pub settings: Settings,
-    /// Layer 7, by agent reference; they may name an agent of any project.
-    pub overrides: BTreeMap<String, Settings>,
+    /// The `[agents.<name>]` edits (no `base`), by agent reference; they may name an agent of any project.
+    pub edits: BTreeMap<String, Settings>,
     /// The agent variants every project sees, by name; a project's own of the same name replaces one.
     pub variants: BTreeMap<String, Variant>,
     /// The adapters of the build: the short model names of each harness. The harnesses they name are the root's.
@@ -100,7 +100,7 @@ pub struct Project {
     pub root: PathBuf,
     /// Layer 3.
     pub settings: Settings,
-    pub overrides: BTreeMap<String, Settings>,
+    pub edits: BTreeMap<String, Settings>,
     pub variants: BTreeMap<String, Variant>,
     pub plugins: Vec<Plugin>,
     /// The bundled plugins on for its runs: the orchestrator's, with the project's `[builtin.<name>]` tables.
@@ -133,7 +133,7 @@ pub struct Rig {
     pub triggers: Vec<Name>,
     /// Layer 4.
     pub settings: Settings,
-    pub overrides: BTreeMap<String, Settings>,
+    pub edits: BTreeMap<String, Settings>,
     /// The variant that runs in place of a pack agent the formulas name, on this rig.
     pub agents: BTreeMap<Name, String>,
 }
@@ -209,7 +209,7 @@ pub struct Step {
 
 #[derive(Clone, Debug)]
 pub enum StepKind {
-    Prompt {
+    Ai {
         agent: Name,
         prompt: Template,
         timeout: Option<Duration>,
@@ -225,10 +225,10 @@ pub enum StepKind {
 }
 
 impl StepKind {
-    /// `prompt`, `exec` or `drain`, as the state and the API name the kind.
+    /// `ai`, `exec` or `drain`, as the state and the API name the kind.
     pub fn name(&self) -> &'static str {
         match self {
-            Self::Prompt { .. } => "prompt",
+            Self::Ai { .. } => "ai",
             Self::Exec { .. } => "exec",
             Self::Drain { .. } => "drain",
         }

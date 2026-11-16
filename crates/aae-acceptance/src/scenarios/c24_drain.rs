@@ -1,6 +1,6 @@
 //! Criterion 24 on the real br and the real `claude` against a fake Anthropic API: a request becomes the root bead of
 //! a run of `ship`; its exec step `plan` creates four beads under the root with rig, agent and harness labels; the
-//! drain step gives each a run of `work` (an exec step, then a prompt step on the agent of the bead): A on `web`, B on
+//! drain step gives each a run of `work` (an exec step, then an ai step on the agent of the bead): A on `web`, B on
 //! `api` once A is closed, F under the epic S fails, H names another harness and gets no run; the exec step `report`
 //! sees what was closed, failed and refused. A `kill -9` of the daemon in each step: no step and no bead runs twice.
 
@@ -24,10 +24,10 @@ const SHIP: &str = "name = \"ship\"\n[inputs]\nbead = { type = \"bead\", require
     [[step]]\nname = \"drain\"\nkind = \"drain\"\nformula = \"work\"\n\
     [[step]]\nname = \"report\"\nkind = \"exec\"\ncommand = [\"sh\", \"{dir}/report.sh\"]\ntimeout = \"120s\"\n";
 
-/// The prompt step names `ops`; the label `agent:dev` of a bead gives its run `dev`.
+/// The ai step names `ops`; the label `agent:dev` of a bead gives its run `dev`.
 const WORK: &str = "name = \"work\"\n[inputs]\nbead = { type = \"bead\", required = true }\n\
     [[step]]\nname = \"do\"\nkind = \"exec\"\ncommand = [\"sh\", \"{dir}/work.sh\"]\ntimeout = \"120s\"\n\
-    [[step]]\nname = \"sign\"\nkind = \"prompt\"\nagent = \"ops\"\nprompt = \"sign.md\"\n";
+    [[step]]\nname = \"sign\"\nkind = \"ai\"\nagent = \"ops\"\nprompt = \"sign.md\"\n";
 
 /// The first attempt holds until the daemon dies; the second creates the beads and keeps their ids. F is a grandchild
 /// of the root, under the epic S: S keeps an open child and is never ready.

@@ -7,7 +7,7 @@ The request is one sentence: "Create me snake game in browser and a simple backe
 
 - `pack/` is the pack `dev`, with not a word about the task. Agent `planner` files the work; agent `coder` does one
   bead. Formula `deliver`:
-  1. `plan`, a prompt step of `planner`: it looks at the rigs and files beads under the request, each with its task
+  1. `plan`, an ai step of `planner`: it looks at the rigs and files beads under the request, each with its task
      and the labels `rig:`, `agent:` and `harness:`;
   2. `work`, a `drain` step: every ready bead under the request gets a run of `implement`, where `coder` does it on
      the rig of its `rig:` label;
@@ -36,14 +36,16 @@ models. Your result differs: the agents decide anew each time.
 ## The harness of a coder
 
 There is one agent `coder`; what it runs on is the user's config, not the pack's. `root/aae.toml` runs it on claude
-`haiku` in the whole project and on codex `luna` on the rig `backend`, with an override:
+`haiku` in the whole project and on codex `luna` on the rig `backend`, with the rig's settings for that agent:
 
 ```toml
-[rigs.backend.overrides.coder]
+[rigs.backend.agents.coder]
 harness = "codex"
 model = "luna"
-permission_mode = "never"
 ```
+
+The permission mode is each harness's own setting, so it is in the harness's native block of `[settings]`:
+`permission_mode` for claude, `approval_policy` for codex.
 
 The other way is a variant per harness, mapped on the rig in place of `coder`:
 
@@ -57,7 +59,6 @@ model = "haiku"
 base = "dev.coder"
 harness = "codex"
 model = "luna"
-permission_mode = "never"
 
 [rigs.frontend]
 path = "../frontend"

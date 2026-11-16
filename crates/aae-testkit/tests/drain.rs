@@ -14,7 +14,7 @@ const ASK: &[(&str, &str)] = &[
     (
         "shop/formulas/ask.toml",
         "name = \"ask\"\n[inputs]\nbead = { type = \"bead\", required = true }\n\
-         [[step]]\nkind = \"prompt\"\nagent = \"dev\"\nprompt = \"ask.md\"\n",
+         [[step]]\nkind = \"ai\"\nagent = \"dev\"\nprompt = \"ask.md\"\n",
     ),
     ("shop/formulas/ask.md", "Do: {{ bead.description }}"),
 ];

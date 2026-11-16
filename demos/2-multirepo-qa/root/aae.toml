@@ -4,13 +4,14 @@ packs = ["../pack"]                   # the agents and the formulas; the request
 # The user's settings: what the agents of the pack run on here, and how.
 [settings]
 inherit_host = false                  # only what this config sets reaches the agents; the logins come from the host
-permission_mode = "never"             # codex's approval policy: the demo runs unattended
+[settings.native.codex]               # codex's own settings
+approval_policy = "never"             # its approval policy: the demo runs unattended
 
-[overrides.planner]
+[agents.planner]                      # the pack's agents, over their defaults
 model = "sol"
-[overrides.coder]
+[agents.coder]
 model = "luna"
-[overrides.qa]
+[agents.qa]
 model = "terra"
 
 [rigs.root]

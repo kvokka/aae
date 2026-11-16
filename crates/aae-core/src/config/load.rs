@@ -38,13 +38,15 @@ impl Loader {
             true => self.read::<OrchestratorFile>(file).unwrap_or_default(),
             false => OrchestratorFile::default(),
         };
-        self.harnesses = raw.harness.keys().cloned().collect();
+        // A harness of the build needs no section (spec §6.1); a section may name one the build lacks, as the
+        // scripted harness of the tests.
+        let built = self.adapters.iter().map(|a| a.name.to_owned());
+        self.harnesses = raw.harness.keys().cloned().chain(built).collect();
         let plugins = self.plugins(file, &base, raw.plugin, &[]);
         let names: Vec<&str> = plugins.iter().map(|p| p.name.as_str()).collect();
         let mut settings = self.settings(file, &base, raw.settings, &names);
         settings.services = self.services(file, raw.service, None);
-        let overrides = self.overrides(file, &base, raw.overrides, &names);
-        let variants = self.variants(file, &base, raw.agents, &names);
+        let (edits, variants) = self.agents(file, &base, raw.agents, &names);
         let bundled = super::check::bundled(&mut self, file, raw.builtin);
         let watchdog = super::check::watchdog(&mut self, file, raw.watchdog);
         let mut projects: Vec<Project> = Vec::new();
@@ -61,7 +63,7 @@ impl Loader {
             super::check::project(&mut self, project, &variants);
             super::variants::check_project(&mut self, project, &variants);
         }
-        super::check::orchestrator_overrides(&mut self, file, overrides.keys(), &projects, &variants);
+        super::check::orchestrator_edits(&mut self, file, edits.keys(), &projects, &variants);
         super::variants::check_orchestrator(&mut self, file, &variants, &projects);
         if raw.api_tcp.is_some_and(|a| !a.ip().is_loopback()) {
             self.fail(file, "`api_tcp` must be a loopback address");
@@ -73,7 +75,7 @@ impl Loader {
                 .none(file, format!("`timezone`: {e}"))
                 .unwrap_or(jiff::tz::TimeZone::UTC),
         };
-        let config = Config {
+        let mut config = Config {
             api_tcp: raw.api_tcp,
             api_token: String::new(),
             timezone,
@@ -81,7 +83,7 @@ impl Loader {
             bead_failures: raw.bead_failures.map_or(DEFAULT_BEAD_FAILURES, NonZeroU32::get),
             harnesses: raw.harness,
             settings,
-            overrides,
+            edits,
             variants,
             adapters: self.adapters,
             plugins,
@@ -91,7 +93,10 @@ impl Loader {
             bridge: Vec::new(),
             service_wait: std::time::Duration::from_secs(30),
         };
-        super::compose::check_runs(&mut self, &config);
+        // A harness of the build the steps run on gets its defaults, none without its section.
+        for harness in super::compose::check_runs(&mut self, &config) {
+            config.harnesses.entry(harness).or_default();
+        }
         if self.errors.is_empty() {
             Ok(config)
         } else {
@@ -114,7 +119,7 @@ impl Loader {
     pub(super) fn read<T: DeserializeOwned>(&mut self, file: &Path) -> Option<T> {
         let parsed = fs::read_to_string(file)
             .map_err(|e| e.to_string())
-            .and_then(|text| toml::from_str(&text).map_err(|e| e.to_string().trim_end().to_owned()));
+            .and_then(|text| toml::from_str(&text).map_err(|e| retired(e.to_string())));
         parsed.map_err(|e| self.fail(file, e)).ok()
     }
 
@@ -211,7 +216,10 @@ impl Loader {
             }
         }
         if let Some(harness) = settings.harness.as_ref().filter(|h| !self.harnesses.contains(*h)) {
-            self.fail(file, format!("harness `{harness}` is not in the orchestrator config"));
+            self.fail(
+                file,
+                format!("harness `{harness}` is neither of this build nor in the orchestrator config"),
+            );
         }
         for harness in settings
             .native
@@ -222,23 +230,10 @@ impl Loader {
         {
             self.fail(
                 file,
-                format!("`native.{harness}`: no such harness in the orchestrator config"),
+                format!("`native.{harness}`: no harness `{harness}` in this build or the orchestrator config"),
             );
         }
         settings
-    }
-
-    fn overrides(
-        &mut self,
-        file: &Path,
-        base: &Path,
-        overrides: BTreeMap<String, Settings>,
-        plugins: &[&str],
-    ) -> BTreeMap<String, Settings> {
-        overrides
-            .into_iter()
-            .map(|(agent, s)| (agent, self.settings(file, base, s, plugins)))
-            .collect()
     }
 
     pub(super) fn timeout(&mut self, file: &Path, text: Option<&str>) -> Option<std::time::Duration> {
@@ -257,8 +252,7 @@ impl Loader {
         let names: Vec<&str> = all.iter().map(|p| p.name.as_str()).collect();
         let mut settings = self.settings(&file, dir, raw.settings, &names);
         settings.services = self.services(&file, raw.service, None);
-        let overrides = self.overrides(&file, dir, raw.overrides, &names);
-        let variants = self.variants(&file, dir, raw.agents, &names);
+        let (edits, variants) = self.agents(&file, dir, raw.agents, &names);
         let mut rigs = BTreeMap::new();
         for (rig, r) in raw.rigs {
             self.name(&file, "rig", &rig);
@@ -279,7 +273,24 @@ impl Loader {
             }
             let triggers = r.triggers.iter().map(|t| reference(t)).collect();
             let settings = self.settings(&file, dir, r.settings, &names);
-            let overrides = self.overrides(&file, dir, r.overrides, &names);
+            let (mut edits, mut agents) = (BTreeMap::new(), BTreeMap::new());
+            for (agent, value) in r.agents {
+                match value {
+                    // Resolved by `check` once the packs are loaded.
+                    toml::Value::String(variant) => drop(agents.insert(reference(&agent), variant)),
+                    toml::Value::Table(table) => match toml::Value::Table(table).try_into::<Settings>() {
+                        Ok(s) => drop(edits.insert(agent, self.settings(&file, dir, s, &names))),
+                        Err(e) => self.fail(
+                            &file,
+                            format!("rig `{rig}`: `agents.{agent}`: {}", retired(e.to_string())),
+                        ),
+                    },
+                    _ => self.fail(
+                        &file,
+                        format!("rig `{rig}`: `agents.{agent}` is a table of settings or the name of a variant"),
+                    ),
+                }
+            }
             rigs.insert(
                 rig,
                 Rig {
@@ -287,9 +298,8 @@ impl Loader {
                     vars: r.vars,
                     triggers,
                     settings,
-                    overrides,
-                    // Resolved by `check` once the packs are loaded.
-                    agents: (r.agents.into_iter()).map(|(k, v)| (reference(&k), v)).collect(),
+                    edits,
+                    agents,
                 },
             );
         }
@@ -327,7 +337,7 @@ impl Loader {
             name,
             root: dir.to_owned(),
             settings,
-            overrides,
+            edits,
             variants,
             plugins,
             bundled,
@@ -386,6 +396,35 @@ pub(super) fn reference(text: &str) -> Name {
     Name {
         pack: pack.to_owned(),
         name: name.to_owned(),
+    }
+}
+
+/// What an earlier config shape said, and where it is written now: the error then is that one line.
+const RETIRED: [(&str, &str); 3] = [
+    (
+        "unknown field `permission_mode`",
+        "`permission_mode` is native to a harness: `approval_policy` in `[settings.native.codex]`, \
+         `permission_mode` in `[settings.native.claude]`",
+    ),
+    (
+        "unknown field `overrides`",
+        "`[overrides.<agent>]` is `[agents.<agent>]` now",
+    ),
+    ("unknown variant `prompt`", "step kind `prompt` is `ai` now"),
+];
+
+/// A parse error as one line with the hint of [`RETIRED`] when it is about a retired key, else as it is.
+pub(super) fn retired(message: String) -> String {
+    let Some((_, hint)) = RETIRED.iter().find(|(said, _)| message.contains(said)) else {
+        return message.trim_end().to_owned();
+    };
+    match message
+        .lines()
+        .next()
+        .and_then(|l| l.strip_prefix("TOML parse error at "))
+    {
+        Some(at) => format!("{at}: {hint}"),
+        None => (*hint).to_owned(),
     }
 }
 

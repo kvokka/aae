@@ -1,4 +1,4 @@
-//! Criterion 2: a formula of one prompt step passes through a real run of the cheapest model of claude and of
+//! Criterion 2: a formula of one ai step passes through a real run of the cheapest model of claude and of
 //! codex with the host login, ending `pass` by the finisher. Costs money; runs only on an explicit spec run.
 
 use super::Live;
@@ -14,7 +14,7 @@ pub(crate) async fn run(env: Arc<Env>, live: Live) -> String {
         live.agent(root);
         write(
             root.join("config/aae/shop/formulas/dev.toml"),
-            "name = \"dev\"\n[[step]]\nkind = \"prompt\"\nagent = \"dev\"\nprompt = \"dev.md\"\n",
+            "name = \"dev\"\n[[step]]\nkind = \"ai\"\nagent = \"dev\"\nprompt = \"dev.md\"\n",
         );
         write(
             root.join("config/aae/shop/formulas/dev.md"),

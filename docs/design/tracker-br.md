@@ -41,7 +41,7 @@ tracker interface and its errors are in [contracts.md](contracts.md) §5; the be
 - Instead of an id the input may ask for the next ready bead, optionally in an epic: `{ next_ready = true, epic }`.
   The ready list comes from the adapter; the daemon picks and records the owner in one transaction, taking the first
   bead in the tracker's order that is in the epic, of the run's rig or of no rig, without an owner and without a
-  closed gate. A bead whose labels the run cannot take (a `harness:` the config does not give its prompt steps, an
+  closed gate. A bead whose labels the run cannot take (a `harness:` the config does not give its ai steps, an
   `agent:` that does not resolve) is passed over and the next one taken; the reply lists it with the reason in
   `passed_over`. A bead named by id with such labels is refused. With none ready no run is created: the caller gets
   the explicit answer `{"nothing_ready": true}`, a trigger `trigger.skipped{nothing_ready}` (its detail names the
@@ -70,9 +70,9 @@ tracker interface and its errors are in [contracts.md](contracts.md) §5; the be
   whole text. The key is drawn once and kept in the effect, so a repeat after `kill -9` creates nothing new; a repeated
   answer is dropped. The run then owns and claims the root as any bead, and its prompt sees the text as
   `{{ bead.description }}`. Known limit: a tracker that answers after `start_timeout` leaves a root without a run.
-- Two labels of a bead shape every run on it. `agent:<name>` runs every prompt step with that agent (a variant by its
+- Two labels of a bead shape every run on it. `agent:<name>` runs every ai step with that agent (a variant by its
   name, else the agent of that name) instead of the step's; the name has no pack prefix, as br refuses a dot in a label.
-  `harness:<name>` is checked against the effective config of each prompt step: a difference refuses the start with
+  `harness:<name>` is checked against the effective config of each ai step: a difference refuses the start with
   both harness names. Without `agent:` each step runs its own agent, without `harness:` nothing is checked; several of
   either label refuse the start.
 

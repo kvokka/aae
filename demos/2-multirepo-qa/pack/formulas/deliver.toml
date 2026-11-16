@@ -7,7 +7,7 @@ bead = { type = "bead", required = true }   # `{ request = "<text>" }`: the requ
 
 [[step]]
 name = "plan"
-kind = "prompt"
+kind = "ai"
 agent = "planner"
 prompt = "plan.md"
 timeout = "20m"
@@ -36,7 +36,7 @@ back_to = "plan"
 # The project's own conditions, tried as a user would; a failure goes back to the planner with what failed.
 [[step]]
 name = "qa"
-kind = "prompt"
+kind = "ai"
 agent = "qa"
 prompt = "qa.md"
 timeout = "20m"

@@ -315,9 +315,7 @@ async fn act(w: &mut World, rng: &mut Rng, play: &mut Play, op: u64, natural: bo
             let journal = Journal::new(&w.journal).read_from(seq, 1).unwrap_or_default();
             let kind = journal.first().and_then(|e| e["type"].as_str()).unwrap_or_default();
             // The hook runner drops a remark on a step with no session before it reaches the core (contracts 6.2).
-            let sessionless = journal
-                .first()
-                .is_some_and(|e| e["data"]["run"]["step_kind"] != "prompt");
+            let sessionless = journal.first().is_some_and(|e| e["data"]["run"]["step_kind"] != "ai");
             let decision = match decision(rng, kind, natural) {
                 Decision::Remark { .. } if sessionless => Decision::Abstain,
                 decision => decision,

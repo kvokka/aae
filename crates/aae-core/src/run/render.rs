@@ -11,7 +11,7 @@ pub(super) const DRAIN_TIMEOUT_MS: i64 = 24 * 3_600_000;
 
 impl RunHandler {
     /// The prompt, the step timeout and the config snapshot of a run, from the config of now: the effective config
-    /// of a prompt step; `{"command", "env"}` of an exec step; `{"drain"}`, the formula of its runs, of a drain step.
+    /// of an ai step; `{"command", "env"}` of an exec step; `{"drain"}`, the formula of its runs, of a drain step.
     pub(super) fn render(&self, tx: &Tx<'_>, row: &Row) -> Result<(Option<String>, i64, Value), String> {
         let project = self.config.projects.iter().find(|p| p.name == row.project);
         let project = project.ok_or(format!("project `{}` is gone from the config", row.project))?;
@@ -38,7 +38,7 @@ impl RunHandler {
                 let config = json!({ "drain": formula.to_string() });
                 return Ok((None, timeout_ms(timeout, DRAIN_TIMEOUT_MS), config));
             }
-            (StepKind::Prompt { prompt, timeout, .. }, "prompt") => (prompt, timeout),
+            (StepKind::Ai { prompt, timeout, .. }, "ai") => (prompt, timeout),
             _ => return Err(format!("step `{}` of `{}` changed its kind", row.step, row.formula)),
         };
         let (agent, config) =

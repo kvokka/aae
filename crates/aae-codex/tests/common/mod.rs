@@ -74,7 +74,8 @@ impl Live {
                 actor: None,
             },
         };
-        let native = json!({ "model_provider": "fake", "sandbox_mode": "danger-full-access", "model_providers": {
+        let native = json!({ "model_provider": "fake", "sandbox_mode": "danger-full-access", "approval_policy": approval,
+            "model_providers": {
             "fake": { "name": "fake", "base_url": provider.base_url(), "wire_api": "responses",
             "request_max_retries": retries, "stream_max_retries": retries } } });
         let config = EffectiveConfig {
@@ -85,7 +86,6 @@ impl Live {
             model: Some(sourced("gpt-fake".to_owned())),
             effort: None,
             system_prompt: None,
-            permission_mode: Some(sourced(approval.to_owned())),
             inherit_host: Some(sourced(false)),
             env: Default::default(),
             mcp: Default::default(),

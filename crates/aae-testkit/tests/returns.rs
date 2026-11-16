@@ -55,7 +55,7 @@ impl World {
         std::fs::read_to_string(self.dir.path().join("shop/web/log")).unwrap_or_default()
     }
 
-    /// The kind and data of the event that ended `run`; each attempt of a prompt step declares `pass` on the way,
+    /// The kind and data of the event that ended `run`; each attempt of an ai step declares `pass` on the way,
     /// but the attempts `fails` declare `fail`. The n-th declaration lets the n-th of `turns` end.
     async fn end(&self, run: &str, fails: &[u32], turns: &[Arc<Notify>]) -> (String, Value) {
         let mut done = Vec::new();
@@ -142,7 +142,7 @@ async fn a_check_that_keeps_failing_fails_the_run_after_the_last_round() {
 #[tokio::test]
 async fn the_step_gone_back_to_sees_the_remarks_in_its_prompt() {
     let steps = [
-        "[[step]]\nname = \"plan\"\nkind = \"prompt\"\nagent = \"dev\"\nprompt = \"plan.md\"\n".to_owned(),
+        "[[step]]\nname = \"plan\"\nkind = \"ai\"\nagent = \"dev\"\nprompt = \"plan.md\"\n".to_owned(),
         exec("check", &failing("check", 1, "add tests"), Some("plan")),
     ];
     let w = flow(
@@ -187,7 +187,7 @@ async fn a_step_gone_back_to_on_another_harness_starts_a_new_session() {
     let check = "n=$(($(cat check 2>/dev/null || echo 0) + 1)); echo $n > check; [ $n -gt 1 ] && exit 0; \
         touch waiting; while [ ! -f go ]; do sleep 0.02; done; echo redo; exit 1";
     let steps = [
-        "[[step]]\nname = \"plan\"\nkind = \"prompt\"\nagent = \"dev\"\nprompt = \"plan.md\"\n".to_owned(),
+        "[[step]]\nname = \"plan\"\nkind = \"ai\"\nagent = \"dev\"\nprompt = \"plan.md\"\n".to_owned(),
         exec("check", check, Some("plan")),
     ];
     let config = "projects = [\"shop\"]\nbuiltin = { default-policy = { enabled = false } }\n[harness.scripted]\n\
@@ -233,7 +233,7 @@ async fn a_step_gone_back_to_on_another_harness_starts_a_new_session() {
 #[tokio::test]
 async fn a_prompt_check_that_declares_fail_sends_the_run_back() {
     let prompt = |name: &str, back: &str| {
-        format!("[[step]]\nname = \"{name}\"\nkind = \"prompt\"\nagent = \"dev\"\nprompt = \"{name}.md\"\n{back}")
+        format!("[[step]]\nname = \"{name}\"\nkind = \"ai\"\nagent = \"dev\"\nprompt = \"{name}.md\"\n{back}")
     };
     let steps = [prompt("plan", ""), prompt("review", "back_to = \"plan\"\n")];
     let w = flow(

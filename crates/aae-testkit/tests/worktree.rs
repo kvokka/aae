@@ -33,7 +33,7 @@ fn git(dir: &Path, args: &[&str]) -> String {
 /// The formula `build` with `worktree = true`.
 const BUILD: (&str, &str) = (
     "shop/formulas/build.toml",
-    "name = \"build\"\nworktree = true\n[[step]]\nkind = \"prompt\"\nagent = \"dev\"\nprompt = \"build.md\"\n",
+    "name = \"build\"\nworktree = true\n[[step]]\nkind = \"ai\"\nagent = \"dev\"\nprompt = \"build.md\"\n",
 );
 
 /// The world with `files` over the common ones, its rig a git repository.

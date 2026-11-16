@@ -1,6 +1,6 @@
 # Your first formula with an agent
 
-This page adds an **agent** to the project of [the previous page](first-project.md) and a `prompt` formula: the agent
+This page adds an **agent** to the project of [the previous page](first-project.md) and an `ai` formula: the agent
 is a general role, the formula the process it goes through, and the task itself is the run's input, from you.
 Keep it that way: an agent's prompt knows nothing of a task and a pack holds no word of one; what to do comes
 only from the input of a run.
@@ -11,10 +11,12 @@ An agent is a directory under `agents/` with an `agent.toml` and, usually, a rol
 `~/work/hello/agents/helper/agent.toml`:
 
 ```toml
-harness = "claude"                    # the agent CLI, one of [harness.*] of the orchestrator config
+harness = "claude"                    # the agent CLI, `claude` or `codex`
 model = "sonnet"                      # optional; the harness default otherwise; a short name is the latest model
 effort = "medium"                     # optional
-permission_mode = "acceptEdits"       # claude's --permission-mode; for codex its approval policy
+
+[native.claude]
+permission_mode = "acceptEdits"       # claude's --permission-mode (for codex: `approval_policy` in [native.codex])
 ```
 
 `~/work/hello/agents/helper/prompt.md`:
@@ -24,11 +26,11 @@ You are a careful assistant working in this repository.
 ```
 
 `harness`, `model` and `effort` in `agent.toml` are only the role's defaults. What the agent runs on in
-your project is your setting, stronger than the agent's: an override for the whole project or one rig, here the
+your project is your setting, stronger than the agent's: an edit of the agent for the whole project or one rig, here the
 cheapest model while you try things out, in `~/work/hello/aae.toml`:
 
 ```toml
-[overrides.helper]                    # or [rigs.main.overrides.helper] for one rig
+[agents.helper]                       # or [rigs.main.agents.helper] for one rig
 model = "haiku"
 ```
 
@@ -62,7 +64,7 @@ description = "Write a one-paragraph summary of a file"
 file = { type = "string", required = true }   # bead | string | integer | boolean
 
 [[step]]
-kind = "prompt"
+kind = "ai"
 agent = "helper"
 prompt = "summarize.md"               # relative to this file
 timeout = "10m"
@@ -87,8 +89,8 @@ besides the result and the summary). A turn that ends without a finish gets a re
 one fails the run. Tell the agent about `aae finish` in the prompt, as above, and make sure `aae` is on the `PATH`
 the harness sees.
 
-The agent must be allowed to run that command. With `permission_mode = "acceptEdits"` claude asks before running a
-shell command; the run then waits in `requires_action` until you answer (or until the `human_timeout`, one hour
+The agent must be allowed to run that command. With `permission_mode = "acceptEdits"` (in `[native.claude]`) claude asks before
+running a shell command; the run then waits in `requires_action` until you answer (or until the `human_timeout`, one hour
 by default, after which the request is denied). `aae run show` names the open request:
 
 ```sh
@@ -134,7 +136,7 @@ command = ["wc", "-l", "README.md"]
 
 [[step]]
 name = "write"
-kind = "prompt"
+kind = "ai"
 agent = "helper"
 prompt = "summarize-checked.md"       # may use {{ steps.count.data.stdout }}
 
@@ -146,7 +148,7 @@ command = ["test", "-s", "SUMMARY.md"]  # gets AAE_STEP_COUNT_* and AAE_STEP_WRI
 
 A prompt template reads an earlier step as `{{ steps.<name>.result }}` (`pass` or `fail`), `.summary` and
 `.data.<key>`; an exec step's `data` is `{exit_code, stdout, stderr}`. An exec step gets the same as
-`AAE_STEP_<NAME>_RESULT`, `AAE_STEP_<NAME>_SUMMARY` and `AAE_STEP_<NAME>_DATA` (JSON). Each prompt step has a session
+`AAE_STEP_<NAME>_RESULT`, `AAE_STEP_<NAME>_SUMMARY` and `AAE_STEP_<NAME>_DATA` (JSON). Each ai step has a session
 of its own. `aae run show` names the step the run is at, and `run.step_finished` marks each ended step but the
 last.
 
@@ -159,7 +161,7 @@ remarks as the reason. `config explain` goes step by step:
 aae config explain --project hello --formula summarize-checked --rig main
 # step `count` of `summarize-checked`: exec `wc -l README.md`
 # step `write` of `summarize-checked` on `main`: agent hello.helper
-# ...one line per value with its layer, e.g. model = "haiku"  # project override
+# ...one line per value with its layer, e.g. model = "haiku"  # project [agents]
 # step `check` of `summarize-checked`: exec `test -s SUMMARY.md`
 ```
 
@@ -189,7 +191,7 @@ bead = { type = "bead", required = true }
 
 [[step]]
 name = "plan"
-kind = "prompt"
+kind = "ai"
 agent = "planner"
 prompt = "plan.md"                    # files the beads under {{ bead.id }}
 

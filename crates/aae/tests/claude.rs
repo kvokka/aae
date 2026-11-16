@@ -31,19 +31,19 @@ async fn daemon_with(provider: &Provider, orchestrator: &str, agent: &str) -> Da
             (
                 shop.join("agents/dev/agent.toml"),
                 format!(
-                    "harness = \"claude\"\nmodel = \"claude-haiku-5-5\"\npermission_mode = \"bypassPermissions\"\n\
-                     inherit_host = false\n[env]\nANTHROPIC_BASE_URL = \"{base_url}\"\nANTHROPIC_API_KEY = \"fake\"\n\
+                    "harness = \"claude\"\nmodel = \"claude-haiku-5-5\"\ninherit_host = false\n\
+                     [native.claude]\npermission_mode = \"bypassPermissions\"\n[env]\nANTHROPIC_BASE_URL = \"{base_url}\"\nANTHROPIC_API_KEY = \"fake\"\n\
                      CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC = \"1\"\nCLAUDE_CODE_MAX_RETRIES = \"0\"\n{agent}"
                 ),
             ),
             (
                 shop.join("formulas/build.toml"),
-                "name = \"build\"\n[[step]]\nkind = \"prompt\"\nagent = \"dev\"\nprompt = \"build.md\"\n".to_owned(),
+                "name = \"build\"\n[[step]]\nkind = \"ai\"\nagent = \"dev\"\nprompt = \"build.md\"\n".to_owned(),
             ),
             (shop.join("formulas/build.md"), "Build {{ rig.name }}.".to_owned()),
             (
                 shop.join("formulas/fix.toml"),
-                "name = \"fix\"\n[inputs]\nbead = { type = \"bead\", required = true }\n[[step]]\nkind = \"prompt\"\n\
+                "name = \"fix\"\n[inputs]\nbead = { type = \"bead\", required = true }\n[[step]]\nkind = \"ai\"\n\
                  agent = \"dev\"\nprompt = \"build.md\"\n"
                     .to_owned(),
             ),
@@ -64,7 +64,7 @@ async fn a_claude_session_that_calls_the_finisher_passes_its_run() {
     let d = daemon(&provider).await;
     let run = d.create("build", None).await;
     let view = d.until_state(&run, "passed").await;
-    assert_eq!(view["step_kind"], "prompt");
+    assert_eq!(view["step_kind"], "ai");
     // Only the finisher passes a prompt run: the second model request carries the result of its Bash call.
     let requests = provider.requests();
     let result = requests[1].body["messages"].to_string();

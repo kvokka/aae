@@ -34,9 +34,9 @@ pub(super) struct Row {
     pub(super) bead: Option<String>,
     /// The bead as the claim returned it (contracts 5.2).
     pub(super) bead_data: Option<String>,
-    /// The agent of every prompt step, as the `agent:` label of the bead names it; `None`: each step's own.
+    /// The agent of every ai step, as the `agent:` label of the bead names it; `None`: each step's own.
     pub(super) as_agent: Option<String>,
-    /// `prompt`, `exec` or `drain`: the kind of `step`.
+    /// `ai`, `exec` or `drain`: the kind of `step`.
     pub(super) step_kind: String,
 }
 

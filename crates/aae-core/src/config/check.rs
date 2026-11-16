@@ -1,5 +1,5 @@
 //! References between files: names resolved to their packs (spec §8.2), trigger inputs against their formula,
-//! rigs and overrides against what the project has; the tables of the bundled plugins; the watchdog table.
+//! rigs and agent edits against what the project has; the tables of the bundled plugins; the watchdog table.
 
 use super::{BUNDLED, Bundled, Name, Pack, Project, StepKind, Variant, Watchdog, load::Loader};
 use crate::template::Inputs;
@@ -10,7 +10,7 @@ pub(super) fn project(loader: &mut Loader, project: &mut Project, variants: &BTr
     let index = project.packs.clone();
     let Project {
         root,
-        overrides,
+        edits,
         rigs,
         packs,
         variants: own_variants,
@@ -29,7 +29,7 @@ pub(super) fn project(loader: &mut Loader, project: &mut Project, variants: &BTr
         for (name, formula) in &mut pack.formulas {
             for step in &mut formula.steps {
                 match &mut step.kind {
-                    StepKind::Prompt { agent, .. } => match resolve(&index, &own, agent, has_agent, "agent") {
+                    StepKind::Ai { agent, .. } => match resolve(&index, &own, agent, has_agent, "agent") {
                         Ok(found) => *agent = found,
                         Err(e) => loader.fail(&manifest, format!("formula `{name}`: {e}")),
                     },
@@ -84,9 +84,9 @@ pub(super) fn project(loader: &mut Loader, project: &mut Project, variants: &BTr
     let file = root.join("aae.toml");
     // Project-level references resolve as if written in the project root pack.
     let own = index.first().map(|p| p.name.clone()).unwrap_or_default();
-    let mut agents: Vec<&String> = overrides.keys().collect();
+    let mut agents: Vec<&String> = edits.keys().collect();
     for (rig, r) in rigs.iter_mut() {
-        agents.extend(r.overrides.keys());
+        agents.extend(r.edits.keys());
         for trigger in &mut r.triggers {
             match resolve(&index, &own, trigger, has_trigger, "trigger") {
                 Ok(found) => *trigger = found,
@@ -94,20 +94,24 @@ pub(super) fn project(loader: &mut Loader, project: &mut Project, variants: &BTr
             }
         }
     }
-    // An override names a pack agent or a variant, by its name.
+    // An edit names a pack agent or a variant, by its name.
     for agent in agents
         .into_iter()
         .filter(|a| !own_variants.contains_key(*a) && !variants.contains_key(*a))
     {
         let name = super::load::reference(agent);
         if let Err(e) = resolve(&index, &own, &name, has_agent, "agent") {
-            loader.fail(&file, format!("overrides: {e}"));
+            loader.fail(&file, format!("`agents.{agent}`: {e}{NEW_NAME}"));
         }
     }
 }
 
-/// An orchestrator override must name an agent of at least one project and be ambiguous in none.
-pub(super) fn orchestrator_overrides<'a>(
+/// What an `[agents.<name>]` table of an unknown name lacks.
+const NEW_NAME: &str = "; a table of a new name is a variant and needs `base`";
+
+/// An orchestrator edit (`[agents.<name>]` without `base`) must name an agent of at least one project and be
+/// ambiguous in none.
+pub(super) fn orchestrator_edits<'a>(
     loader: &mut Loader,
     file: &std::path::Path,
     keys: impl Iterator<Item = &'a String>,
@@ -129,9 +133,9 @@ pub(super) fn orchestrator_overrides<'a>(
             .iter()
             .find(|r| r.as_ref().is_err_and(|e| e.contains("ambiguous")))
         {
-            loader.fail(file, format!("overrides: {e}"));
+            loader.fail(file, format!("`agents.{key}`: {e}"));
         } else if !found.iter().any(Result::is_ok) {
-            loader.fail(file, format!("overrides: no project has agent `{key}`"));
+            loader.fail(file, format!("`agents.{key}`: no project has agent `{key}`{NEW_NAME}"));
         }
     }
 }

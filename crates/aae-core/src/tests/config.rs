@@ -34,7 +34,7 @@ timeout = "10s"
 path = "backend"
 vars = { test_cmd = "cargo test" }
 triggers = ["nightly"]
-[rigs.backend.overrides.implementer]
+[rigs.backend.agents.implementer]
 model = "opus"
 [[trigger]]
 name = "implement-next"
@@ -71,7 +71,7 @@ plugins = [{ name = "mail" }]
 [inputs]
 bead = { type = "bead", required = true }
 [[step]]
-kind = "prompt"
+kind = "ai"
 agent = "implementer"
 prompt = "implement.md"
 timeout = "45m"
@@ -158,11 +158,11 @@ fn a_valid_config_loads_with_every_reference_resolved() {
     );
     assert_eq!(agent.settings.effort.as_deref(), Some("high"));
     match &kit.formulas["implement"].steps[0].kind {
-        StepKind::Prompt { agent, timeout, .. } => {
+        StepKind::Ai { agent, timeout, .. } => {
             assert_eq!(*agent, name("kit", "implementer"));
             assert_eq!(*timeout, Some(Duration::from_secs(45 * 60)));
         }
-        _ => panic!("implement is a prompt step"),
+        _ => panic!("implement is an ai step"),
     }
     assert!(
         matches!(&kit.formulas["audit"].steps[0].kind, StepKind::Exec { command, timeout: None } if command.len() == 3)
@@ -212,8 +212,8 @@ fn a_bare_name_prefers_the_own_pack() {
     let own = ("shop/agents/implementer/agent.toml", "harness = \"claude\"\n");
     let config = load_with(&[own]).unwrap();
     match &config.projects[0].packs[1].formulas["implement"].steps[0].kind {
-        StepKind::Prompt { agent, .. } => assert_eq!(*agent, name("kit", "implementer")),
-        _ => panic!("implement is a prompt step"),
+        StepKind::Ai { agent, .. } => assert_eq!(*agent, name("kit", "implementer")),
+        _ => panic!("implement is an ai step"),
     }
 }
 
@@ -279,7 +279,7 @@ fn files_reject_unknown_keys_and_undeclared_names() {
     );
     fails(
         &[(agent, "harness = \"codex\"\n")],
-        "harness `codex` is not in the orchestrator config",
+        "harness `codex` is neither of this build nor in the orchestrator config",
     );
     fails(&[(agent, "effort = \"high\"\n")], "no layer sets `harness`");
     fails(
@@ -345,9 +345,9 @@ fn files_reject_unknown_keys_and_undeclared_names() {
         .replace("backend", "back end")
         .replace("[rigs.back end", "[rigs.\"back end\"");
     fails(&[("shop/aae.toml", bad_rig.as_str())], "rig name `back end`");
-    let bad_override = BASE[3].1.replace("overrides.implementer", "overrides.reviewer");
+    let bad_override = BASE[3].1.replace("agents.implementer", "agents.reviewer");
     fails(&[("shop/aae.toml", bad_override.as_str())], "no agent `reviewer`");
-    let orchestrator_override = format!("{}[overrides.reviewer]\nmodel = \"opus\"\n", BASE[0].1);
+    let orchestrator_override = format!("{}[agents.reviewer]\nmodel = \"opus\"\n", BASE[0].1);
     fails(
         &[("config.toml", orchestrator_override.as_str())],
         "no project has agent `reviewer`",

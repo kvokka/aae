@@ -19,11 +19,11 @@ pub(crate) async fn run(env: Arc<Env>) -> String {
         );
         write(
             root.join("config/aae/shop/agents/dev/agent.toml"),
-            "harness = \"claude\"\nmodel = \"haiku\"\npermission_mode = \"bypassPermissions\"\n",
+            "harness = \"claude\"\nmodel = \"haiku\"\n[native.claude]\npermission_mode = \"bypassPermissions\"\n",
         );
         write(
             root.join("config/aae/shop/formulas/dev.toml"),
-            "name = \"dev\"\n[[step]]\nkind = \"prompt\"\nagent = \"dev\"\nprompt = \"dev.md\"\n",
+            "name = \"dev\"\n[[step]]\nkind = \"ai\"\nagent = \"dev\"\nprompt = \"dev.md\"\n",
         );
         write(
             root.join("config/aae/shop/formulas/dev.md"),

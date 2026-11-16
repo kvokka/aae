@@ -67,7 +67,7 @@ elsewhere `run` is the envelope's run id. Examples: `bead.labels` and `bead.epic
 Shared objects:
 
 - `RunView`:
-  `{id, formula, step, agent, step_kind: "prompt"|"exec"|"drain", state, class, attempt, generation, bead, workdir, depth, parent_run, created_at, started_at}`.
+  `{id, formula, step, agent, step_kind: "ai"|"exec"|"drain", state, class, attempt, generation, bead, workdir, depth, parent_run, created_at, started_at}`.
   `step` is the name of the formula step the run is at (6.1); `agent` and `step_kind` are of that step, `agent` is null
   for `exec` and `drain` steps, `class` is null until `failed`, `bead` is the bead id or null, `depth` is the chain
   depth of §6.1 (0 for a run started by hand), `parent_run` the run whose event triggered it or whose session started

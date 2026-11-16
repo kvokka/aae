@@ -229,12 +229,12 @@ pub fn open(path: &Path) -> rusqlite::Result<Connection> {
             "ALTER TABLE runs ADD COLUMN step TEXT NOT NULL DEFAULT '1'; \
              ALTER TABLE attempts ADD COLUMN step TEXT NOT NULL DEFAULT '1';",
         ),
-        // The agent the `agent:` label of a run's bead names for its prompt steps (spec §9.1).
+        // The agent the `agent:` label of a run's bead names for its ai steps (spec §9.1).
         (19, "ALTER TABLE runs ADD COLUMN as_agent TEXT;"),
         // The kind of the step a run is at: a drain step has no agent either, and its state is read in SQL.
         (
             20,
-            "ALTER TABLE runs ADD COLUMN step_kind TEXT NOT NULL DEFAULT 'prompt'; \
+            "ALTER TABLE runs ADD COLUMN step_kind TEXT NOT NULL DEFAULT 'ai'; \
              UPDATE runs SET step_kind = 'exec' WHERE agent = '';",
         ),
         // The round of a run and the remarks of the checks that sent it back (spec §9.1).

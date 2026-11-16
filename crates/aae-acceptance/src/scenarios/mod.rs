@@ -36,13 +36,13 @@ pub(crate) const MARK: &str = "MEASURE";
 pub(crate) const ALL: &[Scenario] = &[
     Scenario {
         criterion: "2",
-        title: "a prompt step passes on the cheapest real claude model by the finisher",
+        title: "an ai step passes on the cheapest real claude model by the finisher",
         launch: Launch::Request,
         run: |env| Box::pin(c02_prompt::run(env, Live::Claude)),
     },
     Scenario {
         criterion: "2",
-        title: "a prompt step passes on the cheapest real codex model by the finisher",
+        title: "an ai step passes on the cheapest real codex model by the finisher",
         launch: Launch::Request,
         run: |env| Box::pin(c02_prompt::run(env, Live::Codex)),
     },
@@ -236,9 +236,9 @@ impl Live {
         );
         // The host forbids user namespaces, so the codex sandbox cannot run here (docs/design/experiments.md).
         let rest = match self {
-            Live::Claude => "permission_mode = \"bypassPermissions\"\n",
+            Live::Claude => "[native.claude]\npermission_mode = \"bypassPermissions\"\n",
             Live::Codex => {
-                "permission_mode = \"never\"\neffort = \"low\"\n[native.codex]\nsandbox_mode = \"danger-full-access\"\n"
+                "effort = \"low\"\n[native.codex]\napproval_policy = \"never\"\nsandbox_mode = \"danger-full-access\"\n"
             }
         };
         write(
@@ -286,14 +286,14 @@ pub(crate) fn claude_agent(root: &Path, name: &str, base_url: &str) {
     write(
         root.join(format!("config/aae/shop/agents/{name}/agent.toml")),
         format!(
-            "harness = \"claude\"\nmodel = \"claude-haiku-5-5\"\npermission_mode = \"bypassPermissions\"\n\
-             inherit_host = false\n[env]\nANTHROPIC_BASE_URL = \"{base_url}\"\nANTHROPIC_API_KEY = \"fake\"\n\
+            "harness = \"claude\"\nmodel = \"claude-haiku-5-5\"\ninherit_host = false\n\
+             [native.claude]\npermission_mode = \"bypassPermissions\"\n[env]\nANTHROPIC_BASE_URL = \"{base_url}\"\nANTHROPIC_API_KEY = \"fake\"\n\
              CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC = \"1\"\nCLAUDE_CODE_MAX_RETRIES = \"0\"\n"
         ),
     );
     write(
         root.join(format!("config/aae/shop/formulas/{name}.toml")),
-        format!("name = \"{name}\"\n[[step]]\nkind = \"prompt\"\nagent = \"{name}\"\nprompt = \"{name}.md\"\n"),
+        format!("name = \"{name}\"\n[[step]]\nkind = \"ai\"\nagent = \"{name}\"\nprompt = \"{name}.md\"\n"),
     );
     write(
         root.join(format!("config/aae/shop/formulas/{name}.md")),
@@ -312,15 +312,15 @@ pub(crate) fn codex_agent(root: &Path, name: &str, base_url: &str) {
     write(
         root.join(format!("config/aae/shop/agents/{name}/agent.toml")),
         format!(
-            "harness = \"codex\"\nmodel = \"gpt-fake\"\npermission_mode = \"never\"\ninherit_host = false\n\
-             [native.codex]\nmodel_provider = \"fake\"\nsandbox_mode = \"danger-full-access\"\n\
+            "harness = \"codex\"\nmodel = \"gpt-fake\"\ninherit_host = false\n\
+             [native.codex]\napproval_policy = \"never\"\nmodel_provider = \"fake\"\nsandbox_mode = \"danger-full-access\"\n\
              [native.codex.model_providers.fake]\nname = \"fake\"\nbase_url = \"{base_url}\"\n\
              wire_api = \"responses\"\nrequest_max_retries = 0\nstream_max_retries = 0\n"
         ),
     );
     write(
         root.join(format!("config/aae/shop/formulas/{name}.toml")),
-        format!("name = \"{name}\"\n[[step]]\nkind = \"prompt\"\nagent = \"{name}\"\nprompt = \"{name}.md\"\n"),
+        format!("name = \"{name}\"\n[[step]]\nkind = \"ai\"\nagent = \"{name}\"\nprompt = \"{name}.md\"\n"),
     );
     write(
         root.join(format!("config/aae/shop/formulas/{name}.md")),

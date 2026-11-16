@@ -58,6 +58,37 @@ fn the_transcript_tells_where_the_prompt_stands() {
 }
 
 #[test]
+fn the_native_permission_mode_is_a_flag_and_not_a_settings_key() {
+    let config = EffectiveConfig {
+        services: Default::default(),
+        harness: "claude".into(),
+        harness_from: aae_core::config::Layer::Agent,
+        model_given: None,
+        model: None,
+        effort: None,
+        system_prompt: None,
+        inherit_host: None,
+        env: Default::default(),
+        mcp: Default::default(),
+        hooks: Default::default(),
+        skills: Default::default(),
+        plugins: Vec::new(),
+        native: Some(agent(json!({ "permission_mode": "plan", "env": { "X": "1" } }))),
+    };
+    let plan = SessionPlan::New {
+        workdir: "/w".into(),
+        run: "r".into(),
+        attempt: 1,
+        token: "t".into(),
+        actor: None,
+    };
+    let p = part::process(&config, &plan, Path::new("/state")).unwrap();
+    assert!(part::args(&p).windows(2).any(|w| w == ["--permission-mode", "plan"]));
+    assert_eq!(p["settings"]["env"]["X"], "1");
+    assert!(p["settings"].get("permission_mode").is_none(), "{}", p["settings"]);
+}
+
+#[test]
 fn a_config_the_adapter_cannot_deliver_is_a_config_error() {
     let mut config = EffectiveConfig {
         services: Default::default(),
@@ -67,7 +98,6 @@ fn a_config_the_adapter_cannot_deliver_is_a_config_error() {
         model: None,
         effort: None,
         system_prompt: None,
-        permission_mode: None,
         inherit_host: None,
         env: Default::default(),
         mcp: Default::default(),
@@ -126,7 +156,6 @@ fn hooks_join_the_native_settings_and_mcp_servers_take_claude_form() {
         model: None,
         effort: None,
         system_prompt: None,
-        permission_mode: None,
         inherit_host: None,
         env: Default::default(),
         mcp: [(

@@ -1,8 +1,8 @@
-//! Agent variants (`[agents.<name>]` of the orchestrator and project files) and the rigs that run them in place of
-//! a pack agent (`[rigs.<r>] agents`): docs/design/config.md "Agent variants".
+//! `[agents.<name>]` of the orchestrator and project files — edits of agents and variants of pack agents — and the
+//! rigs that run a variant in place of a pack agent (`[rigs.<r>.agents]`): docs/design/config.md "Agent variants".
 
 use super::{
-    Name, Pack, Project, Variant,
+    Name, Pack, Project, Settings, Variant,
     check::resolve,
     items::{agent_keys, string},
     load::{Loader, reference},
@@ -10,42 +10,39 @@ use super::{
 use std::{collections::BTreeMap, path::Path};
 
 impl Loader {
-    /// The variants one file declares.
-    pub(super) fn variants(
+    /// The `[agents.<name>]` tables of one file: the edits of agents by name, and the variants (those with `base`).
+    pub(super) fn agents(
         &mut self,
         file: &Path,
         base: &Path,
         tables: BTreeMap<String, toml::Table>,
         plugins: &[&str],
-    ) -> BTreeMap<String, Variant> {
-        let mut variants = BTreeMap::new();
+    ) -> (BTreeMap<String, Settings>, BTreeMap<String, Variant>) {
+        let (mut edits, mut variants) = (BTreeMap::new(), BTreeMap::new());
         for (name, mut table) in tables {
-            self.name(file, "agent variant", &name);
             let what = format!("agents.{name}");
             let parsed = string(&mut table, "base").and_then(|b| Ok((b, agent_keys(table)?)));
-            let (agent, settings, max_runs) = match parsed {
-                Ok((Some(agent), (settings, max_runs))) => (agent, settings, max_runs),
-                Ok((None, _)) => {
-                    self.fail(
-                        file,
-                        format!("`{what}`: `base` names the pack agent it is a variant of"),
-                    );
-                    continue;
+            match parsed {
+                Ok((None, (_, Some(_)))) => self.fail(
+                    file,
+                    format!("`{what}`: `max_runs` is the agent's own; a variant (with `base`) may set its own"),
+                ),
+                Ok((None, (settings, None))) => {
+                    edits.insert(name, self.settings(file, base, settings, plugins));
                 }
-                Err(e) => {
-                    self.fail(file, format!("`{what}`: {e}"));
-                    continue;
+                Ok((Some(agent), (settings, max_runs))) => {
+                    self.name(file, "agent variant", &name);
+                    let variant = Variant {
+                        base: reference(&agent),
+                        settings: self.settings(file, base, settings, plugins),
+                        max_runs,
+                    };
+                    variants.insert(name, variant);
                 }
-            };
-            let settings = self.settings(file, base, settings, plugins);
-            let variant = Variant {
-                base: reference(&agent),
-                settings,
-                max_runs,
-            };
-            variants.insert(name, variant);
+                Err(e) => self.fail(file, format!("`{what}`: {e}")),
+            }
         }
-        variants
+        (edits, variants)
     }
 }
 

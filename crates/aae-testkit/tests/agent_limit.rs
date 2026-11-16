@@ -50,12 +50,11 @@ async fn pass(w: &World, run: &str, attempt: u32, turn: &Notify) {
     turn.notify_one();
 }
 
-/// Two rigs and the formula `build` of the prompt steps `steps` (`(name, agent)`); `dev` runs one run at a time.
+/// Two rigs and the formula `build` of the ai steps `steps` (`(name, agent)`); `dev` runs one run at a time.
 fn shop(steps: &[(&str, &str)]) -> World {
     let mut formula = "name = \"build\"\n".to_owned();
     for (name, agent) in steps {
-        formula +=
-            &format!("[[step]]\nname = \"{name}\"\nkind = \"prompt\"\nagent = \"{agent}\"\nprompt = \"build.md\"\n");
+        formula += &format!("[[step]]\nname = \"{name}\"\nkind = \"ai\"\nagent = \"{agent}\"\nprompt = \"build.md\"\n");
     }
     world(&[
         (

@@ -52,14 +52,14 @@ async fn a_claude_session_of_a_worktree_formula_works_in_its_worktree() {
             (
                 shop.join("agents/dev/agent.toml"),
                 format!(
-                    "harness = \"claude\"\nmodel = \"claude-haiku-5-5\"\npermission_mode = \"bypassPermissions\"\n\
-                     inherit_host = false\n[env]\nANTHROPIC_BASE_URL = \"{base_url}\"\nANTHROPIC_API_KEY = \"fake\"\n\
+                    "harness = \"claude\"\nmodel = \"claude-haiku-5-5\"\ninherit_host = false\n\
+                     [native.claude]\npermission_mode = \"bypassPermissions\"\n[env]\nANTHROPIC_BASE_URL = \"{base_url}\"\nANTHROPIC_API_KEY = \"fake\"\n\
                      CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC = \"1\"\nCLAUDE_CODE_MAX_RETRIES = \"0\"\n"
                 ),
             ),
             (
                 shop.join("formulas/build.toml"),
-                "name = \"build\"\nworktree = true\n[[step]]\nkind = \"prompt\"\nagent = \"dev\"\nprompt = \"build.md\"\n"
+                "name = \"build\"\nworktree = true\n[[step]]\nkind = \"ai\"\nagent = \"dev\"\nprompt = \"build.md\"\n"
                     .to_owned(),
             ),
             (shop.join("formulas/build.md"), "Build {{ rig.name }}.".to_owned()),

@@ -36,6 +36,8 @@ fn the_process_gets_the_native_block_and_the_thread_the_rest() {
         args.contains(&"sandbox_mode=\"danger-full-access\"".to_owned()),
         "{args:?}"
     );
+    // The native approval policy is the thread's `approvalPolicy`, not a process override.
+    assert!(!args.iter().any(|a| a.starts_with("approval_policy")), "{args:?}");
     let provider = args.iter().find(|a| a.starts_with("model_providers=")).unwrap();
     let parsed: toml::Table = toml::from_str(provider).unwrap();
     assert_eq!(

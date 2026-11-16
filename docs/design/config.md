@@ -17,6 +17,8 @@ error in every file.
   The daemon re-reads only on an explicit command: `aae config reload` (`POST /v1/config/reload`); on
   error the previous config stays in force, and `aae config check` reports the errors without applying anything
   (it loads the file itself, so it needs no daemon).
+- A retired key is a config error of one line that says where it is written now: `permission_mode` (the native block of
+  the harness), `[overrides.<agent>]` (`[agents.<agent>]`), step kind `prompt` (`ai`).
 - A reload is taken by new runs and by the schedules (a schedule whose `cron`/`every` changed, and every `cron` when
   `timezone` changed, is set again from the reload; a removed one is dropped); the snapshot is per step: a running
   step keeps the one it prepared with, and the next step of the run prepares with the config of that moment; an idle
@@ -30,20 +32,20 @@ error in every file.
 
 One table shape for every layer (see "Effective config"): `[settings]` of the orchestrator, a project and a rig;
 the `[agent]` contribution of a plugin; the top level of `agent.toml`; an agent variant `[agents.<name>]`; and the
-overrides `[overrides.<agent>]`. A pack's `[settings]` and a prompt step take only the three launch settings:
+edit of an agent `[agents.<agent>]`. A pack's `[settings]` and an ai step take only the three launch settings:
 `harness`, `model`, `effort`. There is no `provider` key: a layer that has one is an unknown field.
 
 | Key | Type | Merge |
 |---|---|---|
-| `harness` | string: the agent CLI, one of the orchestrator's `[harness.*]`; see "Harness and model" | scalar |
-| `model`, `effort`, `system_prompt`, `permission_mode` | string; `permission_mode` is the harness's own: claude's `--permission-mode`, codex's approval policy (`untrusted`, `on-request`, `never`) | scalar |
+| `harness` | string: the agent CLI, `claude` or `codex`, or one named in the orchestrator config; see "Harness and model" | scalar |
+| `model`, `effort`, `system_prompt` | string | scalar |
 | `inherit_host` | boolean | scalar |
 | `env` | table of strings | by key |
 | `mcp.<name>` | `{command = [..], env, scope}` (stdio; `scope = "orchestrator" \| "project" \| "session"`, optional) or `{url, headers}` (HTTP), not both (a server the daemon runs is a `[[service]]`, below); a key of the other kind (`headers` with `command`, `env` or `scope` with `url`) is an error | by key, entry replaced whole |
 | `hooks.<name>` | `{event, matcher, command, timeout}` (harness hooks, Claude dialect) or `{enabled = false}`; `event` must be a hook event of claude 2.1 or one codex adds (`Interrupt`, `PreModelRequest`, `PostModelRequest`) | named list |
 | `skills.<name>` | `{path}` (must exist) or `{enabled = false}` | named list |
 | `plugins` | array of `{name, enabled = true}`, in attachment order; parameters belong to the `[[plugin]]` declaration | named list |
-| `native.<harness>` | any table, passed to the adapter as is; `native.claude` is a table of claude settings keys, delivered with `--settings` together with the hooks; `native.codex` is a table of codex `config.toml` keys, delivered to the app-server as `-c key=value` flags (so it is part of the process fingerprint) | by key |
+| `native.<harness>` | any table, passed to the adapter as is; `native.claude` is a table of claude settings keys, delivered with `--settings` together with the hooks, except `permission_mode`, which goes as `--permission-mode`; `native.codex` is a table of codex `config.toml` keys (`approval_policy` is the thread's approval policy), delivered to the app-server as `-c key=value` flags (so it is part of the process fingerprint) | by key |
 
 ### MCP servers and services (spec §11.4)
 
@@ -123,8 +125,8 @@ mcp = { url = "/mcp" }                         # | true (= /mcp); none: no MCP e
 ## Effective config and "explain config"
 
 Settings live on three levels: the orchestrator (`~/.config/aae/config.toml`: the harnesses with the default model of
-each, shared MCP, hooks, skills, env, plugins), the project (`aae.toml`: rigs, packs, project plugins, overrides) and
-the rig (a section of `aae.toml`: repository path, variables, overrides). An agent is not a level but a consumer: its
+each, shared MCP, hooks, skills, env, plugins), the project (`aae.toml`: rigs, packs, project plugins, `[agents]` edits) and
+the rig (a section of `aae.toml`: repository path, variables, `[agents]` edits). An agent is not a level but a consumer: its
 `agent.toml` gives the defaults of the role, and every setting, the harness and the model too, comes from the
 layers, weakest first:
 
@@ -137,8 +139,9 @@ layers, weakest first:
 7. `[settings]` of the pack of the run's formula (launch settings only);
 8. the `[[step]]` of the formula the run is at (launch settings only);
 9. the agent variant the rig runs in place of the agent (`[agents.<name>]`, see "Agent variants");
-10. `[overrides.<agent>]` of the orchestrator, then the project, then the rig: they fix an agent of an outside pack
-   without forking the pack. A variant takes the overrides named after it, not those of its base agent.
+10. `[agents.<agent>]` without `base` (an edit) of the orchestrator, then the project, then the rig: they fix an agent
+    of an outside pack without forking the pack. A variant is edited by an `[agents.<variant>]` table of a stronger
+    level, not by the edits of its base agent. An edit may not set `max_runs`; an unknown name without `base` is an error.
 
 Layers 7 and 8 belong to a run: the agent alone (`explain` without a formula, `aae doctor`) has none of them. What
 the user says for the agent (9, 10) is stronger than what the pack and the formula say.
@@ -152,19 +155,19 @@ whole (`inherit_host = false`), never one element by name. The harness config in
 
 `Config::effective(project, rig, agent)` merges the layers above for one agent alone: the harness default model,
 orchestrator, project and rig settings, then the contributions of the attached plugins in attachment order, the agent,
-and the overrides of the orchestrator, the project and the rig. `Config::for_run(project, rig, formula, step)` is what a
+and the `[agents]` edits of the orchestrator, the project and the rig. `Config::for_run(project, rig, formula, step)` is what a
 step of a run gets: the agent the rig runs for that step (a variant by its name), and its config with the pack, step and
 variant layers too; a run keeps the one of its current step. Plugins attach first (the `plugins` key of every layer), so
-a stronger layer can detach a plugin and its whole contribution. An override applies when its key resolves (see Names)
+a stronger layer can detach a plugin and its whole contribution. An edit applies when its key resolves (see Names)
 to the agent. Every value keeps its layer; a value several layers make together (`native` tables merged by key, a system
 prompt with plugin fragments, `PATH` with plugin `bin/` directories) names them all in order (`# agent + plugin mail`),
 and a model the adapter expanded keeps the short name it was given
-(`model = "gpt-6-luna"  # rig override, given as "luna"`). The new layers print as `pack <name>`,
+(`model = "gpt-6-luna"  # rig [agents], given as "luna"`). The new layers print as `pack <name>`,
 `formula <pack>.<name> step <step>` and `variant <name>`. `explain()` prints one line per value with its layer and one
 line for the host: inherited by the harness and invisible to aae, or off
 (`aae config explain --project <p> --agent <a> [--rig <r>]`, with no daemon, on the file on disk;
 `GET /v1/config/explain`, on the config the daemon holds). The pack, formula and variant layers count only for a run, so
-they show with `--formula <f> --rig <r>` in place of `--agent`, step by step: for a prompt step a header
+they show with `--formula <f> --rig <r>` in place of `--agent`, step by step: for an ai step a header
 ``# step `<s>` of `<f>` on `<r>`: agent <a>`` (the rig's variant if it maps one) and its effective config, for an exec
 step one line ``# step `<s>` of `<f>`: exec `<command>` ``, for a drain step
 ``# step `<s>` of `<f>`: drain, a run of `<formula>` per bead``, and after a check
@@ -181,9 +184,11 @@ in the rig or the harness's home directory. The adapter's `split` turns it into 
 `harness` is the agent CLI that runs the session (`claude`, `codex`); the user names it, there is no `provider`
 setting (spec §6.2). Which vendor serves the model is the harness's own setting (its host config or
 `native.<harness>`, e.g. codex's `model_provider`); the core does not read it. `harness` changes by the same layers
-as the other launch settings: an override, a variant, a pack, a formula step.
+as the other launch settings: an agent edit, a variant, a pack, a formula step.
 
-The harness must be one of the orchestrator's `[harness.*]`, and some layer must set it. These are load errors:
+A harness with an adapter in the build (`claude`, `codex`) needs no `[harness.<name>]` section; the section only sets its
+defaults. Any other name is an error: harness `x` is neither of this build nor in the orchestrator config. Some layer
+must set the harness. These are load errors:
 every prompt formula on every rig of a project must assemble, and an error names the project file, the formula and
 rig (`formula `kit.implement` on rig `backend`: no layer sets `harness``).
 
@@ -259,7 +264,7 @@ bead_failures = 3                   # failed runs of a bead before the core clos
 api_tcp = "127.0.0.1:7171"          # the API on TCP too (off by default; loopback only; a reload cannot change it)
 timezone = "Europe/Berlin"          # IANA zone `cron` is read in (default: the system zone; an unknown name is an error)
 
-[harness.claude]                    # the harnesses of this host
+[harness.claude]                    # optional: only the defaults of the harness
 model = "sonnet"                    # default model of the harness
 binary = "/opt/claude/bin/claude"   # optional explicit path; otherwise mise, then `PATH`
 
@@ -283,7 +288,7 @@ queue_timeout = "168h"              # a run not started
 park_timeout = "168h"               # a parked run on a gate without `until`
 
 [settings]                          # layer 2
-[overrides.implementer]             # layer 10, for an agent of any project
+[agents.implementer]                # layer 10: an edit of an agent of any project (no `base`)
 ```
 
 Each `[watchdog]` value is a duration with one unit (`ms`, `s`, `m`, `h`) from 1 ms to 8760 h; an unknown key is an
@@ -309,7 +314,7 @@ packs = [
 path = "plugins/aae-plugin-notes"
 
 [settings]                          # layer 3
-[overrides.implementer]             # layer 10
+[agents.implementer]                # layer 10: an edit (no `base`)
 
 [agents.codex-implementer]          # a variant of a pack agent (see "Agent variants")
 base = "kit.implementer"
@@ -322,7 +327,7 @@ vars = { test_cmd = "cargo test" }   # `{{ rig.test_cmd }}` in a prompt; `name` 
 triggers = ["nightly-audit"]        # pack triggers that run on this rig (a pack does not know rig names, §9.5)
 agents = { implementer = "codex-implementer" }  # on this rig the variant runs where a formula names `implementer`
 [rigs.backend.settings]             # layer 4
-[rigs.backend.overrides.implementer]
+[rigs.backend.agents.implementer]    # a table: settings of the agent on this rig (layer 10)
 
 [[trigger]]                         # project triggers may name their rig
 name = "audit-backend"
@@ -411,11 +416,11 @@ declared by the orchestrator or the project.
 ## Agent: `agents/<agent>/agent.toml`
 
 `prompt` (role prompt file, default `prompt.md`
-when it exists; its text is the agent layer's `system_prompt`, so an override may still replace it, and setting
+when it exists; its text is the agent layer's `system_prompt`, so an `[agents.<agent>]` edit may still replace it, and setting
 `system_prompt` in `agent.toml` too is an error), `max_runs` (optional positive integer: runs of this agent
 started at once in its project; the orchestrator's `max_runs` still applies; a run whose next step is of an agent
 at its limit parks until a run of that agent ends or leaves its step), then the settings keys above. Its
-`harness`, `model` and `effort` are the defaults of the role: a pack, a formula, a variant or an override may change
+`harness`, `model` and `effort` are the defaults of the role: a pack, a formula, a variant or an `[agents]` edit may change
 any of them, and an agent that names no `harness` needs a layer that does.
 A role prompt file that is empty or only whitespace is a load error naming the file.
 Everything of one agent (settings, prompts,
@@ -432,7 +437,7 @@ A run over a limit waits in `queued` with `waiting_for = "concurrency"`; a busy 
 base agent's). A rig runs a variant in place of an agent the formulas name: `[rigs.<r>] agents = { <agent> =
 "<variant>" }`. A run of the variant is of the variant's name: `max_runs` (its own, else the base agent's), the gate
 `agent:<variant>`, the events and `explain` count it as an agent of its own. The formulas of the pack still name the
-base agent; the other way to the same change, without a new name, is an override (`[rigs.<r>.overrides.<agent>]`).
+base agent; the other way to the same change, without a new name, is an edit (`[rigs.<r>.agents.<agent>]`).
 
 A project's variant replaces an orchestrator's of the same name. Load errors: a `base` that resolves to no agent; a
 `base` that names a variant (a variant is of a pack agent, one level); a rig that maps to a variant nobody declares; a
@@ -451,11 +456,11 @@ bead = { type = "bead", required = true }   # bead | string | integer | boolean
 
 [[step]]
 name = "implement"                  # optional (default: the position, "1", "2", ..)
-kind = "prompt"                     # prompt: agent + prompt template; exec: command; drain: formula
+kind = "ai"                     # ai: agent + prompt template; exec: command; drain: formula
 agent = "implementer"
 prompt = "implement.md"             # relative to the formula file
 timeout = "45m"                     # optional
-model = "opus"                      # optional, prompt steps only: layer 8, the launch settings `harness`,
+model = "opus"                      # optional, ai steps only: layer 8, the launch settings `harness`,
                                     # `model`, `effort`
 
 [[step]]
@@ -473,7 +478,7 @@ timeout = "24h"                     # optional (default 24h)
 
 A formula has a name, a description, declared inputs and one or more steps, which a run goes through in order
 (contracts 6.1): the next step starts when the one before ended, a failed step that is no check fails the run, and
-the run's outcome is that of its last step. Step names are unique in the formula and contain no `.`. A `prompt` step
+the run's outcome is that of its last step. Step names are unique in the formula and contain no `.`. An `ai` step
 is a turn of the agent in a harness session, and its outcome comes from the finisher (`aae finish`, contracts 6.3). An
 `exec` step is a command with no model that the daemon runs in the run's workdir, in a process group of its own, under
 the step timeout; exit 0 is `pass`, 75 (`EX_TEMPFAIL`) a failed attempt (not an outcome), any other `fail`, and a
@@ -500,7 +505,7 @@ A step with `back_to` is a check. When it fails the run does not fail: the steps
 as well, and after the last of them every failed check of the row sends the run back together, to the earliest
 step they name, which starts at once as the next round. Their remarks — per check its name, its summary and, for an
 exec check, the output it kept — reach the steps of the new round as `{{ remarks }}` in a prompt template and
-`AAE_REMARKS` in the environment of an exec step (empty and absent in the first round). A prompt step of the new
+`AAE_REMARKS` in the environment of an exec step (empty and absent in the first round). An ai step of the new
 round that already has a session goes on in it (spec §9.3): its first attempt resumes the session and gets the
 rendered prompt with the remarks, not the reconcile prompt of a resumed retry. A check that fails in the
 last of the formula's `rounds` fails the run (class `agent`) with the reason `still failing after <n> rounds:
@@ -510,8 +515,8 @@ A step sees the outcomes of the steps before it, by name (the last attempt of ea
 `{{ steps.<name>.result }}`, `.summary` and `.data.<key>` (contracts 2.3; `data` of an exec step is `{exit_code,
 stdout, stderr}`), an exec step as `AAE_STEP_<NAME>_RESULT` (`pass` or `fail`), `AAE_STEP_<NAME>_SUMMARY` and
 `AAE_STEP_<NAME>_DATA` (JSON, when there is data), `<NAME>` formed as for inputs; a step name whose variables collide
-with another step's or an input's is a config error. Each prompt step has a session of its own; a run that continues a
-session (`continue_from`) continues it in its first step only, so a formula whose first step is not `prompt` cannot be
+with another step's or an input's is a config error. Each ai step has a session of its own; a run that continues a
+session (`continue_from`) continues it in its first step only, so a formula whose first step is not `ai` cannot be
 continued.
 
 A run start checks the inputs: no undeclared one, every `required` one present (`null` is no value), an `integer` input

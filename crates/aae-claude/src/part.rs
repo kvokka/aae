@@ -16,7 +16,7 @@ use uuid::Uuid;
 /// system_prompt, permission_mode, inherit_host, env, settings, mcp, skills}`; `settings` and `mcp` are the JSON
 /// of `--settings` and `--mcp-config`, `skills` the skill directories by name.
 pub(crate) fn process(config: &EffectiveConfig, plan: &SessionPlan, state: &Path) -> Result<Value, Failure> {
-    let settings = settings(config)?;
+    let (settings, permission_mode) = settings(config)?;
     let mcp = mcp(config)?;
     let skills: BTreeMap<_, _> = config
         .skills
@@ -69,7 +69,7 @@ pub(crate) fn process(config: &EffectiveConfig, plan: &SessionPlan, state: &Path
         "model": value(&config.model),
         "effort": value(&config.effort),
         "system_prompt": value(&config.system_prompt),
-        "permission_mode": value(&config.permission_mode),
+        "permission_mode": permission_mode,
         "inherit_host": inherit,
         "env": env,
         "settings": settings,
@@ -78,8 +78,9 @@ pub(crate) fn process(config: &EffectiveConfig, plan: &SessionPlan, state: &Path
     }))
 }
 
-/// The `--settings` JSON: the native block (claude's own settings keys) with the enabled hooks added to its own.
-fn settings(config: &EffectiveConfig) -> Result<Value, Failure> {
+/// The `--settings` JSON: the native block (claude's own settings keys) with the enabled hooks added to its own; and
+/// the `--permission-mode` the block's `permission_mode` gives, which is a flag and not a settings key.
+fn settings(config: &EffectiveConfig) -> Result<(Value, Option<String>), Failure> {
     let mut settings = match config.native.as_ref().map(|n| &n.value) {
         None => json!({}),
         Some(native @ Value::Object(_)) => native.clone(),
@@ -88,6 +89,11 @@ fn settings(config: &EffectiveConfig) -> Result<Value, Failure> {
                 "the claude native block is a table of claude settings".into(),
             ));
         }
+    };
+    let mode = match settings.as_object_mut().and_then(|s| s.remove("permission_mode")) {
+        None => None,
+        Some(Value::String(mode)) => Some(mode),
+        Some(_) => return Err(config_error("the claude native `permission_mode` is a string".into())),
     };
     // Without the host layer the own config directory and the setting sources drop the user memory, but claude also
     // reads `CLAUDE.md` up the rig's ancestors, and a rig under `HOME` reaches the host's (criterion 12).
@@ -122,7 +128,8 @@ fn settings(config: &EffectiveConfig) -> Result<Value, Failure> {
             _ => return Err(shape()),
         }
     }
-    Ok(if settings == json!({}) { Value::Null } else { settings })
+    let settings = if settings == json!({}) { Value::Null } else { settings };
+    Ok((settings, mode))
 }
 
 /// The `--mcp-config` JSON of the session's own servers.

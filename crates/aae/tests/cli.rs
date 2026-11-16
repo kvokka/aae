@@ -172,7 +172,7 @@ fn the_config_is_checked_and_explained_without_a_daemon() {
     )
     .unwrap();
     fs::create_dir_all(files.join("shop/formulas")).unwrap();
-    let formula = "name = \"go\"\n[[step]]\nkind = \"prompt\"\nagent = \"dev\"\nprompt = \"go.md\"\neffort = \"low\"\n";
+    let formula = "name = \"go\"\n[[step]]\nkind = \"ai\"\nagent = \"dev\"\nprompt = \"go.md\"\neffort = \"low\"\n";
     fs::write(files.join("shop/formulas/go.toml"), formula).unwrap();
     fs::write(files.join("shop/formulas/go.md"), "Go.\n").unwrap();
     let broken = files.join("broken.toml");

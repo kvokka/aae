@@ -123,7 +123,7 @@ impl RunHandler {
             let reason = format!("the workdir `{}` does not exist", row.workdir);
             return self.terminal(tx, row, "failed", Some("infrastructure"), &reason);
         }
-        // Of one step: each prompt step of a formula has a session of its own (spec §9.3).
+        // Of one step: each ai step of a formula has a session of its own (spec §9.3).
         let last_session = |tx: &Tx<'_>, run: &str, step: Option<&str>| {
             tx.sql()
                 .query_row(

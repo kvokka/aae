@@ -27,12 +27,12 @@ pub(crate) async fn run(env: Arc<Env>) -> String {
         // With tool search on, claude would defer the MCP tools and list none of them to the model.
         write(
             root.join("config/aae/shop/agents/dev/agent.toml"),
-            "harness = \"claude\"\nmodel = \"haiku\"\npermission_mode = \"bypassPermissions\"\n\
+            "harness = \"claude\"\nmodel = \"haiku\"\n[native.claude]\npermission_mode = \"bypassPermissions\"\n\
              [env]\nENABLE_TOOL_SEARCH = \"false\"\n[mcp.aae]\nurl = \"${AAE_API}/mcp\"\n",
         );
         write(
             root.join("config/aae/shop/formulas/dev.toml"),
-            "name = \"dev\"\n[[step]]\nkind = \"prompt\"\nagent = \"dev\"\nprompt = \"dev.md\"\n",
+            "name = \"dev\"\n[[step]]\nkind = \"ai\"\nagent = \"dev\"\nprompt = \"dev.md\"\n",
         );
         write(
             root.join("config/aae/shop/formulas/dev.md"),

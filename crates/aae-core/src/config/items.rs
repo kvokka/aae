@@ -31,7 +31,10 @@ impl Loader {
             (Err(e), ..) | (_, Err(e), _) | (.., Err(e)) => return self.none(&file, e),
         };
         if let Some(h) = harness.as_ref().filter(|h| !self.harnesses.contains(*h)) {
-            self.fail(&file, format!("harness `{h}` is not in the orchestrator config"));
+            self.fail(
+                &file,
+                format!("harness `{h}` is neither of this build nor in the orchestrator config"),
+            );
         }
         let prompt = match prompt {
             Some(p) => self.text(&file, &dir.join(p)),
@@ -110,7 +113,7 @@ impl Loader {
         }
         for (at, step) in raw.step.into_iter().enumerate() {
             let (name, back_to) = match &step {
-                StepFile::Prompt { name, back_to, .. } | StepFile::Exec { name, back_to, .. } => {
+                StepFile::Ai { name, back_to, .. } | StepFile::Exec { name, back_to, .. } => {
                     (name.clone(), back_to.clone())
                 }
                 StepFile::Drain { name, .. } => (name.clone(), None),
@@ -175,7 +178,7 @@ impl Loader {
         raw: StepFile,
     ) -> Option<StepKind> {
         Some(match raw {
-            StepFile::Prompt {
+            StepFile::Ai {
                 agent,
                 prompt,
                 timeout,
@@ -198,7 +201,7 @@ impl Loader {
                     );
                 }
                 let timeout = self.timeout(file, timeout.as_deref());
-                StepKind::Prompt {
+                StepKind::Ai {
                     agent: reference(&agent),
                     prompt: template,
                     timeout,
@@ -298,7 +301,7 @@ pub(super) fn agent_keys(mut table: toml::Table) -> Result<(Settings, Option<u32
     };
     let settings = toml::Value::Table(table)
         .try_into::<Settings>()
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| super::load::retired(e.to_string()))?;
     Ok((settings, max_runs))
 }
 

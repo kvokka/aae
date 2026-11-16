@@ -341,13 +341,13 @@ async fn a_start_without_a_rig_takes_it_from_the_label_of_the_bead() {
     w.fix(json!(none)).await.unwrap();
 }
 
-/// The labels of a bead name the agent of every prompt step of its run and the harness it is for (spec §9.1); a pick
+/// The labels of a bead name the agent of every ai step of its run and the harness it is for (spec §9.1); a pick
 /// passes over a bead its run cannot take (§10.3).
 #[tokio::test(start_paused = true)]
 async fn a_bead_names_the_agent_of_its_run_and_the_harness_it_is_for() {
     let pair = "name = \"pair\"\n[inputs]\nbead = { type = \"bead\", required = true }\n\
-        [[step]]\nname = \"one\"\nkind = \"prompt\"\nagent = \"dev\"\nprompt = \"fix.md\"\n\
-        [[step]]\nname = \"two\"\nkind = \"prompt\"\nagent = \"dev\"\nprompt = \"fix.md\"\n";
+        [[step]]\nname = \"one\"\nkind = \"ai\"\nagent = \"dev\"\nprompt = \"fix.md\"\n\
+        [[step]]\nname = \"two\"\nkind = \"ai\"\nagent = \"dev\"\nprompt = \"fix.md\"\n";
     let extra = [
         ("shop/agents/qa/agent.toml", "harness = \"scripted\"\n"),
         ("shop/formulas/pair.toml", pair),

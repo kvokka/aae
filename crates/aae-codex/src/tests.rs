@@ -18,15 +18,16 @@ pub(crate) fn config() -> EffectiveConfig {
         model: Some(agent("gpt-fake".into())),
         effort: Some(agent("low".into())),
         system_prompt: None,
-        permission_mode: Some(agent("never".into())),
         inherit_host: Some(agent(false)),
         env: [("OPENAI_API_KEY".to_owned(), agent("sk-fake".to_owned()))].into(),
         mcp: Default::default(),
         hooks: Default::default(),
         skills: Default::default(),
         plugins: Vec::new(),
-        native: Some(agent(json!({ "sandbox_mode": "danger-full-access",
-            "model_providers": { "fake": { "base_url": "http://127.0.0.1:1/v1", "wire_api": "responses" } } }))),
+        native: Some(agent(
+            json!({ "sandbox_mode": "danger-full-access", "approval_policy": "never",
+            "model_providers": { "fake": { "base_url": "http://127.0.0.1:1/v1", "wire_api": "responses" } } }),
+        )),
     }
 }
 

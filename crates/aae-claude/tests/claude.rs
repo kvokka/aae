@@ -29,7 +29,6 @@ fn config(provider: &Provider) -> EffectiveConfig {
         model: Some(sourced("claude-haiku-5-5")),
         effort: None,
         system_prompt: None,
-        permission_mode: None,
         inherit_host: Some(Sourced {
             value: false,
             from: Layer::Agent,

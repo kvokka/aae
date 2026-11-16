@@ -32,7 +32,7 @@ fn a_stronger_layer_wins_and_every_value_keeps_its_layer() {
     let config = with_lines(&[
         (
             "config.toml",
-            "effort = \"low\"\n[overrides.implementer]\npermission_mode = \"plan\"",
+            "effort = \"low\"\n[agents.implementer]\ninherit_host = false",
         ),
         (
             "shop/aae.toml",
@@ -42,18 +42,18 @@ fn a_stronger_layer_wins_and_every_value_keeps_its_layer() {
     let e = effective(&config, None);
     let model = e.model.as_ref().unwrap();
     assert_eq!((model.value.as_str(), &model.from), ("sonnet", &Layer::Harness));
-    // The agent's `high` beats the orchestrator's `low`; an override beats the agent.
+    // The agent's `high` beats the orchestrator's `low`; an `[agents]` edit beats the agent.
     assert_eq!(e.effort.as_ref().unwrap().from, Layer::Agent);
-    assert_eq!(e.permission_mode.as_ref().unwrap().from, Layer::OrchestratorOverride);
+    assert_eq!(e.inherit_host.as_ref().unwrap().from, Layer::OrchestratorAgent);
     assert_eq!(
         (e.env["LANG"].value.as_str(), &e.env["LANG"].from),
         ("en", &Layer::Project)
     );
     assert_eq!(e.env.len(), 2, "the session environment holds only what the layers say");
-    // The rig override of `BASE` applies only to runs on that rig.
+    // The rig edit of `BASE` applies only to runs on that rig.
     let on_rig = effective(&config, Some("backend"));
     assert_eq!(on_rig.model.as_ref().unwrap().value, "opus");
-    assert_eq!(on_rig.model.as_ref().unwrap().from, Layer::RigOverride);
+    assert_eq!(on_rig.model.as_ref().unwrap().from, Layer::RigAgent);
 }
 
 #[test]
@@ -76,14 +76,14 @@ fn an_attached_plugin_contributes_and_a_stronger_layer_can_switch_it_off() {
     assert_eq!(e.plugins[0].from, Layer::Agent);
     assert_eq!(e.skills["mail"].from, Layer::Plugin("mail".into()));
 
-    let config = with_lines(&[("shop/aae.toml", "[overrides.implementer.skills.mail]\nenabled = false")]);
+    let config = with_lines(&[("shop/aae.toml", "[agents.implementer.skills.mail]\nenabled = false")]);
     let e = effective(&config, None);
     assert!(e.skills.is_empty(), "a skill switched off by name is gone");
     assert_eq!(e.plugins.len(), 1);
 
     let config = with_lines(&[(
         "shop/aae.toml",
-        "[overrides.implementer]\nplugins = [{ name = \"mail\", enabled = false }]",
+        "[agents.implementer]\nplugins = [{ name = \"mail\", enabled = false }]",
     )]);
     let e = effective(&config, None);
     assert!(
@@ -96,7 +96,7 @@ fn an_attached_plugin_contributes_and_a_stronger_layer_can_switch_it_off() {
 fn explain_names_the_layer_of_every_value_and_the_host_in_one_line() {
     let config = load_with(&[]).unwrap();
     let text = effective(&config, Some("backend")).explain();
-    assert!(text.contains("model = \"opus\"  # rig override\n"), "{text}");
+    assert!(text.contains("model = \"opus\"  # rig [agents]\n"), "{text}");
     assert!(text.contains("env.LANG = \"C\"  # orchestrator\n"), "{text}");
     assert!(text.contains("skills.mail = "), "{text}");
     // The role prompt file is the agent layer's system prompt.

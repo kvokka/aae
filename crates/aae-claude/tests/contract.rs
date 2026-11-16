@@ -84,14 +84,13 @@ impl Live {
             model: Some(sourced("claude-haiku-5-5".to_owned())),
             effort: None,
             system_prompt: None,
-            permission_mode: permission.map(|p| sourced(p.to_owned())),
             inherit_host: Some(sourced(false)),
             env: env.into_iter().map(|(k, v)| (k.to_owned(), sourced(v))).collect(),
             mcp: Default::default(),
             hooks: Default::default(),
             skills: Default::default(),
             plugins: Vec::new(),
-            native: None,
+            native: permission.map(|p| sourced(serde_json::json!({ "permission_mode": p }))),
         };
         let split = driver.split(&config, &plan).unwrap();
         let (sink, events) = mpsc::unbounded_channel();

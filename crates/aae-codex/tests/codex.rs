@@ -26,7 +26,6 @@ fn config(provider: &Provider) -> EffectiveConfig {
         model: Some(agent("gpt-fake".into())),
         effort: None,
         system_prompt: None,
-        permission_mode: Some(agent("never".into())),
         inherit_host: Some(agent(false)),
         env: Default::default(),
         mcp: Default::default(),
@@ -35,7 +34,7 @@ fn config(provider: &Provider) -> EffectiveConfig {
         plugins: Vec::new(),
         // The host forbids user namespaces, so the codex sandbox cannot run here (docs/design/experiments.md).
         native: Some(agent(
-            json!({ "model_provider": "fake", "sandbox_mode": "danger-full-access",
+            json!({ "model_provider": "fake", "sandbox_mode": "danger-full-access", "approval_policy": "never",
             "model_providers": { "fake": { "name": "fake", "base_url": provider.base_url(),
             "wire_api": "responses" } } }),
         )),

@@ -13,7 +13,6 @@ pub struct Settings {
     pub model: Option<String>,
     pub effort: Option<String>,
     pub system_prompt: Option<String>,
-    pub permission_mode: Option<String>,
     pub inherit_host: Option<bool>,
     #[serde(default)]
     pub env: BTreeMap<String, String>,
@@ -205,9 +204,7 @@ pub(super) struct OrchestratorFile {
     pub builtin: BTreeMap<String, Map<String, Value>>,
     #[serde(default)]
     pub settings: Settings,
-    #[serde(default)]
-    pub overrides: BTreeMap<String, Settings>,
-    /// `[agents.<name>]`: variants of pack agents, as tables of an agent's keys with `base`.
+    /// `[agents.<name>]`: an edit of the agent of that name, or with `base` a variant of a pack agent.
     #[serde(default)]
     pub agents: BTreeMap<String, toml::Table>,
     #[serde(default)]
@@ -262,8 +259,6 @@ pub(super) struct ProjectFile {
     #[serde(default)]
     pub settings: Settings,
     #[serde(default)]
-    pub overrides: BTreeMap<String, Settings>,
-    #[serde(default)]
     pub agents: BTreeMap<String, toml::Table>,
     #[serde(default)]
     pub rigs: BTreeMap<String, RigFile>,
@@ -283,11 +278,9 @@ pub(super) struct RigFile {
     pub triggers: Vec<String>,
     #[serde(default)]
     pub settings: Settings,
+    /// `agents.<name>`: a table edits that agent on this rig; a string names the variant that runs in its place.
     #[serde(default)]
-    pub overrides: BTreeMap<String, Settings>,
-    /// An agent reference of the formulas and the variant that runs in its place on this rig.
-    #[serde(default)]
-    pub agents: BTreeMap<String, String>,
+    pub agents: BTreeMap<String, toml::Value>,
 }
 
 #[derive(Debug, Deserialize)]

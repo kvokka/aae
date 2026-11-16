@@ -23,7 +23,7 @@ fn steps_are_named_by_their_position_unless_named() {
 #[test]
 fn bad_steps_are_errors() {
     let flow = format!(
-        "name = \"flow\"\n{}[[step]]\nname = \"work\"\nkind = \"prompt\"\nagent = \"implementer\"\n\
+        "name = \"flow\"\n{}[[step]]\nname = \"work\"\nkind = \"ai\"\nagent = \"implementer\"\n\
          prompt = \"flow.md\"\n{}",
         exec(Some("pre")),
         exec(Some("post"))
@@ -106,7 +106,7 @@ fn a_check_goes_back_to_an_earlier_step() {
     let back = |to: &str| format!("back_to = \"{to}\"\n");
     let flow = |rounds: &str, to: &str| {
         format!(
-            "name = \"flow\"\n{rounds}{}[[step]]\nname = \"work\"\nkind = \"prompt\"\nagent = \"implementer\"\n\
+            "name = \"flow\"\n{rounds}{}[[step]]\nname = \"work\"\nkind = \"ai\"\nagent = \"implementer\"\n\
              prompt = \"flow.md\"\n{}{}",
             exec(Some("plan")),
             exec(Some("check")) + &back(to),
