@@ -47,7 +47,9 @@ model = "luna"
 ```
 
 The permission mode is each harness's own setting, so it is in the harness's native block of `[settings]`:
-`permission_mode` for claude, `approval_policy` for codex.
+`permission_mode` for claude, `approval_policy` for codex. claude still asks for some commands under
+`bypassPermissions`; with no one to answer, `root/config.toml` has such a request denied after two minutes
+(`human_timeout`).
 
 The other way is a variant per harness, mapped on the rig in place of `coder`:
 

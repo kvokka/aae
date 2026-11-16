@@ -3,3 +3,8 @@
 # claude and codex need no section here: a section only sets a harness's defaults (model, binary).
 # aae.toml beside it is the project: its rigs, its pack and what the agents run on.
 projects = ["."]
+
+# The demo runs unattended: a permission request no one answers is denied after two minutes, not after the hour left
+# to a human (claude asks for some commands even under `bypassPermissions`).
+[watchdog]
+human_timeout = "2m"
