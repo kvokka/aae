@@ -176,31 +176,25 @@ async fn a_veto_event_blocks_at_its_deadline_and_proceeds_on_abstain() {
 }
 
 #[tokio::test(start_paused = true)]
-async fn one_workdir_holds_one_live_run_and_cancel_frees_it() {
+async fn two_runs_in_one_rig_both_start_and_a_cancel_is_final() {
     let w = world(&[]);
     let first = w.create().await;
     let second = w.create().await;
-    let events = w.events(&second, Duration::from_millis(200)).await;
-    assert_eq!(last(&events, "run.queued")["waiting_for"], "workdir");
-    assert!(!events.iter().any(|(t, _)| t == "run.started"));
-    w.core
-        .send(
-            None,
-            Msg::Cancel {
-                run: first.clone(),
-                reason: "operator".into(),
-            },
-        )
-        .await
-        .unwrap();
-    assert_eq!(w.states(&first).await.last().unwrap(), "cancelled");
-    assert_eq!(w.states(&second).await, ["preparing", "starting", "running"]);
-    let again = Msg::Cancel {
-        run: first,
-        reason: "twice".into(),
+    let live = ["preparing", "starting", "running"];
+    assert_eq!(w.states(&first).await, live);
+    assert_eq!(w.states(&second).await, live);
+    let cancel = |reason: &str| Msg::Cancel {
+        run: first.clone(),
+        reason: reason.into(),
     };
-    assert!(matches!(w.core.send(None, again).await, Err(Error::Rejected(_))));
+    w.core.send(None, cancel("operator")).await.unwrap();
+    assert_eq!(w.states(&first).await.last().unwrap(), "cancelled");
+    assert!(matches!(
+        w.core.send(None, cancel("twice")).await,
+        Err(Error::Rejected(_))
+    ));
 }
+
 #[tokio::test(start_paused = true)]
 async fn the_orchestrator_and_the_agent_limit_started_runs() {
     let rigs = (

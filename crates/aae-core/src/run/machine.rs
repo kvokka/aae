@@ -65,7 +65,6 @@ impl RunHandler {
         env: BTreeMap<String, Option<Sourced<String>>>,
         prompt_append: Option<String>,
     ) -> Result<(), Error> {
-        let moved = workdir.is_some();
         if let Some(dir) = workdir {
             row.workdir = dir.to_string_lossy().into_owned();
         }
@@ -89,10 +88,7 @@ impl RunHandler {
             "UPDATE runs SET workdir = ?2, prompt = ?3, config = ?4 WHERE id = ?1",
             params![row.id, row.workdir, row.prompt, row.config],
         )?;
-        self.start_attempt(tx, row, "new_session")?;
-        // The workdir the run held while preparing (the rig's, docs/design/contracts.md 6) is free once a hook moved
-        // the run: a run waiting for it may start (`worktree`, docs/design/config.md).
-        if moved { self.schedule(tx) } else { Ok(()) }
+        self.start_attempt(tx, row, "new_session")
     }
 
     /// A new attempt (contracts 6.2): a new or resumed session on an instance of its own, then the prompt.
@@ -354,7 +350,7 @@ impl RunHandler {
         }
     }
 
-    /// `passed`, `failed{class}` or `cancelled`; frees the workdir for the queue.
+    /// `passed`, `failed{class}` or `cancelled`; frees the run's concurrency slot for the queue.
     pub(super) fn terminal(
         &mut self,
         tx: &mut Tx<'_>,

@@ -1,5 +1,5 @@
-//! Creation and the queue (docs/design/contracts.md 6.1–6.2): a run waits in `queued` for a free
-//! workdir and a concurrency slot, then leaves for `preparing`, oldest first.
+//! Creation and the queue (docs/design/contracts.md 6.1–6.2): a run waits in `queued` for open gates and
+//! a concurrency slot, then leaves for `preparing`, oldest first.
 
 use super::{
     Create, RunHandler, drain::NO_PROCESS, events::attempt_live, rejected, row::Row, token_sha256, triggers::MAX_DEPTH,
@@ -287,22 +287,8 @@ impl RunHandler {
         Ok(())
     }
 
-    /// A workdir holds one live started run (docs/design/contracts.md 6); a parent in a drain or formula step does not
-    /// hold it from its children.
-    fn workdir_busy(tx: &Tx<'_>, row: &Row) -> Result<bool, Error> {
-        let sql = format!(
-            "SELECT EXISTS (SELECT 1 FROM runs WHERE workdir = ?1 AND id != ?2 \
-             AND state NOT IN ('queued', 'passed', 'failed', 'cancelled') AND NOT (id IS ?3 AND {NO_PROCESS}))"
-        );
-        let busy = tx
-            .sql()
-            .query_row(&sql, params![row.workdir, row.id, row.parent_run], |r| r.get(0))?;
-        Ok(busy)
-    }
-
     /// Why a queued or parked run cannot start yet, `None` when it can: the daemon is stopping, a gate of the run is
-    /// closed (with the
-    /// closure), its workdir is busy, or the orchestrator or its agent has as many started runs as allowed
+    /// closed (with the closure), or the orchestrator or its agent has as many started runs as allowed
     /// (docs/design/contracts.md 6; a parked run, or one in a drain step, has no process and holds no slot).
     fn blocker(&self, tx: &Tx<'_>, row: &Row) -> Result<Option<(&'static str, Value)>, Error> {
         if self.stopping.is_some() {
@@ -310,9 +296,6 @@ impl RunHandler {
         }
         if let Some(gate) = Self::closed_gate(tx, row)? {
             return Ok(Some(("gate", gate)));
-        }
-        if Self::workdir_busy(tx, row)? {
-            return Ok(Some(("workdir", Value::Null)));
         }
         let all: u32 = tx
             .sql()

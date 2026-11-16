@@ -23,8 +23,7 @@ pub(crate) async fn run(env: Arc<Env>) -> String {
     let provider = Provider::start(plan).await;
     let d = Daemon::start(&env, |root| {
         codex_agent(root, "dev", &provider.base_url());
-        // A second rig, so only the account gate can hold the second run: a workdir holds one run
-        // (docs/design/contracts.md 6).
+        // The second run goes to a rig of its own; only the account gate holds it.
         let shop = root.join("config/aae/shop");
         write(
             shop.join("aae.toml"),

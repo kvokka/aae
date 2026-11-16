@@ -28,7 +28,7 @@ fn ship(name: &str, keys: &str) -> String {
     )
 }
 
-/// Each run of `work` in a worktree of its own: runs that share a workdir wait for each other.
+/// Each run of `work` in a worktree of its own, so the runs of a pool never write in one directory.
 const WORK: &str = "name = \"work\"\nworktree = true\n[inputs]\nbead = { type = \"task\", required = true }\n\
     [[step]]\nname = \"do\"\nkind = \"exec\"\ncommand = [\"sh\", \"{dir}/work.sh\"]\n";
 

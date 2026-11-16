@@ -23,7 +23,7 @@ async fn the_replies_fit_their_schemas() {
         fs::write(aae.join("shop/aae.toml"), project).unwrap();
     })
     .await;
-    // A run that ends before `slow` holds the rig.
+    // A finished run, for the shape of its view.
     let passed = d.create("check", None).await;
     let view = d.until_state(&passed, "passed").await;
     assert!(!view["attempts"].as_array().unwrap().is_empty(), "{view}");

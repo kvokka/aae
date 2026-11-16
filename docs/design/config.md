@@ -466,9 +466,7 @@ job of a `root` agent, and a `rig` planner plans inside its one repository. An a
 project root whatever the rig of its run, its session there while the run keeps its own workdir, and takes no
 rig's layer, so "explain config" of it is the same with a rig or without; `explain` prints `scope = "root"`; a
 rig's `agents` that edits it, edits a variant of it or maps it to a variant is a config error, its edits go in the
-project's `[agents]`; the step does not hold the root, so it may share the root with a run without a rig or with
-another root agent's session: the price of letting a rig's runs plan in the root while the root serves its own
-runs), `prompt` (role prompt file, default `prompt.md` when it exists; its text is the agent layer's
+project's `[agents]`), `prompt` (role prompt file, default `prompt.md` when it exists; its text is the agent layer's
 `system_prompt`, so an `[agents.<agent>]` edit may still replace it, and setting `system_prompt` in `agent.toml`
 too is an error), `max_runs` (optional positive integer: runs of this agent
 started at once in its project; the orchestrator's `max_runs` still applies; a run whose next step is of an agent
@@ -497,7 +495,7 @@ skills, hooks, scripts) lives in its directory, laid out as its author likes. Th
 role does is configuration.
 
 A run counts toward both limits from `preparing` until it is terminal, except while `parked` (no harness process).
-A run over a limit waits in `queued` with `waiting_for = "concurrency"`; a busy workdir is reported first.
+A run over a limit waits in `queued` with `waiting_for = "concurrency"`.
 
 ## Agent variants
 
@@ -654,7 +652,9 @@ sends `--input` values as text). A `task` input (there is no input type `bead`: 
 described by all of it; either way the input then holds the bead id ([tracker-br.md](tracker-br.md#beads-and-runs)). A bead named
 by id that belongs to another rig, by the prefix of its id, is refused at the start if the core has seen it, else at
 its claim (the run fails with `bead_of_another_rig` and the claim is released). `worktree = true` gives each run of the formula, of either step kind,
-a git worktree that aae makes and removes (the bundled `worktree`, see below).
+a git worktree that aae makes and removes (the bundled `worktree`, see below). aae does not serialize runs by
+directory: without a worktree, runs of one rig share its directory, and keeping them apart is the user's choice
+(`worktree`, `pool`, `max_runs`).
 
 A prompt template is checked at load against each formula whose steps name its agent (contracts 2.3):
 `inputs.<name>` must be a declared input; `bead.<field>` needs a `task` input and a field of `Bead` (contracts 5.2); `run.<field>` a field of `RunView` (1.3); `project.name`,

@@ -100,7 +100,7 @@ Observed events (plugins and clients read them and cannot change what happens):
 | `instance.starting`, `instance.ready`, `instance.degraded`, `instance.stopped` | `{instance: {id, harness, fingerprint, pid, pgid}, reason}`; `pid`/`pgid` null before spawn, `reason` null except `stopped` (`idle`, `config`, `cancel`, `shutdown`, `recovery`, `operator`) and `degraded` (the health text); `instance.ready` with `reason: null` comes again when a degraded instance is well |
 | `instance.failed` | `{instance, failure: Failure}` |
 | `service.starting`, `service.ready`, `service.stopped`, `service.failed` | same as `instance.*` with `service: {id, name, scope, pid, pgid}` instead of `instance` |
-| `run.queued` | `{run: RunView, waiting_for: "concurrency"\|"gate"\|"workdir"\|"daemon_stopping"\|null, gate}`; re-emitted when the reason changes |
+| `run.queued` | `{run: RunView, waiting_for: "concurrency"\|"gate"\|"daemon_stopping"\|null, gate}`; re-emitted when the reason changes |
 | `run.started` | `{run}`; once per run, when it first leaves `queued` |
 | `run.step_finished` | `{run, outcome: Outcome}`; a step that is not the last passed, `run` is still at that step (6.1) |
 | `run.state_changed` | `{from, to, attempt, generation, reason}` |
@@ -600,7 +600,7 @@ the actor of an exec step and hands that of a session to the adapter in the sess
 
 | State | Meaning | Deadline (default) | On deadline |
 |---|---|---|---|
-| `queued` | not started: waits for a concurrency slot, a free workdir or an open gate; the reason is visible (`run.queued`) | `queue_timeout` 7 d | `failed{infrastructure, queue_timeout}` |
+| `queued` | not started: waits for a concurrency slot or an open gate; the reason is visible (`run.queued`) | `queue_timeout` 7 d | `failed{infrastructure, queue_timeout}` |
 | `preparing` | the bead claim confirmed, `run.preparing` hooks running, workdir and environment being fixed, snapshot of the effective config written | `start_timeout` for the claim, then the hook deadline (see 3.3) | the hooks count as failed → deny → `failed{check, hook_deadline}` |
 | `starting` | an attempt: instance acquired, session started or resumed, first prompt sent, waiting for `prompt.acked` | `start_timeout` 120 s | attempt failure `stall` |
 | `running` | the agent works (or the `exec` command runs, or the `drain` step gives out beads) | step `timeout` of the formula (default 45 m; `drain` and `formula` 24 h) per attempt → `runaway_turn`; silence budgets (an announced `retrying` pause adds to the limit): first event after ack 5 min, model thinking 5 min, tool running 10 min, background work after the turn 30 min → `stall` | attempt failure |
@@ -618,7 +618,7 @@ so that the state machine has one place where `run.attempt_failed` is decided.
 
 - The class of `failed` tells the cause: `agent` (the finisher said `fail`), `check` (a plugin's veto or deny, or a step check script that refused),
   `hollow_done` (the turn ended without an outcome), `infrastructure` (attempts ran out or the policy ended the run).
-- `queued` has not started: it waits for a concurrency slot, a free workdir or an open gate. `parked` has started and
+- `queued` has not started: it waits for a concurrency slot or an open gate. `parked` has started and
   waits for a gate or a slot of its agent with no harness process.
 - A run belongs to a project and a place: a rig, or the project root under its name (config.md "Project"), named
   when it is created (API, CLI, MCP) or by the trigger that fires there. A start that names no rig takes it from the
@@ -626,8 +626,9 @@ so that the state machine has one place where `run.attempt_failed` is decided.
   unknown rig, or a bead that still carries a `rig:` label, is refused before the run exists. Its workdir is the place's
   directory, or a worktree of it with `worktree = true` in the formula (config.md); in a directory without git that
   run fails (`deny` of `worktree`). The session of an ai step works in the run's workdir, but that of an agent of
-  scope `root` works in the root's directory when the run is on a rig (it does not hold that directory). One live run holds a workdir: a second run in the
-  same directory waits in `queued` (`waiting_for: workdir`); parallel work in one rig is the worktree's job.
+  scope `root` works in the root's directory when the run is on a rig. aae does not serialize runs by directory: two
+  runs may work in one directory at once. Keeping parallel writers apart in one rig is the user's choice:
+  `worktree = true` gives each run its own directory, and `pool` and `max_runs` bound how many run at once.
 - Concurrency is bounded per orchestrator (`max_runs`, default 8) and per agent (`max_runs` in `agent.toml`). A run
   that started keeps its orchestrator slot from step to step; a step of an agent at its limit parks until a run of
   that agent ends.
@@ -666,7 +667,7 @@ of the parent leaves them alone.
 |---|---|---|---|
 | — | create (API, CLI, MCP, trigger) with an idempotency key | `queued` | — (with a task input that names a bead the core knows, the run is recorded as the bead's owner in this transaction, invariant 3: a bead another live run holds refuses; `{ next_ready = true, epic }` takes the first bead of the last ready set, in the tracker's order, that is in the epic, of the run's rig or of no rig, without an owner and without a closed gate, passing over (reply `passed_over`) a bead whose `harness:` or `agent:` label the run cannot take; none → the reply `{"nothing_ready": true}`, for a trigger `trigger.skipped{nothing_ready}`; the input then holds the bead id; any other text gets its bead on `preparing`, tracker-br.md) |
 | — | create with `continue_from: <run>` (a terminal run with a session; a session is never reused implicitly) | `queued` | in the workdir of that run; the first attempt resumes that run's last session with the formula prompt; a later `resume` uses the run's own session, or that one while it has none; a harness other than the agent's → `failed{infrastructure}`. Only the first step continues that session: a formula whose first step is not `ai` cannot be continued, and the later steps start sessions of their own |
-| `queued` | slot free, workdir free, no gate of the run closed | `preparing` | with a task text that names no bead the core knows: the tracker creates the root bead, or returns the bead the text names (`create`, key kept in the effect), the run owns it and its input takes the id; with a bead: the tracker claim as owner `aae:<run>` (queue `tracker:<project>`), and the prompt renders once the claim returned the bead; `run.preparing` hooks |
+| `queued` | slot free, no gate of the run closed | `preparing` | with a task text that names no bead the core knows: the tracker creates the root bead, or returns the bead the text names (`create`, key kept in the effect), the run owns it and its input takes the id; with a bead: the tracker claim as owner `aae:<run>` (queue `tracker:<project>`), and the prompt renders once the claim returned the bead; `run.preparing` hooks |
 | `preparing` | decision `proceed` (or no hooks) | `starting` | attempt 1: instance acquire, `start_session`, `send_prompt` |
 | `preparing` | `deny`, template error, claim error `Claimed` / `NotFound` / `Invalid`, `create` error other than `Unavailable`, no claim or `create` answer within `start_timeout` | `failed{check}`, `failed{infrastructure}`, `failed{infrastructure, bead_claimed / bead_not_found / bead_invalid}`, `failed{infrastructure, bead_not_created: <error>}`, `failed{infrastructure, tracker_unavailable}` | — |
 | `starting` | `prompt.acked` of the first prompt | `running` | — |
@@ -678,7 +679,7 @@ of the parent leaves them alone.
 | `preparing` (exec) | decision `proceed` (or no hooks) | `running` (no session to start: the command is spawned at once) | the command runs in the workdir with `PATH`, `HOME`, `LANG` of the daemon, the `env` of `run.preparing`, `AAE_SOCKET` (the API socket), `AAE_INPUT_<NAME>` per input and, per earlier step, `AAE_STEP_<NAME>_RESULT` (`pass`\|`fail`), `AAE_STEP_<NAME>_SUMMARY` and `AAE_STEP_<NAME>_DATA` (the `data` as JSON, when there is one); `<NAME>` is formed as for inputs (config.md, "Formula") |
 | `running` (exec) | exit 0 / other code or a signal | `finishing` with outcome `pass` / `fail`, `summary` `exit <code>` or `signal <n>`, `data` `{exit_code, stdout, stderr}` (last 4 KiB each) | `run.finishing` hooks |
 | `preparing` (drain) | decision `proceed` (or no hooks) | `running` (an attempt with no process, `harness = drain`) | a read of the tracker; the config snapshot is `{drain: <formula>, pool, on_item_failure}` |
-| `running` (drain) | a read of the tracker (`Ready`) | `running` | while fewer than `pool` children are alive (queued or running) and no bead of this entry failed under `soft_stop`/`hard_stop`, each ready bead under the run's bead, at any depth, not given in this entry of the step (a restart starts a new attempt, not a new entry): the create of the first row with the bead as input, no rig, the run's correlation, `depth + 1`, `parent_run` the run (a refusal leaves the bead without a run); a run in a drain step holds no concurrency slot and does not hold its workdir from its children |
+| `running` (drain) | a read of the tracker (`Ready`) | `running` | while fewer than `pool` children are alive (queued or running) and no bead of this entry failed under `soft_stop`/`hard_stop`, each ready bead under the run's bead, at any depth, not given in this entry of the step (a restart starts a new attempt, not a new entry): the create of the first row with the bead as input, no rig, the run's correlation, `depth + 1`, `parent_run` the run (a refusal leaves the bead without a run); a run in a drain step holds no concurrency slot |
 | `preparing` (formula) | decision `proceed` (or no hooks) | `running` (an attempt with no process, `harness = formula`) | the child run of the step's formula is created, or found if a restart cut the attempt that made it |
 | `running` (formula) | the child cannot start: refused (depth, a bead held by another run) or `next_ready` finds no ready bead (`nothing_ready`) | `failed{infrastructure}`, no attempt left to `max_attempts` | — |
 | `running` (formula) | the child ends | `finishing` with the child's outcome (or its reason, without one) | `run.finishing` hooks |
@@ -696,7 +697,7 @@ of the parent leaves them alone.
 | `preparing`, `interrupted` | an attempt would start while a key of the run is closed (by anyone, invariant 18), the daemon is stopping, or the run's agent has as many other started runs as its `max_runs` (a step with no agent, drain or exec, has no such limit) | `parked` (`then`: `new_session` from `preparing`, the decided kind from `interrupted`) | — |
 | any non-terminal | operator cancel, or the cancel of the parent (6.1, reason `parent_cancelled`) | `cancelled` | stop the session, conditional release of the bead |
 
-Every terminal transition releases the run's hold on its workdir and its ownership of its bead. A bead the run
+Every terminal transition frees the run's concurrency slot and releases its ownership of its bead. A bead the run
 claimed is closed (`passed`) or released conditionally (`failed`, `cancelled`) by an effect on the queue
 `tracker:<project>`, followed by a new read of the ready set; a refusal (`OwnerMismatch`, `NotFound`) is
 `resync.diverged{subject: "bead"}`, an unavailable tracker `tracker.sync_failed` and a retry, and the outcome of the

@@ -58,7 +58,10 @@ fn calls(d: &Daemon, name: &str) -> u32 {
 pub(crate) async fn run(env: Arc<Env>) -> String {
     let third_time = "[ $n -ge 3 ] || { echo 'not yet'; exit 1; }";
     let mut d = Daemon::start(&env, |root| {
-        write(root.join("config/aae/config.toml"), "projects = [\"shop\"]\n");
+        write(
+            root.join("config/aae/config.toml"),
+            "projects = [\"shop\"]\nmax_runs = 1\n",
+        );
         formula(root, "third", 3, third_time, true);
         formula(root, "second", 2, third_time, true);
         formula(root, "fatal", 3, "echo 'broken for good'; exit 75", false);
@@ -70,7 +73,7 @@ pub(crate) async fn run(env: Arc<Env>) -> String {
         d.create("fatal").await,
     );
 
-    // Runs in one workdir go one at a time: each is killed in its own turn, between its first and second check.
+    // `max_runs = 1` runs them one at a time: each is killed in its own turn, between its first and second check.
     for name in ["third", "second"] {
         let deadline = Instant::now() + WITHIN;
         while !d.path(&format!("{name}.reached")).exists() {
