@@ -249,6 +249,23 @@ fn idle_counts_only_without_background_work_and_late_notifications() {
 }
 
 #[test]
+fn a_stopped_task_is_no_wake_up_and_only_commands_are_stopped() {
+    let mut s = stream();
+    let tasks = json!({ "type": "system", "subtype": "background_tasks_changed", "tasks": [
+        { "task_id": "b1", "task_type": "local_bash" }, { "task_id": "a1", "task_type": "local_agent" }] });
+    let none = json!({ "type": "system", "subtype": "background_tasks_changed", "tasks": [] });
+    let stopped = json!({ "type": "system", "subtype": "task_notification", "status": "stopped" });
+    feed(&mut s, &[tasks, result(false, json!({})), state("idle")]);
+    assert_eq!(s.commands(), ["b1"]);
+    let idle = Normalized::State {
+        state: SessionState::Idle,
+        background: false,
+    };
+    assert_eq!(feed(&mut s, &[stopped, none, state("idle")]).last(), Some(&idle));
+    assert!(s.commands().is_empty());
+}
+
+#[test]
 fn activity_is_coalesced_to_one_a_second() {
     let mut s = stream();
     let start = Instant::now();

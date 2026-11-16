@@ -3,7 +3,7 @@
 use aae_claude::Claude;
 use aae_core::{
     config::{EffectiveConfig, Hook, Layer, Mcp, Skill, Sourced},
-    driver::{Driver, DriverEvent, Normalized, PromptKey, SessionPlan, StopReason, Transcript},
+    driver::{Driver, DriverEvent, Normalized, PromptKey, SessionPlan, SessionState, StopReason, Transcript},
 };
 use aae_testkit::anthropic::{Provider, Reply};
 use serde_json::Value;
@@ -181,4 +181,80 @@ async fn an_isolated_session_reads_the_rig_but_not_the_host() {
     let sent = Value::from(requests).to_string();
     assert!(sent.contains("RIG-MARKER-7"), "the rig's CLAUDE.md is read");
     assert!(!sent.contains("HOST-MARKER-7"), "the host's is not");
+}
+
+/// The pid a background command wrote to `file`, once it is there (up to 10 s).
+async fn pid_in(file: &Path) -> i32 {
+    for _ in 0..100 {
+        if let Some(pid) = std::fs::read_to_string(file).ok().and_then(|t| t.trim().parse().ok()) {
+            return pid;
+        }
+        tokio::time::sleep(Duration::from_millis(100)).await;
+    }
+    panic!("no pid in {}", file.display());
+}
+
+/// Criterion 34 at the adapter: `stop_background` stops the command through the harness, which comes to idle
+/// without background on its own, starts no turn, asks the model nothing, and takes the next prompt.
+#[tokio::test]
+async fn a_command_left_in_the_background_is_stopped_and_the_session_takes_the_next_prompt() {
+    let dir = tempfile::tempdir().unwrap();
+    let plan = vec![
+        Reply::Background("sh -c 'echo $$ > bg.pid; exec sleep 300'".into()),
+        Reply::Text("Started.".into()),
+        Reply::Text("Again.".into()),
+    ];
+    let provider = Provider::start(plan).await;
+    let driver = Claude::new("claude".into(), dir.path().join("state"), None);
+    let workdir = dir.path().join("rig");
+    std::fs::create_dir_all(&workdir).unwrap();
+    let plan = SessionPlan::New {
+        workdir: workdir.clone(),
+        run: "r1".into(),
+        attempt: 1,
+        token: "t".into(),
+        actor: None,
+    };
+    let mut config = config(&provider);
+    config.native = Some(sourced(serde_json::json!({ "permission_mode": "bypassPermissions" })));
+    let split = driver.split(&config, &plan).unwrap();
+    let (sink, mut events) = mpsc::unbounded_channel();
+    let instance = driver.start_instance("i1", &split.process, sink).await.unwrap();
+    let session = driver.start_session(&instance, &split.session).await.unwrap();
+    let idle = |background| Normalized::State {
+        state: SessionState::Idle,
+        background,
+    };
+    let key = PromptKey::new("r1", 1, 1);
+    driver.send_prompt(&instance, &session, "Start it.", key).await.unwrap();
+    until(&mut events, |e| *e == idle(true)).await;
+    let pid = pid_in(&workdir.join("bg.pid")).await;
+    assert!(aae_core::orphans::start_time(pid).is_some(), "the command runs");
+
+    driver.stop_background(&instance, &session).await;
+    let seen = until(&mut events, |e| *e == idle(false)).await;
+    assert!(!seen.contains(&Normalized::TurnStarted), "{seen:?}");
+    for _ in 0..50 {
+        if aae_core::orphans::start_time(pid).is_none() {
+            break;
+        }
+        tokio::time::sleep(Duration::from_millis(100)).await;
+    }
+    assert_eq!(aae_core::orphans::start_time(pid), None, "the command is gone");
+    let deadline = tokio::time::Instant::now() + Duration::from_secs(2);
+    while let Ok(Some(e)) = tokio::time::timeout_at(deadline, events.recv()).await {
+        assert_ne!(e.event, Normalized::TurnStarted, "claude started a turn of its own");
+    }
+
+    let key = PromptKey::new("r1", 1, 2);
+    driver.send_prompt(&instance, &session, "Again.", key).await.unwrap();
+    let seen = until(&mut events, |e| matches!(e, Normalized::TurnEnded { .. })).await;
+    assert_eq!(
+        seen.last(),
+        Some(&Normalized::TurnEnded {
+            stop_reason: StopReason::Completed
+        })
+    );
+    assert_eq!(provider.requests().len(), 3, "the stop asked the model nothing");
+    driver.stop_instance(&instance, Duration::from_secs(4)).await;
 }
