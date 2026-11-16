@@ -6,19 +6,26 @@
 |---|---|---|
 | while you work | the tests of what you touch, clippy of the crate | `cargo nextest run -p <crate> -E 'test(<name>)'`, `cargo clippy -p <crate> --all-targets -q -- -D warnings` |
 | once, on the committed HEAD, before you hand the work over | **the gate** | `mise run ci` (in the loop: `scripts/loop/checks NN`) |
-| only when the owner asks | acceptance scenarios, live models, the demos, release builds | `mise run acceptance-ci`, `mise run acceptance`, `demos/<demo>/run.sh`, `mise run acceptance-release` |
+| only when the owner asks | the model-free acceptance scenarios and the chaos stand, in CI | `gh workflow run acceptance`, then `gh run watch` |
+| only when the owner asks | live models, the demos, release builds, on this machine | `mise run acceptance`, `demos/<demo>/run.sh`, `mise run acceptance-release` |
 
-- `mise run ci` is the whole gate: formatting, clippy, the unit and integration tests, `cargo deny`, `cargo machete`
-  and the scripts of `scripts/`. A change is done when it is green on the HEAD you hand over. Do not run it after
+- `mise run ci` is the whole gate: formatting, clippy, the unit and integration tests without the chaos stand,
+  `cargo deny`, `cargo machete` and the scripts of `scripts/`. A change is done when it is green on the HEAD you hand over. Do not run it after
   every edit: targeted tests are the everyday loop.
 - [Acceptance scenarios](../acceptance.md) and the demos are never a condition of "done" and are never run on your
   own judgement, however large the change. They run when the owner's request, the plan package or a journal entry of
   the owner names them, and only the part it names. You may say in your report that a change deserves a scenario; you
   do not run it.
+- The one exception is a scenario you edited yourself: run that criterion alone
+  (`cargo build -q -p aae && cargo run -q -p aae-acceptance -- --ci <N>`), as the test of what you touched.
+- Acceptance is allowed to be slow, which is why it is kept out of the way: its model-free rows run in CI only, in
+  the workflow `acceptance` that starts by hand, never as a local habit. Do not move a slow check into the gate, and
+  do not make a test of the gate slow to cover what an acceptance row covers.
 - Fast tests come before new features: a slow or flaky suite is fixed before anything new is built on it. A test
   that grows the time of the gate without a reason is a defect.
-- While iterating on the core you may play fewer chaos seeds: `AAE_CHAOS_SEEDS=96 cargo nextest run -p aae-testkit
-  --test chaos`. The gate plays its full count.
+- The chaos stand with its 1000 seeds is acceptance criterion 35 and is not in the gate. While you change the run
+  machine of the core, a few dozen seeds are a targeted test that takes seconds:
+  `AAE_CHAOS_SEEDS=96 cargo nextest run -p aae-testkit --test chaos`.
 - Every command that may not return (a build, tests, a daemon, a harness, `aae run wait`, the network, a wait for a
   file or a port) runs with an explicit limit: the tool's `timeout` or `timeout <sec> <command>`. A timeout that
   fired is a finding: write down what hung, do not repeat the command without a limit.

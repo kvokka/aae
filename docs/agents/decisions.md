@@ -35,6 +35,7 @@ each heading; this file only marks it as decided.
 | 46 | codex with host inheritance and skills gets its own `CODEX_HOME` that inherits the host and adds the skills; a `config_error` on that path is forbidden |
 | 59 | codex harness hooks get the attempt environment through an `export` at the start of the hook command; the attempt token visible in its argv is accepted |
 | 73 | Model short names are the adapter's knowledge: a short name expands to the latest model of its family, a full name is passed as is |
+| 109 | Mapping a short name to the current full name is the adapter's job, so that a user can say "the latest sonnet-class model". The claude adapter leaves it to the claude CLI, and its model gate key carries the name as the user wrote it (2026-11-17) |
 
 ## Config — [config](../design/config.md)
 
@@ -67,6 +68,7 @@ each heading; this file only marks it as decided.
 | 84 | A check step may send the formula back to an earlier step with its remarks; the formula bounds the number of rounds |
 | 85 | A pack comes from a directory or a git repository pinned by sha or tag, the latest revision without a pin; `aae` downloads it; tags are immutable; a CLI command clears the cache |
 | 93 | A step has optional `max_attempts` (default 1) and `step_check_script_path` (default: none); the script decides whether the step passed: 0 passed, 75 a failure with no repeat, anything else not passed |
+| 110 | `max_attempts` of a step is at most 20, the ceiling of a run's session attempts (2026-11-17) |
 | 94 | An agent's turn is `kind = "ai"`; there is no step kind `prompt` |
 | 95 | An agent's `scope`: `rig` is bound to a rig and works in its directory; `root` is bound to no repository and works over all rigs and the shared bead space. Planning over several repositories is `root` only |
 | 97 | An agent's prompt template lies in its directory as `prompt.template.md`: an agent is self-contained. A project replaces it with `.aae/agents/<agent>/prompt.template.md` in its root, without forking the pack |
@@ -91,6 +93,7 @@ each heading; this file only marks it as decided.
 | 76 | A run started by a `drain` step, a `formula` step or from an agent's session inherits the parent's correlation, one level deeper, under the common depth limit |
 | 77 | `aae run wait` waits for the terminal state of runs by events, not by polling |
 | 104 | Once the outcome is declared and the turn has ended, background processes the agent left do not hold the run: the daemon stops them |
+| 108 | The core does not hold a workdir. A run is bound to a directory, but aae neither locks it nor queues runs by it; keeping parallel writers apart in one rig (worktrees, limits, any other coordination) is the user's business (2026-11-17) |
 
 ## Tracker — [tracker](../design/tracker-br.md)
 
@@ -157,3 +160,4 @@ each heading; this file only marks it as decided.
 | 88 | The core's budget is 18 000 lines |
 | 105 | `mise run ci` is the gate of every change. Acceptance scenarios, live models and the demos run only on the owner's explicit request, and are a criterion of done only when the owner says so (2026-11-17) |
 | 106 | There is no spec and no readiness file: `docs/` describes the product as it is, `docs/agents/` holds the rules for agents (2026-11-17) |
+| 107 | The chaos stand, with all its 1000 seeds, is an acceptance row, not a part of the gate. Acceptance may be slow: its model-free rows run only in CI, in a workflow started by hand, on the owner's request (2026-11-17) |

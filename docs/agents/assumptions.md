@@ -12,9 +12,6 @@ The behaviour itself is described in the document named under each heading; this
 | What | State |
 |---|---|
 | Exit 75 of a check script on a step with `back_to` | the run ends `failed` without a return; chosen by the implementer |
-| `max_attempts` of a step is at most 20 | chosen by the implementer |
-| "One live run holds a workdir" does not hold for the root | a step of an agent of scope `root` does not hold the root's directory and may share it with a run without a rig or with another `root` agent's session ([config](../design/config.md), "Agent") |
-| The model gate key of claude stays a short name (`model:claude/haiku`) | claude has no table of short names: its CLI expands them itself, so the key is not the expanded name decision 74 speaks of |
 
 ## Product shape — [overview](../overview.md), [event model](../design/event-model.md)
 
@@ -72,8 +69,7 @@ The behaviour itself is described in the document named under each heading; this
 ## Runs and triggers — [contracts 6](../design/contracts.md#6-run), [config: trigger](../design/config.md#trigger)
 
 - A run without a rig goes in the root; a step of an agent of scope `root` goes in the root whatever the run's rig.
-- A workdir is held by one live run (see the exception above). Concurrency is bounded per orchestrator and per
-  agent.
+- Concurrency is bounded per orchestrator and per agent.
 - The states from `preparing` to `finishing` are those of the current step.
 - A session per `ai` step; a return to a step continues its session.
 - Cancelling a parent cancels its live child runs.
