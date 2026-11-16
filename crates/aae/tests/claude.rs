@@ -317,13 +317,13 @@ async fn a_claude_killed_in_a_command_is_resumed_and_its_run_passes() {
     assert_eq!(Path::new(&beads), project.join(".beads"));
 }
 
-/// Criterion 4a on the fake: the finisher is called while a background command of the session runs; the run
-/// passes only once the session is idle without background, so never before the command is done.
+/// Criterion 34 on the fake: the finisher is called while a background command of the session runs; the outcome is
+/// declared and the turn has ended, so the command is stopped and the run passes without waiting for it.
 #[tokio::test(flavor = "multi_thread")]
-async fn a_finisher_called_with_a_background_command_running_waits_for_it() {
+async fn a_finisher_called_with_a_background_command_running_stops_it() {
     let finish = format!("{} finish pass --summary built", env!("CARGO_BIN_EXE_aae"));
     let plan = vec![
-        Reply::Background("sleep 2 && touch background-done".into()),
+        Reply::Background("sleep 3 && touch background-done".into()),
         Reply::Bash(finish),
         Reply::Text("Done.".into()),
     ];
@@ -333,7 +333,12 @@ async fn a_finisher_called_with_a_background_command_running_waits_for_it() {
     d.until_state(&run, "passed").await;
     let rig = d.dir.path().join("config/aae/shop/web");
     assert!(
-        rig.join("background-done").exists(),
-        "passed before the background command ended"
+        !rig.join("background-done").exists(),
+        "passed after the background command ended"
+    );
+    tokio::time::sleep(std::time::Duration::from_secs(4)).await;
+    assert!(
+        !rig.join("background-done").exists(),
+        "the background command was not stopped"
     );
 }
