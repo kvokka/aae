@@ -134,40 +134,47 @@ fn a_git_past_the_hook_timeout_is_killed() {
 
 #[test]
 fn runs_of_one_repository_prepared_at_once_each_get_a_worktree() {
-    let repo = tempfile::tempdir().unwrap();
-    let repo = repo.path().canonicalize().unwrap();
-    git(&repo, &["init", "-q", "-b", "main"]);
-    // The first worktree added then writes the repository's config.
-    git(&repo, &["config", "worktree.useRelativePaths", "true"]);
-    git(
-        &repo,
-        &[
-            "-c",
-            "user.email=t@example.com",
-            "-c",
-            "user.name=t",
-            "commit",
-            "-q",
-            "--allow-empty",
-            "-m",
-            "b",
-        ],
-    );
+    // Only the first `git worktree add` of a repository writes its config: a race needs a fresh repository, so a
+    // few of them, each with a few runs, catch it far more often than many runs of one.
+    let repos: Vec<_> = (0..6).map(|_| tempfile::tempdir().unwrap()).collect();
+    let repos: Vec<_> = repos.iter().map(|r| r.path().canonicalize().unwrap()).collect();
+    for repo in &repos {
+        git(repo, &["init", "-q", "-b", "main"]);
+        git(repo, &["config", "worktree.useRelativePaths", "true"]);
+        git(
+            repo,
+            &[
+                "-c",
+                "user.email=t@example.com",
+                "-c",
+                "user.name=t",
+                "commit",
+                "-q",
+                "--allow-empty",
+                "-m",
+                "b",
+            ],
+        );
+    }
     let params = json!({ "formulas": ["shop.fix"] });
     let said: Vec<_> = std::thread::scope(|s| {
-        let runs: Vec<_> = (0..8)
-            .map(|i| {
+        let runs: Vec<_> = repos
+            .iter()
+            .flat_map(|repo| (0..3).map(move |i| (repo, i)))
+            .map(|(repo, i)| {
                 let run_ =
                     json!({ "id": format!("r{i}"), "agent": "shop.dev", "formula": "shop.fix", "workdir": repo });
                 let event = json!({ "type": "run.preparing", "data": { "run": run_ } });
                 let params = &params;
-                s.spawn(move || run("worktree", &event, params))
+                (repo, i, s.spawn(move || run("worktree", &event, params)))
             })
             .collect();
-        runs.into_iter().map(|r| r.join().unwrap()).collect()
+        runs.into_iter()
+            .map(|(repo, i, r)| (repo, i, r.join().unwrap()))
+            .collect()
     });
-    for (i, said) in said.iter().enumerate() {
+    for (repo, i, said) in said {
         let tree = repo.join(format!(".git/aae/worktrees/r{i}"));
-        assert_eq!(said, &Ok(Some(json!({ "decision": "proceed", "workdir": tree }))));
+        assert_eq!(said, Ok(Some(json!({ "decision": "proceed", "workdir": tree }))));
     }
 }

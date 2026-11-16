@@ -116,7 +116,9 @@ fn remove(common: &Path, path: &Path, id: &str, until: Instant) -> Result<(), St
 
 /// Locks the git dir `common` itself, so the runs of one repository change its worktrees one at a time: two
 /// `git worktree add` at once race on the repository's config, which the first one may write
-/// (`worktree.useRelativePaths` sets `extensions.relativeWorktrees`). The lock goes with the returned file.
+/// (`worktree.useRelativePaths` sets `extensions.relativeWorktrees`); and the `git worktree prune` of a creation
+/// deletes the registration of a worktree whose directory is gone, which is where a removal stands halfway through.
+/// The lock goes with the returned file.
 fn hold(common: &Path, until: Instant) -> Result<File, String> {
     let dir = File::open(common).map_err(|e| format!("{}: {e}", common.display()))?;
     loop {
