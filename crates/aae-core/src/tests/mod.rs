@@ -329,3 +329,18 @@ fn the_system_clock_reads_the_system_time() {
     let now = Clock::system().now_ms();
     assert!((before..=wall()).contains(&now));
 }
+
+#[test]
+fn a_state_of_another_schema_is_refused_and_one_of_this_schema_opens_again() {
+    let dir = tempfile::tempdir().unwrap();
+    let db = dir.path().join("state.db");
+    drop(open(&db).unwrap());
+    drop(open(&db).unwrap());
+    let conn = rusqlite::Connection::open(&db).unwrap();
+    let version: i32 = conn.pragma_query_value(None, "user_version", |r| r.get(0)).unwrap();
+    conn.pragma_update(None, "user_version", version - 1).unwrap();
+    drop(conn);
+    let refused = open(&db).unwrap_err().to_string();
+    assert!(refused.contains(&format!("schema {}", version - 1)), "{refused}");
+    assert!(refused.contains("not migrated"), "{refused}");
+}
