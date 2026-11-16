@@ -8,7 +8,8 @@ The request is one sentence: "Create me snake game in browser and a simple backe
 
 - `pack/` is the pack `dev`, with not a word about the task. Agent `planner` files the work, agent `coder` does one
   bead, agent `qa` tries the result; each is `agents/<agent>/agent.toml` and the prompt its steps get,
-  `agents/<agent>/prompt.template.md`. Formula `deliver` (`rounds = 3`):
+  `agents/<agent>/prompt.template.md`; its `scope` is `root` (planner and qa, over all the rigs) or `rig` (the coder,
+  in its bead's rig). Formula `deliver` (`rounds = 3`):
   1. `plan`, an ai step of `planner`: it files beads under the request, each with its task, the prefix of its rig
      and the label `agent:`; from the second round on its prompt has the remarks of the checks, and it files only the fixes;
   2. `work`, a `drain` step: every ready bead under the request gets a run of `implement`, two at once (`pool = 2`):
