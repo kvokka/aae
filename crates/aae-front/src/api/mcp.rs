@@ -195,7 +195,7 @@ pub(super) fn formulas(config: &Config, project: Option<&str>) -> Value {
                 };
                 out.push(
                     json!({ "project": p.name, "formula": formula_ref, "description": formula.description,
-                    "inputs": inputs }),
+                    "inputs": inputs, "internal": formula.internal }),
                 );
             }
         }

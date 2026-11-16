@@ -10,7 +10,7 @@ mod wait;
 use crate::client::{Client, ClientError, Events};
 use clap::{CommandFactory, Parser, Subcommand, ValueEnum};
 pub use commands::{Decision, GateCommand, InstanceCommand, RunCommand, TriggerCommand};
-pub use config::{ConfigCommand, ListCommand, local as config_local};
+pub use config::{ConfigCommand, FormulaCommand, ListCommand, local as config_local};
 use finish::finish;
 use serde_json::{Value, json};
 use std::{path::PathBuf, process::ExitCode};
@@ -112,7 +112,7 @@ pub enum Command {
     Agent(ListCommand),
     /// Formulas.
     #[command(subcommand)]
-    Formula(ListCommand),
+    Formula(FormulaCommand),
     /// Packs.
     #[command(subcommand)]
     Pack(ListCommand),
@@ -250,7 +250,7 @@ async fn execute(client: &Client, cli: Cli) -> Result<ExitCode, ClientError> {
         Command::Trigger(command) => commands::trigger(client, json, command).await?,
         Command::Project(command) => config::list(client, json, "projects", command).await?,
         Command::Agent(command) => config::list(client, json, "agents", command).await?,
-        Command::Formula(command) => config::list(client, json, "formulas", command).await?,
+        Command::Formula(command) => config::formulas(client, json, command).await?,
         Command::Pack(command) => config::list(client, json, "packs", command).await?,
         Command::Plugin(command) => config::list(client, json, "plugins", command).await?,
         Command::Config(ConfigCommand::Reload { idempotency }) => config::reload(client, json, idempotency).await?,

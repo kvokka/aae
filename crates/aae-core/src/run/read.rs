@@ -123,7 +123,7 @@ impl Reader {
                 "SELECT COUNT(*) FROM runs \
                  WHERE (state IN ('preparing', 'starting', 'running', 'requires_action', 'finishing') \
                  OR (state = 'interrupted' AND waiting IS NOT NULL)) AND NOT {}",
-                super::drain::DRAINING
+                super::drain::NO_PROCESS
             ),
             [],
             |r| r.get(0),

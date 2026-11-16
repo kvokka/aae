@@ -2742,7 +2742,8 @@
           "project",
           "formula",
           "description",
-          "inputs"
+          "inputs",
+          "internal"
         ],
         "properties": {
           "description": {
@@ -2760,6 +2761,10 @@
             "propertyNames": {
               "type": "string"
             }
+          },
+          "internal": {
+            "type": "boolean",
+            "description": "Started only by a step of another formula, not directly (spec §9.1); `aae formula list` hides it without\n`--all`."
           },
           "project": {
             "type": "string"

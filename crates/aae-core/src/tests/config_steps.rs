@@ -272,3 +272,66 @@ fn a_bad_max_attempts_or_check_script_is_one_line() {
         );
     }
 }
+
+/// A formula step names a formula of the project whose required inputs it gives or inherits; a formula that runs
+/// itself through such steps and a trigger on an internal formula are errors (spec §9.1).
+#[test]
+fn a_formula_step_names_a_formula_whose_inputs_it_has() {
+    const SUB: &str = "kit/formulas/sub.toml";
+    let sub = |inputs: &str, steps: &str| format!("name = \"sub\"\ninternal = true\n[inputs]\n{inputs}\n{steps}");
+    let flow = |inputs: &str, given: &str| {
+        format!(
+            "name = \"flow\"\n[inputs]\n{inputs}\n[[step]]\nname = \"inner\"\nkind = \"formula\"\nformula = \"sub\"\n\
+             inputs = {{ {given} }}\n"
+        )
+    };
+    let goal = "goal = { type = \"string\", required = true }";
+    let config = load_with(&[(FLOW, &flow(goal, "")), (SUB, &sub(goal, &exec(None)))]).unwrap();
+    let pack = &config.projects[0].packs[1];
+    assert!(pack.formulas["sub"].internal);
+    let step = &pack.formulas["flow"].steps[0];
+    let crate::config::StepKind::Formula { formula, .. } = &step.kind else {
+        panic!("{step:?}");
+    };
+    assert_eq!((formula.to_string().as_str(), step.kind.name()), ("kit.sub", "formula"));
+    let given = load_with(&[
+        (FLOW, &flow("", "goal = \"{{ run.id }}\"")),
+        (SUB, &sub(goal, &exec(None))),
+    ]);
+    assert!(given.is_ok(), "{given:?}");
+    fails(
+        &[(FLOW, &flow("", "")), (SUB, &sub(goal, &exec(None)))],
+        "`kit.sub` needs input `goal`, which the step neither gives nor inherits",
+    );
+    fails(
+        &[(FLOW, &flow(goal, "why = \"x\"")), (SUB, &sub(goal, &exec(None)))],
+        "`kit.sub` has no input `why`",
+    );
+    fails(
+        &[
+            (FLOW, &flow(goal, "goal = \"{{ inputs.nope }}\"")),
+            (SUB, &sub(goal, &exec(None))),
+        ],
+        "names nothing a run has",
+    );
+    // A task is not inherited: the parent holds its bead.
+    let task = "goal = { type = \"task\", required = true }";
+    fails(
+        &[(FLOW, &flow(task, "")), (SUB, &sub(task, &exec(None)))],
+        "needs input `goal`",
+    );
+    let back = "[[step]]\nkind = \"formula\"\nformula = \"flow\"\n";
+    fails(
+        &[(FLOW, &flow(goal, "")), (SUB, &sub(goal, back))],
+        "runs itself through its `formula` steps",
+    );
+    let trigger = (
+        "kit/pack.toml",
+        "name = \"kit\"\nversion = \"0.3.0\"\nrequires_plugins = [\"mail\"]\n[[trigger]]\nname = \"nightly\"\n\
+         cron = \"0 3 * * *\"\nrun = \"sub\"\ninputs = { goal = \"g\" }\n",
+    );
+    fails(
+        &[(FLOW, &flow(goal, "")), (SUB, &sub(goal, &exec(None))), trigger],
+        "formula `kit.sub` is internal",
+    );
+}

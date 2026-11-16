@@ -301,6 +301,8 @@ async fn the_config_from_the_cli_lists_explains_checks_and_reloads() {
             "harness = \"claude\"\neffort = \"high\"\n",
         )
         .unwrap();
+        let inner = "name = \"inner\"\ninternal = true\n[[step]]\nkind = \"exec\"\ncommand = [\"true\"]\n";
+        fs::write(aae.join("shop/formulas/inner.toml"), inner).unwrap();
     })
     .await;
     assert_eq!(d.json(&["project", "list"])[0]["rigs"][0]["name"], "web");
@@ -309,6 +311,14 @@ async fn the_config_from_the_cli_lists_explains_checks_and_reloads() {
         (&agent["agent"], &agent["harness"], agent.get("provider")),
         (&"shop.dev".into(), &"claude".into(), None)
     );
+    // An internal formula (spec §9.1): marked in the API, hidden from `aae formula list` unless `--all`.
+    let internal = |args: &[&str]| -> Vec<Value> {
+        let formulas = d.json(args);
+        let inner = formulas.as_array().unwrap().iter().filter(|f| f["formula"] == "inner");
+        inner.map(|f| f["internal"].clone()).collect()
+    };
+    assert_eq!(internal(&["formula", "list"]), Vec::<Value>::new());
+    assert_eq!(internal(&["formula", "list", "--all"]), vec![Value::Bool(true)]);
     assert_eq!(d.json(&["formula", "list"]).as_array().unwrap().len(), 2);
     assert_eq!(d.json(&["pack", "list"])[0]["name"], "shop");
     let plugins = d.json(&["plugin", "list"]);

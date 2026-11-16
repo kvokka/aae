@@ -317,6 +317,9 @@ pub(crate) struct Formula {
     formula: String,
     description: String,
     inputs: BTreeMap<String, FormulaInput>,
+    /// Started only by a step of another formula, not directly (spec §9.1); `aae formula list` hides it without
+    /// `--all`.
+    internal: bool,
 }
 
 #[derive(ToSchema)]

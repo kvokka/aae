@@ -104,6 +104,7 @@ impl RunHandler {
         match row.step_kind.as_str() {
             "exec" => return self.start_exec(tx, row),
             "drain" => return self.start_drain(tx, row),
+            "formula" => return self.start_formula(tx, row),
             _ => {}
         }
         let config = row
@@ -380,6 +381,9 @@ impl RunHandler {
             _ => json!({ "run": row.view(), "reason": reason, "usage": usage }),
         };
         row.emit(tx, &format!("run.{state}"), data)?;
+        if let Some(parent) = &row.parent_run {
+            self.child_ended(tx, parent, &row.id)?;
+        }
         self.schedule(tx)
     }
 }

@@ -2,7 +2,7 @@
 
 use super::{RunHandler, row::Row};
 use crate::{
-    config::{EffectiveConfig, Scope, StepKind},
+    config::{EffectiveConfig, InputType, Scope, StepKind},
     writer::Tx,
 };
 use rusqlite::Connection;
@@ -10,7 +10,7 @@ use serde_json::{Map, Value, json};
 use std::path::PathBuf;
 
 pub(super) const STEP_TIMEOUT_MS: i64 = 45 * 60_000;
-/// The time a drain step has for every bead under the run's bead (spec §9.1).
+/// The time a drain step has for every bead under the run's bead, and a formula step for its run (spec §9.1).
 pub(super) const DRAIN_TIMEOUT_MS: i64 = 24 * 3_600_000;
 
 impl RunHandler {
@@ -49,6 +49,35 @@ impl RunHandler {
             ) => {
                 let config = json!({ "drain": formula.to_string(), "pool": pool,
                     "on_item_failure": on_item_failure, "env": env });
+                return Ok((None, timeout_ms(timeout, DRAIN_TIMEOUT_MS), config));
+            }
+            // The inputs of the formula's run: the parent's that it declares, a task aside (the parent holds the
+            // bead), then the step's own over them (spec §9.1).
+            (
+                StepKind::Formula {
+                    formula: run,
+                    inputs,
+                    timeout,
+                },
+                "formula",
+            ) => {
+                let (_, child) = project.formula(&run.to_string())?;
+                let own: Value = serde_json::from_str(&row.inputs).unwrap_or_default();
+                let mut given: Map<String, Value> = (child.inputs.iter())
+                    .filter(|(_, i)| i.kind != InputType::Task)
+                    .filter_map(|(k, _)| Some((k.clone(), own.get(k)?.clone())))
+                    .collect();
+                let context = json!({
+                    "inputs": own, "run": row.view(),
+                    "bead": row.bead_data.as_deref().map(serde_json::from_str::<Value>).transpose().ok().flatten(),
+                    "project": { "name": project.name, "path": project.dir },
+                    "steps": step_results(tx.sql(), &row.id, &row.step).map_err(|e| e.to_string())?,
+                });
+                let explicit = inputs
+                    .resolve_in(&context)
+                    .map_err(|e| format!("step `{}`: {e}", row.step))?;
+                given.extend(explicit.as_object().cloned().unwrap_or_default());
+                let config = json!({ "formula": run.to_string(), "inputs": given, "env": env });
                 return Ok((None, timeout_ms(timeout, DRAIN_TIMEOUT_MS), config));
             }
             (StepKind::Ai { timeout, .. }, "ai") => timeout,

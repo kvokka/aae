@@ -137,6 +137,12 @@ impl Loader {
                     max_attempts,
                     step_check_script_path: script,
                     ..
+                }
+                | StepFile::Formula {
+                    name,
+                    max_attempts,
+                    step_check_script_path: script,
+                    ..
                 } => (name.clone(), None, *max_attempts, script.clone()),
             };
             let name = name.unwrap_or_else(|| (at + 1).to_string());
@@ -168,7 +174,7 @@ impl Loader {
             if max_attempts.is_some_and(|n| n.get() > ceiling) {
                 self.fail(file, format!("step `{name}`: `max_attempts` is at most {ceiling}"));
             }
-            let kind = self.step(file, step)?;
+            let kind = self.step(file, step, &raw.inputs, &steps)?;
             steps.push(Step {
                 name,
                 kind,
@@ -205,6 +211,7 @@ impl Loader {
                 description: raw.description,
                 inputs: raw.inputs,
                 worktree: raw.worktree,
+                internal: raw.internal,
                 rounds: raw.rounds.map_or(3, std::num::NonZeroU32::get),
                 steps,
             },
@@ -212,7 +219,13 @@ impl Loader {
     }
 
     /// A step of formula `file`.
-    fn step(&mut self, file: &Path, raw: StepFile) -> Option<StepKind> {
+    fn step(
+        &mut self,
+        file: &Path,
+        raw: StepFile,
+        own: &BTreeMap<String, super::formula_file::Input>,
+        before: &[Step],
+    ) -> Option<StepKind> {
         Some(match raw {
             StepFile::Ai {
                 agent,
@@ -251,6 +264,29 @@ impl Loader {
                 pool: pool.map_or(1, std::num::NonZeroU32::get),
                 on_item_failure,
             },
+            StepFile::Formula {
+                formula,
+                inputs,
+                timeout,
+                ..
+            } => {
+                let inputs = Inputs::parse_step(&Value::Object(inputs))
+                    .map_err(|e| self.fail(file, format!("step `{formula}`: {e}")))
+                    .ok()?;
+                for path in inputs.paths() {
+                    if !super::prompt::path(path, own, before) {
+                        self.fail(
+                            file,
+                            format!("step `{formula}`: `{{{{ {path} }}}}` names nothing a run has"),
+                        );
+                    }
+                }
+                StepKind::Formula {
+                    formula: reference(&formula),
+                    inputs,
+                    timeout: self.timeout(file, timeout.as_deref()),
+                }
+            }
         })
     }
 

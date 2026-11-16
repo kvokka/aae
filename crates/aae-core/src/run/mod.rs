@@ -9,6 +9,7 @@ mod events;
 mod exec;
 mod exec_step;
 mod finish;
+mod formula_step;
 mod gates;
 mod hooks;
 mod machine;

@@ -19,6 +19,18 @@ pub enum ListCommand {
 }
 
 #[derive(Subcommand)]
+pub enum FormulaCommand {
+    /// List the formulas a run can start, of every project or of `--project`.
+    List {
+        #[arg(long)]
+        project: Option<String>,
+        /// Also the internal ones, which only a step of another formula starts.
+        #[arg(long)]
+        all: bool,
+    },
+}
+
+#[derive(Subcommand)]
 pub enum ConfigCommand {
     /// Check the config file as a reload would; exits non-zero when it has errors. Needs no daemon.
     Check {
@@ -61,6 +73,20 @@ pub(super) async fn list(client: &Client, json: bool, what: &str, command: ListC
         json,
         &client.request("GET", &format!("/v1/{what}{query}"), None, None).await?,
     );
+    Ok(())
+}
+
+/// `aae formula list`: the API gives every formula with `internal`; without `--all` the internal ones are left out.
+pub(super) async fn formulas(client: &Client, json: bool, command: FormulaCommand) -> Result<(), ClientError> {
+    let FormulaCommand::List { project, all } = command;
+    let query = project.map(|p| format!("?project={}", encode(&p))).unwrap_or_default();
+    let mut reply = client
+        .request("GET", &format!("/v1/formulas{query}"), None, None)
+        .await?;
+    if !all && let Some(items) = reply.as_array_mut() {
+        items.retain(|f| f["internal"] != true);
+    }
+    print(json, &reply);
     Ok(())
 }
 

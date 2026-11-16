@@ -119,7 +119,7 @@ fn agent_prompt(loader: &mut Loader, overlay: &Path, agent: &Name, base: &Path, 
 }
 
 /// Whether a prompt template path can be resolved for a run of a formula with `inputs` (contracts 2.3).
-fn path(path: &str, inputs: &BTreeMap<String, Input>, before: &[Step]) -> bool {
+pub(super) fn path(path: &str, inputs: &BTreeMap<String, Input>, before: &[Step]) -> bool {
     let (root, rest) = path.split_once('.').unwrap_or((path, ""));
     let first = rest.split('.').next().unwrap_or_default();
     match root {

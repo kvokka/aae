@@ -55,6 +55,8 @@ Code: `crates/aae-front/src/cli/`. The CLI is a thin client of the HTTP API in t
   current attempt is `rejected` ("stale attempt"). From a shell of its own the run starts a new correlation at depth 0.
   `aae run list --parent <run>` lists a run's children; cancelling a run cancels the live runs its sessions
   started (reason `parent_cancelled`), while its pass or failure leaves them alone.
+- `GET /v1/formulas` gives every formula with `internal` (bool): an internal formula only starts as a step of
+  another formula, not directly. `aae formula list` leaves the internal ones out; `--all` shows them too.
 - `aae run watch <run>` prints the live view (a line per event, `-  harness  <type>` per session message) and exits
   0 once the stream ends with the run; `aae run wait` gives the outcome.
 - `aae run wait <run>... [--timeout <dur>]` waits on the event stream (not by polling) until every named run is

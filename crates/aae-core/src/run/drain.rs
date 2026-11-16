@@ -22,9 +22,12 @@ use std::collections::BTreeMap;
 /// The longest title of a root bead, in characters.
 const TITLE_CHARS: usize = 80;
 
-/// A run in a drain step: its attempt has no process, so it holds no slot and does not hold the workdir from its own
-/// children.
+/// A run in a drain step.
 pub(super) const DRAINING: &str = "(step_kind = 'drain' AND state = 'running')";
+
+/// A run in a drain or a formula step: its attempt has no process, so it holds no slot and does not hold the workdir
+/// from its own children.
+pub(super) const NO_PROCESS: &str = "(step_kind IN ('drain', 'formula') AND state = 'running')";
 
 impl RunHandler {
     /// The attempt of a drain step: the read of the tracker it asks for makes the first pass; its deadline is the

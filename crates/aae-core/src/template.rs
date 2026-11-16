@@ -211,9 +211,18 @@ pub enum Inputs {
 impl Inputs {
     /// Placeholders start with `event`; a schedule trigger (`has_event == false`) may have none.
     pub fn parse(value: &Value, has_event: bool) -> Result<Self, SyntaxError> {
+        Self::parse_in(value, &["event"], has_event)
+    }
+
+    /// The `inputs` of a `formula` step: placeholders start with what the parent run shows (spec §9.1).
+    pub fn parse_step(value: &Value) -> Result<Self, SyntaxError> {
+        Self::parse_in(value, &["inputs", "steps", "run", "bead", "project"], true)
+    }
+
+    fn parse_in(value: &Value, roots: &[&str], has_event: bool) -> Result<Self, SyntaxError> {
         Ok(match value {
             Value::String(text) => {
-                let template = Template::parse(text, &["event"])?;
+                let template = Template::parse(text, roots)?;
                 if !has_event && template.paths().next().is_some() {
                     return Err(SyntaxError(format!(
                         "`{text}`: a schedule trigger has no event to substitute"
@@ -224,13 +233,13 @@ impl Inputs {
             Value::Object(table) => Self::Table(
                 table
                     .iter()
-                    .map(|(k, v)| Ok((k.clone(), Self::parse(v, has_event)?)))
+                    .map(|(k, v)| Ok((k.clone(), Self::parse_in(v, roots, has_event)?)))
                     .collect::<Result<_, SyntaxError>>()?,
             ),
             Value::Array(items) => Self::List(
                 items
                     .iter()
-                    .map(|v| Self::parse(v, has_event))
+                    .map(|v| Self::parse_in(v, roots, has_event))
                     .collect::<Result<_, _>>()?,
             ),
             literal => Self::Literal(literal.clone()),
@@ -252,7 +261,8 @@ impl Inputs {
         self.resolve_in(&serde_json::json!({ "event": view }))
     }
 
-    fn resolve_in(&self, context: &Value) -> Result<Value, Unresolved> {
+    /// The inputs against `context`, whose keys are the roots of the placeholders.
+    pub fn resolve_in(&self, context: &Value) -> Result<Value, Unresolved> {
         Ok(match self {
             Self::Template(template) => template.resolve(context)?,
             Self::Table(entries) => Value::Object(

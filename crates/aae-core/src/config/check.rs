@@ -28,6 +28,7 @@ pub(super) fn project(loader: &mut Loader, project: &mut Project, variants: &BTr
             "aae.toml"
         });
         for (name, formula) in &mut pack.formulas {
+            let own_inputs = formula.inputs.clone();
             for step in &mut formula.steps {
                 match &mut step.kind {
                     StepKind::Ai { agent, .. } => match resolve(&index, &own, agent, has_agent, "agent") {
@@ -47,6 +48,22 @@ pub(super) fn project(loader: &mut Loader, project: &mut Project, variants: &BTr
                             Err(e) => loader.fail(&manifest, format!("{what}: {e}")),
                         }
                     }
+                    StepKind::Formula {
+                        formula: run, inputs, ..
+                    } => {
+                        let what = format!("formula `{name}`, step `{}`", step.name);
+                        match resolve(&index, &own, run, has_formula, "formula") {
+                            Ok(found) => {
+                                let pack = index.iter().find(|p| p.name == found.pack).expect("resolved");
+                                let child = &pack.formulas[&found.name];
+                                for e in step_inputs(child, &own_inputs, inputs) {
+                                    loader.fail(&manifest, format!("{what}: `{found}` {e}"));
+                                }
+                                *run = found;
+                            }
+                            Err(e) => loader.fail(&manifest, format!("{what}: {e}")),
+                        }
+                    }
                     StepKind::Exec { .. } => {}
                 }
             }
@@ -56,6 +73,9 @@ pub(super) fn project(loader: &mut Loader, project: &mut Project, variants: &BTr
             match resolve(&index, &own, &trigger.run, has_formula, "formula") {
                 Ok(found) => {
                     let formula = &index.iter().find(|p| p.name == found.pack).expect("resolved").formulas[&found.name];
+                    if formula.internal {
+                        loader.fail(&manifest, format!("{what}: formula `{found}` is internal"));
+                    }
                     let given: Vec<&str> = match &trigger.inputs {
                         Inputs::Table(entries) => entries.iter().map(|(k, _)| k.as_str()).collect(),
                         _ => Vec::new(),
@@ -83,6 +103,12 @@ pub(super) fn project(loader: &mut Loader, project: &mut Project, variants: &BTr
         }
     }
     let file = dir.join("aae.toml");
+    if let Some(cycle) = self_call(packs) {
+        loader.fail(
+            &file,
+            format!("formula `{cycle}` runs itself through its `formula` steps"),
+        );
+    }
     // Project-level references resolve as if written in the project root pack.
     let own = index.first().map(|p| p.name.clone()).unwrap_or_default();
     let mut agents: Vec<&String> = edits.keys().collect();
@@ -296,4 +322,63 @@ pub(super) fn watchdog(loader: &mut Loader, file: &Path, table: BTreeMap<String,
         }
     }
     w
+}
+
+/// What is wrong with the inputs a `formula` step gives `child`: the ones it names that `child` has not, the
+/// required ones of `child` neither given nor inherited. A task is not inherited: the parent holds its bead.
+fn step_inputs(child: &super::Formula, parent: &BTreeMap<String, super::Input>, given: &Inputs) -> Vec<String> {
+    let given: Vec<&str> = match given {
+        Inputs::Table(entries) => entries.iter().map(|(k, _)| k.as_str()).collect(),
+        _ => Vec::new(),
+    };
+    let unknown = (given.iter()).filter(|k| !child.inputs.contains_key(**k));
+    let mut errors: Vec<String> = unknown.map(|k| format!("has no input `{k}`")).collect();
+    let inherited = |k: &str| {
+        parent
+            .get(k)
+            .is_some_and(|i| i.required && i.kind != super::InputType::Task)
+    };
+    for (k, i) in &child.inputs {
+        if i.required && !given.contains(&k.as_str()) && !(i.kind != super::InputType::Task && inherited(k)) {
+            errors.push(format!("needs input `{k}`, which the step neither gives nor inherits"));
+        }
+    }
+    errors
+}
+
+/// A formula that runs itself through `formula` steps, directly or through others; `None` when there is none.
+fn self_call(packs: &[Pack]) -> Option<Name> {
+    let calls = |at: &Name| -> Vec<Name> {
+        let formula = packs
+            .iter()
+            .find(|p| p.name == at.pack)
+            .and_then(|p| p.formulas.get(&at.name));
+        let steps = formula.map(|f| f.steps.as_slice()).unwrap_or_default();
+        (steps.iter())
+            .filter_map(|s| match &s.kind {
+                StepKind::Formula { formula, .. } => Some(formula.clone()),
+                _ => None,
+            })
+            .collect()
+    };
+    for pack in packs {
+        for name in pack.formulas.keys() {
+            let start = Name {
+                pack: pack.name.clone(),
+                name: name.clone(),
+            };
+            // Depth-first from `start`; a path back to it is a cycle. The visited set keeps it finite.
+            let (mut stack, mut seen) = (calls(&start), Vec::new());
+            while let Some(next) = stack.pop() {
+                if next == start {
+                    return Some(start);
+                }
+                if !seen.contains(&next) {
+                    stack.extend(calls(&next));
+                    seen.push(next);
+                }
+            }
+        }
+    }
+    None
 }

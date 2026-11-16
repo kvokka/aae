@@ -2,7 +2,7 @@
 //! workdir and a concurrency slot, then leaves for `preparing`, oldest first.
 
 use super::{
-    Create, RunHandler, drain::DRAINING, events::attempt_live, rejected, row::Row, token_sha256, triggers::MAX_DEPTH,
+    Create, RunHandler, drain::NO_PROCESS, events::attempt_live, rejected, row::Row, token_sha256, triggers::MAX_DEPTH,
 };
 use crate::{
     config::{Formula, InputType, Step, StepKind},
@@ -28,7 +28,7 @@ impl RunHandler {
                 let (agent, config) = self.config.for_run_as(project, rig, formula, &step.name, as_agent)?;
                 Ok((agent, config.model_key()))
             }
-            StepKind::Exec { .. } | StepKind::Drain { .. } => Ok((String::new(), None)),
+            StepKind::Exec { .. } | StepKind::Drain { .. } | StepKind::Formula { .. } => Ok((String::new(), None)),
         }
     }
 
@@ -77,12 +77,20 @@ impl RunHandler {
     }
 
     pub(super) fn create(&mut self, tx: &mut Tx<'_>, mut c: Create) -> Result<Value, Error> {
+        // A step of the parent creates with no token; a start by hand or from a session is direct. A trigger never
+        // names an internal formula: the config refuses it.
+        let direct = c.parent_run.is_none() || c.token.is_some();
         if let Some(token) = c.token.take() {
             Self::child_of(tx, &mut c, &token)?;
         }
         let project = self.config.projects.iter().find(|p| p.name == c.project);
         let project = project.ok_or_else(|| rejected(format!("no project `{}`", c.project)))?;
         let (name, formula) = project.formula(&c.formula).map_err(rejected)?;
+        if direct && formula.internal {
+            return Err(rejected(format!(
+                "`{name}` is internal: only a step of another formula runs it"
+            )));
+        }
         // A start that names no rig runs on the rig of the bead its task names, else on the root.
         let rig_name = c.rig.take().unwrap_or_else(|| {
             let beads = formula.inputs.iter().filter(|(_, i)| i.kind == InputType::Task);
@@ -271,11 +279,11 @@ impl RunHandler {
         Ok(())
     }
 
-    /// A workdir holds one live started run (spec §9.3); a parent in a drain step does not hold it from its children.
+    /// A workdir holds one live started run (spec §9.3); a parent in a drain or formula step does not hold it from its children.
     fn workdir_busy(tx: &Tx<'_>, row: &Row) -> Result<bool, Error> {
         let sql = format!(
             "SELECT EXISTS (SELECT 1 FROM runs WHERE workdir = ?1 AND id != ?2 \
-             AND state NOT IN ('queued', 'passed', 'failed', 'cancelled') AND NOT (id IS ?3 AND {DRAINING}))"
+             AND state NOT IN ('queued', 'passed', 'failed', 'cancelled') AND NOT (id IS ?3 AND {NO_PROCESS}))"
         );
         let busy = tx
             .sql()
@@ -362,9 +370,9 @@ impl RunHandler {
     }
 }
 
-/// The runs that hold a concurrency slot: a parked run, or one in a drain step, has no process and holds none.
+/// The runs that hold a concurrency slot: a parked run, or one in a drain or formula step, has no process and holds none.
 fn started() -> String {
-    format!("state NOT IN ('queued', 'parked', 'passed', 'failed', 'cancelled') AND NOT {DRAINING}")
+    format!("state NOT IN ('queued', 'parked', 'passed', 'failed', 'cancelled') AND NOT {NO_PROCESS}")
 }
 
 /// `reply` with the beads a pick passed over and why, when there are any.

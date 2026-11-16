@@ -2,6 +2,7 @@
 //! formula the core runs (spec §9.1).
 
 use super::{Name, Settings};
+use crate::template::Inputs;
 use serde::Deserialize;
 use std::{collections::BTreeMap, num::NonZeroU32, path::PathBuf, time::Duration};
 
@@ -16,6 +17,9 @@ pub(super) struct FormulaFile {
     /// Each run works in a git worktree of its own that aae makes and removes (spec §11.5).
     #[serde(default)]
     pub worktree: bool,
+    /// Started only by a step of another formula, hidden from the catalog (spec §9.1).
+    #[serde(default)]
+    pub internal: bool,
     /// The most rounds of a run that checks send back (spec §9.1); default 3.
     pub rounds: Option<NonZeroU32>,
     pub step: Vec<StepFile>,
@@ -75,6 +79,16 @@ pub(super) enum StepFile {
         max_attempts: Option<NonZeroU32>,
         step_check_script_path: Option<String>,
     },
+    Formula {
+        name: Option<String>,
+        formula: String,
+        /// Inputs of the formula given on the step, as a trigger's `inputs`; stronger than the inherited ones.
+        #[serde(default)]
+        inputs: serde_json::Map<String, serde_json::Value>,
+        timeout: Option<String>,
+        max_attempts: Option<NonZeroU32>,
+        step_check_script_path: Option<String>,
+    },
 }
 
 /// What a drain step does once the run of a bead failed (spec §9.1).
@@ -96,6 +110,8 @@ pub struct Formula {
     pub inputs: BTreeMap<String, Input>,
     /// `worktree = true`: each run gets a git worktree of its own (spec §11.5).
     pub worktree: bool,
+    /// `internal = true`: started only by a `formula` or `drain` step, hidden from the catalog (spec §9.1).
+    pub internal: bool,
     /// The most rounds of a run: a failed check with `back_to` starts the next one, past the last the run fails.
     pub rounds: u32,
     /// At least one; a run goes through them in order (spec §9.1).
@@ -148,6 +164,13 @@ pub enum StepKind {
         pool: u32,
         on_item_failure: OnItemFailure,
     },
+    /// The step is a run of `formula` of the same project (spec §9.1): its outcome is the step's.
+    Formula {
+        formula: Name,
+        /// The inputs given on the step, resolved against the parent run.
+        inputs: Inputs,
+        timeout: Option<Duration>,
+    },
 }
 
 impl StepKind {
@@ -159,12 +182,13 @@ impl StepKind {
         }
     }
 
-    /// `ai`, `exec` or `drain`, as the state and the API name the kind.
+    /// `ai`, `exec`, `drain` or `formula`, as the state and the API name the kind.
     pub fn name(&self) -> &'static str {
         match self {
             Self::Ai { .. } => "ai",
             Self::Exec { .. } => "exec",
             Self::Drain { .. } => "drain",
+            Self::Formula { .. } => "formula",
         }
     }
 }
