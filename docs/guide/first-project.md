@@ -1,10 +1,11 @@
 # Your first project
 
-A **project** is a directory with an `aae.toml`. It has one or more **rigs**, the working directories its runs work
-in (usually a repository checkout), and its own agents and formulas next to `aae.toml`. The orchestrator config
-lists the projects the daemon serves.
+A **project** is a directory with an `aae.toml`. Its runs work in its **root**, the directory of `aae.toml` unless
+`[root]` says otherwise, or in one of its **rigs**, further working directories (usually repository checkouts) a
+project of several repositories declares. Its own agents and formulas sit next to `aae.toml`. The orchestrator
+config lists the projects the daemon serves.
 
-This page sets up a project with one rig and runs a formula that needs no model. The
+This page sets up a project of one directory, with no rigs, and runs a formula that needs no model. The
 [next page](first-formula.md) adds an agent.
 
 ## 1. The orchestrator config
@@ -36,11 +37,14 @@ git init && echo "Hello" > README.md
 `~/work/hello/aae.toml`:
 
 ```toml
-[rigs.main]
-path = "."                # the rig's working directory, relative to this file; it must exist
+# Nothing is needed: the root is this directory, named `root`. To change either:
+# [root]
+# name = "main"
+# path = "src"            # relative to this file; it must exist and need not be a git repository
 ```
 
-The project is named after its directory (`hello`); `name = "..."` in `aae.toml` overrides that.
+The project is named after its directory (`hello`); `name = "..."` in `aae.toml` overrides that. A project of
+several repositories adds a `[rigs.<name>]` with the `path` of each; the root is never one of them.
 
 ## 3. A formula without a model
 
@@ -52,11 +56,11 @@ This one has a single step.
 
 ```toml
 name = "check"
-description = "The rig has a README"
+description = "The project has a README"
 
 [[step]]
 kind = "exec"
-command = ["test", "-f", "README.md"]   # runs in the rig's directory
+command = ["test", "-f", "README.md"]   # runs in the run's directory: here, the root
 timeout = "30s"
 ```
 
@@ -73,10 +77,10 @@ aae daemon
 In another:
 
 ```sh
-aae project list                      # the project with its rig
+aae project list                      # the project with its root and no rigs
 aae formula list                      # the formula with its inputs
-aae run start hello main check        # project, rig, formula; prints the run id, e.g. run_1
-aae run list                          # run_1  passed  hello/main  hello.check  ...
+aae run start hello check             # project, formula (no rig: the root); prints the run id, e.g. run_1
+aae run list                          # run_1  passed  hello/root  hello.check  ...
 aae run show run_1                    # the whole run: state, attempts, outcome
 ```
 
@@ -104,11 +108,10 @@ A run need not be started by hand. A `[[trigger]]` in `aae.toml` starts a formul
 [[trigger]]
 name = "hourly-check"
 every = "1h"
-run = "check"
-rig = "main"
+run = "check"             # with no `rig`: in the root
 ```
 
 `aae trigger list` shows the triggers with their next firing, and
-`aae trigger fire --project hello --rig main hourly-check` fires one by hand; `aae trigger disable` (with the same
+`aae trigger fire --project hello --rig root hourly-check` fires one by hand; `aae trigger disable` (with the same
 arguments) stops it firing until `aae trigger enable`. Next:
 [your first formula with an agent](first-formula.md).

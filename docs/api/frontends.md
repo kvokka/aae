@@ -31,7 +31,8 @@ Code: `crates/aae-front/src/api/`. Reference: `docs/api/openapi.json`.
   once it has read past the run's terminal event, and when the client leaves. A later attempt's session is picked up
   as it starts.
 
-The surface: projects and rigs; agents, formulas, packs, plugins (list), config check, explain and reload; runs
+The surface: projects with their root and rigs (`GET /v1/projects`: `name`, `dir` — the directory of `aae.toml`,
+`root` and `rigs`, each `{name, path, vars}`; the root is not among the rigs); agents, formulas, packs, plugins (list), config check, explain and reload; runs
 (start, list, state, live view, cancel, answer a request, finish); triggers (list, enable, disable, fire by hand);
 instances and services (list, stop an idle one); issue gates (list, close, open — orchestrator, project, agent, bead,
 account); events; daemon status, drain and planned restart.
@@ -45,8 +46,8 @@ Code: `crates/aae-front/src/cli/`. The CLI is a thin client of the HTTP API in t
 - An error exits 1 with `aae: <message>` on stderr; under `--json`, stderr is `{"error": {"code", "message", ...}}`:
   the API's error object, or for a local error the code `no_daemon`, `usage`, `config_error`, `not_found` or
   `internal`. Arguments that do not parse exit 2 with the usage text.
-- `aae run start <project> [<rig>] <formula>` (options after the positionals) prints the run id; the rig may be
-  left out when a bead input names a bead with one `rig:` label. When a bead input finds nothing ready it says so on
+- `aae run start <project> [<rig>] <formula>` (options after the positionals) prints the run id; without the rig
+  the run takes the rig of the one `rig:` label of the bead an input names, else works in the project root. When a bead input finds nothing ready it says so on
   stderr and exits 3. Inside an agent session (`AAE_RUN` and `AAE_ATTEMPT_TOKEN` set, as for `aae finish`) it sends
   them as `parent` of `POST /v1/runs`: the run is a child of the session's run, with its correlation and one level
   deeper, at most 10 ([contracts](../design/contracts.md#61-states)); a token that is not that of the parent's live
@@ -75,7 +76,7 @@ Code: `crates/aae-front/src/cli/`. The CLI is a thin client of the HTTP API in t
   them again;
   any other command says that no daemon listens on the socket and how to start one. `aae config check` and
   `aae config explain` load the config file themselves as the daemon would (`--config <file>`, default
-  `$XDG_CONFIG_HOME/aae/config.toml`) and print what the API would answer for it.
+  `$XDG_CONFIG_HOME/aae/config.toml`) and print what the API would answer for it; `explain --formula` without `--rig` is of a run in the project root.
 - `aae doctor` checks the host for a daemon that may not run yet (harness and br binaries, logins, private
   directories, the state file), from the shell that will start it. `GET /v1/doctor` makes the same checks from the
   running daemon's process, with its environment and config file; a failing check is an `error` level in the reply

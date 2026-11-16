@@ -13,7 +13,7 @@ request on the TCP listener needs `Authorization: Bearer <token>`; the daemon wr
 | Tool | Arguments | Same as |
 |---|---|---|
 | `list_formulas` | `project`? | the formulas of the config, named as `start_run` takes them, with their inputs |
-| `start_run` | `project`, `rig`? (the bead's `rig:` label when absent), `formula`, `inputs`?, `continue_from`?, `idempotency_key`? | `POST /v1/runs` |
+| `start_run` | `project`, `rig`? (when absent: the bead's `rig:` label, else the project root), `formula`, `inputs`?, `continue_from`?, `idempotency_key`? | `POST /v1/runs` |
 | `run_state` | `id` | `GET /v1/runs/{id}` |
 | `list_runs` | `project`?, `state`?, `limit`? | `GET /v1/runs` |
 | `cancel_run` | `id`, `reason`?, `idempotency_key`? | `POST /v1/runs/{id}/cancel` |

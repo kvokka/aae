@@ -30,7 +30,7 @@ your project is your setting, stronger than the agent's: an edit of the agent fo
 cheapest model while you try things out, in `~/work/hello/aae.toml`:
 
 ```toml
-[agents.helper]                       # or [rigs.main.agents.helper] for one rig
+[agents.helper]                       # or [rigs.<r>.agents.helper] for one rig of a project with rigs
 model = "haiku"
 ```
 
@@ -42,7 +42,7 @@ actually get, and which layer each value comes from:
 
 ```sh
 aae config explain --project hello --agent helper
-aae config explain --project hello --formula summarize --rig main   # with the formula's and the rig's layers
+aae config explain --project hello --formula summarize   # with the formula's layers, in the root (`--rig` for a rig)
 ```
 
 By default the harness also reads your own host settings (`~/.claude`, `~/.codex`); `inherit_host = false` turns
@@ -102,7 +102,7 @@ aae run answer run_2 <request> allow       # or: deny <message>; answer <text> f
 
 ```sh
 aae config reload
-aae run start hello main summarize --input file=README.md
+aae run start hello summarize --input file=README.md
 aae run watch run_2                   # its events and the session's messages live; ends with the run
 aae run show run_2
 ```
@@ -117,7 +117,7 @@ A run that stays `queued` waits for something: `aae run show` names it in `waiti
 a step that fails with a fault of the rig rather than of the work — a `command` that does not exist (a typo), a
 working directory that cannot be used, `workspace_failure` in `aae events` — closes the rig's gate
 (`rig:<project>/<rig>`), and every later run of the rig waits until you fix the cause and run
-`aae gate open rig:hello/main`. `aae gate list` shows the closed gates and why.
+`aae gate open rig:hello/root`. `aae gate list` shows the closed gates and why.
 
 ## Several steps
 
@@ -158,9 +158,9 @@ next to `name` caps the rounds; the default is 3, and a check still failing in t
 remarks as the reason. `config explain` goes step by step:
 
 ```sh
-aae config explain --project hello --formula summarize-checked --rig main
+aae config explain --project hello --formula summarize-checked
 # step `count` of `summarize-checked`: exec `wc -l README.md`
-# step `write` of `summarize-checked` on `main`: agent hello.helper
+# step `write` of `summarize-checked` on `root`: agent hello.helper
 # ...one line per value with its layer, e.g. model = "haiku"  # project [agents]
 # step `check` of `summarize-checked`: exec `test -s SUMMARY.md`
 ```

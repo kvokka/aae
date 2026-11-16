@@ -321,6 +321,11 @@ base = "kit.implementer"
 harness = "codex"
 model = "luna"
 
+[root]                              # optional, as are both keys
+name = "root"                       # the default; a rig may not take it
+path = "."                          # the default: the directory of aae.toml; relative to it, need not be git
+vars = { test_cmd = "make test" }   # as a rig's
+
 [rigs.backend]
 path = "../backend"                 # must exist
 vars = { test_cmd = "cargo test" }   # `{{ rig.test_cmd }}` in a prompt; `name` and `path` are taken by the rig
@@ -338,6 +343,17 @@ rig = "backend"
 
 The project root is itself a pack named after the project: `agents/` and `formulas/` next to `aae.toml` belong to
 it, and its triggers are the `[[trigger]]` of `aae.toml`.
+
+The root (spec §6.1) is where a project works besides its rigs: a run started without a rig works there (unless a
+bead an input names has a `rig:` label), and so does every session of an agent of scope `root`. It is a place like
+a rig, under its own name: the run's `rig` in events, its gate `rig:<project>/<root name>`, its workdir, `worktree`
+and limits all take it the same way; `{{ rig.name }}`, `{{ rig.path }}` and `{{ rig.<var> }}` of a run in the root
+are the root's. Without `[root]` it is `root`, the directory of `aae.toml`; a project of one repository needs no
+rigs. When `path` points elsewhere, the config files (`.aae/agents/`, packs) and the tracker stay next to
+`aae.toml`. The root need not be a git repository: a run in a plain directory works, and only `worktree = true`
+fails that run (`deny`, naming the directory). A rig at the root's path or under the root's name is a config
+error. `[root]` takes no `settings`, `agents` or `triggers`: the project's own are the root's, and a project
+`[[trigger]]` that names no `rig` fires in the root.
 
 ### Packs and plugins from git
 
@@ -415,7 +431,10 @@ declared by the orchestrator or the project.
 
 ## Agent: `agents/<agent>/agent.toml`
 
-`prompt` (role prompt file, default `prompt.md`
+`scope` (`rig`, the default, or `root`: where the agent works, spec §8.1; an agent of the root works in the
+project root whatever the rig of its run, its session there while the run keeps its own workdir, and takes no
+rig's layer, edit or variant, so "explain config" of it is the same with a rig or without; `explain` prints
+`scope = "root"`), `prompt` (role prompt file, default `prompt.md`
 when it exists; its text is the agent layer's `system_prompt`, so an `[agents.<agent>]` edit may still replace it, and setting
 `system_prompt` in `agent.toml` too is an error), `max_runs` (optional positive integer: runs of this agent
 started at once in its project; the orchestrator's `max_runs` still applies; a run whose next step is of an agent
@@ -491,15 +510,16 @@ config error.
 
 A `drain` step gives every ready bead under the run's bead, at any depth, a run of `formula`, on each read of
 the tracker, until none is left: the same start as `aae run start` with the bead as the formula's `bead` input, no rig
-named (the bead's `rig:` label gives it, and its `agent:`/`harness:` labels apply as to any run), the run's correlation,
+named (the bead's `rig:` label gives it, the project root without one, and its `agent:`/`harness:` labels apply as to any run), the run's correlation,
 one level deeper, the run as `parent_run`. A bead goes out once per entry of the step: a child that failed is not run
 again in it, and an attempt cut by a restart (`daemon_crash`) starts no new entry; a round back to the step does. A
-bead whose start is refused (no `rig:` label, a `harness:` label the config does not give) gets no run and stays
+bead whose start is refused (several `rig:` labels, a `harness:` label the config does not give) gets no run and stays
 open. The step has no process (contracts 6.2): it ends once nothing was given, no child is alive and no later
 read of the tracker is queued, always `pass`, with `data = {closed, failed, refused}` — the beads whose runs passed,
 those whose runs failed or were cancelled, and the refused ones with the reason. `formula` must take exactly one
 `bead` input and need no other; a formula with a `drain` step needs a required `bead` input. An epic under the root is
-not ready while it has open beads; once they are closed it is given out as any bead (with no `rig:` label: refused).
+not ready while it has open beads; once they are closed it is given out as any bead (with no `rig:` label: in the
+root).
 
 A step with `back_to` is a check. When it fails the run does not fail: the steps after it that are checks too run
 as well, and after the last of them every failed check of the row sends the run back together, to the earliest
@@ -531,7 +551,8 @@ a git worktree that aae makes and removes (the bundled `worktree`, see below).
 
 A prompt template is checked at load (contracts 2.3): `inputs.<name>` must be a declared input; `bead.<field>` needs
 a `bead` input and a field of `Bead` (contracts 5.2); `run.<field>` a field of `RunView` (1.3); `project.name`,
-`project.path`; `rig.name`, `rig.path` and `rig.<var>` (a rig variable, checked when the run starts).
+`project.path` (the directory of `aae.toml`); `rig.name`, `rig.path` and `rig.<var>` (a variable of the run's rig, or
+of the root for a run in the root, checked when the run starts).
 A prompt is never empty: a template file of only whitespace is a load error, and a prompt that is empty after
 substitution fails the run (`infrastructure`, `prompt: empty after substitution`) before any process starts.
 
