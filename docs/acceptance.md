@@ -4,22 +4,27 @@
 temporary directory tree and on the real harness binaries. They go the way working runs go: the product has no
 separate test mode.
 
-They are not part of the everyday checks. `mise run ci` is the gate of a change
+They are not part of the everyday checks, and they are allowed to be slow. `mise run ci` is the gate of a change
 ([development](guide/development.md)); the scenarios run when the owner of the repository asks for them, before a
 release or to check one area after a change in it. Nothing starts them on a commit or on a schedule.
+
+The model-free rows run in CI, in the workflow `acceptance`, which starts by hand only
+(`gh workflow run acceptance`). The rows on a real model and the demos cannot run there, since CI has no access to a
+model: they run on a developer's machine, on the same request.
 
 | Command | What runs | Needs |
 |---|---|---|
 | `cargo build -p aae && cargo run -p aae-acceptance -- --ci 3 19` | the named criteria, model-free rows only | nothing |
-| `mise run acceptance-ci` | every model-free row: a fake provider, the scripted driver, exec steps | nothing |
+| `mise run acceptance-ci` | every model-free row: a fake provider, the scripted driver, exec steps, the chaos stand; what the workflow `acceptance` runs | nothing |
 | `mise run acceptance` | every row on the release build, the live-model rows and both demos among them | a harness login; it spends real tokens |
 | `mise run acceptance-release` | criterion 1 with the four release targets; the workflow `release` runs it on a `v*` tag | zig, cargo-zigbuild |
 
 A run writes one report, `target/acceptance/report.md`: a line for every row, run or not, with the date, the version
 of `aae` and the versions of the harnesses. A row that is not run cannot fail, so a green model-free run says nothing
 of the live-model rows. After the scenarios the same binary runs the rows that live in cargo and the scripts, one at
-a time: the release build (1), the crash tests of the adapters (9), the contract tests (11), the line budgets (22)
-and the stub linters (23). The crash scenario (8) prints its pause seed; `AAE_CRASH_SEED=<n>` replays it.
+a time: the release build (1), the crash tests of the adapters (9), the contract tests (11), the line budgets (22),
+the stub linters (23) and the chaos stand (35). The crash scenario (8) prints its pause seed; `AAE_CRASH_SEED=<n>`
+replays it, and the chaos stand does the same with `AAE_CHAOS_SEED` ([development](guide/development.md#the-chaos-stand)).
 
 The live-model rows use the cheapest model of each harness, set by the agents of their fixtures. The checks run on
 Linux arm64; the other three targets are built (criterion 1) and not exercised. The numeric thresholds were proposed
@@ -67,3 +72,4 @@ says otherwise.
 | 32 | Scope and prefixes: a step of an agent of scope `root` works in the root, of scope `rig` in the rig; the beads of rigs carry the rig's prefix (the acronym of the name, or the `prefix` key), and the rig of a child run of `drain` is taken from the prefix; in a project of one repository without rigs an agent of scope `rig` does the root's bead in the root | model-free |
 | 33 | An agent from the project: `prompt.template.md` from `.aae/agents/<agent>/` of the root replaces the pack's template; a file of the project (`checks.md`) is substituted into the agent's template; a missing template or named file is a config error that names the path | model-free |
 | 34 | Background after the outcome: an agent declared its outcome and left a background command; the step ends without waiting out the background budget and no orphan process stays; without a declared outcome the background is waited for as before | model-free |
+| 35 | The chaos stand: on 1000 new seeds a random sequence of commands, harness behaviour, hooks, operator actions, repeated and lost deliveries and `kill -9` of the daemon keeps every [invariant](design/invariants.md) of the core after every step, and every run reaches an end once the faults stop | model-free |

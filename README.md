@@ -58,12 +58,11 @@ Claude or Codex agents running `br` inside an aae session has not been assessed.
 
 ## Development
 
-- `mise run test` runs the unit and integration tests: the local loop. The chaos stand among them plays 1000 new
-  seeds each time and prints its base seeds; a failure names its seed and the command that replays it.
+- `mise run test` runs the unit and integration tests: the local loop.
 - `mise run ci` adds formatting, clippy, `cargo deny`, `cargo machete` and the line budgets. It is the gate of a
   change, and all that CI runs on a commit.
-- The [acceptance scenarios](docs/acceptance.md) are end-to-end runs on real daemons, some on a real model and the
-  demos; they run on request, not on a commit.
+- The [acceptance scenarios](docs/acceptance.md) are end-to-end runs on real daemons, some on a real model, with the
+  demos and the chaos stand (1000 new seeds a run); they run on request, not on a commit.
 
 mise is optional here too: the tasks are plain commands in `mise.toml`. The tool versions to install without it,
 the commands of each task, wall times and the replay of a seed: [docs/guide/development.md](docs/guide/development.md).

@@ -33,6 +33,12 @@ pub(crate) const ALL: &[Scenario] = &[
         run: |env| Box::pin(tests(env, "-p aae -E test(/killed_in_a_command_is_resumed/)", 2)),
     },
     Scenario {
+        criterion: "35",
+        title: "the chaos stand: random steps on 1000 new seeds keep the invariants of the core",
+        launch: Launch::Ci,
+        run: |env| Box::pin(tests(env, "-p aae-testkit --test chaos", 10)),
+    },
+    Scenario {
         criterion: "16",
         title: "the claim holds through the death of a claude session and its resume; the session has the tracker's path",
         launch: Launch::Ci,
@@ -378,7 +384,7 @@ mod tests {
     /// The rows of docs/acceptance.md, criterion 21 withdrawn: the report shows each, run or not.
     const ROWS: &[&str] = &[
         "1", "2", "3", "4", "4a", "5a", "5b", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16", "17", "18",
-        "19", "20", "22", "23", "24", "25", "26", "27", "28", "29", "30", "31", "32", "33", "34",
+        "19", "20", "22", "23", "24", "25", "26", "27", "28", "29", "30", "31", "32", "33", "34", "35",
     ];
 
     #[test]

@@ -18,9 +18,9 @@ mise is a convenience, not a requirement: install the same tools any way you lik
 
 Each task is a list of plain commands in `[tasks.<name>]` of `mise.toml`; run them by hand in that order:
 
-- `test`: `cargo nextest run --locked`.
+- `test`: `cargo nextest run --locked -E 'not binary(chaos)'`.
 - `ci`: `cargo fmt --all --check`, `cargo clippy --all-targets --locked -q -- -D warnings`,
-  `cargo nextest run --locked --no-tests=warn`, `cargo deny check`, `cargo machete`, then `scripts/unused-pub.sh`,
+  `cargo nextest run --locked --no-tests=warn -E 'not binary(chaos)'`, `cargo deny check`, `cargo machete`, then `scripts/unused-pub.sh`,
   `scripts/core-boundary.sh`, `scripts/select-biased.sh`, `scripts/budget-selftest.sh`, `scripts/budget.sh`, and a
   `git grep` that fails on an absolute home path (`/home/…`, `/Users/…`) outside `.loop/`.
 - `acceptance-ci`: `cargo build -q --locked -p aae`, then `cargo run -q --locked -p aae-acceptance -- --ci`.
@@ -33,9 +33,9 @@ Each task is a list of plain commands in `[tasks.<name>]` of `mise.toml`; run th
 
 | Task | What it runs | When | Wall time |
 |---|---|---|---|
-| `mise run test` | unit and integration tests (`cargo nextest run`), the chaos stand among them | the everyday loop, usually narrowed to a crate or a test | 53 s (2026-11-16, `04984d6`) |
+| `mise run test` | unit and integration tests (`cargo nextest run`), without the chaos stand | the everyday loop, usually narrowed to a crate or a test | 53 s (2026-11-16, `04984d6`) |
 | `mise run ci` | the above plus formatting, clippy, `cargo deny`, `cargo machete`, the unused-`pub` check, the line budgets, the core boundary (`scripts/core-boundary.sh`: no harness name, `br`, `max_sessions`, `instance_idle_s`, `beads_dir` or `.beads` in the code of `aae-core`), the fixed branch order of its `select!` (`scripts/select-biased.sh`: `biased;` with a comment on the order) and no absolute home paths in the repository | **the gate of a change**: locally before handing work over; CI on every commit | 91 s (2026-11-16, `04984d6`) |
-| `mise run acceptance-ci` | the [acceptance scenarios](../acceptance.md) without a model, each on a real `aae daemon` | on request | 144 s (2026-11-16, `04984d6`) |
+| `mise run acceptance-ci` | the [acceptance scenarios](../acceptance.md) without a model, each on a real `aae daemon`, and the chaos stand | on request, in the workflow `acceptance` (started by hand) | 144 s (2026-11-16, `04984d6`) |
 | `mise run acceptance-release` | acceptance criterion 1 with `--release`: `cargo zigbuild --release` for the four targets, then this host's binary runs | the workflow `release` on a `v*` tag; no tag is made only to check it | 169 s cold (2026-11-14, `a070cd6`) |
 | `mise run acceptance` | all acceptance scenarios, including those on a real model and the demos, whose result stays in the demo's directory, ignored by git | on request: they cost money and need a harness login | 2650 s (2026-11-16, `b32c55c`) |
 
@@ -47,8 +47,9 @@ Each task is a list of plain commands in `[tasks.<name>]` of `mise.toml`; run th
 
 The times are for a warm build on 9 cores. A cold build comes on top, once.
 
-CI has no access to a model by design: it runs `mise run ci` and nothing else. The acceptance scenarios, the runs on
-a real model and the demos run only on a developer's machine and only when asked for ([acceptance](../acceptance.md)).
+CI has no access to a model by design. On a commit it runs `mise run ci` and nothing else; the model-free acceptance
+scenarios run in the workflow `acceptance`, started by hand, and the runs on a real model and the demos only on a
+developer's machine, both only when asked for ([acceptance](../acceptance.md)).
 Dependencies must have MIT-compatible licenses (`cargo deny` checks them); no code of br or bv enters the tree.
 The repository is public: no secrets and no absolute paths of a developer's machine enter it.
 
@@ -59,14 +60,16 @@ the other's daemons are running.
 ## The chaos stand
 
 <!-- MEASURE id=dev-chaos-share date=2026-11-14 ver=1a732a4 env=linux-arm64-orbstack-9-cores src="mise run test" note="the per-test times of the eight chaos shares in the nextest output" -->
-`crates/aae-testkit/tests/chaos` plays 1000 new seeds on every run, in eight shares that run in parallel (14–17 s each
-on the machine above). Each share prints its random base seed; a failure names its seed and the command that replays
-it:
+`crates/aae-testkit/tests/chaos` checks the invariants of the core on random sequences of steps. It is acceptance
+criterion 35, not a part of `mise run test` or `mise run ci`: it plays 1000 new seeds on every run, in eight shares
+that run in parallel (14–17 s each on the machine above). Each share prints its random base seed; a failure names its
+seed and the command that replays it:
 
 ```sh
 AAE_CHAOS_SEED=<n> cargo nextest run -p aae-testkit --test chaos
 ```
 
-A failing seed is a bug of the core, not of the test. `AAE_CHAOS_SEEDS=<n>` plays another number of seeds.
+A failing seed is a bug of the core, not of the test. `AAE_CHAOS_SEEDS=<n>` plays another number of seeds: a few
+dozen take seconds and make a targeted test while you change the core.
 
 The rules of work on this repository (budgets, tests, what is decided) are in [docs/agents](../agents/README.md).

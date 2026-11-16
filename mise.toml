@@ -13,16 +13,16 @@ jq = "1.8.2"
 rumdl = "0.3.4"
 
 [tasks.test]
-description = "Unit and integration tests, with 1000 new chaos seeds; the local loop"
-run = "cargo nextest run --locked"
+description = "Unit and integration tests; the local loop. The chaos stand is an acceptance row (criterion 35)"
+run = "cargo nextest run --locked -E 'not binary(chaos)'"
 
 [tasks.ci]
 description = "Checks that CI runs on every commit"
 run = [
   "cargo fmt --all --check",
   "cargo clippy --all-targets --locked -q -- -D warnings",
-  # Plays 1000 new chaos seeds each time.
-  "cargo nextest run --locked --no-tests=warn",
+  # Without the chaos stand: its 1000 seeds are acceptance criterion 35 (docs/acceptance.md).
+  "cargo nextest run --locked --no-tests=warn -E 'not binary(chaos)'",
   "cargo deny check",
   "cargo machete",
   "scripts/unused-pub.sh",
