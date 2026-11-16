@@ -13,17 +13,17 @@ no row, or a row not run holds the score at 6. In a CI run, which runs no model,
 than the last change of `crates/`. A 10 needs criterion 20 not open, which in a full run means every row of it green;
 and the `readiness` marker must name a commit at or after the last change of `crates/`.
 
-Assessed 2026-11-16 at `01851cb`, by the letter of the scale. The last change of `crates/` is `4b03eae`; at
-`01851cb` every row of the spec ran with real models in one full run (claude haiku 2.1.325, codex `gpt-5.6-luna`
-0.168.0, br 0.7.6): 47 of 49 rows passed in 1335 s. The request rows 1 (this host's release build), 2, 4a, 8 and 17
-passed, and so did both demos of the current config shape: demo 1 (planner and frontend coder on claude haiku, backend
-coder on codex luna) in 423 s, demo 2 (planner on sol, coders on luna, qa on terra) in 658 s and one round, its second
-run in a row after one at `6699f51` (480 s, one round). Of the other two rows, 22 failed on this file, then still
-assessed at `8963068`, and criterion 1's build for the four release targets runs only on a tag (`on a tag`).
-Criterion 20 has no open part now. The components the demos exercise score 10; the others stay at 8, with what is
-missing in their row.
-<!-- MEASURE id=full-run date=2026-11-16 ver=01851cb env=linux-arm64-orbstack src=aae-acceptance note="every row of the spec with real models, 47 of 49: 22 failed on the readiness file then at 8963068, criterion 1's four-target build is for a tag; both live demos passed" -->
-<!-- MEASURE id=readiness date=2026-11-16 ver=01851cb env=linux-arm64-orbstack src=docs/READINESS.md note="scored by the letter of spec 14 against the full run at this commit" -->
+Assessed 2026-11-16 at `11839e9`, by the letter of the scale. The last change of `crates/` is `11839e9`; at it every
+row of the spec ran with real models in one full run of `mise run acceptance`, which since `9a88ecf` runs every
+scenario on the release build of `aae` (claude haiku 2.1.325, codex `gpt-5.6-luna` 0.168.0, br 0.7.6): 47 of 49 rows
+passed in 1177 s. The request rows 1 (this host's release build), 2, 4a, 8 and 17 passed, and so did both demos of the
+current config shape: demo 1 (planner and frontend coder on claude haiku, backend coder on codex luna) in 280 s, demo 2
+(planner on sol, coders on luna, qa on terra) in 606 s and one round, its second run in a row on the release build
+after one at `9d366e3` (772 s, one round). Of the other two rows, 22 failed on this file, then still assessed at
+`01851cb`, and criterion 1's build for the four release targets runs only on a tag (`on a tag`). Criterion 20 has no
+open part. The components the demos exercise score 10; the others stay at 8, with what is missing in their row.
+<!-- MEASURE id=full-run date=2026-11-16 ver=11839e9 env=linux-arm64-orbstack src=aae-acceptance note="every row of the spec with real models on the release build, 47 of 49: 22 failed on the readiness file then at 01851cb, criterion 1's four-target build is for a tag; both live demos passed" -->
+<!-- MEASURE id=readiness date=2026-11-16 ver=11839e9 env=linux-arm64-orbstack src=docs/READINESS.md note="scored by the letter of spec 14 against the full run at this commit" -->
 
 | Component | Criteria | Score | Missing for the next point |
 |---|---|---|---|
@@ -45,4 +45,4 @@ missing in their row.
 | CLI | 17 | 10 | - |
 | MCP frontend | 17 | 8 | 10: the demos do not use it; a real claude session calls it in criterion 17 |
 | Acceptance spec | 28, 29, 30, 31, 33, 34 | 10 | - |
-| Delivery and `doctor` | 1, 23 | 8 | 10: the demos run from a release build; they ran on the debug build |
+| Delivery and `doctor` | 1, 23 | 10 | - |
