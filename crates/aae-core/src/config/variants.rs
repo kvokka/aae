@@ -4,6 +4,7 @@
 use super::{
     Name, Pack, Project, Settings, Variant,
     check::resolve,
+    files::retired,
     items::{agent_keys, string},
     load::{Loader, reference},
 };
@@ -43,6 +44,36 @@ impl Loader {
             }
         }
         (edits, variants)
+    }
+
+    /// `agents` of rig `rig`: the edits of agents on it (tables) and the variants that run in place of agents (names).
+    pub(super) fn rig_agents(
+        &mut self,
+        file: &Path,
+        dir: &Path,
+        rig: &str,
+        tables: BTreeMap<String, toml::Value>,
+        plugins: &[&str],
+    ) -> (BTreeMap<String, Settings>, BTreeMap<Name, String>) {
+        let (mut edits, mut agents) = (BTreeMap::new(), BTreeMap::new());
+        for (agent, value) in tables {
+            match value {
+                // Resolved by `check` once the packs are loaded.
+                toml::Value::String(variant) => drop(agents.insert(reference(&agent), variant)),
+                toml::Value::Table(table) => match toml::Value::Table(table).try_into::<Settings>() {
+                    Ok(s) => drop(edits.insert(agent, self.settings(file, dir, s, plugins))),
+                    Err(e) => self.fail(
+                        file,
+                        format!("rig `{rig}`: `agents.{agent}`: {}", retired(e.to_string())),
+                    ),
+                },
+                _ => self.fail(
+                    file,
+                    format!("rig `{rig}`: `agents.{agent}` is a table of settings or the name of a variant"),
+                ),
+            }
+        }
+        (edits, agents)
     }
 }
 

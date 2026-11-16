@@ -119,7 +119,7 @@ impl Loader {
     pub(super) fn read<T: DeserializeOwned>(&mut self, file: &Path) -> Option<T> {
         let parsed = fs::read_to_string(file)
             .map_err(|e| e.to_string())
-            .and_then(|text| toml::from_str(&text).map_err(|e| retired(e.to_string())));
+            .and_then(|text| toml::from_str(&text).map_err(|e| super::files::retired(e.to_string())));
         parsed.map_err(|e| self.fail(file, e)).ok()
     }
 
@@ -273,24 +273,7 @@ impl Loader {
             }
             let triggers = r.triggers.iter().map(|t| reference(t)).collect();
             let settings = self.settings(&file, dir, r.settings, &names);
-            let (mut edits, mut agents) = (BTreeMap::new(), BTreeMap::new());
-            for (agent, value) in r.agents {
-                match value {
-                    // Resolved by `check` once the packs are loaded.
-                    toml::Value::String(variant) => drop(agents.insert(reference(&agent), variant)),
-                    toml::Value::Table(table) => match toml::Value::Table(table).try_into::<Settings>() {
-                        Ok(s) => drop(edits.insert(agent, self.settings(&file, dir, s, &names))),
-                        Err(e) => self.fail(
-                            &file,
-                            format!("rig `{rig}`: `agents.{agent}`: {}", retired(e.to_string())),
-                        ),
-                    },
-                    _ => self.fail(
-                        &file,
-                        format!("rig `{rig}`: `agents.{agent}` is a table of settings or the name of a variant"),
-                    ),
-                }
-            }
+            let (edits, agents) = self.rig_agents(&file, dir, &rig, r.agents, &names);
             rigs.insert(
                 rig,
                 Rig {
@@ -396,35 +379,6 @@ pub(super) fn reference(text: &str) -> Name {
     Name {
         pack: pack.to_owned(),
         name: name.to_owned(),
-    }
-}
-
-/// What an earlier config shape said, and where it is written now: the error then is that one line.
-const RETIRED: [(&str, &str); 3] = [
-    (
-        "unknown field `permission_mode`",
-        "`permission_mode` is native to a harness: `approval_policy` in `[settings.native.codex]`, \
-         `permission_mode` in `[settings.native.claude]`",
-    ),
-    (
-        "unknown field `overrides`",
-        "`[overrides.<agent>]` is `[agents.<agent>]` now",
-    ),
-    ("unknown variant `prompt`", "step kind `prompt` is `ai` now"),
-];
-
-/// A parse error as one line with the hint of [`RETIRED`] when it is about a retired key, else as it is.
-pub(super) fn retired(message: String) -> String {
-    let Some((_, hint)) = RETIRED.iter().find(|(said, _)| message.contains(said)) else {
-        return message.trim_end().to_owned();
-    };
-    match message
-        .lines()
-        .next()
-        .and_then(|l| l.strip_prefix("TOML parse error at "))
-    {
-        Some(at) => format!("{at}: {hint}"),
-        None => (*hint).to_owned(),
     }
 }
 

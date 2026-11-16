@@ -301,7 +301,7 @@ pub(super) fn agent_keys(mut table: toml::Table) -> Result<(Settings, Option<u32
     };
     let settings = toml::Value::Table(table)
         .try_into::<Settings>()
-        .map_err(|e| super::load::retired(e.to_string()))?;
+        .map_err(|e| super::files::retired(e.to_string()))?;
     Ok((settings, max_runs))
 }
 

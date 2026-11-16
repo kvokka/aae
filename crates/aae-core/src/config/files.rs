@@ -334,3 +334,32 @@ pub(super) struct OrchestratorHookFile {
     pub command: Vec<String>,
     pub timeout: Option<String>,
 }
+
+/// What an earlier config shape said, and where it is written now: the error then is that one line.
+const RETIRED: [(&str, &str); 3] = [
+    (
+        "unknown field `permission_mode`",
+        "`permission_mode` is native to a harness: `approval_policy` in `[settings.native.codex]`, \
+         `permission_mode` in `[settings.native.claude]`",
+    ),
+    (
+        "unknown field `overrides`",
+        "`[overrides.<agent>]` is `[agents.<agent>]` now",
+    ),
+    ("unknown variant `prompt`", "step kind `prompt` is `ai` now"),
+];
+
+/// A parse error as one line with the hint of [`RETIRED`] when it is about a retired key, else as it is.
+pub(super) fn retired(message: String) -> String {
+    let Some((_, hint)) = RETIRED.iter().find(|(said, _)| message.contains(said)) else {
+        return message.trim_end().to_owned();
+    };
+    match message
+        .lines()
+        .next()
+        .and_then(|l| l.strip_prefix("TOML parse error at "))
+    {
+        Some(at) => format!("{at}: {hint}"),
+        None => (*hint).to_owned(),
+    }
+}
