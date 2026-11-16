@@ -56,6 +56,11 @@ the core relies on these, and a driver that misses one fails runs by the watchdo
   only on `State{Idle, background: false}`; with `background: true` (work the harness goes on with after the turn)
   the core waits for a later `State{Idle, background: false}`. Only the harness's authoritative turn-end signal
   ends a turn, never the answer to a request.
+- **`stop_background`** comes once the outcome is declared and the turn has ended with background (spec §9.4). The
+  adapter stops the commands the session left, through the harness so it accounts for them, and nothing the agent
+  may still wait for (a background subagent). The session stays to take a next prompt (a veto remark), starts no
+  turn of its own, and comes to `State{Idle, background: false}` by its usual rule once the commands are gone. It is
+  best effort: an unknown instance or an error is no failure, and the run then waits for the background budget.
 - **A failure** is `Failure{kind, scope, retry_at_ms, retried_by_harness, raw, account, provider_model}` of the
   kinds in contracts 4.4. `retried_by_harness` is true when the harness already retried a 429 or a 5xx itself:
   the policy never retries on top of it. Wording → kind tables belong to the adapter. A success that carries an

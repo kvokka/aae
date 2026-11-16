@@ -30,7 +30,7 @@ fn hooked(root: &Path, on: &str, script: &str) {
 }
 
 /// The types of the events of `run`, read from the start of the journal through its terminal event.
-async fn events_of(d: &Daemon, run: &str) -> Vec<(String, Value)> {
+pub(super) async fn events_of(d: &Daemon, run: &str) -> Vec<(String, Value)> {
     let mut events = d.client.events(Some(1)).await.unwrap();
     let mut seen = Vec::new();
     loop {

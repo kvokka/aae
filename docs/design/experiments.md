@@ -132,7 +132,9 @@ for 0.1 s at 22.10 right before the harness woke itself up.
 
 **Rule for the adapter**: the session is idle without background work when (a) the last `session_state_changed`
 is `idle`, (b) the last `background_tasks_changed` had an empty list (or none arrived since spawn), and (c) no
-`task_notification` arrived after the last `result`. Condition (c) closes the wake-up window seen at 22.10.
+`task_notification` arrived after the last `result`. Condition (c) closes the wake-up window seen at 22.10. A
+`task_notification{status:"stopped"}` does not count for (c): a task stopped by `stop_task` wakes no turn
+(experiment 8).
 
 <!-- MEASURE id=claude-idle-two-signals date=2026-11-12 ver=claude-2.1.322 env=linux-arm64-orbstack src=experiments/02-claude-process/logs/background.ndjson note="n=1; state idle with a live background shell, 0.1 s idle+empty window before a self-started turn" -->
 
@@ -409,3 +411,12 @@ Limits and things to get right:
 - Not checked: a background subagent of claude (`local_agent`) under `stop_task`; whether codex per-thread MCP
   servers carry the thread's token (the session-id filter of step 2 is meant to spare them, since they are not
   started with `setsid`); macOS.
+
+What the product does (contracts 4.1, 4.6, 6.3): step 1 as recommended, through the driver call `stop_background`,
+which the core makes once the outcome is declared and the turn has ended with background, from the idle event or from
+a finisher that comes after the turn. claude stops only `local_bash` tasks: a background subagent is never stopped
+(criterion 4a), and while one lives the state stays `running`, so the call does not come at all. Rule (c) of
+experiment 1b skips a `stopped` notification. Step 2 comes when the session ends, not with the stop: a command that
+detached itself holds no step, so the run does not wait for it. With claude it goes with the session's process on
+the orphan sweep by `AAE_INSTANCE`; with codex `close_session` kills every process with the thread's attempt token
+(the app-server does not carry one, the other threads have tokens of their own).

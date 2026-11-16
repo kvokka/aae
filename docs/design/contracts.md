@@ -346,6 +346,7 @@ trait Driver: Send + Sync {
     fn send_prompt(&self, instance: &InstanceHandle, session: &SessionRef, text: &str, key: PromptKey) -> BoxFuture<Result<(), Failure>>;
     fn cancel_turn(&self, instance: &InstanceHandle, session: &SessionRef) -> BoxFuture<Result<(), Failure>>;
     fn respond(&self, instance: &InstanceHandle, session: &SessionRef, request_id: &str, answer: &Answer) -> BoxFuture<Result<(), Failure>>;
+    fn stop_background(&self, instance: &InstanceHandle, session: &SessionRef) -> BoxFuture<()>; // commands left after the turn; session stays
     fn close_session(&self, instance: &InstanceHandle, session: &SessionRef) -> BoxFuture<()>; // transcript stays
 
     // transcript
@@ -384,7 +385,7 @@ They are input messages of the core, not journal events; the core turns some of 
 | `prompt.acked` | `key` | prompt delivery `sent → acked`; ends `starting` |
 | `turn.started` | — | watchdog: first event seen |
 | `turn.ended` | `stop_reason: completed \| cancelled \| failed` | candidate end of the attempt's work; `failed` follows a `failure` event; `stop_reason` goes to `run.turn_ended_without_outcome` |
-| `state` | `state: running \| idle \| requires_action`, `background: bool` | "idle without background" = `idle` and `background == false`; the adapter applies the harness rule |
+| `state` | `state: running \| idle \| requires_action`, `background: bool` | "idle without background" = `idle` and `background == false`; the adapter applies the harness rule. `idle` with `background` after the turn ended and with the outcome declared makes the core call `stop_background` (6.3) |
 | `permission.requested` | `request_id, kind: permission \| question, tool, input, text` | `requires_action`, `run.requires_action` |
 | `usage` | `input_tokens, output_tokens, rate_limit: {utilization, resets_at} \| null` | the core adds the tokens (increments) to the attempt; keeps the last `rate_limit` per account key (`account:<harness>/<id>`, one row, replaced by each report); still activity for the watchdog |
 | `retrying` | `attempt, delay, text` | in `running`: journals `run.retrying` (`next_retry_at` = now + `delay`) and sets the silence deadline to silence + `delay` (an announced pause is not silence) |
@@ -454,6 +455,7 @@ process part, never the credential itself.
 | Cancel | `control_request{interrupt}`; the following `aborted_tools` result is `turn.ended{cancelled}` | `turn/interrupt` |
 | Resume | full flag set again on every `--resume` | full thread config again on every `thread/resume`, after app-server closed the thread (`thread/unsubscribe` until `notLoaded`, at most 10 s, else `transcript_divergence`): a thread it still holds keeps the old config |
 | Attempt environment | process environment | `shell_environment_policy.set` of the thread; a hook runs with the process environment, so each hook command starts with `export` of the same variables |
+| Stop of what a session left | `control_request{stop_task}` on every `local_bash` task of the last `background_tasks_changed` (a `local_agent` subagent is left alone); the `task_notification{stopped}` that follows is not a wake-up | `thread/backgroundTerminals/clean{threadId}` (experimental API): only that thread's commands go, each one's `item/completed` follows; a command that detached itself goes on `close_session`, killed by the thread's attempt token |
 | Transcript check | the session file under `config_dir`: user record with `key`, answer after it | `thread/read` with turns: `userMessage` with `clientId == key`, completed turn after it |
 
 Every adapter runs each session process (claude) or instance process (codex) in its own process group, and takes
@@ -654,6 +656,7 @@ of the parent leaves them alone.
 | `running` | `permission.requested` | `requires_action` | `run.requires_action` hooks |
 | `requires_action` | answer from a hook or a human, or `human_timeout` | `running` | `respond` |
 | `running` | turn ended, idle without background, outcome declared | `finishing` | `run.finishing` hooks |
+| `running` | turn ended, idle with background, outcome declared | `running` | the adapter stops the commands the session left (`stop_background`); `finishing` follows on idle without background |
 | `running` | turn ended, idle without background, no outcome | `running` | `run.turn_ended_without_outcome` hooks; `continue` → next prompt in the same attempt; `fail` or no decision → `failed{hollow_done}` (with the hook reason for `fail`) |
 | `preparing` (exec) | decision `proceed` (or no hooks) | `running` (no session to start: the command is spawned at once) | the command runs in the workdir with `PATH`, `HOME`, `LANG` of the daemon, the `env` of `run.preparing`, `AAE_SOCKET` (the API socket), `AAE_INPUT_<NAME>` per input and, per earlier step, `AAE_STEP_<NAME>_RESULT` (`pass`\|`fail`), `AAE_STEP_<NAME>_SUMMARY` and `AAE_STEP_<NAME>_DATA` (the `data` as JSON, when there is one); `<NAME>` is formed as for inputs (config.md, "Formula") |
 | `running` (exec) | exit 0 / other code or a signal | `finishing` with outcome `pass` / `fail`, `summary` `exit <code>` or `signal <n>`, `data` `{exit_code, stdout, stderr}` (last 4 KiB each) | `run.finishing` hooks |
@@ -708,7 +711,9 @@ How the finisher behaves, on the transitions of 6.2:
 | finisher called while the turn still runs | the declared outcome is stored in the state; the run stays `running` |
 | finisher called again in the same attempt | the last call wins |
 | turn ended, no background work, outcome declared | `finishing`: `run.finishing` is raised, check plugins may veto |
-| turn ended, background work (subagents) still running | the run stays `running` until idle without background; the wait has a deadline (background silence budget, 6.1) |
+| turn ended, outcome declared, commands left running | the daemon has the adapter stop them (`stop_background`, 4.1); the session comes to idle without background, then `finishing`; the session stays for a veto remark |
+| turn ended, background the daemon does not stop (a subagent), or no outcome | the run stays `running` until idle without background; the wait has a deadline (background silence budget, 6.1) |
+| finisher called after the turn ended, while background runs | the outcome is stored and the commands left are stopped, as above |
 | turn ended, no background work, no outcome | `run.turn_ended_without_outcome`; with no plugin decision `failed{hollow_done}` |
 | a `run.finishing` hook returned a remark | the remark goes to the agent as the next prompt in the same session and attempt; the declared outcome is cleared; the token stays valid |
 | a `run.finishing` hook vetoed | `failed{check}` with the hook's reason |
@@ -743,7 +748,9 @@ for it is not.
   from the step it is at: the move to the next step is in the transaction that accepted the outcome (6.1), so a finished
   step never runs again, and an exec command killed by the restart runs again in a new attempt of the same step.
   Recovery lets go of the handle of such an attempt, whose session died with its instance, and drops what it still had
-  queued for the session. The deadlines that wait for an effect's answer count again from the start: `decide` (3.3) and
+  queued for the session. A daemon that dies while the commands a session left are being stopped (outcome declared,
+idle without background not yet seen) leaves a `running` run in a turn: its attempt is interrupted with `daemon_crash`
+like any other, and a stop still queued finds no instance and does nothing. The deadlines that wait for an effect's answer count again from the start: `decide` (3.3) and
   the claim of a bead in `preparing` (`start_timeout`); those of real time — gate `until`, schedules (a missed one fires
   at most once), the `after` of a retry, `queue_timeout`, `park_timeout` — stay. Then resync. Deadlines are wall-clock
   times: the writer reads the wall clock at least every 30 s, so a deadline passed while the machine slept fires late by

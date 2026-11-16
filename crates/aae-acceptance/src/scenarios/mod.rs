@@ -25,6 +25,7 @@ mod c25_return;
 mod c26_git;
 mod c29_repeat;
 mod c30_drain;
+mod c34_background;
 
 use crate::{
     Launch, Scenario,
@@ -212,6 +213,14 @@ pub(crate) const ALL: &[Scenario] = &[
                 failure, `soft_stop` ends the started across kill -9 and gives no new, `hard_stop` cancels them",
         launch: Launch::Ci,
         run: |env| Box::pin(c30_drain::run(env)),
+    },
+    Scenario {
+        criterion: "34",
+        title: "an agent that declared its outcome and left a background command: the step ends at once and the \
+                command is stopped; without an outcome the background is waited for (claude and codex on fake \
+                providers)",
+        launch: Launch::Ci,
+        run: |env| Box::pin(c34_background::run(env)),
     },
 ];
 

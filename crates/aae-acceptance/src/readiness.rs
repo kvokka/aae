@@ -14,10 +14,6 @@ pub(crate) const OPEN: &[(&str, &str)] = &[
         "31",
         "a `formula` step runs its formula as a child run; formulas with `internal = true`",
     ),
-    (
-        "34",
-        "a step ends once its outcome is declared, without waiting for the background, and leaves no orphan",
-    ),
 ];
 
 /// The criteria §15 checks, in whole or in part, by a request: a run with real models or release builds. A CI run
