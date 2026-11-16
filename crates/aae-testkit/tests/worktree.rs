@@ -36,13 +36,18 @@ const BUILD: (&str, &str) = (
     "name = \"build\"\nworktree = true\n[[step]]\nkind = \"ai\"\nagent = \"dev\"\nprompt = \"build.md\"\n",
 );
 
-/// The world with `files` over the common ones, its rig a git repository.
-fn world(files: &[(&str, &str)]) -> World {
+/// The world with `files` over the common ones and the bundled plugins, its rig a plain directory.
+fn plain(files: &[(&str, &str)]) -> World {
     let hooks = ExecHooks {
         socket: None,
         bundled: Some(aae_plugins::run),
     };
-    let w = world_on(files, Arc::new(hooks), ScriptedDriver::new(2));
+    world_on(files, Arc::new(hooks), ScriptedDriver::new(2))
+}
+
+/// The world with `files` over the common ones, its rig a git repository.
+fn world(files: &[(&str, &str)]) -> World {
+    let w = plain(files);
     let rig = w.dir.path().join("shop/web");
     git(&rig, &["init", "-q", "-b", "main"]);
     git(&rig, &["add", "-A"]);
@@ -133,4 +138,40 @@ async fn a_formula_without_the_key_runs_in_the_rig() {
         w.dir.path().join("shop/web")
     );
     assert!(!w.dir.path().join("shop/web/.git/aae/worktrees").exists());
+}
+
+#[tokio::test]
+async fn a_worktree_in_a_directory_without_git_fails_that_run() {
+    let check = (
+        "shop/formulas/check.toml",
+        "name = \"check\"\n[[step]]\nkind = \"exec\"\ncommand = [\"true\"]\n",
+    );
+    let w = plain(&[BUILD, check]);
+    let rig = w.dir.path().join("shop/web");
+    let run = w.create().await;
+    let failed = w.until(Some(&run), "run.failed", 0).await;
+    assert_eq!(failed["class"], "check");
+    assert_eq!(
+        failed["reason"],
+        format!(
+            "worktree: `{}` is not a git repository; the formula has `worktree = true`",
+            rig.display()
+        )
+    );
+
+    // A formula without the key runs in that same directory.
+    let create = Create {
+        project: "shop".into(),
+        rig: Some("web".into()),
+        formula: "check".into(),
+        inputs: serde_json::Map::new(),
+        correlation: None,
+        depth: 0,
+        parent_run: None,
+        token: None,
+        continue_from: None,
+    };
+    let reply = w.core.send(None, Msg::Create(create)).await.unwrap();
+    let passed = w.until(reply["run"].as_str(), "run.passed", 0).await;
+    assert_eq!(Path::new(passed["run"]["workdir"].as_str().unwrap()), rig);
 }

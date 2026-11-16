@@ -37,6 +37,14 @@ pub(crate) fn hook(event: &Value, p: &Params) -> Result<Option<Value>, String> {
         // A run continuing another's session got that run's workdir: its worktree, brought back if removed.
         (Some("run.preparing"), Some((common, of))) => create(&common, of, until).map(Some),
         (Some("run.preparing"), None) if p.formulas.iter().any(|f| run["formula"] == f.as_str()) => {
+            // A project root may be a plain directory (§6.1): the run fails, not the hook.
+            if !workdir.ancestors().any(|d| d.join(".git").exists()) {
+                let reason = format!(
+                    "worktree: `{}` is not a git repository; the formula has `worktree = true`",
+                    workdir.display()
+                );
+                return Ok(Some(json!({ "decision": "deny", "reason": reason })));
+            }
             let common = git(
                 workdir,
                 &["rev-parse", "--path-format=absolute", "--git-common-dir"],
