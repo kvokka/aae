@@ -1,4 +1,4 @@
-//! A test HTTP MCP service (spec §15 criterion 14): `POST /mcp` in both protocol epochs, one tool [`TOOL`] that
+//! A test HTTP MCP service (criterion 14): `POST /mcp` in both protocol epochs, one tool [`TOOL`] that
 //! answers with the identity headers of the call. Every request must carry `Authorization: Bearer <token>` (401
 //! otherwise) and appends one JSON line to the log: the server's pid, the JSON-RPC method, the tool called, the
 //! `X-Aae-*` headers and whether the token was right.

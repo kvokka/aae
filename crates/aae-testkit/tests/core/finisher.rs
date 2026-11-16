@@ -1,4 +1,4 @@
-//! The finisher on the scripted driver (docs/design/contracts.md 6.3, spec §9.4; §15 criterion 4, core part).
+//! The finisher on the scripted driver (docs/design/contracts.md 6.3; criterion 4, core part).
 
 use crate::common;
 
@@ -177,7 +177,7 @@ async fn continue_after_a_hollow_turn_counts_toward_the_remarks_ceiling() {
 }
 
 /// A run waiting on its finishing hooks when the daemon dies, down for `idle`: it goes on waiting for the same
-/// decision, its hooks run again (spec §11.3; contracts 6.4).
+/// decision, its hooks run again (docs/design/contracts.md 3; contracts 6.4).
 async fn finishing_across_a_restart(hooks: Arc<dyn HookRunner>, idle: Duration) -> (World, String) {
     let mut w = hooked_with("run.finishing", hooks);
     let mut steps = hollow_turn();
@@ -225,7 +225,7 @@ async fn an_accept_after_a_restart_passes_the_outcome_declared_before_it() {
 }
 
 /// A remark needs the session that took the turn, gone with the dead daemon: the attempt fails as `daemon_crash`
-/// for the policy, and no prompt goes to the dead session (spec §5.6).
+/// for the policy, and no prompt goes to the dead session (docs/design/invariants.md).
 #[tokio::test(start_paused = true)]
 async fn a_remark_after_a_restart_fails_the_attempt_with_daemon_crash() {
     let (w, run) = finishing_across_a_restart(Arc::new(Lost), Duration::ZERO).await;

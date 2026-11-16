@@ -325,8 +325,8 @@ fn a_text_answers_every_question_of_a_user_input_request_by_its_id() {
     );
 }
 
-/// A command that outlives its turn (spec §7.5): the turn ends idle with background, and the thread is idle without
-/// it only once the command completes, outside any turn.
+/// A command that outlives its turn (docs/design/contracts.md 4.6): the turn ends idle with background, and the thread
+/// is idle without it only once the command completes, outside any turn.
 #[test]
 fn a_command_that_outlives_its_turn_keeps_the_thread_in_background() {
     let mut stream = Stream::new(None);

@@ -1,4 +1,5 @@
-//! Tracker writes as bead events on the scripted driver and the tracker in memory (spec §10.3, §5.4).
+//! Tracker writes as bead events on the scripted driver and the tracker in memory (docs/design/tracker-br.md,
+//! docs/design/contracts.md 1).
 
 use crate::common;
 

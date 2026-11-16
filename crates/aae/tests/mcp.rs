@@ -1,4 +1,5 @@
-//! The MCP frontend (spec §12, criterion 17): five tools on the daemon's socket, in both protocol epochs (§11.4).
+//! The MCP frontend (docs/api/frontends.md, criterion 17): five tools on the daemon's socket, in both protocol epochs
+//! (docs/design/config.md).
 
 mod common;
 
@@ -92,7 +93,7 @@ async fn a_run_started_over_mcp_is_followed_listed_and_cancelled_there() {
     })
     .await;
     let (formulas, _) = call(&d, "list_formulas", json!({ "project": "shop" })).await;
-    // An internal formula is no part of the catalog a user starts from (spec §12).
+    // An internal formula is no part of the catalog a user starts from (docs/api/frontends.md).
     assert!(
         formulas.as_array().unwrap().iter().all(|f| f["formula"] != "inner"),
         "{formulas}"

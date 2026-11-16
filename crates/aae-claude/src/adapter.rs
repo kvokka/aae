@@ -46,8 +46,8 @@ fn claude_json() -> PathBuf {
     )
 }
 
-/// The stdio MCP servers of the host's user file (spec §6.4): with host inheritance on, each starts in every
-/// session, and the shared MCP of `aae` does not cover them.
+/// The stdio MCP servers of the host's user file (docs/design/config.md): with host inheritance on, each starts in
+/// every session, and the shared MCP of `aae` does not cover them.
 fn host_mcp(file: &Path) -> Check {
     let user: Value = serde_json::from_str(&std::fs::read_to_string(file).unwrap_or_default()).unwrap_or_default();
     let projects = (user["projects"].as_object().into_iter().flatten()).map(|(_, p)| &p["mcpServers"]);

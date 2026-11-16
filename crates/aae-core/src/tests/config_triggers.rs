@@ -1,4 +1,4 @@
-//! Triggers checked against the events and the formulas they name (spec §9.5).
+//! Triggers checked against the events and the formulas they name (docs/design/config.md).
 
 use super::config::{BASE, fails, load_with};
 
@@ -80,8 +80,8 @@ fn cron_reads_the_system_zone_unless_timezone_names_one() {
     assert_eq!(load_with(BASE).unwrap().timezone, jiff::tz::TimeZone::system());
 }
 
-/// Where each trigger runs (spec §9.3): a project trigger without a `rig` in the root, under the root's name, and
-/// with `rig` naming the root there too; a pack trigger only on the rigs that list it.
+/// Where each trigger runs (docs/design/contracts.md 6): a project trigger without a `rig` in the root, under the
+/// root's name, and with `rig` naming the root there too; a pack trigger only on the rigs that list it.
 #[test]
 fn a_project_trigger_without_a_rig_runs_in_the_root() {
     let places = |changes: &[(&str, &str)]| {

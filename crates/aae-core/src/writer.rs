@@ -1,5 +1,6 @@
-//! The single writer (spec §5.1, invariants 1, 9, 10): every message is handled in one SQLite transaction that
-//! also records the events (outbox), the effects and the deadlines it caused; effects run only after commit.
+//! The single writer (docs/design/event-model.md, invariants 1, 9, 10): every message is handled in one SQLite
+//! transaction that also records the events (outbox), the effects and the deadlines it caused; effects run only after
+//! commit.
 
 use crate::{clock::Clock, effects, journal::Journal};
 use rusqlite::{Connection, OptionalExtension, params};

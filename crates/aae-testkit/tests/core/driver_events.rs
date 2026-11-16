@@ -1,4 +1,4 @@
-//! What the core does with each normalized driver event (docs/design/contracts.md 4.3, spec §2, decision 61): every
+//! What the core does with each normalized driver event (docs/design/contracts.md 4.3, decision 61): every
 //! event and field an adapter sends reaches the journal, the run view or the policy.
 
 use crate::common;

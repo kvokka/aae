@@ -1,6 +1,6 @@
-//! The scripted driver (spec §14): a fake harness for core tests that plays prepared scenarios — delays, a turn
-//! that ends without an outcome, provider errors, hangs, a process dying mid-turn, permission requests, events
-//! outside a turn, background work; fake providers for the real harnesses ([`anthropic`], [`openai`]) and a test
+//! The scripted driver (docs/agents/rules-tests.md): a fake harness for core tests that plays prepared scenarios —
+//! delays, a turn that ends without an outcome, provider errors, hangs, a process dying mid-turn, permission requests,
+//! events outside a turn, background work; fake providers for the real harnesses ([`anthropic`], [`openai`]) and a test
 //! MCP service ([`mcp`]). Nothing of it runs in the product.
 
 use aae_core::{

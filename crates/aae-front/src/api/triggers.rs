@@ -1,5 +1,5 @@
-//! Triggers (spec §9.5): the list with the next firings, firing one on a rig by hand as its schedule would, and
-//! switching one off and on.
+//! Triggers (docs/design/config.md): the list with the next firings, firing one on a rig by hand as its schedule would,
+//! and switching one off and on.
 
 use super::{
     Body, ErrorReply, Reply, State, key,

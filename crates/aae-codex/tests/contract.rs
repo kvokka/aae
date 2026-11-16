@@ -1,6 +1,6 @@
-//! The 15 contract scenarios of spec §7.8 for codex: the real `codex app-server` against the fake Responses API,
-//! no model and no account. Each scenario pins what the adapter reports for one harness behaviour; rerun them on
-//! every codex update (docs/harness-updates.md).
+//! The 15 contract scenarios of docs/harness-updates.md for codex: the real `codex app-server` against the fake
+//! Responses API, no model and no account. Each scenario pins what the adapter reports for one harness behaviour; rerun
+//! them on every codex update (docs/harness-updates.md).
 
 mod common;
 
@@ -101,7 +101,7 @@ async fn s10_kill_9_in_a_command_is_a_harness_crash_within_a_second() {
 }
 
 /// EOF on stdin in a turn: the app-server exits at once with code 0, the turn left open; the adapter closes the
-/// "exit 0 without a turn end" trap (spec §7.2) as a crash.
+/// "exit 0 without a turn end" trap (docs/design/adapters.md) as a crash.
 #[tokio::test]
 async fn s11_eof_on_stdin_in_a_turn_is_a_harness_crash() {
     let dir = tempfile::tempdir().unwrap();
@@ -130,8 +130,8 @@ async fn s11_eof_on_stdin_in_a_turn_is_a_harness_crash() {
     assert_eq!(kinds, [FailureKind::HarnessCrash], "{:?}", live.seen);
 }
 
-/// A silent provider gives no turn end and no failure: the core's watchdog owns the stall (spec §5.5); an
-/// interrupt ends the turn as cancelled.
+/// A silent provider gives no turn end and no failure: the core's watchdog owns the stall (docs/design/invariants.md);
+/// an interrupt ends the turn as cancelled.
 #[tokio::test]
 async fn s12_a_silent_provider_ends_nothing_until_an_interrupt_cancels_the_turn() {
     let dir = tempfile::tempdir().unwrap();
@@ -170,9 +170,9 @@ async fn s13_a_permission_request_is_answered_and_the_command_runs() {
     live.stop().await;
 }
 
-/// A command that outlives its turn (spec §7.5): `exec_command` yields while the command still runs, the turn ends
-/// idle with background, and the thread is idle without it once the command's `item/completed` comes, outside any
-/// turn; no turn follows on its own.
+/// A command that outlives its turn (docs/design/contracts.md 4.6): `exec_command` yields while the command still runs,
+/// the turn ends idle with background, and the thread is idle without it once the command's `item/completed` comes,
+/// outside any turn; no turn follows on its own.
 #[tokio::test]
 async fn s14_a_command_that_outlives_its_turn_keeps_the_session_in_background() {
     let dir = tempfile::tempdir().unwrap();

@@ -1,5 +1,6 @@
-//! A prompt run through a real `aae daemon` and the real `codex app-server` on the fake Responses API (spec §7.8,
-//! §15 criteria 2 and 9): the thread calls the finisher with `exec_command`, the run passes. No model, no account.
+//! A prompt run through a real `aae daemon` and the real `codex app-server` on the fake Responses API
+//! (docs/harness-updates.md, criteria 2 and 9): the thread calls the finisher with `exec_command`, the run passes. No
+//! model, no account.
 
 mod common;
 

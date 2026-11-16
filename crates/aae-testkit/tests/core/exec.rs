@@ -1,4 +1,4 @@
-//! The exec step (spec §9.1, docs/design/contracts.md 6.2): real commands, so real time.
+//! The exec step (docs/design/config.md, docs/design/contracts.md 6.2): real commands, so real time.
 
 use crate::common;
 

@@ -1,4 +1,4 @@
-//! The places a project works in: its root and its rigs (spec §6.1, decision 99).
+//! The places a project works in: its root and its rigs (docs/design/config.md, decision 99).
 
 use super::{
     Project, Rig,
@@ -9,7 +9,7 @@ use super::{
 use serde::{Deserialize, Serialize};
 use std::{collections::BTreeMap, path::Path};
 
-/// Where an agent works (spec §8.1, decision 95): in the rig of its run, or in the root whatever the rig.
+/// Where an agent works (docs/design/config.md, decision 95): in the rig of its run, or in the root whatever the rig.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum Scope {
@@ -31,8 +31,8 @@ impl Project {
         }
     }
 
-    /// The rig of a bead: the one whose prefix is the bead's id up to its last `-` (spec §10.2); none for a bead of
-    /// the root.
+    /// The rig of a bead: the one whose prefix is the bead's id up to its last `-` (docs/design/config.md); none
+    /// for a bead of the root.
     pub fn rig_of(&self, bead: &str) -> Option<&str> {
         let (prefix, _) = bead.rsplit_once('-')?;
         let mut rigs = self.rigs.iter();
@@ -40,7 +40,8 @@ impl Project {
             .map(|(n, _)| n.as_str())
     }
 
-    /// The tracker's variables of a session or command at `place`: on a rig, its bead prefix too (spec §10.2).
+    /// The tracker's variables of a session or command at `place`: on a rig, its bead prefix too
+    /// (docs/design/config.md).
     pub fn tracker_env<'a>(&'a self, place: Option<&'a Rig>) -> impl Iterator<Item = (&'a String, &'a String)> {
         let prefix = self.tracker.prefix.as_ref().zip(place.and_then(|r| r.prefix.as_ref()));
         self.tracker.env.iter().chain(prefix)

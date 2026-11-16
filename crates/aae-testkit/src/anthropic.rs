@@ -1,4 +1,4 @@
-//! A fake Anthropic Messages API (spec §7.8, docs/design/contracts.md 9): the real `claude` with
+//! A fake Anthropic Messages API (docs/harness-updates.md, docs/design/contracts.md 9): the real `claude` with
 //! `ANTHROPIC_BASE_URL` set to [`Provider::base_url`] gets answers from a plan instead of a model.
 
 use axum::{

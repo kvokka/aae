@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Spec §2, decision 43: the core knows no harness and no tracker by name; what it needs comes through the driver
+# Decision 43: the core knows no harness and no tracker by name; what it needs comes through the driver
 # capabilities and the tracker interface, in any letter case. Checks the code of `aae-core` outside its tests: `src/tests/` and the
 # top-level item under a `#[cfg(test)]` or `#[test]` (up to its closing `}` at column 0 when it opens a block).
 set -euo pipefail
@@ -21,7 +21,7 @@ found=$(find crates/aae-core/src -name '*.rs' -not -path '*/src/tests/*' -print0
     { print FILENAME ":" FNR ": " $0 }' |
   grep -iE "$names" || true)
 if [[ -n $found ]]; then
-  echo "harness or tracker names in aae-core (spec §2, decision 43):"
+  echo "harness or tracker names in aae-core (decision 43):"
   echo "$found"
   exit 1
 fi

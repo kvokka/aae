@@ -1,6 +1,6 @@
-//! `pool` and `on_item_failure` of a drain step (spec §9.1, criterion 30): at most `pool` beads in work at once, 1
-//! unless set; after a failed bead `soft_stop` gives no new bead and lets the started end, `hard_stop` cancels them,
-//! and the step fails, a restart in between giving no new bead either.
+//! `pool` and `on_item_failure` of a drain step (docs/design/config.md, criterion 30): at most `pool` beads in work at
+//! once, 1 unless set; after a failed bead `soft_stop` gives no new bead and lets the started end, `hard_stop` cancels
+//! them, and the step fails, a restart in between giving no new bead either.
 
 use crate::common;
 

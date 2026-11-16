@@ -1,6 +1,6 @@
-//! Packs and plugins from git (spec §8.2, §11.6): downloaded into the user's cache before each load of the config,
-//! so the core reads only finished directories (spec §13). A commit or a tag in the cache needs no network; a source
-//! without a pin asks the remote for its latest revision at every load.
+//! Packs and plugins from git (docs/design/config.md, docs/guide/plugin.md): downloaded into the user's cache before
+//! each load of the config, so the core reads only finished directories (docs/guide/install.md). A commit or a tag in
+//! the cache needs no network; a source without a pin asks the remote for its latest revision at every load.
 //!
 //! The cache: `<cache>/<key(url)>/<commit>/` is a detached checkout, never changed once in place;
 //! `<cache>/<key(url)>/tag-<key(tag)>` and `<cache>/<key(url)>/head` name the commit a tag and the latest revision

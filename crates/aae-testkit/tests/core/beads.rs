@@ -1,5 +1,5 @@
-//! Bead ownership on the scripted driver and the tracker in memory (spec §10.3, invariants 2–5; §15 criteria 16
-//! and 5a, core part).
+//! Bead ownership on the scripted driver and the tracker in memory (docs/design/tracker-br.md, invariants 2–5;
+//! criteria 16 and 5a, core part).
 
 use crate::common;
 
@@ -327,7 +327,8 @@ async fn a_start_without_a_rig_takes_it_from_the_prefix_of_the_bead_id_or_runs_i
             .unwrap()
             .to_owned()
     };
-    // The id gives the rig before the ready list is read; a bead of no rig's prefix runs in the root (§6.1).
+    // The id gives the rig before the ready list is read; a bead of no rig's prefix runs in the root
+    // (docs/design/config.md).
     assert!(workdir(&web).await.ends_with("/shop/web"));
     assert!(workdir(&none).await.ends_with("/shop"));
     // A `rig:` label no longer places a bead: its start is refused with the reason.
@@ -339,8 +340,8 @@ async fn a_start_without_a_rig_takes_it_from_the_prefix_of_the_bead_id_or_runs_i
     );
 }
 
-/// The labels of a bead name the agent of every ai step of its run and the harness it is for (spec §9.1); a pick
-/// passes over a bead its run cannot take (§10.3).
+/// The labels of a bead name the agent of every ai step of its run and the harness it is for (docs/design/config.md); a
+/// pick passes over a bead its run cannot take (docs/design/tracker-br.md).
 #[tokio::test(start_paused = true)]
 async fn a_bead_names_the_agent_of_its_run_and_the_harness_it_is_for() {
     let pair = "name = \"pair\"\n[inputs]\nbead = { type = \"task\", required = true }\n\

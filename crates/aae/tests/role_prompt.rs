@@ -1,5 +1,5 @@
 //! Demo 1 as the daemon loads it: the user's layers decide what the pack's agents run on, and the role prompt of an
-//! agent (`agents/<a>/prompt.md`, spec §8.1) reaches what both adapters start a session with.
+//! agent (`agents/<a>/prompt.md`, docs/design/config.md) reaches what both adapters start a session with.
 
 use aae_core::config::{Config, EffectiveConfig, Layer, load_for};
 use aae_core::driver::{Adapter, Driver, SessionPlan};

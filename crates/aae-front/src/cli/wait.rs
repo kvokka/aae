@@ -1,4 +1,4 @@
-//! `aae run wait`: the outcomes of runs, waited for on the event stream (spec §1 item 2), not by polling.
+//! `aae run wait`: the outcomes of runs, waited for on the event stream (docs/overview.md item 2), not by polling.
 
 use super::{print, run_path};
 use crate::client::{Client, ClientError};

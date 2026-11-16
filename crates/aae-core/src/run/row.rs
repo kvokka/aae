@@ -38,7 +38,7 @@ pub(super) struct Row {
     pub(super) as_agent: Option<String>,
     /// `ai`, `exec` or `drain`: the kind of `step`.
     pub(super) step_kind: String,
-    /// The execution of the step within its round, from 1 up to the step's `max_attempts` (spec §9.1).
+    /// The execution of the step within its round, from 1 up to the step's `max_attempts` (docs/design/config.md).
     pub(super) step_attempt: u32,
 }
 
@@ -144,7 +144,7 @@ pub(super) fn attempts(conn: &Connection, run: &str) -> Result<Vec<Value>, Error
             "step": r.get::<_, String>(9)?,
             "started_at": rfc3339_ms(r.get(2)?), "ended_at": r.get::<_, Option<i64>>(3)?.map(rfc3339_ms),
             "failure_kind": r.get::<_, Option<String>>(4)?, "harness": r.get::<_, String>(5)?,
-            // The session reference (spec §7.7): the harness's own tools open the conversation by it.
+            // The session reference (docs/api/frontends.md): the harness's own tools open the conversation by it.
             "session": r.get::<_, Option<String>>(6)?.and_then(|s| serde_json::from_str::<Value>(&s).ok()),
             "input_tokens": r.get::<_, i64>(7)?, "output_tokens": r.get::<_, i64>(8)?,
         }))

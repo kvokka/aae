@@ -1,5 +1,6 @@
-//! Contract tests of the br adapter on the pinned br (spec §10.2): claim under concurrency, conditional release and
-//! close, the ready set with epics and labels, the prefix of a rig's beads, the writes as changes, the watcher.
+//! Contract tests of the br adapter on the pinned br (docs/design/tracker-br.md): claim under concurrency, conditional
+//! release and close, the ready set with epics and labels, the prefix of a rig's beads, the writes as changes, the
+//! watcher.
 
 use aae_br::Br;
 use aae_core::tracker::{Tracker, TrackerError};
@@ -135,7 +136,7 @@ async fn the_ready_set_carries_the_epic_labels_and_description() {
 }
 
 /// A rig's bead filed under a root with `BD_ISSUE_PREFIX` keeps the rig's prefix through `--deps parent-child`, and
-/// `--parent` loses it (spec §10.2): the planner's prompt files rig beads the first way.
+/// `--parent` loses it (docs/design/tracker-br.md): the planner's prompt files rig beads the first way.
 #[tokio::test(flavor = "multi_thread")]
 async fn a_bead_filed_with_a_rig_prefix_under_a_root_keeps_it_and_parent_loses_it() {
     let (dir, t) = tracker();
@@ -256,7 +257,7 @@ async fn a_key_creates_one_epic_whose_children_run_and_which_is_released_while_t
 }
 
 /// A task that names a bead gives that bead and files none; a text files a root that keeps the database's prefix
-/// even where a rig's `BD_ISSUE_PREFIX` is set, as in a daemon started from a rig's shell (spec §10.2, §10.3).
+/// even where a rig's `BD_ISSUE_PREFIX` is set, as in a daemon started from a rig's shell (docs/design/tracker-br.md).
 #[tokio::test(flavor = "multi_thread")]
 async fn a_task_naming_a_bead_gives_it_and_a_text_files_a_root_of_the_database_prefix() {
     const NAME: &str = "a_task_naming_a_bead_gives_it_and_a_text_files_a_root_of_the_database_prefix";

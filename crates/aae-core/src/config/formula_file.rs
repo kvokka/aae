@@ -1,5 +1,5 @@
 //! A formula: the TOML shape of its file (docs/design/config.md "Formula"; unknown keys are errors) and the checked
-//! formula the core runs (spec §9.1).
+//! formula the core runs (docs/design/config.md).
 
 use super::{Name, Settings};
 use crate::template::Inputs;
@@ -14,13 +14,13 @@ pub(super) struct FormulaFile {
     pub description: String,
     #[serde(default)]
     pub inputs: BTreeMap<String, Input>,
-    /// Each run works in a git worktree of its own that aae makes and removes (spec §11.5).
+    /// Each run works in a git worktree of its own that aae makes and removes (docs/design/config.md).
     #[serde(default)]
     pub worktree: bool,
-    /// Started only by a step of another formula, hidden from the catalog (spec §9.1).
+    /// Started only by a step of another formula, hidden from the catalog (docs/design/config.md).
     #[serde(default)]
     pub internal: bool,
-    /// The most rounds of a run that checks send back (spec §9.1); default 3.
+    /// The most rounds of a run that checks send back (docs/design/config.md); default 3.
     pub rounds: Option<NonZeroU32>,
     pub step: Vec<StepFile>,
 }
@@ -34,7 +34,7 @@ pub enum InputType {
     Boolean,
 }
 
-/// A declared formula input (spec §9.1).
+/// A declared formula input (docs/design/config.md).
 #[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
 pub struct Input {
@@ -55,7 +55,7 @@ pub(super) enum StepFile {
         model: Option<String>,
         effort: Option<String>,
         back_to: Option<String>,
-        /// The most times the step runs (spec §9.1); default 1.
+        /// The most times the step runs (docs/design/config.md); default 1.
         max_attempts: Option<NonZeroU32>,
         /// The script whose exit code says whether the step passed; empty is none.
         step_check_script_path: Option<String>,
@@ -72,7 +72,7 @@ pub(super) enum StepFile {
         name: Option<String>,
         formula: String,
         timeout: Option<String>,
-        /// The most beads in work at once (spec §9.1); default 1.
+        /// The most beads in work at once (docs/design/config.md); default 1.
         pool: Option<NonZeroU32>,
         #[serde(default)]
         on_item_failure: OnItemFailure,
@@ -91,7 +91,7 @@ pub(super) enum StepFile {
     },
 }
 
-/// What a drain step does once the run of a bead failed (spec §9.1).
+/// What a drain step does once the run of a bead failed (docs/design/config.md).
 #[derive(Clone, Copy, Debug, Default, Deserialize, PartialEq, Eq, serde::Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum OnItemFailure {
@@ -108,13 +108,13 @@ pub enum OnItemFailure {
 pub struct Formula {
     pub description: String,
     pub inputs: BTreeMap<String, Input>,
-    /// `worktree = true`: each run gets a git worktree of its own (spec §11.5).
+    /// `worktree = true`: each run gets a git worktree of its own (docs/design/config.md).
     pub worktree: bool,
-    /// `internal = true`: started only by a `formula` or `drain` step, hidden from the catalog (spec §9.1).
+    /// `internal = true`: started only by a `formula` or `drain` step, hidden from the catalog (docs/design/config.md).
     pub internal: bool,
     /// The most rounds of a run: a failed check with `back_to` starts the next one, past the last the run fails.
     pub rounds: u32,
-    /// At least one; a run goes through them in order (spec §9.1).
+    /// At least one; a run goes through them in order (docs/design/config.md).
     pub steps: Vec<Step>,
 }
 
@@ -136,11 +136,12 @@ pub struct Step {
     /// `name` in the file, or the position from 1.
     pub name: String,
     pub kind: StepKind,
-    /// A check: when it fails, the run goes back to this earlier step with its remarks (spec §9.1).
+    /// A check: when it fails, the run goes back to this earlier step with its remarks (docs/design/config.md).
     pub back_to: Option<String>,
-    /// The most times the step runs; a step that does not pass runs again until then (spec §9.1). At least 1.
+    /// The most times the step runs, at least 1; a step that does not pass runs again until then
+    /// (docs/design/config.md).
     pub max_attempts: u32,
-    /// The script that says whether the step passed, by its exit code (spec §9.1).
+    /// The script that says whether the step passed, by its exit code (docs/design/config.md).
     pub check: Option<PathBuf>,
 }
 
@@ -156,7 +157,8 @@ pub enum StepKind {
         command: Vec<String>,
         timeout: Option<Duration>,
     },
-    /// Every ready bead under the run's bead gets a run of `formula` (spec §9.1, §10.1).
+    /// Every ready bead under the run's bead gets a run of `formula` (docs/design/config.md,
+    /// docs/design/contracts.md 5).
     Drain {
         formula: Name,
         timeout: Option<Duration>,
@@ -164,7 +166,7 @@ pub enum StepKind {
         pool: u32,
         on_item_failure: OnItemFailure,
     },
-    /// The step is a run of `formula` of the same project (spec §9.1): its outcome is the step's.
+    /// The step is a run of `formula` of the same project (docs/design/config.md): its outcome is the step's.
     Formula {
         formula: Name,
         /// The inputs given on the step, resolved against the parent run.

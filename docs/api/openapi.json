@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "aae",
-    "description": "The API of the aae daemon (spec §12). Over TCP every operation needs `Authorization: Bearer <api_token>`; without it the reply is 401 `unauthorized`, an `ErrorReply`.",
+    "description": "The API of the aae daemon (docs/api/frontends.md). Over TCP every operation needs `Authorization: Bearer <api_token>`; without it the reply is 401 `unauthorized`, an `ErrorReply`.",
     "license": {
       "name": "MIT",
       "identifier": "MIT"
@@ -100,7 +100,7 @@
     },
     "/v1/config/explain": {
       "get": {
-        "summary": "The effective config of an agent: one line per value with its layer, and the host layer in one line (spec §6.3).",
+        "summary": "The effective config of an agent: one line per value with its layer, and the host layer in one line\n(docs/design/config.md).",
         "operationId": "explain",
         "parameters": [
           {
@@ -412,7 +412,7 @@
     },
     "/v1/daemon/restart": {
       "post": {
-        "summary": "A drain after which the daemon starts again in the same process (`daemon.stopping{reason: \"restart\"}`);\nrecovery resumes the runs the drain cut (spec §5.6).",
+        "summary": "A drain after which the daemon starts again in the same process (`daemon.stopping{reason: \"restart\"}`);\nrecovery resumes the runs the drain cut (docs/design/invariants.md).",
         "operationId": "restart",
         "parameters": [
           {
@@ -513,7 +513,7 @@
     },
     "/v1/doctor": {
       "get": {
-        "summary": "The checks of `aae doctor` (spec §13) as the daemon's process sees them: its config, the harness and br binaries\nit would run with their versions and logins, its private directories and its state. A check failing is an\n`error` level in the reply, not an error reply.",
+        "summary": "The checks of `aae doctor` (docs/guide/install.md) as the daemon's process sees them: its config, the harness and br\nbinaries it would run with their versions and logins, its private directories and its state. A check failing is an\n`error` level in the reply, not an error reply.",
         "operationId": "doctor",
         "responses": {
           "200": {
@@ -1333,7 +1333,7 @@
         }
       },
       "post": {
-        "summary": "Starts a run of a formula; the reply is `{\"run\": \"<id>\"}`, or `{\"nothing_ready\": true}` when a task input\n`{ next_ready = true }` finds no ready bead to take (spec §10.3). With `parent`, a stale token or a chain deeper\nthan 10 is `rejected`.",
+        "summary": "Starts a run of a formula; the reply is `{\"run\": \"<id>\"}`, or `{\"nothing_ready\": true}` when a task input\n`{ next_ready = true }` finds no ready bead to take (docs/design/tracker-br.md). With `parent`, a stale token or a\nchain deeper than 10 is `rejected`.",
         "operationId": "create",
         "parameters": [
           {
@@ -1448,7 +1448,7 @@
         ],
         "responses": {
           "200": {
-            "description": "The run: `RunView` (docs/design/contracts.md §1.3) with `project`, `rig`, `correlation`, `inputs`, `waiting_for`, `outcome` and `attempts`",
+            "description": "The run: `RunView` (docs/design/contracts.md 1.3) with `project`, `rig`, `correlation`, `inputs`, `waiting_for`, `outcome` and `attempts`",
             "content": {
               "application/json": {
                 "schema": {
@@ -2362,7 +2362,7 @@
               "object",
               "null"
             ],
-            "description": "The harness's own session reference (spec §7.7)."
+            "description": "The harness's own session reference (docs/api/frontends.md)."
           },
           "started_at": {
             "type": "string"
@@ -2433,7 +2433,7 @@
               "string",
               "null"
             ],
-            "description": "A terminal run whose last session this run continues (spec §9.3)."
+            "description": "A terminal run whose last session this run continues (docs/design/contracts.md 6)."
           },
           "formula": {
             "type": "string",
@@ -2716,7 +2716,7 @@
           },
           "internal": {
             "type": "boolean",
-            "description": "Started only by a step of another formula, not directly (spec §9.1); `aae formula list` hides it without\n`--all`."
+            "description": "Started only by a step of another formula, not directly (docs/design/config.md); `aae formula list` hides it\nwithout `--all`."
           },
           "project": {
             "type": "string"
@@ -2899,7 +2899,7 @@
       },
       "Outcome": {
         "type": "object",
-        "description": "`Outcome` of docs/design/contracts.md §1.3.",
+        "description": "`Outcome` of docs/design/contracts.md 1.3.",
         "required": [
           "result",
           "summary"
@@ -3092,7 +3092,7 @@
       },
       "Run": {
         "type": "object",
-        "description": "A run: `RunView` of docs/design/contracts.md §1.3 with where it is, its attempts and its outcome.",
+        "description": "A run: `RunView` of docs/design/contracts.md 1.3 with where it is, its attempts and its outcome.",
         "required": [
           "id",
           "project",
@@ -3235,12 +3235,12 @@
           },
           "step": {
             "type": "string",
-            "description": "The step of the formula the run is at (spec §9.1); `agent` and `step_kind` are of it."
+            "description": "The step of the formula the run is at (docs/design/config.md); `agent` and `step_kind` are of it."
           },
           "step_attempt": {
             "type": "integer",
             "format": "int32",
-            "description": "The execution of the step within its round: 1, and one more each time the step runs again (spec §9.1).",
+            "description": "The execution of the step within its round: 1, and one more each time the step runs again\n(docs/design/config.md).",
             "minimum": 1
           },
           "step_kind": {
@@ -3384,7 +3384,7 @@
       },
       "Usage": {
         "type": "object",
-        "description": "The tokens the harness reported (docs/design/contracts.md §4.3 `usage`).",
+        "description": "The tokens the harness reported (docs/design/contracts.md 4.3 `usage`).",
         "required": [
           "input_tokens",
           "output_tokens"

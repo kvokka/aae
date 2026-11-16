@@ -1,6 +1,6 @@
 //! The messages of one `codex app-server` read into normalized events per thread (docs/design/contracts.md 4.3,
 //! 4.6; docs/design/experiments.md, experiment 2). A turn ends on `turn/completed` only; the thread status `idle`
-//! comes just before it and ends nothing (spec §7.5).
+//! comes just before it and ends nothing (docs/design/contracts.md 4.6).
 
 use aae_core::driver::{Failure, FailureKind, Normalized, RateLimit, RequestKind, SessionState, Source, StopReason};
 use serde_json::Value;

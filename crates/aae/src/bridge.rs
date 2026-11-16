@@ -1,6 +1,6 @@
-//! `aae mcp-bridge -- <command…>` (spec §11.4): one stdio MCP server shared over HTTP. The bridge starts the server
-//! as its child, initializes it once, and only then binds `127.0.0.1:$AAE_SERVICE_PORT`, so "the port accepts" means
-//! "the server is ready". `POST /mcp` speaks both protocol epochs as the API's MCP frontend does, with no session
+//! `aae mcp-bridge -- <command…>` (docs/design/config.md): one stdio MCP server shared over HTTP. The bridge starts the
+//! server as its child, initializes it once, and only then binds `127.0.0.1:$AAE_SERVICE_PORT`, so "the port accepts"
+//! means "the server is ready". `POST /mcp` speaks both protocol epochs as the API's MCP frontend does, with no session
 //! id; every request but the handshake goes to the server under an id of the bridge's own, with the caller's
 //! identity headers in `params._meta`. The child dying ends the bridge with an error, so the daemon restarts both.
 

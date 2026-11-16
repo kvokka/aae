@@ -1,4 +1,4 @@
-//! Issue gates by hand (spec §5.7, contracts 7): list, close as the operator, open.
+//! Issue gates by hand (docs/design/contracts.md 7): list, close as the operator, open.
 
 use super::{
     ApiError, Body, ErrorReply, Reply, State, key,

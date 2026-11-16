@@ -15,11 +15,11 @@ use std::{
     path::Path,
 };
 
-/// Runs started at once when the orchestrator config does not say (spec §9.3).
+/// Runs started at once when the orchestrator config does not say (docs/design/contracts.md 6).
 const DEFAULT_MAX_RUNS: u32 = 8;
 /// What the harness hooks and MCP commands of a plugin's contribution say for the plugin's directory.
 pub(super) const PLUGIN_DIR: &str = "${AAE_PLUGIN_DIR}";
-/// Failed runs of a bead before the core closes its gate (spec §10.3).
+/// Failed runs of a bead before the core closes its gate (docs/design/config.md).
 const DEFAULT_BEAD_FAILURES: u32 = 3;
 
 #[derive(Default)]
@@ -38,8 +38,8 @@ impl Loader {
             true => self.read::<OrchestratorFile>(file).unwrap_or_default(),
             false => OrchestratorFile::default(),
         };
-        // A harness of the build needs no section (spec §6.1); a section may name one the build lacks, as the
-        // scripted harness of the tests.
+        // A harness of the build needs no section (docs/design/config.md); a section may name one the build lacks, as
+        // the scripted harness of the tests.
         let built = self.adapters.iter().map(|a| a.name.to_owned());
         self.harnesses = raw.harness.keys().cloned().chain(built).collect();
         let plugins = self.plugins(file, &base, raw.plugin, &[]);

@@ -1,5 +1,6 @@
-//! The drain step (spec §9.1, §10.1): every ready bead under the run's bead, at any depth, gets a run of the step's
-//! formula, once per entry of the step, on the scripted driver and the tracker in memory.
+//! The drain step (docs/design/config.md, docs/design/tracker-br.md): every ready bead under the run's bead, at any
+//! depth, gets a run of the step's formula, once per entry of the step, on the scripted driver and the tracker in
+//! memory.
 
 use crate::common;
 
@@ -96,7 +97,7 @@ async fn a_refused_bead_gets_no_run_and_a_reason() {
     assert_eq!(w.wrap(&run).await, "Wrap up: 0 closed, 0 failed, 2 refused.");
 }
 
-/// A child of a drain is one level deeper than its run, under the common depth limit (spec §9.3).
+/// A child of a drain is one level deeper than its run, under the common depth limit (docs/design/contracts.md 6).
 #[tokio::test(start_paused = true)]
 async fn a_drain_at_the_depth_limit_gives_no_bead_a_run() {
     let w = world(SWEEP);
@@ -120,8 +121,9 @@ async fn a_drain_at_the_depth_limit_gives_no_bead_a_run() {
     assert!(w.kids(run).is_empty());
 }
 
-/// `kill -9` while one bead has failed, one has a live run and one waits in the queue (spec §5.6, decision 10):
-/// the drain's attempt fails with `daemon_crash` too, and its next attempt gives no bead of the entry again.
+/// `kill -9` while one bead has failed, one has a live run and one waits in the queue (docs/design/invariants.md,
+/// decision 10): the drain's attempt fails with `daemon_crash` too, and its next attempt gives no bead of the entry
+/// again.
 #[tokio::test(start_paused = true)]
 async fn a_restart_mid_drain_fails_the_attempt_and_gives_no_bead_twice() {
     let config = format!("{}[[plugin]]\npath = \"policy\"\n", SWEEP[0].1);
@@ -268,7 +270,7 @@ async fn a_read_that_does_not_know_the_root_decides_nothing() {
 }
 
 /// A bead of an epic under the root runs too; the epic, ready once its beads are closed, is given out as any bead:
-/// its id has no rig prefix, so its run works in the project root (spec §6.1).
+/// its id has no rig prefix, so its run works in the project root (docs/design/config.md).
 #[tokio::test(start_paused = true)]
 async fn a_bead_of_a_nested_epic_runs_and_the_emptied_epic_runs_in_the_project_root() {
     let w = world(SWEEP);

@@ -1,4 +1,4 @@
-//! The instance registry (spec §7.3, docs/design/contracts.md 8): instances by fingerprint, shared up to their
+//! The instance registry (docs/design/contracts.md 8): instances by fingerprint, shared up to their
 //! capacity, stopped once idle. A start or a stop is written before it happens (invariant 9).
 
 use super::RunHandler;
@@ -226,7 +226,8 @@ impl RunHandler {
         }
     }
 
-    /// Queues the check of every instance process against the process table, for the periodic resync (spec §5.1).
+    /// Queues the check of every instance process against the process table, for the periodic resync
+    /// (docs/design/event-model.md).
     pub(super) fn check_instances(tx: &mut Tx<'_>) -> Result<(), Error> {
         let instances: Vec<Value> = {
             let mut stmt = tx.sql().prepare(

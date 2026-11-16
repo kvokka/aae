@@ -1,10 +1,10 @@
-//! The root bead of a run started from a task (spec §9.1, §10.3): a text in a task input that names no bead the core
-//! knows makes the tracker, as the run prepares and once per key, return the bead whose id it is or create an epic
-//! for it; the run then claims that bead as any other.
+//! The root bead of a run started from a task (docs/design/config.md, docs/design/contracts.md 5): a text in a task
+//! input that names no bead the core knows makes the tracker, as the run prepares and once per key, return the bead
+//! whose id it is or create an epic for it; the run then claims that bead as any other.
 //!
-//! The drain step (spec §9.1): an attempt with no process that, on every read of the tracker, gives each ready bead
-//! under the run's bead, at any depth, a run of the step's formula — the one creation every start goes through —
-//! once per entry of the step.
+//! The drain step (docs/design/config.md): an attempt with no process that, on every read of the tracker, gives each
+//! ready bead under the run's bead, at any depth, a run of the step's formula — the one creation every start goes
+//! through — once per entry of the step.
 
 use super::{
     Create, Outcome, RunHandler, Verdict, beads::tracker_key, new_token, render::DRAIN_TIMEOUT_MS, row::Row,
@@ -88,7 +88,7 @@ impl RunHandler {
         };
         // `(id, bead, state, given by this entry)` of every child on a bead. The entry is the tail of the run's
         // attempts on this step after its last execution: a round back to it passes through an attempt of another
-        // step, a repeat through an attempt of it with an outcome (spec §9.1).
+        // step, a repeat through an attempt of it with an outcome (docs/design/config.md).
         let kids: Vec<(String, String, String, bool)> = {
             let mut stmt = tx.sql().prepare(
                 "SELECT r.id, r.bead, r.state, r.created_ms >= (SELECT MIN(a.started_ms) FROM attempts a \

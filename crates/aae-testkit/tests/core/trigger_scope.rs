@@ -1,5 +1,5 @@
-//! The scope of an event trigger (spec §9.5): it hears its own rig unless its `where` names another, and never
-//! another project.
+//! The scope of an event trigger (docs/design/config.md): it hears its own rig unless its `where` names another, and
+//! never another project.
 
 use crate::common;
 

@@ -59,7 +59,7 @@ fn the_harness_is_the_strongest_layers() {
     let (_, e) = run(&load(&[]).unwrap());
     assert_eq!((e.harness.as_str(), &e.harness_from), ("claude", &Layer::Agent));
     assert_eq!(e.model_key().as_deref(), Some("model:claude/opus"));
-    // There is no `provider` setting: the harness's own settings say how it reaches its model (spec §6.2).
+    // There is no `provider` setting: the harness's own settings say how it reaches its model (docs/design/config.md).
     rejected(
         &[(AGENT, "harness = \"claude\"\nprovider = \"openai\"\n")],
         "unknown field `provider`",
@@ -201,7 +201,8 @@ fn variant_errors() {
 
 #[test]
 fn a_harness_of_the_build_needs_no_section() {
-    // `HARNESSES` has no `[harness.codex]`: runs on codex assemble, and codex gets its defaults (spec §6.1).
+    // `HARNESSES` has no `[harness.codex]`: runs on codex assemble, and codex gets its defaults
+    // (docs/design/config.md).
     let project = "packs = [\"../kit\"]\n[settings.native.codex]\napproval_policy = \"never\"\n\
                    [rigs.backend]\npath = \"backend\"\n[agents.implementer]\nharness = \"codex\"\n";
     let config = load(&[("shop/aae.toml", project)]).unwrap();

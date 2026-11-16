@@ -1,5 +1,5 @@
-//! The event stream (spec §5.3): the journal as SSE from a `seq`, then live. A `seq` rotated away is the explicit
-//! "gap" error; the client recovers by reading the state.
+//! The event stream (docs/design/event-model.md): the journal as SSE from a `seq`, then live. A `seq` rotated away is
+//! the explicit "gap" error; the client recovers by reading the state.
 
 use super::{ApiError, ErrorReply, Param, State, replies::Failed, runs::BAD_QUERY};
 use aae_core::ReadError;

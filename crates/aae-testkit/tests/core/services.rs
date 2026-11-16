@@ -1,5 +1,5 @@
-//! Services (spec §11.4, docs/design/contracts.md 8) in the core: one `[[service]]` process per scope shared by the
-//! sessions, its MCP URL with the token and the identity headers in each session (or its URL and token in their
+//! Services (docs/design/config.md, docs/design/contracts.md 8) in the core: one `[[service]]` process per scope shared
+//! by the sessions, its MCP URL with the token and the identity headers in each session (or its URL and token in their
 //! environment), ready once its health check passes, a restart on the same port after it dies (on a new one until
 //! it was first ready), a stop by the operator once it is idle. A port someone else takes: `service_ports.rs`.
 //!

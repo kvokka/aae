@@ -214,7 +214,7 @@ impl Inputs {
         Self::parse_in(value, &["event"], has_event)
     }
 
-    /// The `inputs` of a `formula` step: placeholders start with what the parent run shows (spec §9.1).
+    /// The `inputs` of a `formula` step: placeholders start with what the parent run shows (docs/design/config.md).
     pub fn parse_step(value: &Value) -> Result<Self, SyntaxError> {
         Self::parse_in(value, &["inputs", "steps", "run", "bead", "project"], true)
     }

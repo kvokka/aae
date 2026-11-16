@@ -1,5 +1,5 @@
-//! Triggers (spec §9.5, criteria 5b and 8): event triggers chain runs in one correlation up to the depth limit,
-//! schedules fire on the managed clock, and a restart neither loses nor doubles a firing.
+//! Triggers (docs/design/config.md, criteria 5b and 8): event triggers chain runs in one correlation up to the depth
+//! limit, schedules fire on the managed clock, and a restart neither loses nor doubles a firing.
 
 use crate::common;
 

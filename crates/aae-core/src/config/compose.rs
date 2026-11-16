@@ -1,4 +1,4 @@
-//! The layers of one agent put together (spec §6.3, docs/design/config.md "Layers"): the agent or its variant, the
+//! The layers of one agent put together (docs/design/config.md "Layers"): the agent or its variant, the
 //! pack and step of the formula of a run, the edits; the harness they come to, and the model name the adapter
 //! expands.
 
@@ -30,7 +30,8 @@ impl From<Launch> for Settings {
 }
 
 impl Config {
-    /// The effective config of `agent` alone, with no formula, in `project`, on `rig` when given (spec §6.3, §6.5).
+    /// The effective config of `agent` alone, with no formula, in `project`, on `rig` when given
+    /// (docs/design/config.md).
     pub fn effective(&self, project: &str, rig: Option<&str>, agent: &Name) -> Result<EffectiveConfig, String> {
         let (p, r) = self.place(project, rig)?;
         let a = agent_of(p, agent)?;
@@ -55,7 +56,7 @@ impl Config {
     }
 
     /// [`Self::for_run`] with the agent `as_agent` (a variant's name, else an agent's) in place of the step's: the
-    /// one the `agent:` label of a run's bead names (spec §9.1).
+    /// one the `agent:` label of a run's bead names (docs/design/config.md).
     pub fn for_run_as(
         &self,
         project: &str,
@@ -105,7 +106,7 @@ impl Config {
     }
 
     /// The prompt of `agent` in `project`: a pack agent's qualified name, or a variant's, whose role and so prompt
-    /// are its base agent's (spec §8.1).
+    /// are its base agent's (docs/design/config.md).
     pub fn prompt(&self, project: &str, agent: &str) -> Result<&super::Prompt, String> {
         let (p, _) = self.place(project, None)?;
         let name = match p.variants.get(agent).or_else(|| self.variants.get(agent)) {
@@ -136,8 +137,8 @@ impl Config {
         Ok((p, r))
     }
 
-    /// The layers of spec §6.3 merged, weakest first; `middle` goes between the agent and the edits, of which
-    /// those whose key `named` accepts apply.
+    /// The layers of docs/design/config.md merged, weakest first; `middle` goes between the agent and the edits, of
+    /// which those whose key `named` accepts apply.
     fn assemble(
         &self,
         p: &Project,
@@ -192,7 +193,8 @@ impl Config {
             from: Layer::Harness,
         });
         let mut config = EffectiveConfig::new(harness, harness_from, model);
-        // The project's tracker, by name, even where the project has none (spec §10.2). A layer may still set it.
+        // The project's tracker, by name, even where the project has none (docs/design/config.md). A layer may
+        // still set it.
         for (name, value) in p.tracker_env(r) {
             let value = Sourced {
                 value: value.clone(),
@@ -215,8 +217,8 @@ impl Config {
         Ok(config)
     }
 
-    /// The harness and the layer that names it: the strongest layer that says (spec §6.2). Each layer's harness is
-    /// one of the orchestrator's: loading checks it.
+    /// The harness and the layer that names it: the strongest layer that says (docs/design/config.md). Each layer's
+    /// harness is one of the orchestrator's: loading checks it.
     fn launch(layers: &[(Layer, Settings)]) -> Result<(String, Layer), String> {
         (layers.iter().rev())
             .find_map(|(from, s)| s.harness.clone().map(|h| (h, from.clone())))

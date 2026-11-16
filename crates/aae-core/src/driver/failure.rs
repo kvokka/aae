@@ -1,8 +1,8 @@
-//! The failure taxonomy an adapter or the core reports (spec §7.1, docs/design/contracts.md 4.4).
+//! The failure taxonomy an adapter or the core reports (docs/design/contracts.md 4.4).
 
 use serde::Serialize;
 
-/// The failure kinds of spec §7.1 (contracts 4.4).
+/// The failure kinds of docs/design/contracts.md 4.4.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum FailureKind {

@@ -1,5 +1,5 @@
-//! A check sends the run back to an earlier step with its remarks, for at most the formula's rounds (spec §9.1,
-//! §15 criterion 25, core part). Exec steps run real commands, so real time.
+//! A check sends the run back to an earlier step with its remarks, for at most the formula's rounds
+//! (docs/design/config.md, criterion 25, core part). Exec steps run real commands, so real time.
 
 use crate::common;
 
@@ -137,8 +137,8 @@ async fn a_check_that_keeps_failing_fails_the_run_after_the_last_round() {
     assert_eq!(w.return_log(), "plan\ncheck\nplan\ncheck\n");
 }
 
-/// The step the run went back to continues its session (spec §9.3), and its prompt shows the remarks; the first
-/// round shows none.
+/// The step the run went back to continues its session (docs/design/contracts.md 6), and its prompt shows the remarks;
+/// the first round shows none.
 #[tokio::test]
 async fn the_step_gone_back_to_sees_the_remarks_in_its_prompt() {
     let steps = [

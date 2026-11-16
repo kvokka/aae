@@ -1,7 +1,7 @@
-//! Daemon start (spec §5.6, docs/design/contracts.md 6.4): what the previous daemon left running is killed; the
-//! attempts it was running fail with `daemon_crash` for the policy to decide, a run that waited for a decision on a
-//! deciding event goes on waiting for it, its hooks run again with their full time, and a run that waited only for
-//! its background to stop after the outcome goes to `finishing` with that outcome. Effects and the outbox are
+//! Daemon start (docs/design/invariants.md, docs/design/contracts.md 6.4): what the previous daemon left running is
+//! killed; the attempts it was running fail with `daemon_crash` for the policy to decide, a run that waited for a
+//! decision on a deciding event goes on waiting for it, its hooks run again with their full time, and a run that waited
+//! only for its background to stop after the outcome goes to `finishing` with that outcome. Effects and the outbox are
 //! in the state, so they carry on by themselves; schedules are armed after this.
 
 use super::{RunHandler, decide::DECIDE_SLACK_MS, row::Row};
@@ -15,7 +15,8 @@ use std::collections::BTreeSet;
 impl RunHandler {
     pub(super) fn recover(&mut self, tx: &mut Tx<'_>) -> Result<(), Error> {
         // Every recorded instance is stopped by its pid and start time and swept by its marker (invariants 6, 7);
-        // no reconnect in the first release (§5.6). A new process for one of its runs waits for its death.
+        // no reconnect in the first release (docs/design/invariants.md). A new process for one of its runs waits for
+        // its death.
         let instances: Vec<String> = {
             let mut stmt = tx.sql().prepare("SELECT id FROM instances ORDER BY rowid")?;
             let rows = stmt.query_map([], |r| r.get(0))?;
@@ -58,9 +59,9 @@ impl RunHandler {
             )?;
         }
         // A run whose turn ended waits for the decision on it (`waiting`) and keeps waiting; one whose turn ended with
-        // the outcome declared was only waiting for its background to stop, which the kill above did (spec §9.4); the
-        // others had an attempt going, which is lost (a drain step's too: its next attempt gives no bead its entry has
-        // given).
+        // the outcome declared was only waiting for its background to stop, which the kill above did
+        // (docs/design/contracts.md 6); the others had an attempt going, which is lost (a drain step's too: its next
+        // attempt gives no bead its entry has given).
         let caught: Vec<(String, bool, bool)> = {
             let mut stmt = tx.sql().prepare(
                 "SELECT r.id, r.state IN ('running', 'finishing') AND r.waiting IS NOT NULL, \
@@ -81,7 +82,7 @@ impl RunHandler {
                 [id],
             )?;
             let row = Row::load(tx, id)?;
-            // `finishing` with no decision pending: the check script of the step was running (spec §9.1).
+            // `finishing` with no decision pending: the check script of the step was running (docs/design/config.md).
             let checking = !*waits && row.state == "finishing";
             if *waits || checking || *settled {
                 // The session that took the turn is gone with its instance: a decision that needs it fails the

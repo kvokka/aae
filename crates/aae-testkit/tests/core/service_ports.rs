@@ -1,5 +1,5 @@
-//! A service whose port someone else takes (spec §11.4): before it is ready it moves and the session follows; once
-//! ready it moves after two starts in a row on the taken port, with a new token.
+//! A service whose port someone else takes (docs/design/config.md): before it is ready it moves and the session
+//! follows; once ready it moves after two starts in a row on the taken port, with a new token.
 
 use crate::common;
 

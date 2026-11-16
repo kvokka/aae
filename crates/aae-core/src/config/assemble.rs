@@ -1,5 +1,5 @@
-//! The effective config of one (project, rig, agent): the layers of spec §6.3 merged, every value with the layer it
-//! came from, so that "explain config" can show it.
+//! The effective config of one (project, rig, agent): the layers of docs/design/config.md merged, every value with the
+//! layer it came from, so that "explain config" can show it.
 
 use super::{Hook, Mcp, PluginUse, Service, Settings, Skill};
 use serde::{Deserialize, Serialize};
@@ -7,7 +7,7 @@ use serde_json::Value;
 use std::{collections::BTreeMap, fmt, fmt::Write as _, path::PathBuf};
 
 /// The layer a value came from, weakest first. The host layer is not here: the harness merges it itself and the
-/// core never sees its content (spec §6.3).
+/// core never sees its content (docs/design/config.md).
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "layer", content = "name", rename_all = "snake_case")]
 pub enum Layer {
@@ -94,7 +94,7 @@ pub struct EffectiveConfig {
     pub model_given: Option<String>,
     pub effort: Option<Sourced<String>>,
     pub system_prompt: Option<Sourced<String>>,
-    /// `None`: no layer says, and host inheritance is on by default (spec §6.4).
+    /// `None`: no layer says, and host inheritance is on by default (docs/design/config.md).
     pub inherit_host: Option<Sourced<bool>>,
     pub env: BTreeMap<String, Sourced<String>>,
     pub mcp: BTreeMap<String, Sourced<Mcp>>,
@@ -107,7 +107,7 @@ pub struct EffectiveConfig {
     /// The services its session uses; the core binds them to MCP servers or environment before the adapter.
     #[serde(default)]
     pub services: BTreeMap<String, Sourced<Service>>,
-    /// Where the agent works: its session goes to the root for `root` (spec §8.1).
+    /// Where the agent works: its session goes to the root for `root` (docs/design/config.md).
     #[serde(default)]
     pub scope: super::Scope,
 }
@@ -195,8 +195,9 @@ impl EffectiveConfig {
         by_key(&mut self.services, &settings.services, from, |_| true);
     }
 
-    /// What attached plugins add beyond a settings layer (spec §11.2): their prompt fragments after the system
-    /// prompt and their `bin/` directories ahead of `PATH` (the daemon's when no layer sets it), in attachment order.
+    /// What attached plugins add beyond a settings layer (docs/guide/plugin.md): their prompt fragments after the
+    /// system prompt and their `bin/` directories ahead of `PATH` (the daemon's when no layer sets it), in attachment
+    /// order.
     pub(super) fn contribute(&mut self, attached: &[&super::Plugin]) {
         for plugin in attached {
             let Some(fragment) = &plugin.prompt else { continue };
@@ -230,7 +231,7 @@ impl EffectiveConfig {
         self.env.insert("PATH".to_owned(), Sourced { value, from });
     }
 
-    /// One line per value with its layer, and one line for the host layer (spec §6.3).
+    /// One line per value with its layer, and one line for the host layer (docs/design/config.md).
     pub fn explain(&self) -> String {
         let mut out = String::new();
         let given = (self.model_given.as_ref()).map_or_else(String::new, |g| format!(", given as {}", quoted(g)));

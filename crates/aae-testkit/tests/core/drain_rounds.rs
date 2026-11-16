@@ -1,5 +1,5 @@
-//! The drain step across rounds and a root gone from the tracker (spec §9.1): a round back to the step is a new
-//! entry, so a bead whose run failed gets another; a root gone mid-drain has nothing more under it.
+//! The drain step across rounds and a root gone from the tracker (docs/design/config.md): a round back to the step is a
+//! new entry, so a bead whose run failed gets another; a root gone mid-drain has nothing more under it.
 
 use crate::common;
 

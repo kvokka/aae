@@ -1,5 +1,5 @@
-//! The exec step (spec §9.1, docs/design/contracts.md 6.2): a command the daemon runs in the workdir of the run,
-//! with its outcome taken from the exit code: 0 — `pass`, 75 (`EX_TEMPFAIL`) — an attempt failure, else `fail`.
+//! The exec step (docs/design/config.md, docs/design/contracts.md 6.2): a command the daemon runs in the workdir of the
+//! run, with its outcome taken from the exit code: 0 — `pass`, 75 (`EX_TEMPFAIL`) — an attempt failure, else `fail`.
 
 use super::{Exit, Msg, Outcome, RunHandler, Verdict, row::Row};
 use crate::{
@@ -34,7 +34,7 @@ impl RunHandler {
     }
 
     /// Runs `command` in the workdir of `row` with the environment of its step: the command of an exec step, or
-    /// with `check` the check script of any step, which also sees the outcome of its step (spec §9.1).
+    /// with `check` the check script of any step, which also sees the outcome of its step (docs/design/config.md).
     pub(super) fn command(&mut self, tx: &mut Tx<'_>, row: Row, command: &Value, check: bool) -> Result<(), Error> {
         let config: Value = (row.config.as_deref())
             .and_then(|c| serde_json::from_str(c).ok())
@@ -51,7 +51,7 @@ impl RunHandler {
             env.retain(|(k, _)| *k != name);
             env.push((name, json!(value)));
         }
-        // The context of the run goes in the environment only, never into the command (spec §2, decision 47).
+        // The context of the run goes in the environment only, never into the command (decision 47).
         let inputs: serde_json::Map<String, Value> = serde_json::from_str(&row.inputs).unwrap_or_default();
         let mut context = vec![("AAE_RUN".to_owned(), json!(row.id))];
         context.extend(row.bead.as_ref().map(|bead| ("AAE_BEAD".to_owned(), json!(bead))));
@@ -59,7 +59,8 @@ impl RunHandler {
             let text = value.as_str().map_or_else(|| value.to_string(), str::to_owned);
             context.push((crate::config::input_variable(&name), json!(text)));
         }
-        // The outcomes of the earlier steps (spec §9.1): `AAE_STEP_<NAME>_RESULT`, `_SUMMARY` and `_DATA` (JSON).
+        // The outcomes of the earlier steps (docs/design/config.md): `AAE_STEP_<NAME>_RESULT`, `_SUMMARY` and `_DATA`
+        // (JSON).
         let except = if check { "" } else { row.step.as_str() };
         for (step, outcome) in super::render::step_results(tx.sql(), &row.id, except)? {
             let prefix = format!("AAE_STEP_{}_", crate::config::upper(&step));

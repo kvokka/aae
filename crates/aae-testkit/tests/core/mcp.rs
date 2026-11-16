@@ -1,5 +1,5 @@
 //! The test MCP service answers both protocol epochs, refuses a wrong token and logs every request; the real `claude`
-//! and `codex` (pinned in `mise.toml`) call its tool when the fake providers ask for it (spec §15 criterion 14).
+//! and `codex` (pinned in `mise.toml`) call its tool when the fake providers ask for it (criterion 14).
 
 use aae_testkit::{anthropic, mcp, openai};
 use serde_json::{Value, json};

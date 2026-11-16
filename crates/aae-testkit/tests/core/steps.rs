@@ -1,5 +1,5 @@
-//! The steps of a formula (spec §9.1, §9.3; docs/design/contracts.md 6.1): in order, each once, a session of its own
-//! for each ai step, the outcome of a step in the template and the environment of the later ones, and a kill of
+//! The steps of a formula (docs/design/config.md; docs/design/contracts.md 6.1): in order, each once, a session of its
+//! own for each ai step, the outcome of a step in the template and the environment of the later ones, and a kill of
 //! the daemon at every step boundary. Exec steps run real commands, so real time.
 
 use crate::common;

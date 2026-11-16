@@ -1,4 +1,4 @@
-//! `aae mcp-bridge` (spec §11.4) as the daemon runs it: the real binary in front of the stdio server of
+//! `aae mcp-bridge` (docs/design/config.md) as the daemon runs it: the real binary in front of the stdio server of
 //! `aae_testkit::mcp`, which `cargo nextest run` builds as the `mcp-probe` binary next to `aae`.
 
 use serde_json::{Value, json};

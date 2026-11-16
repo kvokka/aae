@@ -1,5 +1,5 @@
-//! Invariant 6 (spec §5.5, docs/design/contracts.md 8): a new attempt starts only once nothing is left of the
-//! instance it replaces, its marked descendants included, and never touches a live shared instance.
+//! Invariant 6 (docs/design/invariants.md, docs/design/contracts.md 8): a new attempt starts only once nothing is left
+//! of the instance it replaces, its marked descendants included, and never touches a live shared instance.
 #![cfg(target_os = "linux")] // the sweep reads `/proc`
 
 use crate::common;

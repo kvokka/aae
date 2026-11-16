@@ -1,6 +1,6 @@
-//! The formula step (spec §9.1, §9.3, criterion 31, core part): the step is a child run of another formula with the
-//! inputs of its parent it declares and those the step gives; its outcome is the step's; an internal formula runs
-//! only so.
+//! The formula step (docs/design/config.md, docs/design/contracts.md 6, criterion 31, core part): the step is a child
+//! run of another formula with the inputs of its parent it declares and those the step gives; its outcome is the
+//! step's; an internal formula runs only so.
 
 use crate::common;
 

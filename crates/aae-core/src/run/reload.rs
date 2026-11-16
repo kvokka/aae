@@ -1,5 +1,5 @@
-//! The daemon stopping holds every run that has not started (`daemon.stopping`); reloading the config (spec §6.5,
-//! contracts 2 `config.reloaded`): runs keep the snapshot they prepared with, new
+//! The daemon stopping holds every run that has not started (`daemon.stopping`); reloading the config
+//! (docs/design/config.md, contracts 2 `config.reloaded`): runs keep the snapshot they prepared with, new
 //! runs and the schedules take the new config, and an idle instance stops when no agent of the new config starts
 //! sessions on its fingerprint (a changed MCP restarts only the instances it is part of).
 

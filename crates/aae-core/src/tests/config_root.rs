@@ -1,4 +1,4 @@
-//! The project root: its name and path, and the rigs beside it (spec §6.1, decision 99).
+//! The project root: its name and path, and the rigs beside it (docs/design/config.md, decision 99).
 
 use super::{
     config::{BASE, fails, load_for_adapters, load_with},
@@ -45,7 +45,8 @@ fn the_root_takes_a_name_and_a_path() {
         &[("shop/aae.toml", &project("[root]\nmodel = \"opus\"\n"))],
         "unknown field `model`",
     );
-    // Two settings and no more (spec §6.1): text for an agent is a file of the agent (spec §8.1).
+    // Two settings and no more (docs/design/config.md): text for an agent is a file of the agent
+    // (docs/design/config.md).
     fails(
         &[("shop/aae.toml", &project("[root]\nvars = { checks = \"x\" }\n"))],
         "unknown field `vars`",
@@ -149,7 +150,8 @@ fn implementer() -> Name {
     }
 }
 
-/// A rig's beads carry the acronym of its name, or its `prefix` (spec §10.2); a bead of no rig prefix is the root's.
+/// A rig's beads carry the acronym of its name, or its `prefix` (docs/design/tracker-br.md); a bead of no rig prefix is
+/// the root's.
 #[test]
 fn a_rig_takes_the_acronym_of_its_name_or_its_prefix_key() {
     let rigs = "[rigs.my-project]\npath = \"mine\"\n[rigs.web_api]\npath = \"web\"\nprefix = \"api\"\n";

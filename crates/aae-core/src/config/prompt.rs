@@ -1,5 +1,5 @@
-//! The prompt template of each agent a project's formulas name (spec §8.1): `prompt.template.md` of the agent's
-//! directory in its pack, or the project's own in `.aae/agents/<agent>/`, with the files the template names.
+//! The prompt template of each agent a project's formulas name (docs/design/config.md): `prompt.template.md` of the
+//! agent's directory in its pack, or the project's own in `.aae/agents/<agent>/`, with the files the template names.
 
 use super::{Input, InputType, Name, Project, Step, load::Loader, schema};
 use crate::template::{Inputs, Template};
@@ -127,7 +127,7 @@ fn path(path: &str, inputs: &BTreeMap<String, Input>, before: &[Step]) -> bool {
         "bead" => inputs.values().any(|i| i.kind == InputType::Task) && schema::bead_path(rest),
         "run" => schema::run_path(rest),
         "project" => matches!(rest, "name" | "path"),
-        // The remarks of the checks that sent the run back; empty in the first round (spec §9.1).
+        // The remarks of the checks that sent the run back; empty in the first round (docs/design/config.md).
         "remarks" => rest.is_empty(),
         // The outcome of an earlier step: `steps.<name>.result`, `.summary` or `.data` and below.
         "steps" => {

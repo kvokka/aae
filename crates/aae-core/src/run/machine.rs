@@ -90,8 +90,8 @@ impl RunHandler {
             params![row.id, row.workdir, row.prompt, row.config],
         )?;
         self.start_attempt(tx, row, "new_session")?;
-        // The workdir the run held while preparing (the rig's, spec §9.3) is free once a hook moved the run: a run
-        // waiting for it may start (`worktree`, spec §11.5).
+        // The workdir the run held while preparing (the rig's, docs/design/contracts.md 6) is free once a hook moved
+        // the run: a run waiting for it may start (`worktree`, docs/design/config.md).
         if moved { self.schedule(tx) } else { Ok(()) }
     }
 
@@ -123,7 +123,7 @@ impl RunHandler {
             let reason = format!("the workdir `{}` does not exist", row.workdir);
             return self.terminal(tx, row, "failed", Some("infrastructure"), &reason);
         }
-        // Of one step: each ai step of a formula has a session of its own (spec §9.3).
+        // Of one step: each ai step of a formula has a session of its own (docs/design/contracts.md 6).
         let last_session = |tx: &Tx<'_>, run: &str, step: Option<&str>| {
             tx.sql()
                 .query_row(
@@ -136,15 +136,15 @@ impl RunHandler {
         };
         let own = last_session(tx, &row.id, Some(&row.step))?;
         // The first attempt of an execution of a step: at its start, when a check sends the run back to it or when
-        // it runs again (spec §9.1, §9.3); not after an attempt of it that failed.
+        // it runs again (docs/design/config.md, docs/design/contracts.md 6); not after an attempt of it that failed.
         let entering: bool = tx.sql().query_row(
             "SELECT NOT EXISTS (SELECT 1 FROM attempts WHERE run = ?1 AND n = ?2 AND step = ?3 \
              AND (outcome IS NULL OR failure IS NOT NULL))",
             params![row.id, row.attempt, row.step],
             |r| r.get(0),
         )?;
-        // A run that continues the session of another run (spec §9.3) starts there, and its first step resumes there
-        // while it has no session of its own.
+        // A run that continues the session of another run (docs/design/contracts.md 6) starts there, and its first step
+        // resumes there while it has no session of its own.
         let continued: Option<String> = tx
             .sql()
             .query_row(
@@ -167,7 +167,7 @@ impl RunHandler {
         let session = match (row.attempt, kind) {
             (0, _) => from,
             (_, "resume") => own.or(from),
-            // A step gone back to continues its session, with its prompt and the remarks (spec §9.3).
+            // A step gone back to continues its session, with its prompt and the remarks (docs/design/contracts.md 6).
             _ if entering => own.filter(|(_, h)| *h == config.harness),
             _ => None,
         };
@@ -203,7 +203,8 @@ impl RunHandler {
         };
         let (config, services) = Self::bind_services(tx, &row, config, &self.config)?;
         let split = driver.split(&config, &plan);
-        // The account comes from the config before the start (spec §5.7): a closed account gate parks with no launch.
+        // The account comes from the config before the start (docs/design/contracts.md 7): a closed account gate parks
+        // with no launch.
         if let Ok(split) = &split {
             let account = driver
                 .account(&split.process)
@@ -282,7 +283,8 @@ impl RunHandler {
             )
             .optional()?;
         let account = (failure.account.as_ref().zip(harness)).map(|(a, h)| format!("account:{h}/{a}"));
-        // The model key is the config's alone (spec §5.7): a model the failure names stays data of the event.
+        // The model key is the config's alone (docs/design/contracts.md 7): a model the failure names stays data of the
+        // event.
         Self::learn_keys(tx, &row, account, None)?;
         let failure = super::failure_json(&failure);
         self.end_attempt(tx, &row, Some(&failure))?;
@@ -324,8 +326,8 @@ impl RunHandler {
         let Some((harness, handle, session, instance)) = live else {
             return Ok(());
         };
-        // The command of an exec step or the check script of any step (spec §9.1); its own dedupe, apart from the
-        // stop of a session.
+        // The command of an exec step or the check script of any step (docs/design/config.md); its own dedupe, apart
+        // from the stop of a session.
         let command: bool = (tx.sql()).query_row(
             "SELECT EXISTS (SELECT 1 FROM effects WHERE key = ?1)",
             [format!("exec:{}", row.id)],

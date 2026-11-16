@@ -1,4 +1,4 @@
-//! The fake Anthropic Messages API answers every mode of its plan over plain HTTP (spec §7.8).
+//! The fake Anthropic Messages API answers every mode of its plan over plain HTTP (docs/harness-updates.md).
 
 use aae_testkit::anthropic::{Provider, Reply};
 use serde_json::{Value, json};

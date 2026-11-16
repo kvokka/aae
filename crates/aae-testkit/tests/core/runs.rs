@@ -1,4 +1,4 @@
-//! The run machine on the scripted driver (docs/design/contracts.md 6; spec §15 criterion 4, core part), on the
+//! The run machine on the scripted driver (docs/design/contracts.md 6; criterion 4, core part), on the
 //! managed clock.
 
 use crate::common;

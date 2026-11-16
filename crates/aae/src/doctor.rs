@@ -1,6 +1,6 @@
-//! `aae doctor` (spec §13), without a daemon or from it (`GET /v1/doctor`): the harness and br binaries with their
-//! versions and logins, the private directories, the state and its outbox; and `aae daemon --service`, the service
-//! file that runs the daemon.
+//! `aae doctor` (docs/guide/install.md), without a daemon or from it (`GET /v1/doctor`): the harness and br binaries
+//! with their versions and logins, the private directories, the state and its outbox; and `aae daemon --service`, the
+//! service file that runs the daemon.
 
 use crate::{
     daemon::Paths,
@@ -75,7 +75,8 @@ pub(crate) fn findings(paths: &Paths) -> Vec<Value> {
                     "br is MIT with an OpenAI/Anthropic rider, not an OSI license; aae only runs the installed \
                      binary — check that the rider fits your use",
                 ));
-                // A rig's beads must not share the prefix of the root's (spec §10.2); the core does not know br.
+                // A rig's beads must not share the prefix of the root's (docs/design/tracker-br.md); the core does not
+                // know br.
                 for p in config.projects.iter().filter(|p| p.dir.join(".beads").is_dir()) {
                     let Some(db) = aae_br::issue_prefix(&path, &p.dir.join(".beads")) else {
                         continue;
@@ -200,7 +201,7 @@ fn state(db: &Path) -> Value {
 }
 
 /// The service file that runs `aae daemon` with `config` (absolute), and the `PATH` of this shell so the daemon
-/// finds mise (spec §6.5). The daemon is not started: the file is printed for the user to install.
+/// finds mise (docs/design/config.md). The daemon is not started: the file is printed for the user to install.
 pub(crate) fn service(kind: Service, config: Option<PathBuf>) -> ExitCode {
     let exe = env::current_exe().map_or_else(|_| "aae".into(), |p| p.display().to_string());
     let mut args = vec![exe, "daemon".to_owned()];

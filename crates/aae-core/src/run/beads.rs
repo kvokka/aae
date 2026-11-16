@@ -1,7 +1,7 @@
-//! Bead ownership (spec §10.3, invariants 2–5, docs/design/contracts.md 5): the core records the owner run of a bead
-//! when it decides to run on it, claims it in the tracker as the run prepares, and closes or conditionally releases
-//! it when the run ends. The tracker calls are effects on the queue `tracker:<project>`, so the calls of one project
-//! keep their order.
+//! Bead ownership (docs/design/contracts.md 5, invariants 2–5): the core records the owner
+//! run of a bead when it decides to run on it, claims it in the tracker as the run prepares, and closes or
+//! conditionally releases it when the run ends. The tracker calls are effects on the queue `tracker:<project>`, so the
+//! calls of one project keep their order.
 
 use super::{GateSpec, Msg, RunHandler, drain::sync, rejected, row::Row};
 use crate::{
@@ -18,7 +18,7 @@ pub(super) type Trackers = Arc<BTreeMap<String, Arc<dyn Tracker>>>;
 impl RunHandler {
     /// The beads a run created with `input` may work on, the first it can take first: the bead id it names, or the
     /// ready beads (in the tracker's order) that are in `epic`, belong to `rig` (or to the root), have no owner and
-    /// no closed gate. Empty: nothing is ready (§10.3).
+    /// no closed gate. Empty: nothing is ready (docs/design/contracts.md 5).
     pub(super) fn pick_bead(project: &Project, tx: &Tx<'_>, rig: &str, input: &Value) -> Result<Vec<String>, Error> {
         let other = |id: &str| project.rig_of(id).is_some_and(|r| r != rig);
         if let Some(id) = input.as_str() {
@@ -231,7 +231,8 @@ impl RunHandler {
     }
 
     /// The run ended: its hold on the bead goes; a claimed bead is closed (`passed`) or released conditionally, and
-    /// its failure counter moves (§10.3): `bead_failures` failed runs close the bead's gate for the core.
+    /// its failure counter moves (docs/design/contracts.md 5): `bead_failures` failed runs close the bead's gate for
+    /// the core.
     pub(super) fn let_go_bead(&mut self, tx: &mut Tx<'_>, row: &Row, state: &str, reason: &str) -> Result<(), Error> {
         let Some(bead) = &row.bead else { return Ok(()) };
         let owned = tx.sql().execute(

@@ -87,7 +87,7 @@ fn host_mcp(host: &Path) -> Check {
     aae_core::driver::host_mcp_check("codex", &names)
 }
 
-/// Spec §2, decision 38: the codex sandbox needs user namespaces, which many hosts lack, so a codex agent whose config
+/// Decision 38: the codex sandbox needs user namespaces, which many hosts lack, so a codex agent whose config
 /// sets no `sandbox_mode` runs with none; the warning names every such agent, per rig. A config that does not
 /// assemble cannot be shown to set it, so its agent is named too.
 fn sandbox(host: &Path, agents: DoctorAgents) -> Check {

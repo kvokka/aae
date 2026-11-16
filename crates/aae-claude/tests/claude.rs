@@ -1,4 +1,5 @@
-//! The claude adapter driving the real `claude` against the fake Anthropic API (spec §7.8): no model, no account.
+//! The claude adapter driving the real `claude` against the fake Anthropic API (docs/harness-updates.md): no model, no
+//! account.
 
 use aae_claude::Claude;
 use aae_core::{
@@ -164,7 +165,8 @@ fn sourced<T>(value: T) -> Sourced<T> {
     }
 }
 
-/// Host inheritance off: the rig's `CLAUDE.md` reaches the model, the host's personal one does not (spec §6.4).
+/// Host inheritance off: the rig's `CLAUDE.md` reaches the model, the host's personal one does not
+/// (docs/design/config.md).
 #[tokio::test]
 async fn an_isolated_session_reads_the_rig_but_not_the_host() {
     let dir = tempfile::tempdir().unwrap();

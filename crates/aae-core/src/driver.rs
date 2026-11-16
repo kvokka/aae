@@ -1,5 +1,6 @@
 //! The driver interface between the core and a harness adapter (docs/design/contracts.md 4). The adapter
-//! translates and executes; it never retries a turn, parks or decides an outcome (spec §4, §7.2).
+//! translates and executes; it never retries a turn, parks or decides an outcome (docs/architecture.md,
+//! docs/design/adapters.md).
 
 use crate::{BoxFuture, config::EffectiveConfig};
 use serde::{Deserialize, Serialize};
@@ -84,7 +85,7 @@ pub enum SessionPlan {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct SessionRef(pub Value);
 
-/// A running harness process: `pid` and its kernel `start_time` identify the process (spec §5.2).
+/// A running harness process: `pid` and its kernel `start_time` identify the process (docs/design/event-model.md).
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct InstanceHandle {
     pub id: String,
@@ -128,8 +129,8 @@ pub enum Health {
     Dead,
 }
 
-/// The daemon's network settings a harness process inheriting the host gets too (spec §6.4): proxies and the
-/// certificates to trust.
+/// The daemon's network settings a harness process inheriting the host gets too (docs/design/config.md): proxies and
+/// the certificates to trust.
 pub const HOST_NETWORK_ENV: [&str; 11] = [
     "HTTPS_PROXY",
     "https_proxy",
@@ -240,7 +241,8 @@ pub trait Driver: Send + Sync {
     /// The harness name the config uses for it, `[harness.<name>]`.
     fn harness(&self) -> &'static str;
     fn capabilities(&self, process: &ProcessPart) -> Capabilities;
-    /// The account id the gates use (spec §5.7): a stable hash of the credential source, never the credential.
+    /// The account id the gates use (docs/design/contracts.md 7): a stable hash of the credential source, never the
+    /// credential.
     fn account(&self, process: &ProcessPart) -> Option<String>;
     /// A config the harness cannot express is a `config_error` failure of the attempt.
     fn split(&self, config: &EffectiveConfig, plan: &SessionPlan) -> Result<Split, Failure>;
@@ -285,9 +287,10 @@ pub trait Driver: Send + Sync {
         request_id: &'a str,
         answer: &'a Answer,
     ) -> BoxFuture<'a, Result<(), Failure>>;
-    /// Stops the commands the session left running after its turn (spec §9.4); the session stays and takes a next
-    /// prompt. Work the agent may still wait for (a background subagent) is left alone. The harness reports the end
-    /// of what was stopped, and the session comes to `State{Idle, background: false}` by the usual rule. Best effort.
+    /// Stops the commands the session left running after its turn (docs/design/contracts.md 6); the session stays and
+    /// takes a next prompt. Work the agent may still wait for (a background subagent) is left alone. The harness
+    /// reports the end of what was stopped, and the session comes to `State{Idle, background: false}` by the usual
+    /// rule. Best effort.
     fn stop_background<'a>(&'a self, instance: &'a InstanceHandle, session: &'a SessionRef) -> BoxFuture<'a, ()>;
     /// Detaches the session from its instance; the transcript stays, so the session can be resumed later.
     fn close_session<'a>(&'a self, instance: &'a InstanceHandle, session: &'a SessionRef) -> BoxFuture<'a, ()>;
@@ -298,7 +301,7 @@ pub trait Driver: Send + Sync {
         session: &'a SessionRef,
         key: PromptKey,
     ) -> BoxFuture<'a, Result<Transcript, Failure>>;
-    /// The raw harness messages of a session (spec §5.3 direct relay); a slow reader loses messages.
+    /// The raw harness messages of a session (docs/design/event-model.md direct relay); a slow reader loses messages.
     fn live(&self, session: &SessionRef) -> Option<broadcast::Receiver<Value>>;
 }
 

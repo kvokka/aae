@@ -1,5 +1,6 @@
-//! The exits of a check script other than its code (spec §9.1, contracts 6.1 `finishing`): a timeout, a signal and a
-//! lost answer do not pass the step, a script that cannot start fails the run. Real processes, so real time.
+//! The exits of a check script other than its code (docs/design/config.md, contracts 6.1 `finishing`): a timeout, a
+//! signal and a lost answer do not pass the step, a script that cannot start fails the run. Real processes, so real
+//! time.
 
 use crate::{
     common::{World, world},
@@ -104,7 +105,7 @@ async fn a_check_script_that_cannot_start_fails_the_run() {
     assert_eq!(w.executions(&run), [], "no repeat");
 }
 
-/// Exit 75 is a failure for good: a check step with `back_to` sends no work back for it (spec §9.1).
+/// Exit 75 is a failure for good: a check step with `back_to` sends no work back for it (docs/design/config.md).
 #[tokio::test]
 async fn exit_75_of_the_check_script_of_a_check_step_fails_the_run_with_no_return() {
     let formula = "name = \"build\"\n[[step]]\nname = \"work\"\nkind = \"ai\"\nagent = \"dev\"\n[[step]]\n\

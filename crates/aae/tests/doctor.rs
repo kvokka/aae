@@ -1,4 +1,5 @@
-//! `aae doctor` and the service files on fake harness, mise and br binaries (spec §6.5, §13).
+//! `aae doctor` and the service files on fake harness, mise and br binaries (docs/design/config.md,
+//! docs/guide/install.md).
 
 mod common;
 
@@ -140,7 +141,7 @@ fn harnesses_resolve_from_the_config_and_from_mise_and_a_missing_one_fails() {
 #[test]
 fn a_login_counts_only_when_a_session_the_daemon_starts_gets_it() {
     let dir = tree("");
-    // The daemon's own keys reach no session (spec §6.5).
+    // The daemon's own keys reach no session (docs/design/config.md).
     let keys = [("ANTHROPIC_API_KEY", "k"), ("OPENAI_API_KEY", "k")];
     let found = doctor_env(dir.path(), &keys).1;
     assert_eq!(level(&found, "claude login").0, "warning", "{found:?}");

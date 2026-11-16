@@ -1,4 +1,4 @@
-//! The HTTP API (spec §12): JSON over a unix socket, the event stream as SSE. Mutating operations take an
+//! The HTTP API (docs/api/frontends.md): JSON over a unix socket, the event stream as SSE. Mutating operations take an
 //! `Idempotency-Key` header: a repeated request with the same key returns the first reply and changes nothing; the
 //! key repeated with another method, path or body is refused with 422.
 
@@ -77,7 +77,7 @@ type State = axum::extract::State<Arc<Api>>;
 #[openapi(
     info(
         title = "aae",
-        description = "The API of the aae daemon (spec §12). Over TCP every operation needs \
+        description = "The API of the aae daemon (docs/api/frontends.md). Over TCP every operation needs \
             `Authorization: Bearer <api_token>`; without it the reply is 401 `unauthorized`, an `ErrorReply`."
     ),
     components(schemas(ErrorReply))

@@ -1,5 +1,6 @@
-//! Runs an external command for an exec step (spec §9.1) or an orchestrator hook (docs/design/contracts.md 3.1):
-//! a process group of its own, a clean environment, a timeout that ends the whole group, bounded output.
+//! Runs an external command for an exec step (docs/design/config.md) or an orchestrator hook
+//! (docs/design/contracts.md 3.1): a process group of its own, a clean environment, a timeout that ends the whole
+//! group, bounded output.
 
 use rustix::process::{Pid, Signal, kill_process_group};
 use std::{
@@ -182,7 +183,8 @@ async fn pump(from: Option<impl AsyncRead + Unpin>, keep: usize, into: Shared) {
     }
 }
 
-/// Waits until the process `pid` started at `start_time` is gone (spec §5.2); `false` if it outlives `limit`.
+/// Waits until the process `pid` started at `start_time` is gone (docs/design/event-model.md); `false` if it outlives
+/// `limit`.
 pub(crate) async fn wait_dead(pid: i32, start_time: u64, limit: Duration) -> bool {
     let deadline = tokio::time::Instant::now() + limit;
     while crate::orphans::start_time(pid) == Some(start_time) {

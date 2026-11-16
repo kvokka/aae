@@ -1,4 +1,4 @@
-//! The bundled `worktree` plugin on the run machine, with real git (spec §11.5).
+//! The bundled `worktree` plugin on the run machine, with real git (docs/design/config.md).
 
 use crate::common;
 

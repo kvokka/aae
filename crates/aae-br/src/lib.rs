@@ -1,7 +1,7 @@
-//! The br tracker adapter (spec §10.2, docs/design/contracts.md 5): every call is one `br` process (0.7.6) on the
-//! project's database named explicitly by `BEADS_DIR`, with the caller's actor; the writes come from br's `events`
-//! table, read-only, and a watcher on `.beads/` says when to read them (docs/design/experiments.md, experiment 3).
-//! A created bead is an epic whose `external_ref` is its key.
+//! The br tracker adapter (docs/design/tracker-br.md, docs/design/contracts.md 5): every call is one `br` process
+//! (0.7.6) on the project's database named explicitly by `BEADS_DIR`, with the caller's actor; the writes come from
+//! br's `events` table, read-only, and a watcher on `.beads/` says when to read them (docs/design/experiments.md,
+//! experiment 3). A created bead is an epic whose `external_ref` is its key.
 
 #![deny(clippy::disallowed_methods)]
 
@@ -69,8 +69,8 @@ impl Br {
         let text = error["message"]
             .as_str()
             .map_or_else(|| String::from_utf8_lossy(&out.stderr).trim().to_owned(), str::to_owned);
-        // By the exit code, never the text (aae-context/03 §3): 2 with `retryable` is a lock timeout, 130 a shutdown,
-        // a killed br an unknown outcome the next read settles.
+        // By the exit code, never the text (docs/design/tracker-br.md, exit codes): 2 with `retryable` is a lock
+        // timeout, 130 a shutdown, a killed br an unknown outcome the next read settles.
         Err(Fail(
             code,
             match code {
@@ -338,7 +338,7 @@ fn field(kind: &str) -> Option<&'static str> {
     })
 }
 
-/// A bead of `br show --json`; its parent is its epic (br has no epic field, §10.2).
+/// A bead of `br show --json`; its parent is its epic (br has no epic field, docs/design/tracker-br.md).
 fn bead(v: &Value) -> Result<Bead, TrackerError> {
     let text = |k: &str| v[k].as_str().map(str::to_owned);
     let invalid = || TrackerError::Invalid {

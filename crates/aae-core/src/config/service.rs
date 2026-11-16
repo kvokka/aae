@@ -1,5 +1,6 @@
-//! `[[service]]` (spec §11.4): a long-lived process the daemon supervises, shared per scope, with an optional MCP
-//! endpoint the sessions get. aae guesses the common paths: `mcp = true` is `/mcp`, `health = "http"` is `/health`.
+//! `[[service]]` (docs/design/config.md): a long-lived process the daemon supervises, shared per scope, with an
+//! optional MCP endpoint the sessions get. aae guesses the common paths: `mcp = true` is `/mcp`, `health = "http"` is
+//! `/health`.
 
 use super::load::Loader;
 use serde::{Deserialize, Serialize};

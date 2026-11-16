@@ -1,5 +1,5 @@
-//! An agent's prompt template lives in its directory, and the project overrides it with files of its own (spec §8.1,
-//! criterion 33).
+//! An agent's prompt template lives in its directory, and the project overrides it with files of its own
+//! (docs/design/config.md, criterion 33).
 
 use super::config::{BASE, TEMPLATE, fails, load_with};
 use crate::config::{Name, Prompt};

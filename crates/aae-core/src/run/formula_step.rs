@@ -1,5 +1,6 @@
-//! The formula step (spec §9.1, §9.3): an attempt with no process whose step is a run of another formula of the
-//! project, a child of the run on its rig, created once per entry of the step; its end is the step's outcome.
+//! The formula step (docs/design/config.md, docs/design/contracts.md 6): an attempt with no process whose step is a run
+//! of another formula of the project, a child of the run on its rig, created once per entry of the step; its end is the
+//! step's outcome.
 
 use super::{Create, Outcome, RunHandler, Verdict, row::Row, triggers::MAX_DEPTH};
 use crate::writer::{Error, Tx};
@@ -92,8 +93,9 @@ impl RunHandler {
         }
     }
 
-    /// The bead data of `parent` when its formula step lends `bead` to its child (spec §9.1, §10.3): the child works
-    /// on the bead and the parent keeps it; a child of that child may borrow it on.
+    /// The bead data of `parent` when its formula step lends `bead` to its child (docs/design/config.md,
+    /// docs/design/contracts.md 5): the child works on the bead and the parent keeps it; a child of that child may
+    /// borrow it on.
     pub(super) fn lent(tx: &Tx<'_>, parent: Option<&str>, bead: &str) -> Result<Option<String>, Error> {
         let Some(parent) = parent else { return Ok(None) };
         let data: Option<Option<String>> = tx

@@ -1,4 +1,4 @@
-//! The committed OpenAPI document is the one the code generates (spec §12, criterion 17).
+//! The committed OpenAPI document is the one the code generates (docs/api/frontends.md, criterion 17).
 
 use std::{fs, path::Path};
 

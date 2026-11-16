@@ -5,8 +5,9 @@ use tokio::time::Instant;
 ///
 /// `system()` reads the system time on every call, so time spent with the machine asleep and NTP corrections are
 /// seen by the next `now_ms`. `managed(start)` starts at `start` and advances with tokio's clock: under
-/// `tokio::time::pause()` that is the managed clock of the deterministic checks (spec §15, 5b). Deadlines sleep on
-/// tokio's monotonic timer either way; one that overslept a suspend is caught by the periodic resync (spec §5.1).
+/// `tokio::time::pause()` that is the managed clock of the deterministic checks (criterion 5b). Deadlines
+/// sleep on tokio's monotonic timer either way; one that overslept a suspend is caught by the periodic resync
+/// (docs/design/event-model.md).
 #[derive(Clone, Copy, Debug)]
 pub struct Clock(Mode);
 

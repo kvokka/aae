@@ -1,5 +1,5 @@
-//! The 15 contract scenarios of spec §7.8 for claude: the real `claude` against the fake Anthropic API, no model
-//! and no account. Each scenario pins what the adapter reports for one harness behaviour; rerun them on every
+//! The 15 contract scenarios of docs/harness-updates.md for claude: the real `claude` against the fake Anthropic API,
+//! no model and no account. Each scenario pins what the adapter reports for one harness behaviour; rerun them on every
 //! claude update (docs/harness-updates.md).
 
 use aae_claude::Claude;
@@ -205,7 +205,7 @@ async fn s02_endless_rate_limits_are_rate_limited_and_already_retried() {
     assert_eq!(retried(&seen), 1, "{seen:?}");
 }
 
-/// With an API key claude reports no reset time (spec §7.8): a quota looks like a plain rate limit.
+/// With an API key claude reports no reset time (docs/harness-updates.md): a quota looks like a plain rate limit.
 #[tokio::test]
 async fn s03_a_quota_with_a_reset_time_is_a_rate_limit_without_a_time() {
     let (failure, seen) = failure_of(Reply::Quota, 0).await;
@@ -279,7 +279,8 @@ async fn s10_kill_9_in_a_command_is_a_harness_crash_within_a_second() {
     assert_eq!(kinds, [FailureKind::HarnessCrash], "{:?}", live.seen);
 }
 
-/// EOF on stdin in a turn: claude finishes the turn without an observer, then exits on its own (aae-context/01 §6).
+/// EOF on stdin in a turn: claude finishes the turn without an observer, then exits on its own
+/// (docs/harness-updates.md, scenario 11).
 #[tokio::test]
 async fn s11_eof_on_stdin_in_a_turn_lets_the_turn_finish_then_exit() {
     let dir = tempfile::tempdir().unwrap();
@@ -312,8 +313,8 @@ async fn s11_eof_on_stdin_in_a_turn_lets_the_turn_finish_then_exit() {
     assert!(live.failures().is_empty(), "{:?}", live.seen);
 }
 
-/// A silent provider gives no turn end and no failure: the core's watchdog owns the stall (spec §5.5); an
-/// interrupt ends the turn as cancelled.
+/// A silent provider gives no turn end and no failure: the core's watchdog owns the stall (docs/design/invariants.md);
+/// an interrupt ends the turn as cancelled.
 #[tokio::test]
 async fn s12_a_silent_provider_ends_nothing_until_an_interrupt_cancels_the_turn() {
     let dir = tempfile::tempdir().unwrap();
@@ -381,7 +382,7 @@ async fn s14_a_background_command_keeps_the_session_busy_after_the_turn() {
 }
 
 /// claude does not refuse a second process on a live session: both write, so one writer per session is the
-/// core's to keep (spec §5.5, invariant 8), never the harness's.
+/// core's to keep (docs/design/invariants.md, invariant 8), never the harness's.
 #[tokio::test]
 async fn s15_a_second_writer_is_not_refused_by_claude() {
     let dir = tempfile::tempdir().unwrap();

@@ -1,5 +1,5 @@
 //! Configuration: the files of the orchestrator, projects, packs, agents, formulas, triggers and plugins
-//! (spec §6, §8, §9.1, §9.5, §11; docs/design/config.md), loaded and validated as a whole.
+//! (docs/guide/plugin.md; docs/design/config.md), loaded and validated as a whole.
 
 mod assemble;
 mod check;
@@ -26,21 +26,21 @@ pub use sources::{Checkouts, GitSource, commit_id, git_sources};
 use std::{collections::BTreeMap, fmt, path::PathBuf, time::Duration};
 
 /// The whole configuration of one daemon. Loading it is all or nothing: the caller keeps its previous `Config`
-/// when [`load`] fails (spec §6.5).
+/// when [`load`] fails (docs/design/config.md).
 #[derive(Clone, Debug)]
 pub struct Config {
-    /// Runs started at once across every project (spec §9.3).
+    /// Runs started at once across every project (docs/design/contracts.md 6).
     pub max_runs: u32,
-    /// Failed runs of a bead before the core closes the bead's gate (spec §10.3).
+    /// Failed runs of a bead before the core closes the bead's gate (docs/design/config.md).
     pub bead_failures: u32,
-    /// The loopback address the API also listens on with a token (spec §12); off when absent.
+    /// The loopback address the API also listens on with a token (docs/api/frontends.md); off when absent.
     pub api_tcp: Option<std::net::SocketAddr>,
     /// The token of `api_tcp` for this daemon start: not from a file, the daemon sets it.
     pub api_token: String,
     /// The zone `cron` schedules are read in: `timezone` of the orchestrator config, else the system one.
     pub timezone: jiff::tz::TimeZone,
     pub harnesses: BTreeMap<String, Harness>,
-    /// Layer 2 of spec §6.3.
+    /// Layer 2 of docs/design/config.md.
     pub settings: Settings,
     /// The `[agents.<name>]` edits (no `base`), by agent reference; they may name an agent of any project.
     pub edits: BTreeMap<String, Settings>,
@@ -54,11 +54,11 @@ pub struct Config {
     /// The thresholds of the watchdog (invariant 15): a reload applies to deadlines set from then on.
     pub watchdog: Watchdog,
     pub projects: Vec<Project>,
-    /// The command prefix that serves a stdio MCP server over HTTP on `AAE_SERVICE_PORT` (spec §11.4): a stdio
-    /// server not of scope `session` runs behind it as a service. Empty: no bridge, stdio servers stay per session.
-    /// [`load`] leaves it empty; the binary sets it.
+    /// The command prefix that serves a stdio MCP server over HTTP on `AAE_SERVICE_PORT` (docs/design/config.md): a
+    /// stdio server not of scope `session` runs behind it as a service. Empty: no bridge, stdio servers stay per
+    /// session. [`load`] leaves it empty; the binary sets it.
     pub bridge: Vec<String>,
-    /// How long a service may take to pass its health check, and a launch waits for it (spec §11.4): 30 s.
+    /// How long a service may take to pass its health check, and a launch waits for it (docs/design/config.md): 30 s.
     /// Not from a file: [`load`] sets it, a test shortens it.
     pub service_wait: Duration,
 }
@@ -75,7 +75,7 @@ pub struct Watchdog {
     pub park_timeout_ms: i64,
 }
 
-/// The plugins bundled with aae (spec §11.5): name, the events they hook, and whether they are on with no
+/// The plugins bundled with aae (docs/design/config.md): name, the events they hook, and whether they are on with no
 /// `[builtin.<name>]` table. `worktree` has no table: it is on in a project with a formula of `worktree = true`.
 pub const BUNDLED: [(&str, &[&str], bool); 2] = [
     (
@@ -103,7 +103,7 @@ pub struct Project {
     pub name: String,
     /// The directory of `aae.toml`: the config files, packs and tracker of the project live here.
     pub dir: PathBuf,
-    /// The root's name and the root: a place like a rig, without its triggers and settings (spec §6.1).
+    /// The root's name and the root: a place like a rig, without its triggers and settings (docs/design/config.md).
     pub root: (String, Rig),
     /// Layer 3.
     pub settings: Settings,
@@ -120,8 +120,8 @@ pub struct Project {
     pub tracker: TrackerLink,
 }
 
-/// How the project's sessions and commands reach its tracker (spec §10.2). The core knows no tracker (spec §2,
-/// decision 43): the integration that makes trackers fills this in after loading; empty until then.
+/// How the project's sessions and commands reach its tracker (docs/design/config.md). The core knows no tracker
+/// (decision 43): the integration that makes trackers fills this in after loading; empty until then.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct TrackerLink {
     /// The project has a tracker.
@@ -132,14 +132,16 @@ pub struct TrackerLink {
     /// The variable that carries the attempt's tracker actor, `aae:<run>:<attempt>` (contracts 5.1), into a session
     /// or a command.
     pub actor: Option<String>,
-    /// The variable that gives the beads a session or command files on a rig that rig's prefix (spec §10.2).
+    /// The variable that gives the beads a session or command files on a rig that rig's prefix
+    /// (docs/design/config.md).
     pub prefix: Option<String>,
 }
 
 #[derive(Clone, Debug)]
 pub struct Rig {
     pub path: PathBuf,
-    /// The prefix of the ids of its beads (spec §10.2); none for the root, whose beads carry the tracker's own.
+    /// The prefix of the ids of its beads (docs/design/config.md); none for the root, whose beads carry the
+    /// tracker's own.
     pub prefix: Option<String>,
     pub vars: BTreeMap<String, String>,
     /// Pack triggers that run on this rig.
@@ -173,7 +175,8 @@ pub struct Agent {
     pub harness: Option<String>,
     /// Where it works; an agent of the root takes no rig's layer, edits or variant.
     pub scope: Scope,
-    /// The agent layer but its harness; its `system_prompt` is the role prompt file (spec §8.1) when the agent has one.
+    /// The agent layer but its harness; its `system_prompt` is the role prompt file (docs/design/config.md) when the
+    /// agent has one.
     pub settings: Settings,
     /// Runs of this agent started at once in its project; no limit but the orchestrator's when absent.
     pub max_runs: Option<u32>,
@@ -227,7 +230,7 @@ pub struct Plugin {
     pub params: serde_json::Map<String, serde_json::Value>,
 }
 
-/// A command on a core event (spec §11.3).
+/// A command on a core event (docs/design/contracts.md 3).
 #[derive(Clone, Debug)]
 pub struct OrchestratorHook {
     pub on: String,
@@ -243,7 +246,8 @@ pub struct Name {
 }
 
 impl Project {
-    /// The formula a run of this project names; a bare name resolves as written in the project root pack (spec §8.2).
+    /// The formula a run of this project names; a bare name resolves as written in the project root pack
+    /// (docs/design/config.md).
     pub fn formula(&self, reference: &str) -> Result<(Name, &Formula), String> {
         let own = self.packs.first().map(|p| p.name.as_str()).unwrap_or_default();
         let has = |p: &Pack, n: &str| p.formulas.contains_key(n);

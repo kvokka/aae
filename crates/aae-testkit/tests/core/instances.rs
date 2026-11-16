@@ -1,4 +1,4 @@
-//! The instance registry (spec §7.3, docs/design/contracts.md 8, criterion 13 in the core): instances shared by
+//! The instance registry (docs/design/contracts.md 8, criterion 13 in the core): instances shared by
 //! fingerprint up to their capacity, stopped once idle.
 
 use crate::common;
@@ -149,8 +149,8 @@ async fn a_full_instance_or_another_fingerprint_gets_an_instance_of_its_own() {
     assert_eq!(w.count("instance.stopped"), 2, "no idle time: stopped at once");
 }
 
-/// A reload stops the idle instances whose fingerprint no agent of the new config gives, and only those (spec §6.5);
-/// a harness binary change is refused, since the drivers are made at start.
+/// A reload stops the idle instances whose fingerprint no agent of the new config gives, and only those
+/// (docs/design/config.md); a harness binary change is refused, since the drivers are made at start.
 #[tokio::test(start_paused = true)]
 async fn a_reload_stops_only_the_idle_instances_whose_fingerprint_changed() {
     let w = world_driven(FILES, ScriptedDriver::new(4).idle(Duration::from_secs(60)));
@@ -313,8 +313,8 @@ async fn the_operator_stops_an_idle_instance_and_no_busy_one() {
     assert!(reader.instances().unwrap().is_empty(), "the record goes");
 }
 
-/// A process gone with no exit reported is caught by the periodic resync (spec §5.1, invariant 20): the instance
-/// fails as a crash and so does the attempt on it.
+/// A process gone with no exit reported is caught by the periodic resync (docs/design/event-model.md, invariant 20):
+/// the instance fails as a crash and so does the attempt on it.
 #[tokio::test(start_paused = true)]
 async fn an_instance_whose_exit_was_lost_is_failed_by_the_resync() {
     let w = world_driven(FILES, ScriptedDriver::new(1));

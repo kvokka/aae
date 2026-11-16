@@ -1,6 +1,6 @@
-//! The tracker interface (spec §10.1, docs/design/contracts.md 5): the operations the core calls on the tracker of a
-//! project. The daemon is the only claimer (invariant 3); the state of the orchestrator is the truth of ownership
-//! and the assignee in the tracker mirrors it (§10.3).
+//! The tracker interface (docs/design/contracts.md 5): the operations the core calls on the
+//! tracker of a project. The daemon is the only claimer (invariant 3); the state of the orchestrator is the truth of
+//! ownership and the assignee in the tracker mirrors it (docs/design/contracts.md 5).
 
 use crate::writer::BoxFuture;
 use serde::{Deserialize, Serialize};
@@ -82,8 +82,8 @@ pub trait Tracker: Send + Sync {
     fn under<'a>(&'a self, root: &'a str) -> BoxFuture<'a, Result<Vec<String>, TrackerError>>;
     /// The writes after `after` (a `seq`, 0 for all), oldest first.
     fn changes(&self, after: i64) -> BoxFuture<'_, Result<Vec<Change>, TrackerError>>;
-    /// The root bead of a task (spec §10.3): the bead whose id is exactly `description`, else an open epic without
-    /// labels created as `actor`, once per `key` — a repeat returns the bead of the first call.
+    /// The root bead of a task (docs/design/contracts.md 5): the bead whose id is exactly `description`, else an open
+    /// epic without labels created as `actor`, once per `key` — a repeat returns the bead of the first call.
     fn create<'a>(
         &'a self,
         actor: &'a str,

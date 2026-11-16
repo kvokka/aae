@@ -1,5 +1,5 @@
-//! References between files: names resolved to their packs (spec §8.2), trigger inputs against their formula,
-//! rigs and agent edits against what the project has; the tables of the bundled plugins; the watchdog table.
+//! References between files: names resolved to their packs (docs/design/config.md), trigger inputs against their
+//! formula, rigs and agent edits against what the project has; the tables of the bundled plugins; the watchdog table.
 
 use super::{BUNDLED, Bundled, Name, Pack, Project, StepKind, Variant, Watchdog, load::Loader};
 use crate::template::Inputs;
@@ -206,7 +206,7 @@ pub(super) fn resolve(
 }
 
 /// A formula a drain step runs takes the bead and nothing else it needs: one input of type `task`, no other
-/// required one (spec §9.1).
+/// required one (docs/design/config.md).
 fn executor(formula: &super::Formula) -> Result<(), String> {
     let beads = formula.inputs.iter().filter(|(_, i)| i.kind == super::InputType::Task);
     if beads.count() != 1 {

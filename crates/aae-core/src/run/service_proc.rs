@@ -1,5 +1,5 @@
-//! The process of a service (spec §11.4): started by a `start_service` effect, ready once its health check passes,
-//! ended by a `stop_service` effect along with every process that carries its marker.
+//! The process of a service (docs/design/config.md): started by a `start_service` effect, ready once its health check
+//! passes, ended by a `stop_service` effect along with every process that carries its marker.
 
 use super::Msg;
 use crate::{

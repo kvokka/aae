@@ -1,5 +1,5 @@
-//! A task becomes the root bead of its run, or names the bead it takes up (spec §9.1, §10.3), on the scripted driver
-//! and the tracker in memory.
+//! A task becomes the root bead of its run, or names the bead it takes up (docs/design/config.md,
+//! docs/design/tracker-br.md), on the scripted driver and the tracker in memory.
 
 use crate::common;
 
@@ -124,7 +124,7 @@ async fn a_blank_task_or_another_form_is_refused_and_one_with_no_rig_runs_in_the
         assert!(refused.contains("a task is a text"), "{input}: {refused}");
     }
     assert!(w.tracker.bead("b-1").is_none());
-    // With no rig, the task's run works in the project root (spec §6.1).
+    // With no rig, the task's run works in the project root (docs/design/config.md).
     w.driver.script(slow_turn());
     let reply = w.start_bead("ask", None, json!("x")).await.unwrap();
     let run = reply["run"].as_str().unwrap();
@@ -182,7 +182,8 @@ async fn two_tasks_naming_a_bead_not_read_yet_leave_it_to_the_first_and_fail_the
     tokio::time::sleep(Duration::from_secs(1)).await;
     w.tracker.set_down(false);
     tokio::time::sleep(Duration::from_secs(8)).await;
-    // One live owner per bead (spec §5.5): the tracker answers both with the same bead, the second answer fails.
+    // One live owner per bead (docs/design/invariants.md): the tracker answers both with the same bead, the second
+    // answer fails.
     assert_eq!(w.run_bead(&runs[0]).as_deref(), Some(unseen.as_str()));
     assert_eq!(w.assignee(&unseen), Some(format!("aae:{}", runs[0])));
     assert_eq!(w.run_bead(&runs[1]), None);

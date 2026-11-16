@@ -1,5 +1,5 @@
-//! `aae run wait` and `aae run start` from a session against a real `aae daemon` (spec §12): the outcomes on the
-//! event stream, the exit codes, a restart of the daemon in between; the session's attempt token checked.
+//! `aae run wait` and `aae run start` from a session against a real `aae daemon` (docs/api/frontends.md): the outcomes
+//! on the event stream, the exit codes, a restart of the daemon in between; the session's attempt token checked.
 
 mod common;
 

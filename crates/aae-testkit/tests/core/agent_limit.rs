@@ -1,4 +1,4 @@
-//! The `max_runs` of an agent at the step boundary (spec §9.3; docs/design/contracts.md 7), on the managed clock.
+//! The `max_runs` of an agent at the step boundary (docs/design/contracts.md 6, 7), on the managed clock.
 
 use crate::common;
 

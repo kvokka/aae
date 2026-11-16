@@ -1,5 +1,5 @@
-//! Services (spec §11.4, docs/design/contracts.md 8): a `[[service]]` is run by the daemon once per scope and shared
-//! by the sessions of that scope. It lives in the instance registry as a record
+//! Services (docs/design/config.md, docs/design/contracts.md 8): a `[[service]]` is run by the daemon once per scope
+//! and shared by the sessions of that scope. It lives in the instance registry as a record
 //! of kind `service`: a consumer count instead of sessions, stopped once idle, restarted with the effect backoff
 //! when it dies. It listens on loopback with a token: the daemon picks the port and the token; the sessions get its
 //! MCP endpoint with `Authorization: Bearer <token>`, or, with none, its URL and token in their environment. Every
@@ -72,7 +72,8 @@ impl RunHandler {
             // The MCP path is not part of it: a new path restarts no process.
             let definition = json!({ "command": service.command, "env": service.env, "health": service.health });
             let Some((id, port)) = Self::service(tx, &name, &scope, &definition)? else {
-                // No port or no randomness: the session goes without the service, a tool failure (§11.4).
+                // No port or no randomness: the session goes without the service, a tool failure
+                // (docs/design/config.md).
                 config.mcp.remove(&name);
                 continue;
             };
@@ -107,7 +108,8 @@ impl RunHandler {
             let mcp = &mut server.value;
             let Some(url) = &mcp.url else { continue };
             if url.contains(API) {
-                // With no TCP listener the daemon is out of the session's reach: a tool failure (§11.4).
+                // With no TCP listener the daemon is out of the session's reach: a tool failure
+                // (docs/design/config.md).
                 let Some(addr) = daemon.api_tcp else {
                     lost.push(name.clone());
                     continue;

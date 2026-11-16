@@ -1,5 +1,5 @@
-//! A fake OpenAI Responses API (spec §7.8, docs/design/contracts.md 9): the real `codex` with a model provider
-//! whose `base_url` is [`Provider::base_url`] gets answers from a plan instead of a model.
+//! A fake OpenAI Responses API (docs/harness-updates.md, docs/design/contracts.md 9): the real `codex` with a model
+//! provider whose `base_url` is [`Provider::base_url`] gets answers from a plan instead of a model.
 
 use axum::{
     Router,

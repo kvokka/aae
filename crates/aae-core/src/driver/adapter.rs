@@ -59,8 +59,8 @@ pub struct Adapter {
     pub doctor: fn(DoctorAgents) -> Vec<Check>,
 }
 
-/// The finding on the stdio MCP servers `names` of the host settings of `harness` (spec §6.4): with host inheritance
-/// on, each starts in every session, and the shared MCP of `aae` does not cover them.
+/// The finding on the stdio MCP servers `names` of the host settings of `harness` (docs/design/config.md): with host
+/// inheritance on, each starts in every session, and the shared MCP of `aae` does not cover them.
 pub fn host_mcp_check(harness: &str, names: &[&str]) -> Check {
     let check = format!("{harness} host mcp");
     match names.is_empty() {
@@ -78,7 +78,7 @@ pub fn host_mcp_check(harness: &str, names: &[&str]) -> Check {
 }
 
 /// Whether a session the daemon starts can log in: with the host's login `file`, or with one of the `credentials`
-/// variables in its agent's own `env`; the daemon's own environment reaches no session (spec §6.5).
+/// variables in its agent's own `env`; the daemon's own environment reaches no session (docs/design/config.md).
 pub fn login_check(harness: &str, file: &Path, credentials: &[&str], agents: DoctorAgents) -> Check {
     let check = format!("{harness} login");
     if file.is_file() {

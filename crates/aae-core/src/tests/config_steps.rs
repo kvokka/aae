@@ -1,4 +1,4 @@
-//! The steps of a formula file (spec §9.1, docs/design/config.md "Formula").
+//! The steps of a formula file (docs/design/config.md "Formula").
 
 use super::config::{fails, load_with};
 
@@ -103,7 +103,7 @@ fn a_drain_step_names_a_formula_that_takes_one_bead() {
         &[(FLOW, &ship("root = { type = \"task\" }", "implement"))],
         "a formula with a `drain` step needs a required input of type `task`",
     );
-    // No input takes a bead: a formula takes a task (spec §9.1).
+    // No input takes a bead: a formula takes a task (docs/design/config.md).
     fails(
         &[(FLOW, &ship("root = { type = \"bead\" }", "implement"))],
         "input type `bead` is `task` now",
@@ -111,7 +111,7 @@ fn a_drain_step_names_a_formula_that_takes_one_bead() {
 }
 
 /// A drain step keeps `pool` beads in work, 1 unless set, and stops on a failed bead as `on_item_failure` says,
-/// `continue` unless set (spec §9.1); a bad value is one error, placed at the step's header.
+/// `continue` unless set (docs/design/config.md); a bad value is one error, placed at the step's header.
 #[test]
 fn a_drain_step_takes_pool_and_on_item_failure() {
     use crate::config::{OnItemFailure, StepKind};
@@ -148,7 +148,7 @@ fn a_drain_step_takes_pool_and_on_item_failure() {
     fails(&[(FLOW, exec)], "unknown field `pool`");
 }
 
-/// A check names an earlier step to go back to; the formula bounds the rounds (spec §9.1).
+/// A check names an earlier step to go back to; the formula bounds the rounds (docs/design/config.md).
 #[test]
 fn a_check_goes_back_to_an_earlier_step() {
     let back = |to: &str| format!("back_to = \"{to}\"\n");
@@ -274,7 +274,7 @@ fn a_bad_max_attempts_or_check_script_is_one_line() {
 }
 
 /// A formula step names a formula of the project whose required inputs it gives or inherits; a formula that runs
-/// itself through such steps and a trigger on an internal formula are errors (spec §9.1).
+/// itself through such steps and a trigger on an internal formula are errors (docs/design/config.md).
 #[test]
 fn a_formula_step_names_a_formula_whose_inputs_it_has() {
     const SUB: &str = "kit/formulas/sub.toml";
@@ -314,7 +314,7 @@ fn a_formula_step_names_a_formula_whose_inputs_it_has() {
         ],
         "names nothing a run has",
     );
-    // A task is inherited as any input: the child works on the bead its parent holds (spec §9.1).
+    // A task is inherited as any input: the child works on the bead its parent holds (docs/design/config.md).
     let task = "goal = { type = \"task\", required = true }";
     let inherited = load_with(&[(FLOW, &flow(task, "")), (SUB, &sub(task, &exec(None)))]);
     assert!(inherited.is_ok(), "{inherited:?}");

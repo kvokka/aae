@@ -132,7 +132,7 @@ pub(crate) fn world_waiting(
         let path = dir.path().join(path);
         fs::create_dir_all(path.parent().unwrap()).unwrap();
         fs::write(&path, text).unwrap();
-        // A check script must be executable to load (spec §9.1).
+        // A check script must be executable to load (docs/design/config.md).
         if path.extension().is_some_and(|e| e == "sh") {
             let mode = std::os::unix::fs::PermissionsExt::from_mode(0o755);
             fs::set_permissions(&path, mode).unwrap();

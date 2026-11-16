@@ -1,4 +1,5 @@
-//! `aae daemon`: the core and the API on a unix socket, in the foreground (spec §13), until SIGTERM or SIGINT.
+//! `aae daemon`: the core and the API on a unix socket, in the foreground (docs/guide/install.md), until SIGTERM or
+//! SIGINT.
 
 use crate::harness::{binary, driver, load, tested};
 use aae_br::Br;
@@ -71,9 +72,10 @@ impl Paths {
 pub(crate) async fn run(paths: Paths) -> Result<bool, String> {
     let mut config = load(&paths).map_err(|errors| format!("the config has errors:\n{}", errors.join("\n")))?;
     private_dir(&paths.state)?;
-    // Held until the daemon exits: one writer per state directory (spec §5.1), whatever socket it serves.
+    // Held until the daemon exits: one writer per state directory (docs/design/event-model.md), whatever socket it
+    // serves.
     let _lock = lock(&paths.state)?;
-    // Daemons before the lock on the directory left a `lock` file (spec §5.2: no lock files): it goes.
+    // Daemons before the lock on the directory left a `lock` file (docs/design/event-model.md: no lock files): it goes.
     let _ = std::fs::remove_file(paths.state.join("lock"));
     let db = paths.state.join("state.db");
     let conn = open(&db).map_err(|e| format!("{}: {e}", db.display()))?;
@@ -113,7 +115,7 @@ pub(crate) async fn run(paths: Paths) -> Result<bool, String> {
         }
         drivers.push(driver);
     }
-    // A project with a `.beads` directory has br as its tracker (spec §10.2).
+    // A project with a `.beads` directory has br as its tracker (docs/design/tracker-br.md).
     let beads: Vec<(String, PathBuf)> = config
         .projects
         .iter()
@@ -248,8 +250,8 @@ pub(crate) async fn run(paths: Paths) -> Result<bool, String> {
         .map_err(|e| format!("serving the API: {e}"))
 }
 
-/// An exclusive lock on the state directory itself, so no lock file is left in it (spec §5.2); the OS drops it with
-/// the process, so a crash leaves none behind.
+/// An exclusive lock on the state directory itself, so no lock file is left in it (docs/design/event-model.md); the OS
+/// drops it with the process, so a crash leaves none behind.
 fn lock(state: &Path) -> Result<File, String> {
     let dir = File::open(state).map_err(|e| format!("{}: {e}", state.display()))?;
     match dir.try_lock() {
@@ -298,8 +300,8 @@ fn stop_signal() -> io::Result<impl Future<Output = ()> + Send + 'static> {
 }
 
 /// Writes `.bv/workspace.yaml` next to the orchestrator config: one repository per project with a tracker, so `bv`
-/// run there (or with `--workspace`) shows every project's beads (spec §10.2). The trackers are fixed for the
-/// daemon's life (a reload changing them is refused), so the file is written at start only.
+/// run there (or with `--workspace`) shows every project's beads (docs/design/tracker-br.md). The trackers are fixed
+/// for the daemon's life (a reload changing them is refused), so the file is written at start only.
 fn bv_workspace(config: &Path, br: &Path, beads: &[(String, PathBuf)]) -> Result<(), String> {
     if beads.is_empty() {
         return Ok(());

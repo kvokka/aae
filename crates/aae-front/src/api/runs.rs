@@ -1,4 +1,4 @@
-//! Runs: start a formula, list, state, cancel, answer a request, the finisher (spec §12, contracts 6).
+//! Runs: start a formula, list, state, cancel, answer a request, the finisher (docs/api/frontends.md, contracts 6).
 
 use super::{
     ApiError, Body, ErrorReply, Param, Reply, State, key,
@@ -19,7 +19,7 @@ pub(super) const REJECTED: &str = "`rejected`: the core refused the request; the
 pub(super) const NULL: &str = "Done; the body is JSON `null`";
 pub(super) const BAD_QUERY: &str = "`bad_request`: the query is malformed";
 const BAD_PATH: &str = "`bad_request`: the path is malformed";
-const RUN_VIEW: &str = "The run: `RunView` (docs/design/contracts.md §1.3) with `project`, `rig`, `correlation`, \
+const RUN_VIEW: &str = "The run: `RunView` (docs/design/contracts.md 1.3) with `project`, `rig`, `correlation`, \
     `inputs`, `waiting_for`, `outcome` and `attempts`";
 const RUN_VIEWS: &str = "Run views as `GET /v1/runs/{id}` gives them";
 
@@ -33,7 +33,7 @@ pub(crate) struct CreateRun {
     formula: String,
     #[serde(default)]
     inputs: Map<String, Value>,
-    /// A terminal run whose last session this run continues (spec §9.3).
+    /// A terminal run whose last session this run continues (docs/design/contracts.md 6).
     continue_from: Option<String>,
     /// The agent session that starts this run (`AAE_RUN`, `AAE_ATTEMPT_TOKEN`): the run is its child, with its
     /// correlation, one level deeper (docs/design/contracts.md 6.1). Absent: a new correlation at depth 0.
@@ -48,8 +48,8 @@ pub(crate) struct ParentAttempt {
 }
 
 /// Starts a run of a formula; the reply is `{"run": "<id>"}`, or `{"nothing_ready": true}` when a task input
-/// `{ next_ready = true }` finds no ready bead to take (spec §10.3). With `parent`, a stale token or a chain deeper
-/// than 10 is `rejected`.
+/// `{ next_ready = true }` finds no ready bead to take (docs/design/tracker-br.md). With `parent`, a stale token or a
+/// chain deeper than 10 is `rejected`.
 #[utoipa::path(post, path = "/v1/runs", request_body = CreateRun,
     params(("Idempotency-Key" = Option<String>, Header, description = "Repeats return the first reply")),
     responses((status = OK, body = Started), (status = CONFLICT, description = REJECTED, body = ErrorReply), Keyed))]

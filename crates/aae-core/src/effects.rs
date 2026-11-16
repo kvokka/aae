@@ -1,5 +1,5 @@
 //! Effects run after commit through a queue keyed by subject: one at a time per key, retried with backoff
-//! 500 ms → 5 min (spec §5.1).
+//! 500 ms → 5 min (docs/design/event-model.md).
 
 use rusqlite::{Connection, OptionalExtension, params};
 use serde_json::Value;

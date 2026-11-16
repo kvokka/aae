@@ -1,5 +1,6 @@
-//! The daemon (spec §12, §9.3): its status, and a drain or a planned restart — no run starts from then on, the
-//! daemon stops when the runs in a turn are done or the drain times out, and a restart starts it again in place.
+//! The daemon (docs/api/frontends.md, docs/design/contracts.md 6): its status, and a drain or a planned restart — no
+//! run starts from then on, the daemon stops when the runs in a turn are done or the drain times out, and a restart
+//! starts it again in place.
 
 use super::{
     ErrorReply, Param, Reply, State, key,
@@ -29,8 +30,8 @@ pub(crate) async fn status(state: State) -> Reply {
     Ok(Json(daemon))
 }
 
-/// The checks of `aae doctor` (spec §13) as the daemon's process sees them: its config, the harness and br binaries
-/// it would run with their versions and logins, its private directories and its state. A check failing is an
+/// The checks of `aae doctor` (docs/guide/install.md) as the daemon's process sees them: its config, the harness and br
+/// binaries it would run with their versions and logins, its private directories and its state. A check failing is an
 /// `error` level in the reply, not an error reply.
 #[utoipa::path(get, path = "/v1/doctor", responses((status = OK, body = [Finding])))]
 pub(crate) async fn doctor(state: State) -> Reply {
@@ -55,7 +56,7 @@ pub(crate) async fn drain(state: State, headers: HeaderMap, Param(Query(q)): Par
 }
 
 /// A drain after which the daemon starts again in the same process (`daemon.stopping{reason: "restart"}`);
-/// recovery resumes the runs the drain cut (spec §5.6).
+/// recovery resumes the runs the drain cut (docs/design/invariants.md).
 #[utoipa::path(post, path = "/v1/daemon/restart", params(Drain, ("Idempotency-Key" = Option<String>, Header)),
     responses((status = OK, body = Stopping), (status = CONFLICT, description = REJECTED, body = ErrorReply), Keyed))]
 pub(crate) async fn restart(state: State, headers: HeaderMap, Param(Query(q)): Param<Query<Drain>>) -> Reply {

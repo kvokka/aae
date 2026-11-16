@@ -1,5 +1,5 @@
-//! The daemon's start and its stop by a signal (spec §13): what its steps started goes with it (invariant 7),
-//! quietly.
+//! The daemon's start and its stop by a signal (docs/guide/install.md): what its steps started goes with it
+//! (invariant 7), quietly.
 
 mod common;
 
@@ -72,7 +72,7 @@ async fn a_signal_stop_ends_the_step_processes_and_prints_no_panic() {
     assert!(!log.contains("panicked"), "{log}");
 }
 
-/// An older daemon's `lock` file is not left in the state directory (spec §5.2: no lock files).
+/// An older daemon's `lock` file is not left in the state directory (docs/design/event-model.md: no lock files).
 #[tokio::test]
 async fn a_start_removes_the_lock_file_of_an_older_daemon() {
     let d = Daemon::start(|dir| {

@@ -1,5 +1,5 @@
 //! A step that does not pass runs again within its `max_attempts`, and its check script decides whether it passed
-//! (spec §9.1, criterion 29, core part). The check script is a real process, so real time.
+//! (docs/design/config.md, criterion 29, core part). The check script is a real process, so real time.
 
 use crate::common;
 

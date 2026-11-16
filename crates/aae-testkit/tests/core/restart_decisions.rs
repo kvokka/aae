@@ -1,6 +1,6 @@
-//! A daemon restart while a run waits for a decision on a deciding event (spec §5.6, §11.3; docs/design/contracts.md
-//! 6.4): the run keeps waiting, its hooks run again, and the time the daemon was down is not theirs. A drain waits
-//! for those decisions and starts no new turn.
+//! A daemon restart while a run waits for a decision on a deciding event (docs/design/invariants.md,
+//! docs/design/contracts.md 3, 6.4): the run keeps waiting, its hooks run again, and the time the daemon was down is
+//! not theirs. A drain waits for those decisions and starts no new turn.
 
 use crate::common;
 
@@ -188,7 +188,7 @@ async fn an_exec_step_in_finishing_passes_after_a_restart_with_its_command_run_o
     assert_eq!(*hooks.0.lock().unwrap(), ["run.finishing", "run.finishing"]);
 }
 
-/// Spec §2, decisions 49, 50 takes only the wait on a closed account gate out of the ceiling: a park on the account
+/// Decisions 49, 50 takes only the wait on a closed account gate out of the ceiling: a park on the account
 /// whose `until` has passed waits for nothing, so its attempts count and the run ends (invariant 16).
 #[tokio::test(start_paused = true)]
 async fn parks_on_an_account_gate_that_does_not_close_end_at_the_attempts_ceiling() {

@@ -1,4 +1,4 @@
-//! The model gate key of a run is its config's alone (spec §5.7, docs/design/contracts.md 7): a closed model gate
+//! The model gate key of a run is its config's alone (docs/design/contracts.md 7): a closed model gate
 //! holds a new run on that model before its first attempt, and a failure that names another model adds no key.
 
 use crate::common;

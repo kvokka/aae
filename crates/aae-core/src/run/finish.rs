@@ -1,4 +1,4 @@
-//! The finisher and the end of a run (docs/design/contracts.md 6.3, spec §9.4): the declared outcome, the decisions
+//! The finisher and the end of a run (docs/design/contracts.md 6.3): the declared outcome, the decisions
 //! on `run.finishing` and the next prompt of an attempt after a remark or a `continue`.
 
 use super::{Outcome, RunHandler, Verdict, events::attempt_live, row::Row, token_sha256};
@@ -63,7 +63,8 @@ impl RunHandler {
     }
 
     /// Once the outcome is declared and the turn has ended, the commands the session left running go: the adapter
-    /// stops them, and the session's idle without background then moves the run to `finishing` (spec §9.4).
+    /// stops them, and the session's idle without background then moves the run to `finishing`
+    /// (docs/design/contracts.md 6).
     pub(super) fn stop_background(tx: &mut Tx<'_>, row: &Row) -> Result<(), Error> {
         let found: Option<(String, String, String)> = tx
             .sql()
@@ -105,16 +106,16 @@ impl RunHandler {
         match (outcome.map(|o| (o.result, o.summary)), veto) {
             (Some((Verdict::Pass, _)), None) => self.check(tx, row),
             (Some((Verdict::Pass, _)), Some(reason)) => self.terminal(tx, row, "failed", Some("check"), reason),
-            // A step that fails on its own runs again with no check script (spec §9.1).
+            // A step that fails on its own runs again with no check script (docs/design/config.md).
             (Some((Verdict::Fail, _)), _) => self.repeat(tx, row, "agent", false),
             (None, _) => self.terminal(tx, row, "failed", Some("infrastructure"), "outcome lost"),
         }
     }
 
-    /// After a step that passed, or failed for the class and reason `failed` (spec §9.1): the next step starts at once; the
-    /// run passes after the last. A failed step fails the run unless it is a check (`back_to`). Checks in a row all
-    /// run; after the last of them, any that failed send the run back together, to the earliest step they name, for
-    /// the next round; past the formula's last round the run fails with their remarks.
+    /// After a step that passed, or failed for the class and reason `failed` (docs/design/config.md): the next step
+    /// starts at once; the run passes after the last. A failed step fails the run unless it is a check (`back_to`).
+    /// Checks in a row all run; after the last of them, any that failed send the run back together, to the earliest
+    /// step they name, for the next round; past the formula's last round the run fails with their remarks.
     pub(super) fn advance(&mut self, tx: &mut Tx<'_>, row: Row, failed: Option<(&str, &str)>) -> Result<(), Error> {
         let project = self.config.projects.iter().find(|p| p.name == row.project);
         let formula = project.and_then(|p| p.formula(&row.formula).ok()).map(|(_, f)| f);
@@ -173,7 +174,7 @@ impl RunHandler {
     }
 
     /// The run ends its step and starts `next` at once: its first execution, or with the remark `again` the next one
-    /// of the same step (spec §9.1).
+    /// of the same step (docs/design/config.md).
     pub(super) fn enter(
         &mut self,
         tx: &mut Tx<'_>,
@@ -204,7 +205,8 @@ impl RunHandler {
         let frees = left != row.agent && self.config.max_runs(&row.project, &left).is_some();
         row.set_state(tx, "preparing", None)?;
         self.render_and_prepare(tx, row)?;
-        // The step left gives up a slot of its agent's `max_runs`: a run parked for it may go (spec §9.3).
+        // The step left gives up a slot of its agent's `max_runs`: a run parked for it may go
+        // (docs/design/contracts.md 6).
         if frees { self.schedule(tx) } else { Ok(()) }
     }
 
@@ -225,8 +227,9 @@ impl RunHandler {
         let key = PromptKey::new(&row.id, row.attempt, n);
         super::prompts::intent(tx, &row.id, row.attempt, n, key, text)?;
         // The session of the turn died with the daemon that ran it (recovery let go of its handle), or dies with the
-        // one that is stopping now: no next turn starts, the attempt fails for the policy to decide (spec §5.6), and
-        // the prompt left as an intent goes to the session a resumed attempt brings back (contracts 6.4).
+        // one that is stopping now: no next turn starts, the attempt fails for the policy to decide
+        // (docs/design/invariants.md), and the prompt left as an intent goes to the session a resumed attempt brings
+        // back (contracts 6.4).
         let (Some(handle), Some(session), None) = (handle, session, &self.stopping) else {
             return self.attempt_failed(tx, row, Failure::new(FailureKind::DaemonCrash, Source::Core));
         };

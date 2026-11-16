@@ -1,4 +1,5 @@
-//! Repeats of a drain step and the cancel of a run whose check script runs (spec §9.1). Real processes, so real time.
+//! Repeats of a drain step and the cancel of a run whose check script runs (docs/design/config.md). Real processes, so
+//! real time.
 
 use crate::{
     common::{self, World, drain::SWEEP, world},

@@ -1,4 +1,4 @@
-//! Creation and the queue (spec §9.3, docs/design/contracts.md 6.1–6.2): a run waits in `queued` for a free
+//! Creation and the queue (docs/design/contracts.md 6.1–6.2): a run waits in `queued` for a free
 //! workdir and a concurrency slot, then leaves for `preparing`, oldest first.
 
 use super::{
@@ -34,8 +34,8 @@ impl RunHandler {
 
     /// What the bead `bead` of a run of `formula` on `rig` makes of it: the bead, the agent its `agent:` label names,
     /// and the agent and model key of the first step. Refused when the bead has a `rig:` label, when a `harness:`
-    /// label differs from the harness the config gives an ai step, or when the named agent does not resolve (spec
-    /// §9.1).
+    /// label differs from the harness the config gives an ai step, or when the named agent does not resolve
+    /// (docs/design/config.md).
     #[expect(clippy::type_complexity, reason = "a private tuple read at its one call site")]
     fn bead_agent(
         &self,
@@ -143,18 +143,20 @@ impl RunHandler {
         if let Some(why) = mistyped {
             return Err(rejected(why));
         }
-        // A run holds at most one bead (spec §10.3); its task input becomes the id of the bead it works on.
+        // A run holds at most one bead (docs/design/contracts.md 5); its task input becomes the id of the bead it works
+        // on.
         let bead_input = formula
             .inputs
             .iter()
             .find(|(k, i)| i.kind == InputType::Task && c.inputs.contains_key(*k));
-        // A bead the run cannot take as labelled is passed over by a pick and refused when named (spec §10.3).
+        // A bead the run cannot take as labelled is passed over by a pick and refused when named
+        // (docs/design/contracts.md 5).
         let mut passed_over = serde_json::Map::new();
         let (bead, as_agent, (agent, model)) = match bead_input {
             Some(_) if !self.trackers.contains_key(&c.project) => {
                 return Err(rejected(format!("`{}` has no tracker", c.project)));
             }
-            // A text gets its bead as the run prepares (spec §10.3).
+            // A text gets its bead as the run prepares (docs/design/contracts.md 5).
             Some((key, _)) if Self::is_text(tx, &c.project, &c.inputs[key])? => {
                 self.bead_agent(tx, &c.project, &rig_name, &name.to_string(), formula, None)?
             }
@@ -285,7 +287,8 @@ impl RunHandler {
         Ok(())
     }
 
-    /// A workdir holds one live started run (spec §9.3); a parent in a drain or formula step does not hold it from its children.
+    /// A workdir holds one live started run (docs/design/contracts.md 6); a parent in a drain or formula step does not
+    /// hold it from its children.
     fn workdir_busy(tx: &Tx<'_>, row: &Row) -> Result<bool, Error> {
         let sql = format!(
             "SELECT EXISTS (SELECT 1 FROM runs WHERE workdir = ?1 AND id != ?2 \
@@ -299,8 +302,8 @@ impl RunHandler {
 
     /// Why a queued or parked run cannot start yet, `None` when it can: the daemon is stopping, a gate of the run is
     /// closed (with the
-    /// closure), its workdir is busy, or the orchestrator or its agent has as many started runs as allowed (spec
-    /// §9.3; a parked run, or one in a drain step, has no process and holds no slot).
+    /// closure), its workdir is busy, or the orchestrator or its agent has as many started runs as allowed
+    /// (docs/design/contracts.md 6; a parked run, or one in a drain step, has no process and holds no slot).
     fn blocker(&self, tx: &Tx<'_>, row: &Row) -> Result<Option<(&'static str, Value)>, Error> {
         if self.stopping.is_some() {
             return Ok(Some(("daemon_stopping", Value::Null)));
@@ -320,7 +323,8 @@ impl RunHandler {
         Ok(full.then_some(("concurrency", Value::Null)))
     }
 
-    /// Whether the other started runs of the agent of `row` are as many as its `max_runs` allows (spec §9.3).
+    /// Whether the other started runs of the agent of `row` are as many as its `max_runs` allows
+    /// (docs/design/contracts.md 6).
     pub(super) fn agent_full(&self, tx: &Tx<'_>, row: &Row) -> Result<bool, Error> {
         let Some(limit) = self.config.max_runs(&row.project, &row.agent) else {
             return Ok(false);

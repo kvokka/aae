@@ -1,5 +1,5 @@
-//! Tracker writes and the ready set as events (spec §9.5, contracts 5.2): `bead.created|updated|closed` from the
-//! writes after the project's cursor, `bead.ready` from the beads new to the ready set.
+//! Tracker writes and the ready set as events (docs/design/config.md, contracts 5.2): `bead.created|updated|closed`
+//! from the writes after the project's cursor, `bead.ready` from the beads new to the ready set.
 
 use super::RunHandler;
 use crate::{
@@ -12,7 +12,7 @@ use serde_json::{Value, json};
 
 impl RunHandler {
     /// The writes to a project's tracker after its cursor become `bead.created|updated|closed`, and the beads new to
-    /// its ready set `bead.ready` (spec §9.5); the ready set is kept for the next diff and for picking.
+    /// its ready set `bead.ready` (docs/design/config.md); the ready set is kept for the next diff and for picking.
     pub(super) fn ready(
         &self,
         tx: &mut Tx<'_>,
@@ -73,7 +73,7 @@ impl RunHandler {
 }
 
 /// A tracker write as an event; a write by a run's attempt (`aae:<run>[:<n>]`) carries that run and its correlation,
-/// any other actor starts a new chain (§9.5). Returns the run and correlation it carried.
+/// any other actor starts a new chain (docs/design/config.md). Returns the run and correlation it carried.
 fn bead_event(
     tx: &mut Tx<'_>,
     place: (&str, Option<&Project>),
@@ -95,7 +95,8 @@ fn bead_event(
     Ok(by)
 }
 
-/// `place`: the project's name and config; the rig of the event is the rig of the bead's id (spec §10.2).
+/// `place`: the project's name and config; the rig of the event is the rig of the bead's id
+/// (docs/design/config.md).
 fn emit_bead(
     tx: &mut Tx<'_>,
     (project, config): (&str, Option<&Project>),

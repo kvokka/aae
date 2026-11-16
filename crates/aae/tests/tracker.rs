@@ -1,4 +1,4 @@
-//! The br tracker of a project on a real `aae daemon` and the pinned br (spec §10.2, §10.3; §15 criteria 11, 16).
+//! The br tracker of a project on a real `aae daemon` and the pinned br (docs/design/tracker-br.md; criteria 11, 16).
 
 mod common;
 
@@ -162,7 +162,7 @@ async fn a_tracker_that_cannot_be_watched_says_so_in_an_event() {
 }
 
 /// A task names a bead filed a moment ago, before any read saw it: the run takes it up on its rig and files nothing;
-/// a text becomes one root epic (spec §10.3; §15 criterion 28).
+/// a text becomes one root epic (docs/design/tracker-br.md; criterion 28).
 #[tokio::test]
 async fn a_task_takes_up_the_bead_it_names_and_a_text_files_one_root() {
     let fix = "name = \"fix\"\n[inputs]\ntask = { type = \"task\", required = true }\n\

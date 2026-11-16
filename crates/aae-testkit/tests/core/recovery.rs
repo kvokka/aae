@@ -1,6 +1,6 @@
-//! Daemon start (spec §5.6, criterion 8): a daemon that dies mid-run leaves no process behind once a new one starts,
-//! and the attempt it was running fails with `daemon_crash` for the policy to decide. On the paused clock, except the
-//! tests whose exec step runs a real command.
+//! Daemon start (docs/design/invariants.md, criterion 8): a daemon that dies mid-run leaves no process behind once a
+//! new one starts, and the attempt it was running fails with `daemon_crash` for the policy to decide. On the paused
+//! clock, except the tests whose exec step runs a real command.
 
 use crate::common;
 
@@ -53,7 +53,8 @@ async fn a_restart_interrupts_the_running_attempt_stops_its_instance_and_the_run
     );
 }
 
-/// A drain starts no process (spec §5.6): a retry decided meanwhile parks, and the next daemon starts it.
+/// A drain starts no process (docs/design/invariants.md): a retry decided meanwhile parks, and the next daemon starts
+/// it.
 #[tokio::test(start_paused = true)]
 async fn a_draining_daemon_parks_a_retry_and_the_next_daemon_starts_it() {
     let mut w = world(POLICY);

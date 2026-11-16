@@ -1,4 +1,4 @@
-//! The finisher (spec §9.4, contracts 6.3): `aae finish pass|fail` inside an agent session.
+//! The finisher (contracts 6.3): `aae finish pass|fail` inside an agent session.
 
 use super::{Verdict, fail, run_path};
 use crate::client::{Client, ClientError};

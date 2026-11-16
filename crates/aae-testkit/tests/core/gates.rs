@@ -1,4 +1,4 @@
-//! Issue gates and parked runs (spec §5.7, invariant 18, docs/design/contracts.md 6–7) on the managed clock.
+//! Issue gates and parked runs (docs/design/contracts.md 6–7, invariant 18) on the managed clock.
 
 use crate::common;
 

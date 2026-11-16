@@ -1,5 +1,5 @@
-//! The project root as a place of work (spec §6.1): a run with no rig works in the root, under the root's name, in
-//! the directory of `aae.toml` or the root's own path, with no git repository needed.
+//! The project root as a place of work (docs/design/config.md): a run with no rig works in the root, under the root's
+//! name, in the directory of `aae.toml` or the root's own path, with no git repository needed.
 
 use crate::common;
 
@@ -127,7 +127,8 @@ async fn a_run_without_a_rig_works_in_the_root_that_is_no_git_repository() {
     assert!(same(here.trim_end(), &shop), "the exec step's cwd: {here}");
 }
 
-/// An agent with `scope = "root"` works in the root on any rig; the run keeps the rig's directory (spec §6.1).
+/// An agent with `scope = "root"` works in the root on any rig; the run keeps the rig's directory
+/// (docs/design/config.md).
 #[tokio::test(start_paused = true)]
 async fn a_root_agent_works_in_the_root_whatever_the_rig() {
     let w = world(TWO);

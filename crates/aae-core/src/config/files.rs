@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 use std::{collections::BTreeMap, num::NonZeroU32, path::PathBuf};
 
-/// The settings of one layer of spec §6.3; paths are absolute once loaded.
+/// The settings of one layer of docs/design/config.md; paths are absolute once loaded.
 #[derive(Clone, Debug, Default, Deserialize, PartialEq)]
 #[serde(deny_unknown_fields)]
 pub struct Settings {
@@ -67,7 +67,7 @@ pub enum McpScope {
     Session,
 }
 
-/// An MCP server: a command (stdio) or a URL (HTTP); a server the daemon runs is a `[[service]]` (spec §11.4).
+/// An MCP server: a command (stdio) or a URL (HTTP); one the daemon runs is a `[[service]]` (docs/design/config.md).
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct Mcp {
@@ -98,7 +98,7 @@ impl Mcp {
     }
 }
 
-/// A harness hook in the one hook dialect (spec §11.2); `enabled = false` alone switches off a lower layer's hook.
+/// A hook in the one hook dialect (docs/guide/plugin.md); `enabled = false` alone turns off a lower layer's hook.
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct Hook {
@@ -214,13 +214,13 @@ pub(super) struct OrchestratorFile {
     pub watchdog: BTreeMap<String, String>,
 }
 
-/// A harness agents may choose and its defaults (spec §6.1).
+/// A harness agents may choose and its defaults (docs/design/config.md).
 #[derive(Clone, Debug, Default, Deserialize, PartialEq)]
 pub struct Harness {
     pub model: Option<String>,
     pub binary: Option<PathBuf>,
-    /// The other keys: the adapter's own settings, which the core passes on unread and the adapter checks (spec
-    /// §2, decision 43: the core knows no harness).
+    /// The other keys: the adapter's own settings, which the core passes on unread and the adapter checks
+    /// (decision 43: the core knows no harness).
     #[serde(flatten)]
     pub options: toml::Table,
 }
@@ -270,7 +270,7 @@ pub(super) struct ProjectFile {
     pub service: Vec<super::service::ServiceFile>,
 }
 
-/// `[root]`: the project's root, `root` in the directory of `aae.toml` when absent (spec §6.1, decision 99).
+/// `[root]`: the project's root, `root` beside `aae.toml` when absent (docs/design/config.md, decision 99).
 #[derive(Debug, Default, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub(super) struct RootFile {

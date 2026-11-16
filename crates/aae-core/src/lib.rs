@@ -1,4 +1,4 @@
-//! Core of aae: the single writer of the runtime state (spec §4, §5).
+//! Core of aae: the single writer of the runtime state (docs/architecture.md, docs/design/event-model.md).
 
 #![deny(clippy::disallowed_methods)]
 

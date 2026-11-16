@@ -1,4 +1,5 @@
-//! The content of a pack: agents (spec §8.1), formulas (§9.1) and triggers (§9.5), each checked on its own.
+//! The content of a pack: agents (docs/design/config.md), formulas (docs/design/config.md) and triggers
+//! (docs/design/config.md), each checked on its own.
 
 use super::{
     Agent, Formula, Settings, Source, Step, StepKind, Trigger, duration,
@@ -45,7 +46,7 @@ impl Loader {
             None => self.text(&file, &dir.join("prompt.md")),
         };
         let mut settings = self.settings(&file, dir, settings, plugins);
-        // The role prompt is the agent layer's system prompt (spec §8.1, §6.3): one value, so not both.
+        // The role prompt is the agent layer's system prompt (docs/design/config.md): one value, so not both.
         if prompt.is_some() && settings.system_prompt.is_some() {
             self.fail(&file, "`system_prompt` and a role prompt file are both set; keep one");
         }
@@ -96,7 +97,7 @@ impl Loader {
         }
     }
 
-    /// The text of a prompt file: a prompt is never empty (spec §6.3, §8.1).
+    /// The text of a prompt file: a prompt is never empty (docs/design/config.md).
     pub(super) fn text(&mut self, file: &Path, path: &Path) -> Option<String> {
         match fs::read_to_string(path) {
             Ok(text) if text.trim().is_empty() => self.none(file, format!("`{}` is empty", path.display())),
@@ -183,7 +184,7 @@ impl Loader {
                 check,
             });
         }
-        // The task bead a drain step gives out beads under (spec §9.1).
+        // The task bead a drain step gives out beads under (docs/design/config.md).
         let drains = steps.iter().any(|s| matches!(s.kind, StepKind::Drain { .. }));
         if drains && !raw.inputs.values().any(|i| i.kind == InputType::Task && i.required) {
             self.fail(

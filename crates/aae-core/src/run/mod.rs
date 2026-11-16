@@ -1,4 +1,4 @@
-//! Runs (spec §9.3, docs/design/contracts.md 6): the run state machine inside the single writer, the effects that
+//! Runs (docs/design/contracts.md 6): the run state machine inside the single writer, the effects that
 //! drive a harness through its [`Driver`], and the driver events fed back to the writer as messages.
 
 mod bead_events;
@@ -205,7 +205,7 @@ impl Handler for RunHandler {
 
     fn started(&mut self, tx: &mut Tx<'_>) -> Result<(), Error> {
         self.recover(tx)?;
-        // The resync at the start (§5.6): what the last daemon left behind is checked at once.
+        // The resync at the start (docs/design/invariants.md): what the last daemon left behind is checked at once.
         Self::check_instances(tx)?;
         self.sync_trackers(tx, None, "start")?;
         tx.set_deadline(RESYNC, tx.now_ms() + RESYNC_MS)?;
@@ -216,7 +216,8 @@ impl Handler for RunHandler {
 }
 
 /// The deadline of the periodic resync: the trackers are read again and the instance processes checked against the
-/// process table this often whatever their watchers say, so a lost signal costs at most this much (spec §5.1).
+/// process table this often whatever their watchers say, so a lost signal costs at most this much
+/// (docs/design/event-model.md).
 const RESYNC: &str = "daemon:resync";
 const RESYNC_MS: i64 = 5 * 60 * 1000;
 

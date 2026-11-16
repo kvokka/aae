@@ -10,8 +10,9 @@ use std::{
     sync::Arc,
 };
 
-/// Where the binary `name` is and who said so (spec §6.5): the config's `explicit` path, else mise (a daemon under
-/// systemd or launchd has no mise shims on its `PATH`), else the bare name, looked up on `PATH` at each spawn.
+/// Where the binary `name` is and who said so (docs/design/config.md): the config's `explicit` path, else mise (a
+/// daemon under systemd or launchd has no mise shims on its `PATH`), else the bare name, looked up on `PATH` at each
+/// spawn.
 pub(crate) fn binary(name: &str, explicit: Option<&Path>) -> (PathBuf, &'static str) {
     if let Some(path) = explicit {
         return (path.to_owned(), "config");
@@ -81,7 +82,7 @@ pub(crate) fn load(paths: &Paths) -> Result<config::Config, Vec<String>> {
     let mut config = config::load_for(file, ADAPTERS, checkouts)
         .map_err(|errors| errors.iter().map(ToString::to_string).collect::<Vec<_>>())?;
     // br is the tracker of a project with a `.beads` directory, always named by an explicit path: its own search
-    // would climb to another project's (spec §10.2).
+    // would climb to another project's (docs/design/tracker-br.md).
     for p in &mut config.projects {
         let dir = p.dir.join(".beads");
         p.tracker.present = dir.is_dir();

@@ -1,7 +1,7 @@
-//! `worktree` (spec §11.5): on `run.preparing` a run of a formula with `worktree = true` gets its own git worktree on
-//! the branch `aae/<run>` as its workdir; once the run ends the worktree goes, only when it has no uncommitted change
-//! and its commits are reachable from a ref. The branch stays unless it is merged. A run continuing the session of a run
-//! that had a worktree works in that same worktree, recreated on its branch if it was removed.
+//! `worktree` (docs/design/config.md): on `run.preparing` a run of a formula with `worktree = true` gets its own git
+//! worktree on the branch `aae/<run>` as its workdir; once the run ends the worktree goes, only when it has no
+//! uncommitted change and its commits are reachable from a ref. The branch stays unless it is merged. A run continuing
+//! the session of a run that had a worktree works in that same worktree, recreated on its branch if it was removed.
 
 use serde::Deserialize;
 use serde_json::{Value, json};
@@ -37,7 +37,7 @@ pub(crate) fn hook(event: &Value, p: &Params) -> Result<Option<Value>, String> {
         // A run continuing another's session got that run's workdir: its worktree, brought back if removed.
         (Some("run.preparing"), Some((common, of))) => create(&common, of, until).map(Some),
         (Some("run.preparing"), None) if p.formulas.iter().any(|f| run["formula"] == f.as_str()) => {
-            // A project root may be a plain directory (§6.1): the run fails, not the hook.
+            // A project root may be a plain directory (docs/design/config.md): the run fails, not the hook.
             if !workdir.ancestors().any(|d| d.join(".git").exists()) {
                 let reason = format!(
                     "worktree: `{}` is not a git repository; the formula has `worktree = true`",

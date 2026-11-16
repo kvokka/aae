@@ -32,7 +32,7 @@ pub enum Msg {
         trigger: String,
         enabled: bool,
     },
-    /// The operator closes a gate (spec §5.7): automation never removes this closure (invariant 18).
+    /// The operator closes a gate (docs/design/contracts.md 7): automation never removes this closure (invariant 18).
     CloseGate(GateSpec),
     /// The operator opens a gate: every closure of `key` goes.
     OpenGate {
@@ -66,7 +66,7 @@ pub enum Msg {
         id: String,
         degraded: Option<String>,
     },
-    /// The periodic resync found the process of a registry instance gone (spec §5.1).
+    /// The periodic resync found the process of a registry instance gone (docs/design/event-model.md).
     InstanceGone {
         handle: InstanceHandle,
     },
@@ -128,7 +128,7 @@ pub enum Msg {
     ExecDone {
         run: String,
         attempt: u32,
-        /// The command was the check script of the run's step (spec §9.1).
+        /// The command was the check script of the run's step (docs/design/config.md).
         check: bool,
         exit: Exit,
         stdout: String,
@@ -194,7 +194,7 @@ pub enum Verdict {
 /// (`parent_run` and its attempt `token`: the core takes the correlation and the depth from the parent).
 pub struct Create {
     pub project: String,
-    /// `None`: the rig of the prefix of the bead id an input names, else the root (spec §9.3).
+    /// `None`: the rig of the prefix of the bead id an input names, else the root (docs/design/contracts.md 6).
     pub rig: Option<String>,
     /// A formula reference as a project writes it: `name` or `<pack>.<name>`.
     pub formula: String,
@@ -204,7 +204,7 @@ pub struct Create {
     pub parent_run: Option<String>,
     /// The attempt token of the session of `parent_run` that starts this run; checked as the finisher's is.
     pub token: Option<String>,
-    /// A terminal run whose last session this run continues (spec §9.3); never implicit.
+    /// A terminal run whose last session this run continues (docs/design/contracts.md 6); never implicit.
     pub continue_from: Option<String>,
 }
 

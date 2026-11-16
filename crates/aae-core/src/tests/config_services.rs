@@ -1,4 +1,4 @@
-//! `[[service]]` in the orchestrator config, a project and a plugin (spec §11.4).
+//! `[[service]]` in the orchestrator config, a project and a plugin (docs/design/config.md).
 
 use super::config::{BASE, fails, load_with};
 use crate::config::{Config, Health, Layer, Name, Service, ServiceScope};

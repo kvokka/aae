@@ -92,7 +92,7 @@ pub(crate) fn check(w: &World, play: &mut Play) -> Result<(), String> {
         return Err(format!("{created} runs for {} creates (invariant 10)", play.runs.len()));
     }
     for (run, state, attempt, waiting) in &all {
-        // Attempts that parked on an account gate are outside the ceiling (spec §2, decisions 49, 50).
+        // Attempts that parked on an account gate are outside the ceiling (decisions 49, 50).
         let counted: u32 = conn
             .query_row(
                 "SELECT COUNT(*) FROM attempts WHERE run = ?1 AND waited = 0 AND failure IS NOT NULL",
@@ -216,7 +216,7 @@ type StepRow = (String, String, String, Option<String>, Option<bool>);
 
 /// The attempts of a run go through the steps of its formula in order; the run is at the step of its last attempt or,
 /// once that attempt said pass, at the next one, and the journal says every step before it finished (S2). No session
-/// serves two steps (S3, spec §9.3).
+/// serves two steps (S3, docs/design/contracts.md 6).
 fn stepped(conn: &rusqlite::Connection, play: &Play) -> Result<(), String> {
     let rows: Vec<StepRow> = conn
         .prepare(

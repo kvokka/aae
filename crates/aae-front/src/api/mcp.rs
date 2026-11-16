@@ -1,6 +1,7 @@
-//! The MCP frontend (spec §12): five tools over the API's own handlers on `POST /mcp`, in both protocol epochs
-//! (spec §11.4). A request with `MCP-Protocol-Version: 2026-07-28` is served statelessly (`server/discover`); any
-//! other takes the `initialize` epoch, with no session id, so a daemon restart strands no client.
+//! The MCP frontend (docs/api/frontends.md): five tools over the API's own handlers on `POST /mcp`, in both protocol
+//! epochs (docs/design/config.md). A request with `MCP-Protocol-Version: 2026-07-28` is served statelessly
+//! (`server/discover`); any other takes the `initialize` epoch, with no session id, so a daemon restart strands no
+//! client.
 
 use super::{
     ApiError, Body, Param, State, request_hash,
@@ -130,7 +131,8 @@ async fn call(state: State, params: &Value) -> Option<Value> {
     let reply = match params["name"].as_str()? {
         "list_formulas" => {
             let mut all = formulas(&state.config(), args["project"].as_str());
-            // The catalog a user can start (spec §12): an internal formula runs only from a step of another.
+            // The catalog a user can start (docs/api/frontends.md): an internal formula runs only from a step of
+            // another.
             if let Value::Array(all) = &mut all {
                 all.retain(|f| f["internal"] != true);
             }

@@ -1,5 +1,5 @@
-//! Five-field cron expressions of schedule triggers (spec §9.5), read in the time zone of the config (the system
-//! one unless `timezone` says): minute, hour, day of month, month, day of week. A field is `*`, a value, a range
+//! Five-field cron expressions of schedule triggers (docs/design/config.md), read in the time zone of the config (the
+//! system one unless `timezone` says): minute, hour, day of month, month, day of week. A field is `*`, a value, a range
 //! `a-b`, any of them with a step `/n`, or a comma list of those; months and days of week also take three-letter
 //! English names, and day of week 7 is Sunday like 0. A local time skipped by a
 //! clock change fires when the clock has moved on (02:30 in a spring gap fires at 03:30); a local time that repeats

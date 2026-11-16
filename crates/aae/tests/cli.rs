@@ -1,4 +1,4 @@
-//! The CLI against a real `aae daemon` (spec §12): a thin client with JSON output.
+//! The CLI against a real `aae daemon` (docs/api/frontends.md): a thin client with JSON output.
 
 mod common;
 
@@ -155,7 +155,7 @@ async fn the_finisher_gives_up_on_an_unreachable_daemon_with_tempfail() {
     assert!(String::from_utf8_lossy(&out.stderr).contains("unreachable for 1 s"));
 }
 
-/// `config check` and `config explain` load the file as the daemon would, so they need none (spec §6.3).
+/// `config check` and `config explain` load the file as the daemon would, so they need none (docs/design/config.md).
 #[test]
 fn the_config_is_checked_and_explained_without_a_daemon() {
     let dir = tempfile::tempdir().unwrap();
@@ -286,8 +286,8 @@ fn the_config_is_checked_and_explained_without_a_daemon() {
     assert!(out.stderr.is_empty(), "{}", String::from_utf8_lossy(&out.stderr));
 }
 
-/// The config by hand (spec §12): lists, the effective config of an agent with the layer of every value, a check
-/// and a reload that a broken file does not pass, and the triggers of the reloaded config with their next firing.
+/// The config by hand (docs/api/frontends.md): lists, the effective config of an agent with the layer of every value, a
+/// check and a reload that a broken file does not pass, and the triggers of the reloaded config with their next firing.
 #[tokio::test]
 async fn the_config_from_the_cli_lists_explains_checks_and_reloads() {
     const CONFIG: &str =
@@ -311,7 +311,7 @@ async fn the_config_from_the_cli_lists_explains_checks_and_reloads() {
         (&agent["agent"], &agent["harness"], agent.get("provider")),
         (&"shop.dev".into(), &"claude".into(), None)
     );
-    // An internal formula (spec §9.1): marked in the API, hidden from `aae formula list` unless `--all`.
+    // An internal formula (docs/design/config.md): marked in the API, hidden from `aae formula list` unless `--all`.
     let internal = |args: &[&str]| -> Vec<Value> {
         let formulas = d.json(args);
         let inner = formulas.as_array().unwrap().iter().filter(|f| f["formula"] == "inner");

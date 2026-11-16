@@ -1,4 +1,4 @@
-//! The HTTP API on a real `aae daemon` (spec §12, §13).
+//! The HTTP API on a real `aae daemon` (docs/api/frontends.md, docs/guide/install.md).
 
 mod common;
 
@@ -179,7 +179,7 @@ async fn one_daemon_per_state_directory_whatever_its_socket() {
         let mode = fs::metadata(&file).unwrap().permissions().mode();
         assert_eq!(mode & 0o777, 0o600, "{}", file.display());
     }
-    // The daemon locks the state directory itself: no lock file (spec §5.2).
+    // The daemon locks the state directory itself: no lock file (docs/design/event-model.md).
     assert!(!state.join("lock").exists());
     let mut child = command(d.dir.path())
         .env("XDG_RUNTIME_DIR", d.dir.path().join("other-run"))

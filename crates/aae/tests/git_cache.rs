@@ -1,5 +1,5 @@
 //! Packs from git on local repositories: downloaded into the cache at a tag, a commit or the latest revision, kept
-//! there without the network, removed by `aae cache clear` (spec §8.2, §11.6).
+//! there without the network, removed by `aae cache clear` (docs/design/config.md, docs/guide/plugin.md).
 
 use std::{
     collections::BTreeSet,

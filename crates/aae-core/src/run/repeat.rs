@@ -1,6 +1,7 @@
-//! Repeats of a step and its check script (spec §9.1): a step that did not pass runs again while it has executions
-//! left of its `max_attempts`; a check script, when the step has one, decides whether a step that passed on its own
-//! did. A repeat enters the same step again within the round, so it spends no round and no attempt of the session.
+//! Repeats of a step and its check script (docs/design/config.md): a step that did not pass runs again while it has
+//! executions left of its `max_attempts`; a check script, when the step has one, decides whether a step that passed on
+//! its own did. A repeat enters the same step again within the round, so it spends no round and no attempt of the
+//! session.
 
 use super::{Exit, Outcome, RunHandler, Verdict, finish::remark, row::Row};
 use crate::{

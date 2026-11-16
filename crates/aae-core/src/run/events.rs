@@ -175,7 +175,7 @@ impl RunHandler {
             }
             _ if row.state != "running" => Ok(()),
             Normalized::Activity { tool_running: true } => silence(tx, &row, w.tool_silence_ms),
-            // The harness retries a request by itself: its announced pause is not silence (spec §7.2).
+            // The harness retries a request by itself: its announced pause is not silence (docs/design/adapters.md).
             Normalized::Retrying {
                 attempt: retry,
                 delay,
@@ -353,7 +353,7 @@ impl RunHandler {
             ("state", "preparing") => self.terminal(tx, row, "failed", Some("infrastructure"), "tracker_unavailable"),
             ("state", "starting") | ("silence", "running") => self.attempt_failed(tx, row, stall(FailureKind::Stall)),
             ("state", "running") => self.attempt_failed(tx, row, stall(FailureKind::RunawayTurn)),
-            // The check script of the step was lost on its way back (spec §9.1).
+            // The check script of the step was lost on its way back (docs/design/config.md).
             ("state", "finishing") => {
                 let attempt = row.attempt;
                 self.check_done(tx, row, attempt, super::Exit::TimedOut, ("", ""))

@@ -1,4 +1,4 @@
-//! Issue gates (spec §5.7, docs/design/contracts.md 7) and parked runs: a closed key keeps the runs that have it
+//! Issue gates (docs/design/contracts.md 7) and parked runs: a closed key keeps the runs that have it
 //! from starting an attempt — a queued run waits in `queued`, a started one waits in `parked`.
 
 use super::{RunHandler, rejected, row::Row};
@@ -71,7 +71,8 @@ impl RunHandler {
         if let Some(bead) = &row.bead {
             keys.push(format!("bead:{}/{bead}", row.project));
         } else if row.state == "queued" {
-            // A task may name a bead the core has not read yet; it gets that bead only as it prepares (spec §10.3).
+            // A task may name a bead the core has not read yet; it gets that bead only as it prepares
+            // (docs/design/contracts.md 5).
             let inputs: Value = serde_json::from_str(&row.inputs).unwrap_or_default();
             let named = inputs.as_object().into_iter().flatten().filter_map(|(_, v)| v.as_str());
             keys.extend(named.map(|text| format!("bead:{}/{text}", row.project)));
@@ -97,9 +98,9 @@ impl RunHandler {
         Ok(Self::gates_of(tx, row)?.into_iter().next())
     }
 
-    /// What keeps `row` from starting an attempt: the stopping daemon (`null`, spec §5.6), its oldest closed gate, or
-    /// its agent's `max_runs` reached by other runs (`null`; e.g. a step of another agent, spec §9.3). A step with no
-    /// agent (drain, exec) has no such limit.
+    /// What keeps `row` from starting an attempt: the stopping daemon (`null`, docs/design/invariants.md), its oldest
+    /// closed gate, or its agent's `max_runs` reached by other runs (`null`; e.g. a step of another agent,
+    /// docs/design/contracts.md 6). A step with no agent (drain, exec) has no such limit.
     pub(super) fn held(&self, tx: &Tx<'_>, row: &Row) -> Result<Option<Value>, Error> {
         if self.stopping.is_some() {
             return Ok(Some(Value::Null));

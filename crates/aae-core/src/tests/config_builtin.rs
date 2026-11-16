@@ -1,4 +1,4 @@
-//! The `[builtin.<name>]` tables of the orchestrator config and the formula key `worktree` (spec §11.5).
+//! The `[builtin.<name>]` tables of the orchestrator config and the formula key `worktree` (docs/design/config.md).
 
 use super::config::{BASE, fails, load_with};
 use crate::config::{Bundled, load};

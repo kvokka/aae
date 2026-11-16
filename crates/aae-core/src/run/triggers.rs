@@ -1,6 +1,6 @@
-//! Triggers (spec §9.5, docs/design/contracts.md 2, 3.5): an event trigger is matched in the transaction that commits
-//! its event, a schedule fires on a deadline; either way the run it starts, or its `trigger.skipped`, commits with
-//! the cause, so a crash neither loses nor doubles a firing.
+//! Triggers (docs/design/config.md, docs/design/contracts.md 2, 3.5): an event trigger is matched in the transaction
+//! that commits its event, a schedule fires on a deadline; either way the run it starts, or its `trigger.skipped`,
+//! commits with the cause, so a crash neither loses nor doubles a firing.
 
 use super::{Create, RunHandler, row::Row};
 use crate::{
@@ -128,7 +128,7 @@ fn next(source: &Source, now_ms: i64, tz: &jiff::tz::TimeZone) -> Option<i64> {
 
 impl RunHandler {
     /// At start: a schedule without a deadline gets one; a deadline whose schedule left the config goes. A deadline
-    /// missed while the daemon was down is past, so it fires once now (spec §9.5).
+    /// missed while the daemon was down is past, so it fires once now (docs/design/config.md).
     pub(super) fn arm_schedules(&self, tx: &mut Tx<'_>) -> Result<(), Error> {
         self.arm_schedules_after(tx, None)
     }
@@ -292,8 +292,9 @@ impl RunHandler {
             }
             None => None,
         };
-        // A bead made ready is the next work of the tracker, not a run the parent started (spec §9.5, §2 item 18):
-        // it keeps its parent's depth, so a long epic is legal; a bead retried in a loop is bounded by its failures.
+        // A bead made ready is the next work of the tracker, not a run the parent started (docs/design/config.md,
+        // decision 18): it keeps its parent's depth, so a long epic is legal; a bead retried in a loop is bounded by
+        // its failures.
         let step = i64::from(cause.is_none_or(|e| e["type"] != "bead.ready"));
         let depth = parent_depth.map_or(1, |d| (d + step).max(1));
         if depth > MAX_DEPTH {

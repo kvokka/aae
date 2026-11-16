@@ -1,5 +1,6 @@
-//! Prompt runs through a real `aae daemon` and the real `claude` on the fake Anthropic API (spec §7.8, §15
-//! criteria 2 and 9): the session calls the finisher with its Bash tool, the run passes. No model, no account.
+//! Prompt runs through a real `aae daemon` and the real `claude` on the fake Anthropic API (docs/harness-updates.md,
+//! docs/acceptance.md criteria 2 and 9): the session calls the finisher with its Bash tool, the run passes. No model,
+//! no account.
 
 mod common;
 

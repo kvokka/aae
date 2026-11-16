@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Spec §15, criterion 23: every `pub` item is used somewhere in the workspace besides its own definition and
+# Criterion 23 (docs/acceptance.md): every `pub` item is used somewhere in the workspace besides its own definition and
 # comments; `unreachable_pub` (Cargo.toml) already denies `pub` items no crate root exports.
 # shortcut: matches by name, so an unused item that shares its name with a used one passes; a real cross-crate
 # analysis (rust-analyzer or rustdoc JSON) is the upgrade if such a miss is ever found.

@@ -51,7 +51,7 @@ pub(crate) fn process(config: &EffectiveConfig, plan: &SessionPlan, state: &Path
     let inherit = config.inherits_host();
     // An isolated session keeps its settings, transcripts and session registry under the state directory.
     // Generated files and, for an isolated session, its settings, transcripts and session registry live under the
-    // state directory (§6.5).
+    // state directory (docs/design/config.md).
     let files = state.join("claude").join(&session_id);
     let config_dir = (!inherit).then(|| files.join("config"));
     let value = |s: &Option<aae_core::config::Sourced<String>>| s.as_ref().map(|s| s.value.clone());
@@ -235,7 +235,7 @@ pub(crate) fn materialize(p: &Value) -> std::io::Result<()> {
 
 /// The whole environment of `claude` for the process part `p` of instance `id`; nothing else is inherited.
 /// `host` is the host's claude config directory: an isolated session without a credential of its own gets the
-/// host's login from there (§6.4).
+/// host's login from there (docs/design/config.md).
 pub(crate) fn env(p: &Value, id: &str, socket: Option<&Path>, host: &Path) -> Vec<(String, String)> {
     let mut env = aae_core::driver::child::base_env(daemon_vars(p), &p["env"], id, socket);
     let text = |v: &Value| v.as_str().map(str::to_owned).unwrap_or_else(|| v.to_string());
@@ -282,14 +282,16 @@ pub(crate) fn host_dir() -> PathBuf {
 
 /// The subscription access token of the login in `host` (`claudeAiOauth.accessToken` of `.credentials.json`),
 /// read at every spawn, so a token the host refreshed reaches the next process.
-// shortcut: the file only — macOS keeps the login in the keychain; read it there once macOS is checked (§1.1).
+// shortcut: the file only — macOS keeps the login in the keychain; read it there once macOS is checked
+// (docs/overview.md).
 fn host_token(host: &Path) -> Option<String> {
     let text = std::fs::read_to_string(host.join(".credentials.json")).ok()?;
     let credentials: Value = serde_json::from_str(&text).ok()?;
     credentials["claudeAiOauth"]["accessToken"].as_str().map(str::to_owned)
 }
 
-/// The account the gates use: a hash of where the credential comes from, never the credential itself (§5.7).
+/// The account the gates use: a hash of where the credential comes from, never the credential itself
+/// (docs/design/contracts.md 7).
 pub(crate) fn account(p: &Value) -> String {
     let env = &p["env"];
     let source = match CREDENTIALS.iter().find(|k| !env[**k].is_null()) {

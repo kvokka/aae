@@ -1,4 +1,5 @@
-//! Where the daemon keeps its files, by the XDG base directories (spec §13); the CLI finds the socket the same way.
+//! Where the daemon keeps its files, by the XDG base directories (docs/guide/install.md); the CLI finds the socket the
+//! same way.
 
 use std::path::PathBuf;
 

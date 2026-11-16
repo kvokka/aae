@@ -1,4 +1,4 @@
-//! Orchestrator hooks (spec §11.3, docs/design/contracts.md 3): the dispatcher queues the hooks of an event as an
+//! Orchestrator hooks (docs/design/contracts.md 3): the dispatcher queues the hooks of an event as an
 //! effect that commits with the event; the runner executes them after commit, one after another in plugin order,
 //! and sends the combined decision of a deciding event back to the core.
 
@@ -22,7 +22,7 @@ const HOOK_CEILING_MS: i64 = 300_000;
 const MAX_STDOUT: u64 = 64 * 1024;
 const STDERR_TAIL: usize = 4 * 1024;
 
-/// The events whose hooks may decide (spec §5.4).
+/// The events whose hooks may decide (docs/design/contracts.md 1).
 const DECIDING: [&str; 5] = [
     "run.preparing",
     "run.requires_action",

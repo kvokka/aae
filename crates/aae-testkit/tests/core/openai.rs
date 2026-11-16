@@ -1,5 +1,5 @@
 //! The fake OpenAI Responses API answers every mode of its plan over plain HTTP, and the real `codex` takes its
-//! answers (spec §7.8).
+//! answers (docs/harness-updates.md).
 
 use aae_testkit::openai::{Provider, Reply};
 use serde_json::{Value, json};

@@ -1,5 +1,6 @@
-//! Repeats of a step and its check script (spec §9.1): the first two steps of `ship` run at most twice and have a
-//! check script, which the stand plays instead of running. A kill lands between the record of the script and its word.
+//! Repeats of a step and its check script (docs/design/config.md): the first two steps of `ship` run at most twice and
+//! have a check script, which the stand plays instead of running. A kill lands between the record of the script and its
+//! word.
 
 use crate::{
     Rng,

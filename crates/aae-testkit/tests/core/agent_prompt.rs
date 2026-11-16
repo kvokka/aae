@@ -1,5 +1,5 @@
-//! A run gets the template of its agent, and a project rewrites the agent of a pack with files of its own (spec §8.1,
-//! criterion 33), on the scripted driver.
+//! A run gets the template of its agent, and a project rewrites the agent of a pack with files of its own
+//! (docs/design/config.md, criterion 33), on the scripted driver.
 
 use crate::common;
 
@@ -25,7 +25,8 @@ async fn a_run_gets_the_project_template_of_its_agent_filled_with_the_project_fi
     assert_eq!(w.driver.sent(&run, 1).1, ["Build web so that:\n- it compiles\n"]);
 }
 
-/// The `agent:` label of a bead names the agent of its run (spec §10.3), and with it the template the run renders.
+/// The `agent:` label of a bead names the agent of its run (docs/design/tracker-br.md), and with it the template the
+/// run renders.
 #[tokio::test(start_paused = true)]
 async fn a_run_of_a_bead_labelled_with_an_agent_gets_that_agent_template() {
     let qa = [

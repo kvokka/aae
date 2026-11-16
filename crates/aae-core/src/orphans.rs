@@ -1,9 +1,9 @@
-//! No orphans (spec §5.5, invariant 7; docs/design/experiments.md "Descendants after `kill -9`"): every instance
-//! process and its descendants carry `AAE_INSTANCE=<id>` and are killed by it once the instance is gone; the
+//! No orphans (docs/design/invariants.md, invariant 7; docs/design/experiments.md "Descendants after `kill -9`"): every
+//! instance process and its descendants carry `AAE_INSTANCE=<id>` and are killed by it once the instance is gone; the
 //! daemon is the child subreaper, so descendants that dropped the marker are reaped by it, not left as zombies.
 
 // shortcut: Linux only (`/proc`, `PR_SET_CHILD_SUBREAPER`); elsewhere nothing is found or adopted and a process is
-// told by its pid alone (`start_time`) — macOS ships but is not checked in the first release (§1.1).
+// told by its pid alone (`start_time`) — macOS ships but is not checked in the first release (docs/overview.md).
 
 use rustix::process::{Pid, Signal, WaitOptions, getpid, kill_process, waitpid};
 use std::{
@@ -103,7 +103,7 @@ pub fn adopt_orphans() -> io::Result<()> {
 }
 
 /// The kernel start time of the live process `pid` (field 22 of `/proc/<pid>/stat`); `None` for a zombie or a
-/// process that is gone. pid + start time identify a process (spec §5.2).
+/// process that is gone. pid + start time identify a process (docs/design/event-model.md).
 #[cfg(target_os = "linux")]
 pub fn start_time(pid: i32) -> Option<u64> {
     let stat = std::fs::read_to_string(format!("/proc/{pid}/stat")).ok()?;
@@ -113,7 +113,7 @@ pub fn start_time(pid: i32) -> Option<u64> {
 }
 
 /// shortcut: without `/proc` every existing process starts at 0, so a reused pid passes for the old process and a
-/// zombie for a live one; read `kinfo_proc` through `sysctl` once macOS is checked (§1.1).
+/// zombie for a live one; read `kinfo_proc` through `sysctl` once macOS is checked (docs/overview.md).
 #[cfg(not(target_os = "linux"))]
 pub fn start_time(pid: i32) -> Option<u64> {
     rustix::process::test_kill_process(Pid::from_raw(pid)?).ok().map(|()| 0)
@@ -227,7 +227,7 @@ pub fn kill_descendants() {
 }
 
 /// `port` on loopback is listened on, and only by processes marked `id`: a port check passed by anyone else would
-/// hand them the sessions' token (spec §11.4). Only listeners a connection to `127.0.0.1` may reach count.
+/// hand them the sessions' token (docs/design/config.md). Only listeners a connection to `127.0.0.1` may reach count.
 #[cfg(target_os = "linux")]
 pub(crate) fn listens_alone(id: &str, port: u16) -> bool {
     let tables = ["/proc/net/tcp", "/proc/net/tcp6"].map(|table| std::fs::read_to_string(table).unwrap_or_default());
@@ -250,7 +250,7 @@ pub(crate) fn listens_alone(id: &str, port: u16) -> bool {
 }
 
 /// shortcut: without `/proc` whoever listens on the port passes for the service (macOS is not checked in the first
-/// release, §1.1); read the sockets through `proc_pidfdinfo` once macOS is checked.
+/// release, docs/overview.md); read the sockets through `proc_pidfdinfo` once macOS is checked.
 #[cfg(not(target_os = "linux"))]
 pub(crate) fn listens_alone(_id: &str, _port: u16) -> bool {
     true

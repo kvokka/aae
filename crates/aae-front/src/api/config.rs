@@ -1,5 +1,5 @@
-//! The config through the API (spec §12, §6.3, §6.5): projects and rigs, agents, formulas, packs, plugins, the
-//! effective config of an agent with the layer of every value, a check of the file and its reload.
+//! The config through the API (docs/api/frontends.md, docs/design/config.md): projects and rigs, agents, formulas,
+//! packs, plugins, the effective config of an agent with the layer of every value, a check of the file and its reload.
 
 use super::{
     ApiError, ErrorReply, Param, Reply, State, key,
@@ -159,7 +159,8 @@ pub(crate) struct ExplainQuery {
     rig: Option<String>,
 }
 
-/// The effective config of an agent: one line per value with its layer, and the host layer in one line (spec §6.3).
+/// The effective config of an agent: one line per value with its layer, and the host layer in one line
+/// (docs/design/config.md).
 #[utoipa::path(get, path = "/v1/config/explain", params(ExplainQuery),
     responses((status = OK, body = Explained), (status = BAD_REQUEST, description = BAD_QUERY, body = ErrorReply),
         (status = NOT_FOUND, description = "`not_found`: no such project, rig, agent or formula", body = ErrorReply)))]

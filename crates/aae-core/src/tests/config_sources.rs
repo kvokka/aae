@@ -1,5 +1,5 @@
-//! Packs and plugins from git: the core loads them from the directories the caller downloaded them to (spec §8.2,
-//! §11.6).
+//! Packs and plugins from git: the core loads them from the directories the caller downloaded them to
+//! (docs/design/config.md, docs/guide/plugin.md).
 
 use super::config::{BASE, fails};
 use crate::config::{Checkouts, Config, ConfigError, GitSource, git_sources, load_for};

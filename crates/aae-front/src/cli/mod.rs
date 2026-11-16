@@ -1,4 +1,4 @@
-//! The CLI (spec §12): a thin client of the API, one command per API operation, JSON output with `--json`.
+//! The CLI (docs/api/frontends.md): a thin client of the API, one command per API operation, JSON output with `--json`.
 //! Without a daemon only `aae daemon`, `aae doctor`, `aae cache clear`, `aae config check|explain` and `aae --version`
 //! work.
 

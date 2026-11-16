@@ -1,6 +1,6 @@
-//! `default-policy` (spec §11.5): the reactions to failures as decisions of docs/design/contracts.md 10. Every
-//! count comes from the event (`attempts`, `gates`, `keys`), so the policy keeps no state and the same event always
-//! gets the same decision: a hook run again after a daemon crash decides the same.
+//! `default-policy` (docs/design/config.md): the reactions to failures as decisions of docs/design/contracts.md 10.
+//! Every count comes from the event (`attempts`, `gates`, `keys`), so the policy keeps no state and the same event
+//! always gets the same decision: a hook run again after a daemon crash decides the same.
 
 use aae_core::{parse_rfc3339_ms, rfc3339_ms};
 use serde::Deserialize;
@@ -22,7 +22,7 @@ pub(crate) struct Params {
     backoff_cap_s: i64,
     /// From this many consecutive rate limits on, the model gate closes instead of a backoff.
     backoff_park_from: usize,
-    /// The wait on `auth_required` and `billing` (postmortem 0001, spec §2, decisions 49, 50): the gate closes for
+    /// The wait on `auth_required` and `billing` (decisions 49, 50): the gate closes for
     /// `min(base · 2^(n−1), cap)` after `n` consecutive such failures; the attempt after it probes the cause. No
     /// escalation to an operator, and the core does not count these attempts against its ceiling.
     auth_backoff_base_s: i64,
@@ -165,7 +165,7 @@ fn attempt_failed(event: &Value, p: &Params) -> Value {
                 resume(backoff(p.backoff_base_s, p.backoff_cap_s, n))
             }
         }
-        // An auth failure may be a passing proxy or WAF error (postmortem 0001): a growing wait, re-armed on every
+        // An auth failure may be a passing proxy or WAF error: a growing wait, re-armed on every
         // failure. A run without an account key cannot park: it fails.
         "auth_required" | "billing" => match key("account:") {
             Some(account) => {

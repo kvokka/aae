@@ -121,9 +121,9 @@ pub async fn stop(instance: &InstanceHandle, grace: Duration, eof: bool) {
     }
 }
 
-/// Watches the task that reads the harness output of `instance`: its panic is the adapter's crash (spec §7.1). Every
-/// session of the instance gets `adapter_crash`, `forget` drops the instance from the adapter, the process group is
-/// killed, and the instance is reported gone.
+/// Watches the task that reads the harness output of `instance`: its panic is the adapter's crash
+/// (docs/design/contracts.md 4). Every session of the instance gets `adapter_crash`, `forget` drops the instance from
+/// the adapter, the process group is killed, and the instance is reported gone.
 pub fn watch(reader: JoinHandle<()>, events: Events, instance: InstanceHandle, forget: impl FnOnce() + Send + 'static) {
     tokio::spawn(async move {
         let Err(Ok(panic)) = reader.await.map_err(tokio::task::JoinError::try_into_panic) else {

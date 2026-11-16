@@ -1,5 +1,5 @@
-//! A long epic (spec §9.5, §2 item 18): each bead is blocked by the one before it, a trigger on `bead.ready` takes
-//! the next, and the chain runs to the end however long it is. Exec steps, so real time.
+//! A long epic (docs/design/config.md, decision 18): each bead is blocked by the one before it, a trigger on
+//! `bead.ready` takes the next, and the chain runs to the end however long it is. Exec steps, so real time.
 
 use crate::common;
 

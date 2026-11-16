@@ -1,4 +1,4 @@
-//! Orchestrator hooks as commands (spec §11.3, docs/design/contracts.md 3): real processes, so real time.
+//! Orchestrator hooks as commands (docs/design/contracts.md 3): real processes, so real time.
 
 use crate::common;
 

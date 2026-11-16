@@ -123,15 +123,15 @@ CREATE TABLE instances (
 CREATE INDEX instances_fingerprint ON instances (fingerprint, state);
 ";
 
-/// The trigger (`<pack>.<name>`) that started a run, for the overlap check of spec §9.5.
+/// The trigger (`<pack>.<name>`) that started a run, for the overlap check of docs/design/config.md.
 const SCHEMA_V7: &str = "
 ALTER TABLE runs ADD COLUMN trigger TEXT;
 CREATE INDEX runs_trigger ON runs (trigger);
 ";
 
-/// Bead ownership (spec §10.3, invariants 2–4): the owner run of a bead (the truth the tracker's assignee mirrors),
-/// the generation of its claims and the failed runs counted toward its gate; the last ready set of each project's
-/// tracker, in the tracker's order; the bead of a run and its data as the claim returned it.
+/// Bead ownership (docs/design/contracts.md 5, invariants 2–4): the owner run of a bead (the truth the tracker's
+/// assignee mirrors), the generation of its claims and the failed runs counted toward its gate; the last ready set of
+/// each project's tracker, in the tracker's order; the bead of a run and its data as the claim returned it.
 const SCHEMA_V8: &str = "
 CREATE TABLE beads (
     project TEXT NOT NULL,
@@ -223,13 +223,13 @@ pub fn open(path: &Path) -> rusqlite::Result<Connection> {
         (16, "ALTER TABLE instances ADD COLUMN degraded TEXT;"),
         // The `seq` of the last driver event taken from the instance (contracts 4.3).
         (17, "ALTER TABLE instances ADD COLUMN seq INTEGER NOT NULL DEFAULT 0;"),
-        // The step of the formula a run is at and the one an attempt ran (spec §9.1).
+        // The step of the formula a run is at and the one an attempt ran (docs/design/config.md).
         (
             18,
             "ALTER TABLE runs ADD COLUMN step TEXT NOT NULL DEFAULT '1'; \
              ALTER TABLE attempts ADD COLUMN step TEXT NOT NULL DEFAULT '1';",
         ),
-        // The agent the `agent:` label of a run's bead names for its ai steps (spec §9.1).
+        // The agent the `agent:` label of a run's bead names for its ai steps (docs/design/config.md).
         (19, "ALTER TABLE runs ADD COLUMN as_agent TEXT;"),
         // The kind of the step a run is at: a drain step has no agent either, and its state is read in SQL.
         (
@@ -237,13 +237,13 @@ pub fn open(path: &Path) -> rusqlite::Result<Connection> {
             "ALTER TABLE runs ADD COLUMN step_kind TEXT NOT NULL DEFAULT 'ai'; \
              UPDATE runs SET step_kind = 'exec' WHERE agent = '';",
         ),
-        // The round of a run and the remarks of the checks that sent it back (spec §9.1).
+        // The round of a run and the remarks of the checks that sent it back (docs/design/config.md).
         (
             21,
             "ALTER TABLE runs ADD COLUMN round INTEGER NOT NULL DEFAULT 1; \
              ALTER TABLE runs ADD COLUMN remarks TEXT;",
         ),
-        // The execution of the run's step and the remark of the one before, within a round (spec §9.1).
+        // The execution of the run's step and the remark of the one before, within a round (docs/design/config.md).
         (
             22,
             "ALTER TABLE runs ADD COLUMN step_attempt INTEGER NOT NULL DEFAULT 1; \

@@ -7,14 +7,14 @@ use serde_json::{Map, Value};
 use std::collections::BTreeMap;
 use utoipa::{IntoResponses, ToSchema};
 
-/// A run: `RunView` of docs/design/contracts.md §1.3 with where it is, its attempts and its outcome.
+/// A run: `RunView` of docs/design/contracts.md 1.3 with where it is, its attempts and its outcome.
 #[derive(ToSchema)]
 pub(crate) struct Run {
     id: String,
     project: String,
     rig: String,
     formula: String,
-    /// The step of the formula the run is at (spec §9.1); `agent` and `step_kind` are of it.
+    /// The step of the formula the run is at (docs/design/config.md); `agent` and `step_kind` are of it.
     step: String,
     /// Absent for an exec or a drain step.
     agent: Option<String>,
@@ -31,7 +31,8 @@ pub(crate) struct Run {
     /// The round of the formula's checks the run is in: 1, and one more each time a check sends it back.
     #[schema(minimum = 1)]
     round: u32,
-    /// The execution of the step within its round: 1, and one more each time the step runs again (spec §9.1).
+    /// The execution of the step within its round: 1, and one more each time the step runs again
+    /// (docs/design/config.md).
     #[schema(minimum = 1)]
     step_attempt: u32,
     bead: Option<String>,
@@ -59,14 +60,14 @@ pub(crate) struct Run {
     usage: Usage,
 }
 
-/// The tokens the harness reported (docs/design/contracts.md §4.3 `usage`).
+/// The tokens the harness reported (docs/design/contracts.md 4.3 `usage`).
 #[derive(ToSchema)]
 pub(crate) struct Usage {
     input_tokens: u64,
     output_tokens: u64,
 }
 
-/// `Outcome` of docs/design/contracts.md §1.3.
+/// `Outcome` of docs/design/contracts.md 1.3.
 #[derive(ToSchema)]
 pub(crate) struct Outcome {
     /// `pass` or `fail`.
@@ -88,7 +89,7 @@ pub(crate) struct Attempt {
     ended_at: Option<String>,
     failure_kind: Option<String>,
     harness: String,
-    /// The harness's own session reference (spec §7.7).
+    /// The harness's own session reference (docs/api/frontends.md).
     #[schema(value_type = Option<Object>)]
     session: Option<Value>,
     input_tokens: u64,
@@ -317,8 +318,8 @@ pub(crate) struct Formula {
     formula: String,
     description: String,
     inputs: BTreeMap<String, FormulaInput>,
-    /// Started only by a step of another formula, not directly (spec §9.1); `aae formula list` hides it without
-    /// `--all`.
+    /// Started only by a step of another formula, not directly (docs/design/config.md); `aae formula list` hides it
+    /// without `--all`.
     internal: bool,
 }
 

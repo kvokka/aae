@@ -16,7 +16,7 @@ use std::{
 /// The variables that carry a credential; a process with one of them uses it, not the host's login.
 pub(crate) const CREDENTIALS: [&str; 2] = ["OPENAI_API_KEY", "CODEX_API_KEY"];
 
-/// The sandbox a process runs in when no config sets one (spec §2, decision 38); `doctor` warns about it.
+/// The sandbox a process runs in when no config sets one (decision 38); `doctor` warns about it.
 pub(crate) const DEFAULT_SANDBOX: &str = "danger-full-access";
 /// The native key of the approval policy, codex's own config key.
 const APPROVAL: &str = "approval_policy";
@@ -26,7 +26,7 @@ const APPROVAL: &str = "approval_policy";
 /// threads survive a daemon restart; a process inheriting the host with skills gets its own `CODEX_HOME` there that
 /// links the host's (`host`); `overrides` are the `-c key=value` flags of the native block.
 pub(crate) fn process(config: &EffectiveConfig, state: &Path, host: &Path) -> Result<Value, Failure> {
-    // The contributions of attached plugins are already merged into the config (layer 5 of spec §6.3).
+    // The contributions of attached plugins are already merged into the config (layer 5 of docs/design/config.md).
     let mut overrides: Vec<String> = match config.native.as_ref().map(|n| &n.value) {
         None => Vec::new(),
         // The approval policy is the thread's (`session`), not the process's.
@@ -63,7 +63,7 @@ pub(crate) fn process(config: &EffectiveConfig, state: &Path, host: &Path) -> Re
             part["home"] = json!(host);
             return Ok(part);
         }
-        // Skills need a home of the process's own: it links the host's login and config (spec §2, decision 46).
+        // Skills need a home of the process's own: it links the host's login and config (decision 46).
         part["host"] = json!(host);
     } else if !own {
         host_provider(&mut part, host, true);
@@ -209,7 +209,7 @@ pub(crate) fn env(p: &Value, id: &str, socket: Option<&Path>) -> Vec<(String, St
         p["home"].as_str().unwrap_or_default().to_owned(),
     ));
     env.extend(p["user_home"].as_str().map(|h| ("HOME".to_owned(), h.to_owned())));
-    // The host's login (§6.4) may be a provider whose key is a variable of the daemon's environment.
+    // The host's login (docs/design/config.md) may be a provider whose key is a variable of the daemon's environment.
     env.extend(
         p["host_key"]
             .as_str()
@@ -277,7 +277,7 @@ pub(crate) fn daemon_vars(p: &Value) -> impl Iterator<Item = &'static str> {
         .chain(host.into_iter().flatten())
 }
 
-/// Spec §2, decision 38: a process runs with no sandbox unless the native block of its config, or the host's codex
+/// Decision 38: a process runs with no sandbox unless the native block of its config, or the host's codex
 /// config in `home` it inherits, sets one.
 pub(crate) fn unconfined(config: &EffectiveConfig, home: &Path) -> bool {
     let native = config.native.as_ref().and_then(|n| n.value.as_object());
@@ -307,8 +307,9 @@ pub(crate) fn host_key(home: &Path) -> Option<String> {
     provider(home)?.1.get("env_key")?.as_str().map(str::to_owned)
 }
 
-/// The host's login by a model provider of the host's codex config in `host` (§6.4): the name of its key variable,
-/// and for an isolated process, which does not read that config, the provider itself as the first `-c` flags.
+/// The host's login by a model provider of the host's codex config in `host` (docs/design/config.md): the name of its
+/// key variable, and for an isolated process, which does not read that config, the provider itself as the first `-c`
+/// flags.
 pub(crate) fn host_provider(part: &mut Value, host: &Path, isolated: bool) {
     let Some((name, provider)) = self::provider(host) else {
         return;
@@ -338,7 +339,8 @@ pub(crate) fn host_home() -> PathBuf {
     }
 }
 
-/// The account the gates use: a hash of where the credential comes from, never the credential itself (§5.7).
+/// The account the gates use: a hash of where the credential comes from, never the credential itself
+/// (docs/design/contracts.md 7).
 pub(crate) fn account(p: &Value) -> String {
     let env = &p["env"];
     let source = match CREDENTIALS.iter().find(|k| !env[**k].is_null()) {

@@ -1,6 +1,6 @@
-//! Background work after the outcome (spec §9.4, criterion 34, core part): once the outcome is declared and the turn
-//! has ended, the commands the session left are stopped and the step ends; without an outcome, or with background
-//! the harness cannot stop (a subagent, criterion 4a), the background is waited for.
+//! Background work after the outcome (docs/design/contracts.md 6, criterion 34, core part): once the outcome is
+//! declared and the turn has ended, the commands the session left are stopped and the step ends; without an outcome, or
+//! with background the harness cannot stop (a subagent, criterion 4a), the background is waited for.
 
 use crate::common;
 
@@ -95,7 +95,8 @@ async fn a_restart_while_the_background_stops_keeps_the_declared_outcome() {
     tokio::time::sleep(Duration::from_secs(11)).await;
     assert_eq!(w.driver.background_stops(), 1);
     w.restart().await;
-    // The restart killed the instance, which is the stop the run waited for (spec §9.4, §5.6).
+    // The restart killed the instance, which is the stop the run waited for (docs/design/contracts.md 6,
+    // docs/design/invariants.md).
     let events = w.events(&run, Duration::from_millis(300)).await;
     assert!(!events.iter().any(|(t, _)| t == "run.attempt_failed"));
     assert_eq!(last(&events, "run.finishing")["outcome"]["summary"], "done");

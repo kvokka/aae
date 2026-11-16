@@ -1,6 +1,6 @@
-//! The live view of a run (spec §5.3, §12): its events from the journal as SSE from a `seq`, and the raw messages
-//! of its current session relayed from the adapter as they come. The core never stores those messages, so a
-//! reconnect gets only the new ones; the history is in the harness's transcript.
+//! The live view of a run (docs/design/event-model.md, docs/api/frontends.md): its events from the journal as SSE from
+//! a `seq`, and the raw messages of its current session relayed from the adapter as they come. The core never stores
+//! those messages, so a reconnect gets only the new ones; the history is in the harness's transcript.
 
 use super::{
     Api, ApiError, ErrorReply, Param, State,

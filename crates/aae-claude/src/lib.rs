@@ -1,5 +1,5 @@
-//! The claude adapter (spec §7, docs/design/contracts.md 4.6): one `claude -p` process per session, stream-json
-//! on stdin and stdout.
+//! The claude adapter (docs/design/adapters.md, docs/design/contracts.md 4.6): one `claude -p` process per session,
+//! stream-json on stdin and stdout.
 
 #![deny(clippy::disallowed_methods)]
 

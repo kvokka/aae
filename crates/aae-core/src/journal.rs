@@ -1,5 +1,5 @@
-//! The JSONL event journal (spec §5.3): one line per outbox event, rotated by size, read back from a `seq`.
-//! It is a durable outbox consumer: an event leaves the outbox once every consumer has acknowledged it.
+//! The JSONL event journal (docs/design/event-model.md): one line per outbox event, rotated by size, read back from a
+//! `seq`. It is a durable outbox consumer: an event leaves the outbox once every consumer has acknowledged it.
 
 use crate::store;
 use rusqlite::Connection;
@@ -52,7 +52,7 @@ impl From<io::Error> for ReadError {
 }
 
 impl Journal {
-    /// The spec's journal: 10 MB per file, 5 files.
+    /// The journal of decision 22: 10 MB per file, 5 files.
     pub fn new(dir: &Path) -> Self {
         Self::with_limits(dir, 10 * 1024 * 1024, 5)
     }
@@ -195,7 +195,7 @@ impl Journal {
     }
 
     /// Events with `seq >= from`, oldest first, at most `limit`. A `from` older than the oldest event still held
-    /// is a gap: the reader recovers through the state API instead (spec §5.3).
+    /// is a gap: the reader recovers through the state API instead (docs/design/event-model.md).
     pub fn read_from(&self, from: i64, limit: usize) -> Result<Vec<Value>, ReadError> {
         let files: Vec<PathBuf> = (0..self.files)
             .rev()

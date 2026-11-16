@@ -1,9 +1,10 @@
-//! The deterministic check of the core invariants (spec §5.5, §14; criterion 8 in CI): for each seed a sequence of
-//! commands, harness behaviour, policy hooks, operator actions, repeated and lost deliveries and daemon crashes
-//! (`kill -9` cuts a step short wherever the writer is then, and takes the effects in flight with it) plays on the run
-//! machine with the managed clock. The invariants are checked on the state and the journal after every step; once
-//! the faults stop, every run must reach an end and every hooked event must have had its hooks run. Each full share
-//! of seeds plays on until it has killed the daemon with tracker, harness and hook calls recorded and not yet done.
+//! The deterministic check of the core invariants (docs/design/invariants.md; criterion 8 in CI): for each seed a
+//! sequence of commands, harness behaviour, policy hooks, operator actions, repeated and lost deliveries and daemon
+//! crashes (`kill -9` cuts a step short wherever the writer is then, and takes the effects in flight with it) plays on
+//! the run machine with the managed clock. The invariants are checked on the state and the journal after every step;
+//! once the faults stop, every run must reach an end and every hooked event must have had its hooks run. Each full
+//! share of seeds plays on until it has killed the daemon with tracker, harness and hook calls recorded and not yet
+//! done.
 //!
 //! Every run plays new seeds: each share starts from a random base seed and prints it. A failure names its seed:
 //! `AAE_CHAOS_SEED=<n> cargo nextest run -p aae-testkit --test chaos` replays it alone; `AAE_CHAOS_SEEDS=<n>` plays
