@@ -27,6 +27,7 @@ use utoipa::IntoParams;
 const BATCH: usize = 256;
 
 #[derive(Deserialize, IntoParams)]
+#[into_params(parameter_in = Query)]
 pub(crate) struct LiveQuery {
     /// The first `seq` to send; absent: from the oldest event held (or after `Last-Event-ID`).
     from: Option<i64>,

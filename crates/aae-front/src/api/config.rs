@@ -17,6 +17,7 @@ use std::sync::Arc;
 use utoipa::IntoParams;
 
 #[derive(Deserialize, IntoParams)]
+#[into_params(parameter_in = Query)]
 pub(crate) struct ProjectQuery {
     /// Only this project.
     project: Option<String>,
@@ -146,6 +147,7 @@ pub(crate) async fn list_plugins(state: State, Param(Query(query)): Param<Query<
 }
 
 #[derive(Deserialize, IntoParams)]
+#[into_params(parameter_in = Query)]
 pub(crate) struct ExplainQuery {
     project: String,
     /// `<pack>.<name>`, or a bare name of the project's own pack; or else `formula`.

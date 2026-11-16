@@ -17,14 +17,11 @@
         "parameters": [
           {
             "name": "project",
-            "in": "path",
+            "in": "query",
             "description": "Only this project.",
-            "required": true,
+            "required": false,
             "schema": {
-              "type": [
-                "string",
-                "null"
-              ]
+              "type": "string"
             }
           }
         ],
@@ -108,7 +105,7 @@
         "parameters": [
           {
             "name": "project",
-            "in": "path",
+            "in": "query",
             "required": true,
             "schema": {
               "type": "string"
@@ -116,38 +113,29 @@
           },
           {
             "name": "agent",
-            "in": "path",
+            "in": "query",
             "description": "`<pack>.<name>`, or a bare name of the project's own pack; or else `formula`.",
-            "required": true,
+            "required": false,
             "schema": {
-              "type": [
-                "string",
-                "null"
-              ]
+              "type": "string"
             }
           },
           {
             "name": "formula",
-            "in": "path",
+            "in": "query",
             "description": "A formula: step by step, the agent each ai step of its run on `rig` is of, with the layers of its pack, its\nstep and the rig's variant.",
-            "required": true,
+            "required": false,
             "schema": {
-              "type": [
-                "string",
-                "null"
-              ]
+              "type": "string"
             }
           },
           {
             "name": "rig",
-            "in": "path",
+            "in": "query",
             "description": "The rig of the run; its layer counts when given. A `formula` without it is of a run in the project root.",
-            "required": true,
+            "required": false,
             "schema": {
-              "type": [
-                "string",
-                "null"
-              ]
+              "type": "string"
             }
           }
         ],
@@ -328,14 +316,11 @@
         "parameters": [
           {
             "name": "timeout_s",
-            "in": "path",
+            "in": "query",
             "description": "How long the runs in a turn may go on, in seconds (default 300); the daemon stops then anyway.",
-            "required": true,
+            "required": false,
             "schema": {
-              "type": [
-                "integer",
-                "null"
-              ],
+              "type": "integer",
               "format": "int64",
               "minimum": 0
             }
@@ -432,14 +417,11 @@
         "parameters": [
           {
             "name": "timeout_s",
-            "in": "path",
+            "in": "query",
             "description": "How long the runs in a turn may go on, in seconds (default 300); the daemon stops then anyway.",
-            "required": true,
+            "required": false,
             "schema": {
-              "type": [
-                "integer",
-                "null"
-              ],
+              "type": "integer",
               "format": "int64",
               "minimum": 0
             }
@@ -566,14 +548,11 @@
         "parameters": [
           {
             "name": "from",
-            "in": "path",
+            "in": "query",
             "description": "The first `seq` to send; absent: the events after the last written one (or after `Last-Event-ID`).",
-            "required": true,
+            "required": false,
             "schema": {
-              "type": [
-                "integer",
-                "null"
-              ],
+              "type": "integer",
               "format": "int64"
             }
           },
@@ -649,14 +628,11 @@
         "parameters": [
           {
             "name": "project",
-            "in": "path",
+            "in": "query",
             "description": "Only this project.",
-            "required": true,
+            "required": false,
             "schema": {
-              "type": [
-                "string",
-                "null"
-              ]
+              "type": "string"
             }
           }
         ],
@@ -1091,14 +1067,11 @@
         "parameters": [
           {
             "name": "project",
-            "in": "path",
+            "in": "query",
             "description": "Only this project.",
-            "required": true,
+            "required": false,
             "schema": {
-              "type": [
-                "string",
-                "null"
-              ]
+              "type": "string"
             }
           }
         ],
@@ -1155,14 +1128,11 @@
         "parameters": [
           {
             "name": "project",
-            "in": "path",
+            "in": "query",
             "description": "Only this project.",
-            "required": true,
+            "required": false,
             "schema": {
-              "type": [
-                "string",
-                "null"
-              ]
+              "type": "string"
             }
           }
         ],
@@ -1219,14 +1189,11 @@
         "parameters": [
           {
             "name": "project",
-            "in": "path",
+            "in": "query",
             "description": "Only this project.",
-            "required": true,
+            "required": false,
             "schema": {
-              "type": [
-                "string",
-                "null"
-              ]
+              "type": "string"
             }
           }
         ],
@@ -1283,49 +1250,37 @@
         "parameters": [
           {
             "name": "project",
-            "in": "path",
-            "required": true,
+            "in": "query",
+            "required": false,
             "schema": {
-              "type": [
-                "string",
-                "null"
-              ]
+              "type": "string"
             }
           },
           {
             "name": "state",
-            "in": "path",
+            "in": "query",
             "description": "One of the run states; another is a bad request.",
-            "required": true,
+            "required": false,
             "schema": {
-              "type": [
-                "string",
-                "null"
-              ]
+              "type": "string"
             }
           },
           {
             "name": "parent",
-            "in": "path",
+            "in": "query",
             "description": "The runs whose `parent_run` this is: those its sessions started and those its events triggered.",
-            "required": true,
+            "required": false,
             "schema": {
-              "type": [
-                "string",
-                "null"
-              ]
+              "type": "string"
             }
           },
           {
             "name": "limit",
-            "in": "path",
+            "in": "query",
             "description": "At most this many, newest first (default 100).",
-            "required": true,
+            "required": false,
             "schema": {
-              "type": [
-                "integer",
-                "null"
-              ],
+              "type": "integer",
               "format": "int32",
               "minimum": 0
             }
@@ -1876,14 +1831,11 @@
           },
           {
             "name": "from",
-            "in": "path",
+            "in": "query",
             "description": "The first `seq` to send; absent: from the oldest event held (or after `Last-Event-ID`).",
-            "required": true,
+            "required": false,
             "schema": {
-              "type": [
-                "integer",
-                "null"
-              ],
+              "type": "integer",
               "format": "int64"
             }
           },

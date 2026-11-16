@@ -39,6 +39,7 @@ pub(crate) async fn doctor(state: State) -> Reply {
 }
 
 #[derive(Deserialize, IntoParams)]
+#[into_params(parameter_in = Query)]
 pub(crate) struct Drain {
     /// How long the runs in a turn may go on, in seconds (default 300); the daemon stops then anyway.
     timeout_s: Option<u64>,

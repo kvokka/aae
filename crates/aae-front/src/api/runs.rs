@@ -84,6 +84,7 @@ const STATES: [&str; 11] = [
 ];
 
 #[derive(Deserialize, IntoParams)]
+#[into_params(parameter_in = Query)]
 pub(crate) struct ListQuery {
     project: Option<String>,
     /// One of the run states; another is a bad request.

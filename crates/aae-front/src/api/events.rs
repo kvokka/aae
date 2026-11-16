@@ -25,6 +25,7 @@ pub(super) const GAP: &str = "`gap`: the `seq` was rotated away; `oldest` is the
 const BATCH: usize = 256;
 
 #[derive(Deserialize, IntoParams)]
+#[into_params(parameter_in = Query)]
 pub(crate) struct StreamQuery {
     /// The first `seq` to send; absent: the events after the last written one (or after `Last-Event-ID`).
     from: Option<i64>,
