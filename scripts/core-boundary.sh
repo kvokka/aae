@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Decision 43: the core knows no harness and no tracker by name; what it needs comes through the driver
-# capabilities and the tracker interface, in any letter case. Checks the code of `aae-core` outside its tests: `src/tests/` and the
-# top-level item under a `#[cfg(test)]` or `#[test]` (up to its closing `}` at column 0 when it opens a block).
+# capabilities and the tracker interface, in any letter case. Checks the code of `aae-core` outside its tests:
+# `src/tests/`, every `tests.rs` (the tests of a module, in a file of their own) and the top-level item under a
+# `#[cfg(test)]` or `#[test]` (up to its closing `}` at column 0 when it opens a block).
 set -euo pipefail
 cd "$(dirname "$0")/.."
 # The harness names come from the adapter table of the daemon, the one place that lists them.
@@ -11,7 +12,7 @@ if [[ -z $harnesses ]]; then
   exit 1
 fi
 names="\\b($harnesses|br|max_sessions|instance_idle_s|beads_dir)\\b|\\.beads\\b"
-found=$(find crates/aae-core/src -name '*.rs' -not -path '*/src/tests/*' -print0 | sort -z |
+found=$(find crates/aae-core/src -name '*.rs' -not -path '*/src/tests/*' -not -name tests.rs -print0 | sort -z |
   xargs -0 awk '
     FNR == 1 { on = 1; item = 0 }
     item && /^#\[/ { next }
