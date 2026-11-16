@@ -548,27 +548,26 @@ call `aae`) and `AAE_INPUT_<NAME>` per input (the name upper-cased, other charac
 string as it is, any other value as JSON). Two inputs that give one variable (`note-text` and `note_text`) are a
 config error.
 
-A `drain` step gives every ready bead under the run's bead, at any depth, a run of `formula`, on each read of
-the tracker, until none is left: the same start as `aae run start` with the bead as the formula's `bead` input, no rig
-named (the prefix of the bead's id gives it, the project root when it matches no rig, and its `agent:`/`harness:` labels apply as to any run), the run's correlation,
-one level deeper, the run as `parent_run`. A bead goes out once per entry of the step: a child that failed is not run
-again in it, and an attempt cut by a restart (`daemon_crash`) starts no new entry; a round back to the step does. A
-bead whose start is refused (a `rig:` label, a `harness:` label the config does not give) gets no run and stays
-open. The step has no process (contracts 6.2): it ends once nothing was given, no child is alive and no later
-read of the tracker is queued, with `data = {closed, failed, refused}` — the beads whose runs passed,
-those whose runs failed or were cancelled, and the refused ones with the reason.
-`pool` (default 1) is the most beads of the step in work at once: a child holds its place from its creation, queued
-or running, and the end of one gives out the next ready bead. `on_item_failure` says what a failed run of a bead
-does: `continue` (default) — the other beads go on and the step passes; `soft_stop` — no new bead goes out, the
-started ones end; `hard_stop` — the started ones are cancelled too (reason `drain_hard_stop`), on the read of the
-tracker that the failed run's end queues. A stopped step ends `fail` once no child is alive, its `data` adds
-`stopped_on` (the failed beads) and `not_started` (the ready beads under the root it did not give), and its summary
-is `stopped on <beads>: <n> closed, <n> failed, <n> not started`. The stop follows from the children of the entry,
-so a restart keeps it: no new bead goes out after one; a repeat of the step or a round back to it is a new entry and
-gives the beads again. A cancelled child stops nothing. `formula` must take exactly one
-`bead` input and need no other; a formula with a `drain` step needs a required `bead` input. An epic under the root is
-not ready while it has open beads; once they are closed it is given out as any bead (with an id of no rig: in the
-root).
+A `drain` step gives every ready bead under the run's bead, at any depth, a run of `formula`, on each read of the
+tracker, until none is left: the same start as `aae run start` with the bead as the formula's input of type `task`, no
+rig named (the prefix of the bead's id gives it, the project root when it matches no rig, and its `agent:`/`harness:`
+labels apply as to any run), the run's correlation, one level deeper, the run as `parent_run`. A bead goes out once
+per entry of the step: a child that failed is not run again in it, and an attempt cut by a restart (`daemon_crash`)
+starts no new entry; a round back to the step does. A bead whose start is refused (a `rig:` label, a `harness:` label
+the config does not give) gets no run and stays open. The step has no process (contracts 6.2): it ends once nothing
+was given, no child is alive and no later read of the tracker is queued, with `data = {closed, failed, refused}` — the
+beads whose runs passed, those whose runs failed or were cancelled, and the refused ones with the reason. `pool`
+(default 1) is the most beads of the step in work at once: a child holds its place from its creation, queued or
+running, and the end of one gives out the next ready bead. `on_item_failure` says what a failed run of a bead does:
+`continue` (default) — the other beads go on and the step passes; `soft_stop` — no new bead goes out, the started ones
+end; `hard_stop` — the started ones are cancelled too (reason `drain_hard_stop`), on the read of the tracker that the
+failed run's end queues. A stopped step ends `fail` once no child is alive, its `data` adds `stopped_on` (the failed
+beads) and `not_started` (the ready beads under the root it did not give), and its summary is `stopped on <beads>: <n>
+closed, <n> failed, <n> not started`. The stop follows from the children of the entry, so a restart keeps it: no new
+bead goes out after one; a repeat of the step or a round back to it is a new entry and gives the beads again. A
+cancelled child stops nothing. `formula` must take exactly one input of type `task` and need no other; a formula with
+a `drain` step needs a required `task` input. An epic under the root is not ready while it has open beads; once they
+are closed it is given out as any bead (with an id of no rig prefix: in the root).
 
 A `formula` step runs `formula`, a formula of the run's project (a formula of another project is not in its reach,
 whatever its name), as one child run: the same rig, the run's correlation, one level deeper, the run as
