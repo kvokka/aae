@@ -265,15 +265,9 @@ async fn main() -> ExitCode {
     }
     for s in skipped {
         let (mark, notes) = if s.launch == Launch::Release {
-            (
-                "on a tag",
-                "the release targets build on a tag: `mise run acceptance-release`",
-            )
+            ("on a tag", "built on a tag: `mise run acceptance-release`")
         } else {
-            (
-                "not run",
-                "needs a real model or a release build: run the spec without --ci",
-            )
+            ("not run", "a request row: run the spec without --ci")
         };
         rows.push(Row {
             criterion: s.criterion,
