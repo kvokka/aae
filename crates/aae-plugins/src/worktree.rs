@@ -6,6 +6,7 @@
 use serde::Deserialize;
 use serde_json::{Value, json};
 use std::{
+    fs::{File, TryLockError},
     io::Read,
     os::unix::process::CommandExt,
     path::{Path, PathBuf},
@@ -71,6 +72,7 @@ fn worktree(workdir: &Path) -> Option<(PathBuf, &str)> {
 /// reused, so a hook run again after a crash decides the same; an existing branch `aae/<id>` is checked out, never
 /// reset.
 fn create(common: &Path, id: &str, until: Instant) -> Result<Value, String> {
+    let _held = hold(common, until)?;
     let path = common.join(DIR).join(id);
     if !path.join(".git").exists() {
         let branch = format!("aae/{id}");
@@ -91,6 +93,7 @@ fn remove(common: &Path, path: &Path, id: &str, until: Instant) -> Result<(), St
     if !path.exists() {
         return Ok(());
     }
+    let _held = hold(common, until)?;
     let head = git(path, &["rev-parse", "HEAD"], until)?;
     if git(
         path,
@@ -109,6 +112,25 @@ fn remove(common: &Path, path: &Path, id: &str, until: Instant) -> Result<(), St
     // Deletes the branch only when it is merged; an unmerged one is the run's work.
     let _ = git(common, &["branch", "-d", &format!("aae/{id}")], until);
     Ok(())
+}
+
+/// Locks the git dir `common` itself, so the runs of one repository change its worktrees one at a time: two
+/// `git worktree add` at once race on the repository's config, which the first one may write
+/// (`worktree.useRelativePaths` sets `extensions.relativeWorktrees`). The lock goes with the returned file.
+fn hold(common: &Path, until: Instant) -> Result<File, String> {
+    let dir = File::open(common).map_err(|e| format!("{}: {e}", common.display()))?;
+    loop {
+        match dir.try_lock() {
+            Ok(()) => return Ok(dir),
+            Err(TryLockError::WouldBlock) if Instant::now() < until => {
+                thread::sleep(Duration::from_millis(20));
+            }
+            Err(TryLockError::WouldBlock) => {
+                return Err(format!("{}: locked past the hook timeout", common.display()));
+            }
+            Err(TryLockError::Error(e)) => return Err(format!("{}: {e}", common.display())),
+        }
+    }
 }
 
 /// Runs `git` in its own process group, killed with the group once `until` passes.

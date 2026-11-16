@@ -375,3 +375,43 @@ fn a_git_past_the_hook_timeout_is_killed() {
     assert!(started.elapsed() < Duration::from_secs(10), "{said:?}");
     assert!(said.unwrap_err().contains("killed past the hook timeout"));
 }
+
+#[test]
+fn runs_of_one_repository_prepared_at_once_each_get_a_worktree() {
+    let repo = tempfile::tempdir().unwrap();
+    let repo = repo.path().canonicalize().unwrap();
+    git(&repo, &["init", "-q", "-b", "main"]);
+    // The first worktree added then writes the repository's config.
+    git(&repo, &["config", "worktree.useRelativePaths", "true"]);
+    git(
+        &repo,
+        &[
+            "-c",
+            "user.email=t@example.com",
+            "-c",
+            "user.name=t",
+            "commit",
+            "-q",
+            "--allow-empty",
+            "-m",
+            "b",
+        ],
+    );
+    let params = json!({ "formulas": ["shop.fix"] });
+    let said: Vec<_> = std::thread::scope(|s| {
+        let runs: Vec<_> = (0..8)
+            .map(|i| {
+                let run_ =
+                    json!({ "id": format!("r{i}"), "agent": "shop.dev", "formula": "shop.fix", "workdir": repo });
+                let event = json!({ "type": "run.preparing", "data": { "run": run_ } });
+                let params = &params;
+                s.spawn(move || run("worktree", &event, params))
+            })
+            .collect();
+        runs.into_iter().map(|r| r.join().unwrap()).collect()
+    });
+    for (i, said) in said.iter().enumerate() {
+        let tree = repo.join(format!(".git/aae/worktrees/r{i}"));
+        assert_eq!(said, &Ok(Some(json!({ "decision": "proceed", "workdir": tree }))));
+    }
+}

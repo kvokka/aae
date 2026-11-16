@@ -775,8 +775,11 @@ or for a project.
   the branch is deleted only when it is merged. A run with `continue_from` starts in the workdir of the run it continues
   (a session resumes where it ran); when that is a worktree of this plugin, it is brought back on its branch if it was
   removed, whatever the run's formula says. A reload that leaves a project no formula with `worktree = true` turns the
-  plugin off there: the worktrees of its runs still going are left in place, as are their branches. Its hook has the 30
-  s timeout of a hook; a `git` still running at that timeout is killed with its process group and the hook fails.
+  plugin off there: the worktrees of its runs still going are left in place, as are their branches. Runs of one
+  repository that start or end at once make and remove their worktrees one at a time, under an OS lock on the git
+  common dir: two `git worktree add` at once can race on the repository config. Its hook has the 30 s timeout of a
+  hook, the wait for that lock included; a `git` still running at that timeout is killed with its process group and
+  the hook fails.
 
 ### Where the bundled plugins end and the core begins
 
