@@ -10,7 +10,6 @@ use crate::{
     process::{self, Exit, Spec},
     writer::{CoreHandle, Error, Event, Tx},
 };
-use rusqlite::OptionalExtension;
 use serde_json::{Value, json};
 use std::{
     collections::BTreeMap,
@@ -91,17 +90,7 @@ impl RunHandler {
                 let mut payload = json!({ "op": "hooks", "event": event, "hooks": hooks, "marker": marker });
                 // A hook on a failed attempt reads its transcript once the process the attempt stopped is dead.
                 if kind == "run.attempt_failed" {
-                    let stopped: Option<String> = tx
-                        .sql()
-                        .query_row(
-                            "SELECT i.handle FROM attempts a JOIN runs r ON r.id = a.run AND r.attempt = a.n \
-                             JOIN instances i ON i.id = a.instance WHERE a.run = ?1 AND i.state = 'stopping'",
-                            [run],
-                            |r| r.get(0),
-                        )
-                        .optional()?
-                        .flatten();
-                    payload["after"] = stopped.and_then(|h| serde_json::from_str(&h).ok()).unwrap_or_default();
+                    payload["after"] = Self::stopped(tx, run)?;
                 }
                 tx.effect(&key, &seq.to_string(), &payload)?;
             }

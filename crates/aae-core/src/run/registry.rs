@@ -320,6 +320,21 @@ impl RunHandler {
             .collect())
     }
 
+    /// The handle of the instance the current attempt of `run` stopped, `null` when it stays up.
+    pub(super) fn stopped(tx: &Tx<'_>, run: &str) -> Result<Value, Error> {
+        let handle: Option<String> = tx
+            .sql()
+            .query_row(
+                "SELECT i.handle FROM attempts a JOIN runs r ON r.id = a.run AND r.attempt = a.n \
+                 JOIN instances i ON i.id = a.instance WHERE a.run = ?1 AND i.state = 'stopping'",
+                [run],
+                |r| r.get(0),
+            )
+            .optional()?
+            .flatten();
+        Ok(handle.and_then(|h| serde_json::from_str(&h).ok()).unwrap_or_default())
+    }
+
     pub(super) fn stop_instance(tx: &mut Tx<'_>, id: &str, reason: &str) -> Result<(), Error> {
         let kind: String = tx
             .sql()
