@@ -102,5 +102,5 @@ if [ "${EXAMPLE:-}" = 1 ]; then
   done
   cp RESULT.md RESULT-example.md
 fi
-echo "$demo: $result in ${seconds}s; see RESULT.md, the daemon's log is .aae/daemon.log"
+echo "$demo: $result in ${seconds}s after $rounds round(s); see RESULT.md, the daemon's log is .aae/daemon.log"
 [ "$result" = passed ]

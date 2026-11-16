@@ -93,14 +93,14 @@ pub(crate) const ALL: &[Scenario] = &[
         title: "demo 1: a request, a planner that files beads, a drain to coders on claude and codex, a report that \
             every bead under the root is closed, unattended",
         launch: Launch::Request,
-        run: |env| Box::pin(demo(env, "1-planner-executor")),
+        run: |env| Box::pin(demo(env, "1-planner-executor", 1)),
     },
     Scenario {
         criterion: "20",
         title: "demo 2: demo 1 on openai models, then a rumdl check and a qa agent in a browser send the work back to \
-            the planner until both pass, in at most three rounds, unattended",
+            the planner until both pass, in at most three rounds, unattended, two runs in a row",
         launch: Launch::Request,
-        run: |env| Box::pin(demo(env, "2-multirepo-qa")),
+        run: |env| Box::pin(demo(env, "2-multirepo-qa", 2)),
     },
     Scenario {
         criterion: "22",
@@ -338,11 +338,19 @@ async fn demos_load(env: Arc<Env>) -> String {
     "`aae config check` of demos/<demo>/root/config.toml is clean for each demo".into()
 }
 
-/// One demo on real models (spec §15 "Demo"); its `run.sh` leaves the result in the demo's directory, ignored by git.
-async fn demo(env: Arc<Env>, name: &str) -> String {
+/// One demo on real models (spec §15 "Demo"), `times` runs in a row; its `run.sh` leaves the result in the demo's
+/// directory, ignored by git, and each run starts from what `git clean` leaves, as the demo's README says. What the
+/// agents may have left running is neither looked for nor killed.
+async fn demo(env: Arc<Env>, name: &str, times: usize) -> String {
     let aae = format!("AAE={}", env.aae.display());
-    let out = command(&env, "env", &[&aae, &format!("demos/{name}/run.sh")]).await;
-    line_with(&out, name)
+    let dir = format!("demos/{name}");
+    let mut runs = Vec::new();
+    for _ in 0..times {
+        command(&env, "git", &["clean", "-ffdXq", "--", &dir]).await;
+        let out = command(&env, "env", &[&aae, &format!("{dir}/run.sh")]).await;
+        runs.push(line_with(&out, name));
+    }
+    runs.join("; ")
 }
 
 async fn budget(env: Arc<Env>) -> String {
