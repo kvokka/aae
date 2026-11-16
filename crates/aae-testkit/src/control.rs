@@ -1,6 +1,6 @@
 //! How a test sets up and reads the scripted driver: scenarios, instances, tokens, what sessions were given.
 
-use super::{ScriptedDriver, Session, State, Step};
+use super::{NO_PID, ScriptedDriver, Session, State, Step};
 use aae_contract::driver::{Capabilities, PromptKey};
 use serde_json::Value;
 use std::{
@@ -44,6 +44,25 @@ impl ScriptedDriver {
     /// Every later `start_session` never returns: a process that never reports its session.
     pub fn stall_sessions(&self) {
         self.lock().stalled = true;
+    }
+
+    /// Every later `start_session` blocks its thread until the returned sender sends or is dropped: like a call into
+    /// a synchronous library, it cannot be cancelled meanwhile.
+    pub fn hold_sessions(&self) -> std::sync::mpsc::Sender<()> {
+        let (release, held) = std::sync::mpsc::channel();
+        self.lock().held = Some(Arc::new(Mutex::new(held)));
+        release
+    }
+
+    /// Every later instance has a real process (a `sleep`) behind its handle, which dies `dying` after
+    /// `stop_instance` is called.
+    pub fn real_processes(&self, dying: Duration) {
+        self.lock().dying = Some(dying);
+    }
+
+    /// `(pid, start_time)` of every real process started so far.
+    pub fn spawned(&self) -> Vec<(i32, u64)> {
+        self.lock().spawned.clone()
     }
 
     /// Every later `send_prompt` returns but the harness never gets the prompt: no transcript entry, no ack.
@@ -145,4 +164,21 @@ impl ScriptedDriver {
         let env = state.tokens.get(&(run.to_owned(), attempt)).map(|t| t.1.clone());
         (env, state.texts.clone())
     }
+}
+
+/// The `(pid, start_time)` of a new real process of instance `id` under [`ScriptedDriver::real_processes`], else
+/// of no process.
+pub(crate) fn real_process(state: &mut State, id: &str) -> (i32, u64) {
+    if state.dying.is_none() {
+        return (NO_PID, 0);
+    }
+    let process = std::process::Command::new("sleep")
+        .arg("60")
+        .spawn()
+        .expect("sleep starts");
+    let pid = i32::try_from(process.id()).expect("a pid fits i32");
+    let start_time = aae_contract::orphans::start_time(pid).expect("a live process has a start time");
+    state.processes.insert(id.to_owned(), process);
+    state.spawned.push((pid, start_time));
+    (pid, start_time)
 }

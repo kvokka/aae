@@ -47,7 +47,14 @@ impl Executor for RunExecutor {
         Box::pin(async move {
             let core = &self.core;
             match payload["op"].as_str() {
-                Some("hooks") => self.hooks.run(core, payload).await,
+                Some("hooks") => {
+                    if let Ok(stopped) = serde_json::from_value::<InstanceHandle>(payload["after"].clone()) {
+                        // At most the stop grace: a process that will not die does not hold the decision past its
+                        // deadline.
+                        crate::process::wait_dead(stopped.pid, stopped.start_time, STOP_GRACE).await;
+                    }
+                    self.hooks.run(core, payload).await;
+                }
                 Some("tracker") => return super::beads::execute(&self.trackers, core, payload).await,
                 Some("exec") => {
                     let msg = match self.hooks.played(payload) {
@@ -243,7 +250,10 @@ impl RunExecutor {
             attempt,
             session: session.clone(),
         };
-        let _ = core.send(None, msg).await;
+        // A prompt goes only into a session the writer recorded.
+        if core.send(None, msg).await.is_err() {
+            return Ok(());
+        }
         driver.send_prompt(&handle, &session, &text, key).await?;
         let _ = core.send(None, Msg::PromptSent { run, attempt, key }).await;
         Ok(())

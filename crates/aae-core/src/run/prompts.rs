@@ -42,17 +42,17 @@ pub(super) fn first(tx: &Tx<'_>, run: &str, attempt: u32) -> Result<Option<Strin
     Ok(key)
 }
 
-/// The last prompt the attempt before `attempt` left unsettled, `(key, text)`, when the daemon died under it: the
+/// The last prompt the attempt before `attempt` left unsettled, `(n, key, text)`, when the daemon died under it: the
 /// resumed session's transcript tells whether the harness ever got it.
-pub(super) fn unsettled(tx: &Tx<'_>, run: &str, attempt: u32) -> Result<Option<(String, String)>, Error> {
+pub(super) fn unsettled(tx: &Tx<'_>, run: &str, attempt: u32) -> Result<Option<(u32, String, String)>, Error> {
     let found = tx
         .sql()
         .query_row(
-            "SELECT p.key, p.text FROM prompts p JOIN attempts a ON a.run = p.run AND a.n = p.attempt \
+            "SELECT p.n, p.key, p.text FROM prompts p JOIN attempts a ON a.run = p.run AND a.n = p.attempt \
              WHERE p.run = ?1 AND p.attempt = ?2 AND p.state != 'settled' \
              AND json_extract(a.failure, '$.kind') = 'daemon_crash' ORDER BY p.n DESC LIMIT 1",
             params![run, attempt.saturating_sub(1)],
-            |r| Ok((r.get(0)?, r.get(1)?)),
+            |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
         )
         .optional()?;
     Ok(found)

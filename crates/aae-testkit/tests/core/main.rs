@@ -7,6 +7,7 @@ mod common;
 mod agent_limit;
 mod agent_prompt;
 mod anthropic;
+mod attempt_edges;
 mod auth;
 mod background;
 mod bead_events;

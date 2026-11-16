@@ -29,4 +29,4 @@ aae-core = { version = "0.1.0", path = "../aae-core" }
 aae-plugins = { version = "0.1.0", path = "../aae-plugins" }
 rusqlite = "0.42.0"
 tempfile = "3.27.0"
-tokio = { version = "1.54.1", features = ["rt", "macros", "time", "test-util", "io-util", "net"] }
+tokio = { version = "1.54.1", features = ["rt", "rt-multi-thread", "macros", "time", "test-util", "io-util", "net"] }

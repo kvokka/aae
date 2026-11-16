@@ -119,12 +119,14 @@ impl RunHandler {
             let reason = format!("the workdir `{}` does not exist", row.workdir);
             return self.terminal(tx, row, "failed", Some("infrastructure"), &reason);
         }
-        // Of one step: each ai step of a formula has a session of its own (docs/design/contracts.md 6).
+        // Of one step: each ai step of a formula has a session of its own (docs/design/contracts.md 6). A session from
+        // before the step's last `new_session` attempt is one the policy gave up, never resumed.
         let last_session = |tx: &Tx<'_>, run: &str, step: Option<&str>| {
             tx.sql()
                 .query_row(
                     "SELECT session, harness FROM attempts WHERE run = ?1 AND session IS NOT NULL \
-                    AND (?2 IS NULL OR step = ?2) ORDER BY n DESC LIMIT 1",
+                    AND (?2 IS NULL OR (step = ?2 AND n >= (SELECT COALESCE(MAX(n), 0) FROM attempts \
+                    WHERE run = ?1 AND step = ?2 AND kind = 'new_session'))) ORDER BY n DESC LIMIT 1",
                     params![run, step],
                     |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?)),
                 )
@@ -140,12 +142,12 @@ impl RunHandler {
             |r| r.get(0),
         )?;
         // A run that continues the session of another run (docs/design/contracts.md 6) starts there, and its first step
-        // resumes there while it has no session of its own.
+        // resumes there while it has no session of its own and has started no new one.
         let continued: Option<String> = tx
             .sql()
             .query_row(
                 "SELECT continue_from FROM runs WHERE id = ?1 \
-                 AND NOT EXISTS (SELECT 1 FROM attempts WHERE run = ?1 AND step != ?2)",
+                 AND NOT EXISTS (SELECT 1 FROM attempts WHERE run = ?1 AND (step != ?2 OR kind = 'new_session'))",
                 params![row.id, row.step],
                 |r| r.get(0),
             )
@@ -244,16 +246,20 @@ impl RunHandler {
         )?;
         Self::use_services(tx, &row.id, row.attempt, &services)?;
         let after = Self::old_instances(tx, &row.id, continued.as_deref())?;
-        let prompt = match resume {
-            Some(_) if !entering => RECONCILE.to_owned(),
-            _ => row.prompt.clone().unwrap_or_default(),
+        let unsettled = match entering {
+            true => None,
+            false => super::prompts::unsettled(tx, &row.id, row.attempt)?,
+        };
+        let step_prompt = row.prompt.clone().unwrap_or_default();
+        let (prompt, retry) = match (&resume, unsettled) {
+            (Some(_), _) if entering => (step_prompt, None),
+            (Some(_), unsettled) => (RECONCILE.to_owned(), unsettled.map(|(_, key, text)| (key, text))),
+            // A new session knows nothing of the old one: a remark the daemon died under follows the step's prompt.
+            (None, Some((n, _, text))) if n > 1 => (format!("{step_prompt}\n\n{text}"), None),
+            (None, _) => (step_prompt, None),
         };
         let key = PromptKey::new(&row.id, row.attempt, 1);
         super::prompts::intent(tx, &row.id, row.attempt, 1, key, &prompt)?;
-        let retry = match resume {
-            Some(_) if !entering => super::prompts::unsettled(tx, &row.id, row.attempt)?,
-            _ => None,
-        };
         let payload = json!({
             "op": "launch", "run": row.id, "attempt": row.attempt, "harness": config.harness,
             "instance": instance, "handle": handle, "after": after, "process": split.process.0,

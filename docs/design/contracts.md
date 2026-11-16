@@ -228,6 +228,9 @@ timeout = "30s"
 - Hooks run after commit, outside the core loop; the result enters the core as a message. Hooks of different
   events run concurrently; the hooks of one run are serialized in `seq` order on two queues: deciding events on
   one, observed events on the other (see 3.5), so an observer never delays a decision.
+- The hooks of `run.attempt_failed` start once the process the failed attempt stopped is dead, so a hook that reads
+  the transcript reads it whole. The wait is at most the stop grace (10 s, after which the process is killed), and
+  none when the instance stays up (a shared app-server).
 - Delivery is at least once: a hook cut by a daemon crash runs again after restart if its run is still in the state
   that emitted the event (see 3.4); observed hooks always run again. Hooks must be idempotent; `seq` identifies the
   event.
@@ -289,10 +292,11 @@ the hooks of every deciding event still pending — on `run.preparing`, `run.fin
 `run.turn_ended_without_outcome` — and the run waits for the same decision meanwhile, its deadline counted again (3.3).
 The harness session of a run that ended its turn is gone with the dead daemon (no reconnection, 6.4): a decision that
 needs it — `remark` on `run.finishing`, `continue` on `run.turn_ended_without_outcome` — fails the attempt with
-`daemon_crash` in the transaction of the decision, and its text waits as the unsettled prompt of the attempt that
-resumes the session; the other decisions apply as they would have. Recovery drops the pending deciding hooks only of a
-run whose attempt was live (`starting`, `running` in a turn, `requires_action`, 6.4): they judge the lost attempt, and
-that attempt's `attempt_failed` queues its own hooks.
+`daemon_crash` in the transaction of the decision, and its text waits as the unsettled prompt of the next attempt
+(6.4: a resume checks the transcript for it, a new session gets it after the step's prompt); the other decisions apply
+as they would have. Recovery drops the pending deciding hooks only of a run whose attempt was live (`starting`,
+`running` in a turn, `requires_action`, 6.4): they judge the lost attempt, and that attempt's `attempt_failed` queues
+its own hooks.
 
 ### 3.5 Outbox lifetime
 
@@ -648,7 +652,9 @@ so that the state machine has one place where `run.attempt_failed` is decided.
   next round, the same way from `finishing` to `preparing` (config.md, "Formula").
 - An attempt starts a new session or resumes the previous one of its step, and has its own generation. Each prompt
   step has a session of its own: the first attempt of a step the run went back to resumes it with the step's rendered
-  prompt (6.4 is the prompt of a resumed retry). Attempt numbers run on across the steps of the run, so the token of
+  prompt (6.4 is the prompt of a resumed retry). A `new_session` attempt gives up the step's earlier sessions: a later
+  `resume` resumes only a session started since, else (the new session failed before it was recorded) it starts
+  another new one. Attempt numbers run on across the steps of the run, so the token of
   an attempt of an earlier step is stale.
 
 Ceilings of the core (invariant 16): 20 failed attempts per run (the attempts of every step together), not counting the
@@ -673,7 +679,7 @@ of the parent leaves them alone.
 | From | On | To | Effects after commit |
 |---|---|---|---|
 | — | create (API, CLI, MCP, trigger) with an idempotency key | `queued` | — (with a task input that names a bead the core knows, the run is recorded as the bead's owner in this transaction, invariant 3: a bead another live run holds refuses; `{ next_ready = true, epic }` takes the first bead of the last ready set, in the tracker's order, that is in the epic, of the run's rig or of no rig, without an owner and without a closed gate, passing over (reply `passed_over`) a bead whose `harness:` or `agent:` label the run cannot take; none → the reply `{"nothing_ready": true}`, for a trigger `trigger.skipped{nothing_ready}`; the input then holds the bead id; any other text gets its bead on `preparing`, tracker-br.md) |
-| — | create with `continue_from: <run>` (a terminal run with a session; a session is never reused implicitly) | `queued` | in the workdir of that run; the first attempt resumes that run's last session with the formula prompt; a later `resume` uses the run's own session, or that one while it has none; a harness other than the agent's → `failed{infrastructure}`. Only the first step continues that session: a formula whose first step is not `ai` cannot be continued, and the later steps start sessions of their own |
+| — | create with `continue_from: <run>` (a terminal run with a session; a session is never reused implicitly) | `queued` | in the workdir of that run; the first attempt resumes that run's last session with the formula prompt; a later `resume` uses the run's own session, or that one while it has none and started no new one; a harness other than the agent's → `failed{infrastructure}`. Only the first step continues that session: a formula whose first step is not `ai` cannot be continued, and the later steps start sessions of their own |
 | `queued` | slot free, no gate of the run closed | `preparing` | with a task text that names no bead the core knows: the tracker creates the root bead, or returns the bead the text names (`create`, key kept in the effect), the run owns it and its input takes the id; with a bead: the tracker claim as owner `aae:<run>` (queue `tracker:<project>`), and the prompt renders once the claim returned the bead; `run.preparing` hooks |
 | `preparing` | decision `proceed` (or no hooks) | `starting` | attempt 1: instance acquire, `start_session`, `send_prompt` |
 | `preparing` | `deny`, template error, claim error `Claimed` / `NotFound` / `Invalid`, `create` error other than `Unavailable`, no claim or `create` answer within `start_timeout` | `failed{check}`, `failed{infrastructure}`, `failed{infrastructure, bead_claimed / bead_not_found / bead_invalid}`, `failed{infrastructure, bead_not_created: <error>}`, `failed{infrastructure, tracker_unavailable}` | — |
@@ -793,7 +799,8 @@ for it is not.
 - A resumed attempt after `daemon_crash` checks the transcript for the last unsettled key: not delivered → send the
   same prompt with the same key; delivered → send the reconcile prompt (a constant of the core:
   "Your previous turn was interrupted. Check the current state of the work and continue toward the goal.") with a
-  new key.
+  new key. A `new_session` attempt after `daemon_crash` sends the step's prompt; a remark or a `continue` left
+  unsettled follows it, after a blank line, in the same first prompt.
 
 ## 7. Issue gates
 

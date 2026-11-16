@@ -63,6 +63,14 @@ struct State {
     stoppable: bool,
     /// Calls of `stop_background`.
     background_stops: usize,
+    /// Set by [`ScriptedDriver::hold_sessions`].
+    held: Option<Arc<Mutex<std::sync::mpsc::Receiver<()>>>>,
+    /// Set by [`ScriptedDriver::real_processes`]: how long a stopped process takes to die.
+    dying: Option<Duration>,
+    /// The real process of each instance not yet stopped.
+    processes: HashMap<String, std::process::Child>,
+    /// `(pid, start_time)` of every real process started.
+    spawned: Vec<(i32, u64)>,
 }
 
 struct Instance {
@@ -156,6 +164,7 @@ impl Driver for ScriptedDriver {
     ) -> BoxFuture<'a, Result<InstanceHandle, Failure>> {
         let mut state = self.lock();
         let id = id.to_owned();
+        let (pid, start_time) = control::real_process(&mut state, &id);
         state.instances.insert(
             id.clone(),
             Instance {
@@ -167,8 +176,8 @@ impl Driver for ScriptedDriver {
         );
         ready(Ok(InstanceHandle {
             id,
-            pid: NO_PID,
-            start_time: 0,
+            pid,
+            start_time,
             pgid: NO_PID,
         }))
     }
@@ -181,11 +190,26 @@ impl Driver for ScriptedDriver {
     }
 
     fn stop_instance<'a>(&'a self, instance: &'a InstanceHandle, _grace: Duration) -> BoxFuture<'a, ()> {
-        let alive = self.lock().instances.get(&instance.id).is_some_and(|i| i.alive);
-        if alive {
-            self.exit(&instance.id, None, Some(15));
-        }
-        ready(())
+        let (alive, process, dying) = {
+            let mut state = self.lock();
+            let alive = state.instances.get(&instance.id).is_some_and(|i| i.alive);
+            (
+                alive,
+                state.processes.remove(&instance.id),
+                state.dying.unwrap_or_default(),
+            )
+        };
+        Box::pin(async move {
+            // A real process dies a while after it is told to.
+            if let Some(mut process) = process {
+                tokio::time::sleep(dying).await;
+                let _ = process.kill();
+                let _ = process.wait();
+            }
+            if alive {
+                self.exit(&instance.id, None, Some(15));
+            }
+        })
     }
 
     fn start_session<'a>(
@@ -195,6 +219,11 @@ impl Driver for ScriptedDriver {
     ) -> BoxFuture<'a, Result<SessionRef, Failure>> {
         let mut state = self.lock();
         got(&mut state, part);
+        if let Some(held) = state.held.clone() {
+            drop(state);
+            let _ = held.lock().map(|r| r.recv());
+            state = self.lock();
+        }
         if state.stalled {
             return Box::pin(std::future::pending());
         }
