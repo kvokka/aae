@@ -228,7 +228,7 @@ name = "write"
 kind = "ai"
 agent = "helper"
 max_attempts = 3                      # up to three executions; the repeat sees the last remark in {{ remarks }}
-step_check_script_path = "check.sh"   # beside the formula file; exit 0 passes, any other code repeats
+step_check_script_path = "check.sh"   # beside the formula file; 0 passes, 75 fails for good, else repeats
 ```
 
 Exit code 75 of the script is a failure for good: the run fails at once, with no repeat and no `back_to` round.
