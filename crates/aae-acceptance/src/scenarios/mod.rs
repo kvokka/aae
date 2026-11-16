@@ -24,6 +24,7 @@ mod c24_drain;
 mod c25_return;
 mod c26_git;
 mod c29_repeat;
+mod c30_drain;
 
 use crate::{
     Launch, Scenario,
@@ -204,6 +205,13 @@ pub(crate) const ALL: &[Scenario] = &[
                 fails it at once",
         launch: Launch::Ci,
         run: |env| Box::pin(c29_repeat::run(env)),
+    },
+    Scenario {
+        criterion: "30",
+        title: "a drain step on br keeps one bead in work, two with `pool = 2`; `continue` runs the rest after a \
+                failure, `soft_stop` ends the started across kill -9 and gives no new, `hard_stop` cancels them",
+        launch: Launch::Ci,
+        run: |env| Box::pin(c30_drain::run(env)),
     },
 ];
 

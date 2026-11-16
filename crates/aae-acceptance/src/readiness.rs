@@ -11,10 +11,6 @@ pub(crate) const OPEN: &[(&str, &str)] = &[
         "the demos of the current config shape (runs without a rig, agent scope, the project root) have not run live",
     ),
     (
-        "30",
-        "`drain` keeps up to `pool` items in work and follows `on_item_failure`",
-    ),
-    (
         "31",
         "a `formula` step runs its formula as a child run; formulas with `internal = true`",
     ),

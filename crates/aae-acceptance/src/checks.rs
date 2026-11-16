@@ -205,6 +205,22 @@ pub(crate) const ALL: &[Scenario] = &[
             ))
         },
     },
+    Scenario {
+        criterion: "30",
+        title: "a drain step keeps at most `pool` beads in work, 1 unless set; `on_item_failure` stops it softly or \
+                hard and fails it, a restart giving no new bead, a repeat giving them again",
+        launch: Launch::Ci,
+        run: |env| {
+            Box::pin(tests(
+                env,
+                "-p aae-core -p aae-testkit -E test(/a_drain_step_takes_pool_and_on_item_failure\
+                 |without_pool_one_bead_is_in_work_at_a_time|pool_two_keeps_two_of_five_in_work\
+                 |soft_stop_gives_no_new_bead|hard_stop_cancels_the_started_beads|a_restart_mid_stop_gives_no_new_bead\
+                 |a_repeat_after_a_stop_is_a_new_entry/)",
+                7,
+            ))
+        },
+    },
 ];
 
 /// The workspace this binary was built from.
