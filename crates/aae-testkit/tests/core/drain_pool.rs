@@ -101,8 +101,9 @@ async fn pool_two_keeps_two_of_five_in_work_and_a_failed_bead_does_not_stop_the_
     let (w, run, beads) = start("two", "", &[]).await;
     let mut done = BTreeSet::new();
     w.settle(&run, &[], &[beads[0].as_str()], &mut done).await;
+    // Another read of the tracker: the second holds its place of the pool queued (`max_runs = 1` runs one at a time).
+    w.changed().await;
     tokio::time::sleep(Duration::from_secs(5)).await;
-    // The second holds its place of the pool queued: `max_runs = 1` runs one at a time.
     assert_eq!(states(&w, &run), ["running", "queued"]);
     let outcome = &passed(&w, &run, &[beads[0].as_str()], &mut done).await["outcome"];
     assert_eq!(
