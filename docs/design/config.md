@@ -294,9 +294,9 @@ path = "~/aae-plugins/aae-plugin-mail"
 backoff_cap_s = 300
 
 [watchdog]                          # thresholds of invariant 15 (contracts 6.1); every key optional
-silence = "5m"                      # no event after the ack, the model thinking, after a turn ended
-tool_silence = "10m"                # a tool running
-background_silence = "30m"          # background work after the turn
+silence = "15m"                     # no event after the ack, the model thinking, after a turn ended
+tool_silence = "40m"                # a tool running
+background_silence = "120m"         # background work after the turn
 human_timeout = "1h"                # a request waiting for its answer
 start_timeout = "120s"              # the bead claim, then the ack of the first prompt
 queue_timeout = "168h"              # a run not started

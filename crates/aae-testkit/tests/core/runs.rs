@@ -71,7 +71,7 @@ async fn an_attempt_failure_without_a_policy_fails_the_run() {
 async fn silence_after_the_prompt_is_a_stall_at_its_budget() {
     let w = world(&[]);
     let run = w.create().await;
-    let events = w.events(&run, Duration::from_secs(299)).await;
+    let events = w.events(&run, Duration::from_secs(899)).await;
     assert!(!events.iter().any(|(t, _)| t == "run.attempt_failed"));
     let events = w.events(&run, Duration::from_secs(2)).await;
     assert_eq!(last(&events, "run.attempt_failed")["failure"]["kind"], "stall");

@@ -69,7 +69,7 @@ Code: `crates/aae-front/src/cli/`. The CLI is a thin client of the HTTP API in t
   1 when one did not (or a run is unknown), 124 when the timeout ran out first; then the current state of each run is
   printed. A daemon restart in between is reconnected to with backoff and the states are read again.
 - An agent that waits for its children holds its turn open on one long tool call, and two clocks watch it. The
-  watchdog's silence budget while a tool runs is `[watchdog] tool_silence` (default 10 min); each
+  watchdog's silence budget while a tool runs is `[watchdog] tool_silence` (default 40 min); each
   `Activity{tool_running}` from the adapter renews it. Claude sends a `tool_progress` heartbeat every 30 s, so a
   long `aae run wait` in Bash never trips it, but claude moves a foreground Bash call to the background after 120 s
   (`BASH_DEFAULT_TIMEOUT_MS`). Codex has no heartbeat: only the start of a command and its output renew the budget,

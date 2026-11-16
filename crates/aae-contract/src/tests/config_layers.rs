@@ -241,9 +241,9 @@ fn a_project_builtin_table_replaces_the_orchestrators_for_its_runs() {
 #[test]
 fn the_watchdog_deadlines_come_from_the_orchestrator_file() {
     let defaults = Watchdog {
-        silence_ms: 300_000,
-        tool_silence_ms: 600_000,
-        background_silence_ms: 1_800_000,
+        silence_ms: 900_000,
+        tool_silence_ms: 2_400_000,
+        background_silence_ms: 7_200_000,
         human_timeout_ms: 3_600_000,
         start_timeout_ms: 120_000,
         queue_timeout_ms: 604_800_000,

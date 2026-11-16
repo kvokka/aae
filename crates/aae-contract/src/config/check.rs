@@ -293,9 +293,9 @@ pub(super) fn project_bundled(
 pub(super) fn watchdog(loader: &mut Loader, file: &Path, table: BTreeMap<String, String>) -> Watchdog {
     const MAX_MS: u128 = 8760 * 3_600_000;
     let mut w = Watchdog {
-        silence_ms: 5 * 60_000,
-        tool_silence_ms: 10 * 60_000,
-        background_silence_ms: 30 * 60_000,
+        silence_ms: 15 * 60_000,
+        tool_silence_ms: 40 * 60_000,
+        background_silence_ms: 120 * 60_000,
         human_timeout_ms: 3_600_000,
         start_timeout_ms: 120_000,
         queue_timeout_ms: 7 * 86_400_000,
