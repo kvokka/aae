@@ -1,7 +1,7 @@
 //! An agent's prompt template lives in its directory, and the project overrides it with files of its own (spec §8.1,
 //! criterion 33).
 
-use super::config::{TEMPLATE, fails, load_with};
+use super::config::{BASE, TEMPLATE, fails, load_with};
 use crate::config::{Name, Prompt};
 use serde_json::json;
 
@@ -114,4 +114,20 @@ fn a_variant_runs_on_the_template_of_its_base_agent() {
     let prompt = config.prompt("shop", "quick").unwrap();
     assert!(prompt.from.ends_with(TEMPLATE), "{}", prompt.from.display());
     assert!(config.prompt("shop", "nobody").is_err());
+}
+
+#[test]
+fn a_prompt_template_may_use_only_values_its_runs_have() {
+    let template = TEMPLATE;
+    fails(&[(template, "{{ inputs.nope }}")], "`{{ inputs.nope }}`");
+    fails(&[(template, "{{ bead.nope }}")], "`{{ bead.nope }}`");
+    fails(&[(template, "{{ run.nope }}")], "`{{ run.nope }}`");
+    fails(&[(template, "{{ project.nope }}")], "`{{ project.nope }}`");
+    fails(&[(template, "{{ secrets.token }}")], "starts with none of");
+    fails(&[(template, "{{ inputs.bead")], "unclosed");
+    let no_bead = BASE[8].1.replace(r#"type = "task""#, r#"type = "string""#);
+    fails(
+        &[("kit/formulas/implement.toml", no_bead.as_str())],
+        "`{{ bead.title }}`",
+    );
 }

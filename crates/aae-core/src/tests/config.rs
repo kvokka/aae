@@ -250,22 +250,6 @@ fn two_inputs_of_an_exec_step_may_not_share_a_variable() {
 }
 
 #[test]
-fn a_prompt_template_may_use_only_values_its_runs_have() {
-    let template = TEMPLATE;
-    fails(&[(template, "{{ inputs.nope }}")], "`{{ inputs.nope }}`");
-    fails(&[(template, "{{ bead.nope }}")], "`{{ bead.nope }}`");
-    fails(&[(template, "{{ run.nope }}")], "`{{ run.nope }}`");
-    fails(&[(template, "{{ project.nope }}")], "`{{ project.nope }}`");
-    fails(&[(template, "{{ secrets.token }}")], "starts with none of");
-    fails(&[(template, "{{ inputs.bead")], "unclosed");
-    let no_bead = BASE[8].1.replace(r#"type = "task""#, r#"type = "string""#);
-    fails(
-        &[("kit/formulas/implement.toml", no_bead.as_str())],
-        "`{{ bead.title }}`",
-    );
-}
-
-#[test]
 fn files_reject_unknown_keys_and_undeclared_names() {
     let agent = "kit/agents/implementer/agent.toml";
     fails(

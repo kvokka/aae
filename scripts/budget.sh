@@ -32,11 +32,13 @@ if ((${#files[@]})); then
   done < <(tokei -o json "${files[@]}" \
     | jq -r 'to_entries[] | select(.key != "Total") | .value.reports[] | "\(.stats.code)\t\(.name)"')
 
-  for f in "${files[@]}"; do
-    n=$(wc -l <"$f")
-    ((n <= 400)) || err "$f has $n lines, the limit is 400"
-  done
 fi
+
+# The file limit holds for every Rust file, tests and test-only crates included.
+while IFS= read -r f; do
+  n=$(wc -l <"$f")
+  ((n <= 400)) || err "$f has $n lines, the limit is 400"
+done < <(git ls-files -co --exclude-standard -- 'crates/*.rs' | grep -v '/generated/' || true)
 
 for part in core claude codex tracker frontends plugins reserve; do
   printf 'budget: %-9s %6d / %d\n' "$part" "${used[$part]:-0}" "${limit[$part]}"
