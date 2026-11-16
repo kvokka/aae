@@ -89,4 +89,6 @@ runs the rows that live in cargo and the scripts, one at a time: `cargo zigbuild
 `scripts/budget.sh` (22) and clippy, `cargo machete` and `scripts/unused-pub.sh` (23); they build in the target
 directory the binary runs from. `--ci` leaves criterion 1 out (the row shows `not run`): the release builds are the
 slowest part, so criterion 1 is checked by the full local acceptance run (`mise run acceptance-release`). The
-workflow `release` runs the same on a `v*` tag, but no tag is made only to check it.
+workflow `release` runs the same on a `v*` tag, but no tag is made only to check it. A part of a criterion that no
+row checks yet shows as an `open` row (`crates/aae-acceptance/src/readiness.rs`, `OPEN`): it does not fail the run,
+but it keeps its criterion open, so criterion 22 caps the readiness scores of the components that list it.

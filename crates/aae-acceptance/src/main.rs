@@ -10,6 +10,7 @@
 
 mod checks;
 mod daemon;
+mod readiness;
 mod scenarios;
 
 use std::{
@@ -173,7 +174,8 @@ fn order(criterion: &str) -> (u32, &str) {
     (criterion[..digits].parse().unwrap_or(u32::MAX), &criterion[digits..])
 }
 
-/// A line of the report: `mark` is `pass`, `FAIL` or `not run` (a request or release row of a CI run).
+/// A line of the report: `mark` is `pass`, `FAIL`, `not run` (a request or release row of a CI run) or `open` (a part of
+/// a criterion no row checks yet).
 struct Row {
     criterion: &'static str,
     title: &'static str,
@@ -268,6 +270,14 @@ async fn main() -> ExitCode {
             took: Duration::ZERO,
         });
     }
+    let open = readiness::OPEN.iter().filter(|(c, _)| wanted(c));
+    rows.extend(open.map(|&(criterion, title)| Row {
+        criterion,
+        title,
+        mark: "open",
+        notes: "no row checks this part yet: the criterion stays open".into(),
+        took: Duration::ZERO,
+    }));
     rows.sort_by(|a, b| order(a.criterion).cmp(&order(b.criterion)));
     let marks: Vec<(&str, &str)> = (rows.iter())
         .filter(|r| r.criterion != "22")
@@ -275,8 +285,7 @@ async fn main() -> ExitCode {
         .collect();
     if let Some(row) = rows.iter_mut().find(|r| r.criterion == "22" && r.mark == "pass") {
         let readiness = fs::read_to_string(checks::root().join("docs/READINESS.md")).unwrap_or_default();
-        let verdict =
-            checks::readiness_fresh(&readiness).and_then(|()| checks::readiness_verdict(&readiness, &marks, !args.ci));
+        let verdict = readiness::fresh(&readiness).and_then(|()| readiness::verdict(&readiness, &marks, !args.ci));
         match verdict {
             Ok(scores) => row.notes = format!("{}; readiness: {scores}", row.notes),
             Err(why) => {
@@ -310,9 +319,10 @@ async fn main() -> ExitCode {
     }
     let _ = writeln!(
         report,
-        "\n{passed} of {} rows passed, {failed} failed, {} not run, in {:.0} s.",
+        "\n{passed} of {} rows passed, {failed} failed, {} not run, {} open, in {:.0} s.",
         rows.len(),
         count("not run"),
+        count("open"),
         started.elapsed().as_secs_f64()
     );
     let written = args
