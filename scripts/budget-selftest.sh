@@ -18,7 +18,7 @@ expect() { # expect pass|fail <label>
 
 fresh; expect pass "clean tree"
 fresh; seq 401 | sed 's/.*/const _: u8 = 0;/' >crates/aae/src/big.rs; expect fail "file over 400 lines"
-fresh; seq 401 | sed 's/.*/const _: u8 = 0;/' >crates/aae/src/tests.rs; expect pass "test file is exempt"
+fresh; seq 401 | sed 's/.*/const _: u8 = 0;/' >crates/aae/src/tests.rs; expect fail "test file over 400 lines"
 fresh; echo '// MEASURE id=y date=2026-11-12 env=linux' >crates/aae/src/m.rs; expect fail "marker without ver"
 fresh; echo '// MEASURE id=y date=2026-11-12 env=linux note="see ver=1"' >crates/aae/src/m.rs; expect fail "ver only inside note"
 fresh; mkdir -p crates/other/src && echo 'fn f() {}' >crates/other/src/lib.rs; expect fail "unbudgeted crate"
