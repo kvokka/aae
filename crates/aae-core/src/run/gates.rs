@@ -70,6 +70,11 @@ impl RunHandler {
         }
         if let Some(bead) = &row.bead {
             keys.push(format!("bead:{}/{bead}", row.project));
+        } else if row.state == "queued" {
+            // A task may name a bead the core has not read yet; it gets that bead only as it prepares (spec §10.3).
+            let inputs: Value = serde_json::from_str(&row.inputs).unwrap_or_default();
+            let named = inputs.as_object().into_iter().flatten().filter_map(|(_, v)| v.as_str());
+            keys.extend(named.map(|text| format!("bead:{}/{text}", row.project)));
         }
         let (account, model): (Option<String>, Option<String>) = conn.query_row(
             "SELECT account, CASE WHEN config IS NULL THEN model ELSE 'model:' || json_extract(config, '$.harness') \

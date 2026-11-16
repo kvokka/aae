@@ -73,7 +73,8 @@ tracker interface and its errors are in [contracts.md](contracts.md) §5; the be
   as an effect on the queue `tracker:<project>`: the adapter returns the bead whose id is exactly the string (looked
   up in the same `br list -a`, not by `br show`, which takes partial ids), else creates the root: title the first line
   of the text that is not blank (at most 80 characters), description the whole text. A bead filed a moment ago is
-  thus taken up, not filed again. Edge: a text that is exactly `<prefix of a rig>-<word>` and names no rig runs on
+  thus taken up, not filed again; while it is `queued`, a gate on `bead:<project>/<the string>` holds it as if it
+  held the bead. Edge: a text that is exactly `<prefix of a rig>-<word>` and names no rig runs on
   that rig; a bead that another run holds fails the run (`held by`), as the start could not see it. The key is drawn once and kept in the effect, so a repeat after `kill -9` creates nothing new; a repeated
   answer is dropped. The run then owns and claims the root as any bead, and its prompt sees the text as
   `{{ bead.description }}`. Known limit: a tracker that answers after `start_timeout` leaves a root without a run.
