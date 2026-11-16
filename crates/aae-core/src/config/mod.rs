@@ -18,6 +18,7 @@ use crate::template::{Filter, Inputs, Template};
 pub use assemble::{EffectiveConfig, Layer, Sourced};
 pub use files::{Harness, Hook, Mcp, McpScope, PluginUse, Settings, Skill};
 pub use formula_file::{Input, InputType};
+pub use places::Scope;
 pub use service::{Health, Service, ServiceScope};
 pub use sources::{Checkouts, GitSource, commit_id, git_sources};
 use std::{collections::BTreeMap, fmt, path::PathBuf, time::Duration};
@@ -160,6 +161,8 @@ pub struct Pack {
 pub struct Agent {
     /// The harness `agent.toml` names, part of the agent layer.
     pub harness: Option<String>,
+    /// Where it works; an agent of the root takes no rig's layer, edits or variant.
+    pub scope: Scope,
     /// The agent layer but its harness; its `system_prompt` is the role prompt file (spec §8.1) when the agent has one.
     pub settings: Settings,
     /// Runs of this agent started at once in its project; no limit but the orchestrator's when absent.

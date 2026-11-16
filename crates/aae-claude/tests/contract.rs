@@ -80,6 +80,7 @@ impl Live {
             services: Default::default(),
             harness: "claude".into(),
             harness_from: aae_core::config::Layer::Agent,
+            scope: Default::default(),
             model_given: None,
             model: Some(sourced("claude-haiku-5-5".to_owned())),
             effort: None,

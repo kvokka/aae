@@ -3,7 +3,7 @@
 //! expands.
 
 use super::{
-    Agent, Config, EffectiveConfig, Layer, Name, Pack, PluginUse, Project, Rig, Settings, Sourced, StepKind,
+    Agent, Config, EffectiveConfig, Layer, Name, Pack, PluginUse, Project, Rig, Scope, Settings, Sourced, StepKind,
     check::resolve, load::Loader, load::reference,
 };
 use serde::Deserialize;
@@ -78,14 +78,19 @@ impl Config {
         let own = p.packs.first().map(|pack| pack.name.as_str()).unwrap_or_default();
         let has_agent = |pack: &Pack, n: &str| pack.agents.contains_key(n);
         let is_variant = |n: &str| p.variants.contains_key(n) || self.variants.contains_key(n);
+        // A rig maps an agent of its own to a variant; an agent of the root has none.
+        let mapped = |a: &Name| {
+            let of_rig = agent_of(p, a).is_ok_and(|a| a.scope == Scope::Rig);
+            r.filter(|_| of_rig).and_then(|r| r.agents.get(a)).cloned()
+        };
         let (agent, variant) = match as_agent {
             Some(n) if is_variant(n) => (agent.clone(), Some(n.to_owned())),
             Some(n) => {
                 let agent = resolve(&p.packs, own, &reference(n), has_agent, "agent")?;
-                let variant = r.and_then(|r| r.agents.get(&agent)).cloned();
+                let variant = mapped(&agent);
                 (agent, variant)
             }
-            None => (agent.clone(), r.and_then(|r| r.agents.get(agent)).cloned()),
+            None => (agent.clone(), mapped(agent)),
         };
         let Some(variant) = variant else {
             let a = agent_of(p, &agent)?;
@@ -131,6 +136,7 @@ impl Config {
         middle: Vec<(Layer, Settings)>,
         named: &dyn Fn(&String) -> bool,
     ) -> Result<EffectiveConfig, String> {
+        let r = r.filter(|_| a.scope == Scope::Rig);
         let edits = |map: &BTreeMap<String, Settings>| {
             (map.iter().filter(|(k, _)| named(k)).map(|(_, s)| s.clone())).collect::<Vec<_>>()
         };
@@ -189,6 +195,7 @@ impl Config {
             config.apply(settings, layer);
         }
         config.contribute(&attached);
+        config.scope = a.scope;
         let adapter = self.adapters.iter().find(|a| a.name == config.harness);
         if let (Some(model), Some(adapter)) = (&mut config.model, adapter)
             && let Some((_, full)) = adapter.models.iter().find(|(short, _)| *short == model.value)

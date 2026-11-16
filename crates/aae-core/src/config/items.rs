@@ -25,6 +25,12 @@ impl Loader {
     pub(super) fn agent(&mut self, dir: &Path, plugins: &[&str]) -> Option<Agent> {
         let file = dir.join("agent.toml");
         let mut table: toml::Table = self.read(&file)?;
+        let scope = table
+            .remove("scope")
+            .map_or(Ok(super::Scope::Rig), toml::Value::try_into);
+        let Ok(scope) = scope else {
+            return self.none(&file, "`scope` is `rig` or `root`".to_owned());
+        };
         let (harness, prompt) = (string(&mut table, "harness"), string(&mut table, "prompt"));
         let (harness, prompt, (settings, max_runs)) = match (harness, prompt, agent_keys(table)) {
             (Ok(h), Ok(p), Ok(rest)) => (h, p, rest),
@@ -49,6 +55,7 @@ impl Loader {
         settings.system_prompt = settings.system_prompt.or(prompt);
         Some(Agent {
             harness,
+            scope,
             settings,
             max_runs,
         })

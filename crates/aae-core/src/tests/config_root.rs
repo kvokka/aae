@@ -4,6 +4,7 @@ use super::{
     config::{BASE, fails, load_for_adapters, load_with},
     config_launch::{ADAPTERS, HARNESSES},
 };
+use crate::config::{Name, Scope};
 
 /// `shop/aae.toml` of `BASE` with `extra` before its rigs.
 fn project(extra: &str) -> String {
@@ -68,4 +69,35 @@ fn a_project_of_one_repository_checks_its_formulas_on_the_root() {
     assert!(config.harnesses.contains_key("codex"));
     let (agent, _) = config.for_run("shop", "root", "kit.implement", "1").unwrap();
     assert_eq!(agent, "kit.implementer");
+}
+
+#[test]
+fn an_agent_of_scope_root_takes_no_rig_layer() {
+    let agent = "kit/agents/implementer/agent.toml";
+    let rig_agent = load_with(&[]).unwrap();
+    let (_, e) = rig_agent.for_run("shop", "backend", "kit.implement", "1").unwrap();
+    assert_eq!((e.scope, e.model.unwrap().value.as_str()), (Scope::Rig, "opus"));
+    let text = format!(
+        "scope = \"root\"\n{}",
+        BASE.iter().find(|(p, _)| *p == agent).unwrap().1
+    );
+    let config = load_with(&[(agent, &text)]).unwrap();
+    let (_, on_rig) = config.for_run("shop", "backend", "kit.implement", "1").unwrap();
+    let (_, in_root) = config.for_run("shop", "root", "kit.implement", "1").unwrap();
+    assert_eq!(
+        on_rig, in_root,
+        "the rig's edit of the agent does not reach an agent of the root"
+    );
+    assert_eq!(on_rig.scope, Scope::Root);
+    assert!(on_rig.explain().contains("scope = \"root\"  # agent"));
+    let alone = config.effective("shop", Some("backend"), &implementer()).unwrap();
+    assert_eq!(alone, config.effective("shop", None, &implementer()).unwrap());
+    fails(&[(agent, "scope = \"repo\"\n")], "`scope` is `rig` or `root`");
+}
+
+fn implementer() -> Name {
+    Name {
+        pack: "kit".into(),
+        name: "implementer".into(),
+    }
 }

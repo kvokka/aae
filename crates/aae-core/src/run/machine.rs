@@ -183,7 +183,7 @@ impl RunHandler {
                 "no randomness for the attempt token",
             );
         };
-        let (run, attempt, workdir) = (row.id.clone(), row.attempt + 1, PathBuf::from(&row.workdir));
+        let (run, attempt, workdir) = (row.id.clone(), row.attempt + 1, self.session_dir(&row, &config));
         let token_sha256 = super::token_sha256(&token);
         let actor = self.config.actor(&row.project, &run, attempt);
         let plan = match resume.clone() {

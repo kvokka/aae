@@ -1,9 +1,13 @@
 //! The prompt, the step timeout and the config snapshot of a run, rendered from the config of now.
 
 use super::{RunHandler, row::Row};
-use crate::{config::StepKind, writer::Tx};
+use crate::{
+    config::{EffectiveConfig, Scope, StepKind},
+    writer::Tx,
+};
 use rusqlite::Connection;
 use serde_json::{Map, Value, json};
+use std::path::PathBuf;
 
 pub(super) const STEP_TIMEOUT_MS: i64 = 45 * 60_000;
 /// The time a drain step has for every bead under the run's bead (spec §9.1).
@@ -62,6 +66,16 @@ impl RunHandler {
             return Err("prompt: empty after substitution".to_owned());
         }
         Ok((Some(text), timeout_ms(timeout, STEP_TIMEOUT_MS), json!(config)))
+    }
+
+    /// Where the session of `row`'s step works: the root for an agent of the root (spec §8.1), else the run's
+    /// workdir.
+    pub(super) fn session_dir(&self, row: &Row, config: &EffectiveConfig) -> PathBuf {
+        let root = (self.config.projects.iter().find(|p| p.name == row.project)).map(|p| &p.root);
+        match root {
+            Some((name, root)) if config.scope == Scope::Root && *name != row.rig => root.path.clone(),
+            _ => PathBuf::from(&row.workdir),
+        }
     }
 }
 

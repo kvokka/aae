@@ -82,6 +82,7 @@ impl Live {
             services: Default::default(),
             harness: "codex".into(),
             harness_from: aae_core::config::Layer::Agent,
+            scope: Default::default(),
             model_given: None,
             model: Some(sourced("gpt-fake".to_owned())),
             effort: None,

@@ -107,6 +107,9 @@ pub struct EffectiveConfig {
     /// The services its session uses; the core binds them to MCP servers or environment before the adapter.
     #[serde(default)]
     pub services: BTreeMap<String, Sourced<Service>>,
+    /// Where the agent works: its session goes to the root for `root` (spec §8.1).
+    #[serde(default)]
+    pub scope: super::Scope,
 }
 
 fn agent() -> Layer {
@@ -130,6 +133,7 @@ impl EffectiveConfig {
             plugins: Vec::new(),
             native: None,
             services: BTreeMap::new(),
+            scope: super::Scope::Rig,
         }
     }
 
@@ -237,6 +241,9 @@ impl EffectiveConfig {
             let _ = writeln!(out, "{key} = {value}  # {from}");
         };
         line("harness", quoted(&self.harness), &self.harness_from);
+        if self.scope == super::Scope::Root {
+            line("scope", quoted("root"), &Layer::Agent);
+        }
         for (key, slot) in [("effort", &self.effort), ("system_prompt", &self.system_prompt)] {
             if let Some(s) = slot {
                 line(key, quoted(&s.value), &s.from);

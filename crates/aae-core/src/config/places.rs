@@ -6,7 +6,17 @@ use super::{
     items::resolve,
     load::Loader,
 };
+use serde::{Deserialize, Serialize};
 use std::{collections::BTreeMap, path::Path};
+
+/// Where an agent works (spec §8.1, decision 95): in the rig of its run, or in the root whatever the rig.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Scope {
+    #[default]
+    Rig,
+    Root,
+}
 
 /// The root's name when `[root]` does not give one.
 const ROOT: &str = "root";
