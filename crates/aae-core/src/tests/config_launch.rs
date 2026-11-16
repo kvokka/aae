@@ -225,7 +225,7 @@ fn a_retired_key_is_one_line_that_says_where_it_went() {
         (
             "config.toml",
             "[settings]\npermission_mode = \"never\"\n",
-            "`approval_policy` in `[settings.native.codex]`",
+            "its own key in `[settings.native.<harness>]`",
         ),
         (
             AGENT,

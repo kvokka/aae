@@ -339,8 +339,7 @@ pub(super) struct OrchestratorHookFile {
 const RETIRED: [(&str, &str); 3] = [
     (
         "unknown field `permission_mode`",
-        "`permission_mode` is native to a harness: `approval_policy` in `[settings.native.codex]`, \
-         `permission_mode` in `[settings.native.claude]`",
+        "`permission_mode` is native to a harness: its own key in `[settings.native.<harness>]`",
     ),
     (
         "unknown field `overrides`",
