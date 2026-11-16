@@ -37,7 +37,7 @@ marked `[experimental]`, and codex released every 2–8 days (observed on 2026-1
   the session. The tables below give the expected outcome per harness.
 - The scenarios run the real binary mise selects against fake provider APIs written in this repository:
   `crates/aae-testkit/src/anthropic.rs` (claude) and `crates/aae-testkit/src/openai.rs` (codex, Responses API).
-  They cost no model calls and need no account, so CI runs them on every commit (criterion 11 of the release).
+  They cost no model calls and need no account, so `mise run ci` runs them on every commit (acceptance criterion 11 runs the same tests).
 - The suite is rerun on every harness update (above), and beyond it one real turn on the cheapest model of the
   harness confirms the path end to end.
 - Known limit: claude logged in with an API key gets no quota reset time from the provider, so its "quota with a

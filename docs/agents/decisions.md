@@ -1,0 +1,159 @@
+# Owner decisions
+
+What the owner decided. An agent does not revisit a decision: a change needs the owner's word, and a departure found
+in the code is a defect, not an option. What is not listed here and is not said by the owner elsewhere is an
+implementation choice or an [assumption](assumptions.md).
+
+The numbers are stable: old notes say "decision 49". Missing numbers were assumptions (12, 33, 34) or are retired
+(31, 53, 55: the readiness file and the spec are gone). The behaviour itself is described in the document named under
+each heading; this file only marks it as decided.
+
+## The shape of the product — [overview](../overview.md), [architecture](../architecture.md)
+
+| № | Decision |
+|---|---|
+| 1 | The name is `aae`, Adaptive Agent Executor |
+| 2 | The core is written in Rust |
+| 5 | No tmux: a terminal screen is never a control channel |
+| 22 | The event journal is JSONL, rotated at 10 MB × 5 files |
+| 28 | A human joining a live session and handover of control are a later release: no operations, states or stubs now |
+| 43 | `aae-core` names no harness and no br; CI checks it |
+| 61 | Everything an adapter reports reaches the policy and the observer; the core drops nothing of it |
+| 62 | Safety timers are allowed; polling as a way to wait for a unit of work is forbidden |
+| 65 | A harness is an abstraction: all knowledge of one lives in its adapter; the root of the build holds the one table of adapters |
+
+## Harnesses — [adapters](../design/adapters.md), [contracts 4](../design/contracts.md#4-driver-interface)
+
+| № | Decision |
+|---|---|
+| 3 | claude and codex in the first release, then opencode. One adapter per harness |
+| 4 | Native protocols: claude is `claude -p` stream-json, codex is aae's own `codex app-server`. The driver interface follows the semantics of ACP v2 |
+| 9 | The instance registry is lazy: an instance starts on first need for a concrete set of settings |
+| 38 | The codex adapter sets `sandbox_mode = "danger-full-access"` unless the aae config or the host config sets it; `doctor` and the docs warn |
+| 40 | Updating a harness is the user's concern, or the aae developer's in this repository; it is no acceptance criterion |
+| 45 | codex protocol types are read by hand, field by field, and held by contract tests; nothing is generated from the schema |
+| 46 | codex with host inheritance and skills gets its own `CODEX_HOME` that inherits the host and adds the skills; a `config_error` on that path is forbidden |
+| 59 | codex harness hooks get the attempt environment through an `export` at the start of the hook command; the attempt token visible in its argv is accepted |
+| 73 | Model short names are the adapter's knowledge: a short name expands to the latest model of its family, a full name is passed as is |
+
+## Config — [config](../design/config.md)
+
+| № | Decision |
+|---|---|
+| 6 | The hierarchy is orchestrator → project → rig |
+| 7 | Config is layered; the effective config is assembled before a harness starts |
+| 8 | Host inheritance is an option, on by default |
+| 25 | External dependencies are managed through mise |
+| 71 | Launch settings are three layered scalars: `harness`, `model`, `effort`. The agent gives defaults, the pack and the formula change them, the user's explicit setting beats all |
+| 72 | The user names a harness (`claude`, `codex`), not a provider; there is no `provider` setting |
+| 89 | A harness the build has an adapter for works without a `[harness.<name>]` section; the section only sets its defaults |
+| 90 | There is no neutral `permission_mode`: it is a native setting of a harness and lives in `native.<harness>`. No common section has a key only one harness understands |
+| 91 | All a user says of an agent lives in `[agents.<name>]`: the name of a pack's agent edits it, a new name with `base` is a variant. There is no `[overrides.*]` |
+| 99 | The root of a project has a name (default `root`) and a path (default: the directory of `aae.toml`), both settings. It may be the only repository of the project, or a plain directory without git |
+
+## Agents, packs, formulas — [config](../design/config.md)
+
+| № | Decision |
+|---|---|
+| 13 | A formula is a name, a description, inputs and steps in order; a step is an agent's turn (`ai`), an exec command, a `drain` or another formula |
+| 19 | A pack and a plugin are two different things |
+| 60 | A prompt is required: a run without one does not start; an empty role file or template is a config error |
+| 68 | An agent is a general role with default launch settings; it knows nothing of a concrete task |
+| 69 | A formula answers "how"; the "what" comes only from the user's input |
+| 70 | A pack holds agents and formulas fit for any project, with not a word about a concrete task |
+| 75 | An agent variant is a pack's agent under the user's own name with other settings; a rig maps an agent name to a variant |
+| 80 | A formula is a workflow: a sequence of agent calls and checks between them, by a script or an agent |
+| 83 | A `drain` step gives out every bead under the root bead and waits for them; how many at once and what to do on a failure are settings of the step; by default one failed bead does not stop the others |
+| 84 | A check step may send the formula back to an earlier step with its remarks; the formula bounds the number of rounds |
+| 85 | A pack comes from a directory or a git repository pinned by sha or tag, the latest revision without a pin; `aae` downloads it; tags are immutable; a CLI command clears the cache |
+| 93 | A step has optional `max_attempts` (default 1) and `step_check_script_path` (default: none); the script decides whether the step passed: 0 passed, 75 a failure with no repeat, anything else not passed |
+| 94 | An agent's turn is `kind = "ai"`; there is no step kind `prompt` |
+| 95 | An agent's `scope`: `rig` is bound to a rig and works in its directory; `root` is bound to no repository and works over all rigs and the shared bead space. Planning over several repositories is `root` only |
+| 97 | An agent's prompt template lies in its directory as `prompt.template.md`: an agent is self-contained. A project replaces it with `.aae/agents/<agent>/prompt.template.md` in its root, without forking the pack |
+| 98 | Text a project gives an agent (check conditions and the like) is a file in `.aae/agents/<agent>/` of the root, not a string in `aae.toml` |
+| 100 | `drain`: `pool` is how many beads one step keeps in work at once; default 1 |
+| 101 | `drain`: `on_item_failure` is `continue` (default), `soft_stop` or `hard_stop` |
+| 102 | A step may be another formula; the parent's inputs are inherited, but only those the child declares; a step may set them explicitly |
+| 103 | The daemon is system-wide, formulas live in the scope of a project: a project sees only the formulas of its packs. The structure is flat. `internal = true` hides a formula from the catalogue and allows it only as a part of another (`--all` shows it, the API marks it) |
+
+## Runs — [contracts 6](../design/contracts.md#6-run), [invariants](../design/invariants.md)
+
+| № | Decision |
+|---|---|
+| 15 | A run starts by an explicit call, a subscription to an event or a schedule; all three are in the core |
+| 16 | The outcome is the agent's explicit finisher; a turn that ends without one is a failure |
+| 17 | A new session per run, per `ai` step in a formula of several; another run's session is continued only explicitly |
+| 47 | An exec step gets its context through the environment (`AAE_RUN`, `AAE_BEAD`, `AAE_INPUT_<NAME>`); nothing is substituted into the command; input types are checked at start |
+| 50 | Waiting on the gate of the run's own account after `auth_required`, `billing` or `quota_exhausted` does not spend the attempt ceiling; any other parking does |
+| 51 | Schedules use the system time zone; the orchestrator's `timezone` key overrides it |
+| 58 | A run that waited for a decision on a deciding event waits for the same decision after a restart; a declared outcome and the result of an exec command are not lost |
+| 74 | The model gate key is `model:<harness>/<expanded name>`; a run has one model, and the key is known from the config before the start |
+| 76 | A run started by a `drain` step, a `formula` step or from an agent's session inherits the parent's correlation, one level deeper, under the common depth limit |
+| 77 | `aae run wait` waits for the terminal state of runs by events, not by polling |
+| 104 | Once the outcome is declared and the turn has ended, background processes the agent left do not hold the run: the daemon stops them |
+
+## Tracker — [tracker](../design/tracker-br.md)
+
+| № | Decision |
+|---|---|
+| 11 | br behind an adapter interface; one database per project; the rig of a bead is the prefix of its id |
+| 18 | A task is an optional input; the daemon takes up or files the bead for it, and claims, returns and closes it. `pass` closes the bead; the next work comes by taking the next ready bead, within an epic too |
+| 32 | br is installed apart, through mise, and declared there; its license gets an explicit warning wherever a user meets br |
+| 52 | A tracker operation is added to the interface only when a caller needs it; a bead of another rig is refused |
+| 81 | The user's request becomes the root bead; everything filed for it lies under that bead |
+| 82 | An executor's bead carries all it needs: the task, the rig, the agent and the harness. Which beads to file and for whom is the planner's judgement |
+| 92 | The user gives a formula a task, not a bead: nobody files one in advance. A task that names an existing bead takes it up; otherwise `aae` files the root bead |
+| 96 | A rig's bead carries the rig's prefix: the acronym of its name (`backend` → `b`, `my-project` → `mp`) or the rig's `prefix` key; the root's beads carry no rig prefix |
+
+## Plugins — [plugin guide](../guide/plugin.md), [contracts 3](../design/contracts.md#3-orchestrator-hooks-decisions-and-timeouts)
+
+| № | Decision |
+|---|---|
+| 20 | A plugin's logic on the orchestrator side is exec hooks on core events and supervised services |
+| 21 | A worktree is an optional part of a run |
+| 24 | A shared MCP server is one per scope, shared by sessions, not started per session |
+| 41 | The stdio→HTTP bridge is in the first release |
+| 42 | A service is any long-lived supervised process; MCP is optional for it |
+| 48 | A worktree is switched on by the formula setting `worktree = true`; there are no central lists and no agent-level switch |
+| 49 | `auth_required` and `billing`: repeats with a growing pause up to once an hour, never escalated to a human |
+
+## Frontends — [frontends](../api/frontends.md), [MCP](../api/mcp.md)
+
+| № | Decision |
+|---|---|
+| 10 | HTTP API, CLI and MCP are three adapters over one core. The API and the CLI are the full surface, MCP a small one |
+| 78 | The MCP tool set does not grow: a planner agent uses the CLI |
+
+## Delivery — [install](../guide/install.md), [development](../guide/development.md)
+
+| № | Decision |
+|---|---|
+| 29 | Checks run on the owner's host only (Linux arm64); the other three targets are built |
+| 63 | The build for the four targets is checked by a full local run on request; no tag is made for the sake of it |
+| 66 | `br` is pinned by an exact version, claude and codex by a release line; there is no `mise.lock` |
+| 87 | mise is a convenience, not a requirement, for development and for the demos; a demo's dependencies are in its own `mise.toml` without a lock |
+
+## Process — [code rules](rules-code.md), [test rules](rules-tests.md)
+
+| № | Decision |
+|---|---|
+| 14 | Acceptance scenarios with real runs on a cheap model run only on the owner's explicit request |
+| 23 | Line budgets are checked by CI |
+| 26 | Every measurement carries a visible date, a version or short sha, and an invisible `MEASURE` comment |
+| 27 | No stubs and no code "for later"; less code is better |
+| 30 | There are no deadlines and no calendar budgets |
+| 35 | CI has no access to an LLM, by design. Whatever needs a login and real tokens runs only on a developer's machine, by an explicit command, on the cheapest model and narrowly |
+| 36 | Burning quota on purpose for the sake of a check is forbidden |
+| 37 | Fast tests come before new features: a slow or flaky suite is fixed before anything new is built |
+| 39 | The demos are `demos/1-planner-executor/` and `demos/2-multirepo-qa/` |
+| 44 | An acceptance run writes one report with every criterion, the rows that live in cargo tests and scripts among them |
+| 54 | Results of experiments go to `docs/design/experiments.md` and the code of a recorded experiment is deleted; experiment code stays under 5 000 lines; each of `experiments/*`, `demos/*`, `examples/*` has a short README |
+| 56 | No locked seeds: a test passes on any seed; a random stand takes a new seed each run and prints it |
+| 57 | Unit and integration tests are the everyday loop; nothing new is built on a slow or unstable stand |
+| 64 | The repository is public: research reports are not in it, and the predecessor project is not named |
+| 67 | Temporary logs of the work process are not committed; git history is not rewritten |
+| 79 | The averaging window of the idle-CPU check is 30 seconds |
+| 86 | Running a demo does not conflict with the files of the repository: what a run creates is in `.gitignore`; the author's result lies beside it with the suffix `-example` and the date it was made |
+| 88 | The core's budget is 18 000 lines |
+| 105 | `mise run ci` is the gate of every change. Acceptance scenarios, live models and the demos run only on the owner's explicit request, and are a criterion of done only when the owner says so (2026-11-17) |
+| 106 | There is no spec and no readiness file: `docs/` describes the product as it is, `docs/agents/` holds the rules for agents (2026-11-17) |

@@ -1,6 +1,6 @@
 # Demos
 
-Small live examples of aae (spec §15, criterion 20), each in a directory of its own. The user's request is one
+Small live examples of aae (criterion 20), each in a directory of its own. The user's request is one
 sentence; how to do it and in what order the agents decide. They run real models, so they need the harness logins
 and spend tokens; CI only checks that each demo's pack and project load.
 

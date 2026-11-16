@@ -32,7 +32,9 @@ Code: `crates/aae-front/src/api/`. Reference: `docs/api/openapi.json`.
   as it starts.
 
 The surface: projects with their root and rigs (`GET /v1/projects`: `name`, `dir` — the directory of `aae.toml`,
-`root` and `rigs`, each `{name, path, vars}`; the root is not among the rigs); agents, formulas, packs, plugins (list), config check, explain and reload; runs
+`root` and `rigs`, each `{name, path, vars}`; the root is not among the rigs); agents (`GET /v1/agents` gives each
+agent's harness in the project outside any rig and formula, `null` when its layers do not set one), formulas, packs,
+plugins (list), config check, explain and reload; runs
 (start, list, state, live view, cancel, answer a request, finish); triggers (list, enable, disable, fire by hand);
 instances and services (list, stop an idle one); issue gates (list, close, open — orchestrator, project, agent, bead,
 account); events; daemon status, drain and planned restart.
@@ -98,10 +100,10 @@ so an agent names it in its own config (`[mcp.aae] url = "${AAE_API}/mcp"`, whic
 - A human sees runs, follows a run's live view and answers its permission requests and questions through these
   frontends (`aae run watch`, `aae run answer` or the API).
 - The state of a run shows each attempt's `session`: the harness's own session reference (claude
-  `{session_id, config_dir}`, codex `{thread_id, codex_home}`). After the run a human may open that conversation
+  `{session_id, config_dir, workdir}`, codex `{thread_id, codex_home}`). After the run a human may open that conversation
   with the harness's own tools; aae takes no part in it.
-- Joining a live session and handing control over to a human is the next development cycle. The first release has
-  no operation, no state and no stub for it, and the driver interface has none either
+- Joining a live session and handing control over to a human are not in the first release: it has no operation, no
+  state and no stub for them, and the driver interface has none either
   ([contracts](../design/contracts.md#41-shape)).
 
 ## Verified by
@@ -109,5 +111,5 @@ so an agent names it in its own config (`[mcp.aae] url = "${AAE_API}/mcp"`, whic
 - Integration tests on the real daemon: `crates/aae/tests/api.rs`, `cli.rs`, `mcp.rs`; the live view and
   `run watch` on the real claude (`crates/aae/tests/claude.rs`); the `lagged` path on a real broadcast channel
   (`api/live.rs`).
-- Criterion 17 (a CLI command per operation, OpenAPI equal to the code, five MCP tools) runs in CI. The request
-  scenario `c17_mcp.rs` has a real haiku session call `list_formulas` and report a formula only the tool named.
+- The tests of acceptance criterion 17 (a CLI command per operation, OpenAPI equal to the code, five MCP tools) run in
+  `mise run ci`. The live scenario `c17_mcp.rs` has a real haiku session call `list_formulas` and report a formula only the tool named.

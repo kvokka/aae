@@ -1,13 +1,13 @@
 # Experiments
 
 Results of the throwaway experiments that precede the core. Every number carries a `MEASURE` marker. The experiments are
-recorded here and their code has left the tree (spec §2, decision 54); each section names the commit that still holds it
+recorded here and their code has left the tree; each section names the commit that still holds it
 (`git show <commit>:<path>`). Their logs stay in `experiments/`: sanitized samples (`<home>`, `<work>` placeholders;
 long `tools`/`skills` arrays are replaced by their length) kept as the record of what each harness printed; no test
 reads them. A new experiment goes to `experiments/` as a separate Cargo workspace outside the product budgets, ≤ 5 000
 lines in total, checked by `scripts/budget.sh`.
 
-Cheap experiments came first and the core after them. The set and where each stands:
+A cheap experiment comes before the code that relies on it. The set and where each stands:
 
 | # | Experiment | Why | Status |
 |---|---|---|---|
@@ -17,8 +17,14 @@ Cheap experiments came first and the core after them. The set and where each sta
 | 4 | delivery of hooks, skills and MCP into a session without writing into the rig, with and without host inheritance | config delivery | done (below) |
 | 5 | credentials in a session with host inheritance off | config delivery | done for claude and codex API keys; codex subscription login not checked (below) |
 | 6 | finisher from a session: token in the environment, resume, the codex sandbox | finisher | done except the sandbox: deferred until after the release, on a host with user namespaces or macOS; until then the codex adapter sets `danger-full-access` ([config](config.md)) |
-| 7 | opencode, by the open questions of spec §7.6 | next release | deferred to the next release, with the opencode adapter |
-| 8 | background work after the outcome: what stops a command a session left running, without touching other sessions (spec §9.4, §17) | criterion 34 | done for codex and claude on fake providers (below) |
+| 7 | opencode, by the open questions [below](#opencode-experiment-7) | next release | deferred to the next release, with the opencode adapter |
+| 8 | background work after the outcome: what stops a command a session left running, without touching other sessions | criterion 34 | done for codex and claude on fake providers (below) |
+
+Not checked by any experiment: a real subscription quota running out and a login expiring in the middle of a session
+(both seen only on fake APIs; the claude half of criterion 10 stays open, and with an API key claude gives no reset
+time at all); long turns, many subagents, tens of parallel sessions and runs of hours (the experiments ran "reply OK"
+turns and at most 4 sessions); a cold start on the role models (measured on haiku); macOS and x86_64 (every
+experiment ran on Linux aarch64).
 
 Common setup for the claude experiments: `claude -p --input-format stream-json --output-format stream-json
 --verbose --setting-sources "" --strict-mcp-config --model haiku`, clean environment (only `PATH`, `HOME`, `LANG`,
@@ -38,7 +44,7 @@ Logs: `experiments/01-claude-protocol/logs/`.
 | "reply OK" round trip | Works. A turn takes 0.9–1.0 s from writing the prompt to `result`. `system/init` repeats on every turn with the same `session_id` as `--session-id`. |
 | Output before the first prompt | Nothing in 3 s. `init` comes only after a prompt is written, so the driver never waits for `init` before the prompt. |
 | Native prompt acknowledgement | Yes: `{"type":"command_lifecycle","command_uuid":<uuid of our user message>,"state":"queued"\|"started"\|"completed"}`. `queued` arrives 6–9 ms after the write and `started` within 15 ms, `completed` right after `result`. Emitted with and without `--replay-user-messages`; `init.capabilities` lists `msg_lifecycle_v1`. The `isReplay` echo of `--replay-user-messages` is not an acknowledgement: it arrives 0.9 s later, just before the reply. |
-| Idempotency key | The `uuid` field of the user message we write becomes the `uuid` of the user record in the transcript (`<config>/projects/<dir>/<session>.jsonl`). Writing a message whose `uuid` is already in the session yields `command_lifecycle{state:"completed"}` at once and no turn. So the key is the message `uuid` (derive it deterministically from the attempt key); after a daemon crash the transcript is searched for it. Limit: only a *finished* turn was observed. If the daemon dies after `queued` and the turn is cut, the user record is already in the transcript without an answer; a resend with the same `uuid` will most likely also complete silently and the attempt would hang. So after a restart the adapter checks the transcript for an answer after our `uuid` and, if there is none, sends a continuation with a new `uuid` (WP-27, contract tests WP-28). |
+| Idempotency key | The `uuid` field of the user message we write becomes the `uuid` of the user record in the transcript (`<config>/projects/<dir>/<session>.jsonl`). Writing a message whose `uuid` is already in the session yields `command_lifecycle{state:"completed"}` at once and no turn. So the key is the message `uuid` (derive it deterministically from the attempt key); after a daemon crash the transcript is searched for it. Limit: only a *finished* turn was observed. If the daemon dies after `queued` and the turn is cut, the user record is already in the transcript without an answer; a resend with the same `uuid` will most likely also complete silently and the attempt would hang. So after a restart the adapter checks the transcript for an answer after our `uuid` and, if there is none, sends a continuation with a new `uuid` ([contracts 6.4](contracts.md#64-prompt-delivery-and-recovery)). |
 | `--resume` with stream-json input | Works: the context survives (the resumed session recalled a word from the first one), `session_id` is unchanged, `init` after the prompt as usual. |
 | Model after resume | Not reset. Without `--model`, a fresh session started on the account default (`claude-opus-5-5`), a resumed haiku session started on `claude-haiku-5-5`. The adapter still passes the model explicitly. (The no-`--model` runs used an unreachable `ANTHROPIC_BASE_URL`, so no non-haiku request was made; `init` already names the model.) |
 | Permission request | `--permission-prompt-tool stdio`: `session_state_changed{requires_action}` and `control_request{subtype:"can_use_tool"}` arrive together; the answer is a `control_response` (shape below), then `{running}`. A deny with a message reaches the model as `tool_result{is_error:true, content:<message>}` with `tool_result_meta[].non_execution_kind:"permission-rule"`; the model went on with the next step. |
@@ -57,14 +63,14 @@ Wire shapes the adapter relies on (full samples in the logs):
 {"type":"control_request","request_id":"<ours>","request":{"subtype":"interrupt"}}
 ```
 
-Consequences for the claude adapter (WP-27):
+Consequences for the claude adapter:
 
 - "Prompt accepted" = `command_lifecycle{queued}` with our `command_uuid`; a timeout without it is an adapter
   failure, not a turn.
 - An interrupted turn ends with `is_error:true` and `terminal_reason:"aborted_tools"` (or another
   `error_during_execution`); after our own `interrupt` it maps to `turn.ended{stop_reason: cancelled}`, never to a
   failure.
-- `command_lifecycle` is a stream type the context notes did not list; unknown types must be ignored, not fatal.
+- Unknown stream types (`command_lifecycle` was one, undocumented) are ignored, not fatal.
 
 ## claude processes and background work (experiment 1b)
 
@@ -89,7 +95,7 @@ subtree — a per-session cgroup is unavailable without root. On GitHub runners 
 
 1. Every session process in its own process group (`kill(-pgid)` for the harness itself).
 2. A per-attempt marker variable in the session environment; on cleanup the daemon kills every process carrying the
-   marker (`/proc/<pid>/environ`; macOS is out of scope for the first release, spec §1.1). The same sweep runs during
+   marker (`/proc/<pid>/environ`; macOS is out of scope for the first release). The same sweep runs during
    recovery after a daemon crash. Known macOS differences until it is checked: no sweep, no subreaper, and a process is
    told by its pid alone (no start time), so a reused pid passes for the old process.
 3. Linux: the daemon is a child subreaper, so descendants that dropped the marker still become its children and are
@@ -104,7 +110,7 @@ orphaned while the daemon itself is down (it goes to PID 1, not to the restarted
 ### Heartbeat of a long tool
 
 `tool_progress{heartbeat:true}` at 30.0 s and 60.0 s after the `tool_use` of a 100 s foreground Bash command —
-the 30 s interval of the context notes holds.
+a 30 s interval.
 
 <!-- MEASURE id=claude-tool-heartbeat date=2026-11-11 ver=claude-2.1.322 env=linux-arm64-orbstack src=reports/46a note="tool_progress in stream-json; the stall watchdog threshold depends on the interval" -->
 <!-- MEASURE id=claude-tool-heartbeat-1b date=2026-11-12 ver=claude-2.1.322 env=linux-arm64-orbstack src=experiments/02-claude-process/logs/orphans.ndjson note="n=1, Bash in the main thread" -->
@@ -151,14 +157,14 @@ Code: `experiments/05-br-events` (one scenario, fresh workspace with an isolated
 | Signal | Every mutating command rewrites `issues.jsonl` by rename exactly once; `notify` reports it as two events, `Modify(Name(To))` and `Modify(Name(Both))`. 20/20 sequential creates and 16/16 concurrent claims gave one rename each — no loss, no extra. Reads (`list`, `show`, `ready`) gave none; the database files see open/close/write traffic on reads too, so they are not a signal. |
 | Watcher cost | 110 ms of CPU for the whole watching process over steps 1–4 (20 creates, 9 reads, 16 concurrent claims, 4 attribution cases): `notify` plus a read-only `events` query per signal. |
 | Latency | The rename lands 23–62 ms after the command starts (median 41 ms) and always before the command exits. |
-| Change content | The `events` table, read after the cursor (`WHERE id > ?`), with the database opened read-only per signal and closed at once: 0.6–0.7 ms per read including open/close. It held exactly one row per create and two per claim (`status_changed` + `assignee_changed`), 32/32 rows attributed to the right claimer under concurrency. A full snapshot (`br list --all --json`) costs 8–9 ms at 20 beads and grows linearly (60 ms at 5 000 beads per the context notes) and carries no actor. |
+| Change content | The `events` table, read after the cursor (`WHERE id > ?`), with the database opened read-only per signal and closed at once: 0.6–0.7 ms per read including open/close. It held exactly one row per create and two per claim (`status_changed` + `assignee_changed`), 32/32 rows attributed to the right claimer under concurrency. A full snapshot (`br list --all --json`) costs 8–9 ms at 20 beads and grows linearly (60 ms at 5 000 beads in an earlier measurement) and carries no actor. |
 | Attribution | `--actor X` and the environment variable `BD_ACTOR=X` both land in `events.actor`. `BR_ACTOR` does nothing; `BR_AGENT_NAME`, `BR_HARNESS`, `BR_MODEL` are **not** recorded in 0.7.6 (columns stay empty) despite the help text. |
 
 <!-- MEASURE id=br-rename-latency date=2026-11-12 ver=br-0.7.6 env=linux-arm64-orbstack src=experiments/05-br-events/logs/run.txt note="n=20 sequential creates, 20-bead database; grows with database size (auto-flush rewrites the whole file)" -->
 <!-- MEASURE id=br-watcher-cpu date=2026-11-12 ver=br-0.7.6 env=linux-arm64-orbstack src=experiments/05-br-events/logs/run.txt note="getrusage of the experiment process over steps 1–4, n=1; includes the scenario driver itself, so an upper bound" -->
 <!-- MEASURE id=br-events-read-cost date=2026-11-12 ver=br-0.7.6 env=linux-arm64-orbstack src=experiments/05-br-events/logs/run.txt note="rusqlite bundled, open read-only + query + close, mean of 100, ~60 rows" -->
 
-**Chosen method** for `bead.*` (WP-31):
+**Chosen method** for `bead.*`:
 
 1. Watch the `.beads/` directory (not the file: the rename replaces the inode). Any rename of `issues.jsonl` means
    "something changed"; signals are coalesced, and a missed or duplicate signal costs nothing because of step 2.
@@ -166,8 +172,8 @@ Code: `experiments/05-br-events` (one scenario, fresh workspace with an isolated
    `bead.ready` is derived by re-reading `br ready` and diffing with the last set. On start and after recovery, read
    from the stored cursor without waiting for a signal.
 3. Attribution: every session gets `BD_ACTOR=<attempt actor>` in its environment, and aae's own calls pass
-   `--actor`; `events.actor` then names the run behind every change (correlation, spec §9.5).
-4. Guard against the private schema: the exact `br` version is pinned (spec §13) and a contract test reads
+   `--actor`; `events.actor` then names the run behind every change (correlation, [contracts 5.1](contracts.md#51-operations)).
+4. Guard against the private schema: the exact `br` version is pinned ([tracker-br](tracker-br.md#versions)) and a contract test reads
    `events` on that version.
 
 ## codex app-server (experiment 2)
@@ -184,7 +190,7 @@ turn goes to the fake provider, `HOME` and `CODEX_HOME` are fresh directories, t
 
 | Question | Answer |
 |---|---|
-| Transport | Both work and carry the same messages (compare `threads-stdio.ndjson` and `threads-unix.ndjson`). **Chosen: stdio.** It needs no WebSocket code (handshake, masking, ping) on a transport the vendor calls experimental and unsupported, and no socket directory with `0700`. The one thing only the socket gives — the server outliving its client — is not needed in the first release (spec §5.6); with stdio the server ends with the daemon (below), so no stale app-server is left holding thread writer locks. |
+| Transport | Both work and carry the same messages (compare `threads-stdio.ndjson` and `threads-unix.ndjson`). **Chosen: stdio.** It needs no WebSocket code (handshake, masking, ping) on a transport the vendor calls experimental and unsupported, and no socket directory with `0700`. The one thing only the socket gives — the server outliving its client — is not needed in the first release (no reconnection after a daemon restart, [invariants](invariants.md#recovery)); with stdio the server ends with the daemon (below), so no stale app-server is left holding thread writer locks. |
 | Two threads in one process | Two `turn/start` sent back to back on two threads both completed (72–119 ms with the fake provider). Each provider request carried only its own thread's `model` and `developerInstructions`. |
 | Config per thread | `cwd`, `model`, `developerInstructions` and `config` (`shell_environment_policy.set`, `hooks`, `bypass_hook_trust`) given in `thread/start` apply to that thread only. |
 | Hooks per thread | **Work.** `thread/start.config.hooks` takes the same value as the `hooks` key of `hooks.json`; the hooks fire with `run.source: "sessionFlags"`, and threads of one process run their own sets: A (`UserPromptSubmit` + `Stop`) ran both, B (`UserPromptSubmit` only) ran just that one, and neither set fired on the other thread's turn. Hook stdin carries `session_id` = thread id. Two conditions: `config.bypass_hook_trust: true` is required — thread C got the full set without it and ran no hook (no `hook/*` notification, no warning), while thread D with the same set and the bypass ran both; with it every `thread/start` emits a `configWarning` and a `warning` "`--dangerously-bypass-hook-trust` is enabled", which the adapter ignores. **Hooks run with the process environment**: `shell_environment_policy.set` of the thread is not visible to them. So hooks are a per-thread part of the config, the environment of hooks is a per-process part; per-thread values for a hook go into its command line (it is per thread anyway) or are looked up by `session_id`. |
@@ -201,8 +207,8 @@ same as on 0.166.0: 93 MB empty, +39–62 MB for the first thread, ≈ 5–10 MB
 
 <!-- MEASURE id=codex-appserver-rss date=2026-11-10 ver=codex-0.166.0 env=linux-arm64-orbstack src=reports/15 note="RSS, up to 4 threads, turns reply OK; not checked on long histories: a thread's history lives in the process memory" -->
 
-`initialize` answered 150–307 ms after spawn on both transports (77 ms on 0.166.0 per the context notes, other
-setup).
+`initialize` answered 150–307 ms after spawn on both transports (77 ms on 0.166.0 in an earlier
+measurement with another setup).
 
 **Types.** `codex app-server generate-json-schema --out DIR` writes the bundle;
 `cargo run -p codex-appserver --bin gen -- DIR/codex_app_server_protocol.v2.schemas.json` takes the hand-picked roots
@@ -210,18 +216,18 @@ listed in `gen.rs`, collects the definitions they reach and generates `src/gener
 (9 roots → 83 definitions → 5.1k lines, excluded from the line budgets). The four types the scenarios parse
 (`ThreadStartResponse`, `ThreadResumeResponse`, `TurnCompletedNotification`, `HookCompletedNotification`)
 deserialized every message received. `InitializeResponse` is only in the non-v2 bundle
-(`codex_app_server_protocol.schemas.json`); the client reads it as plain JSON. The adapter (WP-29) does not take this
+(`codex_app_server_protocol.schemas.json`); the client reads it as plain JSON. The adapter does not take this
 route: generated types are not needed, it reads by hand the few fields it uses, and the contract suite
 ([harness updates](../harness-updates.md)) catches a changed field on every codex update. The generator is kept only
 in the commit named above.
 
-**Fake provider** (sketch for WP-26): an HTTP server on `127.0.0.1` given to codex as
+**Fake provider** (the sketch of `crates/aae-testkit/src/openai.rs`): an HTTP server on `127.0.0.1` given to codex as
 `[model_providers.fake] base_url = "http://…/v1", wire_api = "responses"` in `CODEX_HOME/config.toml`. A turn is
 answered with `content-length` SSE of three events — `response.created`, `response.output_item.done` with a
 `message` item of one `output_text`, `response.completed` with `usage` — and `connection: close`. Unknown model
 names only cause a `warning` "Model metadata for `<model>` not found".
 
-Consequences for the codex adapter (WP-29) and the instance registry (WP-18):
+Consequences for the codex adapter and the instance registry:
 
 - One app-server per fingerprint over stdio, spawned and owned by the daemon; the hook set is not part of the
   fingerprint, the process environment is.
@@ -244,7 +250,7 @@ with an `exec_command` call; claude runs on haiku with `--permission-mode bypass
 |---|---|
 | Token in the environment, claude | The Bash tool sees the environment of the `claude` process: the finisher reached the socket with the token of that process. After `--resume` in a new process with another token, the finisher reported the new one — the token belongs to the process, not to the session. |
 | Token in the environment, codex | A per-thread `config.shell_environment_policy.set` value reaches the command, and so does a process variable (both have `TOKEN` in the name — the default excludes did not drop them). |
-| codex after resume in a new process | **The per-thread config is not restored**: `thread/resume` with only `threadId` ran the command without the per-thread token (the process variable was there). `thread/resume` with the same `config` restored it, with the new value. So the adapter passes the full thread config on every resume (closes the open point of the context notes, §3.5). |
+| codex after resume in a new process | **The per-thread config is not restored**: `thread/resume` with only `threadId` ran the command without the per-thread token (the process variable was there). `thread/resume` with the same `config` restored it, with the new value. So the adapter passes the full thread config on every resume (an open point until then). |
 | codex after resume in the same process | **A thread app-server still holds keeps its config**: after `thread/unsubscribe` a thread whose last turn failed (status `systemError`) stayed loaded, `thread/resume` rejoined it, and its command ran with the token of the first attempt (an idle thread was reloaded by the same resume and got the new one). With `-c thread_unload_delay_secs=0` the last unsubscribe closes the thread within milliseconds (`thread/closed`; a resume in between is refused: "is closing; retry thread/resume after the thread is closed"), and a thread with a turn in flight stays loaded. So the adapter starts app-server with that flag and resumes only once `thread/unsubscribe` answers `notLoaded` (codex 0.168.0). |
 | codex sandbox | **Not checked.** The sandbox needs unprivileged user namespaces (bubblewrap); the owner's host container forbids them (`unshare -U` → "Operation not permitted"), so every codex command here ran in `danger-full-access`. Whether a `workspace-write` command can connect to the daemon socket and write the tracker database outside the work directory stays open. |
 
@@ -288,8 +294,8 @@ directory, so a rig under `HOME` still reached the host's file (acceptance scena
 host layer the adapter therefore sets `claudeMdExcludes` to `~/.claude/CLAUDE.md` and `~/.claude/rules/**` in the
 `--settings` file; scenario 12 checks that the isolated session no longer sees it. `~` here is the `HOME` of the
 daemon process: a daemon run with another `HOME` than the user whose rigs it serves (a system service, for one) does
-not exclude that user's file; run the daemon as that user, as the service files of spec §13 do.
-Open: refresh of a delivered OAuth token after expiry (spec §6.4).
+not exclude that user's file; run the daemon as that user, as the service files do ([install](../guide/install.md#run-the-daemon)).
+Open: refresh of a delivered OAuth token after expiry ([config](config.md#host-inheritance)).
 
 ### codex
 
@@ -309,18 +315,18 @@ Open: refresh of a delivered OAuth token after expiry (spec §6.4).
 | Host config (`config.toml` of `CODEX_HOME`: instructions, MCP) | process | yes | marker and the host MCP tool reached the thread; the MCP server started per thread |
 | Provider key: `env_key` of the provider, value in the app-server environment | process | yes | `authorization: bearer <key>` at the provider |
 | Provider key per thread | thread | name only | `config.model_providers.<p>.env_key` in `thread/start` is applied (a missing variable fails the turn: "Missing environment variable"), but the value is still read from the process environment; `experimental_bearer_token` in the thread config was ignored |
-| ChatGPT subscription login in a separate `CODEX_HOME` | process | not checked | the host has no codex login (spec §6.4 stays open) |
+| ChatGPT subscription login in a separate `CODEX_HOME` | process | not checked | the host has no codex login ([config](config.md#host-inheritance) keeps it open) |
 
 ### Consequences
 
-- claude (WP-27): the adapter delivers everything with flags and files in the state directory: `--settings` (file or
+- claude: the adapter delivers everything with flags and files in the state directory: `--settings` (file or
   inline), `--plugin-dir` for skills and plugin hooks, `--mcp-config`; and repeats the whole set on every `--resume`. It
   does not pass `--strict-mcp-config`: that would cut the rig's `.mcp.json` too, and with inheritance off the setting
   sources and the own config directory already cut the host's servers. With inheritance on, the host's personal MCP
-  servers reach the session as well, as spec §6.4 intends. Host inheritance off = `--setting-sources project,local` (not
+  servers reach the session as well, as [config](config.md#host-inheritance) intends. Host inheritance off = `--setting-sources project,local` (not
   `""`): the rig's own config keeps working — the rig-config rule of `config.md` holds for claude. With an isolated
   `CLAUDE_CONFIG_DIR` the adapter delivers `CLAUDE_CODE_OAUTH_TOKEN` (or `ANTHROPIC_API_KEY`).
-- codex (WP-29): MCP, hooks (`config.hooks`), instructions and `bypass_hook_trust` go per thread; skills, the
+- codex: MCP, hooks (`config.hooks`), instructions and `bypass_hook_trust` go per thread; skills, the
   provider key value and the host layer are per process. The instance fingerprint
   ([contracts](contracts.md#8-instance-and-service-registry)) therefore holds
   `CODEX_HOME`, `HOME`, the skill roots and the provider and its key; MCP and hooks are not in it. Host
@@ -390,7 +396,7 @@ Once the outcome is declared and the turn has ended, the adapter stops what the 
 1. **Through the harness**, so it accounts for the stop: codex — `thread/backgroundTerminals/clean{threadId}` (one
    call per thread; only that thread's commands go; the command's `item/completed` follows and the stream already
    turns it into "idle without background"); claude — `stop_task` for every task of the last
-   `background_tasks_changed`. Neither ends the session, so a veto remark (§9.4) can still go to it as the next prompt.
+   `background_tasks_changed`. Neither ends the session, so a veto remark ([contracts 6.3](contracts.md#63-finisher)) can still go to it as the next prompt.
    Not `unsubscribe` or `end_session`: they close the session, and `unsubscribe` gives no `item/completed`.
 2. **Then the token sweep**: kill every process whose `/proc/<pid>/environ` holds this attempt's
    `AAE_ATTEMPT_TOKEN` and whose session id differs from the harness process's (app-server, or claude itself, which
@@ -420,3 +426,19 @@ experiment 1b skips a `stopped` notification. Step 2 comes when the session ends
 detached itself holds no step, so the run does not wait for it. With claude it goes with the session's process on
 the orphan sweep by `AAE_INSTANCE`; with codex `close_session` kills every process with the thread's attempt token
 (the app-server does not carry one, the other threads have tokens of their own).
+
+## opencode (experiment 7)
+
+Not studied yet: it comes with the opencode adapter in the next release. opencode 2.1.1 has `opencode serve` (HTTP
+API v2, a `--stdio` flag), a native `opencode acp`, a background service and a `--standalone` flag.
+<!-- MEASURE id=opencode-cli-surface date=2026-11-12 ver=opencode-2.1.1 env=linux-arm64-orbstack src=opencode---help-output note="only the help was read, the harness was not run" -->
+
+Questions the experiment answers before the adapter is written:
+
+1. `serve` or `acp` as the transport; how many sessions one server holds.
+2. What is set per session and what per process: model, MCP, env, cwd, permissions.
+3. What failures look like: 429, quota, 5xx, an expired login; whether a reset time comes; whether it retries itself.
+4. Resume after `kill -9`; what happens to an unfinished tool call.
+5. opencode hooks and plugins and how they relate to the Claude hook dialect.
+6. Inheritance of the user's config and the way to cut it.
+7. A human joining a live session.

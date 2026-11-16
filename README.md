@@ -7,6 +7,8 @@ finisher and by plugins.
 
 ## Documentation
 
+- [aae in one page](docs/overview.md): what it is, the glossary, what the first release leaves out
+- [Architecture](docs/architecture.md): the parts, the crates, the life of a run
 - [Installing aae](docs/guide/install.md)
 - [Your first project](docs/guide/first-project.md)
 - [Your first formula with an agent](docs/guide/first-formula.md)
@@ -14,6 +16,7 @@ finisher and by plugins.
 - [Demos](demos/README.md): a planner agent files a request as beads, and coder agents on claude and codex do them
 - Reference: [configuration files](docs/design/config.md), [contracts](docs/design/contracts.md) (events, hooks,
   run states), [HTTP API](docs/api/openapi.json)
+- [Everything else](docs/README.md): the map of the documentation
 
 ## Running the daemon
 
@@ -57,24 +60,11 @@ Claude or Codex agents running `br` inside an aae session has not been assessed.
 
 - `mise run test` runs the unit and integration tests: the local loop. The chaos stand among them plays 1000 new
   seeds each time and prints its base seeds; a failure names its seed and the command that replays it.
-- `mise run ci` adds formatting, clippy, `cargo deny`, `cargo machete` and the line budgets.
-- `mise run acceptance-ci` runs the model-free acceptance scenarios on real daemons; CI runs it on every commit,
-  locally it is optional. The release builds for the four targets run on a `v*` tag (`mise run acceptance-release`).
+- `mise run ci` adds formatting, clippy, `cargo deny`, `cargo machete` and the line budgets. It is the gate of a
+  change, and all that CI runs on a commit.
+- The [acceptance scenarios](docs/acceptance.md) are end-to-end runs on real daemons, some on a real model and the
+  demos; they run on request, not on a commit.
 
 mise is optional here too: the tasks are plain commands in `mise.toml`. The tool versions to install without it,
 the commands of each task, wall times and the replay of a seed: [docs/guide/development.md](docs/guide/development.md).
-
-## Acceptance spec
-
-The acceptance criteria of the first release are executable scenarios in `crates/aae-acceptance`, each on a real
-`aae daemon` in a temporary directory tree. `mise run acceptance-ci` runs the scenarios without a model, as CI does on
-every commit. `mise run acceptance` runs all of them, including those that call a real model: they use the cheapest
-model, cost money and need your harness login. Pass criterion numbers to run only those:
-`cargo build -p aae && cargo run -p aae-acceptance -- --ci 3 19`. The rows that live in cargo and the CI scripts
-run from the same binary after the scenarios: the release build for this host's target (1, not with `--ci`; the
-four targets only with `--release`), the crash tests of the adapters (9), the contract tests (11), the demos (20;
-in CI only that they load), the line budgets with the readiness file checked against the failed rows (22) and the
-stub linters (23). The report has a line for every row of §15, run or not, with the date and the versions of `aae` and
-the harnesses, and goes to
-`target/acceptance/report.md`. No row is checked by hand. A row that is not run cannot fail, so a green 22 under
-`--ci` says nothing of the rows that need a model, the demos of 20 among them.
+The rules for agents working on this repository: [docs/agents](docs/agents/README.md).

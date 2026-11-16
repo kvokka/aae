@@ -91,7 +91,7 @@ its own text, say the conditions a checker tries; a file found in neither place 
 
 ## 3. How a run ends: the finisher
 
-A prompt run does not pass because the agent stopped talking. It passes when the agent calls `aae finish pass`
+An `ai` step does not pass because the agent stopped talking. It passes when the agent calls `aae finish pass`
 from its session (the session's environment carries the run and an attempt token, so the call needs no arguments
 besides the result and the summary). A turn that ends without a finish gets a reminder; one that still ends without
 one fails the run. Tell the agent about `aae finish` in the prompt, as above, and make sure `aae` is on the `PATH`

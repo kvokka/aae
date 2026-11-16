@@ -1,7 +1,8 @@
 # MCP frontend
 
-The daemon serves a small MCP server on its API socket at `/mcp` (spec §12). It is connected to no agent by
-default: tool descriptions cost tokens in every session, so an agent gets it only by naming it in its own config.
+The daemon serves a small MCP server on its API socket at `/mcp`. It is connected to no agent by default: tool
+descriptions cost tokens in every session, so an agent gets it only by naming it in its own config. For the same
+reason the set stays at the five tools below: an agent that needs more, a planner for one, uses the CLI.
 
 A harness reaches it over TCP: set `api_tcp = "127.0.0.1:<port>"` in the orchestrator config and give the agent
 `[mcp.aae] url = "${AAE_API}/mcp"`; the session gets the URL and the bearer token (docs/design/config.md). Every

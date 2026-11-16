@@ -15,7 +15,7 @@ all of them share.
   the state happens before commit (invariant 9: intent before effect).
 - Consumers of committed events: the JSONL journal writer (the one durable outbox consumer), trigger matching and
   plugin exec hooks (both tied to the transaction that commits the event), and API event streams (which read the
-  journal from a `seq`). See [contracts.md §3.5](contracts.md#35-outbox-lifetime).
+  journal from a `seq`). See [contracts.md 3.5](contracts.md#35-outbox-lifetime).
 - The journal writer appends each drain as one batch with one `sync_data` at its end (and one before a file is
   rotated away), and acknowledges the batch in the outbox only after that sync: an unsynced line is never acked, so
   a power loss can cost journal lines but the next drain writes them again from the outbox.
@@ -75,6 +75,8 @@ all of them share.
 - Timers are deadlines with an exact wake-up time stored in the state; the writer sleeps until the earliest one.
   Deadlines are wall-clock times: the writer reads the wall clock at least every 30 s so a clock jump is noticed.
   A deadline whose handler fails fires again a minute later.
+- The safety timers — the orphan reaper, the instance health check, resync — move nothing forward in normal
+  operation; they only catch what a lost signal left.
 - The latency from an event to the core's reaction contains no polling interval. Acceptance checks it as the hop
   (criterion 6, `crates/aae-acceptance` scenario `c06_hop.rs`: 30 hops, p50 about 35 ms to the harness launch;
   recorded 2026-11-13, `49e194c`).

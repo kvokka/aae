@@ -7,7 +7,8 @@ A plugin is a directory with a `plugin.toml`. It has two independent sides:
 - the **orchestrator side** (`[[hook]]`): programs aae runs on its own events, which may observe them or decide what
   happens next (veto a pass, retry a failed attempt, answer a permission request...).
 
-A plugin is a directory, not a library: hooks are any executables, in any language. The complete example
+A plugin is not a pack: a pack brings agents and formulas, a plugin extends the agents that attach it and the
+orchestrator. A plugin is a directory, not a library: hooks are any executables, in any language. The complete example
 [`examples/aae-plugin-review`](../../examples/aae-plugin-review) shows both sides; this page walks through it.
 
 ## The manifest
@@ -75,7 +76,7 @@ rig settings and the agent's own `agent.toml`, so an agent can still override wh
   `[[service]]` with `name = "notes"`, `command = ["${AAE_PLUGIN_DIR}/bin/notes-mcp"]` and `mcp = true`. The process
   listens on `$AAE_SERVICE_PORT` and checks `Authorization: Bearer $AAE_SERVICE_TOKEN`; the sessions get its MCP
   endpoint `/mcp` (or, without `mcp`, its URL and token in `AAE_SERVICE_<NAME>_URL` and `_TOKEN`)
-  ([details](../design/config.md#mcp-servers-and-services-spec-114)).
+  ([details](../design/config.md#mcp-servers-and-services)).
 
 ## The orchestrator side
 

@@ -1,9 +1,9 @@
-# Contracts (fixed before the core)
+# Contracts
 
 The interfaces that later code may not change without a break: the event and its version, the trigger filter and input
 mapping, the decisions of orchestrator hooks and their timeouts, the outbox, the driver and tracker interfaces, the run
-state machine, the issue gates and the instance registry. Spec references are by section number (`§9.5`); references
-inside this document read "see 3.5". Experiment results are cited from [`experiments.md`](experiments.md), not repeated.
+state machine, the issue gates and the instance registry. References inside this document read "see 3.5"; other
+documents are linked. Experiment results are cited from [`experiments.md`](experiments.md), not repeated.
 
 Conventions used below:
 
@@ -11,10 +11,9 @@ Conventions used below:
   durations in config and decisions are strings with a unit (`"500ms"`, `"30s"`, `"45m"`, `"2h"`).
 - Identifiers are opaque strings to every consumer. The daemon makes them time-sortable with a type prefix:
   `run_…`, `att_…`, `cor_…`, `ins_…`.
-- A **default** below is a config parameter with that default value, chosen by the implementer (no report gives
-  one); a **ceiling** is a core constant that config and policy cannot raise (invariant 16).
-- Rust signatures are a shape, not code: crate layout, lifetimes and error plumbing are settled by the work
-  package that writes the code, as long as the operations, types and semantics here stay.
+- A **default** below is a config parameter with that default value; a **ceiling** is a core constant that config and policy cannot raise (invariant 16).
+- Rust signatures are a shape, not code: crate layout, lifetimes and error plumbing are the code's, as long as the
+  operations, types and semantics here stay.
 
 ## 1. Event
 
@@ -43,8 +42,8 @@ One envelope for the JSONL journal, the API event stream (SSE) and the stdin of 
 | `ts` | time | commit time (the managed clock in tests) |
 | `type` | string | one of 1.3 below |
 | `project`, `rig` | string or null | null for orchestrator-level events |
-| `run` | string or null | the run the event is about; for `bead.*` the run whose attempt made the change (§10.2 attribution), else null |
-| `correlation` | string or null | chain id: a run started by hand starts a chain, a run started by a trigger inherits the chain of the event that fired it, a run started from an agent session (§6.1) that of the session's run; null for events outside any chain |
+| `run` | string or null | the run the event is about; for `bead.*` the run whose attempt made the change (attribution by actor, 5.1), else null |
+| `correlation` | string or null | chain id: a run started by hand starts a chain, a run started by a trigger inherits the chain of the event that fired it, a run started from an agent session (6.1) that of the session's run; null for events outside any chain |
 | `data` | object | payload of the type, see 1.3 |
 
 Version rules:
@@ -70,7 +69,7 @@ Shared objects:
   `{id, formula, step, agent, step_kind: "ai"|"exec"|"drain"|"formula", state, class, attempt, generation, bead, workdir, depth, parent_run, created_at, started_at}`.
   `step` is the name of the formula step the run is at (6.1); `agent` and `step_kind` are of that step, `agent` is null
   for `exec` and `drain` steps, `class` is null until `failed`, `bead` is the bead id or null, `depth` is the chain
-  depth of §6.1 (0 for a run started by hand), `parent_run` the run whose event triggered it or whose session started
+  depth of 6.1 (0 for a run started by hand), `parent_run` the run whose event triggered it or whose session started
   it. The read API (`GET /v1/runs/{id}`, `aae run show`) gives the `RunView` with `project`, `rig`, `correlation`,
   `inputs`, `waiting_for`, `outcome`, `attempts`, `usage` (`{input_tokens, output_tokens}`, summed over every attempt)
   and: `reason` (the veto text, the cancel reason, `pass`, or the failure reason), `request` (the open request while in
@@ -172,12 +171,12 @@ event of the type.
 | array of scalars | the value equals any element (for an array value: contains any element) |
 
 A path that is absent or null in the event does not match. There is no negation, no comparison and no regular
-expression in the first release; a trigger that needs more uses an `exec` step that decides. Example — the
-`label = "auto"` of the spec §9.5 sample is written `where = { "bead.labels" = "auto" }`.
+expression in the first release; a trigger that needs more uses an `exec` step that decides. Example — a trigger
+on beads labelled `auto` is written `where = { "bead.labels" = "auto" }`.
 
 ### 2.3 Substitution (`inputs` and prompt templates)
 
-One language for trigger `inputs` (§9.5) and prompt templates (`config.md`, "Agent"): `{{ path }}` with optional
+One language for trigger `inputs` (`config.md`, "Trigger") and prompt templates (`config.md`, "Agent"): `{{ path }}` with optional
 spaces, nothing else — no filters, conditions or loops.
 
 - In `inputs` the root is `event` (`{{ event.bead.epic }}`); a schedule trigger has no event, so any placeholder
@@ -240,11 +239,11 @@ timeout = "30s"
 
 | Event | Allowed decisions | Exit 2 means | Hook failure means |
 |---|---|---|---|
-| `run.preparing` | `{"decision":"proceed","workdir":"/abs/path","env":{"NAME":"value","DROP_ME":null},"prompt_append":"text"}` — every field but `decision` optional; `{"decision":"deny","reason":"…"}` | deny | deny (veto hook, §11.3) |
+| `run.preparing` | `{"decision":"proceed","workdir":"/abs/path","env":{"NAME":"value","DROP_ME":null},"prompt_append":"text"}` — every field but `decision` optional; `{"decision":"deny","reason":"…"}` | deny | deny (a veto hook) |
 | `run.requires_action` | `{"decision":"allow","updated_input":{…}}` (`updated_input` optional); `{"decision":"deny","message":"…"}`; `{"decision":"answer","text":"…"}` (only for `kind: "question"`) | deny with the stderr text as message | no decision from this plugin |
 | `run.attempt_failed` | `{"decision":"resume","after":"30s"}`; `{"decision":"new_session","after":"0s"}`; `{"decision":"park","gate":{"key":"…","until":"<time>"\|null,"reason":"…"},"then":"resume"\|"new_session"}`; `{"decision":"fail","reason":"…"}`; `gate` is required on `park` and optional on the other three (the gate is closed in the same transaction) | `fail` with the stderr reason | no decision from this plugin |
 | `run.turn_ended_without_outcome` | `{"decision":"continue","message":"…"}`; `{"decision":"fail","reason":"…"}` | `fail` | no decision from this plugin |
-| `run.finishing` | `{"decision":"accept"}`; `{"decision":"veto","reason":"…"}`; `{"decision":"remark","message":"…"}` | veto | veto with reason `hook_failed:<plugin>` (§11.3) |
+| `run.finishing` | `{"decision":"accept"}`; `{"decision":"veto","reason":"…"}`; `{"decision":"remark","message":"…"}` | veto | veto with reason `hook_failed:<plugin>` (a veto hook) |
 
 Hooks on observed events may only exit 0 or fail; their failures are reported and otherwise ignored.
 
@@ -324,7 +323,8 @@ that attempt's `attempt_failed` queues its own hooks.
 The core owns one driver per harness, behind one object-safe trait; the binary lists one `Adapter` per harness and knows
 no harness by name ([adapters](adapters.md)), tests wire the scripted driver in (`crates/aae-testkit`). Futures are
 boxed; events go to the core through a sink handed to `start_instance`. The adapter translates and executes; it never
-retries a turn, parks or decides an outcome (§4; adapter duties in 4.4–4.6). The interface has no steer in the middle of
+retries a turn, parks or decides an outcome (adapter duties in 4.4–4.6 and [adapters](adapters.md#what-the-core-expects-of-a-driver)): decisions are policy, which lives in plugins and config. Its semantics follow ACP v2: a session is `running`, `idle` or
+`requires_action` (4.3), and a turn fails with a typed failure (4.4). The interface has no steer in the middle of
 a turn, no model change inside a live session and no way for a human to join a live session
 ([frontends](../api/frontends.md#humans-and-runs)).
 
@@ -362,7 +362,7 @@ trait Driver: Send + Sync {
 | `EffectiveConfig` | the merged harness-neutral categories of `config.md` "Settings" (model, effort, env, MCP servers, harness hooks, skills, system prompt, permission mode, plugin parts, host inheritance flag) plus the uninterpreted `native` block of the harness; produced by config assembly with the provenance of every value |
 | `SessionPlan` | `New { workdir, run, attempt, token, actor }` or `Resume { session: SessionRef, workdir, run, attempt, token, actor }`; the adapter needs `run`/`attempt` only to name files in the state directory, and `run`, `token` and the tracker `actor` to set the attempt environment (4.6) |
 | `Split` | `{ process: ProcessPart, session: SessionPart, fingerprint: Fingerprint }`; the two parts are opaque serializable values of the adapter; `fingerprint` = SHA-256 of the harness name and the canonical JSON of `process` (see 8) |
-| `InstanceHandle` | `{ id, pid, start_time, pgid }`; `start_time` is the kernel start time of `pid` (`/proc/<pid>/stat`), pid + start time identify the process (§5.2) |
+| `InstanceHandle` | `{ id, pid, start_time, pgid }`; `start_time` is the kernel start time of `pid` (`/proc/<pid>/stat`), pid + start time identify the process ([event model](event-model.md#state)) |
 | `SessionRef` | opaque JSON the adapter fills with everything resume needs; the core stores and returns it. claude: `{session_id, config_dir, workdir}` (`config_dir` null: the session inherits the host, and its transcript is under the daemon's `CLAUDE_CONFIG_DIR`, else `~/.claude`); codex: `{thread_id, codex_home}` (the transcript lives in `CODEX_HOME`; `codex_home` is not read yet: a resume takes the home of the process part) |
 | `PromptKey` | UUID v5 of `"aae:prompt:<run>/<attempt n>/<prompt n>"` in the URL namespace; the idempotency key of one prompt (see 6.4) |
 | `Answer` | `Allow { updated_input }`, `Deny { message }`, `Text { text }` (decisions of `run.requires_action`) |
@@ -378,7 +378,9 @@ Every event carries `instance`, `session` (null for instance-wide events) and `s
 `seq` 0 is an event the core makes itself (the `exited` of an instance the health check found dead), outside the
 numbering. The core takes an instance's events in `seq` order: one with `seq` ≤ the last
 taken is dropped with no effect, and one that is not last + 1 (a repeat or a gap) is told with `resync.diverged`.
-They are input messages of the core, not journal events; the core turns some of them into the run events of §1.3.
+They are input messages of the core, not journal events; the core turns some of them into the run events of 1.3.
+Nothing a driver reports is dropped: a retry of the harness, a degraded instance, token usage, an account limit and
+the stop reason of a turn reach the policy and the observers through those events.
 
 | Event | Fields | Core use |
 |---|---|---|
@@ -441,7 +443,7 @@ Success traps are the adapter's: claude `subtype:"success"` with `is_error:true`
 - `versions`: the tested range of the harness binary, `[lowest, highest]` inclusive, the same as `Adapter.tested`
   ([adapters](adapters.md)); outside it the daemon warns at start, and `aae doctor` does.
 
-`account(process)` returns the account id the gates use (§5.7): a stable hash of the credential source of the
+`account(process)` returns the account id the gates use (7): a stable hash of the credential source of the
 process part, never the credential itself.
 
 ### 4.6 Harness specifics the contract relies on
@@ -483,10 +485,19 @@ claude (`crates/aae-claude`):
 - Nothing is printed before the first prompt: `init` comes after the prompt and on every turn, so waiting for
   `init` before the prompt deadlocks. The number of turn results is not the number of prompts: a background task
   wakes the session into a turn of its own.
+- Subagents of claude run in the background by default, so a turn's `result` does not end its work: the end is
+  "idle without background" (4.3).
 - When the daemon dies, the turn goes on unobserved; its outcome is learned from the transcript and the state of the
-  repository (4.2 `Transcript`, 6.4).
+  repository (4.2 `Transcript`, 6.4). A `--resume` reaches `init` in 0.30 s, so a resumed attempt costs little; a
+  planned restart drains first ([invariants](invariants.md#recovery)).
+  <!-- MEASURE id=claude-resume-time date=2026-11-10 ver=claude-2.1.322 env=linux-arm64-orbstack src=reports/42 note="one-turn session, haiku, n=6; through the ACP adapter on 2.1.321 0.4–0.5 s (reports/14); resume of a long transcript not measured" -->
 - A cold start takes 0.25–0.35 s to `init`; the rest is the model's time to the first token, so no warm pool.
   <!-- MEASURE id=claude-coldstart-init date=2026-11-10 ver=claude-2.1.322 env=linux-arm64-orbstack src=reports/42 note="haiku, n=5–7, medians from spawn; re-measure on the role models" -->
+- `CLAUDE_CODE_RETRY_WATCHDOG=1` is never set in a session's environment: claude then waits out a 429 or 529 in
+  silence (one `api_retry{max_retries: 300}` with a pause of an hour), which the core's watchdog reads as a stall.
+- `requires_action` is reported only with `--permission-prompt-tool stdio` and
+  `CLAUDE_CODE_EMIT_SESSION_STATE_EVENTS=1`. With an MCP permission tool the state stays `running` and the stream is
+  silent, so the watchdog would take a waiting human for a stall.
 
 codex (`crates/aae-codex`):
 
@@ -501,21 +512,27 @@ codex (`crates/aae-codex`):
   there is no notification at all and codex has no timeout of its own: the core's watchdog owns it.
 - Two `turn/start` on one thread are not queued but merged: the second becomes a steer of the first. The core sends
   a session's next prompt only after its turn ended (6.2), so this never happens.
-- Hooks run with the environment of the app-server process, not of the thread (4.6 table, attempt environment).
+- Hooks run with the environment of the app-server process, not of the thread (4.6 table, attempt environment); so
+  the attempt token stands in the `export` of the hook command and is visible in its argv, which is accepted.
 - app-server is marked `[experimental]` and codex ships often; see [harness updates](../harness-updates.md).
 
+The harnesses' own watchdogs fire later than the core's and are not relied on. claude cuts a silent response stream
+after 180 s by bytes (300 s behind `ANTHROPIC_BASE_URL`) and 300 s by events, and a silent background subagent after
+10 min (vendor documentation for 2.1.322, not measured). codex gives up a stream silent for `stream_idle_timeout_ms`
+(300 s) only after `stream_max_retries` (5) reconnects, about 30 min in the worst case (an estimate).
+
 The failure classification tables (harness wording → kind) are owned by the adapters and pinned by the contract
-tests of §7.8.
+tests ([harness updates](../harness-updates.md#how-the-suite-is-built)).
 
 ## 5. Tracker interface
 
 ### 5.1 Operations
 
-The trait has the seven operations the core calls (spec §2, decision 52: an operation is added when a caller needs it).
+The trait has the seven operations the core calls; an operation is added only when a caller needs it.
 Every call names the actor: `aae:<run id>` when the daemon acts for a run, `aae` for
 the daemon's own reads. Sessions and exec steps get `BD_ACTOR=aae:<run id>:<attempt n>` and the database path in
 their environment ([experiments](experiments.md#br-as-an-event-source-experiment-3)). An actor of any other form is a
-human or an outside tool and starts a new correlation chain (§9.5).
+human or an outside tool and starts a new correlation chain (`correlation`, 1.1).
 
 ```rust
 trait Tracker: Send + Sync {
@@ -540,7 +557,7 @@ knows; a text that is the id of a bead returns that bead instead. It is idempote
 again after a restart) returns the bead of the first call, never a second bead.
 
 `under` gives the ids of the ready beads below `root` at any depth, in the tracker's order: the beads a `drain` step
-gives out (spec §9.1). A bead's `epic` names only its parent, and an epic with open children is not ready, so the
+gives out (`config.md`, "Formula"). A bead's `epic` names only its parent, and an epic with open children is not ready, so the
 ancestors of a grandchild cannot be told from `ready()`; the tracker answers for the whole subtree. An epic becomes a
 member once its own children are closed and it is ready itself. A `root` the tracker does not have is `NotFound`.
 
@@ -560,13 +577,13 @@ the actor of an exec step and hands that of a session to the adapter in the sess
 
 - `Bead`: `{id, title, description, status: "open"|"in_progress"|"blocked"|"deferred"|"closed", priority, labels,
   assignee, epic, created_at, updated_at, closed_at}`. `epic` is computed by the adapter (br has no such field,
-  §10.2). The rig of a bead is the prefix of its id (no label).
+  [tracker-br](tracker-br.md#limits-of-br-the-adapter-is-shaped-by)). The rig of a bead is the prefix of its id (no label).
 - `Change`: `{seq, kind: "created"|"updated"|"closed", actor, changed: [field], bead: Bead}`; `seq` orders the writes
   and is the cursor of `changes(after)`, `bead` is the bead when the change is read; the core maps it to `bead.created`,
   `bead.updated`, `bead.closed`, and derives `bead.ready` by diffing `ready()` with the last ready set it keeps in the
-  state (a bead is "ready" the first time it enters the set, §9.5).
+  state (a bead is "ready" the first time it enters the set, `config.md` "Trigger").
 - `TrackerError`: `NotFound`; `Claimed { holder }` (claim of a bead someone else holds — told by the state of the
-  bead after the call, not by the exit code text, §10.2); `OwnerMismatch { holder }` (conditional release or close
+  bead after the call, not by the exit code text, [tracker-br](tracker-br.md#limits-of-br-the-adapter-is-shaped-by)); `OwnerMismatch { holder }` (conditional release or close
   found another owner, nothing changed); `Unavailable { text }` (transient: retried by the effect queue with
   backoff, `tracker.sync_failed` on every failure); `Invalid { text }` (permanent).
 - `release` and `close` are conditional on `assignee == owner`; br 0.7.6 has neither a conditional close nor a release,
@@ -628,16 +645,16 @@ so that the state machine has one place where `run.attempt_failed` is decided.
 
 Ceilings of the core (invariant 16): 20 failed attempts per run (the attempts of every step together), not counting the
 attempts whose `auth_required`, `billing` or `quota_exhausted` failure the decision parked on the run's own `account:`
-gate, closed by it (spec §2, decisions 49, 50: a wait on the account does not spend the ceiling; the attempt is marked
+gate, closed by it (a wait on the account does not spend the ceiling; the attempt is marked
 `waited` in the state; a park on a gate that does not close, `until` passed, or any other park counts), 10 remarks per
 attempt (`continue` after a hollow turn and `remark` after `run.finishing` both count). A repeat of a step under `max_attempts` spends neither ceiling. The eleventh fails the run with
 reason `remarks_ceiling` and the class the event would give: `hollow_done` for `continue`, `check` for `remark`. Between
 turns (from idle without background to the next prompt) the step `timeout` pauses like in `requires_action`. Trigger
-depth (§9.5): a trigger does not start a run deeper than 10 (`trigger.skipped{depth}`); the limit is fixed, with no
+depth: a trigger does not start a run deeper than 10 (`trigger.skipped{depth}`); the limit is fixed, with no
 setting. A run started on `bead.ready` keeps the depth of the run that caused it, with no level added: a bead made ready
 is the next work of the tracker, not a run the parent started, so a long epic stays legal. A run started from an agent
 session (`aae run start` with `AAE_RUN` and `AAE_ATTEMPT_TOKEN` in its environment, `parent` of `POST /v1/runs`) is a
-child of the session's run: the token must be that of the parent's live current attempt, as for the finisher (§6.3),
+child of the session's run: the token must be that of the parent's live current attempt, as for the finisher (6.3),
 else the start is `rejected` ("stale attempt"); the child takes the parent's correlation and `parent_run`, one level
 deeper, under the same ceiling of 10 (`rejected` beyond it). Cancelling a run cancels its live children started from its
 sessions, with reason `parent_cancelled` (runs its events triggered are not its children to cancel); a pass or a failure
@@ -677,7 +694,7 @@ of the parent leaves them alone.
 | `interrupted` | `fail`, no decision, attempts ceiling | `failed{infrastructure}` | gate closed if the decision carries one |
 | `parked` | every key of the run open, a concurrency slot free (in creation order with the queue) | `starting` (`then` of the park decision); `run.resumed` | new attempt |
 | `preparing`, `interrupted` | an attempt would start while a key of the run is closed (by anyone, invariant 18), the daemon is stopping, or the run's agent has as many other started runs as its `max_runs` (a step with no agent, drain or exec, has no such limit) | `parked` (`then`: `new_session` from `preparing`, the decided kind from `interrupted`) | — |
-| any non-terminal | operator cancel, or the cancel of the parent (§6.1, reason `parent_cancelled`) | `cancelled` | stop the session, conditional release of the bead |
+| any non-terminal | operator cancel, or the cancel of the parent (6.1, reason `parent_cancelled`) | `cancelled` | stop the session, conditional release of the bead |
 
 Every terminal transition releases the run's hold on its workdir and its ownership of its bead. A bead the run
 claimed is closed (`passed`) or released conditionally (`failed`, `cancelled`) by an effect on the queue
@@ -685,8 +702,8 @@ claimed is closed (`passed`) or released conditionally (`failed`, `cancelled`) b
 `resync.diverged{subject: "bead"}`, an unavailable tracker `tracker.sync_failed` and a retry, and the outcome of the
 run never changes. The failure counter of the bead: a failed run that held the claim adds one, `passed`
 resets it, `cancelled` and a refused claim leave it; at `bead_failures` (orchestrator config, default 3) the core
-closes the gate `bead:<project>/<id>`, and the operator opening that gate resets the counter. Operator holds (§5.7
-gates closed by the operator, cancel) are read by every automatic decision: a decision that would start an attempt
+closes the gate `bead:<project>/<id>`, and the operator opening that gate resets the counter. Operator holds (gates
+closed by the operator, 7, and cancel) are read by every automatic decision: a decision that would start an attempt
 of a run whose gate the operator closed parks it instead (invariant 18).
 
 ### 6.3 Finisher
@@ -737,11 +754,11 @@ for it is not.
   with the decision to send; `sent` after `send_prompt` returned; `acked` on `prompt.acked`; `settled` when the turn
   ended. No marker in the prompt text: both harnesses keep the key in the transcript natively
   ([experiments](experiments.md)), so the transcript check finds it.
-- Daemon start (§5.6): open the state and drain the outbox; for every recorded instance check pid + start time, kill its
+- Daemon start ([invariants](invariants.md#recovery)): open the state and drain the outbox; for every recorded instance check pid + start time, kill its
   process group and sweep every process carrying its marker `AAE_INSTANCE=<id>` in the environment, wait for the end
   (invariants 6, 7); every hook still queued is first killed by its `AAE_INSTANCE` marker, with what it started, so a
   hook the dead daemon left running does not outlive it. A hook process is killed with SIGKILL without waiting for its
-  death, so the hook that runs again may start before the old process is gone: hooks must be idempotent (spec §11.3).
+  death, so the hook that runs again may start before the old process is gone: hooks must be idempotent (3.1).
   Runs with a live attempt — `starting`, `running` in a turn, `requires_action` — → `interrupted` with `daemon_crash` (a
   `drain` attempt too: its next attempt gives no bead its entry of the step gave out), the launches, prompts, answers
   and deciding hooks they still had queued dropped, and the command of an exec step killed by its `AAE_INSTANCE` marker
@@ -804,7 +821,7 @@ of their own. The adapter reports the account id (4.5, `Driver::account`).
 - No half-open probe in the core: when a gate opens, the waiting runs are admitted in creation order within the
   concurrency limits. A failure of an attempt that started before the gate closed on its key is visible to the
   policy (`gates` in `run.attempt_failed`), which parks the run without escalating again — the "absorb" of the
-  traffic light (§5.7).
+  traffic light.
 
 ## 8. Instance and service registry
 
@@ -844,13 +861,13 @@ of their own. The adapter reports the account id (4.5, `Driver::account`).
   `{instance, reason: text}` and `degraded: <text>` in the instance view (`GET /v1/instances`, `aae instance list`;
   null otherwise); it keeps the state `ready` and its sessions. When it is well, `instance.ready` with `reason: null`
   is emitted again.
-- Resync (§5.1): every 5 minutes, with the trackers, the driver is asked for the health of every instance not `stopping`
+- Resync ([event model](event-model.md#resync)): every 5 minutes, with the trackers, the driver is asked for the health of every instance not `stopping`
   that has a process (pid + start time for claude and codex). One found `Dead` whose record still holds that process and
   is not `stopping` counts as its `exited` event, as above: a gone process is not ambiguous, so no `resync.diverged`. A
   record that moved on since the check is left alone. Every process still carrying the marker of an instance an attempt
   used (live or ended within the hour) and no record holds is swept again; at a start too ([event
   model](event-model.md)).
-- Services ([config](config.md#mcp-servers-and-services-spec-114)) use the same record with kind `service`: the service
+- Services ([config](config.md#mcp-servers-and-services)) use the same record with kind `service`: the service
   name, the key `<scope>#<sha256 of the definition>` (the definition is `command`, `env`, `health`; scope `orchestrator`
   or `project:<p>`), the definition, the port and the token in the process column, the consumer count in `sessions` (an
   attempt's services are in `attempts.services`). The launch transaction acquires them (a new record emits
@@ -877,12 +894,16 @@ The adapters cannot tell the fake provider from the real thing; nothing in the p
 
 ## 10. `default-policy` as decisions
 
-The built-in policy expressed in the decisions of 3.2, so that the schema provably carries every reaction of §11.5.
+The built-in policy expressed in the decisions of 3.2, so that the schema provably carries every reaction of the bundled `default-policy`.
 Thresholds are its config parameters (docs/design/config.md); "consecutive" counts are computed from `attempts` of the
 event, times from its `ts`, and the gate keys come from its `keys`. A `park` on a key the run does not have (an exec run
 has no agent key, a run whose harness reported no account has no account key) becomes a `resume` after the same wait,
 except a `park` with no `until` (a lasting `auth_required`, `billing`), which becomes `fail`; a `fail` names no gate
 then. Implemented in `crates/aae-plugins`.
+
+The thresholds below are uncalibrated defaults, not measurements: the 30 s rapid crash, five in a row before a 5 min
+pause and three failed resumes before a new session come from the code of an earlier orchestrator, the
+`min(10 s · 2^(n−1), 5 min)` backoff from the Symphony specification. Each may be changed on evidence.
 
 | Event / kind | Decision |
 |---|---|
@@ -890,7 +911,7 @@ then. Implemented in `crates/aae-plugins`.
 | `quota_exhausted` | `park{gate: account, until: T + quota_margin_s (60 s), then: resume}`, `T` = `retry_at` of the failure, else `resets_at` of the used-up account; neither → `until` now + `quota_wait_s` (30 min) |
 | `rate_limited`, `overloaded` with `retried_by_harness` | `park{gate: model, until: now + 10 min, then: resume}` |
 | `rate_limited`, `overloaded` without | `resume{after: min(10 s · 2^(n−1), 5 min)}` over `n` consecutive such failures; from the 3rd — the `park` above |
-| `auth_required`, `billing` | `park{gate: account, until: now + min(30 s · 2^(n−1), 1 h), then: resume}` over `n` consecutive failures of that kind (postmortem 0001: a proxy or WAF error passes by itself; the attempt after the wait is the probe); never escalated to an operator, and these attempts do not count against the core's ceiling (spec §2, decisions 49, 50); no account key: `fail` |
+| `auth_required`, `billing` | `park{gate: account, until: now + min(30 s · 2^(n−1), 1 h), then: resume}` over `n` consecutive failures of that kind (a proxy or WAF error often passes by itself; the attempt after the wait is the probe); never escalated to an operator, and these attempts do not count against the core's ceiling (6.1); no account key: `fail` |
 | `context_overflow`, `transcript_divergence` | `new_session` |
 | `config_error` | `fail{gate: agent, until: null}` |
 | `harness_crash`, `adapter_crash` | `resume`; 5 consecutive attempts shorter than 30 s → `park{gate: agent, until: now + 5 min, then: resume}`; 3 consecutive failed resumes → `new_session` |

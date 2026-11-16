@@ -2,8 +2,14 @@
 
 A harness is an agent CLI aae drives (claude, codex). The core treats every harness as the `Driver` trait
 ([contracts 4](contracts.md#4-driver-interface)); each harness gets an adapter crate, `crates/aae-<name>`, that
-translates its protocol into the trait. Adapters are modules of the one `aae` binary, not processes of their own:
-there is no adapter protocol between processes (spec §4).
+translates its protocol into the trait. Everything known of one harness — its protocol, the shape of its failures, its
+options, its model short names, its `doctor` checks — lives in its adapter. Adapters are modules of the one `aae`
+binary, not processes of their own: there is no adapter protocol between processes; the way to connect an outside
+harness later is a generic ACP v2 driver.
+
+Where adapters stand among the other parts, and the boundaries the build checks, is in the
+[architecture](../architecture.md). The adapter never decides policy: retry, park and refuse live in plugins and
+config ([config](config.md#where-the-bundled-plugins-end-and-the-core-begins)).
 
 ## Adding a harness
 
@@ -42,7 +48,7 @@ there is no adapter protocol between processes (spec §4).
    to another model silently.
 3. One row in `ADAPTERS` (`crates/aae/src/harness.rs`) and the crate in `crates/aae/Cargo.toml`. Nothing else in
    the root names a harness; a `[harness.<name>]` with no row is a config error that lists the known ones.
-4. The binary pinned in `mise.toml` (spec §13), a line budget in `scripts/budget.sh`, and the contract suite below.
+4. The binary pinned in `mise.toml` by release line ([harness updates](../harness-updates.md)), a line budget in `scripts/budget.sh`, and the contract suite below.
 
 ## What the core expects of a driver
 
@@ -56,7 +62,7 @@ the core relies on these, and a driver that misses one fails runs by the watchdo
   only on `State{Idle, background: false}`; with `background: true` (work the harness goes on with after the turn)
   the core waits for a later `State{Idle, background: false}`. Only the harness's authoritative turn-end signal
   ends a turn, never the answer to a request.
-- **`stop_background`** comes once the outcome is declared and the turn has ended with background (spec §9.4). The
+- **`stop_background`** comes once the outcome is declared and the turn has ended with background (contracts 6.3). The
   adapter stops the commands the session left, through the harness so it accounts for them, and nothing the agent
   may still wait for (a background subagent). The session stays to take a next prompt (a veto remark), starts no
   turn of its own, and comes to `State{Idle, background: false}` by its usual rule once the commands are gone. It is
@@ -79,7 +85,7 @@ the core relies on these, and a driver that misses one fails runs by the watchdo
   JSON the adapter made of them, so an adapter must not encode or reshape a value it got.
 - **The process** runs in a process group of its own and carries `AAE_INSTANCE` (the orphan sweep finds it by
   that); nothing of the daemon's environment is inherited unless the adapter passes it.
-- The adapter never retries a turn, parks or decides an outcome (spec §4).
+- The adapter never retries a turn, parks or decides an outcome: that is policy.
 
 `aae_core::driver::child` holds what every process-based adapter does the same way: `spawn` (piped stdio, own
 group, pid and start time), `base_env`, the `Events` sender, `health`, the stop ladder `stop`, `watch` (a panic of

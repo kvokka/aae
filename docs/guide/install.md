@@ -35,6 +35,10 @@ aae starts agents through their own command-line harnesses and never downloads o
 - `br` (beads_rust): only for projects that keep their tasks in a `.beads` tracker. Read
   [its license](../../README.md#the-br-tracker-and-its-license) before you install it.
 
+Running a harness headless spends the limits of your subscription, and a vendor's terms may restrict how a
+subscription is used through its automation interfaces (OpenAI's terms for the codex app-server limit commercial and
+hosted use). aae supports API keys for both harnesses; keeping to the vendor's terms is your responsibility.
+
 Install them any way you like. With mise, the daemon finds the same versions you test with, for example from your
 global `~/.config/mise/config.toml`:
 
@@ -100,4 +104,5 @@ exits, and its next start resumes the runs they belonged to. `aae restart` drain
 in the same process, from the path the daemon was started with: to upgrade, replace the binary at that path (a new
 file moved over it is fine), then run `aae restart`. Should the path hold no binary by then, the daemon logs the
 error and exits with a failure, for the service manager to see.
+
 Next: [your first project](first-project.md).

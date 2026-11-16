@@ -34,7 +34,10 @@ error in every file.
 One table shape for every layer (see "Effective config"): `[settings]` of the orchestrator, a project and a rig;
 the `[agent]` contribution of a plugin; the top level of `agent.toml`; an agent variant `[agents.<name>]`; and the
 edit of an agent `[agents.<agent>]`. A pack's `[settings]` and an ai step take only the three launch settings:
-`harness`, `model`, `effort`. There is no `provider` key: a layer that has one is an unknown field.
+`harness`, `model`, `effort`. There is no `provider` key: a layer that has one is an unknown field. No neutral key
+holds a value only one harness understands: the permission mode is claude's `--permission-mode` and codex's approval
+policy, with different values, so it is set in the harness's own block (`[settings.native.codex] approval_policy =
+"never"`), never as a shared `permission_mode`.
 
 | Key | Type | Merge |
 |---|---|---|
@@ -48,7 +51,14 @@ edit of an agent `[agents.<agent>]`. A pack's `[settings]` and an ai step take o
 | `plugins` | array of `{name, enabled = true}`, in attachment order; parameters belong to the `[[plugin]]` declaration | named list |
 | `native.<harness>` | any table, passed to the adapter as is; `native.claude` is a table of claude settings keys, delivered with `--settings` together with the hooks, except `permission_mode`, which goes as `--permission-mode`; `native.codex` is a table of codex `config.toml` keys (`approval_policy` is the thread's approval policy), delivered to the app-server as `-c key=value` flags (so it is part of the process fingerprint) | by key |
 
-### MCP servers and services (spec §11.4)
+A harness hook (`hooks.<name>`) delivered to claude also fires inside every subagent of the session (its input carries
+`agent_id` and `agent_type`); it cannot be switched off per subagent. codex reads the same hook config but behaves
+differently (by its source at 0.166.0, not exercised here): exit 2 blocks only when stderr is not empty, otherwise
+the hook counts as failed; `permissionDecision: "ask"` is rejected and the call goes through; `updatedInput` works
+only with `allow`; `prompt` and `agent` handlers are skipped; there is no `StopFailure`, so a hook cannot catch an
+API error or a quota. Its matchers name `Bash`, `apply_patch` (aliases `Edit`, `Write`) and `mcp__<server>__<tool>`.
+
+### MCP servers and services
 
 - `url` alone: an HTTP server someone else runs. Every session gets it with its own `headers` and the identity
   headers `X-Aae-Project`, `X-Aae-Rig`, `X-Aae-Agent` and `X-Aae-Run`.
@@ -185,22 +195,22 @@ in the rig or the harness's home directory. The adapter's `split` turns it into 
 ## Harness and model
 
 `harness` is the agent CLI that runs the session (`claude`, `codex`); the user names it, there is no `provider`
-setting (spec §6.2). Which vendor serves the model is the harness's own setting (its host config or
+setting. Which vendor serves the model is the harness's own setting (its host config or
 `native.<harness>`, e.g. codex's `model_provider`); the core does not read it. `harness` changes by the same layers
 as the other launch settings: an agent edit, a variant, a pack, a formula step.
 
 A harness with an adapter in the build (`claude`, `codex`) needs no `[harness.<name>]` section; the section only sets its
 defaults. Any other name is an error: harness `x` is neither of this build nor in the orchestrator config. Some layer
 must set the harness. These are load errors:
-every prompt formula on every rig of a project must assemble, and an error names the project file, the formula and
-rig (`formula `kit.implement` on rig `backend`: no layer sets `harness``).
+every ai step of every formula of a project must assemble on every rig and on the root, and an error names the
+project file, the formula and rig (`formula `kit.implement` on rig `backend`: no layer sets `harness``).
 
 `model` is a full name, passed to the harness as it is, or a short name of the adapter's table, expanded to the
 latest model of that family when the config is assembled: codex takes `astra`, `luna`, `terra`, `sol`; claude
 resolves `fable`, `opus`, `sonnet`, `haiku` itself, so they go to it as they are. The model gate of a run is
 `model:<harness>/<model>` with the expanded name (contracts 7), known from the config before the first attempt.
 
-## Host inheritance (spec §6.4)
+## Host inheritance
 
 `inherit_host` is on by default and is a scalar setting of any layer. On, the harness reads the operator's own
 config (`~/.claude`, `~/.codex`) as it would outside `aae`; `aae` does not see that layer and shows it as one line
@@ -217,6 +227,8 @@ What inheritance costs, and what the user should know:
   when it sees stdio MCP servers in the host settings (`crates/aae/src/doctor.rs`);
   <!-- MEASURE id=stdio-mcp-per-session date=2026-11-10 ver=prior-a86d05bd7 env=linux-arm64-orbstack src=reports/02,reports/18 note="deja server, PSS 42-62 MB per session; deja version not recorded; depends on the operator's MCP set" -->
 - the operator's own hooks and plugins run in agent sessions;
+- codex runs every command through the login shell named by `SHELL` (`$SHELL -lc '<command>'`) and snapshots that
+  shell's environment on the first turn, so the operator's shell rc files shape every command of the agent;
 - codex rewrites `~/.codex/config.toml` itself (hook trust hashes); the adapters add no writes of their own to
   the host's files.
 
@@ -229,7 +241,7 @@ skills that inherits the host gets a `CODEX_HOME` of its own in the state direct
 such an agent, and `HOME` stays the operator's.
 
 codex runs with `sandbox_mode = "danger-full-access"` unless the native block, or the host's `config.toml` of an
-inheriting process, sets `sandbox_mode` (spec §2, decision 38): the codex sandbox needs unprivileged user namespaces,
+inheriting process, sets `sandbox_mode`: the codex sandbox needs unprivileged user namespaces,
 which many hosts forbid (`docs/design/experiments.md`). Commands are then not confined to the workdir; `aae doctor`
 names each such agent, as `<project>/<rig>@<pack>.<agent>`, in a warning; an agent whose config does not assemble
 cannot be shown to set it and is named too.
@@ -255,7 +267,7 @@ Known limits:
   gets the provider without `http_headers` and `experimental_bearer_token`, so a provider whose login is only there
   is not logged in under isolation (and `doctor` reports such a provider's login as not checked).
 
-Checked by criterion 12 of the acceptance spec (`crates/aae-acceptance`), the unit tests of both adapters and
+Checked by acceptance criterion 12 (`crates/aae-acceptance`), the unit tests of both adapters and
 `crates/aae/tests/doctor.rs`.
 
 ## Orchestrator: `~/.config/aae/config.toml`
@@ -332,7 +344,7 @@ path = "."                          # the default: the directory of aae.toml; re
 path = "../backend"                 # must exist
 prefix = "be"                       # optional: the id prefix of the rig's beads; default, the acronym of the name (`b`)
 vars = { test_cmd = "cargo test" }   # `{{ rig.test_cmd }}` in a prompt; `name` and `path` are taken by the rig
-triggers = ["nightly-audit"]        # pack triggers that run on this rig (a pack does not know rig names, §9.5)
+triggers = ["nightly-audit"]        # pack triggers that run on this rig (a pack does not know rig names)
 agents = { implementer = "codex-implementer" }  # on this rig the variant runs where a formula names `implementer`
 [rigs.backend.settings]             # layer 4
 [rigs.backend.agents.implementer]    # a table: settings of the agent on this rig (layer 10)
@@ -353,7 +365,7 @@ root.
 The project root is itself a pack named after the project: `agents/` and `formulas/` next to `aae.toml` belong to
 it, and its triggers are the `[[trigger]]` of `aae.toml`.
 
-The root (spec §6.1) is where a project works besides its rigs: a run started without a rig works there (unless the
+The root is where a project works besides its rigs: a run started without a rig works there (unless the
 id of a bead an input names has the prefix of a rig), and so does every session of an agent of scope `root`. It is a place like
 a rig, under its own name: the run's `rig` in events, its gate `rig:<project>/<root name>`, its workdir, `worktree`
 and limits all take it the same way; `{{ rig.name }}` and `{{ rig.path }}` of a run in the root are the root's. The
@@ -430,7 +442,13 @@ Content: `agents/<agent>/agent.toml` (plus `prompt.md`, `prompt.template.md` and
 "Agent") and
 `formulas/**/*.toml`: every `.toml` file under `formulas/`, in subdirectories too, is a formula. A pack
 is the unit of content: agents, formulas and triggers. It may require plugins but never contains one; a plugin is
-declared by the orchestrator or the project.
+declared by the orchestrator or the project. A pack holds no word of a user's task: what to do comes only from the
+inputs of a run.
+
+Formulas belong to a project. One daemon serves many projects, and a project sees only the formulas of its own packs
+(its root included); two projects that use one pack each have their own formulas, and neither affects the other. A
+formula is named by its `name` key, not by the subdirectory its file sits in, so the formulas of a project are a flat
+list of names.
 
 ## Names
 
@@ -441,7 +459,10 @@ declared by the orchestrator or the project.
 
 ## Agent: `agents/<agent>/agent.toml`
 
-`scope` (`rig`, the default, or `root`: where the agent works, spec §8.1; an agent of the root works in the
+`scope` (`rig`, the default, or `root`: where the agent works. An agent of a rig is an executor bound to one
+repository and works in its rig's directory, or in the root on a run without a rig; an agent of the root is bound to
+no repository, works over all the rigs of the project and their beads, so planning across several repositories is the
+job of a `root` agent, and a `rig` planner plans inside its one repository. An agent of the root works in the
 project root whatever the rig of its run, its session there while the run keeps its own workdir, and takes no
 rig's layer, so "explain config" of it is the same with a rig or without; `explain` prints `scope = "root"`; a
 rig's `agents` that edits it, edits a variant of it or maps it to a variant is a config error, its edits go in the
@@ -456,7 +477,8 @@ at its limit parks until a run of that agent ends or leaves its step), then the 
 any of them, and an agent that names no `harness` needs a layer that does.
 A role prompt file that is empty or only whitespace is a load error naming the file.
 
-`prompt.template.md` is the template of the agent's prompt (spec §8.1): an `ai` step names the agent and its run gets
+`prompt.template.md` is the template of the agent's prompt, in the agent's own directory, so the agent is
+self-contained: an `ai` step names the agent and its run gets
 this template, rendered (contracts 2.3); the step has no prompt file of its own. A run whose agent a variant or a
 bead's `agent:` label gives renders that agent's template (a variant's is its base agent's). An agent that an `ai` step
 names and that has no template is a config error naming the path to put it at. The template is checked against every
@@ -515,7 +537,7 @@ model = "opus"                      # optional, ai steps only: layer 8, the laun
 name = "test"
 kind = "exec"
 command = ["cargo", "test"]
-back_to = "implement"               # optional, prompt and exec steps: a check; on fail, back to this earlier step
+back_to = "implement"               # optional, ai and exec steps: a check; on fail, back to this earlier step
 max_attempts = 2                    # optional, any step (default 1): the most times the step runs
 step_check_script_path = "check-test.sh"  # optional, any step: passes when it exits 0; from this file's directory
 
@@ -593,7 +615,7 @@ as well, and after the last of them every failed check of the row sends the run 
 step they name, which starts at once as the next round. Their remarks — per check its name, its summary and, for an
 exec check, the output it kept — reach the steps of the new round as `{{ remarks }}` in a prompt template and
 `AAE_REMARKS` in the environment of an exec step (empty and absent in the first round). An ai step of the new
-round that already has a session goes on in it (spec §9.3): its first attempt resumes the session and gets the
+round that already has a session goes on in it: its first attempt resumes the session and gets the
 rendered prompt with the remarks, not the reconcile prompt of a resumed retry. A check that fails in the
 last of the formula's `rounds` fails the run (class `agent`) with the reason `still failing after <n> rounds:
 <remarks>`. `back_to` must name a step before the check; a `drain` step is no check.
@@ -612,8 +634,9 @@ and the script is not started. It gets the environment of an `exec` step plus `A
 and `_DATA` of its own step, in the run's workdir under the step timeout. A repeat of an `ai` step goes on in its
 session and gets the script's output as a remark: through `{{ remarks }}`, or appended to the prompt when the
 template has none. A repeat of a `drain` step is a new entry. The count is within a round: a round back to the step
-gives it the full `max_attempts` again. A repeat spends neither the session attempt ceiling (spec §5.5) nor the
-rounds.
+gives it the full `max_attempts` again. A repeat spends neither the session attempt ceiling (invariant 16,
+[invariants.md](invariants.md#the-invariants)) nor the rounds, and a failure of the infrastructure does not spend
+`max_attempts`.
 
 A step sees the outcomes of the steps before it, by name (the last attempt of each): a prompt template as
 `{{ steps.<name>.result }}`, `.summary` and `.data.<key>` (contracts 2.3; `data` of an exec step is `{exit_code,
@@ -625,7 +648,7 @@ continued.
 
 A run start checks the inputs: no undeclared one, every `required` one present (`null` is no value), an `integer` input
 a JSON integer or its text, a `boolean` one a JSON boolean or `true`/`false` as text, a `string` one a string (the CLI
-sends `--input` values as text). A `task` input (spec §9.1; there is no input type `bead`) is a string or
+sends `--input` values as text). A `task` input (there is no input type `bead`: nobody files a bead for the user beforehand) is a string or
 `{ next_ready = true, epic = <id> }`. A string that is the id of a bead has the run take that bead up; any other text
 (not blank) has the tracker create the run's root bead as the run prepares, titled with the first line of the text and
 described by all of it; either way the input then holds the bead id ([tracker-br.md](tracker-br.md#beads-and-runs)). A bead named
@@ -677,12 +700,12 @@ fires neither on its schedule nor on events, only by hand, and stays off across 
 
 - A firing is idempotent on `(trigger, event seq)`. Triggers match in the transaction that commits the event, not
   on the JSONL journal, so the new run (or its `trigger.skipped`) commits with the event or not at all: a `kill -9`
-  of the daemon neither loses nor doubles a firing (contracts §3.5).
+  of the daemon neither loses nor doubles a firing ([contracts 3.5](contracts.md#35-outbox-lifetime)).
 - Overlap: while a run started by the same trigger with the same inputs is alive, a new firing is skipped with
   `trigger.skipped{overlap}`.
 - A run started by a trigger inherits the correlation of its event. A tracker event carries the correlation of the
   run whose attempt made the write, known from the br actor `aae:<run>[:<attempt>]`; a write by a human starts a
-  new chain (contracts §5).
+  new chain ([contracts 5](contracts.md#5-tracker-interface)).
 - Tracker events are `bead.created`, `bead.updated`, `bead.closed` and `bead.ready`; `bead.ready` is raised when a
   bead first enters the ready set: open, unclaimed, every blocker closed.
 - The event schema and its version, the `where` and `inputs` language, hook decisions and timeouts and the outbox
@@ -698,7 +721,7 @@ prompt = "prompt.md"                # optional: its text joins the system prompt
 [agent]                             # layer 5 contribution to the agents that attach the plugin
 skills.mail = { path = "skills/mail" }
 
-[[hook]]                            # orchestrator hook (§11.3, contracts 3)
+[[hook]]                            # orchestrator hook (contracts 3)
 on = "run.finishing"
 command = ["bin/check-mail"]
 timeout = "10s"                     # optional
@@ -728,12 +751,12 @@ and the core has no storage for plugins.
 
 ## Bundled plugins: `[builtin.<name>]`
 
-The plugins bundled with aae (spec §11.5) run in process as hooks of the contract of contracts 3, after every
+The plugins bundled with aae run in process as hooks of the contract of contracts 3, after every
 declared plugin, so a declared plugin decides first. `enabled` (boolean) turns one on or off; every other key is a
 parameter, checked when the daemon starts. A table with parameters and no `enabled` turns the plugin on. A
 project's `aae.toml` may have `[builtin.<name>]` tables too: for the runs of that project such a table replaces the
-orchestrator's table of that plugin whole (spec §11.3: orchestrator-side plugins are turned on for the orchestrator
-or for a project).
+orchestrator's table of that plugin whole, since the orchestrator side of a plugin is turned on for the orchestrator
+or for a project.
 
 - `default-policy` (on unless `enabled = false`) decides on `run.attempt_failed` and `run.turn_ended_without_outcome` as
   in contracts 10. Parameters, all integers: `quota_margin_s` (60), `quota_wait_s` (1800; the wait of `quota_exhausted`
@@ -743,8 +766,8 @@ or for a project).
   `crash_pause_s` (300), `resume_failures` (3), `unknown_after_s` (30), `unknown_retries` (3). The waits and caps that a
   zero would turn into a hot loop (`quota_wait_s`, `model_pause_s`, both bases and both caps, `crash_pause_s`) and
   `crash_loop` must be at least 1; `quota_margin_s`, `rapid_s` and `unknown_after_s` must not be negative.
-- `worktree` has no table: it is on for the runs of the formulas with `worktree = true` (a formula setting, spec §2,
-  decision 48), and a `[builtin.worktree]` table is a config error saying so. Each such run gets a git worktree of its
+- `worktree` has no table: it is on for the runs of the formulas with `worktree = true` (a formula setting; there is no central
+  list and no agent-level switch), and a `[builtin.worktree]` table is a config error saying so. Each such run gets a git worktree of its
   rig on the branch `aae/<run>`, in `<git common dir>/aae/worktrees/<run>`, as its workdir. When the run ends the
   worktree is removed unless it has uncommitted changes or a HEAD no ref reaches (then `plugin.hook_failed` says why);
   the branch is deleted only when it is merged. A run with `continue_from` starts in the workdir of the run it continues
@@ -763,9 +786,8 @@ attempt ends the run `failed` with class `infrastructure`. The bundled plugins a
 no external runtime, and are counted on their own budget line (`plugins` in `scripts/budget.sh`, 1500 lines) inside the
 release total.
 
-Postmortem 0001 (`docs/postmortems/0001-loop-stalled-after-transient-auth-error.md`) and the owner's decision of
-2026-11-14 (spec §2, decisions 49, 50) shaped `auth_required` and `billing`: a proxy or WAF 403 passes by itself, so
-every such failure parks the account gate for a wait that grows with each failure in a row up to an hour, and the next
+An `auth_required` or `billing` failure may be a passing error of a proxy or WAF (a 403 that goes away by itself)
+rather than a real logout, so every such failure parks the account gate for a wait that grows with each failure in a row up to an hour, and the next
 attempt is the probe. Nothing goes to an operator and there is no alerting: the journal and the logs tell it. The core
 does not count these attempts against its ceiling, so a long outage never ends in `failed{attempts_ceiling}`. The raw
 error stays in `failure.raw`. Not done: telling a real logout from a WAF page by the raw error; a real logout is probed

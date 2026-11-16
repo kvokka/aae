@@ -1,8 +1,8 @@
 # The br tracker
 
 How aae uses [br](https://github.com/Dicklesworthstone/beads_rust) (beads_rust) as the tracker of a project. The
-tracker interface and its errors are in [contracts.md](contracts.md) §5; the bead and run relation is below
-([Beads and runs](#beads-and-runs)). Code: `crates/aae-br` (the adapter), `crates/aae-core/src/run/beads.rs` and
+tracker interface and its errors are in [contracts.md, section 5](contracts.md#5-tracker-interface); the bead and
+run relation is below ([Beads and runs](#beads-and-runs)). Code: `crates/aae-br` (the adapter), `crates/aae-core/src/run/beads.rs` and
 `run/bead_events.rs` (the core side), `crates/aae/src/daemon.rs` (the bv workspace file).
 
 ## An external binary, and its license
@@ -17,13 +17,15 @@ tracker interface and its errors are in [contracts.md](contracts.md) §5; the be
 ## One database per project
 
 - A project with a `<project>/.beads` directory has a br tracker: one database per project, outside the git of its
-  rigs. The rig of a bead is the prefix of its id, so an epic spans rigs and `ready` is shared
-  ([below](#the-rig-of-a-bead)).
+  rigs. The rig of a bead is the prefix of its id, so an epic spans rigs, `ready` is shared and an agent of scope
+  `root` sees the beads of every rig ([below](#the-rig-of-a-bead)).
 - The database path is always explicit: every br call and every session or exec step gets `BEADS_DIR`. br's own
   discovery walks up to `$HOME`, and an agent without an explicit path silently writes to someone else's tracker.
 - Every attempt has its own actor: the adapter passes `--actor` to br, sessions get `BD_ACTOR=aae:<run>:<n>`. br
   tells claim owners apart only by name, and the actor also carries the correlation of an agent's writes. Experiment 3
-  confirmed both: `--actor X` and `BD_ACTOR=X` land in br's `events.actor`.
+  confirmed both: `--actor X` and `BD_ACTOR=X` land in br's `events.actor`. A claim repeated by the same actor
+  succeeds (exit 0), which makes the claim effect safe to repeat after a restart; without an actor every caller is
+  `unknown` and two claims of one bead both succeed.
 - Nothing of the orchestrator is written to the tracker: no runs, steps or sessions.
 
 ## Beads and runs
@@ -64,7 +66,8 @@ tracker interface and its errors are in [contracts.md](contracts.md) §5; the be
   min).
 - The agent uses `br` itself for the content of its work: child beads, comments, dependencies.
 - The daemon creates one kind of bead: the root of a run started from the text of a task, an epic without labels whose
-  `external_ref` is the key of the creation (`aae-` and 16 hex digits). The adapter first looks the key up in
+  `external_ref` is the key of the creation (`aae-` and 16 hex digits); everything filed for that task goes under
+  it. The adapter first looks the key up in
   `br list -a`, so a creation repeated after a restart returns the same bead. The children of a claimed root are
   ready; a released root with open children is not.
 - The ready beads under a root, at any depth (`under`, for `drain`), are one command:
@@ -80,6 +83,9 @@ tracker interface and its errors are in [contracts.md](contracts.md) §5; the be
   that rig; a bead that another run holds fails the run (`held by`), as the start could not see it. The key is drawn once and kept in the effect, so a repeat after `kill -9` creates nothing new; a repeated
   answer is dropped. The run then owns and claims the root as any bead, and its prompt sees the text as
   `{{ bead.description }}`. Known limit: a tracker that answers after `start_timeout` leaves a root without a run.
+- A bead for an executor carries all its work needs: the task text, the rig as the prefix of its id, and the labels
+  `agent:` and `harness:`. Which beads to file, how many and for which agent is the planner's judgment; a pack and a
+  formula know nothing of it.
 - Two labels of a bead shape every run on it. `agent:<name>` runs every ai step with that agent (a variant by its
   name, else the agent of that name) instead of the step's; the name has no pack prefix, as br refuses a dot in a label.
   `harness:<name>` is checked against the effective config of each ai step: a difference refuses the start with
@@ -89,8 +95,9 @@ tracker interface and its errors are in [contracts.md](contracts.md) §5; the be
 ## The rig of a bead
 
 - The rig of a bead is its id up to the last `-`, matched against the prefixes of the project's rigs (`api-x1.2` is
-  of the rig with prefix `api`). No match: a bead of the root, which runs in the root whatever the agent's scope. There
-  is no `rig:` label.
+  of the rig with prefix `api`). No match: a bead of the root, which runs in the root whatever the agent's scope. br
+  has no empty prefix, so a bead of the root has an id with the br database's own prefix. There is no `rig:` label:
+  two sources of one fact would drift apart.
 - A rig's prefix is the acronym of the words of its name (`backend` is `b`, `my-project` is `mp`) or its `prefix`
   key ([config.md](config.md)). A session of a `rig`-scope agent on a rig and an `exec` step on a rig get
   `BD_ISSUE_PREFIX=<prefix>`, so `br create` there gives the rig's prefix. The daemon's own br calls drop it.
@@ -111,7 +118,14 @@ tracker interface and its errors are in [contracts.md](contracts.md) §5; the be
 
 ## Limits of br the adapter is shaped by
 
-- A rig name obeys the label rules: ASCII letters, digits, `-`, `_`.
+- A label is ASCII letters, digits, `-`, `_` and `:`, at most 50 characters; a bead holds at most 64 labels (the
+  65th is exit 4). A rig name obeys the same character rules.
+- The adapter never passes `--no-auto-flush` (it removes the rename of `issues.jsonl` the watcher relies on, and that
+  file is br's only backup), `--no-db`, `--allow-stale` or `--force`. A stderr warning `AUTO_FLUSH_FAILED` with exit 0
+  means the write reached the database but not the JSONL: no watcher signal follows and the periodic resync picks the
+  change up.
+- `PRAGMA user_version` is no guard for br's private schema: 0.7.6 and br's main branch both report 19 with different
+  layouts; the guard is the pinned version and the contract test.
 - A bead's JSON has no epic field: the adapter computes the parent.
 - br 0.7.6 has no conditional close and no "give the bead back" command: release and close check the owner first
   (`--if-unchanged` on release). br refuses to close a parent with open children (exit 3); the adapter releases it
@@ -124,6 +138,20 @@ tracker interface and its errors are in [contracts.md](contracts.md) §5; the be
 - Every br command costs time linear in the size of the database: `close` takes 81 ms on 100 beads, 311 ms on
   5 thousand, 3.2–4.4 s on 50 thousand (br 0.7.6).
   <!-- MEASURE id=br-close-latency date=2026-11-10 ver=br-0.7.6 env=linux-arm64-orbstack,9vcpu,12gb src=reports/11 note="medians, synthetic database: 2 % epics, 60 % closed; measure again on every br update" -->
+
+### Exit codes
+
+With `--json` br prints the error envelope `{"error":{"code","message","hint","retryable","context"}}` on stdout.
+Exit codes: 0 success; 1 internal; 2 database (`NOT_INITIALIZED`, `SCHEMA_MISMATCH`, `DATABASE_LOCKED`); 3 issue
+(`ISSUE_NOT_FOUND`, `AMBIGUOUS_ID`, `CLOSE_INCOMPLETE`); 4 validation or policy (a claim of a held bead, a 65th label,
+bad input); 5 dependency (a cycle, a duplicate, dependents exist); 6 sync and the `--if-unchanged` check
+(`UPDATE_PRECONDITION_FAILED`, `SYNC_CONFLICT`); 7 config (`CONFIG_ERROR`, merge conflict markers among them); 8 I/O;
+130 shutting down. Codes 0, 3, 4 and 6 were seen on 0.7.6; the rest is br's own documentation.
+
+The adapter decides by the exit code and the `retryable` flag, never by the `code` string: for a busy claim it is
+`VALIDATION_FAILED` in 0.7.6 and `CLAIM_CONFLICT` on br's main branch. Exit 2 is retried only when the envelope says
+`retryable: true`. A br process that was killed or timed out has an unknown outcome (the write may have been
+applied), so the state is read again before a repeat.
 
 ## Versions
 
