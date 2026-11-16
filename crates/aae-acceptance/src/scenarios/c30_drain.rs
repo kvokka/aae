@@ -34,8 +34,9 @@ const WORK: &str = "name = \"work\"\nworktree = true\n[inputs]\nbead = { type = 
 
 const PLAN: &str = "set -e\nfor i in 1 2 3 4 5; do br create \"B$i\" --parent \"$AAE_BEAD\" --silent; done\n";
 
-/// The first run after `fail` appears fails at once; any other logs its bead in `started` and holds until `go`.
-const WORK_SH: &str = "D={dir}\nif [ -e $D/fail ]; then rm $D/fail; exit 3; fi\necho \"$AAE_BEAD\" >> $D/started\n\
+/// The first run after `fail` appears fails at once (the rename lets one of two runs started together take it); any
+/// other logs its bead in `started` and holds until `go`.
+const WORK_SH: &str = "D={dir}\nif mv $D/fail $D/failed 2>/dev/null; then exit 3; fi\necho \"$AAE_BEAD\" >> $D/started\n\
     while [ ! -e $D/go ]; do sleep 0.05; done\n";
 
 /// The children of `run`: `(bead, state)`.
