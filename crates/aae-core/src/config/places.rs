@@ -40,6 +40,12 @@ impl Project {
             .map(|(n, _)| n.as_str())
     }
 
+    /// The tracker's variables of a session or command at `place`: on a rig, its bead prefix too (spec §10.2).
+    pub fn tracker_env<'a>(&'a self, place: Option<&'a Rig>) -> impl Iterator<Item = (&'a String, &'a String)> {
+        let prefix = self.tracker.prefix.as_ref().zip(place.and_then(|r| r.prefix.as_ref()));
+        self.tracker.env.iter().chain(prefix)
+    }
+
     /// The root first, then the rigs.
     pub fn places(&self) -> impl Iterator<Item = (&str, &Rig)> {
         std::iter::once((self.root.0.as_str(), &self.root.1)).chain(self.rigs.iter().map(|(n, r)| (n.as_str(), r)))

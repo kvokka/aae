@@ -128,6 +128,8 @@ pub struct TrackerLink {
     /// The variable that carries the attempt's tracker actor, `aae:<run>:<attempt>` (contracts 5.1), into a session
     /// or a command.
     pub actor: Option<String>,
+    /// The variable that gives the beads a session or command files on a rig that rig's prefix (spec §10.2).
+    pub prefix: Option<String>,
 }
 
 #[derive(Clone, Debug)]

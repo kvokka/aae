@@ -84,10 +84,15 @@ fn an_agent_of_scope_root_takes_no_rig_layer() {
         "scope = \"root\"\n{}",
         BASE.iter().find(|(p, _)| *p == agent).unwrap().1
     );
-    let config = load_with(&[(agent, &text), ("shop/aae.toml", &rig_wide)]).unwrap();
+    let mut config = load_with(&[(agent, &text), ("shop/aae.toml", &rig_wide)]).unwrap();
+    config.projects[0].tracker.prefix = Some("PREFIX".into());
     let (_, on_rig) = config.for_run("shop", "backend", "kit.implement", "1").unwrap();
     let (_, in_root) = config.for_run("shop", "root", "kit.implement", "1").unwrap();
-    assert_eq!(on_rig, in_root, "the rig's settings do not reach an agent of the root");
+    assert_eq!(
+        on_rig, in_root,
+        "the rig's settings and prefix do not reach an agent of the root"
+    );
+    assert!(!on_rig.env.contains_key("PREFIX"));
     assert_eq!(on_rig.scope, Scope::Root);
     assert!(on_rig.explain().contains("scope = \"root\"  # agent"));
     let alone = config.effective("shop", Some("backend"), &implementer()).unwrap();

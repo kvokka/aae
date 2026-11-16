@@ -74,7 +74,7 @@ impl World {
 
 #[tokio::test]
 async fn exit_0_passes_with_the_output_tail_in_the_outcome() {
-    let (w, create) = check("echo \"$TRACKER_ACTOR\"; pwd; echo warn >&2");
+    let (w, create) = check("echo \"$TRACKER_ACTOR\"; pwd; echo \"$TRACKER_PREFIX\"; echo warn >&2");
     let run = w.start_run(create).await;
     let (kind, data) = w.run_end(&run).await;
     assert_eq!(kind, "run.passed");
@@ -85,7 +85,10 @@ async fn exit_0_passes_with_the_output_tail_in_the_outcome() {
     let out = &data["outcome"]["data"];
     assert_eq!((&out["exit_code"], &out["stderr"]), (&json!(0), &json!("warn\n")));
     let stdout = out["stdout"].as_str().unwrap();
-    assert!(stdout.ends_with("/shop/web\n"), "runs in the rig: {out}");
+    assert!(
+        stdout.ends_with("/shop/web\nw\n"),
+        "runs in the rig, its beads with its prefix: {out}"
+    );
     assert!(
         stdout.starts_with(&format!("aae:{run}:1\n")),
         "the attempt is the tracker actor: {out}"

@@ -31,7 +31,7 @@ impl RunHandler {
         let (prompt, timeout) = match (step, row.step_kind.as_str()) {
             (StepKind::Exec { command, timeout }, "exec") => {
                 // The tracker by name, as in a session (spec §10.2).
-                let env: serde_json::Map<String, Value> = (project.tracker.env.iter())
+                let env: serde_json::Map<String, Value> = (project.tracker_env(Some(rig)))
                     .map(|(name, value)| (name.clone(), json!({ "value": value })))
                     .collect();
                 let config = json!({ "command": command, "env": env });

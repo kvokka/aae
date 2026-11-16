@@ -1,5 +1,5 @@
 //! Contract tests of the br adapter on the pinned br (spec §10.2): claim under concurrency, conditional release and
-//! close, the ready set with epics and rig labels, the writes as changes, the watcher.
+//! close, the ready set with epics and labels, the prefix of a rig's beads, the writes as changes, the watcher.
 
 use aae_br::Br;
 use aae_core::tracker::{Tracker, TrackerError};
@@ -111,13 +111,13 @@ async fn release_and_close_change_only_a_bead_their_owner_holds() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn the_ready_set_carries_the_epic_rig_labels_and_description() {
+async fn the_ready_set_carries_the_epic_labels_and_description() {
     let (dir, t) = tracker();
     let epic = create(dir.path(), "Epic", &["-t", "epic"]);
     let child = create(
         dir.path(),
         "Child",
-        &["--parent", &epic, "-l", "rig:web", "-d", "Do it"],
+        &["--parent", &epic, "-l", "agent:coder", "-d", "Do it"],
     );
     let lone = create(dir.path(), "Lone", &[]);
     let ready = t.ready().await.unwrap();
@@ -125,13 +125,39 @@ async fn the_ready_set_carries_the_epic_rig_labels_and_description() {
     assert_eq!(child.epic.as_ref(), Some(&epic));
     assert_eq!(
         (child.labels.as_slice(), child.description.as_str()),
-        (&["rig:web".to_owned()][..], "Do it")
+        (&["agent:coder".to_owned()][..], "Do it")
     );
     assert_eq!(ready.iter().find(|b| b.id == lone).unwrap().epic, None);
     assert!(
         ready.iter().all(|b| b.id != epic),
         "an epic with open children is not ready"
     );
+}
+
+/// A rig's bead filed under a root with `BD_ISSUE_PREFIX` keeps the rig's prefix through `--deps parent-child`, and
+/// `--parent` loses it (spec §10.2): the planner's prompt files rig beads the first way.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_bead_filed_with_a_rig_prefix_under_a_root_keeps_it_and_parent_loses_it() {
+    let (dir, t) = tracker();
+    let root = create(dir.path(), "Root", &["-t", "epic"]);
+    let on_rig = |link: &str| {
+        let out = Command::new("br")
+            .args(["create", "For the rig", "--silent", link, "--actor", "alice"])
+            .env("BEADS_DIR", dir.path().join(".beads"))
+            .env("BD_ISSUE_PREFIX", "api")
+            .env("RUST_LOG", "error")
+            .output()
+            .unwrap();
+        assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
+        String::from_utf8(out.stdout).unwrap().trim().to_owned()
+    };
+    let kept = on_rig(&format!("--deps=parent-child:{root}"));
+    assert!(kept.starts_with("api-"), "{kept}");
+    let ready = t.ready().await.unwrap();
+    assert_eq!(ready.iter().find(|b| b.id == kept).unwrap().epic.as_ref(), Some(&root));
+    assert_eq!(t.under(&root).await.unwrap(), [kept]);
+    assert_eq!(on_rig(&format!("--parent={root}")), format!("{root}.1"));
+    assert!(root.starts_with("t-"), "a root bead has the database's prefix: {root}");
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -156,7 +182,7 @@ async fn each_command_is_one_change_with_its_actor_and_the_watcher_signals_it() 
         let _ = tx.send(());
     })
     .unwrap();
-    let id = create(dir.path(), "Three", &["-l", "rig:web"]);
+    let id = create(dir.path(), "Three", &["-l", "agent:coder"]);
     assert!(rx.recv_timeout(Duration::from_secs(2)).is_ok(), "a write is signalled");
     t.claim("aae:run_1:1", &id).await.unwrap();
     t.close("aae:run_1:1", &id, "passed: done").await.unwrap();

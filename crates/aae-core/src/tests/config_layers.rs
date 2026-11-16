@@ -67,6 +67,16 @@ fn the_tracker_variables_come_under_every_layer() {
     let env = |name: &str| (e.env[name].value.as_str(), &e.env[name].from);
     assert_eq!(env("TRACKER_DIR"), ("/shop/.tracker", &Layer::Project));
     assert_eq!(env("TRACKER"), ("mine", &Layer::Project), "a layer may still set it");
+    // A session on a rig files beads with the rig's prefix; in the root, or of an agent of the root, without.
+    assert!(!e.env.contains_key("PREFIX"));
+    let shop = config.projects.iter_mut().find(|p| p.name == "shop").unwrap();
+    shop.tracker.prefix = Some("PREFIX".to_owned());
+    let on_rig = effective(&config, Some("backend"));
+    assert_eq!(
+        (on_rig.env["PREFIX"].value.as_str(), &on_rig.env["PREFIX"].from),
+        ("b", &Layer::Project)
+    );
+    assert!(!effective(&config, None).env.contains_key("PREFIX"));
 }
 
 #[test]

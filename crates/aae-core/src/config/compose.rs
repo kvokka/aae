@@ -180,7 +180,7 @@ impl Config {
         });
         let mut config = EffectiveConfig::new(harness, harness_from, model);
         // The project's tracker, by name, even where the project has none (spec §10.2). A layer may still set it.
-        for (name, value) in &p.tracker.env {
+        for (name, value) in p.tracker_env(r) {
             let value = Sourced {
                 value: value.clone(),
                 from: Layer::Project,

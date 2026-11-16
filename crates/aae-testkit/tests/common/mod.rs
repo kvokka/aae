@@ -164,6 +164,7 @@ fn core_on(
     for p in config.projects.iter_mut().filter(|p| p.name == "shop") {
         p.tracker.present = true;
         p.tracker.actor = Some("TRACKER_ACTOR".to_owned());
+        p.tracker.prefix = Some("TRACKER_PREFIX".to_owned());
     }
     let mut drivers: Vec<Arc<dyn aae_core::driver::Driver>> = vec![Arc::new(driver.clone())];
     // A world that declares the harness `other` has it on the same scripted driver.

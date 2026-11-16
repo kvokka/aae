@@ -43,6 +43,8 @@ impl Br {
     /// Runs `br <args> --json` as `actor`; the parsed stdout, or the failure with br's exit code.
     async fn br(&self, actor: &str, args: &[&str]) -> Result<Value, Fail> {
         let out = tokio::process::Command::new(&self.binary)
+            // A rig's prefix in the daemon's environment would give the root's beads its ids.
+            .env_remove("BD_ISSUE_PREFIX")
             .args(args)
             .args([
                 "--json",
