@@ -60,13 +60,15 @@ async fn runs_and_gates_by_hand_from_the_cli() {
         out.status.code() == Some(2) && text.contains("`n` is not NAME=VALUE"),
         "{text}"
     );
-    // The rig is optional: with none and no bead input, the core refuses the start.
-    let out = d.cli(&["run", "start", "shop", "check"], &[]);
-    let text = String::from_utf8_lossy(&out.stderr);
-    assert!(
-        out.status.code() == Some(1) && text.contains("aae: rejected: no rig: name one"),
-        "{text}"
-    );
+    // The rig is optional: with none and no bead input, the run works in the project root.
+    let rootless = d.json(&["run", "start", "shop", "check"])["run"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+    let view = d.json(&["run", "show", &rootless]);
+    assert_eq!(view["rig"], "root", "{view}");
+    assert!(view["workdir"].as_str().unwrap().ends_with("/shop"), "{view}");
+    d.json(&["run", "cancel", &rootless, "--reason", "by hand"]);
     let view = d.json(&["run", "show", &run]);
     assert_eq!((&view["state"], &view["inputs"]["n"]), (&"queued".into(), &2.into()));
     assert_eq!(
@@ -215,11 +217,11 @@ fn the_config_is_checked_and_explained_without_a_daemon() {
     let text = reply["text"].as_str().unwrap_or_default();
     assert!(text.contains("effort = \"low\"  # formula shop.go"), "{reply}");
     assert_eq!(reply["steps"][0]["agent"], "shop.dev", "{reply}");
-    assert!(
-        !aae(&["config", "explain", "--project", "shop", "--formula", "go"])
-            .status
-            .success()
-    );
+    // With no rig, the formula is explained on the project root.
+    let out = aae(&["config", "explain", "--project", "shop", "--formula", "go", "--json"]);
+    let reply: Value = serde_json::from_slice(&out.stdout).unwrap();
+    let text = reply["text"].as_str().unwrap_or_default();
+    assert!(out.status.success() && text.contains("on `root`"), "{reply}");
     let out = aae(&["--json", "config", "explain", "--project", "nope", "--agent", "dev"]);
     let error: Value = serde_json::from_slice(&out.stderr).unwrap();
     assert_eq!(

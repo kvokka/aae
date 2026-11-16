@@ -70,10 +70,11 @@ impl RunHandler {
         Ok(found)
     }
 
-    /// The rig of a start that names none: the one `rig:` label of the bead `id` an input names. Only a bead of the
-    /// ready list has known labels; for any other the start is refused before a run exists (spec §9.3).
-    pub(super) fn rig_of_bead(tx: &Tx<'_>, project: &str, id: Option<&str>) -> Result<String, Error> {
-        let id = id.ok_or_else(|| rejected("no rig: name one, or a bead with a `rig:` label"))?;
+    /// The place of a start that names no rig: the one `rig:` label of the bead `id` an input names, else the `root`.
+    /// Only a bead of the ready list has known labels; for any other the start is refused before a run exists
+    /// (spec §9.3).
+    pub(super) fn rig_of_bead(tx: &Tx<'_>, project: &str, root: &str, id: Option<&str>) -> Result<String, Error> {
+        let Some(id) = id else { return Ok(root.to_owned()) };
         let sql = "SELECT body FROM ready_beads WHERE project = ?1 AND id = ?2";
         let body: Option<Value> = tx.sql().query_row(sql, [project, id], |r| r.get(0)).optional()?;
         let body = body.ok_or_else(|| {
@@ -83,7 +84,7 @@ impl RunHandler {
         })?;
         match labelled(&body, "rig")[..] {
             [rig] => Ok(rig.to_owned()),
-            [] => Err(rejected(format!("bead `{id}` has no `rig:` label: name the rig"))),
+            [] => Ok(root.to_owned()),
             _ => Err(rejected(format!("bead `{id}` is labelled for several rigs: name one"))),
         }
     }

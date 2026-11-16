@@ -81,22 +81,16 @@ async fn a_refused_bead_gets_no_run_and_a_reason() {
     let w = world(SWEEP);
     let root = w.tracker.add(&[], None);
     let codex = w.tracker.add(&["rig:web", "harness:codex"], Some(&root));
-    let none = w.tracker.add(&[], Some(&root));
     let run = w.sweep(&root).await;
     let outcome = w.settle(&run, &[], &[], &mut BTreeSet::new()).await;
-    let refused = &outcome["data"]["refused"];
-    let why = refused[&codex].as_str().unwrap();
+    let why = outcome["data"]["refused"][&codex].as_str().unwrap();
     assert!(
         why.contains("labelled `harness:codex`: the config gives `scripted` to `shop.dev`"),
         "{why}"
     );
-    let why = refused[&none].as_str().unwrap();
-    assert!(why.contains("has no `rig:` label"), "{why}");
     assert!(w.kids(&run).is_empty());
-    for bead in [codex, none] {
-        assert_eq!(w.tracker.bead(&bead).unwrap().assignee, None);
-    }
-    assert_eq!(w.wrap(&run).await, "Wrap up: 0 closed, 0 failed, 2 refused.");
+    assert_eq!(w.tracker.bead(&codex).unwrap().assignee, None);
+    assert_eq!(w.wrap(&run).await, "Wrap up: 0 closed, 0 failed, 1 refused.");
 }
 
 /// A child of a drain is one level deeper than its run, under the common depth limit (spec §9.3).
@@ -270,9 +264,10 @@ async fn a_read_that_does_not_know_the_root_decides_nothing() {
     assert_eq!(outcome["data"]["closed"], json!([first]));
 }
 
-/// A bead of an epic under the root runs too; the epic, ready once its beads are closed, is given out as any bead.
+/// A bead of an epic under the root runs too; the epic, ready once its beads are closed, is given out as any bead:
+/// with no `rig:` label, its run works in the project root (spec §6.1).
 #[tokio::test(start_paused = true)]
-async fn a_bead_of_a_nested_epic_runs_and_the_emptied_epic_is_refused() {
+async fn a_bead_of_a_nested_epic_runs_and_the_emptied_epic_runs_in_the_project_root() {
     let w = world(SWEEP);
     let root = w.tracker.add(&[], None);
     let sub = w.tracker.add(&[], Some(&root));
@@ -280,8 +275,10 @@ async fn a_bead_of_a_nested_epic_runs_and_the_emptied_epic_is_refused() {
     let child = w.tracker.add(&["rig:api"], Some(&root));
     let run = w.sweep(&root).await;
     let outcome = w.settle(&run, &[], &[], &mut BTreeSet::new()).await;
-    assert_eq!(outcome["data"]["closed"], json!([deep, child]), "{outcome}");
-    let why = outcome["data"]["refused"][&sub].as_str().unwrap();
-    assert!(why.contains("has no `rig:` label"), "{why}");
-    assert_eq!(w.kids(&run).len(), 2);
+    assert_eq!(outcome["data"]["closed"], json!([deep, child, sub]), "{outcome}");
+    let rigs: Vec<(String, String)> = w.kids(&run).into_iter().map(|k| (k.1, k.3)).collect();
+    assert_eq!(
+        rigs,
+        [(deep, "web".into()), (child, "api".into()), (sub, "root".into())]
+    );
 }

@@ -299,7 +299,7 @@ async fn claims_that_answer_after_their_runs_failed_neither_count_nor_reach_the_
 }
 
 #[tokio::test(start_paused = true)]
-async fn a_start_without_a_rig_takes_it_from_the_label_of_the_bead() {
+async fn a_start_without_a_rig_takes_it_from_the_label_of_the_bead_or_runs_in_the_root() {
     let w = world(FIX);
     let [web, none, api, both] = [
         w.tracker.add(&["rig:web"], None),
@@ -325,20 +325,19 @@ async fn a_start_without_a_rig_takes_it_from_the_label_of_the_bead() {
         .unwrap()
         .to_owned();
     assert!(workdir.ends_with("/shop/web"), "{workdir}");
-    assert!(refused(&none).await.contains("has no `rig:` label: name the rig"));
     assert!(refused(&both).await.contains("is labelled for several rigs: name one"));
     assert!(refused(&api).await.contains("no rig `api` in `shop`"));
-    let no_bead = w
-        .fix_on(None, json!({ "next_ready": true }))
-        .await
-        .unwrap_err()
-        .to_string();
-    assert!(
-        no_bead.contains("no rig: name one, or a bead with a `rig:` label"),
-        "{no_bead}"
-    );
-    // A refused start leaves the bead free: named with a rig, it is taken.
-    w.fix(json!(none)).await.unwrap();
+    // A bead without a `rig:` label runs in the root (spec §6.1).
+    let run = w.fix_on(None, json!(none)).await.unwrap()["run"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+    let events = w.events(&run, Duration::ZERO).await;
+    let workdir = last(&events, "run.queued")["run"]["workdir"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+    assert!(workdir.ends_with("/shop"), "{workdir}");
 }
 
 /// The labels of a bead name the agent of every ai step of its run and the harness it is for (spec §9.1); a pick

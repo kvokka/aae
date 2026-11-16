@@ -49,8 +49,8 @@ struct State {
     started: u64,
     /// The attempt token the core handed over and the session environment, by `(run, attempt)`.
     tokens: HashMap<(String, u32), (String, BTreeMap<String, String>)>,
-    /// The MCP servers each attempt's session starts with, as its launch gave them.
-    mcp: HashMap<(String, u32), Value>,
+    /// The session part each attempt's session starts with, as its launch gave it.
+    parts: HashMap<(String, u32), Value>,
     texts: Vec<String>,
     /// Set by [`ScriptedDriver::stall_sessions`].
     stalled: bool,
@@ -91,7 +91,7 @@ fn got(state: &mut State, part: &SessionPart) {
     if let Some(entry) = state.tokens.get_mut(&key) {
         entry.1 = env;
     }
-    state.mcp.insert(key, part.0["mcp"].clone());
+    state.parts.insert(key, part.0.clone());
 }
 
 fn ready<'a, T: Send + 'a>(value: T) -> BoxFuture<'a, T> {

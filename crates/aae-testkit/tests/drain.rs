@@ -109,7 +109,7 @@ async fn a_root_bead_created_before_a_crash_is_the_one_the_run_gets_and_a_repeat
 }
 
 #[tokio::test(start_paused = true)]
-async fn a_request_with_no_text_or_another_key_or_no_rig_is_refused() {
+async fn a_request_with_no_text_or_another_key_is_refused_and_one_with_no_rig_runs_in_the_root() {
     let w = world(ASK);
     for input in [
         json!({ "request": "" }),
@@ -120,11 +120,16 @@ async fn a_request_with_no_text_or_another_key_or_no_rig_is_refused() {
         let refused = w.ask(input.clone()).await.unwrap_err().to_string();
         assert!(refused.contains("a bead request is"), "{input}: {refused}");
     }
-    let refused = w
-        .start_bead("ask", None, json!({ "request": "x" }))
-        .await
-        .unwrap_err()
-        .to_string();
-    assert!(refused.contains("no rig"), "{refused}");
     assert!(w.tracker.bead("b-1").is_none());
+    // With no rig, the request's run works in the project root (spec §6.1).
+    w.driver.script(slow_turn());
+    let reply = w.start_bead("ask", None, json!({ "request": "x" })).await.unwrap();
+    let run = reply["run"].as_str().unwrap();
+    tokio::time::sleep(Duration::from_secs(1)).await;
+    let db = rusqlite::Connection::open(w.dir.path().join("state.db")).unwrap();
+    let rig: String = db
+        .query_row("SELECT rig FROM runs WHERE id = ?1", [run], |r| r.get(0))
+        .unwrap();
+    assert_eq!(rig, "root");
+    assert_eq!(w.run_bead(run).as_deref(), Some("b-1"));
 }

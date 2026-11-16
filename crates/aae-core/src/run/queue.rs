@@ -80,7 +80,7 @@ impl RunHandler {
             None => {
                 let beads = formula.inputs.iter().filter(|(_, i)| i.kind == InputType::Bead);
                 let named = beads.filter_map(|(k, _)| c.inputs.get(k)?.as_str()).next();
-                Self::rig_of_bead(tx, &c.project, named)?
+                Self::rig_of_bead(tx, &c.project, &project.root.0, named)?
             }
         };
         let rig = project.place(&rig_name);

@@ -111,11 +111,20 @@ impl ScriptedDriver {
 
     /// The MCP servers the session of attempt `attempt` of `run` gets, by name.
     pub fn mcp(&self, run: &str, attempt: u32) -> Value {
-        self.lock()
-            .mcp
+        self.part(run, attempt, "mcp")
+    }
+
+    /// The working directory the session of attempt `attempt` of `run` starts in.
+    pub fn workdir(&self, run: &str, attempt: u32) -> Value {
+        self.part(run, attempt, "workdir")
+    }
+
+    fn part(&self, run: &str, attempt: u32, field: &str) -> Value {
+        let state = self.lock();
+        state
+            .parts
             .get(&(run.to_owned(), attempt))
-            .cloned()
-            .unwrap_or_default()
+            .map_or(Value::Null, |p| p[field].clone())
     }
 
     /// The environment the session of attempt `attempt` of `run` gets from the effective config and the tracker
