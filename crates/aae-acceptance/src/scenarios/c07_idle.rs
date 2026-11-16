@@ -1,5 +1,5 @@
 //! Criterion 7: the daemon idle with one registered project holds RSS at or under 50 MB and uses at most 1 % of
-//! one core on average over 30 seconds. Linux only, as acceptance runs on the owner's Linux host (spec §15).
+//! one core on average over 30 seconds. Linux only, as acceptance runs on the owner's Linux host (docs/acceptance.md).
 
 use super::MARK;
 use crate::{Env, daemon::Daemon};

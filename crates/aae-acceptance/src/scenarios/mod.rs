@@ -1,4 +1,4 @@
-//! The scenarios of the spec, one file per criterion of spec §15, and what several of them share.
+//! The scenarios of the spec, one file per criterion of docs/acceptance.md, and what several of them share.
 
 mod c02_prompt;
 mod c03_exec;

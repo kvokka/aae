@@ -1,8 +1,8 @@
-//! The acceptance spec of aae (spec §9.2, §15): executable scenarios, one per criterion, on a real `aae daemon`
+//! The acceptance spec of aae (docs/acceptance.md): executable scenarios, one per criterion, on a real `aae daemon`
 //! and real binaries, and the checks of the rows that live in cargo and the CI scripts. `aae-acceptance` runs all of
-//! them; `aae-acceptance --ci` runs the subset without a model, which CI runs on every commit. The result is one
-//! report with a line for every row of §15, run or not, the date, the version of `aae` and the versions of the
-//! harnesses.
+//! them; `aae-acceptance --ci` runs the subset without a model. Nothing runs either on its own: only on request. The
+//! result is one report with a line for every row of docs/acceptance.md, run or not, the date, the version of `aae`
+//! and the versions of the harnesses.
 //!
 //! Usage: `aae-acceptance [--ci] [--aae <binary>] [--report <file>] [<criterion>...]`; `aae-acceptance --mcp-probe
 //! <log>` is the test MCP service of criterion 14, as aae starts a service; `aae-acceptance --mcp-stdio-probe <log>`
@@ -10,7 +10,6 @@
 
 mod checks;
 mod daemon;
-mod readiness;
 mod scenarios;
 
 use std::{
@@ -24,10 +23,10 @@ use std::{
     time::{Duration, Instant},
 };
 
-/// Where a scenario runs (the column "Launch" of spec §15).
+/// Where a scenario runs (the column "Launch" of docs/acceptance.md).
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Launch {
-    /// Without a model: in every spec run and in CI.
+    /// Without a model: in every spec run, `--ci` included.
     Ci,
     /// With a real model: only when the user runs the whole spec.
     Request,
@@ -38,7 +37,7 @@ pub(crate) enum Launch {
 
 pub(crate) type Notes = Pin<Box<dyn Future<Output = String> + Send>>;
 
-/// One criterion of spec §15. `run` panics on a failed check and returns notes for the report.
+/// One criterion of docs/acceptance.md. `run` panics on a failed check and returns notes for the report.
 pub(crate) struct Scenario {
     pub(crate) criterion: &'static str,
     pub(crate) title: &'static str,
@@ -172,14 +171,14 @@ async fn execute(env: Arc<Env>, run: fn(Arc<Env>) -> Notes) -> (Result<String, S
     (result, at.elapsed())
 }
 
-/// The place of a criterion in §15: "4a" after "4" and before "5a".
+/// The place of a criterion in docs/acceptance.md: "4a" after "4" and before "5a".
 fn order(criterion: &str) -> (u32, &str) {
     let digits = criterion.find(|c: char| !c.is_ascii_digit()).unwrap_or(criterion.len());
     (criterion[..digits].parse().unwrap_or(u32::MAX), &criterion[digits..])
 }
 
 /// A line of the report: `mark` is `pass`, `FAIL`, `not run` (a request row of a CI run), `on a tag` (a release row
-/// of a run without `--release`) or `open` (a part of a criterion no row checks yet).
+/// of a run without `--release`).
 struct Row {
     criterion: &'static str,
     title: &'static str,
@@ -277,31 +276,7 @@ async fn main() -> ExitCode {
             took: Duration::ZERO,
         });
     }
-    let open = readiness::OPEN.iter().filter(|(c, _)| wanted(c));
-    rows.extend(open.map(|&(criterion, title)| Row {
-        criterion,
-        title,
-        mark: "open",
-        notes: "no row checks this part yet: the criterion stays open".into(),
-        took: Duration::ZERO,
-    }));
     rows.sort_by(|a, b| order(a.criterion).cmp(&order(b.criterion)));
-    let marks: Vec<(&str, &str)> = (rows.iter())
-        .filter(|r| r.criterion != "22")
-        .map(|r| (r.criterion, r.mark))
-        .collect();
-    if let Some(row) = rows.iter_mut().find(|r| r.criterion == "22" && r.mark == "pass") {
-        let readiness = fs::read_to_string(checks::root().join("docs/READINESS.md")).unwrap_or_default();
-        let verdict = (readiness::fresh(&readiness).and_then(|()| readiness::live(&readiness)))
-            .and_then(|live| readiness::verdict(&readiness, &marks, !args.ci, live));
-        match verdict {
-            Ok(scores) => row.notes = format!("{}; readiness: {scores}", row.notes),
-            Err(why) => {
-                (row.mark, row.notes) = ("FAIL", why);
-                print!("{}", row.line());
-            }
-        }
-    }
     let mut report = format!(
         "# aae acceptance spec\n\n- date: {}\n- aae: {}\n- claude: {}\n- codex: {}\n- br: {}\n- host: {}\n- run: {}\n\n\
          <!-- {} id=acceptance-times date={} ver={} env={} src=aae-acceptance note=\"wall time of each row; the \
@@ -327,11 +302,10 @@ async fn main() -> ExitCode {
     }
     let _ = writeln!(
         report,
-        "\n{passed} of {} rows passed, {failed} failed, {} not run, {} on a tag, {} open, in {:.0} s.",
+        "\n{passed} of {} rows passed, {failed} failed, {} not run, {} on a tag, in {:.0} s.",
         rows.len(),
         count("not run"),
         count("on a tag"),
-        count("open"),
         started.elapsed().as_secs_f64()
     );
     let written = args

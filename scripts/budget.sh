@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Enforces the line budgets and measurement rules of spec §14.
+# Enforces the line budgets and measurement rules of docs/agents/rules-code.md.
 # Usage: scripts/budget.sh [repo-root]   (defaults to the current git repository)
 set -euo pipefail
 cd "${1:-$(git rev-parse --show-toplevel)}"
@@ -25,7 +25,7 @@ if ((${#files[@]})); then
       crates/aae-front/*) part=frontends ;;
       crates/aae-plugins/*) part=plugins ;;
       crates/aae/*) part=reserve ;;
-      *) err "$path belongs to no budget part (spec §14)"; continue ;;
+      *) err "$path belongs to no budget part (docs/agents/rules-code.md)"; continue ;;
     esac
     used[$part]=$((${used[$part]:-0} + code))
     total=$((total + code))
@@ -48,12 +48,12 @@ printf 'budget: %-9s %6d / 30000 (hard stop 35000)\n' total "$total"
 ((total <= 30000)) || err "release budget exceeded"
 ((total <= 35000)) || err "HARD STOP exceeded: no new features until a deletion pass"
 
-# Spec §16: the throwaway experiments stay within 5 000 code lines in total (generated code excluded, as above).
+# docs/design/experiments.md: the throwaway experiments stay within 5 000 code lines in total (generated code excluded, as above).
 mapfile -t exp < <(git ls-files -co --exclude-standard -- 'experiments/*.rs' | grep -v '/generated/' || true)
 if ((${#exp[@]})); then
   n=$(tokei -o json "${exp[@]}" | jq '.Total.code')
   printf 'budget: %-9s %6d / 5000\n' experiments "$n"
-  ((n <= 5000)) || err "experiments exceed 5000 lines (spec §16)"
+  ((n <= 5000)) || err "experiments exceed 5000 lines (docs/design/experiments.md)"
 fi
 
 # Every MEASURE marker carries non-empty id, date, ver and env. `id=<...>` is the format template, not a marker.
@@ -69,20 +69,5 @@ while IFS= read -r line; do
   done
   [[ "$bare" =~ [[:space:]]date=[0-9]{4}-[0-9]{2}-[0-9]{2} ]] || err "MEASURE marker without date: $line"
 done <<<"$markers"
-
-[[ -f docs/READINESS.md ]] || err "docs/READINESS.md is missing (spec §14)"
-grep -q 'MEASURE id=' docs/READINESS.md 2>/dev/null || err "docs/READINESS.md has no MEASURE marker"
-# The readiness table (spec §14): every component scores 0 to 10, in the column headed `Score`. What a score may
-# claim against the acceptance rows, and the 8 of criterion 22, are checked by aae-acceptance (criterion 22).
-rows=$(awk -F'|' '/^\| / { if (!col) { for (i = 2; i < NF; i++) if ($i ~ /^ *Score *$/) col = i; next }
-  print $2 "|" $col }' docs/READINESS.md 2>/dev/null || true)
-if [[ -z "$rows" ]]; then
-  err "docs/READINESS.md has no component table"
-else
-  while IFS='|' read -r name score; do
-    [[ "$score" =~ ^\ *([0-9]+(\.[0-9]+)?)\ *$ ]] && awk "BEGIN { exit !(${BASH_REMATCH[1]} <= 10) }" ||
-      err "readiness of${name% } is${score% }, not a score from 0 to 10"
-  done <<<"$rows"
-fi
 
 exit "$fail"

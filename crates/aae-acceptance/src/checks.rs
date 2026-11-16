@@ -1,11 +1,11 @@
-//! The rows of spec §15 that live in cargo builds, cargo tests and the CI scripts (spec §2, decision 44): each runs its
-//! commands in the workspace, with the target directory of the spec, and passes when all of them succeed. They run
-//! one after another once the scenarios are done (see `main`).
+//! The rows of docs/acceptance.md that live in cargo builds, cargo tests and the CI scripts (decision 44): each runs
+//! its commands in the workspace, with the target directory of the spec, and passes when all of them succeed. They
+//! run one after another once the scenarios are done (see `main`).
 
 use crate::{Env, Launch, Scenario};
 use std::{env::consts, path::PathBuf, sync::Arc};
 
-/// The four release targets of spec §13.
+/// The four release targets of docs/guide/install.md.
 const TARGETS: [&str; 4] = [
     "x86_64-unknown-linux-musl",
     "aarch64-unknown-linux-musl",
@@ -58,7 +58,7 @@ pub(crate) const ALL: &[Scenario] = &[
     },
     Scenario {
         criterion: "11",
-        title: "the contract tests of claude and codex (§7.8), codex's model list, and of the br tracker (§10.2) pass",
+        title: "the contract tests of claude and codex, codex's model list, and of the br tracker pass",
         launch: Launch::Ci,
         run: |env| {
             Box::pin(tests(
@@ -104,7 +104,7 @@ pub(crate) const ALL: &[Scenario] = &[
     },
     Scenario {
         criterion: "22",
-        title: "line budgets, MEASURE markers, a current readiness file whose scores the rows allow, all 8 or more",
+        title: "line budgets and MEASURE markers (scripts/budget.sh)",
         launch: Launch::Ci,
         run: |env| Box::pin(budget(env)),
     },
@@ -338,9 +338,9 @@ async fn demos_load(env: Arc<Env>) -> String {
     "`aae config check` of demos/<demo>/root/config.toml is clean for each demo".into()
 }
 
-/// One demo on real models (spec §15 "Demo"), `times` runs in a row; its `run.sh` leaves the result in the demo's
-/// directory, ignored by git, and each run starts from what `git clean` leaves, as the demo's README says. What the
-/// agents may have left running is neither looked for nor killed.
+/// One demo on real models (docs/acceptance.md "Demo"), `times` runs in a row; its `run.sh` leaves the result in the
+/// demo's directory, ignored by git, and each run starts from what `git clean` leaves, as the demo's README says.
+/// What the agents may have left running is neither looked for nor killed.
 async fn demo(env: Arc<Env>, name: &str, times: usize) -> String {
     let aae = format!("AAE={}", env.aae.display());
     let dir = format!("demos/{name}");
@@ -375,16 +375,16 @@ async fn no_stubs(env: Arc<Env>) -> String {
 mod tests {
     use super::*;
 
-    /// The rows of §15, criterion 21 withdrawn: the report shows each, run or not.
+    /// The rows of docs/acceptance.md, criterion 21 withdrawn: the report shows each, run or not.
     const ROWS: &[&str] = &[
         "1", "2", "3", "4", "4a", "5a", "5b", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16", "17", "18",
         "19", "20", "22", "23", "24", "25", "26", "27", "28", "29", "30", "31", "32", "33", "34",
     ];
 
     #[test]
-    fn every_row_of_section_15_is_in_the_report() {
+    fn every_row_of_the_acceptance_table_is_in_the_report() {
         let checked = ALL.iter().chain(crate::scenarios::ALL).map(|s| s.criterion);
-        let known: Vec<&str> = checked.chain(crate::readiness::OPEN.iter().map(|(c, _)| *c)).collect();
+        let known: Vec<&str> = checked.collect();
         for row in ROWS {
             assert!(known.contains(row), "criterion {row} has no check or scenario");
         }

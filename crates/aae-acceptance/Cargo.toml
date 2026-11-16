@@ -1,6 +1,6 @@
 [package]
 name = "aae-acceptance"
-description = "The acceptance spec of aae (spec §9.2, §15): scenarios on a real daemon and real binaries"
+description = "The acceptance spec of aae (docs/acceptance.md): scenarios on a real daemon and real binaries"
 version.workspace = true
 edition.workspace = true
 license.workspace = true

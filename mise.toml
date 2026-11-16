@@ -21,7 +21,7 @@ description = "Checks that CI runs on every commit"
 run = [
   "cargo fmt --all --check",
   "cargo clippy --all-targets --locked -q -- -D warnings",
-  # Plays 1000 new chaos seeds each time (spec §2.1 item 20).
+  # Plays 1000 new chaos seeds each time.
   "cargo nextest run --locked --no-tests=warn",
   "cargo deny check",
   "cargo machete",
@@ -31,11 +31,11 @@ run = [
   "scripts/budget-selftest.sh",
   "scripts/budget.sh",
   # The repository is public: no absolute home paths of the machine the demos or tests ran on.
-  "! git grep -nE '/(home|Users)/[A-Za-z]' -- . ':!.loop' ':!docs/init'",
+  "! git grep -nE '/(home|Users)/[A-Za-z]' -- . ':!.loop'",
 ]
 
 [tasks.build-all]
-description = "Release builds for the four targets of spec §13"
+description = "Release builds for the four targets"
 run = """
 for t in x86_64-unknown-linux-musl aarch64-unknown-linux-musl x86_64-apple-darwin aarch64-apple-darwin; do
   cargo zigbuild --release --locked --target "$t"
@@ -43,7 +43,7 @@ done
 """
 
 [tasks.acceptance]
-description = "The whole acceptance spec (spec §9.2, §15) on the release build of aae; scenarios with a real model cost money and need a login"
+description = "The whole acceptance spec (docs/acceptance.md) on the release build of aae; scenarios with a real model cost money and need a login"
 run = [
   "cargo build -q --locked --release -p aae",
   "cargo run -q --locked -p aae-acceptance -- --aae {{config_root}}/target/release/aae",
@@ -54,7 +54,7 @@ description = "Criterion 1 of the acceptance with the four release targets, and 
 run = "cargo run -q --locked -p aae-acceptance -- --release 1"
 
 [tasks.acceptance-ci]
-description = "The acceptance scenarios without a model and without the release builds, as CI runs them on every commit"
+description = "The model-free acceptance scenarios, without the release builds; run on request"
 run = [
   "cargo build -q --locked -p aae",
   "cargo run -q --locked -p aae-acceptance -- --ci",
