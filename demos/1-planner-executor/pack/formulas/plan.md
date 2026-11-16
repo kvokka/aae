@@ -9,7 +9,7 @@ Work through these steps.
 
 1. Find the project's rigs: `aae --json project list --project {{ project.name }}`. Each rig is a directory a coder
    works in, its name says what it is for, and its `vars.harness` is the harness its coder runs on. Look at what is
-   in each rig. Your own rig `{{ rig.name }}` gets no task.
+   in each rig. You work in the project root, `{{ rig.path }}`: it is no rig and gets no task.
 
 2. Split the request into tasks: one or several per rig, in the order they must be done. A coder sees only the text
    of its own bead, so each task holds everything its coder needs:

@@ -14,8 +14,8 @@ The checks of the last round, empty in the first one:
 Work through these steps.
 
 1. Find the project's rigs: `aae --json project list --project {{ project.name }}`. Each rig is a directory a coder
-   works in, and its name says what it is for. Look at what is in each rig. Your own rig `{{ rig.name }}` gets no
-   task.
+   works in, and its name says what it is for. Look at what is in each rig. You work in the project root,
+   `{{ rig.path }}`: it is no rig and gets no task.
 
 2. With no remarks, split the request into tasks: one or several per rig, in the order they must be done. With
    remarks, the beads filed before are done (`br list --all --tree`): the tasks are only the fixes the remarks call

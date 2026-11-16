@@ -39,7 +39,7 @@ done
 
 started=$(date +%s)
 bead=$(jq -cn --arg request "$request" '{request: $request}')
-run=$("$aae" run start planner-executor root dev.deliver --input "bead=$bead")
+run=$("$aae" run start planner-executor dev.deliver --input "bead=$bead")
 result=passed
 "$aae" run wait "$run" --timeout 60m >.aae/outcome.txt || result=failed
 seconds=$(($(date +%s) - started))
