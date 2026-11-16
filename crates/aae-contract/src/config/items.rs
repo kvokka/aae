@@ -171,7 +171,7 @@ impl Loader {
                 );
             }
             // A repeat spends no session attempt, so the step's own count takes the same ceiling (invariant 16).
-            let ceiling = crate::run::MAX_ATTEMPTS;
+            let ceiling = super::MAX_ATTEMPTS;
             if max_attempts.is_some_and(|n| n.get() > ceiling) {
                 self.fail(file, format!("step `{name}`: `max_attempts` is at most {ceiling}"));
             }

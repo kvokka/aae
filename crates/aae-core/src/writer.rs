@@ -2,14 +2,12 @@
 //! transaction that also records the events (outbox), the effects and the deadlines it caused; effects run only after
 //! commit.
 
-use crate::{clock::Clock, effects, journal::Journal};
+use crate::{BoxFuture, clock::Clock, effects, journal::Journal};
 use rusqlite::{Connection, OptionalExtension, params};
 use serde_json::{Value, json};
 use std::{
     collections::{HashMap, HashSet},
     fmt,
-    future::Future,
-    pin::Pin,
     sync::Arc,
 };
 use tokio::{
@@ -23,8 +21,6 @@ const IDEMPOTENCY_KEEP_MS: i64 = 86_400_000;
 const RECHECK_MS: i64 = 30_000;
 /// How long after a failed firing a deadline fires again.
 const DEADLINE_RETRY_MS: i64 = 60_000;
-
-pub type BoxFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
 
 #[derive(Debug)]
 pub enum Error {
@@ -103,7 +99,7 @@ impl Tx<'_> {
             params![self.now_ms, body],
         )?;
         let seq = self.tx.last_insert_rowid();
-        self.events.push(crate::journal::envelope(seq, self.now_ms, &body));
+        self.events.push(aae_contract::envelope(seq, self.now_ms, &body));
         Ok(seq)
     }
 

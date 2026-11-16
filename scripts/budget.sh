@@ -18,7 +18,7 @@ total=0
 if ((${#files[@]})); then
   while IFS=$'\t' read -r code path; do
     case "$path" in
-      crates/aae-core/*) part=core ;;
+      crates/aae-core/* | crates/aae-contract/*) part=core ;;
       crates/aae-claude/*) part=claude ;;
       crates/aae-codex/*) part=codex ;;
       crates/aae-br/*) part=tracker ;;

@@ -74,9 +74,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "aae-contract"
+version = "0.1.0"
+dependencies = [
+ "jiff",
+ "rustix",
+ "serde",
+ "serde_json",
+ "sha2",
+ "tempfile",
+ "tokio",
+ "toml",
+ "uuid",
+]
+
+[[package]]
 name = "aae-core"
 version = "0.1.0"
 dependencies = [
+ "aae-contract",
  "getrandom",
  "jiff",
  "rusqlite",
@@ -86,7 +102,6 @@ dependencies = [
  "sha2",
  "tempfile",
  "tokio",
- "toml",
  "uuid",
 ]
 

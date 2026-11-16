@@ -130,7 +130,7 @@ pub(crate) const ALL: &[Scenario] = &[
         run: |env| {
             Box::pin(tests(
                 env,
-                "-p aae-core -p aae-testkit -E test(/a_harness_of_the_build_needs_no_section|a_retired_key_is_one_line\
+                "-p aae-contract -p aae-core -p aae-testkit -E test(/a_harness_of_the_build_needs_no_section|a_retired_key_is_one_line\
                  |variant_errors|an_agents_table_changes_the_harness|a_rig_runs_a_variant_in_place_of_the_agent\
                  |a_project_without_a_root_section|the_root_takes_a_name_and_a_path|a_rig_at_the_root_path\
                  |a_root_with_a_name_and_a_path_is_where_its_runs_work|a_run_without_a_rig_works_in_the_root_that_is_no_git_repository\
@@ -148,7 +148,7 @@ pub(crate) const ALL: &[Scenario] = &[
         run: |env| {
             Box::pin(tests(
                 env,
-                "-p aae-core -p aae-testkit -p aae-br -E test(/an_agent_of_scope_root_takes_no_rig_layer\
+                "-p aae-contract -p aae-testkit -p aae-br -E test(/an_agent_of_scope_root_takes_no_rig_layer\
                  |a_project_of_one_repository_checks_its_formulas_on_the_root|a_run_without_a_rig_works_in_the_root\
                  |a_root_agent_works_in_the_root_whatever_the_rig|a_bead_of_the_root_runs_in_the_root\
                  |a_rig_neither_edits_nor_maps_an_agent_of_the_root|a_rig_takes_the_acronym_of_its_name_or_its_prefix_key\
@@ -168,7 +168,7 @@ pub(crate) const ALL: &[Scenario] = &[
         run: |env| {
             Box::pin(tests(
                 env,
-                "-p aae-core -p aae-testkit -p aae-br -p aae -E test(/a_text_task_becomes_one_root_bead\
+                "-p aae-contract -p aae-testkit -p aae-br -p aae -E test(/a_text_task_becomes_one_root_bead\
                  |a_root_bead_created_before_a_crash_is_the_one_the_run_gets|a_blank_task_or_another_form_is_refused\
                  |a_task_naming_a_bead_takes_it_up_and_files_no_second_bead|a_drain_step_names_a_formula_that_takes_one_bead\
                  |a_task_naming_a_bead_gives_it_and_a_text_files_a_root_of_the_database_prefix\
@@ -185,7 +185,7 @@ pub(crate) const ALL: &[Scenario] = &[
         run: |env| {
             Box::pin(tests(
                 env,
-                "-p aae-core -p aae-testkit -p aae -E test(/a_project_template_replaces_the_packs\
+                "-p aae-contract -p aae-testkit -p aae -E test(/a_project_template_replaces_the_packs\
                  |a_missing_template_or_named_file_is_an_error|an_agent_named_by_a_step_without_a_template\
                  |a_template_fits_every_formula_whose_steps_name_its_agent|a_retired_key_is_one_line\
                  |a_run_gets_the_project_template_of_its_agent|the_config_is_checked_and_explained_without_a_daemon\
@@ -203,7 +203,7 @@ pub(crate) const ALL: &[Scenario] = &[
         run: |env| {
             Box::pin(tests(
                 env,
-                "-p aae-core -p aae-testkit -E test(/a_step_runs_again_until_its_check_script_passes\
+                "-p aae-contract -p aae-testkit -E test(/a_step_runs_again_until_its_check_script_passes\
                  |past_max_attempts_the_step_fails|exit_75_of_the_check_script_fails_the_step_at_once\
                  |a_step_that_fails_on_its_own_runs_again_without_its_script|a_crash_between_attempts_keeps_the_count\
                  |a_check_script_cut_by_a_restart_runs_again_and_counts_once\
@@ -225,7 +225,7 @@ pub(crate) const ALL: &[Scenario] = &[
         run: |env| {
             Box::pin(tests(
                 env,
-                "-p aae-core -p aae-testkit -E test(/a_drain_step_takes_pool_and_on_item_failure\
+                "-p aae-contract -p aae-testkit -E test(/a_drain_step_takes_pool_and_on_item_failure\
                  |without_pool_one_bead_is_in_work_at_a_time|pool_two_keeps_two_of_five_in_work\
                  |soft_stop_gives_no_new_bead|hard_stop_cancels_the_started_beads|a_restart_mid_stop_gives_no_new_bead\
                  |a_repeat_after_a_stop_is_a_new_entry/)",
@@ -244,7 +244,7 @@ pub(crate) const ALL: &[Scenario] = &[
         run: |env| {
             Box::pin(tests(
                 env,
-                "-p aae-core -p aae-testkit -E test(/^formula_step::|a_formula_step_names_a_formula_whose_inputs_it_has/)",
+                "-p aae-contract -p aae-testkit -E test(/^formula_step::|a_formula_step_names_a_formula_whose_inputs_it_has/)",
                 14,
             ))
         },

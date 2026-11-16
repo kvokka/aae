@@ -22,9 +22,11 @@ How the parts of aae fit together and where each lives. The terms are in the [gl
 
 These are checked by the build, not kept by agreement.
 
-- The core depends on no adapter, frontend or plugin. `aae-core` names no harness and no tracker (`codex`, `br`,
-  `max_sessions`, `BEADS_DIR`, `.beads`): what it needs comes through the driver's capabilities and the tracker
-  interface, and `scripts/core-boundary.sh` checks its sources in CI.
+- The core is two crates: `aae-contract`, the contracts adapters, the tracker adapter, plugins and test doubles are
+  written against, and `aae-core`, the engine over them. The core depends on no adapter, frontend or plugin, and
+  neither crate names a harness or a tracker (`codex`, `br`, `max_sessions`, `BEADS_DIR`, `.beads`): what the core
+  needs comes through the driver's capabilities and the tracker interface, and `scripts/core-boundary.sh` checks the
+  sources of both in CI.
 - A harness is an abstraction to the core. The root of the build holds the one table of adapters
   (`crates/aae/src/harness.rs`), the only place that names a harness.
 - Adapters and frontends only translate protocols.
@@ -36,7 +38,8 @@ These are checked by the build, not kept by agreement.
 
 | Crate | What it is | Read |
 |---|---|---|
-| `aae-core` | the single writer of the runtime state: runs, attempts, triggers, deadlines, gates, config assembly, the instance registry, hook execution, recovery | [event model](design/event-model.md), [invariants](design/invariants.md), [contracts](design/contracts.md), [config](design/config.md) |
+| `aae-contract` | the contracts of the core: config assembly, the driver and tracker interfaces, the event envelope, templates and schedules, the registry of child processes. The adapters, `aae-br`, `aae-plugins` and the test doubles depend on it, not on the engine | [contracts](design/contracts.md), [config](design/config.md) |
+| `aae-core` | the engine, the single writer of the runtime state: runs, attempts, triggers, deadlines, gates, the instance registry, hook execution, recovery. It re-exports the modules of `aae-contract` | [event model](design/event-model.md), [invariants](design/invariants.md) |
 | `aae-claude` | the claude adapter: one `claude -p` process per session, stream-json | [adapters](design/adapters.md), [contracts 4.6](design/contracts.md#46-harness-specifics-the-contract-relies-on) |
 | `aae-codex` | the codex adapter: one `codex app-server` per fingerprint over stdio, a thread per session | the same |
 | `aae-br` | the br tracker adapter: every call is one `br` process on the project's database | [tracker](design/tracker-br.md) |

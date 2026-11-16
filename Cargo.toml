@@ -8,6 +8,7 @@ default-members = [
   "crates/aae-br",
   "crates/aae-claude",
   "crates/aae-codex",
+  "crates/aae-contract",
   "crates/aae-core",
   "crates/aae-front",
   "crates/aae-plugins",

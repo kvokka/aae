@@ -2,7 +2,7 @@
 //! tracker of a project. The daemon is the only claimer (invariant 3); the state of the orchestrator is the truth of
 //! ownership and the assignee in the tracker mirrors it (docs/design/contracts.md 5).
 
-use crate::writer::BoxFuture;
+use crate::BoxFuture;
 use serde::{Deserialize, Serialize};
 use std::fmt;
 

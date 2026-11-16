@@ -75,6 +75,9 @@ pub struct Watchdog {
     pub park_timeout_ms: i64,
 }
 
+/// Ceiling of the core: attempts per run, not counting those that parked on an account gate (invariant 16).
+pub const MAX_ATTEMPTS: u32 = 20;
+
 /// The plugins bundled with aae (docs/design/config.md): name, the events they hook, and whether they are on with no
 /// `[builtin.<name>]` table. `worktree` has no table: it is on in a project with a formula of `worktree = true`.
 pub const BUNDLED: [(&str, &[&str], bool); 2] = [
@@ -311,12 +314,12 @@ pub fn load(orchestrator_file: &std::path::Path) -> Result<Config, Vec<ConfigErr
 }
 
 /// The environment variable an exec step gets input `name` in: `note-text` → `AAE_INPUT_NOTE_TEXT`.
-pub(crate) fn input_variable(name: &str) -> String {
+pub fn input_variable(name: &str) -> String {
     format!("AAE_INPUT_{}", upper(name))
 }
 
 /// The name part of an environment variable: `note-text` → `NOTE_TEXT`.
-pub(crate) fn upper(name: &str) -> String {
+pub fn upper(name: &str) -> String {
     let upper = name.chars().map(|c| {
         if c.is_ascii_alphanumeric() {
             c.to_ascii_uppercase()

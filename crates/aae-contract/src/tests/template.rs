@@ -150,7 +150,7 @@ fn a_loaded_where_on_the_run_view_matches_a_journal_envelope() {
             "type": "run.passed", "project": "shop", "rig": "backend", "run": "r1", "correlation": null,
             "data": { "run": { "id": "r1", "formula": formula }, "outcome": { "result": "pass" } }
         });
-        crate::journal::envelope(3, 0, &body.to_string())
+        crate::envelope(3, 0, &body.to_string())
     };
     assert!(filter.matches(&event_view(&passed("implement"))));
     assert!(!filter.matches(&event_view(&passed("audit"))));

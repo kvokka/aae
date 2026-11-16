@@ -178,12 +178,12 @@ pub fn sweep_var(name: &str, value: &str) -> usize {
 
 /// Kills every process but this one whose environment carries `AAE_INSTANCE=<id>`; the ones it found as (pid, start
 /// time), so one it could not kill does not pass for dead.
-pub(crate) fn sweep(id: &str) -> Vec<(i32, u64)> {
+pub fn sweep(id: &str) -> Vec<(i32, u64)> {
     sweep_all(&BTreeSet::from([id.to_owned()]))
 }
 
 /// [`sweep`] for every id of `ids` in one walk of `/proc`.
-pub(crate) fn sweep_all(ids: &BTreeSet<String>) -> Vec<(i32, u64)> {
+pub fn sweep_all(ids: &BTreeSet<String>) -> Vec<(i32, u64)> {
     marked()
         .filter(|(_, marker)| ids.contains(marker))
         .filter_map(|(pid, _)| Some((Pid::from_raw(pid)?, start_time(pid)?)))
@@ -229,7 +229,7 @@ pub fn kill_descendants() {
 /// `port` on loopback is listened on, and only by processes marked `id`: a port check passed by anyone else would
 /// hand them the sessions' token (docs/design/config.md). Only listeners a connection to `127.0.0.1` may reach count.
 #[cfg(target_os = "linux")]
-pub(crate) fn listens_alone(id: &str, port: u16) -> bool {
+pub fn listens_alone(id: &str, port: u16) -> bool {
     let tables = ["/proc/net/tcp", "/proc/net/tcp6"].map(|table| std::fs::read_to_string(table).unwrap_or_default());
     let listening: BTreeSet<String> = tables
         .iter()
@@ -252,7 +252,7 @@ pub(crate) fn listens_alone(id: &str, port: u16) -> bool {
 /// shortcut: without `/proc` whoever listens on the port passes for the service (macOS is not checked in the first
 /// release, docs/overview.md); read the sockets through `proc_pidfdinfo` once macOS is checked.
 #[cfg(not(target_os = "linux"))]
-pub(crate) fn listens_alone(_id: &str, _port: u16) -> bool {
+pub fn listens_alone(_id: &str, _port: u16) -> bool {
     true
 }
 
