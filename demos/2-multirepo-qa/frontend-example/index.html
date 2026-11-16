@@ -3,49 +3,34 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Snake</title>
-  <link rel="stylesheet" href="styles.css">
+  <meta name="theme-color" content="#101b1a">
+  <title>Snake — One more bite</title>
+  <link rel="stylesheet" href="/style.css">
+  <script src="/game.js" defer></script>
 </head>
 <body>
-  <main class="page">
-    <header class="page-header">
-      <div>
-        <p class="eyebrow">A little arcade classic</p>
-        <h1>Snake</h1>
-      </div>
-      <button id="start-button" class="primary" type="button">Start game</button>
-    </header>
-
-    <div class="layout">
-      <section class="game-panel" aria-label="Snake game">
-        <div class="stats">
-          <div><span class="stat-label">Score</span><strong id="score">0</strong></div>
-          <p id="game-status" role="status">Press Start or an arrow key to play.</p>
-        </div>
-        <canvas id="board" width="480" height="480" aria-label="Snake game board"></canvas>
-        <p class="instructions">Move with <kbd>↑</kbd> <kbd>↓</kbd> <kbd>←</kbd> <kbd>→</kbd> or <kbd>W</kbd> <kbd>A</kbd> <kbd>S</kbd> <kbd>D</kbd>. Eat the red food for 10 points. Avoid the walls and yourself.</p>
-      </section>
-
-      <aside class="scores-panel">
-        <div class="panel-heading">
-          <div><p class="eyebrow">Hall of fame</p><h2>High scores</h2></div>
-          <button id="refresh-button" class="quiet" type="button">Refresh</button>
-        </div>
-        <p id="scores-message" class="muted" role="status">Loading scores…</p>
-        <ol id="scores-list" class="scores-list"></ol>
-
-        <form id="score-form" class="score-form" hidden>
-          <label for="player-name">Save your score</label>
-          <div class="submit-row">
-            <input id="player-name" name="name" type="text" autocomplete="name" placeholder="Your name" required>
-            <button id="submit-button" type="submit">Submit</button>
-          </div>
-          <p id="submit-message" class="muted" role="status"></p>
-        </form>
-      </aside>
-    </div>
-    <footer>Scores are saved locally by the game server.</footer>
+  <main class="layout">
+    <section class="game-panel" aria-labelledby="title">
+      <header class="topline"><span class="brand-mark" aria-hidden="true">✳</span><span>ARCADE / 01</span><span class="live"><i></i> READY WHEN YOU ARE</span></header>
+      <div class="intro"><div><p class="eyebrow">A CLASSIC, KEPT SIMPLE</p><h1 id="title">One more<br><em>bite.</em></h1></div><p class="intro-copy">A little focus goes a long way.<br>How long can you grow?</p></div>
+      <div class="game-top"><div><span class="label">YOUR SCORE</span><strong id="score">00</strong></div><div class="best-score"><span class="label">BEST THIS RUN</span><strong id="best">00</strong></div><span class="game-status" id="game-status" aria-live="polite">READY</span></div>
+      <div class="board-wrap"><canvas id="board" width="480" height="480" aria-label="Snake game board"></canvas><div class="overlay" id="overlay"><div class="overlay-card"><span class="overlay-icon" id="overlay-icon">↗</span><h2 id="overlay-title">Ready?</h2><p id="overlay-copy">Press start or use an arrow key.</p></div></div></div>
+      <div class="game-controls"><button class="primary" id="start-button" type="button">Start game <span>↗</span></button><p><kbd>↑</kbd><kbd>←</kbd><kbd>↓</kbd><kbd>→</kbd> <span>or</span> <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> <span>to steer</span></p></div>
+      <p class="hint">Eat the glowing dots to grow. Don’t hit the walls or yourself.</p>
+    </section>
+    <aside class="side-panel" aria-label="Leaderboard and game information">
+      <div class="leader-head"><div><p class="eyebrow">THE GREATS</p><h2>High scores<span>↘</span></h2></div><span class="top-ten">TOP 10</span></div>
+      <p class="leader-note">A little friendly competition.</p>
+      <div class="leaderboard" id="leaderboard" aria-live="polite"><p class="leader-message">Loading scores…</p></div>
+      <p class="api-message" id="api-message" role="status"></p>
+      <form class="submit-form" id="score-form" hidden>
+        <label for="player-name">Save this run</label>
+        <div class="form-row"><input id="player-name" name="name" maxlength="20" autocomplete="nickname" placeholder="Your name" required><button type="submit" id="submit-button">Submit <span>↗</span></button></div>
+        <p id="submit-message" role="status"></p>
+      </form>
+      <div class="side-footer"><div class="rule"><span>01</span><p><b>ONE BITE, ONE POINT</b><br>Every dot makes you longer.</p></div><div class="rule"><span>02</span><p><b>KEEP YOUR HEAD</b><br>Walls and your tail are out.</p></div><div class="rule"><span>03</span><p><b>CLAIM YOUR PLACE</b><br>Submit your score at the end.</p></div></div>
+      <p class="edition">SNAKE CLUB <span>·</span> EST. 2024</p>
+    </aside>
   </main>
-  <script src="game.js"></script>
 </body>
 </html>

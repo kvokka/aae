@@ -1,0 +1,9 @@
+{
+  "name": "snake-game-frontend",
+  "version": "1.0.0",
+  "private": true,
+  "description": "A small browser Snake game and high score board",
+  "scripts": {
+    "start": "node server.js"
+  }
+}

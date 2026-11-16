@@ -4,34 +4,33 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Snake</title>
-  <link rel="icon" href="data:,">
   <link rel="stylesheet" href="style.css">
+  <script src="game.js" defer></script>
 </head>
 <body>
   <main class="layout">
-    <h1>Snake</h1>
+    <section class="game">
+      <h1>Snake</h1>
+      <p class="score">Score: <span id="score">0</span></p>
+      <canvas id="board" width="400" height="400"></canvas>
+      <p id="status" class="status">Press an arrow key to start</p>
 
-    <div class="game">
-      <canvas id="board" width="400" height="400" aria-label="Snake game board"></canvas>
-      <p id="score" class="score">Score: 0</p>
-
-      <form id="save-form" class="save-panel" hidden>
-        <label for="name">Name</label>
-        <div class="save-row">
-          <input id="name" type="text" maxlength="20" autocomplete="nickname" placeholder="Your name">
-          <button id="save-button" type="submit">Save</button>
+      <section id="game-over" class="panel" hidden>
+        <p id="game-over-text" class="game-over-text"></p>
+        <label for="player-name">Name</label>
+        <input id="player-name" type="text" maxlength="20" placeholder="Anonymous" autocomplete="off">
+        <div class="buttons">
+          <button id="save-btn" type="button">Save score</button>
+          <button id="play-again-btn" type="button">Play again</button>
         </div>
-        <p id="save-status" class="status" role="status"></p>
-      </form>
-    </div>
+        <p id="save-message" class="message" role="status"></p>
+      </section>
+    </section>
 
     <section class="leaderboard">
-      <h2>High scores</h2>
-      <p id="leaderboard-status" class="status" role="status"></p>
-      <ol id="leaderboard"></ol>
+      <h2>Leaderboard</h2>
+      <div id="leaderboard" class="leaderboard-body">Loading...</div>
     </section>
   </main>
-
-  <script src="game.js" defer></script>
 </body>
 </html>

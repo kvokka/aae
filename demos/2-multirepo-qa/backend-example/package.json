@@ -1,0 +1,10 @@
+{
+  "name": "snake-high-scores-api",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Small persistent high-score API for the browser snake game",
+  "scripts": {
+    "start": "node server.js",
+    "test": "node --test"
+  }
+}

@@ -1,46 +1,41 @@
 # Snake high-score API
 
-A small persistent API using only Python 3's standard library and SQLite. No packages or external services are needed.
+This is a small Node.js HTTP API for the browser snake game. It uses only Node built-in modules and stores scores in a local JSON file.
 
-## Start
+## Requirements and commands
 
-From this directory, run:
+Install Node.js 18 or newer. From this directory, start the API with:
 
 ```sh
-python3 server.py
+npm start
 ```
 
-The server binds to `127.0.0.1:8000`. Scores are stored in `highscores.sqlite3` beside `server.py` and remain after server restarts. The database is created on first use and is excluded from git. Set `SNAKE_HIGHSCORES_DB` to use a different database path.
+It listens on `http://localhost:3000`. Run the built-in test suite with:
+
+```sh
+npm test
+```
 
 ## API
 
-`GET /api/highscores` returns HTTP 200 and up to ten entries, ordered by score descending and then submission order ascending. An empty store returns `{"scores":[]}`.
-
-`POST /api/highscores` accepts `Content-Type: application/json` and `{"name":"Ada","score":30}`. Names are trimmed and must contain 1–24 characters. Scores must be JSON integers from 0 through 2147483647 (booleans are not accepted). A successful submission returns HTTP 201 with the saved name and score. Invalid fields or malformed JSON return HTTP 400 with `{"error":"human-readable message"}`. JSON responses use `Content-Type: application/json`.
-
-CORS allows `http://127.0.0.1:5173` and `http://localhost:5173`, including `OPTIONS` preflight for JSON POST requests. There is no authentication.
-
-Examples:
+Get the top ten scores:
 
 ```sh
-curl http://127.0.0.1:8000/api/highscores
-curl -i -X POST http://127.0.0.1:8000/api/highscores \
+curl http://localhost:3000/api/scores
+```
+
+Submit a score (the name is trimmed; names must be 1–20 characters and scores nonnegative safe integers):
+
+```sh
+curl -X POST http://localhost:3000/api/scores \
   -H 'Content-Type: application/json' \
-  -d '{"name":"Ada","score":30}'
+  -d '{"name":"Ada","score":12}'
 ```
 
-Unknown paths return 404 and unsupported methods return 405.
+The POST response is the accepted `{ "name": "Ada", "score": 12 }`, even when it does not place in the top ten. Invalid requests return HTTP 400 and a JSON `error`. Browser requests from `http://localhost:5173` are allowed for GET, POST, and OPTIONS.
 
-## Automated checks
+## Storage and frontend
 
-Run the focused checks with:
+Scores persist in `data/scores.json` under this backend directory. The `data/` directory is excluded from git. To reset scores, stop the server and remove `data/scores.json` (or remove the whole `data/` directory); the next request starts with an empty score list.
 
-```sh
-python3 -m unittest -v
-```
-
-They cover empty results, valid submissions, top-ten ordering and ties, invalid input, database persistence after reopening storage, and CORS preflight. Tests use a temporary database and remove it when finished.
-
-## Run with the browser frontend
-
-In this backend rig, start the API with `python3 server.py`. In the sibling frontend rig, run `python3 -m http.server 5173 --bind 127.0.0.1`, then open <http://127.0.0.1:5173>.
+Run the frontend separately at `http://localhost:5173` and this API with `npm start` in the backend directory. The frontend should call `http://localhost:3000/api/scores`.
