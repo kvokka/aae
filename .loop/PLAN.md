@@ -39,7 +39,7 @@ find target -type f -newer "$s" -printf '%i %s\n' | sort -u | awk '{s+=$2} END {
 Порядок: WP-91 — первым (с ним гейт красный в двух прогонах из трёх); затем WP-87, WP-88, WP-89; WP-90 — последним и
 один, без других пакетов в работе.
 
-### WP-91 · Гонка двух прогонов одного рига с `worktree = true` · размер M · статус: todo
+### WP-91 · Гонка двух прогонов одного рига с `worktree = true` · размер M · статус: done
 - Вставлен владельцем 2026-11-17 (журнал того же дня, запись 04:35). Брать первым, отдельно от остальных пакетов.
 - Документы: `docs/design/contracts.md` (хук `run.preparing` и поле `workdir`), `docs/design/config.md` (`worktree`),
   `docs/design/invariants.md` (инвариант 19), решения 21, 48 и 108, `docs/agents/rules-tests.md` (мигающий тест
@@ -66,7 +66,7 @@ find target -type f -newer "$s" -printf '%i %s\n' | sort -u | awk '{s+=$2} END {
   >/dev/null 2>&1 || echo fail; done | grep -c fail`
 - Не входит: возврат удержания каталога; правка теста так, чтобы он перестал замечать гонку.
 
-### WP-87 · Интеграционные тесты адаптеров — один бинарь на крейт · размер S · статус: todo
+### WP-87 · Интеграционные тесты адаптеров — один бинарь на крейт · размер S · статус: done
 - Документы: `docs/design/adapters.md` (места о `tests/contract.rs` и `tests/models.rs`), `docs/harness-updates.md`
   (разделы claude и codex), решение 115.
 - Зависит от: —
@@ -87,7 +87,7 @@ find target -type f -newer "$s" -printf '%i %s\n' | sort -u | awk '{s+=$2} END {
   замер записи при правке `aae-core` до и после — в отчёте.
 - Не входит: `aae-br` и `aae-front` (интеграционный бинарь у каждого и так один).
 
-### WP-88 · Пустые тестовые бинари и встроенные тестовые модули · размер S · статус: todo
+### WP-88 · Пустые тестовые бинари и встроенные тестовые модули · размер S · статус: done
 - Документы: `docs/agents/rules-code.md`, `docs/agents/rules-tests.md`.
 - Зависит от: —
 - Сделать, двумя коммитами:
@@ -110,7 +110,7 @@ find target -type f -newer "$s" -printf '%i %s\n' | sort -u | awk '{s+=$2} END {
   -- 'crates/*/src' | grep -E 'mod [a-z_]+ \{'` пусто; после правки только вынесенного файла тестов `aae-front`
   сборка не компилирует `aae` и `aae-acceptance` (вывод cargo — в отчёте); `mise run ci` зелёный.
 
-### WP-89 · `aae-acceptance` вне повседневной сборки · размер S · статус: todo
+### WP-89 · `aae-acceptance` вне повседневной сборки · размер S · статус: done
 - Документы: `docs/guide/development.md` (задачи mise), `docs/agents/rules-tests.md`.
 - Зависит от: —
 - Проблема: раннер приёмки нужен только по просьбе владельца, а собирается и линкуется при каждой сборке и каждой

@@ -1,0 +1,11 @@
+# default nextest --no-run after touching aae-acceptance/src/main.rs
+    Finished `test` profile [optimized] target(s) in 0.03s
+# binaries (default)
+0
+# --workspace no-run
+   Compiling aae-acceptance v0.1.0 (/home/ubuntu/proj/work/aae/crates/aae-acceptance)
+    Finished `test` profile [optimized] target(s) in 2.98s
+# default no-run right after
+    Finished `test` profile [optimized] target(s) in 0.03s
+# tests in ci selection
+538

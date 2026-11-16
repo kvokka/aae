@@ -1,0 +1,2 @@
+   Compiling aae-front v0.1.0 (/home/ubuntu/proj/work/aae/crates/aae-front)
+    Finished `test` profile [optimized] target(s) in 0.44s

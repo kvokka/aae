@@ -523,3 +523,27 @@ owner»; до ответа действует то, что в коде):
    Формулы-автоматы — в roadmap, низкий приоритет.
 3. Скиллы aae для агента пользователя поставляются плагином Claude Code и Codex (125).
 4. Фоновый subagent claude после конца хода разрешено проверить на локальном фейковом API, без модели и аккаунта.
+
+## 2026-11-17T21:30 · цикл 106 · coder · НАХОДКА
+
+WP-91: причина мигания `two_runs_of_one_rig_work_at_once_each_in_its_worktree` — не очередь, а git. На этой машине
+глобальный git config включает `worktree.useRelativePaths`; тогда первый `git worktree add` в репозитории пишет в его
+config `extensions.relativeWorktrees`, и второй одновременный `add` падает «could not lock config file» → хук
+`worktree` падает, прогон кончается с `workdir` рига. Без этой настройки гонки нет (0 из 40 пар против 23 из 40).
+Гипотеза про `ca7799d` верна наполовину: до него прогоны шли по очереди и не пересекались. Починка — блокировка ОС на
+git common dir в плагине (`crates/aae-plugins/src/worktree.rs`, `hold`). Тесты, которые зовут git продукта, по-прежнему
+читают глобальный git config машины.
+
+## 2026-11-17T21:35 · цикл 106 · coder · ВОПРОС
+
+WP-89: у workspace теперь `default-members` без `aae-acceptance`. Команды в `CLAUDE.md` и `.claude/`
+(`cargo clippy --all-targets ...`, `cargo nextest run ...` без `-p`) его больше не проверяют; гейт проверяет
+(`--workspace` в `mise.toml`). Харнесс не трогал; предложение — при правке `aae-acceptance` советовать
+`--workspace`, как в `docs/agents/rules-tests.md`.
+
+## 2026-11-17T22:10 · цикл 106 · reviewer · НАХОДКА
+
+Тест WP-91 `runs_of_one_repository_prepared_at_once_each_get_a_worktree` без блокировки в `create` краснеет в 11 из 20
+запусков (в отчёте — 9 из 10): гонка возможна только на первом `git worktree add` репозитория, число потоков не
+помогает. Усилить — несколько свежих репозиториев в одном тесте. Кодер взял M + 3 S при правиле «один M или два S»
+(`docs/agents/loop.md:29`); результат годен. Ревью: `.loop/cycles/106/review.md`.
