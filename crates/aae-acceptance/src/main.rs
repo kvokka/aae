@@ -31,7 +31,8 @@ pub(crate) enum Launch {
     Ci,
     /// With a real model: only when the user runs the whole spec.
     Request,
-    /// The release builds: in a whole spec run and in the release workflow on a tag, not in CI on every commit.
+    /// The builds for every release target: only with `--release`, as the release workflow runs it on a tag; dev
+    /// builds this host's target alone.
     Release,
 }
 
@@ -60,6 +61,7 @@ const SCENARIO_LIMIT: Duration = Duration::from_secs(20 * 60);
 
 struct Args {
     ci: bool,
+    release: bool,
     aae: PathBuf,
     report: PathBuf,
     target: PathBuf,
@@ -74,6 +76,7 @@ fn args() -> Result<Args, String> {
     let target = dir.parent().unwrap_or(dir).to_owned();
     let mut args = Args {
         ci: false,
+        release: false,
         aae: dir.join("aae"),
         report: target.join("acceptance/report.md"),
         target,
@@ -84,6 +87,7 @@ fn args() -> Result<Args, String> {
     while let Some(arg) = it.next() {
         match arg.as_str() {
             "--ci" => args.ci = true,
+            "--release" => args.release = true,
             "--aae" => args.aae = it.next().ok_or("--aae needs a path")?.into(),
             "--report" => args.report = it.next().ok_or("--report needs a path")?.into(),
             "--mcp-probe" | "--mcp-stdio-probe" => {
@@ -174,8 +178,8 @@ fn order(criterion: &str) -> (u32, &str) {
     (criterion[..digits].parse().unwrap_or(u32::MAX), &criterion[digits..])
 }
 
-/// A line of the report: `mark` is `pass`, `FAIL`, `not run` (a request or release row of a CI run) or `open` (a part of
-/// a criterion no row checks yet).
+/// A line of the report: `mark` is `pass`, `FAIL`, `not run` (a request row of a CI run), `on a tag` (a release row
+/// of a run without `--release`) or `open` (a part of a criterion no row checks yet).
 struct Row {
     criterion: &'static str,
     title: &'static str,
@@ -232,7 +236,11 @@ async fn main() -> ExitCode {
     let wanted = |c: &str| args.only.is_empty() || args.only.iter().any(|o| o == c);
     let pick = |list: &'static [Scenario]| -> (Vec<&'static Scenario>, Vec<&'static Scenario>) {
         let list = list.iter().filter(|s| wanted(s.criterion));
-        list.partition(|s| !args.ci || s.launch == Launch::Ci)
+        list.partition(|s| match s.launch {
+            Launch::Ci => true,
+            Launch::Request => !args.ci,
+            Launch::Release => args.release,
+        })
     };
     let (checks, mut skipped) = pick(checks::ALL);
     let (chosen, request) = pick(scenarios::ALL);
@@ -256,17 +264,22 @@ async fn main() -> ExitCode {
         rows.push(row);
     }
     for s in skipped {
-        let notes = if s.launch == Launch::Release {
-            "release builds: run on a tag, or the spec without --ci"
+        let (mark, notes) = if s.launch == Launch::Release {
+            (
+                "on a tag",
+                "the release targets build on a tag: `mise run acceptance-release`",
+            )
         } else {
-            "needs a real model: run the spec without --ci"
-        }
-        .to_owned();
+            (
+                "not run",
+                "needs a real model or a release build: run the spec without --ci",
+            )
+        };
         rows.push(Row {
             criterion: s.criterion,
             title: s.title,
-            mark: "not run",
-            notes,
+            mark,
+            notes: notes.to_owned(),
             took: Duration::ZERO,
         });
     }
@@ -320,9 +333,10 @@ async fn main() -> ExitCode {
     }
     let _ = writeln!(
         report,
-        "\n{passed} of {} rows passed, {failed} failed, {} not run, {} open, in {:.0} s.",
+        "\n{passed} of {} rows passed, {failed} failed, {} not run, {} on a tag, {} open, in {:.0} s.",
         rows.len(),
         count("not run"),
+        count("on a tag"),
         count("open"),
         started.elapsed().as_secs_f64()
     );

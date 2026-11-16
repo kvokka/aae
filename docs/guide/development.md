@@ -10,7 +10,8 @@ mise is a convenience, not a requirement: install the same tools any way you lik
   targets `x86_64-unknown-linux-musl`, `aarch64-unknown-linux-musl`, `x86_64-apple-darwin`, `aarch64-apple-darwin`.
 - cargo-nextest 0.9.151, cargo-deny 0.20.2, cargo-machete 0.9.2 (`cargo install --locked <crate>@<version>`) and
   tokei 15.0.0 (`scripts/budget.sh`).
-- zig 0.17.1 and cargo-zigbuild 0.24.1: only for the release cross-build (`build-all`, `acceptance-release`).
+- zig 0.17.1 and cargo-zigbuild 0.24.1: for the static release build (`acceptance`, `build-all`,
+  `acceptance-release`).
 - br 0.7.6, claude (line `2.1`), codex (line `0`): for the acceptance scenarios that run them; jq 1.8.2 for the
   demos' `run.sh`, which `mise run acceptance` runs; jq and rumdl 0.3.4 also for the CI scenario of demo 2's format
   step.
@@ -24,7 +25,7 @@ Each task is a list of plain commands in `[tasks.<name>]` of `mise.toml`; run th
   `git grep` that fails on an absolute home path (`/home/…`, `/Users/…`) outside `.loop/` and `docs/init/`.
 - `acceptance-ci`: `cargo build -q --locked -p aae`, then `cargo run -q --locked -p aae-acceptance -- --ci`.
 - `acceptance`: the same without `--ci`.
-- `acceptance-release`: `cargo run -q --locked -p aae-acceptance -- 1`.
+- `acceptance-release`: `cargo run -q --locked -p aae-acceptance -- --release 1`.
 - `build-all`: `cargo zigbuild --release --locked --target <target>` for each of the four targets.
 
 ## Where each kind of test runs
@@ -34,7 +35,7 @@ Each task is a list of plain commands in `[tasks.<name>]` of `mise.toml`; run th
 | `mise run test` | unit and integration tests (`cargo nextest run`), the chaos stand among them | locally, the everyday loop; CI too | 29 s (2026-11-14, `1a732a4`) |
 | `mise run ci` | the above plus formatting, clippy, `cargo deny`, `cargo machete`, the unused-`pub` check, the line budgets and the core boundary (`scripts/core-boundary.sh`: no harness name, `br`, `max_sessions`, `instance_idle_s`, `beads_dir` or `.beads` in the code of `aae-core`) and the fixed branch order of its `select!` (`scripts/select-biased.sh`: `biased;` with a comment on the order), no absolute home paths in the repository | locally before a commit; CI on every commit | 62 s (2026-11-14, `75a5ee0`) |
 | `mise run acceptance-ci` | the acceptance scenarios without a model, each on a real `aae daemon`, then the checks of criteria 9, 11, 17, 22 and 23 | CI on every commit (job `acceptance`); locally optional | 71 s warm (2026-11-14, `75a5ee0`) |
-| `mise run acceptance-release` | criterion 1: `cargo zigbuild --release` for the four targets, then this host's binary runs | locally, the full acceptance run; no tag is made for it | 169 s cold (2026-11-14, `a070cd6`+WP-52) |
+| `mise run acceptance-release` | criterion 1 with `--release`: `cargo zigbuild --release` for the four targets, then this host's binary runs | the workflow `release` on a `v*` tag; no tag is made only to check it | 169 s cold (2026-11-14, `a070cd6`+WP-52) |
 | `mise run acceptance` | all acceptance scenarios, including those on a real model; the rows of criterion 20 run `demos/<demo>/run.sh`, whose result stays in the demo's directory, ignored by git | by hand: they cost money and need a harness login | not measured |
 
 <!-- MEASURE id=dev-test-wall date=2026-11-14 ver=1a732a4 env=linux-arm64-orbstack-9-cores src="mise run test" note="warm build; nextest summary 28.8 s for 286 tests; another build ran beside it" -->
@@ -84,11 +85,13 @@ harnesses.
 
 Pass criterion numbers to run only those: `cargo build -p aae && cargo run -p aae-acceptance -- --ci 3 19`. The
 report, with a line for every row of §15, goes to `target/acceptance/report.md`. After the scenarios the same binary
-runs the rows that live in cargo and the scripts, one at a time: `cargo zigbuild --release` for the four targets
-(criterion 1, about a minute per target warm), the crash tests of criterion 9, the contract tests of criterion 11,
+runs the rows that live in cargo and the scripts, one at a time: `cargo zigbuild --release` for this host's target
+(criterion 1), the crash tests of criterion 9, the contract tests of criterion 11,
 `scripts/budget.sh` (22) and clippy, `cargo machete` and `scripts/unused-pub.sh` (23); they build in the target
-directory the binary runs from. `--ci` leaves criterion 1 out (the row shows `not run`): the release builds are the
-slowest part, so criterion 1 is checked by the full local acceptance run (`mise run acceptance-release`). The
-workflow `release` runs the same on a `v*` tag, but no tag is made only to check it. A part of a criterion that no
-row checks yet shows as an `open` row (`crates/aae-acceptance/src/readiness.rs`, `OPEN`): it does not fail the run,
-but it keeps its criterion open, so criterion 22 caps the readiness scores of the components that list it.
+directory the binary runs from. `--ci` leaves criterion 1 out (the row shows `not run`): the release build is the
+slowest part, so the full local run (`mise run acceptance`) checks it. A developer's machine builds its own target
+only: the row of the four release targets runs only with `--release` (`mise run acceptance-release`), which the
+workflow `release` runs on a `v*` tag; without it the row shows `on a tag` and counts for no score. A part of a
+criterion that no row checks yet shows as an `open` row (`crates/aae-acceptance/src/readiness.rs`, `OPEN`): it does
+not fail the run, but it keeps its criterion open, so criterion 22 caps the readiness scores of the components that
+list it.

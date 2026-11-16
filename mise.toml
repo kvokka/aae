@@ -47,8 +47,8 @@ description = "The whole acceptance spec (spec §9.2, §15); scenarios with a re
 run = ["cargo build -q --locked -p aae", "cargo run -q --locked -p aae-acceptance"]
 
 [tasks.acceptance-release]
-description = "Criterion 1 of the acceptance: the four release targets build and this host's runs; CI runs it on tags"
-run = "cargo run -q --locked -p aae-acceptance -- 1"
+description = "Criterion 1 of the acceptance with the four release targets, and this host's build runs; CI runs it on tags"
+run = "cargo run -q --locked -p aae-acceptance -- --release 1"
 
 [tasks.acceptance-ci]
 description = "The acceptance scenarios without a model and without the release builds, as CI runs them on every commit"

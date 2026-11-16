@@ -16,9 +16,15 @@ const TARGETS: [&str; 4] = [
 pub(crate) const ALL: &[Scenario] = &[
     Scenario {
         criterion: "1",
-        title: "one binary builds for the four targets; the build for this host runs without extra runtimes",
+        title: "the release build for this host's target runs without extra runtimes",
+        launch: Launch::Request,
+        run: |env| Box::pin(release(env, &[])),
+    },
+    Scenario {
+        criterion: "1",
+        title: "one binary builds for each of the four targets",
         launch: Launch::Release,
-        run: |env| Box::pin(release(env)),
+        run: |env| Box::pin(release(env, &TARGETS)),
     },
     Scenario {
         criterion: "9",
@@ -277,8 +283,19 @@ fn line_with(text: &str, word: &str) -> String {
         .to_owned()
 }
 
-async fn release(env: Arc<Env>) -> String {
-    for target in TARGETS {
+/// The release build for this host's target and `targets` besides, then the host's binary runs.
+async fn release(env: Arc<Env>, targets: &[&str]) -> String {
+    let os = if consts::OS == "macos" {
+        "apple-darwin"
+    } else {
+        "unknown-linux-musl"
+    };
+    let host = format!("{}-{os}", consts::ARCH);
+    let mut built: Vec<&str> = targets.to_vec();
+    if !built.contains(&host.as_str()) {
+        built.push(&host);
+    }
+    for target in &built {
         let args = [
             "zigbuild",
             "-q",
@@ -291,17 +308,11 @@ async fn release(env: Arc<Env>) -> String {
         ];
         command(&env, "cargo", &args).await;
     }
-    let os = if consts::OS == "macos" {
-        "apple-darwin"
-    } else {
-        "unknown-linux-musl"
-    };
-    let host = format!("{}-{os}", consts::ARCH);
     let binary = env.target.join(&host).join("release/aae");
     let version = command(&env, &binary.to_string_lossy(), &["--version"]).await;
     format!(
         "built for {}; the {host} build runs: {}",
-        TARGETS.join(", "),
+        built.join(", "),
         version.trim()
     )
 }

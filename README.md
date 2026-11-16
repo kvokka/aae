@@ -71,9 +71,10 @@ The acceptance criteria of the first release are executable scenarios in `crates
 every commit. `mise run acceptance` runs all of them, including those that call a real model: they use the cheapest
 model, cost money and need your harness login. Pass criterion numbers to run only those:
 `cargo build -p aae && cargo run -p aae-acceptance -- --ci 3 19`. The rows that live in cargo and the CI scripts
-run from the same binary after the scenarios: the release build for the four targets (1, not with `--ci`), the
-crash tests of the adapters (9), the contract tests (11), the demos (20; in CI only that they load), the line
-budgets with the readiness file checked against the failed rows (22) and the stub linters (23). The report has a
-line for every row of §15, run or not, with the date and the versions of `aae` and the harnesses, and goes to
+run from the same binary after the scenarios: the release build for this host's target (1, not with `--ci`; the
+four targets only with `--release`), the crash tests of the adapters (9), the contract tests (11), the demos (20;
+in CI only that they load), the line budgets with the readiness file checked against the failed rows (22) and the
+stub linters (23). The report has a line for every row of §15, run or not, with the date and the versions of `aae` and
+the harnesses, and goes to
 `target/acceptance/report.md`. No row is checked by hand. A row that is not run cannot fail, so a green 22 under
 `--ci` says nothing of the rows that need a model, the demos of 20 among them.
