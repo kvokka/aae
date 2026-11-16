@@ -3,7 +3,9 @@
 use aae_codex::Codex;
 use aae_core::{
     config::{EffectiveConfig, Layer, Skill, Sourced},
-    driver::{Driver, DriverEvent, FailureKind, Normalized, PromptKey, SessionPlan, StopReason, Transcript},
+    driver::{
+        Driver, DriverEvent, FailureKind, Normalized, PromptKey, SessionPlan, SessionState, StopReason, Transcript,
+    },
 };
 use aae_testkit::openai::{Provider, Reply};
 use serde_json::json;
@@ -208,5 +210,139 @@ async fn a_thread_resumed_on_its_live_app_server_gets_the_new_attempt_token() {
     let events = until(&mut rx, |e| matches!(e, Normalized::TurnEnded { .. })).await;
     let marker = std::fs::read_to_string(dir.path().join("marker"));
     assert_eq!(marker.unwrap_or_default().trim(), "two", "{events:?}");
+    driver.stop_instance(&instance, Duration::from_secs(4)).await;
+}
+
+/// The pid a command wrote to `file`, once it is there (up to 10 s).
+async fn pid_in(file: &std::path::Path) -> i32 {
+    for _ in 0..100 {
+        if let Some(pid) = std::fs::read_to_string(file).ok().and_then(|t| t.trim().parse().ok()) {
+            return pid;
+        }
+        tokio::time::sleep(Duration::from_millis(100)).await;
+    }
+    panic!("no pid in {}", file.display());
+}
+
+/// Criterion 34 at the adapter: `stop_background` cleans one thread's background terminals; that thread comes to
+/// idle without background and takes a next prompt, the other thread of the same app-server keeps its command.
+#[tokio::test]
+async fn the_commands_a_thread_left_are_stopped_and_other_threads_keep_theirs() {
+    let left = Reply::Command("sh -c 'echo $$ > bg.pid; exec sleep 300'".into());
+    let provider = Provider::start(vec![Reply::Turn(vec![left, Reply::Text("Started.".into())])]).await;
+    let dir = tempfile::tempdir().unwrap();
+    let driver = Codex::new("codex".into(), dir.path().join("state"), None, 8);
+    let (tx, mut rx) = mpsc::unbounded_channel();
+    let mut threads = Vec::new();
+    let mut instance = None;
+    for name in ["a", "b"] {
+        let workdir = dir.path().join(name);
+        std::fs::create_dir_all(&workdir).unwrap();
+        let plan = SessionPlan::New {
+            workdir: workdir.clone(),
+            run: name.into(),
+            attempt: 1,
+            token: name.into(),
+            actor: None,
+        };
+        let split = driver.split(&config(&provider), &plan).unwrap();
+        if instance.is_none() {
+            instance = Some(driver.start_instance("i1", &split.process, tx.clone()).await.unwrap());
+        }
+        let instance = instance.as_ref().unwrap();
+        let session = driver.start_session(instance, &split.session).await.unwrap();
+        let key = PromptKey::new(name, 1, 1);
+        driver.send_prompt(instance, &session, "start it", key).await.unwrap();
+        threads.push((session, workdir));
+    }
+    let instance = instance.unwrap();
+    let idle = |background| Normalized::State {
+        state: SessionState::Idle,
+        background,
+    };
+    // Each command yields its turn after about 10 s: both threads end idle with background.
+    let mut busy = Vec::new();
+    while busy.len() < 2 {
+        let e = tokio::time::timeout(Duration::from_secs(30), rx.recv())
+            .await
+            .unwrap()
+            .unwrap();
+        if e.event == idle(true) {
+            busy.push(e.session.unwrap());
+        }
+    }
+    let [(a, a_dir), (_, b_dir)] = &threads[..] else {
+        unreachable!()
+    };
+    let (a_pid, b_pid) = (pid_in(&a_dir.join("bg.pid")).await, pid_in(&b_dir.join("bg.pid")).await);
+
+    driver.stop_background(&instance, a).await;
+    loop {
+        let e = tokio::time::timeout(Duration::from_secs(30), rx.recv())
+            .await
+            .unwrap()
+            .unwrap();
+        if e.event == idle(false) {
+            assert_eq!(e.session.as_ref(), Some(a), "only thread A is free");
+            break;
+        }
+    }
+    for _ in 0..50 {
+        if aae_core::orphans::start_time(a_pid).is_none() {
+            break;
+        }
+        tokio::time::sleep(Duration::from_millis(100)).await;
+    }
+    assert_eq!(aae_core::orphans::start_time(a_pid), None, "A's command is gone");
+    assert!(aae_core::orphans::start_time(b_pid).is_some(), "B's command runs on");
+
+    driver
+        .send_prompt(&instance, a, "again", PromptKey::new("a", 1, 2))
+        .await
+        .unwrap();
+    let events = until(&mut rx, |e| matches!(e, Normalized::TurnEnded { .. })).await;
+    assert!(events.contains(&Normalized::TurnStarted), "{events:?}");
+    driver.stop_instance(&instance, Duration::from_secs(4)).await;
+}
+
+/// A command that detached itself is no background of its thread, and it goes when its thread is closed: it carries
+/// the attempt's token, while the shared app-server lives on.
+#[tokio::test]
+async fn a_detached_command_goes_with_its_thread() {
+    let detached = Reply::Command("setsid sh -c 'echo $$ > det.pid; exec sleep 300' >/dev/null 2>&1 &".into());
+    let provider = Provider::start(vec![Reply::Turn(vec![detached, Reply::Text("Started.".into())])]).await;
+    let dir = tempfile::tempdir().unwrap();
+    let driver = Codex::new("codex".into(), dir.path().join("state"), None, 8);
+    let plan = SessionPlan::New {
+        workdir: dir.path().into(),
+        run: "r".into(),
+        attempt: 1,
+        token: format!("detached-{}", std::process::id()),
+        actor: None,
+    };
+    let split = driver.split(&config(&provider), &plan).unwrap();
+    let (tx, mut rx) = mpsc::unbounded_channel();
+    let instance = driver.start_instance("i1", &split.process, tx).await.unwrap();
+    let session = driver.start_session(&instance, &split.session).await.unwrap();
+    let prompt = driver.send_prompt(&instance, &session, "start it", PromptKey::new("r", 1, 1));
+    prompt.await.unwrap();
+    until(&mut rx, |e| matches!(e, Normalized::TurnEnded { .. })).await;
+    let pid = pid_in(&dir.path().join("det.pid")).await;
+    assert!(
+        aae_core::orphans::start_time(pid).is_some(),
+        "the command outlives its turn"
+    );
+    driver.close_session(&instance, &session).await;
+    for _ in 0..50 {
+        if aae_core::orphans::start_time(pid).is_none() {
+            break;
+        }
+        tokio::time::sleep(Duration::from_millis(100)).await;
+    }
+    assert_eq!(
+        aae_core::orphans::start_time(pid),
+        None,
+        "the command went with its thread"
+    );
     driver.stop_instance(&instance, Duration::from_secs(4)).await;
 }
