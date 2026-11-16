@@ -4,7 +4,7 @@
   "cycle": 105,
   "phase": null,
   "attempt": 0,
-  "base": "ba6b363e1fd7c30468371e7f0218719cc058bd79",
+  "base": "d4d24ee1efb8ea93b9ef9a5b7fd150210ea46ea2",
   "started": "2026-11-16T22:16:50+0700",
   "coder_status": "done",
   "history": [],
@@ -92,7 +92,7 @@
     },
     {
       "cycle": 105,
-      "base": "ba6b363e1fd7c30468371e7f0218719cc058bd79",
+      "base": "d4d24ee1efb8ea93b9ef9a5b7fd150210ea46ea2",
       "head": "04984d6c4e53d4fe66dfb17d3faec924b9e0291a",
       "coder_status": "done",
       "score": 9.0,
