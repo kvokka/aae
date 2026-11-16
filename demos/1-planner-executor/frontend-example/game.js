@@ -1,151 +1,156 @@
 "use strict";
 
-// Base URL of the score backend. Change it here only.
-const API_BASE_URL = "http://127.0.0.1:8000";
+// Backend base URL. Must match the score API contract.
+const API_BASE_URL = "http://localhost:8080";
+const SCORES_ENDPOINT = `${API_BASE_URL}/api/scores`;
+
+const NAME_STORAGE_KEY = "snake.playerName";
+const NAME_MAX_LENGTH = 20;
+const LEADERBOARD_LIMIT = 10;
+const UNAVAILABLE_MESSAGE = "Scores unavailable (backend is not running)";
 
 const GRID_SIZE = 20;
-const CELL_PX = 20; // GRID_SIZE * CELL_PX matches the 400px canvas
-const TICK_MS = 120;
-const INITIAL_LENGTH = 3;
-const POINTS_PER_FOOD = 10;
-const NAME_MAX_LENGTH = 20;
-const DEFAULT_NAME = "Player";
-const LEADERBOARD_LIMIT = 10;
-const REQUEST_TIMEOUT_MS = 5000;
-
-const UP = { x: 0, y: -1 };
-const DOWN = { x: 0, y: 1 };
-const LEFT = { x: -1, y: 0 };
-const RIGHT = { x: 1, y: 0 };
-
-const DIRECTION_BY_KEY = {
-  ArrowUp: UP,
-  ArrowDown: DOWN,
-  ArrowLeft: LEFT,
-  ArrowRight: RIGHT,
-  w: UP,
-  s: DOWN,
-  a: LEFT,
-  d: RIGHT,
-};
+const CELL_SIZE = 20;
+const STEP_INTERVAL_MS = 120;
 
 const COLORS = {
-  board: "#14161b",
-  grid: "#1d2028",
-  snakeHead: "#8af0a8",
-  snakeBody: "#4fd17a",
-  food: "#ff7b72",
-  overlay: "rgba(13, 15, 20, 0.72)",
-  overlayText: "#e8eaf0",
+  board: "#111827",
+  grid: "#1f2937",
+  snake: "#22c55e",
+  snakeHead: "#15803d",
+  food: "#ef4444",
+  overlay: "rgba(0, 0, 0, 0.65)",
+  text: "#f9fafb",
+};
+
+const DIRECTIONS = {
+  up: { x: 0, y: -1 },
+  down: { x: 0, y: 1 },
+  left: { x: -1, y: 0 },
+  right: { x: 1, y: 0 },
+};
+
+// Keys are lower-cased event.key values.
+const KEY_TO_DIRECTION = {
+  arrowup: DIRECTIONS.up,
+  w: DIRECTIONS.up,
+  arrowdown: DIRECTIONS.down,
+  s: DIRECTIONS.down,
+  arrowleft: DIRECTIONS.left,
+  a: DIRECTIONS.left,
+  arrowright: DIRECTIONS.right,
+  d: DIRECTIONS.right,
 };
 
 const canvas = document.getElementById("board");
-const ctx = canvas.getContext("2d");
-const scoreEl = document.getElementById("score");
-const statusEl = document.getElementById("status");
+const context = canvas.getContext("2d");
+const scoreLabel = document.getElementById("score");
 const saveForm = document.getElementById("save-form");
+const nameInput = document.getElementById("name");
 const saveButton = document.getElementById("save-button");
-const nameInput = document.getElementById("player-name");
-const saveMessageEl = document.getElementById("save-message");
-const leaderboardMessageEl = document.getElementById("leaderboard-message");
-const leaderboardTable = document.getElementById("leaderboard-table");
-const leaderboardBody = document.getElementById("leaderboard-body");
+const saveStatus = document.getElementById("save-status");
+const leaderboardStatus = document.getElementById("leaderboard-status");
+const leaderboardList = document.getElementById("leaderboard");
 
-// Game state. state: "ready" | "running" | "over".
-// snake[0] is the head. dir is the direction applied by the last tick;
-// queuedDir is the single pending direction applied by the next tick.
-let game = null;
-let timerId = null;
-// The finished game whose score the name form is currently saving.
-let saveTarget = null;
+const game = {
+  status: "idle", // "idle" (waiting for first key) | "running" | "over"
+  snake: [],
+  direction: DIRECTIONS.right, // direction applied on the last step
+  nextDirection: DIRECTIONS.right, // direction applied on the next step
+  food: null,
+  score: 0,
+  timerId: null,
+  saving: false,
+  saved: false,
+};
 
-function createGame() {
-  const cx = Math.floor(GRID_SIZE / 2);
-  const cy = Math.floor(GRID_SIZE / 2);
-  const snake = [];
-  for (let i = 0; i < INITIAL_LENGTH; i += 1) {
-    snake.push({ x: cx - i, y: cy });
-  }
-  return {
-    snake,
-    dir: RIGHT,
-    queuedDir: RIGHT,
-    food: randomFreeCell(snake),
-    score: 0,
-    state: "ready",
-  };
+class ScoreApiError extends Error {}
+
+function sameCell(a, b) {
+  return a.x === b.x && a.y === b.y;
 }
 
-function randomFreeCell(snake) {
-  const occupied = new Set(snake.map((cell) => cell.y * GRID_SIZE + cell.x));
+function isInsideGrid(cell) {
+  return cell.x >= 0 && cell.x < GRID_SIZE && cell.y >= 0 && cell.y < GRID_SIZE;
+}
+
+// Returns a random cell not occupied by the snake, or null if the board is full.
+function placeFood() {
+  const occupied = new Set(game.snake.map((cell) => cell.y * GRID_SIZE + cell.x));
   const free = [];
-  for (let y = 0; y < GRID_SIZE; y += 1) {
-    for (let x = 0; x < GRID_SIZE; x += 1) {
-      if (!occupied.has(y * GRID_SIZE + x)) {
-        free.push({ x, y });
-      }
+  for (let index = 0; index < GRID_SIZE * GRID_SIZE; index += 1) {
+    if (!occupied.has(index)) {
+      free.push(index);
     }
   }
   if (free.length === 0) {
     return null;
   }
-  return free[Math.floor(Math.random() * free.length)];
+  const index = free[Math.floor(Math.random() * free.length)];
+  return { x: index % GRID_SIZE, y: Math.floor(index / GRID_SIZE) };
 }
 
 function stopTimer() {
-  if (timerId !== null) {
-    clearInterval(timerId);
-    timerId = null;
+  if (game.timerId !== null) {
+    clearInterval(game.timerId);
+    game.timerId = null;
   }
 }
 
-function startGame() {
+function startTimer() {
   stopTimer();
-  hideSaveForm();
-  game = createGame();
-  game.state = "running";
-  setStatus("Game on! Steer with arrow keys or WASD.");
-  timerId = setInterval(tick, TICK_MS);
+  game.timerId = setInterval(step, STEP_INTERVAL_MS);
+}
+
+function resetBoard(status) {
+  const middle = Math.floor(GRID_SIZE / 2);
+  game.snake = [
+    { x: middle, y: middle },
+    { x: middle - 1, y: middle },
+    { x: middle - 2, y: middle },
+  ];
+  game.direction = DIRECTIONS.right;
+  game.nextDirection = DIRECTIONS.right;
+  game.score = 0;
+  game.food = placeFood();
+  game.status = status;
+  game.saved = false;
+  saveForm.hidden = true;
+}
+
+function startNewGame() {
+  resetBoard("running");
+  startTimer();
   render();
 }
 
-function queueDirection(dir) {
-  // A reversal into the neck is ignored. Checked against the applied direction,
-  // so at most one change can take effect per tick: only queuedDir is applied.
-  const current = game.dir;
-  if (dir.x === -current.x && dir.y === -current.y) {
-    return;
+// Queues a direction for the next step. A 180-degree reverse of the current direction is ignored.
+function steer(direction) {
+  const isReverse =
+    direction.x === -game.direction.x && direction.y === -game.direction.y;
+  if (!isReverse) {
+    game.nextDirection = direction;
   }
-  game.queuedDir = dir;
 }
 
-function tick() {
-  if (!game || game.state !== "running") {
-    return;
-  }
-  game.dir = game.queuedDir;
+function step() {
+  game.direction = game.nextDirection;
   const head = game.snake[0];
-  const next = { x: head.x + game.dir.x, y: head.y + game.dir.y };
-
-  if (next.x < 0 || next.x >= GRID_SIZE || next.y < 0 || next.y >= GRID_SIZE) {
-    endGame();
-    return;
-  }
-
-  const eats = next.x === game.food.x && next.y === game.food.y;
-  // The tail moves away on a normal step, so its cell is free; when eating it stays.
+  const next = { x: head.x + game.direction.x, y: head.y + game.direction.y };
+  const eats = sameCell(next, game.food);
+  // The tail leaves the board on this step unless the snake grows, so it is not a blocker.
   const blockers = eats ? game.snake : game.snake.slice(0, -1);
-  if (blockers.some((cell) => cell.x === next.x && cell.y === next.y)) {
+
+  if (!isInsideGrid(next) || blockers.some((cell) => sameCell(cell, next))) {
     endGame();
     return;
   }
 
   game.snake.unshift(next);
   if (eats) {
-    game.score += POINTS_PER_FOOD;
-    game.food = randomFreeCell(game.snake);
+    game.score += 1;
+    game.food = placeFood();
     if (game.food === null) {
-      // The board is full: nothing left to eat.
       endGame();
       return;
     }
@@ -157,276 +162,235 @@ function tick() {
 
 function endGame() {
   stopTimer();
-  game.state = "over";
+  game.status = "over";
   render();
   if (game.score > 0) {
-    setStatus(`Game over! Final score: ${game.score}. Enter your name to save it.`);
-    showSaveForm(game);
-  } else {
-    setStatus("Game over. A score of 0 is not saved. Press Space or Enter to play again.");
+    showSavePanel();
+  }
+}
+
+function showSavePanel() {
+  nameInput.value = loadSavedName();
+  nameInput.disabled = false;
+  saveButton.disabled = false;
+  saveStatus.textContent = "";
+  saveForm.hidden = false;
+}
+
+function setSaveStatus(message) {
+  saveStatus.textContent = message;
+}
+
+function handleKeyDown(event) {
+  const target = event.target;
+  if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement) {
+    return; // Typing in the name field must not steer or restart the game.
+  }
+
+  const key = event.key.toLowerCase();
+  const direction = KEY_TO_DIRECTION[key];
+
+  if (direction) {
+    if (game.status === "over") {
+      return;
+    }
+    event.preventDefault();
+    if (game.status === "idle") {
+      game.status = "running";
+      startTimer();
+    }
+    steer(direction);
+    return;
+  }
+
+  if (key === " " || key === "enter") {
+    if (game.status === "running" || event.repeat) {
+      return;
+    }
+    if (target instanceof HTMLButtonElement) {
+      if (key === "enter") {
+        return; // Enter on a focused button (Save) activates that button.
+      }
+      // Space on a focused button would click it on release; drop focus so the key starts the game instead.
+      target.blur();
+    }
+    event.preventDefault();
+    startNewGame();
+  }
+}
+
+async function fetchScores() {
+  const response = await fetch(SCORES_ENDPOINT);
+  if (!response.ok) {
+    throw new Error(`HTTP ${response.status}`);
+  }
+  const scores = await response.json();
+  if (!Array.isArray(scores)) {
+    throw new Error("Unexpected response shape");
+  }
+  return scores;
+}
+
+async function postScore(name, score) {
+  const response = await fetch(SCORES_ENDPOINT, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ name, score }),
+  });
+  const data = await response.json().catch(() => null);
+  if (response.status !== 201) {
+    const message =
+      data && typeof data.error === "string"
+        ? data.error
+        : `Could not save the score (HTTP ${response.status}).`;
+    throw new ScoreApiError(message);
+  }
+  return data;
+}
+
+function isSameEntry(a, b) {
+  return a.name === b.name && a.score === b.score && a.date === b.date;
+}
+
+function renderLeaderboard(scores, highlight) {
+  const items = scores.slice(0, LEADERBOARD_LIMIT).map((entry, index) => {
+    const item = document.createElement("li");
+    item.textContent = `${index + 1}. ${entry.name} - ${entry.score}`;
+    if (highlight && isSameEntry(entry, highlight)) {
+      item.classList.add("highlight");
+    }
+    return item;
+  });
+  leaderboardList.replaceChildren(...items);
+  leaderboardStatus.textContent = scores.length === 0 ? "No scores yet." : "";
+}
+
+// Never throws: a failed load only changes the leaderboard message.
+async function refreshLeaderboard(highlight = null) {
+  leaderboardStatus.textContent = "Loading scores...";
+  try {
+    const scores = await fetchScores();
+    renderLeaderboard(scores, highlight);
+  } catch (error) {
+    leaderboardList.replaceChildren();
+    leaderboardStatus.textContent = UNAVAILABLE_MESSAGE;
+  }
+}
+
+async function handleSave(event) {
+  event.preventDefault();
+  if (game.status !== "over" || game.saved || game.saving || game.score <= 0) {
+    return;
+  }
+
+  const name = nameInput.value.trim();
+  if (name === "") {
+    setSaveStatus("Please enter a name.");
+    nameInput.focus();
+    return;
+  }
+
+  const score = game.score;
+  game.saving = true;
+  saveButton.disabled = true;
+  setSaveStatus("Saving...");
+  saveName(name);
+
+  try {
+    const entry = await postScore(name, score);
+    game.saved = true;
+    nameInput.disabled = true;
+    setSaveStatus("Score saved.");
+    await refreshLeaderboard(entry);
+  } catch (error) {
+    const message =
+      error instanceof ScoreApiError ? error.message : UNAVAILABLE_MESSAGE;
+    setSaveStatus(message);
+    saveButton.disabled = false;
+  } finally {
+    game.saving = false;
+  }
+}
+
+function loadSavedName() {
+  try {
+    return (localStorage.getItem(NAME_STORAGE_KEY) || "").slice(0, NAME_MAX_LENGTH);
+  } catch (error) {
+    return "";
+  }
+}
+
+function saveName(name) {
+  try {
+    localStorage.setItem(NAME_STORAGE_KEY, name);
+  } catch (error) {
+    // Storage may be unavailable (for example, in private mode); the name is simply not remembered.
+  }
+}
+
+function drawOverlay(lines) {
+  context.fillStyle = COLORS.overlay;
+  context.fillRect(0, 0, canvas.width, canvas.height);
+  context.fillStyle = COLORS.text;
+  context.textAlign = "center";
+  context.textBaseline = "middle";
+
+  const lineHeight = 36;
+  const top = canvas.height / 2 - ((lines.length - 1) * lineHeight) / 2;
+  lines.forEach((line, index) => {
+    context.font = `${line.weight} ${line.size}px system-ui, sans-serif`;
+    context.fillText(line.text, canvas.width / 2, top + index * lineHeight);
+  });
+}
+
+function drawBoard() {
+  context.fillStyle = COLORS.board;
+  context.fillRect(0, 0, canvas.width, canvas.height);
+
+  context.strokeStyle = COLORS.grid;
+  context.lineWidth = 1;
+  context.beginPath();
+  for (let line = 1; line < GRID_SIZE; line += 1) {
+    const position = line * CELL_SIZE + 0.5;
+    context.moveTo(position, 0);
+    context.lineTo(position, canvas.height);
+    context.moveTo(0, position);
+    context.lineTo(canvas.width, position);
+  }
+  context.stroke();
+
+  if (game.food) {
+    context.fillStyle = COLORS.food;
+    context.fillRect(game.food.x * CELL_SIZE + 2, game.food.y * CELL_SIZE + 2, CELL_SIZE - 4, CELL_SIZE - 4);
+  }
+
+  game.snake.forEach((cell, index) => {
+    context.fillStyle = index === 0 ? COLORS.snakeHead : COLORS.snake;
+    context.fillRect(cell.x * CELL_SIZE + 1, cell.y * CELL_SIZE + 1, CELL_SIZE - 2, CELL_SIZE - 2);
+  });
+
+  if (game.status === "idle") {
+    drawOverlay([
+      { text: "Snake", size: 32, weight: "bold" },
+      { text: "Press an arrow key or W A S D to start", size: 15, weight: "normal" },
+    ]);
+  } else if (game.status === "over") {
+    drawOverlay([
+      { text: "Game over", size: 32, weight: "bold" },
+      { text: `Score: ${game.score}`, size: 20, weight: "normal" },
+      { text: "Press Space or Enter to play again", size: 15, weight: "normal" },
+    ]);
   }
 }
 
 function render() {
-  ctx.fillStyle = COLORS.board;
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-  ctx.strokeStyle = COLORS.grid;
-  ctx.lineWidth = 1;
-  for (let i = 1; i < GRID_SIZE; i += 1) {
-    const p = i * CELL_PX + 0.5;
-    ctx.beginPath();
-    ctx.moveTo(p, 0);
-    ctx.lineTo(p, canvas.height);
-    ctx.moveTo(0, p);
-    ctx.lineTo(canvas.width, p);
-    ctx.stroke();
-  }
-
-  if (game.food) {
-    ctx.fillStyle = COLORS.food;
-    ctx.beginPath();
-    ctx.arc(
-      game.food.x * CELL_PX + CELL_PX / 2,
-      game.food.y * CELL_PX + CELL_PX / 2,
-      CELL_PX / 2 - 3,
-      0,
-      Math.PI * 2
-    );
-    ctx.fill();
-  }
-
-  game.snake.forEach((cell, index) => {
-    ctx.fillStyle = index === 0 ? COLORS.snakeHead : COLORS.snakeBody;
-    ctx.fillRect(cell.x * CELL_PX + 1, cell.y * CELL_PX + 1, CELL_PX - 2, CELL_PX - 2);
-  });
-
-  if (game.state !== "running") {
-    ctx.fillStyle = COLORS.overlay;
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-    ctx.fillStyle = COLORS.overlayText;
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-    ctx.font = "600 28px system-ui, sans-serif";
-    ctx.fillText(game.state === "over" ? "Game over" : "Snake", canvas.width / 2, canvas.height / 2 - 14);
-    ctx.font = "16px system-ui, sans-serif";
-    ctx.fillText("Press Space or Enter", canvas.width / 2, canvas.height / 2 + 18);
-  }
-
-  scoreEl.textContent = String(game.score);
+  drawBoard();
+  scoreLabel.textContent = `Score: ${game.score}`;
 }
 
-function setStatus(text) {
-  statusEl.textContent = text;
-}
+saveForm.addEventListener("submit", handleSave);
+document.addEventListener("keydown", handleKeyDown);
 
-function isTypingTarget(element) {
-  return (
-    element instanceof HTMLElement &&
-    (element.tagName === "INPUT" || element.tagName === "TEXTAREA" || element.tagName === "SELECT")
-  );
-}
-
-document.addEventListener("keydown", (event) => {
-  if (isTypingTarget(event.target) || event.ctrlKey || event.metaKey || event.altKey) {
-    return;
-  }
-
-  const key = event.key;
-  if (key === " " || key === "Enter") {
-    // Buttons handle their own Space/Enter activation.
-    if (event.target instanceof HTMLButtonElement) {
-      return;
-    }
-    event.preventDefault();
-    if (!event.repeat && (!game || game.state !== "running")) {
-      startGame();
-    }
-    return;
-  }
-
-  const dir = DIRECTION_BY_KEY[key] || DIRECTION_BY_KEY[String(key).toLowerCase()];
-  if (dir) {
-    event.preventDefault();
-    if (game && game.state === "running") {
-      queueDirection(dir);
-    }
-  }
-});
-
-// ---- Name form and score submission ----
-
-function showSaveForm(finishedGame) {
-  saveTarget = finishedGame;
-  nameInput.value = "";
-  saveMessageEl.textContent = "";
-  saveMessageEl.classList.remove("error");
-  saveButton.disabled = false;
-  saveForm.hidden = false;
-  nameInput.focus();
-}
-
-function hideSaveForm() {
-  saveTarget = null;
-  saveForm.hidden = true;
-}
-
-function normalizeName(raw) {
-  const trimmed = raw.trim();
-  if (trimmed === "") {
-    return DEFAULT_NAME;
-  }
-  // Input maxlength already limits this; the slice is a safety net.
-  return Array.from(trimmed).slice(0, NAME_MAX_LENGTH).join("");
-}
-
-function fetchWithTimeout(url, options = {}) {
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
-  return fetch(url, { ...options, signal: controller.signal }).finally(() => clearTimeout(timeout));
-}
-
-function unreachableMessage() {
-  return `cannot reach the score server at ${API_BASE_URL}. Check that it is running and allows requests from this page.`;
-}
-
-async function submitScore(name, score) {
-  let response;
-  try {
-    response = await fetchWithTimeout(`${API_BASE_URL}/api/scores`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name, score }),
-    });
-  } catch (error) {
-    throw new Error(`Score not saved: ${unreachableMessage()}`);
-  }
-
-  let data = null;
-  try {
-    data = await response.json();
-  } catch (error) {
-    data = null;
-  }
-
-  if (response.status === 201) {
-    return data;
-  }
-  const detail = data && typeof data.error === "string" ? data.error : `HTTP ${response.status}`;
-  throw new Error(`Score not saved: ${detail}.`);
-}
-
-saveForm.addEventListener("submit", async (event) => {
-  event.preventDefault();
-  const target = saveTarget;
-  if (!target || saveButton.disabled) {
-    return;
-  }
-
-  const name = normalizeName(nameInput.value);
-  saveButton.disabled = true;
-  saveMessageEl.classList.remove("error");
-  saveMessageEl.textContent = "Saving…";
-
-  try {
-    await submitScore(name, target.score);
-    // A new game may have started while the request was in flight.
-    if (saveTarget === target) {
-      hideSaveForm();
-      setStatus(`Saved: ${name} with ${target.score} points. Press Space or Enter to play again.`);
-    }
-    await loadLeaderboard();
-  } catch (error) {
-    if (saveTarget === target) {
-      saveMessageEl.classList.add("error");
-      saveMessageEl.textContent = error.message;
-      saveButton.disabled = false;
-    }
-  }
-});
-
-// ---- Leaderboard ----
-
-function setLeaderboardMessage(text, isError = false) {
-  leaderboardMessageEl.textContent = text;
-  leaderboardMessageEl.classList.toggle("error", isError);
-}
-
-function formatDate(value) {
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? String(value) : date.toLocaleString();
-}
-
-function renderLeaderboard(entries) {
-  leaderboardBody.replaceChildren();
-  if (entries.length === 0) {
-    leaderboardTable.hidden = true;
-    setLeaderboardMessage("No scores yet. Be the first!");
-    return;
-  }
-
-  entries.forEach((entry, index) => {
-    const row = document.createElement("tr");
-    const cells = [
-      { text: String(index + 1), className: "num" },
-      { text: String(entry && entry.name !== undefined ? entry.name : "") },
-      { text: String(entry && entry.score !== undefined ? entry.score : ""), className: "num score" },
-      { text: formatDate(entry && entry.created_at !== undefined ? entry.created_at : "") },
-    ];
-    for (const cell of cells) {
-      const td = document.createElement("td");
-      td.textContent = cell.text;
-      if (cell.className) {
-        td.className = cell.className;
-      }
-      row.appendChild(td);
-    }
-    leaderboardBody.appendChild(row);
-  });
-
-  leaderboardTable.hidden = false;
-  setLeaderboardMessage("");
-}
-
-async function loadLeaderboard() {
-  try {
-    let response;
-    try {
-      response = await fetchWithTimeout(`${API_BASE_URL}/api/scores?limit=${LEADERBOARD_LIMIT}`);
-    } catch (error) {
-      leaderboardTable.hidden = true;
-      setLeaderboardMessage(`High scores unavailable: ${unreachableMessage()} The game still works.`, true);
-      return;
-    }
-
-    if (!response.ok) {
-      leaderboardTable.hidden = true;
-      setLeaderboardMessage(`High scores unavailable: the server returned HTTP ${response.status}.`, true);
-      return;
-    }
-
-    let entries;
-    try {
-      entries = await response.json();
-    } catch (error) {
-      entries = null;
-    }
-    if (!Array.isArray(entries)) {
-      leaderboardTable.hidden = true;
-      setLeaderboardMessage("High scores unavailable: the server sent an unexpected response.", true);
-      return;
-    }
-    renderLeaderboard(entries);
-  } catch (error) {
-    // Last-resort guard: the leaderboard must never break the game.
-    leaderboardTable.hidden = true;
-    setLeaderboardMessage("High scores unavailable: unexpected error while loading.", true);
-  }
-}
-
-// ---- Start ----
-
-game = createGame();
+resetBoard("idle");
 render();
-setLeaderboardMessage("Loading high scores…");
-loadLeaderboard();
+refreshLeaderboard();

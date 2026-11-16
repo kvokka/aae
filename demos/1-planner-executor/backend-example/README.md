@@ -1,32 +1,24 @@
-# Snake high-score backend
+# Snake score API
 
-This backend uses only the Python 3 standard library. It listens on
-`127.0.0.1:8000`. Set `PORT` to choose another port and `SCORES_FILE` to choose
-the JSON file used to store scores. By default, scores are stored in
-`scores.json` in the current working directory.
+Requires Python 3 and uses only the standard library.
 
-Start the server from this directory:
+Run from this directory with:
 
 ```sh
 python3 server.py
 ```
 
-List the top scores:
+The server listens on `127.0.0.1:8080`. Run the tests with:
 
 ```sh
-curl -i 'http://127.0.0.1:8000/api/scores'
+python3 -m unittest -v
 ```
 
-Add a score:
+## API
 
-```sh
-curl -i -X POST http://127.0.0.1:8000/api/scores \
-  -H 'Content-Type: application/json' \
-  -d '{"name":"Ada","score":42}'
-```
+- `GET /api/scores` returns a JSON array of up to 10 entries, highest score first. Equal scores keep their earlier order.
+- `POST /api/scores` accepts `{"name":"Ada","score":42}` and returns the saved entry with status 201. Names are trimmed and must contain 1–20 characters. Scores must be nonnegative integers (booleans are rejected).
+- Invalid JSON or values return status 400 with `{"error":"..."}`. Unknown paths return 404; unsupported methods on the API path return 405.
+- `OPTIONS /api/scores` returns 204 with CORS method and header permissions.
 
-Run the standard-library test suite:
-
-```sh
-python3 -m unittest discover -s tests -v
-```
+Each entry contains `name`, `score`, and an ISO 8601 UTC `date`. The server stores the top 10 entries in `scores.json` in the current working directory, replacing the file atomically.

@@ -3,39 +3,49 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Snake | Arcade</title>
-  <link rel="stylesheet" href="style.css">
-  <script src="game.js" defer></script>
+  <title>Snake</title>
+  <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-  <main class="layout">
-    <section class="game-panel" aria-labelledby="title">
-      <header class="topbar">
-        <div><p class="eyebrow">ARCADE CLASSIC</p><h1 id="title">Snake</h1></div>
-        <div class="score-box"><span>Score</span><strong id="score">0</strong></div>
-      </header>
-      <p class="instructions">Eat the glowing food and grow. Use the arrow keys to steer. Don’t hit the walls or yourself.</p>
-      <div class="board-wrap">
-        <canvas id="board" width="480" height="480" aria-label="Snake game board"></canvas>
-        <div id="overlay" class="overlay">
-          <p id="overlay-title">Ready to play?</p>
-          <span id="overlay-copy">Use the arrow keys to move</span>
-          <button id="start-button" type="button">Start game</button>
-        </div>
+  <main class="page">
+    <header class="page-header">
+      <div>
+        <p class="eyebrow">A little arcade classic</p>
+        <h1>Snake</h1>
       </div>
-      <div class="game-footer"><span id="game-status" aria-live="polite">Press start when you’re ready.</span><button id="restart-button" class="secondary" type="button">Restart</button></div>
-      <form id="submit-form" class="submit-form" hidden>
-        <label for="player-name">Add your score to the board</label>
-        <div class="submit-row"><input id="player-name" name="name" maxlength="20" required autocomplete="nickname" placeholder="Your name"><button id="submit-button" type="submit">Submit score</button></div>
-        <span id="submit-status" aria-live="polite"></span>
-      </form>
-    </section>
-    <aside class="scores-panel" aria-labelledby="scores-title">
-      <p class="eyebrow">THE LEADERBOARD</p><h2 id="scores-title">High scores</h2>
-      <p class="scores-note">Top ten players</p>
-      <ol id="high-scores" class="high-scores"><li class="muted">Loading scores…</li></ol>
-      <p id="scores-status" class="scores-status" aria-live="polite"></p>
-    </aside>
+      <button id="start-button" class="primary" type="button">Start game</button>
+    </header>
+
+    <div class="layout">
+      <section class="game-panel" aria-label="Snake game">
+        <div class="stats">
+          <div><span class="stat-label">Score</span><strong id="score">0</strong></div>
+          <p id="game-status" role="status">Press Start or an arrow key to play.</p>
+        </div>
+        <canvas id="board" width="480" height="480" aria-label="Snake game board"></canvas>
+        <p class="instructions">Move with <kbd>↑</kbd> <kbd>↓</kbd> <kbd>←</kbd> <kbd>→</kbd> or <kbd>W</kbd> <kbd>A</kbd> <kbd>S</kbd> <kbd>D</kbd>. Eat the red food for 10 points. Avoid the walls and yourself.</p>
+      </section>
+
+      <aside class="scores-panel">
+        <div class="panel-heading">
+          <div><p class="eyebrow">Hall of fame</p><h2>High scores</h2></div>
+          <button id="refresh-button" class="quiet" type="button">Refresh</button>
+        </div>
+        <p id="scores-message" class="muted" role="status">Loading scores…</p>
+        <ol id="scores-list" class="scores-list"></ol>
+
+        <form id="score-form" class="score-form" hidden>
+          <label for="player-name">Save your score</label>
+          <div class="submit-row">
+            <input id="player-name" name="name" type="text" autocomplete="name" placeholder="Your name" required>
+            <button id="submit-button" type="submit">Submit</button>
+          </div>
+          <p id="submit-message" class="muted" role="status"></p>
+        </form>
+      </aside>
+    </div>
+    <footer>Scores are saved locally by the game server.</footer>
   </main>
+  <script src="game.js"></script>
 </body>
 </html>

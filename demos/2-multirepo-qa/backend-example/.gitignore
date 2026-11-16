@@ -1,2 +1,4 @@
-scores.json
-scores.json.*.tmp
+__pycache__/
+*.py[cod]
+highscores.sqlite3
+highscores.sqlite3-*
