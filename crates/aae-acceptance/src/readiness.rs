@@ -41,18 +41,24 @@ pub(crate) const OPEN: &[(&str, &str)] = &[
     ),
 ];
 
+/// The criteria §15 checks, in whole or in part, by a request: a run with real models or release builds. A CI run
+/// leaves their rows `not run`, so they count only while the last full run is on the code assessed.
+const REQUEST: &[&str] = &["1", "2", "4a", "8", "20"];
+
 /// Criterion 22 against the rest of the report (spec §14, §2, decision 53), the report's rows as `(criterion, mark)`.
 /// A score of 8 is "the component's §15 criteria green", so one of its criteria (the `Criteria` column of
-/// docs/READINESS.md) open caps it at 6: a `FAIL` row, a part in [`OPEN`] (whatever rows the run picked), or in a
-/// full run a row not run or left out. A 10 needs
+/// docs/READINESS.md) open caps it at 6: a `FAIL` row, a part in [`OPEN`] (whatever rows the run picked), in a
+/// full run a row not run or left out, and in a CI run a row of a [`REQUEST`] criterion not run while the last full
+/// run is older than the code (`live` false, see [`live()`]). A 10 needs
 /// criterion 20 not open the same way: in a full run every row of it green. A full run also needs every component at
 /// 8 or more, the letter of criterion 22; a CI run cannot judge the rows with a model and checks only the caps.
 /// `Ok`: the components below 8.
-pub(crate) fn verdict(readiness: &str, rows: &[(&str, &str)], full: bool) -> Result<String, String> {
+pub(crate) fn verdict(readiness: &str, rows: &[(&str, &str)], full: bool, live: bool) -> Result<String, String> {
     let marks = |c: &str| -> Vec<&str> { rows.iter().filter(|(r, _)| *r == c).map(|(_, m)| *m).collect() };
     let open = |c: &&str| {
         let marks = marks(c);
-        let failed = |m: &&str| *m == "FAIL" || (full && *m == "not run");
+        let unmeasured = full || (!live && REQUEST.contains(c));
+        let failed = |m: &&str| *m == "FAIL" || (unmeasured && *m == "not run");
         OPEN.iter().any(|(o, _)| o == c) || (full && marks.is_empty()) || marks.iter().any(failed)
     };
     let (mut low, mut wrong) = (Vec::new(), Vec::new());
@@ -103,9 +109,30 @@ pub(crate) fn verdict(readiness: &str, rows: &[(&str, &str)], full: bool) -> Res
 /// The readiness file is current: its `MEASURE id=readiness` marker names (`ver=`) a commit at or after the last
 /// one that changed `crates/`.
 pub(crate) fn fresh(readiness: &str) -> Result<(), String> {
-    let marker = readiness.lines().find(|l| l.contains("MEASURE id=readiness"));
-    let ver = marker.and_then(|m| m.split_whitespace().find_map(|w| w.strip_prefix("ver=")));
-    let ver = ver.ok_or("docs/READINESS.md has no `MEASURE id=readiness ... ver=<sha>` marker")?;
+    let ver =
+        marker(readiness, "readiness").ok_or("docs/READINESS.md has no `MEASURE id=readiness ... ver=<sha>` marker")?;
+    match current(ver)? {
+        Ok(()) => Ok(()),
+        Err(last) => Err(format!(
+            "docs/READINESS.md is assessed at {ver}, not at or after {last}, the last change of crates/: re-assess it"
+        )),
+    }
+}
+
+/// The last full run of the spec is on the code: its `MEASURE id=full-run` marker names a commit at or after the
+/// last change of `crates/`. No marker is no full run.
+pub(crate) fn live(readiness: &str) -> Result<bool, String> {
+    marker(readiness, "full-run").map_or(Ok(false), |ver| Ok(current(ver)?.is_ok()))
+}
+
+/// The `ver=` of the `MEASURE` marker `id`.
+fn marker<'a>(readiness: &'a str, id: &str) -> Option<&'a str> {
+    let marker = readiness.lines().find(|l| l.contains(&format!("MEASURE id={id} ")))?;
+    marker.split_whitespace().find_map(|w| w.strip_prefix("ver="))
+}
+
+/// `Err(last)`: the commit `ver` is older than `last`, the last change of `crates/`.
+fn current(ver: &str) -> Result<Result<(), String>, String> {
     let git = |args: &[&str]| {
         let out = std::process::Command::new("git")
             .args(args)
@@ -116,12 +143,7 @@ pub(crate) fn fresh(readiness: &str) -> Result<(), String> {
             .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_owned())
     };
     let last = git(&["log", "-1", "--format=%h", "--", "crates"]).ok_or("git log of crates/ failed")?;
-    match git(&["merge-base", "--is-ancestor", &last, ver]) {
-        Some(_) => Ok(()),
-        None => Err(format!(
-            "docs/READINESS.md is assessed at {ver}, not at or after {last}, the last change of crates/: re-assess it"
-        )),
-    }
+    Ok(git(&["merge-base", "--is-ancestor", &last, ver]).map(drop).ok_or(last))
 }
 
 #[cfg(test)]
@@ -134,40 +156,52 @@ mod tests {
             |score: &str| format!("| Component | Criteria | Score |\n|---|---|---|\n| CLI | 3, 17 | {score} |\n");
         let pass = [("3", "pass"), ("17", "pass"), ("17", "not run"), ("20", "pass")];
         assert_eq!(
-            verdict(&table("8"), &pass[..3], false),
+            verdict(&table("8"), &pass[..3], false, true),
             Ok("every component at 8 or more".into())
         );
         // A row not run caps the score in a full run only; a FAIL or an open part caps it in either.
         if let Some((part, _)) = OPEN.first() {
             let with_part = |score: &str| table(score).replace("3, 17", &format!("3, {part}"));
-            let err = verdict(&with_part("8"), &pass[..1], false).unwrap_err();
+            let err = verdict(&with_part("8"), &pass[..1], false, true).unwrap_err();
             assert!(err.contains(&format!("criterion {part} open")), "{err}");
-            assert!(verdict(&with_part("6"), &pass[..1], false).is_ok());
+            assert!(verdict(&with_part("6"), &pass[..1], false, true).is_ok());
         }
         assert!(
-            verdict(&table("8"), &pass[..3], true)
+            verdict(&table("8"), &pass[..3], true, true)
                 .unwrap_err()
                 .contains("criterion 17 open")
         );
         let failed = [("3", "FAIL"), ("17", "pass")];
-        assert!(verdict(&table("8"), &failed, false).unwrap_err().contains("at most 6"));
-        assert_eq!(verdict(&table("6"), &failed, false), Ok("below 8: CLI 6".into()));
+        assert!(
+            verdict(&table("8"), &failed, false, true)
+                .unwrap_err()
+                .contains("at most 6")
+        );
+        assert_eq!(verdict(&table("6"), &failed, false, true), Ok("below 8: CLI 6".into()));
         // A full run needs 8 everywhere; a 10 needs criterion 20 green in it, and no FAIL of it in CI.
         let all = [("3", "pass"), ("17", "pass"), ("20", "pass"), ("20", "not run")];
         assert!(
-            verdict(&table("6"), &all[..3], true)
+            verdict(&table("6"), &all[..3], true, true)
                 .unwrap_err()
                 .contains("at 8 or more: CLI 6")
         );
         // An open part of criterion 20 refuses a 10 whatever its rows say.
         let demos_open = OPEN.iter().any(|(c, _)| *c == "20");
-        assert_eq!(verdict(&table("10"), &all[..3], true).is_ok(), !demos_open);
-        assert_eq!(verdict(&table("10"), &all, false).is_ok(), !demos_open);
+        assert_eq!(verdict(&table("10"), &all[..3], true, true).is_ok(), !demos_open);
+        assert_eq!(verdict(&table("10"), &all, false, true).is_ok(), !demos_open);
         for (rows, full) in [(&all[..], true), (&all[..2], true), (&[("20", "FAIL")][..], false)] {
-            let err = verdict(&table("10"), rows, full).unwrap_err();
+            let err = verdict(&table("10"), rows, full, true).unwrap_err();
             assert!(err.contains("criterion 20 open"), "{err}");
         }
-        assert!(verdict("| Component | Score |\n| CLI | 8 |\n", &all, false).is_err());
+        assert!(verdict("| Component | Score |\n| CLI | 8 |\n", &all, false, true).is_err());
+        // A request row not run caps in CI while the last full run is older than the code; criterion 17 is CI only.
+        let request = |score: &str| table(score).replace("3, 17", "3, 8");
+        let ci = [("3", "pass"), ("8", "pass"), ("8", "not run"), ("17", "not run")];
+        let err = verdict(&request("8"), &ci, false, false).unwrap_err();
+        assert!(err.contains("criterion 8 open"), "{err}");
+        assert!(verdict(&request("8"), &ci, false, true).is_ok());
+        assert!(verdict(&request("6"), &ci, false, false).is_ok());
+        assert!(verdict(&table("8"), &ci, false, false).is_ok());
     }
 
     #[test]
@@ -182,5 +216,9 @@ mod tests {
         let first = first.lines().next().unwrap();
         assert!(fresh(&marker(first)).unwrap_err().contains("re-assess"));
         assert!(fresh("no marker").is_err());
+        let full_run = |ver: &str| format!("<!-- {} id=full-run date=2026-11-15 ver={ver} env=x -->\n", "MEASURE");
+        assert_eq!(live(&full_run("HEAD")), Ok(true));
+        assert_eq!(live(&full_run(first)), Ok(false));
+        assert_eq!(live(&marker("HEAD")), Ok(false));
     }
 }

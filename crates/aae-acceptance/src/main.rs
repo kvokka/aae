@@ -285,7 +285,8 @@ async fn main() -> ExitCode {
         .collect();
     if let Some(row) = rows.iter_mut().find(|r| r.criterion == "22" && r.mark == "pass") {
         let readiness = fs::read_to_string(checks::root().join("docs/READINESS.md")).unwrap_or_default();
-        let verdict = readiness::fresh(&readiness).and_then(|()| readiness::verdict(&readiness, &marks, !args.ci));
+        let verdict = (readiness::fresh(&readiness).and_then(|()| readiness::live(&readiness)))
+            .and_then(|live| readiness::verdict(&readiness, &marks, !args.ci, live));
         match verdict {
             Ok(scores) => row.notes = format!("{}; readiness: {scores}", row.notes),
             Err(why) => {
