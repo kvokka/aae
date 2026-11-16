@@ -23,6 +23,7 @@ mod c20_format;
 mod c24_drain;
 mod c25_return;
 mod c26_git;
+mod c29_repeat;
 
 use crate::{
     Launch, Scenario,
@@ -196,6 +197,13 @@ pub(crate) const ALL: &[Scenario] = &[
                 `cache clear` makes it download again",
         launch: Launch::Ci,
         run: |env| Box::pin(c26_git::run(env)),
+    },
+    Scenario {
+        criterion: "29",
+        title: "a step repeats while its check script fails, up to max_attempts, and kill -9 keeps the count; exit 75 \
+                fails it at once",
+        launch: Launch::Ci,
+        run: |env| Box::pin(c29_repeat::run(env)),
     },
 ];
 

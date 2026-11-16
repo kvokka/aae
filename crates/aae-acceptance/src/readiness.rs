@@ -11,10 +11,6 @@ pub(crate) const OPEN: &[(&str, &str)] = &[
         "the demos of the current config shape (runs without a rig, agent scope, the project root) have not run live",
     ),
     (
-        "29",
-        "a step repeats up to `max_attempts` while its check script fails; exit code 75 fails it at once",
-    ),
-    (
         "30",
         "`drain` keeps up to `pool` items in work and follows `on_item_failure`",
     ),

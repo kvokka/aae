@@ -182,6 +182,25 @@ pub(crate) const ALL: &[Scenario] = &[
             ))
         },
     },
+    Scenario {
+        criterion: "29",
+        title: "a step runs again up to `max_attempts` while its check script fails, the script's output its remark in \
+            the same session; exit 75 fails it at once; a crash or a restart keeps the count; a round starts it again",
+        launch: Launch::Ci,
+        run: |env| {
+            Box::pin(tests(
+                env,
+                "-p aae-core -p aae-testkit -E test(/a_step_runs_again_until_its_check_script_passes\
+                 |past_max_attempts_the_step_fails|exit_75_of_the_check_script_fails_the_step_at_once\
+                 |a_step_that_fails_on_its_own_runs_again_without_its_script|a_crash_between_attempts_keeps_the_count\
+                 |a_check_script_cut_by_a_restart_runs_again_and_counts_once\
+                 |a_check_script_gets_the_step_and_its_output_is_the_remark\
+                 |a_repeat_stays_in_its_round_and_a_round_starts_the_count_again\
+                 |a_step_of_any_kind_takes_max_attempts_and_a_check_script|a_bad_max_attempts_or_check_script_is_one_line/)",
+                10,
+            ))
+        },
+    },
 ];
 
 /// The workspace this binary was built from.
