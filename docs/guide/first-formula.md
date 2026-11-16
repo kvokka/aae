@@ -164,7 +164,7 @@ last.
 
 A check can send the work back instead of failing the run: with `back_to = "write"` on the step `check`, a failed
 check starts `write` again, and its prompt can show why with `{{ remarks }}` (empty the first time). `rounds = 2`
-next to `name` caps the rounds; the default is 3, and a check still failing in the last one fails the run with its
+among the formula's own keys, next to its `name` above the steps, caps the rounds; the default is 3, and a check still failing in the last one fails the run with its
 remarks as the reason. `config explain` goes step by step:
 
 ```sh
@@ -223,8 +223,12 @@ A step can also repeat itself before it gives up, and a script can judge its res
 ```toml
 [[step]]
 name = "write"
+kind = "ai"
+agent = "helper"
 max_attempts = 3                      # up to three executions; the repeat sees the last remark in {{ remarks }}
-step_check_script_path = "check.sh"   # exit 0 passes, 75 fails the run at once, anything else repeats
+step_check_script_path = "check.sh"   # beside the formula file; exit 0 passes, any other code repeats
 ```
+
+Exit code 75 of the script is a failure for good: the run fails at once, with no repeat and no `back_to` round.
 
 Next: [writing a plugin](plugin.md).
