@@ -23,7 +23,7 @@ on its second attempt and in two rounds of its `format` and `qa` checks (the fir
 to a component the demos run through end to end: a request, the planner's beads, `drain` to coders on claude and codex,
 demo 2's `format` and `qa` checks, which send the work back when one fails. A component the demos do not reach stays at
 8: its own criteria are green, but no unattended demo run goes through it.
-<!-- MEASURE id=readiness date=2026-11-16 ver=fbbae59 env=linux-arm64-orbstack src=docs/READINESS.md note="the full run with real models on ffaccea, the crates/ of 15c7d3a: 37 of 37 rows; the drain change of 918884b and 520e02a lies on the path of both demos, so both ran again live on c1fa9bc: demo 1 passed in 347 s; demo 2 failed once (a coder left a background http.server running, so its turn never went idle without background, spec 7.5) and passed on its next run in 1070 s; c00f951 only counts a new contract test in row 11; fbbae59 only adds drain tests (a round back to the step, a root gone mid-drain) and a test helper of the tracker in memory" -->
+<!-- MEASURE id=readiness date=2026-11-16 ver=7c36d9f env=linux-arm64-orbstack src=docs/READINESS.md note="the full run with real models on ffaccea, the crates/ of 15c7d3a: 37 of 37 rows; the drain change of 918884b and 520e02a lies on the path of both demos, so both ran again live on c1fa9bc: demo 1 passed in 347 s; demo 2 failed once (a coder left a background http.server running, so its turn never went idle without background, spec 7.5) and passed on its next run in 1070 s; c00f951 only counts a new contract test in row 11; fbbae59 only adds drain tests (a round back to the step, a root gone mid-drain) and a test helper of the tracker in memory; 7c36d9f reshapes the user config (criterion 27 without its root half): no harness sections, `[agents.<name>]`, the permission mode in the native block, step kind `ai`; its CI rows are green, the demos of the new shape are not run live yet" -->
 
 | Component | Criteria | Score | Missing for the next point |
 |---|---|---|---|
@@ -32,7 +32,7 @@ demo 2's `format` and `qa` checks, which send the work back when one fails. A co
 | Triggers and schedules | 5a, 5b, 6 | 8 | 10: the demos run no subscription or schedule; their own rows are green |
 | Issue gates | 10, 19 | 8 | 10: the demos hit no gate; the claude half of criterion 10 is unverified (no claude quota limit seen live) |
 | Recovery | 8, 9, 24 | 8 | 10: the demos run without a crash; criterion 8 kills the daemon under real models |
-| Config assembly | 12, 13, 26 | 10 | - |
+| Config assembly | 12, 13, 26, 27 | 8 | 10: criterion 27 for the root (its name and path, a root that is no git repository); the demos of the new config shape run live |
 | Instance and service registry | 13, 14 | 10 | - |
 | claude adapter | 2, 4a, 9, 11 | 10 | - |
 | codex adapter | 2, 10, 11, 13 | 10 | - |
