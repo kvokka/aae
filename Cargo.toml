@@ -20,12 +20,14 @@ dbg_macro = "deny"
 # Denied by the root of each daemon crate (`clippy.toml`); tests and the acceptance runner spawn freely.
 disallowed_methods = "allow"
 
-# Line tables keep file:line in backtraces at half the target/ size and link time.
+# No debug info: a rebuild writes half as much to disk and a test binary is a third of the size. A panic still names
+# its file and line; the frames of a backtrace get theirs back for one command (docs/agents/rules-tests.md).
 [profile.dev]
-debug = "line-tables-only"
+debug = false
 # The invariant stand and the scenarios run a lot of code; unoptimised they are several times slower.
 opt-level = 1
 
+# `debug` stays explicit here: that one command then rebuilds the workspace crates only.
 [profile.dev.package."*"]
 debug = false
 opt-level = 2

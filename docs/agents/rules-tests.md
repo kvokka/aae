@@ -33,6 +33,10 @@
   `mise run test` and an acceptance run side by side: each rewrites `target/debug/aae` under the other's daemons.
 - Command output is always cut: `cargo nextest run --no-fail-fast --status-level fail --final-status-level fail
   2>&1 | tail -80`.
+- The dev profile carries no debug info: a panic names its file and line, a backtrace names functions without
+  lines. When that is not enough to find one failure, prefix that one command with
+  `CARGO_PROFILE_DEV_DEBUG=line-tables-only RUST_BACKTRACE=1`. It builds a second copy of the workspace crates
+  (half a minute, 1.6 GB), so it is not a habit.
 
 ## Live models
 
