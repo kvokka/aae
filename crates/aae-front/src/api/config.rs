@@ -219,6 +219,12 @@ pub(crate) fn explained(config: &Config, project: &str, of: &Explain, rig: Optio
                 if let Some(to) = &step.back_to {
                     text += &format!("# a check: on fail, back to `{to}`, at most {} rounds\n", f.rounds);
                 }
+                let times = (step.max_attempts > 1).then(|| format!("runs at most {} times", step.max_attempts));
+                let check = (step.check.as_ref()).map(|c| format!("passes when {} exits 0", c.display()));
+                let repeat: Vec<String> = times.into_iter().chain(check).collect();
+                if !repeat.is_empty() {
+                    text += &format!("# {}\n", repeat.join("; "));
+                }
                 steps.push(json!({ "step": name, "kind": step.kind.name(), "agent": agent }));
             }
             return Ok(json!({ "agent": null, "steps": steps, "text": text, "inherits_host": host }));

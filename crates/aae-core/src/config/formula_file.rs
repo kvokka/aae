@@ -3,7 +3,7 @@
 
 use super::{Name, Settings};
 use serde::Deserialize;
-use std::{collections::BTreeMap, num::NonZeroU32, time::Duration};
+use std::{collections::BTreeMap, num::NonZeroU32, path::PathBuf, time::Duration};
 
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -51,17 +51,25 @@ pub(super) enum StepFile {
         model: Option<String>,
         effort: Option<String>,
         back_to: Option<String>,
+        /// The most times the step runs (spec §9.1); default 1.
+        max_attempts: Option<NonZeroU32>,
+        /// The script whose exit code says whether the step passed; empty is none.
+        step_check_script_path: Option<String>,
     },
     Exec {
         name: Option<String>,
         command: Vec<String>,
         timeout: Option<String>,
         back_to: Option<String>,
+        max_attempts: Option<NonZeroU32>,
+        step_check_script_path: Option<String>,
     },
     Drain {
         name: Option<String>,
         formula: String,
         timeout: Option<String>,
+        max_attempts: Option<NonZeroU32>,
+        step_check_script_path: Option<String>,
     },
 }
 
@@ -97,6 +105,10 @@ pub struct Step {
     pub kind: StepKind,
     /// A check: when it fails, the run goes back to this earlier step with its remarks (spec §9.1).
     pub back_to: Option<String>,
+    /// The most times the step runs; a step that does not pass runs again until then (spec §9.1). At least 1.
+    pub max_attempts: u32,
+    /// The script that says whether the step passed, by its exit code (spec §9.1).
+    pub check: Option<PathBuf>,
 }
 
 #[derive(Clone, Debug)]

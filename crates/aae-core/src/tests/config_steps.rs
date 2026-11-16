@@ -145,3 +145,84 @@ fn a_check_goes_back_to_an_earlier_step() {
                  kind = \"drain\"\nformula = \"implement\"\nback_to = \"a\"\n";
     fails(&[(FLOW, drain)], "unknown field `back_to`");
 }
+
+/// [`load_with`] with the files `executable` given the execute bit.
+fn load_executable(
+    changes: &[(&str, &str)],
+    executable: &[&str],
+) -> Result<crate::config::Config, Vec<crate::config::ConfigError>> {
+    use std::{fs, os::unix::fs::PermissionsExt};
+    let dir = tempfile::tempdir().unwrap();
+    let base = super::config::BASE
+        .iter()
+        .filter(|(p, _)| !changes.iter().any(|(c, _)| c == p));
+    for (path, text) in base.chain(changes) {
+        let path = dir.path().join(path);
+        fs::create_dir_all(path.parent().unwrap()).unwrap();
+        fs::write(path, text).unwrap();
+    }
+    for path in executable {
+        fs::set_permissions(dir.path().join(path), fs::Permissions::from_mode(0o755)).unwrap();
+    }
+    crate::config::load_for(&dir.path().join("config.toml"), &[], Default::default())
+}
+
+const SCRIPT: (&str, &str) = ("kit/formulas/check.sh", "#!/bin/sh\nexit 0\n");
+
+/// Any step may run more than once and have a script say whether it passed; the path is from the formula file.
+#[test]
+fn a_step_of_any_kind_takes_max_attempts_and_a_check_script() {
+    let flow = "name = \"flow\"\n[inputs]\nroot = { type = \"task\", required = true }\n\
+                [[step]]\nname = \"work\"\nkind = \"ai\"\nagent = \"worker\"\nmax_attempts = 3\n\
+                step_check_script_path = \"check.sh\"\n\
+                [[step]]\nname = \"build\"\nkind = \"exec\"\ncommand = [\"true\"]\nstep_check_script_path = \"\"\n\
+                [[step]]\nname = \"test\"\nkind = \"exec\"\ncommand = [\"true\"]\nstep_check_script_path = \"/bin/sh\"\n\
+                [[step]]\nname = \"all\"\nkind = \"drain\"\nformula = \"implement\"\nmax_attempts = 2\n\
+                step_check_script_path = \"../scripts/check\"\n";
+    let changes = [
+        (FLOW, flow),
+        WORKER,
+        (WORKER_TEMPLATE, "Work."),
+        SCRIPT,
+        ("kit/scripts/check", SCRIPT.1),
+    ];
+    let config = load_executable(&changes, &[SCRIPT.0, "kit/scripts/check"]).unwrap();
+    let steps = &config.projects[0].packs[1].formulas["flow"].steps;
+    let got: Vec<(u32, Option<&std::path::Path>)> =
+        steps.iter().map(|s| (s.max_attempts, s.check.as_deref())).collect();
+    assert_eq!(got.iter().map(|g| g.0).collect::<Vec<_>>(), [3, 1, 1, 2]);
+    assert!(
+        got[0].1.is_some_and(|p| p.is_absolute() && p.ends_with(SCRIPT.0)),
+        "{got:?}"
+    );
+    assert_eq!(got[1].1, None, "an empty path is no script");
+    assert_eq!(
+        got[2].1,
+        Some(std::path::Path::new("/bin/sh")),
+        "an absolute path stays"
+    );
+    assert!(got[3].1.is_some_and(|p| p.ends_with("kit/scripts/check")), "{got:?}");
+}
+
+/// A zero `max_attempts` or a check script that is no executable file is one error.
+#[test]
+fn a_bad_max_attempts_or_check_script_is_one_line() {
+    let flow = |key: &str| format!("name = \"flow\"\n{}{key}\n", exec(Some("build")));
+    let errors = |key: &str, executable: &[&str]| {
+        let errors = load_executable(&[(FLOW, &flow(key)), SCRIPT], executable).unwrap_err();
+        assert_eq!(errors.len(), 1, "one error for one cause: {errors:?}");
+        errors[0].message.clone()
+    };
+    let zero = errors("max_attempts = 0", &[SCRIPT.0]);
+    // The parser places a bad key of a tagged table at the table's header.
+    assert!(zero.contains("nonzero") && zero.contains("line 2"), "{zero}");
+    for (script, executable) in [("none.sh", &[SCRIPT.0][..]), ("check.sh", &[])] {
+        let message = errors(&format!("step_check_script_path = \"{script}\""), executable);
+        assert!(
+            message.starts_with("step `build`: the check script `/")
+                && message.ends_with(&format!("kit/formulas/{script}` is not an executable file"))
+                && !message.contains('\n'),
+            "{message}"
+        );
+    }
+}

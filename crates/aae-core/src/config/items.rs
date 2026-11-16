@@ -117,11 +117,27 @@ impl Loader {
             variables.insert(super::input_variable(name), format!("input `{name}`"));
         }
         for (at, step) in raw.step.into_iter().enumerate() {
-            let (name, back_to) = match &step {
-                StepFile::Ai { name, back_to, .. } | StepFile::Exec { name, back_to, .. } => {
-                    (name.clone(), back_to.clone())
+            let (name, back_to, max_attempts, script) = match &step {
+                StepFile::Ai {
+                    name,
+                    back_to,
+                    max_attempts,
+                    step_check_script_path: script,
+                    ..
                 }
-                StepFile::Drain { name, .. } => (name.clone(), None),
+                | StepFile::Exec {
+                    name,
+                    back_to,
+                    max_attempts,
+                    step_check_script_path: script,
+                    ..
+                } => (name.clone(), back_to.clone(), *max_attempts, script.clone()),
+                StepFile::Drain {
+                    name,
+                    max_attempts,
+                    step_check_script_path: script,
+                    ..
+                } => (name.clone(), None, *max_attempts, script.clone()),
             };
             let name = name.unwrap_or_else(|| (at + 1).to_string());
             if let Some(to) = back_to.as_ref().filter(|to| !steps.iter().any(|s| &s.name == *to)) {
@@ -137,8 +153,24 @@ impl Loader {
             } else if let Some(other) = variables.insert(variable.clone(), format!("step `{name}`")) {
                 self.fail(file, format!("{other} and step `{name}` are both `{variable}*`"));
             }
+            let check = script
+                .filter(|s| !s.is_empty())
+                .map(|s| resolve(&parent(file), Path::new(&s)));
+            if let Some(path) = check.as_ref().filter(|p| !executable(p)) {
+                let path = path.display();
+                self.fail(
+                    file,
+                    format!("step `{name}`: the check script `{path}` is not an executable file"),
+                );
+            }
             let kind = self.step(file, step)?;
-            steps.push(Step { name, kind, back_to });
+            steps.push(Step {
+                name,
+                kind,
+                back_to,
+                max_attempts: max_attempts.map_or(1, std::num::NonZeroU32::get),
+                check,
+            });
         }
         // The task bead a drain step gives out beads under (spec §9.1).
         let drains = steps.iter().any(|s| matches!(s.kind, StepKind::Drain { .. }));
@@ -288,6 +320,12 @@ pub(super) fn agent_keys(mut table: toml::Table) -> Result<(Settings, Option<u32
         .try_into::<Settings>()
         .map_err(|e| super::files::retired(e.to_string(), ""))?;
     Ok((settings, max_runs))
+}
+
+/// A regular file (a symlink is followed) with an execute bit.
+fn executable(path: &Path) -> bool {
+    use std::os::unix::fs::PermissionsExt;
+    fs::metadata(path).is_ok_and(|m| m.is_file() && m.permissions().mode() & 0o111 != 0)
 }
 
 pub(super) fn parent(file: &Path) -> PathBuf {

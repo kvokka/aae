@@ -172,7 +172,8 @@ they show with `--formula <f> --rig <r>` in place of `--agent`, step by step: fo
 ``# step `<s>` of `<f>` on `<r>`: agent <a>`` (the rig's variant if it maps one) and its effective config, for an exec
 step one line ``# step `<s>` of `<f>`: exec `<command>` ``, for a drain step
 ``# step `<s>` of `<f>`: drain, a run of `<formula>` per bead``, and after a check
-``# a check: on fail, back to `<step>`, at most <n> rounds``. The API answer then has `agent` null and
+``# a check: on fail, back to `<step>`, at most <n> rounds``, and for a step with `max_attempts` above 1 or a check
+script ``# runs at most <n> times; passes when <script> exits 0`` (each part when it applies). The API answer then has `agent` null and
 `steps: [{step, kind, agent}]`. The effective config serializes to JSON: a run keeps it as its snapshot, and `env` is
 the whole session environment besides what the adapter adds: a session does not inherit the daemon's environment
 wholesale. The core assembles it when the run prepares, right before the session starts; the adapter materializes it
@@ -512,6 +513,8 @@ name = "test"
 kind = "exec"
 command = ["cargo", "test"]
 back_to = "implement"               # optional, prompt and exec steps: a check; on fail, back to this earlier step
+max_attempts = 2                    # optional, any step (default 1): the most times the step runs
+step_check_script_path = "check-test.sh"  # optional, any step: passes when it exits 0; from this file's directory
 
 [[step]]
 name = "children"
@@ -555,6 +558,20 @@ round that already has a session goes on in it (spec §9.3): its first attempt r
 rendered prompt with the remarks, not the reconcile prompt of a resumed retry. A check that fails in the
 last of the formula's `rounds` fails the run (class `agent`) with the reason `still failing after <n> rounds:
 <remarks>`. `back_to` must name a step before the check; a `drain` step is no check.
+
+Any step may have `max_attempts` (a positive integer, default 1): the step runs at most that many times, and one that
+does not pass runs again until then; past it the step fails. `step_check_script_path` names a script that says
+whether the step passed, a path from the directory of the formula file (an absolute one stays; empty is none) that
+must be an executable regular file at load. Its exit code decides: 0 passed, 75 an incurable failure that fails the
+step with no more runs, any other code did not pass. Unlike the exit code 75 of an `exec` step's command, a failed
+attempt, 75 of the check script is final. The script runs after the step has run on its own and its hooks accepted
+`pass`; a step that failed on its own (finisher `fail`, a non-zero exit of the command) is a run that did not pass,
+and the script is not started. It gets the environment of an `exec` step plus `AAE_STEP_<NAME>_RESULT`, `_SUMMARY`
+and `_DATA` of its own step, in the run's workdir under the step timeout. A repeat of an `ai` step goes on in its
+session and gets the script's output as a remark: through `{{ remarks }}`, or appended to the prompt when the
+template has none. A repeat of a `drain` step is a new entry. The count is within a round: a round back to the step
+gives it the full `max_attempts` again. A repeat spends neither the session attempt ceiling (spec §5.5) nor the
+rounds.
 
 A step sees the outcomes of the steps before it, by name (the last attempt of each): a prompt template as
 `{{ steps.<name>.result }}`, `.summary` and `.data.<key>` (contracts 2.3; `data` of an exec step is `{exit_code,
