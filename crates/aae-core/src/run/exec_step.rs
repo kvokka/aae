@@ -176,7 +176,6 @@ pub(super) type Running = Arc<Mutex<HashMap<String, Arc<Notify>>>>;
 
 /// Runs the command of an `exec` effect to its end and tells the core how it ended.
 pub(super) async fn run(running: &Running, payload: &Value, socket: Option<&Path>) -> Msg {
-    let run = payload["run"].as_str().unwrap_or_default().to_owned();
     let command: Vec<String> = serde_json::from_value(payload["command"].clone()).unwrap_or_default();
     let mut env = process::base_env();
     let pairs: Vec<(String, String)> = serde_json::from_value(payload["env"].clone()).unwrap_or_default();
@@ -200,13 +199,18 @@ pub(super) async fn run(running: &Running, payload: &Value, socket: Option<&Path
     })
     .await;
     lock().remove(&key);
+    done(payload, out.exit, &out.stdout, &out.stderr)
+}
+
+/// The message that tells the core how the command of an `exec` effect ended.
+pub(super) fn done(payload: &Value, exit: Exit, stdout: &[u8], stderr: &[u8]) -> Msg {
     Msg::ExecDone {
-        run,
+        run: payload["run"].as_str().unwrap_or_default().to_owned(),
         attempt: super::exec::attempt(payload),
         check: payload["check"] == true,
-        exit: out.exit,
-        stdout: String::from_utf8_lossy(&out.stdout).into_owned(),
-        stderr: String::from_utf8_lossy(&out.stderr).into_owned(),
+        exit,
+        stdout: String::from_utf8_lossy(stdout).into_owned(),
+        stderr: String::from_utf8_lossy(stderr).into_owned(),
     }
 }
 

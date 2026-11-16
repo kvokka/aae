@@ -40,6 +40,8 @@ pub(crate) struct Play {
     pub(crate) drained: BTreeSet<String>,
     /// The attempts of drain steps a kill of the daemon caught, by run and number.
     pub(crate) caught: BTreeSet<(String, i64)>,
+    /// The repeats of each step of each run.
+    pub(crate) repeats: BTreeMap<(String, String), u32>,
 }
 
 /// The run of the idempotency key `key`: of `build` (0, 1), of the three steps of `ship` (2, 3), of `fix` on the

@@ -13,11 +13,12 @@ mod check;
 #[path = "../common/mod.rs"]
 mod common;
 mod drain;
+mod repeat;
 mod steps;
 
 use aae_core::{
     BoxFuture, CoreHandle, Journal,
-    run::{HookRunner, Msg},
+    run::{Exit, HookRunner, Msg},
 };
 use check::{check, runs};
 use common::world_with;
@@ -29,6 +30,7 @@ use std::{
     time::Duration,
 };
 use steps::{Play, create_keyed, decision, step};
+use tokio::task::AbortHandle;
 
 const POLICY: &[(&str, &str)] = &[
     (
@@ -56,13 +58,16 @@ const FIX: &[(&str, &str)] = &[
     ),
 ];
 
-/// A formula of three ai steps, named by their position: a run goes through them in order, one session each.
+/// A formula of three ai steps, named by their position: a run goes through them in order, one session each. The
+/// first two run at most twice and have a check script, which [`Hooks`] plays: the first, so that a script runs before
+/// the faults stop. Any executable file is the script; one outside the world keeps the world in memory (a `.sh` in it
+/// would move the world to disk, twice as slow).
 const SHIP: &[(&str, &str)] = &[
     (
         "shop/formulas/ship.toml",
         "name = \"ship\"\n\
-         [[step]]\nkind = \"ai\"\nagent = \"dev\"\n\
-         [[step]]\nkind = \"ai\"\nagent = \"dev\"\n\
+         [[step]]\nkind = \"ai\"\nagent = \"dev\"\nmax_attempts = 2\nstep_check_script_path = \"/bin/sh\"\n\
+         [[step]]\nkind = \"ai\"\nagent = \"dev\"\nmax_attempts = 2\nstep_check_script_path = \"/bin/sh\"\n\
          [[step]]\nkind = \"ai\"\nagent = \"dev\"\n",
     ),
     ("shop/agents/dev/prompt.template.md", "Ship {{ rig.name }}."),
@@ -112,6 +117,8 @@ impl Rng {
 struct Hooks {
     seed: u64,
     ran: Mutex<BTreeSet<i64>>,
+    /// The daemon a check script kills, while the faults go on ([`repeat::exit`]).
+    cut: Mutex<Option<AbortHandle>>,
 }
 
 impl HookRunner for Hooks {
@@ -132,6 +139,10 @@ impl HookRunner for Hooks {
             self.ran.lock().unwrap().insert(seq);
         })
     }
+
+    fn played(&self, payload: &Value) -> Option<Exit> {
+        repeat::exit(self.seed, payload, &self.cut)
+    }
 }
 
 /// What a seed played: the steps and the journal with its temporary directory masked, for the check that a seed
@@ -144,6 +155,7 @@ async fn play(seed: u64) -> Result<Played, String> {
     let hooks = Arc::new(Hooks {
         seed,
         ran: Mutex::default(),
+        cut: Mutex::default(),
     });
     let mut w = world_with(&[POLICY, FIX, SHIP, SWEEP].concat(), hooks.clone());
     w.tracker.add(&[], None);
@@ -166,7 +178,9 @@ async fn play(seed: u64) -> Result<Played, String> {
     // on the others the agent and the policy behave until every run ends.
     let behave = rng.below(2) == 1;
     for _ in 0..STEPS {
+        repeat::arm(&w, &hooks.cut);
         step(&mut w, &mut rng, &mut play, false).await;
+        repeat::restart(&mut w, &mut play, &hooks.cut).await;
         tokio::time::sleep(Duration::from_millis(1)).await;
         if let Err(why) = check(&w, &mut play) {
             return Err(report(&play, why));
@@ -245,8 +259,8 @@ fn seeds(nth: u64) {
     // landed, so a rare kind missing from these random seeds is not a failure, and a kind that never lands is.
     // `step`: a run was past the first step of its formula, so a restart went on from the step it was at; `drain`:
     // a run was in a drain step, so a restart ended its attempt with `daemon_crash` and the next one went on with the
-    // children it had given.
-    const KINDS: [&str; 5] = ["tracker", "harness", "hooks", "step", "drain"];
+    // children it had given; `check`: a check script was recorded and had not said its word, so a restart ran it again.
+    const KINDS: [&str; 6] = ["tracker", "harness", "hooks", "step", "drain", "check"];
     let landed = || {
         let kills = steps::KILLS.lock().unwrap();
         KINDS.iter().all(|at| kills.contains_key(at))

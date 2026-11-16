@@ -78,7 +78,9 @@ pub(crate) fn check(w: &World, play: &mut Play) -> Result<(), String> {
                 failed(run, &e["data"], play)?;
             }
         }
-        step_finished(run, kind, &e["data"]["run"], play)?;
+        if !crate::repeat::repeated(run, kind, &e["data"], play)? {
+            step_finished(run, kind, &e["data"]["run"], play)?;
+        }
     }
     let conn = state(w);
     let all = runs(w);
@@ -153,6 +155,7 @@ pub(crate) fn check(w: &World, play: &mut Play) -> Result<(), String> {
         }
     }
     stepped(&conn, play)?;
+    crate::repeat::counted(&conn, play)?;
     crate::drain::drained(&conn, play)?;
     // One live owner per bead, and the owner the state records is a live run on that bead (invariants 2, 3).
     let owners: Vec<(String, Option<String>, i64)> = conn
@@ -177,7 +180,7 @@ pub(crate) fn check(w: &World, play: &mut Play) -> Result<(), String> {
 
 /// The steps of each formula of the stand (`shop.ship` and the like), in order: `ship` has three, named by position,
 /// `sweep` two, the first of them a drain step.
-fn formula_steps(formula: &str) -> &'static [&'static str] {
+pub(crate) fn formula_steps(formula: &str) -> &'static [&'static str] {
     if formula.ends_with(".ship") {
         &["1", "2", "3"]
     } else if formula.ends_with(".sweep") {
@@ -187,7 +190,7 @@ fn formula_steps(formula: &str) -> &'static [&'static str] {
     }
 }
 
-/// Each step but the last finishes once, in the order of the formula (S1); a run passes once every step before the
+/// Each step but the last finishes once, a repeat aside, in the order of the formula (S1); a run passes once every step before the
 /// last finished and from the last one (S4).
 fn step_finished(run: &str, kind: &str, view: &Value, play: &mut Play) -> Result<(), String> {
     let steps = formula_steps(view["formula"].as_str().unwrap_or_default());
@@ -351,6 +354,17 @@ pub(crate) fn undone(w: &World) -> Vec<&'static str> {
         .unwrap();
     if draining {
         undone.insert("drain");
+    }
+    // A run in `finishing` that waits for no decision waits for the word of its check script.
+    let checking: bool = conn
+        .query_row(
+            "SELECT EXISTS (SELECT 1 FROM runs WHERE state = 'finishing' AND waiting IS NULL)",
+            [],
+            |r| r.get(0),
+        )
+        .unwrap();
+    if checking {
+        undone.insert("check");
     }
     undone.into_iter().collect()
 }

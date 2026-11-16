@@ -117,6 +117,11 @@ pub trait HookRunner: Send + Sync + 'static {
     fn socket(&self) -> Option<&Path> {
         None
     }
+
+    /// How the command of an `exec` effect ended, when a test stand plays it instead of running it.
+    fn played(&self, _payload: &Value) -> Option<Exit> {
+        None
+    }
 }
 
 /// A bundled plugin's hook: `(plugin, event, params)` to its decision, `None` for none, or why it failed.

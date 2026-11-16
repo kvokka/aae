@@ -50,7 +50,10 @@ impl Executor for RunExecutor {
                 Some("hooks") => self.hooks.run(core, payload).await,
                 Some("tracker") => return super::beads::execute(&self.trackers, core, payload).await,
                 Some("exec") => {
-                    let msg = super::exec_step::run(&self.running, payload, self.hooks.socket()).await;
+                    let msg = match self.hooks.played(payload) {
+                        Some(exit) => super::exec_step::done(payload, exit, b"", b""),
+                        None => super::exec_step::run(&self.running, payload, self.hooks.socket()).await,
+                    };
                     // A stopped writer drops the message; recovery (WP-20) finds the attempt on restart.
                     let _ = core.send(None, msg).await;
                 }
