@@ -13,7 +13,7 @@ no row, or a row not run holds the score at 6. In a CI run, which runs no model,
 than the last change of `crates/`. A 10 needs criterion 20 not open, which in a full run means every row of it green;
 and the `readiness` marker must name a commit at or after the last change of `crates/`.
 
-Assessed 2026-11-16 at `bd74b0f`, by the letter of the scale. The project root and agent scope (decisions 95, 99) and
+Assessed 2026-11-16 at `67a25c9`, by the letter of the scale. The project root and agent scope (decisions 95, 99) and
 the new criteria 28 to 34 opened work that is not done: the task input (28), step repeats (29), `drain` with `pool` (30), the `formula` step (31), agent files from the project (33), the background
 after an outcome (34); rig prefixes of beads (24, 32) are done and their rows green. Their components score 6: their model-free tests are green, but a criterion of theirs is
 open. Criterion 20 is open too: the demos of the current config shape (runs without a rig, agent scope, `[root]`)
@@ -22,7 +22,7 @@ the live demo runs were on `c1fa9bc` (demo 1 on claude haiku and codex luna, dem
 Both are older than the config shape of today and count as history, not as a measure of this code: criteria 1, 2,
 4a and 8 have not run on it, which holds the event loop, `default-policy` and delivery at 6 too.
 <!-- MEASURE id=full-run date=2026-11-15 ver=ffaccea env=linux-arm64-orbstack src=aae-acceptance note="the last run of the whole spec with real models, 37 of 37 rows" -->
-<!-- MEASURE id=readiness date=2026-11-16 ver=bd74b0f env=linux-arm64-orbstack src=docs/READINESS.md note="scored by the letter of spec 14 against the CI rows of acceptance-ci at this commit and the open parts of criteria 20, 28 to 31, 33 and 34; no live run on this code" -->
+<!-- MEASURE id=readiness date=2026-11-16 ver=67a25c9 env=linux-arm64-orbstack src=docs/READINESS.md note="scored by the letter of spec 14 against the CI rows of acceptance-ci at this commit and the open parts of criteria 20, 28 to 31, 33 and 34; no live run on this code" -->
 
 | Component | Criteria | Score | Missing for the next point |
 |---|---|---|---|
