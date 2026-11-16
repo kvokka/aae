@@ -1,7 +1,7 @@
 //! Criterion 30 on the real br, with no model: an exec step `plan` files five beads under the root bead of a run, a
-//! drain step gives them runs of `work`. With no `pool` one bead is in work at a time, with `pool = 2` two; a failed
-//! bead stops nothing under `continue`; `soft_stop` lets the started bead end across a `kill -9` and gives no new
-//! one; `hard_stop` cancels the started bead; a stopped step fails the run.
+//! drain step gives them runs of `work`. With no `pool` one bead is in work at a time, with `pool = 2` two at once,
+//! each in a worktree; a failed bead stops nothing under `continue`; `soft_stop` lets the started bead end across a
+//! `kill -9` and gives no new one; `hard_stop` cancels the started bead; a stopped step fails the run.
 
 use super::tracker;
 use crate::{
@@ -12,6 +12,7 @@ use serde_json::{Value, json};
 use std::{
     fs,
     path::Path,
+    process::Command,
     sync::Arc,
     time::{Duration, Instant},
 };
@@ -27,7 +28,8 @@ fn ship(name: &str, keys: &str) -> String {
     )
 }
 
-const WORK: &str = "name = \"work\"\n[inputs]\nbead = { type = \"task\", required = true }\n\
+/// Each run of `work` in a worktree of its own: runs that share a workdir wait for each other.
+const WORK: &str = "name = \"work\"\nworktree = true\n[inputs]\nbead = { type = \"task\", required = true }\n\
     [[step]]\nname = \"do\"\nkind = \"exec\"\ncommand = [\"sh\", \"{dir}/work.sh\"]\n";
 
 const PLAN: &str = "set -e\nfor i in 1 2 3 4 5; do br create \"B$i\" --parent \"$AAE_BEAD\" --silent; done\n";
@@ -117,6 +119,24 @@ pub(crate) async fn run(env: Arc<Env>) -> String {
         write(root.join("plan.sh"), PLAN);
         write(root.join("work.sh"), WORK_SH.replace("{dir}", &dir));
         tracker(root);
+        // A worktree needs a commit to branch from.
+        let git = Command::new("git")
+            .args([
+                "-c",
+                "user.name=t",
+                "-c",
+                "user.email=t@t",
+                "commit",
+                "-q",
+                "--allow-empty",
+                "-m",
+                "init",
+            ])
+            .current_dir(root.join("config/aae/shop"))
+            .env("GIT_CONFIG_GLOBAL", "/dev/null")
+            .env("GIT_CONFIG_NOSYSTEM", "1")
+            .status();
+        assert!(git.is_ok_and(|s| s.success()), "git commit");
     })
     .await;
     let started = d.path("started");
@@ -129,9 +149,9 @@ pub(crate) async fn run(env: Arc<Env>) -> String {
     d.until_state(&one, "passed", WITHIN).await;
     assert_eq!(states(&kids(&d, &one).await), ["passed"; 5]);
 
-    // `pool = 2`: the first fails, the next two are given, the rest wait; `continue` lets them all run.
+    // `pool = 2`: the first fails, the next two work at once, the rest wait; `continue` lets them all run.
     let two = start(&d, "two", true).await;
-    let kids_two = until_kids(&d, &two, "three given", |k| k.len() >= 3 && lines(&started) == 1).await;
+    let kids_two = until_kids(&d, &two, "two at work", |k| k.len() >= 3 && lines(&started) == 2).await;
     assert_eq!((kids_two.len(), alive(&kids_two)), (3, 2), "pool 2: {kids_two:?}");
     write(d.path("go"), "");
     d.until_state(&two, "passed", WITHIN).await;
@@ -160,7 +180,7 @@ pub(crate) async fn run(env: Arc<Env>) -> String {
     let hard = start(&d, "hard", true).await;
     let view = d.until_state(&hard, "failed", WITHIN).await;
     assert_eq!(states(&kids(&d, &hard).await), ["cancelled", "failed"], "{view}");
-    "five beads: no pool one at a time, pool 2 two, continue ran all; soft_stop ended the started across kill -9 and \
+    "five beads: no pool one at a time, pool 2 two at work at once, continue ran all; soft_stop ended the started across kill -9 and \
      failed with 3 not started; hard_stop cancelled the started"
         .into()
 }

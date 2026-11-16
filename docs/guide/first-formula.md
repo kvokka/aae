@@ -210,7 +210,8 @@ agent = "planner"                     # its template files the beads under {{ be
 name = "work"
 kind = "drain"
 formula = "implement"                 # takes one `task` input; one run per bead, on the rig of its id prefix
-pool = 2                              # two beads in work at once (default 1)
+pool = 2                              # two beads given at once (default 1); with no `worktree = true`
+                                      # in `implement` they share the rig and work one after the other
 on_item_failure = "continue"          # a failed bead stops nothing; soft_stop / hard_stop stop the step
 
 [[step]]
