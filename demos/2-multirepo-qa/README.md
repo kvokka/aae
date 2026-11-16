@@ -46,7 +46,7 @@ the bead tree, the runs and the outcome. Everything a run creates is in `.gitign
 it for the next run. Compare with the author's run: `frontend-example/`, `backend-example/` and
 `RESULT-example.md`, with its date, versions and models. Your result differs: the agents decide anew each time.
 
-The author's run (2026-11-15, `RESULT-example.md`) needed two rounds: the first round of the checks sent the work
-back to the planner, which added a bead to hide the game overlay during play; in the second round `qa` played the game
-in the browser and saw a score reach the backend. How a return goes is in `crates/aae-testkit/tests/core/returns.rs`,
-without a model.
+The author's runs (2026-11-16, two in a row, the second in `RESULT-example.md`) each passed in one round: the
+format check and `qa` in the browser found nothing to send back. An earlier one (2026-11-15) needed two rounds: the
+checks sent the work back to the planner, which added a bead to hide the game overlay during play. How a return goes
+is in `crates/aae-testkit/tests/core/returns.rs` and in the second-round row of criterion 20, without a model.
