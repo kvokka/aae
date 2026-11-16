@@ -31,6 +31,15 @@ impl Project {
         }
     }
 
+    /// The rig of a bead: the one whose prefix is the bead's id up to its last `-` (spec §10.2); none for a bead of
+    /// the root.
+    pub fn rig_of(&self, bead: &str) -> Option<&str> {
+        let (prefix, _) = bead.rsplit_once('-')?;
+        let mut rigs = self.rigs.iter();
+        rigs.find(|(_, r)| r.prefix.as_deref() == Some(prefix))
+            .map(|(n, _)| n.as_str())
+    }
+
     /// The root first, then the rigs.
     pub fn places(&self) -> impl Iterator<Item = (&str, &Rig)> {
         std::iter::once((self.root.0.as_str(), &self.root.1)).chain(self.rigs.iter().map(|(n, r)| (n.as_str(), r)))
@@ -55,8 +64,29 @@ impl Loader {
         );
         let at_root = root.1.path.canonicalize().ok();
         let mut rigs = BTreeMap::new();
+        let mut prefixes = BTreeMap::new();
         for (rig, r) in raw {
             let mut place = self.place_of(file, dir, ("rig", &rig), &r.path, r.vars);
+            let prefix = r.prefix.unwrap_or_else(|| acronym(&rig));
+            // What br keeps as it is: it lowercases a prefix.
+            let ok = |c: char| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-';
+            if prefix.is_empty() || prefix.starts_with('-') || prefix.ends_with('-') || !prefix.chars().all(ok) {
+                self.fail(
+                    file,
+                    format!(
+                        "rig `{rig}`: prefix `{prefix}`: lowercase ASCII letters, digits and `-` inside: set `prefix`"
+                    ),
+                );
+            }
+            if let Some(other) = prefixes.insert(prefix.clone(), rig.clone()) {
+                self.fail(
+                    file,
+                    format!(
+                        "rigs `{other}` and `{rig}` both give their beads the prefix `{prefix}`: set `prefix` on one"
+                    ),
+                );
+            }
+            place.prefix = Some(prefix);
             if rig == name {
                 self.fail(
                     file,
@@ -90,12 +120,10 @@ impl Loader {
         vars: BTreeMap<String, String>,
     ) -> Rig {
         self.name(file, kind, name);
-        // The place is the tracker label `rig:<name>`; the tracker takes labels of `[A-Za-z0-9_:-]`, 50 at most
-        // (§10.2).
-        if name.len() > 46 || !name.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_') {
+        if !name.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_') {
             self.fail(
                 file,
-                format!("{kind} name `{name}`: ASCII letters, digits, `-` and `_`, 46 at most"),
+                format!("{kind} name `{name}`: ASCII letters, digits, `-` and `_`"),
             );
         }
         let path = resolve(dir, path);
@@ -110,6 +138,7 @@ impl Loader {
         }
         Rig {
             path,
+            prefix: None,
             vars,
             triggers: Vec::new(),
             settings: Default::default(),
@@ -117,4 +146,10 @@ impl Loader {
             agents: BTreeMap::new(),
         }
     }
+}
+
+/// The first letter of each word of a rig's name, lowercased: `backend` is `b`, `my-project` is `mp`.
+fn acronym(name: &str) -> String {
+    let words = name.split(['-', '_']).filter_map(|w| w.chars().next());
+    words.map(|c| c.to_ascii_lowercase()).collect()
 }

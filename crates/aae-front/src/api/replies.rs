@@ -290,6 +290,8 @@ pub(crate) struct Project {
 pub(crate) struct Rig {
     name: String,
     path: String,
+    /// The prefix of the ids of the rig's beads; null for the root, whose beads carry the tracker's own.
+    prefix: Option<String>,
     vars: BTreeMap<String, String>,
 }
 

@@ -139,3 +139,41 @@ fn implementer() -> Name {
         name: "implementer".into(),
     }
 }
+
+/// A rig's beads carry the acronym of its name, or its `prefix` (spec §10.2); a bead of no rig prefix is the root's.
+#[test]
+fn a_rig_takes_the_acronym_of_its_name_or_its_prefix_key() {
+    let rigs = "[rigs.my-project]\npath = \"mine\"\n[rigs.web_api]\npath = \"web\"\nprefix = \"api\"\n";
+    let files = [
+        ("shop/aae.toml", project(rigs)),
+        ("shop/mine/.keep", String::new()),
+        ("shop/web/.keep", String::new()),
+    ];
+    let files: Vec<(&str, &str)> = files.iter().map(|(p, t)| (*p, t.as_str())).collect();
+    let config = load_with(&files).unwrap();
+    let shop = &config.projects[0];
+    let prefix = |rig: &str| shop.rigs[rig].prefix.clone();
+    assert_eq!(
+        (prefix("backend"), prefix("my-project")),
+        (Some("b".into()), Some("mp".into()))
+    );
+    assert_eq!(prefix("web_api").as_deref(), Some("api"));
+    assert_eq!(shop.root.1.prefix, None);
+    let rig_of = |bead: &str| shop.rig_of(bead);
+    assert_eq!(
+        [rig_of("api-x1"), rig_of("api-x1.2"), rig_of("mp-q59")],
+        [Some("web_api"), Some("web_api"), Some("my-project")]
+    );
+    assert_eq!([rig_of("root-79u.1"), rig_of("b"), rig_of("x-b-1")], [None, None, None]);
+}
+
+#[test]
+fn two_rigs_with_one_prefix_or_a_prefix_br_rewrites_are_an_error() {
+    let both = project("[rigs.billing]\npath = \"backend\"\n");
+    fails(
+        &[("shop/aae.toml", &both)],
+        "rigs `backend` and `billing` both give their beads the prefix `b`",
+    );
+    let upper = project("[rigs.web]\npath = \"backend\"\nprefix = \"API\"\n");
+    fails(&[("shop/aae.toml", &upper)], "rig `web`: prefix `API`");
+}

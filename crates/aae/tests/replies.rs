@@ -72,6 +72,11 @@ async fn the_replies_fit_their_schemas() {
         "{projects}"
     );
     assert_eq!(shop["rigs"].as_array().unwrap().len(), 1, "only `web`: {projects}");
+    assert_eq!(
+        (&shop["rigs"][0]["prefix"], &shop["root"]["prefix"]),
+        (&"w".into(), &json!(null)),
+        "{projects}"
+    );
     for path in [
         "/v1/daemon",
         "/v1/gates",

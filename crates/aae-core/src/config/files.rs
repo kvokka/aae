@@ -284,6 +284,9 @@ pub(super) struct RootFile {
 #[serde(deny_unknown_fields)]
 pub(super) struct RigFile {
     pub path: PathBuf,
+    /// The prefix of the ids of the rig's beads; the acronym of the rig's name without it.
+    #[serde(default)]
+    pub prefix: Option<String>,
     #[serde(default)]
     pub vars: BTreeMap<String, String>,
     #[serde(default)]

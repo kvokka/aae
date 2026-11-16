@@ -172,7 +172,7 @@ fn a_valid_config_loads_with_every_reference_resolved() {
 #[test]
 fn a_rig_path_has_no_dot_and_no_dot_dot() {
     let project = "packs = [\"../kit\"]\n[root]\npath = \"./x/..\"\n[rigs.below]\npath = \"./x/./y/..\"\n\
-                   [rigs.beside]\npath = \"../x\"\n";
+                   [rigs.beside]\npath = \"../x\"\nprefix = \"bs\"\n";
     // The files make the directories the rigs name.
     let config = load_with(&[("shop/aae.toml", project), ("shop/x/y/f", ""), ("x/f", "")]).unwrap();
     let shop = &config.projects[0];

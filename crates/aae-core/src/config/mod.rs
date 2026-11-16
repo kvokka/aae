@@ -133,6 +133,8 @@ pub struct TrackerLink {
 #[derive(Clone, Debug)]
 pub struct Rig {
     pub path: PathBuf,
+    /// The prefix of the ids of its beads (spec §10.2); none for the root, whose beads carry the tracker's own.
+    pub prefix: Option<String>,
     pub vars: BTreeMap<String, String>,
     /// Pack triggers that run on this rig.
     pub triggers: Vec<Name>,

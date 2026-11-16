@@ -3115,6 +3115,13 @@
           "path": {
             "type": "string"
           },
+          "prefix": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "The prefix of the ids of the rig's beads; null for the root, whose beads carry the tracker's own."
+          },
           "vars": {
             "type": "object",
             "additionalProperties": {
