@@ -221,6 +221,21 @@ pub(crate) const ALL: &[Scenario] = &[
             ))
         },
     },
+    Scenario {
+        criterion: "31",
+        title: "a formula step runs its formula as a child run with the inputs it declares and the step's, its \
+                outcome the step's, cancelled with its parent and not doubled by a restart; an internal formula \
+                starts only from a step; the config refuses a step short of an input, one the formula lacks, a \
+                formula that runs itself and a trigger on an internal formula",
+        launch: Launch::Ci,
+        run: |env| {
+            Box::pin(tests(
+                env,
+                "-p aae-core -p aae-testkit -E test(/^formula_step::|a_formula_step_names_a_formula_whose_inputs_it_has/)",
+                6,
+            ))
+        },
+    },
 ];
 
 /// The workspace this binary was built from.

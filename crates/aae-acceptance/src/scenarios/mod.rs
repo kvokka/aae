@@ -25,6 +25,7 @@ mod c25_return;
 mod c26_git;
 mod c29_repeat;
 mod c30_drain;
+mod c31_formula;
 mod c34_background;
 
 use crate::{
@@ -213,6 +214,14 @@ pub(crate) const ALL: &[Scenario] = &[
                 failure, `soft_stop` ends the started across kill -9 and gives no new, `hard_stop` cancels them",
         launch: Launch::Ci,
         run: |env| Box::pin(c30_drain::run(env)),
+    },
+    Scenario {
+        criterion: "31",
+        title: "a formula step runs an internal formula as a child run with the inputs it declares and those the \
+                step gives, its outcome the step's; a direct start of it is refused, the list hides it without \
+                `--all`; one formula name in two projects runs each project's own",
+        launch: Launch::Ci,
+        run: |env| Box::pin(c31_formula::run(env)),
     },
     Scenario {
         criterion: "34",

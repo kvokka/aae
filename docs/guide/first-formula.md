@@ -234,4 +234,15 @@ step_check_script_path = "check.sh"   # beside the formula file; 0 passes, 75 fa
 
 Exit code 75 of the script is a failure for good: the run fails at once, with no repeat and no `back_to` round.
 
+A step can run another formula of the project as a child run, whose outcome is the step's; the child inherits the
+inputs it declares (other than a `task`), and the step adds its own:
+
+```toml
+[[step]]
+name = "review"
+kind = "formula"
+formula = "review"                    # with `internal = true` in review.toml it starts only from a step
+inputs = { focus = "{{ steps.write.summary }}" }
+```
+
 Next: [writing a plugin](plugin.md).

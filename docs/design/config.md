@@ -497,13 +497,15 @@ name = "implement"
 description = "Implement the task of a bead"
 worktree = true                     # optional (default false): each run works in a git worktree of its own
 rounds = 3                          # optional (default 3): the most rounds a check may send the run through
+internal = false                    # optional: true starts it only from a `formula` or `drain` step
 
 [inputs]
 task = { type = "task", required = true }   # task | string | integer | boolean
 
 [[step]]
 name = "implement"                  # optional (default: the position, "1", "2", ..)
-kind = "ai"                     # ai: agent (whose prompt.template.md it gets); exec: command; drain: formula
+kind = "ai"                     # ai: agent (whose prompt.template.md it gets); exec: command;
+                                # drain, formula: formula
 agent = "implementer"
 timeout = "45m"                     # optional
 model = "opus"                      # optional, ai steps only: layer 8, the launch settings `harness`,
@@ -524,6 +526,13 @@ formula = "fix"                     # the formula of each bead's run
 timeout = "24h"                     # optional (default 24h)
 pool = 2                            # optional (default 1): the most beads in work at once
 on_item_failure = "soft_stop"       # optional: continue (default) | soft_stop | hard_stop
+
+[[step]]
+name = "review"
+kind = "formula"
+formula = "review"                  # a formula of the project, run as a child run
+inputs = { focus = "{{ steps.implement.summary }}" }  # optional: inputs of `formula`, given on top of inherited
+timeout = "24h"                     # optional (default 24h)
 ```
 
 A formula has a name, a description, declared inputs and one or more steps, which a run goes through in order
@@ -560,6 +569,20 @@ gives the beads again. A cancelled child stops nothing. `formula` must take exac
 `bead` input and need no other; a formula with a `drain` step needs a required `bead` input. An epic under the root is
 not ready while it has open beads; once they are closed it is given out as any bead (with an id of no rig: in the
 root).
+
+A `formula` step runs `formula`, a formula of the run's project (a formula of another project is not in its reach,
+whatever its name), as one child run: the same rig, the run's correlation, one level deeper, the run as
+`parent_run`. The child's outcome (result, summary, data) is the step's. Its inputs are those of the parent it
+declares, but not a `task` input (the parent holds that bead), and on top of them the step's `inputs`: a table as a
+trigger's, each string a template over `inputs`, `steps`, `run`, `bead` and `project`. The step has no process: it
+ends when the child does; a cancelled parent cancels the child, and a restart finds the child it made and makes no
+second one. `max_attempts` and `step_check_script_path` apply as to any step. A formula with `internal = true` runs
+only from such a step or a `drain` step: a start by hand, from the API, MCP or a session is refused (`` `<name>` is
+internal: only a step of another formula runs it ``), `GET /v1/formulas` marks each formula with `internal`, and
+`aae formula list` hides the internal ones unless `--all`. Config errors: a step that neither gives nor inherits a
+required input of its formula (``needs input `goal`, which the step neither gives nor inherits``), one that gives an
+input the formula does not declare, a formula that runs itself through its `formula` steps, at any depth, and a
+trigger on an internal formula.
 
 A step with `back_to` is a check. When it fails the run does not fail: the steps after it that are checks too run
 as well, and after the last of them every failed check of the row sends the run back together, to the earliest
