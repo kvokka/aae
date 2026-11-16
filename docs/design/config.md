@@ -433,8 +433,10 @@ declared by the orchestrator or the project.
 
 `scope` (`rig`, the default, or `root`: where the agent works, spec §8.1; an agent of the root works in the
 project root whatever the rig of its run, its session there while the run keeps its own workdir, and takes no
-rig's layer, edit or variant, so "explain config" of it is the same with a rig or without; `explain` prints
-`scope = "root"`), `prompt` (role prompt file, default `prompt.md`
+rig's layer, so "explain config" of it is the same with a rig or without; `explain` prints `scope = "root"`; a
+rig's `agents` that edits it or maps it to a variant is a config error, its edits go in the project's `[agents]`;
+the step does not hold the root, so it may share the root with a run without a rig or with another root agent's
+session: the price of letting a rig's runs plan in the root while the root serves its own runs), `prompt` (role prompt file, default `prompt.md`
 when it exists; its text is the agent layer's `system_prompt`, so an `[agents.<agent>]` edit may still replace it, and setting
 `system_prompt` in `agent.toml` too is an error), `max_runs` (optional positive integer: runs of this agent
 started at once in its project; the orchestrator's `max_runs` still applies; a run whose next step is of an agent

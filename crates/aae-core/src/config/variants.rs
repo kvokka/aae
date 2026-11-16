@@ -2,7 +2,7 @@
 //! rigs that run a variant in place of a pack agent (`[rigs.<r>.agents]`): docs/design/config.md "Agent variants".
 
 use super::{
-    Name, Pack, Project, Settings, Variant,
+    Name, Pack, Project, Scope, Settings, Variant,
     check::resolve,
     files::retired,
     items::{agent_keys, string},
@@ -113,13 +113,28 @@ pub(super) fn check_project(loader: &mut Loader, project: &mut Project, outer: &
     }
     let own = project.packs.first().map(|p| p.name.clone()).unwrap_or_default();
     let has_agent = |p: &Pack, n: &str| p.agents.contains_key(n);
+    let packs = &project.packs;
+    let of_root = |a: &Name| {
+        let agent = packs
+            .iter()
+            .find(|p| p.name == a.pack)
+            .and_then(|p| p.agents.get(&a.name));
+        agent.is_some_and(|a| a.scope == Scope::Root)
+    };
+    let root = "works in the root (`scope = \"root\"`), which no rig edits: edit it in the project's `[agents]`";
     for (rig, r) in &mut project.rigs {
+        for agent in (r.edits.keys()).filter(|a| !project.variants.contains_key(*a) && !outer.contains_key(*a)) {
+            if resolve(packs, &own, &reference(agent), has_agent, "agent").is_ok_and(|a| of_root(&a)) {
+                loader.fail(&file, format!("rig `{rig}`: agent `{agent}` {root}"));
+            }
+        }
         let mut resolved = BTreeMap::new();
         for (agent, variant) in std::mem::take(&mut r.agents) {
             if !project.variants.contains_key(&variant) && !outer.contains_key(&variant) {
                 loader.fail(&file, format!("rig `{rig}`: `agents`: no agent variant `{variant}`"));
             }
-            match resolve(&project.packs, &own, &agent, has_agent, "agent") {
+            match resolve(packs, &own, &agent, has_agent, "agent") {
+                Ok(found) if of_root(&found) => loader.fail(&file, format!("rig `{rig}`: agent `{found}` {root}")),
                 Ok(found) => drop(resolved.insert(found, variant)),
                 Err(e) => loader.fail(&file, format!("rig `{rig}`: `agents`: {e}")),
             }

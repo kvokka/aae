@@ -78,11 +78,8 @@ impl Config {
         let own = p.packs.first().map(|pack| pack.name.as_str()).unwrap_or_default();
         let has_agent = |pack: &Pack, n: &str| pack.agents.contains_key(n);
         let is_variant = |n: &str| p.variants.contains_key(n) || self.variants.contains_key(n);
-        // A rig maps an agent of its own to a variant; an agent of the root has none.
-        let mapped = |a: &Name| {
-            let of_rig = agent_of(p, a).is_ok_and(|a| a.scope == Scope::Rig);
-            r.filter(|_| of_rig).and_then(|r| r.agents.get(a)).cloned()
-        };
+        // A rig maps an agent of its own to a variant; it maps none of the root (the config refuses that).
+        let mapped = |a: &Name| r.and_then(|r| r.agents.get(a)).cloned();
         let (agent, variant) = match as_agent {
             Some(n) if is_variant(n) => (agent.clone(), Some(n.to_owned())),
             Some(n) => {

@@ -79,3 +79,34 @@ fn cron_reads_the_system_zone_unless_timezone_names_one() {
     fails(&[("config.toml", with("Mars/Olympus").as_str())], "`timezone`");
     assert_eq!(load_with(BASE).unwrap().timezone, jiff::tz::TimeZone::system());
 }
+
+/// Where each trigger runs (spec §9.3): a project trigger without a `rig` in the root, under the root's name, and
+/// with `rig` naming the root there too; a pack trigger only on the rigs that list it.
+#[test]
+fn a_project_trigger_without_a_rig_runs_in_the_root() {
+    let places = |changes: &[(&str, &str)]| {
+        let config = load_with(changes).unwrap();
+        let dir = tempfile::tempdir().unwrap();
+        let db = dir.path().join("state.db");
+        crate::open(&db).unwrap();
+        let listed = crate::run::Reader::open(&db).unwrap().triggers(&config).unwrap();
+        let mut at: Vec<String> = (listed.iter())
+            .map(|t| format!("{} {}", t["trigger"], t["rig"]))
+            .collect();
+        at.sort();
+        at
+    };
+    let expect = |root: &str| {
+        vec![
+            r#""kit.nightly" "backend""#.to_owned(),
+            format!(r#""shop.implement-next" "{root}""#),
+        ]
+    };
+    assert_eq!(places(&[]), expect("root"));
+    let named = BASE[3]
+        .1
+        .replacen("[rigs.backend]", "[root]\nname = \"main\"\n[rigs.backend]", 1);
+    assert_eq!(places(&[("shop/aae.toml", &named)]), expect("main"));
+    let to_root = named.replace("run = \"implement\"\n", "run = \"implement\"\nrig = \"main\"\n");
+    assert_eq!(places(&[("shop/aae.toml", &to_root)]), expect("main"));
+}
