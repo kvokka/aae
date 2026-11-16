@@ -3,7 +3,7 @@
 //! them on every codex update (docs/harness-updates.md).
 
 use crate::common::{Live, failure_of};
-use aae_core::driver::{Answer, Driver, FailureKind, Normalized, PromptKey, SessionState, StopReason};
+use aae_contract::driver::{Answer, Driver, FailureKind, Normalized, PromptKey, SessionState, StopReason};
 use aae_testkit::openai::Reply;
 use std::time::{Duration, Instant};
 
@@ -250,7 +250,7 @@ async fn a_thread_hook_runs_with_the_attempt_environment() {
     let dir = tempfile::tempdir().unwrap();
     let provider = std::sync::Arc::new(aae_testkit::openai::Provider::start(vec![Reply::Text("Hi.".into())]).await);
     let out = dir.path().join("hook-env");
-    let hook = aae_core::config::Hook {
+    let hook = aae_contract::config::Hook {
         enabled: true,
         event: Some("Stop".into()),
         matcher: None,

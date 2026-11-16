@@ -16,7 +16,7 @@ test = false
 workspace = true
 
 [dependencies]
-aae-core = { version = "0.1.0", path = "../aae-core" }
+aae-contract = { version = "0.1.0", path = "../aae-contract" }
 # kqueue, not the default FSEvents backend: FSEvents links macOS frameworks that `cargo zigbuild` has no SDK for.
 notify = { version = "8.2.2", default-features = false, features = ["macos_kqueue"] }
 rusqlite = { version = "0.42", features = ["bundled"] }

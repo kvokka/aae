@@ -1,10 +1,10 @@
 # Denied at the root of each daemon crate: the orphan reaper takes the exit of a child the daemon did not register
-# from that child's `wait`, so every child is spawned through `aae_core::orphans`.
+# from that child's `wait`, so every child is spawned through `aae_contract::orphans`.
 disallowed-methods = [
-  { path = "std::process::Command::spawn", reason = "spawn through `aae_core::orphans::spawn_std`" },
-  { path = "std::process::Command::output", reason = "use `aae_core::orphans::output_std`" },
-  { path = "std::process::Command::status", reason = "spawn through `aae_core::orphans::spawn_std`" },
-  { path = "tokio::process::Command::spawn", reason = "spawn through `aae_core::orphans::spawn`" },
-  { path = "tokio::process::Command::output", reason = "use `aae_core::orphans::output`" },
-  { path = "tokio::process::Command::status", reason = "spawn through `aae_core::orphans::spawn`" },
+  { path = "std::process::Command::spawn", reason = "spawn through `aae_contract::orphans::spawn_std`" },
+  { path = "std::process::Command::output", reason = "use `aae_contract::orphans::output_std`" },
+  { path = "std::process::Command::status", reason = "spawn through `aae_contract::orphans::spawn_std`" },
+  { path = "tokio::process::Command::spawn", reason = "spawn through `aae_contract::orphans::spawn`" },
+  { path = "tokio::process::Command::output", reason = "use `aae_contract::orphans::output`" },
+  { path = "tokio::process::Command::status", reason = "spawn through `aae_contract::orphans::spawn`" },
 ]

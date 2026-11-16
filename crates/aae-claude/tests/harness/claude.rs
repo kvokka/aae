@@ -2,7 +2,7 @@
 //! account.
 
 use aae_claude::Claude;
-use aae_core::{
+use aae_contract::{
     config::{EffectiveConfig, Hook, Layer, Mcp, Skill, Sourced},
     driver::{Driver, DriverEvent, Normalized, PromptKey, SessionPlan, SessionState, StopReason, Transcript},
 };
@@ -25,7 +25,7 @@ fn config(provider: &Provider) -> EffectiveConfig {
     EffectiveConfig {
         services: Default::default(),
         harness: "claude".into(),
-        harness_from: aae_core::config::Layer::Agent,
+        harness_from: aae_contract::config::Layer::Agent,
         scope: Default::default(),
         model_given: None,
         model: Some(sourced("claude-haiku-5-5")),
@@ -231,18 +231,18 @@ async fn a_command_left_in_the_background_is_stopped_and_the_session_takes_the_n
     driver.send_prompt(&instance, &session, "Start it.", key).await.unwrap();
     until(&mut events, |e| *e == idle(true)).await;
     let pid = pid_in(&workdir.join("bg.pid")).await;
-    assert!(aae_core::orphans::start_time(pid).is_some(), "the command runs");
+    assert!(aae_contract::orphans::start_time(pid).is_some(), "the command runs");
 
     driver.stop_background(&instance, &session).await;
     let seen = until(&mut events, |e| *e == idle(false)).await;
     assert!(!seen.contains(&Normalized::TurnStarted), "{seen:?}");
     for _ in 0..50 {
-        if aae_core::orphans::start_time(pid).is_none() {
+        if aae_contract::orphans::start_time(pid).is_none() {
             break;
         }
         tokio::time::sleep(Duration::from_millis(100)).await;
     }
-    assert_eq!(aae_core::orphans::start_time(pid), None, "the command is gone");
+    assert_eq!(aae_contract::orphans::start_time(pid), None, "the command is gone");
     let deadline = tokio::time::Instant::now() + Duration::from_secs(2);
     while let Ok(Some(e)) = tokio::time::timeout_at(deadline, events.recv()).await {
         assert_ne!(e.event, Normalized::TurnStarted, "claude started a turn of its own");

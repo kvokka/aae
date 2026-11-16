@@ -9,7 +9,7 @@ mod stream;
 
 pub use adapter::ADAPTER;
 
-use aae_core::{
+use aae_contract::{
     BoxFuture,
     config::EffectiveConfig,
     driver::{
@@ -118,7 +118,7 @@ impl Claude {
             instance.live.clone(),
         );
         let mut lines = BufReader::new(child.stdout.take().expect("stdout is piped")).lines();
-        let stderr = tokio::spawn(aae_core::driver::stderr_tail(
+        let stderr = tokio::spawn(aae_contract::driver::stderr_tail(
             child.stderr.take().expect("stderr is piped"),
         ));
         let instances = self.instances.clone();

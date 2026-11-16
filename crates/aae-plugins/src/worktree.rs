@@ -138,7 +138,7 @@ fn hold(common: &Path, until: Instant) -> Result<File, String> {
 /// Runs `git` in its own process group, killed with the group once `until` passes.
 fn git(dir: &Path, args: &[&str], until: Instant) -> Result<String, String> {
     // Dropped once the child was waited for, on every way out.
-    let (mut child, _own) = aae_core::orphans::spawn_std(
+    let (mut child, _own) = aae_contract::orphans::spawn_std(
         Command::new("git")
             .arg("-C")
             .arg(dir)

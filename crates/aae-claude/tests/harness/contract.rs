@@ -3,7 +3,7 @@
 //! claude update (docs/harness-updates.md).
 
 use aae_claude::Claude;
-use aae_core::{
+use aae_contract::{
     config::{EffectiveConfig, Layer, Sourced},
     driver::{
         Answer, Driver, DriverEvent, Failure, FailureKind, InstanceHandle, Normalized, PromptKey, SessionPlan,
@@ -79,7 +79,7 @@ impl Live {
         let config = EffectiveConfig {
             services: Default::default(),
             harness: "claude".into(),
-            harness_from: aae_core::config::Layer::Agent,
+            harness_from: aae_contract::config::Layer::Agent,
             scope: Default::default(),
             model_given: None,
             model: Some(sourced("claude-haiku-5-5".to_owned())),

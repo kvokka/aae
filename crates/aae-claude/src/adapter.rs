@@ -4,7 +4,7 @@ use crate::{
     Claude, TESTED,
     part::{CREDENTIALS, host_dir},
 };
-use aae_core::driver::{Adapter, Check, DoctorAgents, Driver, Setup, login_check};
+use aae_contract::driver::{Adapter, Check, DoctorAgents, Driver, Setup, login_check};
 use serde_json::Value;
 use std::{
     path::{Path, PathBuf},
@@ -60,5 +60,5 @@ fn host_mcp(file: &Path) -> Check {
         .collect();
     names.sort_unstable();
     names.dedup();
-    aae_core::driver::host_mcp_check("claude", &names)
+    aae_contract::driver::host_mcp_check("claude", &names)
 }

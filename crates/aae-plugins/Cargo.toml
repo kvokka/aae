@@ -12,7 +12,7 @@ publish = false
 workspace = true
 
 [dependencies]
-aae-core = { version = "0.1.0", path = "../aae-core" }
+aae-contract = { version = "0.1.0", path = "../aae-contract" }
 rustix = { version = "1.1.6", features = ["process"] }
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.154"

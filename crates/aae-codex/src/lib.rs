@@ -10,7 +10,7 @@ mod stream;
 
 pub use adapter::ADAPTER;
 
-use aae_core::{
+use aae_contract::{
     BoxFuture,
     config::EffectiveConfig,
     driver::{
@@ -108,7 +108,7 @@ impl Codex {
             pgid: pid,
         };
         let lines = BufReader::new(child.stdout.take().expect("stdout is piped")).lines();
-        let stderr = tokio::spawn(aae_core::driver::stderr_tail(
+        let stderr = tokio::spawn(aae_contract::driver::stderr_tail(
             child.stderr.take().expect("stderr is piped"),
         ));
         let (instances, id) = (self.instances.clone(), id.to_owned());
@@ -323,7 +323,7 @@ impl Driver for Codex {
             // A command that detached itself is no background of the thread and would outlive it on the shared
             // app-server; it still carries the attempt's token (experiment 8). Walking `/proc` is synchronous.
             if let Some(token) = token {
-                let sweep = move || aae_core::orphans::sweep_var("AAE_ATTEMPT_TOKEN", &token);
+                let sweep = move || aae_contract::orphans::sweep_var("AAE_ATTEMPT_TOKEN", &token);
                 let _ = tokio::task::spawn_blocking(sweep).await;
             }
         })

@@ -1,7 +1,7 @@
 //! The codex driver on the real `codex app-server` (pinned in `mise.toml`) against the fake Responses API: no model.
 
 use aae_codex::Codex;
-use aae_core::{
+use aae_contract::{
     config::{EffectiveConfig, Layer, Skill, Sourced},
     driver::{
         Driver, DriverEvent, FailureKind, Normalized, PromptKey, SessionPlan, SessionState, StopReason, Transcript,
@@ -23,7 +23,7 @@ fn config(provider: &Provider) -> EffectiveConfig {
     EffectiveConfig {
         services: Default::default(),
         harness: "codex".into(),
-        harness_from: aae_core::config::Layer::Agent,
+        harness_from: aae_contract::config::Layer::Agent,
         scope: Default::default(),
         model_given: None,
         model: Some(agent("gpt-fake".into())),
@@ -288,13 +288,16 @@ async fn the_commands_a_thread_left_are_stopped_and_other_threads_keep_theirs() 
         }
     }
     for _ in 0..50 {
-        if aae_core::orphans::start_time(a_pid).is_none() {
+        if aae_contract::orphans::start_time(a_pid).is_none() {
             break;
         }
         tokio::time::sleep(Duration::from_millis(100)).await;
     }
-    assert_eq!(aae_core::orphans::start_time(a_pid), None, "A's command is gone");
-    assert!(aae_core::orphans::start_time(b_pid).is_some(), "B's command runs on");
+    assert_eq!(aae_contract::orphans::start_time(a_pid), None, "A's command is gone");
+    assert!(
+        aae_contract::orphans::start_time(b_pid).is_some(),
+        "B's command runs on"
+    );
 
     driver
         .send_prompt(&instance, a, "again", PromptKey::new("a", 1, 2))
@@ -329,18 +332,18 @@ async fn a_detached_command_goes_with_its_thread() {
     until(&mut rx, |e| matches!(e, Normalized::TurnEnded { .. })).await;
     let pid = pid_in(&dir.path().join("det.pid")).await;
     assert!(
-        aae_core::orphans::start_time(pid).is_some(),
+        aae_contract::orphans::start_time(pid).is_some(),
         "the command outlives its turn"
     );
     driver.close_session(&instance, &session).await;
     for _ in 0..50 {
-        if aae_core::orphans::start_time(pid).is_none() {
+        if aae_contract::orphans::start_time(pid).is_none() {
             break;
         }
         tokio::time::sleep(Duration::from_millis(100)).await;
     }
     assert_eq!(
-        aae_core::orphans::start_time(pid),
+        aae_contract::orphans::start_time(pid),
         None,
         "the command went with its thread"
     );

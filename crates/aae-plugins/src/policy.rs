@@ -2,7 +2,7 @@
 //! Every count comes from the event (`attempts`, `gates`, `keys`), so the policy keeps no state and the same event
 //! always gets the same decision: a hook run again after a daemon crash decides the same.
 
-use aae_core::{parse_rfc3339_ms, rfc3339_ms};
+use aae_contract::{parse_rfc3339_ms, rfc3339_ms};
 use serde::Deserialize;
 use serde_json::{Value, json};
 

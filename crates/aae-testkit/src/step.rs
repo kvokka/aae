@@ -1,6 +1,6 @@
 //! The steps of a scripted scenario.
 
-use aae_core::driver::Normalized;
+use aae_contract::driver::Normalized;
 use std::{sync::Arc, time::Duration};
 use tokio::sync::Notify;
 

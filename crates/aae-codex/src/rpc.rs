@@ -2,7 +2,9 @@
 //! the rest into events.
 
 use crate::stream::Stream;
-use aae_core::driver::{Failure, FailureKind, Normalized, PromptKey, SessionRef, Source, Transcript, child::Events};
+use aae_contract::driver::{
+    Failure, FailureKind, Normalized, PromptKey, SessionRef, Source, Transcript, child::Events,
+};
 use serde_json::{Value, json};
 use std::{
     collections::HashMap,

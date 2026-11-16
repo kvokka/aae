@@ -1,5 +1,5 @@
 use super::*;
-use aae_core::driver::{RequestKind, SessionState};
+use aae_contract::driver::{RequestKind, SessionState};
 use tokio::{sync::mpsc, time::Instant};
 
 type Events = mpsc::UnboundedReceiver<DriverEvent>;
@@ -330,7 +330,7 @@ fn prompt_keys_are_stable_and_distinct() {
 #[test]
 fn failures_take_the_default_scope_of_their_kind() {
     use FailureKind::*;
-    use aae_core::driver::Scope::*;
+    use aae_contract::driver::Scope::*;
     // The whole table of docs/design/contracts.md 4.4, one row per kind.
     let table = [
         (QuotaExhausted, Account),

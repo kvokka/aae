@@ -1,7 +1,7 @@
 //! The stdout of one `claude -p --output-format stream-json` session read into normalized events
 //! (docs/design/contracts.md 4.3, 4.6; docs/design/experiments.md, experiment 1a and "Idle without background").
 
-use aae_core::driver::{
+use aae_contract::driver::{
     Failure, FailureKind, Normalized, PromptKey, RateLimit, RequestKind, SessionState, Source, StopReason,
 };
 use serde_json::Value;

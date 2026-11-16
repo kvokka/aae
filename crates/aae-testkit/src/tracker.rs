@@ -2,7 +2,7 @@
 //! creation order, creation once per key, and an outage switch. As in br, a parent with open children is not ready
 //! and is released, not closed.
 
-use aae_core::{
+use aae_contract::{
     BoxFuture,
     tracker::{Bead, Change, Tracker, TrackerError},
 };

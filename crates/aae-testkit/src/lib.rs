@@ -3,7 +3,7 @@
 //! events outside a turn, background work; fake providers for the real harnesses ([`anthropic`], [`openai`]) and a test
 //! MCP service ([`mcp`]). Nothing of it runs in the product.
 
-use aae_core::{
+use aae_contract::{
     BoxFuture,
     config::EffectiveConfig,
     driver::{

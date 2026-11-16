@@ -5,7 +5,7 @@ use crate::{
     Codex, TESTED,
     part::{CREDENTIALS, host_config, host_home, host_key, host_provider_name, unconfined},
 };
-use aae_core::driver::{Adapter, Check, DoctorAgents, Driver, Setup, login_check};
+use aae_contract::driver::{Adapter, Check, DoctorAgents, Driver, Setup, login_check};
 use std::{num::NonZeroU32, path::Path, sync::Arc, time::Duration};
 
 pub const ADAPTER: Adapter = Adapter {
@@ -84,7 +84,7 @@ fn host_mcp(host: &Path) -> Check {
     let names: Vec<&str> = (servers.filter(|(_, s)| s.get("command").is_some()))
         .map(|(n, _)| n.as_str())
         .collect();
-    aae_core::driver::host_mcp_check("codex", &names)
+    aae_contract::driver::host_mcp_check("codex", &names)
 }
 
 /// Decision 38: the codex sandbox needs user namespaces, which many hosts lack, so a codex agent whose config

@@ -4,7 +4,7 @@ use crate::{
     Codex, part,
     tests::{agent, config},
 };
-use aae_core::driver::{Driver, FailureKind, SessionPlan};
+use aae_contract::driver::{Driver, FailureKind, SessionPlan};
 use serde_json::{Value, json};
 use std::path::Path;
 
@@ -13,7 +13,7 @@ fn the_process_gets_the_native_block_and_the_thread_the_rest() {
     let mut config = config();
     config.hooks.insert(
         "stop".into(),
-        agent(aae_core::config::Hook {
+        agent(aae_contract::config::Hook {
             enabled: true,
             event: Some("Stop".into()),
             matcher: None,
@@ -117,7 +117,7 @@ fn a_process_without_a_key_of_its_own_logs_in_by_the_host_provider() {
 #[test]
 fn no_sandbox_unless_the_config_or_the_inherited_host_config_sets_one() {
     let host = tempfile::tempdir().unwrap();
-    let sandbox = |config: &aae_core::config::EffectiveConfig| -> Vec<String> {
+    let sandbox = |config: &aae_contract::config::EffectiveConfig| -> Vec<String> {
         let p = part::process(config, Path::new("/state"), host.path()).unwrap();
         part::args(&p)
             .into_iter()
@@ -159,7 +159,7 @@ fn a_process_inheriting_the_host_with_skills_gets_a_home_linking_the_hosts() {
     let p = part::process(&config, state.path(), host.path()).unwrap();
     assert_eq!(p["home"], json!(host.path()), "without skills the host's home itself");
     assert!(p["user_home"].is_null());
-    let mail = aae_core::config::Skill {
+    let mail = aae_contract::config::Skill {
         enabled: true,
         path: Some(skill.path().to_owned()),
     };
@@ -199,7 +199,7 @@ fn only_a_process_inheriting_the_host_gets_its_network_settings() {
 
 #[test]
 fn a_thread_read_that_got_no_answer_is_no_missing_transcript() {
-    use aae_core::driver::{Failure, Source, Transcript};
+    use aae_contract::driver::{Failure, Source, Transcript};
     let failed = |kind| crate::rpc::unread(Failure::new(kind, Source::Adapter));
     assert_eq!(failed(FailureKind::Stall).unwrap_err().kind, FailureKind::Stall);
     assert_eq!(

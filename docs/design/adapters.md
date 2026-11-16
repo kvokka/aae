@@ -13,11 +13,11 @@ config ([config](config.md#where-the-bundled-plugins-end-and-the-core-begins)).
 
 ## Adding a harness
 
-1. A crate `crates/aae-<name>` that depends on `aae-core` and implements `Driver`.
+1. A crate `crates/aae-<name>` that depends on `aae-contract` and implements `Driver`.
 2. In it, one exported description of itself:
 
    ```rust
-   pub const ADAPTER: aae_core::driver::Adapter = Adapter {
+   pub const ADAPTER: aae_contract::driver::Adapter = Adapter {
        name: "<name>",                   // [harness.<name>] and the binary mise resolves
        models: &[("<short>", "<full>")], // short model names it expands; any other name goes as it is
        tested: [(1, 2, 0), (1, 4, 3)],   // tested binary versions, inclusive; also Capabilities.versions
@@ -32,7 +32,7 @@ config ([config](config.md#where-the-bundled-plugins-end-and-the-core-begins)).
    no settings refuses any key. `doctor` gets every agent on the harness, labelled and with its effective config,
    and answers what only the adapter knows: whether a session the daemon starts can log in (the daemon's own
    environment reaches no session, so a key there does not count), host settings every session inherits (stdio
-   MCP servers), a sandbox. `login_check` and `host_mcp_check` in `aae_core::driver` give the common wording.
+   MCP servers), a sandbox. `login_check` and `host_mcp_check` in `aae_contract::driver` give the common wording.
 
    `models` is what the config knows of the harness (config.md "Harness and model"): a short model name becomes
    the full one when the config is assembled, so the gate key `model:<harness>/<model>` and `explain` have the name
@@ -87,7 +87,7 @@ the core relies on these, and a driver that misses one fails runs by the watchdo
   that); nothing of the daemon's environment is inherited unless the adapter passes it.
 - The adapter never retries a turn, parks or decides an outcome: that is policy.
 
-`aae_core::driver::child` holds what every process-based adapter does the same way: `spawn` (piped stdio, own
+`aae_contract::driver::child` holds what every process-based adapter does the same way: `spawn` (piped stdio, own
 group, pid and start time), `base_env`, the `Events` sender, `health`, the stop ladder `stop`, `watch` (a panic of
 the reader task becomes `adapter_crash`) and `config_error`; `stderr_tail` and `HOST_NETWORK_ENV` sit next to it.
 

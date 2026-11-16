@@ -1,7 +1,7 @@
 //! The effective config of a session as `claude` flags and environment (docs/design/experiments.md "Config and
 //! credential delivery"). claude runs a process per session, so everything is in the process part.
 
-use aae_core::{
+use aae_contract::{
     config::EffectiveConfig,
     driver::{Failure, Fingerprint, ProcessPart, SessionPlan, child::config_error},
 };
@@ -54,7 +54,7 @@ pub(crate) fn process(config: &EffectiveConfig, plan: &SessionPlan, state: &Path
     // state directory (docs/design/config.md).
     let files = state.join("claude").join(&session_id);
     let config_dir = (!inherit).then(|| files.join("config"));
-    let value = |s: &Option<aae_core::config::Sourced<String>>| s.as_ref().map(|s| s.value.clone());
+    let value = |s: &Option<aae_contract::config::Sourced<String>>| s.as_ref().map(|s| s.value.clone());
     let env: BTreeMap<_, _> = config.env.iter().map(|(k, v)| (k.clone(), v.value.clone())).collect();
     Ok(json!({
         "session_id": session_id,
@@ -110,7 +110,7 @@ fn settings(config: &EffectiveConfig) -> Result<(Value, Option<String>), Failure
         let mut entry = json!({ "type": "command", "command": command });
         if let Some(timeout) = &hook.timeout {
             let timeout =
-                aae_core::config::duration(timeout).map_err(|e| config_error(format!("hook `{name}`: {e}")))?;
+                aae_contract::config::duration(timeout).map_err(|e| config_error(format!("hook `{name}`: {e}")))?;
             entry["timeout"] = json!(timeout.as_secs().max(1));
         }
         let matcher = json!({ "matcher": hook.matcher.clone().unwrap_or_default(), "hooks": [entry] });
@@ -237,7 +237,7 @@ pub(crate) fn materialize(p: &Value) -> std::io::Result<()> {
 /// `host` is the host's claude config directory: an isolated session without a credential of its own gets the
 /// host's login from there (docs/design/config.md).
 pub(crate) fn env(p: &Value, id: &str, socket: Option<&Path>, host: &Path) -> Vec<(String, String)> {
-    let mut env = aae_core::driver::child::base_env(daemon_vars(p), &p["env"], id, socket);
+    let mut env = aae_contract::driver::child::base_env(daemon_vars(p), &p["env"], id, socket);
     let text = |v: &Value| v.as_str().map(str::to_owned).unwrap_or_else(|| v.to_string());
     env.extend([
         ("CLAUDE_CODE_EMIT_SESSION_STATE_EVENTS".to_owned(), "1".to_owned()),
@@ -262,7 +262,7 @@ pub(crate) fn env(p: &Value, id: &str, socket: Option<&Path>, host: &Path) -> Ve
 /// network settings.
 pub(crate) fn daemon_vars(p: &Value) -> impl Iterator<Item = &'static str> {
     let inherits = p["config_dir"].is_null();
-    let host = inherits.then_some(aae_core::driver::HOST_NETWORK_ENV);
+    let host = inherits.then_some(aae_contract::driver::HOST_NETWORK_ENV);
     ["PATH", "HOME", "LANG"]
         .into_iter()
         .chain(host.into_iter().flatten())

@@ -3,7 +3,7 @@
 //! watcher.
 
 use aae_br::Br;
-use aae_core::tracker::{Tracker, TrackerError};
+use aae_contract::tracker::{Tracker, TrackerError};
 use std::{path::Path, process::Command, sync::mpsc, time::Duration};
 
 /// A fresh tracker in a temporary directory.

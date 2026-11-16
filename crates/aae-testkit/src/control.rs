@@ -1,7 +1,7 @@
 //! How a test sets up and reads the scripted driver: scenarios, instances, tokens, what sessions were given.
 
 use super::{ScriptedDriver, Session, State, Step};
-use aae_core::driver::{Capabilities, PromptKey};
+use aae_contract::driver::{Capabilities, PromptKey};
 use serde_json::Value;
 use std::{
     collections::BTreeMap,

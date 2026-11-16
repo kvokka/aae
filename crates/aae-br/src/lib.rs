@@ -5,7 +5,7 @@
 
 #![deny(clippy::disallowed_methods)]
 
-use aae_core::{
+use aae_contract::{
     BoxFuture,
     tracker::{Bead, Change, Tracker, TrackerError},
 };
@@ -23,7 +23,7 @@ const READER: &str = "aae";
 pub fn issue_prefix(binary: &Path, dir: &Path) -> Option<String> {
     let mut command = std::process::Command::new(binary);
     command.args(["config", "get", "issue_prefix"]).env("BEADS_DIR", dir);
-    let out = aae_core::orphans::output_std(&mut command).ok()?;
+    let out = aae_contract::orphans::output_std(&mut command).ok()?;
     let prefix = String::from_utf8_lossy(out.stdout.trim_ascii());
     (out.status.success() && !prefix.is_empty()).then(|| prefix.into_owned())
 }
@@ -57,7 +57,7 @@ impl Br {
             .env("BEADS_DIR", &self.dir)
             .env("RUST_LOG", "error")
             .kill_on_drop(true);
-        let out = aae_core::orphans::output(&mut command)
+        let out = aae_contract::orphans::output(&mut command)
             .await
             .map_err(|e| Fail(None, unavailable(format!("br: {e}"))))?;
         let body: Value = serde_json::from_slice(&out.stdout).unwrap_or(Value::Null);

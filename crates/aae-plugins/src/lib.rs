@@ -1,5 +1,5 @@
 //! The plugins bundled with aae (docs/design/config.md): in-process executors of the orchestrator hook contract
-//! (docs/design/contracts.md 3.1). The core runs them as hooks of their events (`aae_core::config::BUNDLED`) with
+//! (docs/design/contracts.md 3.1). The core runs them as hooks of their events (`aae_contract::config::BUNDLED`) with
 //! their `[builtin.<name>]` table as parameters (`worktree`: the loader's); the daemon checks those at start.
 
 #![deny(clippy::disallowed_methods)]

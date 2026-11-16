@@ -1,7 +1,7 @@
 //! The harness of the codex contract scenarios: one codex thread on the fake Responses API.
 
 use aae_codex::Codex;
-use aae_core::{
+use aae_contract::{
     config::{EffectiveConfig, Layer, Sourced},
     driver::{
         Driver, DriverEvent, Failure, InstanceHandle, Normalized, PromptKey, SessionPlan, SessionRef, StopReason,
@@ -50,7 +50,7 @@ impl Live {
         retries: u32,
         approval: &str,
         resume: Option<SessionRef>,
-        hooks: std::collections::BTreeMap<String, aae_core::config::Sourced<aae_core::config::Hook>>,
+        hooks: std::collections::BTreeMap<String, aae_contract::config::Sourced<aae_contract::config::Hook>>,
     ) -> Result<Self, Failure> {
         let id = if resume.is_some() { "i2" } else { "i1" };
         let driver = Codex::new("codex".into(), dir.join("state"), None, 8);
@@ -81,7 +81,7 @@ impl Live {
         let config = EffectiveConfig {
             services: Default::default(),
             harness: "codex".into(),
-            harness_from: aae_core::config::Layer::Agent,
+            harness_from: aae_contract::config::Layer::Agent,
             scope: Default::default(),
             model_given: None,
             model: Some(sourced("gpt-fake".to_owned())),

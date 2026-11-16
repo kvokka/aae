@@ -1,9 +1,9 @@
 use super::*;
 
-fn agent<T>(value: T) -> aae_core::config::Sourced<T> {
-    aae_core::config::Sourced {
+fn agent<T>(value: T) -> aae_contract::config::Sourced<T> {
+    aae_contract::config::Sourced {
         value,
-        from: aae_core::config::Layer::Agent,
+        from: aae_contract::config::Layer::Agent,
     }
 }
 
@@ -62,7 +62,7 @@ fn the_native_permission_mode_is_a_flag_and_not_a_settings_key() {
     let config = EffectiveConfig {
         services: Default::default(),
         harness: "claude".into(),
-        harness_from: aae_core::config::Layer::Agent,
+        harness_from: aae_contract::config::Layer::Agent,
         scope: Default::default(),
         model_given: None,
         model: None,
@@ -94,7 +94,7 @@ fn a_config_the_adapter_cannot_deliver_is_a_config_error() {
     let mut config = EffectiveConfig {
         services: Default::default(),
         harness: "claude".into(),
-        harness_from: aae_core::config::Layer::Agent,
+        harness_from: aae_contract::config::Layer::Agent,
         scope: Default::default(),
         model_given: None,
         model: None,
@@ -125,12 +125,12 @@ fn a_config_the_adapter_cannot_deliver_is_a_config_error() {
     config.native = Some(agent(json!("permissions")));
     assert_eq!(driver.split(&config, &plan).unwrap_err().kind, FailureKind::ConfigError);
     config.native = None;
-    let shared = aae_core::config::Mcp {
+    let shared = aae_contract::config::Mcp {
         command: Some(vec!["srv".into()]),
         env: Default::default(),
         url: None,
         headers: Default::default(),
-        scope: Some(aae_core::config::McpScope::Project),
+        scope: Some(aae_contract::config::McpScope::Project),
     };
     config.mcp.insert("shared".into(), agent(shared));
     let split = driver.split(&config, &plan).unwrap();
@@ -142,7 +142,7 @@ fn a_config_the_adapter_cannot_deliver_is_a_config_error() {
 
 #[test]
 fn hooks_join_the_native_settings_and_mcp_servers_take_claude_form() {
-    use aae_core::config::{Hook, Mcp};
+    use aae_contract::config::{Hook, Mcp};
     let hook = |event: &str, enabled| Hook {
         enabled,
         event: Some(event.into()),
@@ -153,7 +153,7 @@ fn hooks_join_the_native_settings_and_mcp_servers_take_claude_form() {
     let mut config = EffectiveConfig {
         services: Default::default(),
         harness: "claude".into(),
-        harness_from: aae_core::config::Layer::Agent,
+        harness_from: aae_contract::config::Layer::Agent,
         scope: Default::default(),
         model_given: None,
         model: None,

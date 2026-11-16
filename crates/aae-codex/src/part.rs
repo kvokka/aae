@@ -3,7 +3,7 @@
 //! process environment are the process's; cwd, model, instructions, MCP, hooks and the command environment are the
 //! thread's.
 
-use aae_core::{
+use aae_contract::{
     config::EffectiveConfig,
     driver::{Failure, Fingerprint, ProcessPart, SessionPlan, child::config_error},
 };
@@ -96,7 +96,7 @@ pub(crate) fn session(config: &EffectiveConfig, plan: &SessionPlan) -> Result<Va
             ..
         } => (workdir, run, token, actor),
     };
-    let value = |s: &Option<aae_core::config::Sourced<String>>| s.as_ref().map(|s| s.value.clone());
+    let value = |s: &Option<aae_contract::config::Sourced<String>>| s.as_ref().map(|s| s.value.clone());
     // The attempt environment and the tracker actor of the attempt, as the core planned it (contracts 5.1); the
     // thread's, not the shared process's.
     let mut attempt = Map::from_iter([
@@ -170,7 +170,7 @@ fn hooks(config: &EffectiveConfig, vars: &Map<String, Value>) -> Result<Map<Stri
         let mut entry = json!({ "type": "command", "command": format!("{export}{command}") });
         if let Some(timeout) = &hook.timeout {
             let timeout =
-                aae_core::config::duration(timeout).map_err(|e| config_error(format!("hook `{name}`: {e}")))?;
+                aae_contract::config::duration(timeout).map_err(|e| config_error(format!("hook `{name}`: {e}")))?;
             entry["timeout"] = json!(timeout.as_secs().max(1));
         }
         let matcher = json!({ "matcher": hook.matcher.clone().unwrap_or_default(), "hooks": [entry] });
@@ -203,7 +203,7 @@ pub(crate) fn args(p: &Value) -> Vec<String> {
 /// inherits the host), the agent's variables, the homes, and the instance id the orphan sweep looks for. The attempt
 /// variables go to each thread instead.
 pub(crate) fn env(p: &Value, id: &str, socket: Option<&Path>) -> Vec<(String, String)> {
-    let mut env = aae_core::driver::child::base_env(daemon_vars(p), &p["env"], id, socket);
+    let mut env = aae_contract::driver::child::base_env(daemon_vars(p), &p["env"], id, socket);
     env.push((
         "CODEX_HOME".to_owned(),
         p["home"].as_str().unwrap_or_default().to_owned(),
@@ -271,7 +271,9 @@ pub(crate) fn materialize(p: &Value) -> std::io::Result<()> {
 
 /// The daemon's variables the app-server gets.
 pub(crate) fn daemon_vars(p: &Value) -> impl Iterator<Item = &'static str> {
-    let host = p["user_home"].is_null().then_some(aae_core::driver::HOST_NETWORK_ENV);
+    let host = p["user_home"]
+        .is_null()
+        .then_some(aae_contract::driver::HOST_NETWORK_ENV);
     ["PATH", "HOME", "LANG", "SHELL"]
         .into_iter()
         .chain(host.into_iter().flatten())

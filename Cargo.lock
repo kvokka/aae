@@ -38,7 +38,7 @@ dependencies = [
 name = "aae-br"
 version = "0.1.0"
 dependencies = [
- "aae-core",
+ "aae-contract",
  "notify",
  "rusqlite",
  "serde_json",
@@ -50,7 +50,7 @@ dependencies = [
 name = "aae-claude"
 version = "0.1.0"
 dependencies = [
- "aae-core",
+ "aae-contract",
  "aae-testkit",
  "rustix",
  "serde_json",
@@ -63,7 +63,7 @@ dependencies = [
 name = "aae-codex"
 version = "0.1.0"
 dependencies = [
- "aae-core",
+ "aae-contract",
  "aae-testkit",
  "rustix",
  "serde",
@@ -128,7 +128,7 @@ dependencies = [
 name = "aae-plugins"
 version = "0.1.0"
 dependencies = [
- "aae-core",
+ "aae-contract",
  "rustix",
  "serde",
  "serde_json",
@@ -139,6 +139,7 @@ dependencies = [
 name = "aae-testkit"
 version = "0.1.0"
 dependencies = [
+ "aae-contract",
  "aae-core",
  "aae-plugins",
  "axum",

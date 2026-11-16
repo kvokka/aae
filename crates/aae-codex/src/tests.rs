@@ -1,11 +1,11 @@
 use super::*;
-use aae_core::driver::Normalized;
-use aae_core::driver::{RateLimit, RequestKind, SessionState, StopReason};
+use aae_contract::driver::Normalized;
+use aae_contract::driver::{RateLimit, RequestKind, SessionState, StopReason};
 
-pub(crate) fn agent<T>(value: T) -> aae_core::config::Sourced<T> {
-    aae_core::config::Sourced {
+pub(crate) fn agent<T>(value: T) -> aae_contract::config::Sourced<T> {
+    aae_contract::config::Sourced {
         value,
-        from: aae_core::config::Layer::Agent,
+        from: aae_contract::config::Layer::Agent,
     }
 }
 
@@ -13,7 +13,7 @@ pub(crate) fn config() -> EffectiveConfig {
     EffectiveConfig {
         services: Default::default(),
         harness: "codex".into(),
-        harness_from: aae_core::config::Layer::Agent,
+        harness_from: aae_contract::config::Layer::Agent,
         scope: Default::default(),
         model_given: None,
         model: Some(agent("gpt-fake".into())),
