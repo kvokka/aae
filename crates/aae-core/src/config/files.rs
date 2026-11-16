@@ -351,7 +351,7 @@ pub(super) struct OrchestratorHookFile {
 }
 
 /// What an earlier config shape said, and where it is written now: the error then is that one line.
-const RETIRED: [(&str, &str); 3] = [
+const RETIRED: [(&str, &str); 4] = [
     (
         "unknown field `permission_mode`",
         "`permission_mode` is native to a harness: its own key in `[settings.native.<harness>]`",
@@ -361,6 +361,10 @@ const RETIRED: [(&str, &str); 3] = [
         "`[overrides.<agent>]` is `[agents.<agent>]` now",
     ),
     ("unknown variant `prompt`", "step kind `prompt` is `ai` now"),
+    (
+        "unknown variant `bead`",
+        "input type `bead` is `task` now: a text, a bead id or `{ next_ready = true }`",
+    ),
 ];
 
 /// A parse error as one line with the hint of [`RETIRED`] when it is about a retired key, else as it is.

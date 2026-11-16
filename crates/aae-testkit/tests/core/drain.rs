@@ -4,7 +4,7 @@
 use crate::common;
 
 use aae_core::{
-    run::Msg,
+    run::{GateSpec, Msg},
     tracker::{Bead, Tracker},
 };
 use common::{World, beads::slow_turn, last, world};
@@ -159,4 +159,66 @@ async fn a_task_naming_a_bead_takes_it_up_and_files_no_second_bead() {
     // A bead a run holds is no text either: a second task naming it is refused.
     let refused = w.ask(json!(unseen)).await.unwrap_err().to_string();
     assert!(refused.contains("is held by"), "{refused}");
+}
+
+#[tokio::test(start_paused = true)]
+async fn two_tasks_naming_a_bead_not_read_yet_leave_it_to_the_first_and_fail_the_second() {
+    let rigs = (
+        "shop/aae.toml",
+        "[rigs.web]\npath = \"web\"\n[rigs.api]\npath = \"api\"\n",
+    );
+    let w = world(&[ASK[0], ASK[1], rigs, ("shop/api/.keep", "")]);
+    w.changed().await;
+    let unseen = w.tracker.add(&[], None);
+    // The tracker holds both answers back: neither run owns the bead when the other starts.
+    w.tracker.set_down(true);
+    let mut runs = Vec::new();
+    for rig in ["web", "api"] {
+        w.driver.script(slow_turn());
+        let reply = w.start_bead("ask", Some(rig), json!(unseen)).await.unwrap();
+        runs.push(reply["run"].as_str().unwrap().to_owned());
+    }
+    tokio::time::sleep(Duration::from_secs(1)).await;
+    w.tracker.set_down(false);
+    tokio::time::sleep(Duration::from_secs(8)).await;
+    // One live owner per bead (spec §5.5): the tracker answers both with the same bead, the second answer fails.
+    assert_eq!(w.run_bead(&runs[0]).as_deref(), Some(unseen.as_str()));
+    assert_eq!(w.assignee(&unseen), Some(format!("aae:{}", runs[0])));
+    assert_eq!(w.run_bead(&runs[1]), None);
+    let failed = w.events(&runs[1], Duration::ZERO).await;
+    let reason = last(&failed, "run.failed")["reason"]
+        .as_str()
+        .unwrap_or_default()
+        .to_owned();
+    assert!(reason.contains("held by"), "{failed:?}");
+    assert!(w.tracker.bead("b-2").is_none(), "no bead filed");
+    assert!(!w.states(&runs[0]).await.contains(&"failed".to_owned()));
+    let (session, texts) = w.driver.sent(&runs[0], 1);
+    assert!(
+        session.is_some() && texts.len() == 1,
+        "the first run's agent works on: {texts:?}"
+    );
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_task_naming_a_bead_not_read_yet_waits_queued_while_that_bead_is_gated() {
+    let w = world(ASK);
+    w.changed().await;
+    let unseen = w.tracker.add(&[], None);
+    let key = format!("bead:shop/{unseen}");
+    let gate = GateSpec {
+        key: key.clone(),
+        until_ms: None,
+        reason: "hold".into(),
+    };
+    w.core.send(None, Msg::CloseGate(gate)).await.unwrap();
+    w.driver.script(slow_turn());
+    let run = w.ask(json!(unseen)).await.unwrap()["run"].as_str().unwrap().to_owned();
+    let events = w.events(&run, Duration::from_secs(60)).await;
+    assert_eq!(last(&events, "run.queued")["gate"]["key"], key.as_str());
+    assert!(w.states(&run).await.is_empty(), "never left `queued`");
+    w.core.send(None, Msg::OpenGate { key }).await.unwrap();
+    tokio::time::sleep(Duration::from_secs(1)).await;
+    assert_eq!(w.run_bead(&run).as_deref(), Some(unseen.as_str()));
+    assert_eq!(w.states(&run).await.last().unwrap(), "running");
 }

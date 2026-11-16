@@ -101,7 +101,7 @@ fn a_drain_step_names_a_formula_that_takes_one_bead() {
     // No input takes a bead: a formula takes a task (spec §9.1).
     fails(
         &[(FLOW, &ship("root = { type = \"bead\" }", "implement"))],
-        "unknown variant `bead`, expected one of `task`",
+        "input type `bead` is `task` now",
     );
 }
 

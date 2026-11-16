@@ -530,8 +530,9 @@ because a run id is not reused within one state directory (it is a counter there
 `run_1` again) and a run owns at most one bead once. A claim answer carries the generation it was made for and is
 dropped unless the run still owns the bead in that generation and still waits for it in `preparing`.
 
-`create` makes an open epic without labels: the root bead of a run started from a request. It is idempotent by `key`:
-a repeat (an effect run again after a restart) returns the bead of the first call, never a second bead.
+`create` makes an open epic without labels: the root bead of a run whose task is a text that names no bead the core
+knows; a text that is the id of a bead returns that bead instead. It is idempotent by `key`: a repeat (an effect run
+again after a restart) returns the bead of the first call, never a second bead.
 
 `under` gives the ids of the ready beads below `root` at any depth, in the tracker's order: the beads a `drain` step
 gives out (spec §9.1). A bead's `epic` names only its parent, and an epic with open children is not ready, so the
@@ -643,7 +644,7 @@ of the parent leaves them alone.
 |---|---|---|---|
 | — | create (API, CLI, MCP, trigger) with an idempotency key | `queued` | — (with a task input that names a bead the core knows, the run is recorded as the bead's owner in this transaction, invariant 3: a bead another live run holds refuses; `{ next_ready = true, epic }` takes the first bead of the last ready set, in the tracker's order, that is in the epic, of the run's rig or of no rig, without an owner and without a closed gate, passing over (reply `passed_over`) a bead whose `harness:` or `agent:` label the run cannot take; none → the reply `{"nothing_ready": true}`, for a trigger `trigger.skipped{nothing_ready}`; the input then holds the bead id; any other text gets its bead on `preparing`, tracker-br.md) |
 | — | create with `continue_from: <run>` (a terminal run with a session; a session is never reused implicitly) | `queued` | in the workdir of that run; the first attempt resumes that run's last session with the formula prompt; a later `resume` uses the run's own session, or that one while it has none; a harness other than the agent's → `failed{infrastructure}`. Only the first step continues that session: a formula whose first step is not `prompt` cannot be continued, and the later steps start sessions of their own |
-| `queued` | slot free, workdir free, no gate of the run closed | `preparing` | with a request: the tracker creates the root bead (`create`, key kept in the effect), the run owns it and its input takes the id; with a bead: the tracker claim as owner `aae:<run>` (queue `tracker:<project>`), and the prompt renders once the claim returned the bead; `run.preparing` hooks |
+| `queued` | slot free, workdir free, no gate of the run closed | `preparing` | with a task text that names no bead the core knows: the tracker creates the root bead, or returns the bead the text names (`create`, key kept in the effect), the run owns it and its input takes the id; with a bead: the tracker claim as owner `aae:<run>` (queue `tracker:<project>`), and the prompt renders once the claim returned the bead; `run.preparing` hooks |
 | `preparing` | decision `proceed` (or no hooks) | `starting` | attempt 1: instance acquire, `start_session`, `send_prompt` |
 | `preparing` | `deny`, template error, claim error `Claimed` / `NotFound` / `Invalid`, `create` error other than `Unavailable`, no claim or `create` answer within `start_timeout` | `failed{check}`, `failed{infrastructure}`, `failed{infrastructure, bead_claimed / bead_not_found / bead_invalid}`, `failed{infrastructure, bead_not_created: <error>}`, `failed{infrastructure, tracker_unavailable}` | — |
 | `starting` | `prompt.acked` of the first prompt | `running` | — |

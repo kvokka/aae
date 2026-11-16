@@ -239,6 +239,11 @@ fn a_retired_key_is_one_line_that_says_where_it_went() {
         ),
         ("shop/aae.toml", rig, "`[overrides.<agent>]` is `[agents.<agent>]` now"),
         ("kit/formulas/implement.toml", step, "step kind `prompt` is `ai` now"),
+        (
+            "kit/formulas/implement.toml",
+            "name = \"implement\"\n[inputs]\nbead = { type = \"bead\" }\n",
+            "input type `bead` is `task` now",
+        ),
     ] {
         let errors = load(&[(file, text)]).expect_err(text);
         let error = (errors.iter().find(|e| e.message.contains(hint))).unwrap_or_else(|| panic!("{errors:?}"));
