@@ -132,7 +132,7 @@ find target -type f -newer "$s" -printf '%i %s\n' | sort -u | awk '{s+=$2} END {
   `mise run ci` команда `cargo nextest run --locked --no-run` не печатает ни одной строки `Compiling`;
   `docs/guide/development.md` описывает новый состав задач.
 
-### WP-90 · Движок отдельно от контрактов ядра · размер M · критичный · статус: todo
+### WP-90 · Движок отдельно от контрактов ядра · размер M · критичный · статус: done
 - Документы: `docs/architecture.md` (части, таблица крейтов, правило зависимостей), `docs/design/contracts.md` (по
   разделам), решение 43 и `scripts/core-boundary.sh`.
 - Зависит от: —. Брать после WP-87…WP-89 и одним: перенос задевает файлы, которые правят все пакеты.
