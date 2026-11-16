@@ -74,7 +74,7 @@ impl Loader {
         for (rig, r) in raw {
             let mut place = self.place_of(file, dir, ("rig", &rig), &r.path, r.vars);
             let prefix = r.prefix.unwrap_or_else(|| acronym(&rig));
-            // What br keeps as it is: it lowercases a prefix.
+            // What a tracker keeps as it is: one lowercases a prefix.
             let ok = |c: char| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-';
             if prefix.is_empty() || prefix.starts_with('-') || prefix.ends_with('-') || !prefix.chars().all(ok) {
                 self.fail(
