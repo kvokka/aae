@@ -104,6 +104,19 @@ impl Config {
         Ok((variant, config))
     }
 
+    /// The prompt of `agent` in `project`: a pack agent's qualified name, or a variant's, whose role and so prompt
+    /// are its base agent's (spec §8.1).
+    pub fn prompt(&self, project: &str, agent: &str) -> Result<&super::Prompt, String> {
+        let (p, _) = self.place(project, None)?;
+        let name = match p.variants.get(agent).or_else(|| self.variants.get(agent)) {
+            Some(v) => super::variants::base(p, v)?,
+            None => reference(agent),
+        };
+        p.prompts
+            .get(&name)
+            .ok_or_else(|| format!("agent `{agent}` has no prompt template"))
+    }
+
     /// Runs of `agent` (a pack agent's qualified name or a variant's) started at once in `project`: a variant's own
     /// limit, else its base agent's.
     pub fn max_runs(&self, project: &str, agent: &str) -> Option<u32> {

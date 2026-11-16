@@ -9,7 +9,6 @@ task = { type = "task", required = true }   # the request: its text becomes the 
 name = "plan"
 kind = "ai"
 agent = "planner"
-prompt = "plan.md"
 timeout = "20m"
 
 [[step]]
@@ -38,6 +37,5 @@ back_to = "plan"
 name = "qa"
 kind = "ai"
 agent = "qa"
-prompt = "qa.md"
 timeout = "20m"
 back_to = "plan"

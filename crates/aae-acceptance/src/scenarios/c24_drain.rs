@@ -24,10 +24,10 @@ const SHIP: &str = "name = \"ship\"\n[inputs]\ntask = { type = \"task\", require
     [[step]]\nname = \"drain\"\nkind = \"drain\"\nformula = \"work\"\n\
     [[step]]\nname = \"report\"\nkind = \"exec\"\ncommand = [\"sh\", \"{dir}/report.sh\"]\ntimeout = \"120s\"\n";
 
-/// The ai step names `ops`; the label `agent:dev` of a bead gives its run `dev`.
+/// The ai step names `ops`; the label `agent:dev` of a bead gives its run `dev`, and with it `dev`'s template.
 const WORK: &str = "name = \"work\"\n[inputs]\nbead = { type = \"task\", required = true }\n\
     [[step]]\nname = \"do\"\nkind = \"exec\"\ncommand = [\"sh\", \"{dir}/work.sh\"]\ntimeout = \"120s\"\n\
-    [[step]]\nname = \"sign\"\nkind = \"ai\"\nagent = \"ops\"\nprompt = \"sign.md\"\n";
+    [[step]]\nname = \"sign\"\nkind = \"ai\"\nagent = \"ops\"\n";
 
 /// The first attempt holds until the daemon dies; the second creates the beads and keeps their ids. A bead of a rig
 /// is filed with the rig's prefix (`w`, `a`) and `parent-child`, as `--parent` would give it the parent's id. F is a
@@ -88,7 +88,6 @@ pub(crate) async fn run(env: Arc<Env>) -> String {
         ] {
             write(root.join(path), text.replace("{dir}", &dir));
         }
-        write(shop.join("formulas/sign.md"), "Sign {{ bead.title }}.");
         tracker(root);
     })
     .await;

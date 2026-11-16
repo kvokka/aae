@@ -32,10 +32,10 @@ pub(crate) async fn run(env: Arc<Env>) -> String {
         );
         write(
             root.join("config/aae/shop/formulas/dev.toml"),
-            "name = \"dev\"\n[[step]]\nkind = \"ai\"\nagent = \"dev\"\nprompt = \"dev.md\"\n",
+            "name = \"dev\"\n[[step]]\nkind = \"ai\"\nagent = \"dev\"\n",
         );
         write(
-            root.join("config/aae/shop/formulas/dev.md"),
+            root.join("config/aae/shop/agents/dev/prompt.template.md"),
             format!(
                 "Call the tool `list_formulas` of the MCP server `aae` once. Then run this shell command once, with \
                  the names of all the formulas it listed, comma-separated, in place of NAMES: \

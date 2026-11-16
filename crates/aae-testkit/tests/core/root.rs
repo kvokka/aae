@@ -23,7 +23,7 @@ const ROOTED: (&str, &str) = ("shop/aae.toml", "");
 /// An ai step of `dev`, then an exec step that writes where it runs to `here`.
 const HERE: (&str, &str) = (
     "shop/formulas/here.toml",
-    "name = \"here\"\n[[step]]\nkind = \"ai\"\nagent = \"dev\"\nprompt = \"here.md\"\n\
+    "name = \"here\"\n[[step]]\nkind = \"ai\"\nagent = \"dev\"\n\
      [[step]]\nkind = \"exec\"\ncommand = [\"sh\", \"-c\", \"pwd > here\"]\ntimeout = \"10s\"\n",
 );
 
@@ -35,10 +35,11 @@ const TWO: &[(&str, &str)] = &[
     ),
     (
         "shop/formulas/two.toml",
-        "name = \"two\"\n[[step]]\nkind = \"ai\"\nagent = \"ops\"\nprompt = \"two.md\"\n\
-         [[step]]\nkind = \"ai\"\nagent = \"dev\"\nprompt = \"two.md\"\n",
+        "name = \"two\"\n[[step]]\nkind = \"ai\"\nagent = \"ops\"\n\
+         [[step]]\nkind = \"ai\"\nagent = \"dev\"\n",
     ),
-    ("shop/formulas/two.md", "Two."),
+    ("shop/agents/ops/prompt.template.md", "Two."),
+    ("shop/agents/dev/prompt.template.md", "Two."),
 ];
 
 impl World {
@@ -110,7 +111,7 @@ fn same(a: impl AsRef<Path>, b: impl AsRef<Path>) -> bool {
 #[tokio::test]
 async fn a_run_without_a_rig_works_in_the_root_that_is_no_git_repository() {
     let w = world_with(
-        &[ROOTED, HERE, ("shop/formulas/here.md", "Here.")],
+        &[ROOTED, HERE, ("shop/agents/dev/prompt.template.md", "Here.")],
         Arc::new(ExecHooks::default()),
     );
     let shop = w.dir.path().join("shop");
@@ -163,7 +164,7 @@ async fn a_root_with_a_name_and_a_path_is_where_its_runs_work() {
 
 #[tokio::test(start_paused = true)]
 async fn a_bead_of_the_root_runs_in_the_root() {
-    let w = world(&[ROOTED, FIX[0], FIX[1]]);
+    let w = world(&[&[ROOTED], FIX].concat());
     w.driver.script(slow_turn());
     let bead = w.tracker.add(&[], None);
     w.changed().await;

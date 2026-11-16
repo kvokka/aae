@@ -165,6 +165,22 @@ pub(crate) const ALL: &[Scenario] = &[
             ))
         },
     },
+    Scenario {
+        criterion: "33",
+        title: "an agent's prompt template is its `prompt.template.md`; the project's `.aae/agents/<agent>/` replaces it \
+            and fills it with its files; a missing template or file is a config error naming the path",
+        launch: Launch::Ci,
+        run: |env| {
+            Box::pin(tests(
+                env,
+                "-p aae-core -p aae-testkit -p aae -E test(/a_project_template_replaces_the_packs\
+                 |a_missing_template_or_named_file_is_an_error|an_agent_named_by_a_step_without_a_template\
+                 |a_template_fits_every_formula_whose_steps_name_its_agent|a_retired_key_is_one_line\
+                 |a_run_gets_the_project_template_of_its_agent|the_config_is_checked_and_explained_without_a_daemon/)",
+                7,
+            ))
+        },
+    },
 ];
 
 /// The workspace this binary was built from.

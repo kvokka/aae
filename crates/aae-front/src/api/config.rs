@@ -209,6 +209,8 @@ pub(crate) fn explained(config: &Config, project: &str, of: &Explain, rig: Optio
                     StepKind::Ai { .. } => {
                         let (agent, effective) = config.for_run(project, rig, formula, name)?;
                         text += &format!("# step `{name}` of `{formula}` on `{rig}`: agent {agent}\n");
+                        let template = config.prompt(project, &agent)?.from.display();
+                        text += &format!("# prompt template: {template}\n");
                         text += &effective.explain();
                         host |= effective.inherits_host();
                         Some(agent)

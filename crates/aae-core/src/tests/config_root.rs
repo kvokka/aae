@@ -25,12 +25,11 @@ fn a_project_without_a_root_section_has_the_root_next_to_its_file() {
 
 #[test]
 fn the_root_takes_a_name_and_a_path() {
-    let text = project("[root]\nname = \"mono\"\npath = \"../work\"\nvars = { test_cmd = \"make\" }\n");
+    let text = project("[root]\nname = \"mono\"\npath = \"../work\"\n");
     let config = load_with(&[("shop/aae.toml", &text), ("work/.keep", "")]).unwrap();
     let shop = &config.projects[0];
     assert_eq!(shop.root.0, "mono");
     assert_eq!(shop.root.1.path, shop.dir.parent().unwrap().join("work"));
-    assert_eq!(shop.root.1.vars["test_cmd"], "make");
     assert!(shop.dir.ends_with("shop"), "the config stays where aae.toml is");
     assert!(shop.place("root").is_none());
     // The root takes the rules of a rig's name and path.
@@ -45,6 +44,11 @@ fn the_root_takes_a_name_and_a_path() {
     fails(
         &[("shop/aae.toml", &project("[root]\nmodel = \"opus\"\n"))],
         "unknown field `model`",
+    );
+    // Two settings and no more (spec §6.1): text for an agent is a file of the agent (spec §8.1).
+    fails(
+        &[("shop/aae.toml", &project("[root]\nvars = { checks = \"x\" }\n"))],
+        "unknown field `vars`",
     );
 }
 

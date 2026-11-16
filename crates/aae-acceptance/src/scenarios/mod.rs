@@ -293,10 +293,10 @@ pub(crate) fn claude_agent(root: &Path, name: &str, base_url: &str) {
     );
     write(
         root.join(format!("config/aae/shop/formulas/{name}.toml")),
-        format!("name = \"{name}\"\n[[step]]\nkind = \"ai\"\nagent = \"{name}\"\nprompt = \"{name}.md\"\n"),
+        format!("name = \"{name}\"\n[[step]]\nkind = \"ai\"\nagent = \"{name}\"\n"),
     );
     write(
-        root.join(format!("config/aae/shop/formulas/{name}.md")),
+        root.join(format!("config/aae/shop/agents/{name}/prompt.template.md")),
         "Do the work on {{ rig.name }}.",
     );
 }
@@ -320,10 +320,10 @@ pub(crate) fn codex_agent(root: &Path, name: &str, base_url: &str) {
     );
     write(
         root.join(format!("config/aae/shop/formulas/{name}.toml")),
-        format!("name = \"{name}\"\n[[step]]\nkind = \"ai\"\nagent = \"{name}\"\nprompt = \"{name}.md\"\n"),
+        format!("name = \"{name}\"\n[[step]]\nkind = \"ai\"\nagent = \"{name}\"\n"),
     );
     write(
-        root.join(format!("config/aae/shop/formulas/{name}.md")),
+        root.join(format!("config/aae/shop/agents/{name}/prompt.template.md")),
         "Do the work on {{ rig.name }}.",
     );
 }

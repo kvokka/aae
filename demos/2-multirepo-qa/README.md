@@ -7,7 +7,8 @@ again, for at most three rounds.
 The request is one sentence: "Create me snake game in browser and a simple backend which store the high-scores, KISS".
 
 - `pack/` is the pack `dev`, with not a word about the task. Agent `planner` files the work, agent `coder` does one
-  bead, agent `qa` tries the result. Formula `deliver` (`rounds = 3`):
+  bead, agent `qa` tries the result; each is `agents/<agent>/agent.toml` and the prompt its steps get,
+  `agents/<agent>/prompt.template.md`. Formula `deliver` (`rounds = 3`):
   1. `plan`, an ai step of `planner`: it files beads under the request, each with its task, the prefix of its rig
      and the label `agent:`; from the second round on its prompt has the remarks of the checks, and it files only the fixes;
   2. `work`, a `drain` step: every ready bead under the request gets a run of `implement`;
@@ -18,9 +19,9 @@ The request is one sentence: "Create me snake game in browser and a simple backe
 
   Both checks have `back_to = "plan"`: when either fails, the run goes back to `plan` with the remarks of both. A
   check still failing in the third round fails the run.
-- `root/` is the root repository: `aae.toml` (the project, its rigs, what the agents run on and, in
-  `[root.vars] checks`, the conditions `qa` checks: the project's, not the pack's) and its tracker, made by the
-  run. `root/config.toml` is the orchestrator config of the demo: `run.sh` starts a daemon of the demo's own with it,
+- `root/` is the root repository: `aae.toml` (the project, its rigs and what the agents run on),
+  `.aae/agents/qa/checks.md` (the conditions `qa` checks: the project's, not the pack's; the template of `qa` takes
+  them as `{{ agent.checks }}`) and its tracker, made by the run. `root/config.toml` is the orchestrator config of the demo: `run.sh` starts a daemon of the demo's own with it,
   so the demo neither reads nor changes your `~/.config/aae`.
 - `frontend/` and `backend/` are the two repositories of the project, empty before a run.
 

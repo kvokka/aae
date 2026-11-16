@@ -3,6 +3,9 @@
 use super::config::{fails, load_with};
 
 const FLOW: &str = "kit/formulas/flow.toml";
+/// The agent of the `ai` step of `FLOW`, with a template of its own: an agent's template fits every formula naming it.
+const WORKER: (&str, &str) = ("kit/agents/worker/agent.toml", "harness = \"claude\"\n");
+const WORKER_TEMPLATE: &str = "kit/agents/worker/prompt.template.md";
 
 fn exec(name: Option<&str>) -> String {
     let name = name.map(|n| format!("name = \"{n}\"\n")).unwrap_or_default();
@@ -23,12 +26,11 @@ fn steps_are_named_by_their_position_unless_named() {
 #[test]
 fn bad_steps_are_errors() {
     let flow = format!(
-        "name = \"flow\"\n{}[[step]]\nname = \"work\"\nkind = \"ai\"\nagent = \"implementer\"\n\
-         prompt = \"flow.md\"\n{}",
+        "name = \"flow\"\n{}[[step]]\nname = \"work\"\nkind = \"ai\"\nagent = \"worker\"\n{}",
         exec(Some("pre")),
         exec(Some("post"))
     );
-    let with = |text: &'static str| load_with(&[(FLOW, &flow), ("kit/formulas/flow.md", text)]);
+    let with = |text: &'static str| load_with(&[(FLOW, &flow), WORKER, (WORKER_TEMPLATE, text)]);
     let refused = |text: &'static str| {
         with(text)
             .unwrap_err()
@@ -111,19 +113,18 @@ fn a_check_goes_back_to_an_earlier_step() {
     let back = |to: &str| format!("back_to = \"{to}\"\n");
     let flow = |rounds: &str, to: &str| {
         format!(
-            "name = \"flow\"\n{rounds}{}[[step]]\nname = \"work\"\nkind = \"ai\"\nagent = \"implementer\"\n\
-             prompt = \"flow.md\"\n{}{}",
+            "name = \"flow\"\n{rounds}{}[[step]]\nname = \"work\"\nkind = \"ai\"\nagent = \"worker\"\n{}{}",
             exec(Some("plan")),
             exec(Some("check")) + &back(to),
             exec(Some("post"))
         )
     };
-    let text = ("kit/formulas/flow.md", "Remarks: {{ remarks }}");
-    let config = load_with(&[(FLOW, &flow("", "plan")), text]).unwrap();
+    let text = (WORKER_TEMPLATE, "Remarks: {{ remarks }}");
+    let config = load_with(&[(FLOW, &flow("", "plan")), WORKER, text]).unwrap();
     let formula = &config.projects[0].packs[1].formulas["flow"];
     assert_eq!(formula.rounds, 3, "the default");
     assert_eq!(formula.steps[2].back_to.as_deref(), Some("plan"));
-    let config = load_with(&[(FLOW, &flow("rounds = 5\n", "work")), text]).unwrap();
+    let config = load_with(&[(FLOW, &flow("rounds = 5\n", "work")), WORKER, text]).unwrap();
     assert_eq!(config.projects[0].packs[1].formulas["flow"].rounds, 5);
     for (to, rounds, error) in [
         (
@@ -138,7 +139,7 @@ fn a_check_goes_back_to_an_earlier_step() {
         ),
         ("plan", "rounds = 0\n", "nonzero"),
     ] {
-        fails(&[(FLOW, &flow(rounds, to)), text], error);
+        fails(&[(FLOW, &flow(rounds, to)), WORKER, text], error);
     }
     let drain = "name = \"flow\"\n[inputs]\nb = { type = \"task\", required = true }\n[[step]]\nname = \"a\"\n\
                  kind = \"drain\"\nformula = \"implement\"\nback_to = \"a\"\n";

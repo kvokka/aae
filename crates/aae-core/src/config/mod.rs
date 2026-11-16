@@ -9,6 +9,7 @@ mod formula_file;
 mod items;
 mod load;
 mod places;
+mod prompt;
 pub(crate) mod schema;
 mod service;
 mod sources;
@@ -19,6 +20,7 @@ pub use assemble::{EffectiveConfig, Layer, Sourced};
 pub use files::{Harness, Hook, Mcp, McpScope, PluginUse, Settings, Skill};
 pub use formula_file::{Formula, Input, InputType, Step, StepKind};
 pub use places::Scope;
+pub use prompt::{Prompt, TEMPLATE};
 pub use service::{Health, Service, ServiceScope};
 pub use sources::{Checkouts, GitSource, commit_id, git_sources};
 use std::{collections::BTreeMap, fmt, path::PathBuf, time::Duration};
@@ -113,6 +115,8 @@ pub struct Project {
     pub rigs: BTreeMap<String, Rig>,
     /// The project root pack (named after the project, holding the project triggers) first.
     pub packs: Vec<Pack>,
+    /// The prompt of each agent its formulas' `ai` steps name, by the pack agent the step names.
+    pub prompts: BTreeMap<Name, Prompt>,
     pub tracker: TrackerLink,
 }
 
@@ -163,6 +167,8 @@ pub struct Pack {
 
 #[derive(Clone, Debug)]
 pub struct Agent {
+    /// Its directory in the pack: `agent.toml`, the role prompt, `prompt.template.md` and the files it names.
+    pub dir: PathBuf,
     /// The harness `agent.toml` names, part of the agent layer.
     pub harness: Option<String>,
     /// Where it works; an agent of the root takes no rig's layer, edits or variant.

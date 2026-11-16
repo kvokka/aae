@@ -22,17 +22,19 @@ const FILES: &[(&str, &str)] = &[
     ),
     ("shop/api/.keep", ""),
     ("shop/agents/same/agent.toml", "harness = \"scripted\"\n"),
+    ("shop/agents/same/prompt.template.md", "Build {{ rig.name }}."),
+    ("shop/agents/other/prompt.template.md", "Build {{ rig.name }}."),
     (
         "shop/agents/other/agent.toml",
         "harness = \"scripted\"\n[native.scripted]\naccount = \"b\"\n",
     ),
     (
         "shop/formulas/same.toml",
-        "name = \"same\"\n[[step]]\nkind = \"ai\"\nagent = \"same\"\nprompt = \"build.md\"\n",
+        "name = \"same\"\n[[step]]\nkind = \"ai\"\nagent = \"same\"\n",
     ),
     (
         "shop/formulas/other.toml",
-        "name = \"other\"\n[[step]]\nkind = \"ai\"\nagent = \"other\"\nprompt = \"build.md\"\n",
+        "name = \"other\"\n[[step]]\nkind = \"ai\"\nagent = \"other\"\n",
     ),
 ];
 

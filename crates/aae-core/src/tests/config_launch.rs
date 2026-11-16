@@ -97,7 +97,7 @@ fn the_pack_and_the_formula_step_are_layers() {
     let pack = "name = \"kit\"\nversion = \"0.3.0\"\nrequires_plugins = [\"mail\"]\n\
                 [[trigger]]\nname = \"nightly\"\ncron = \"0 3 * * *\"\nrun = \"audit\"\n[settings]\nmodel = \"haiku\"\neffort = \"low\"\n";
     let formula = "name = \"implement\"\n[inputs]\nbead = { type = \"task\", required = true }\n\
-                   [[step]]\nkind = \"ai\"\nagent = \"implementer\"\nprompt = \"implement.md\"\neffort = \"max\"\n";
+                   [[step]]\nkind = \"ai\"\nagent = \"implementer\"\neffort = \"max\"\n";
     let config = load(&[("kit/pack.toml", pack), ("kit/formulas/implement.toml", formula)]).unwrap();
     let (agent, e) = run(&config);
     assert_eq!(agent, "kit.implementer");
@@ -239,6 +239,11 @@ fn a_retired_key_is_one_line_that_says_where_it_went() {
         ),
         ("shop/aae.toml", rig, "`[overrides.<agent>]` is `[agents.<agent>]` now"),
         ("kit/formulas/implement.toml", step, "step kind `prompt` is `ai` now"),
+        (
+            "kit/formulas/implement.toml",
+            &step.replace("\"prompt\"", "\"ai\""),
+            "an `ai` step has no `prompt`: its agent's template is `agents/<agent>/prompt.template.md`",
+        ),
         (
             "kit/formulas/implement.toml",
             "name = \"implement\"\n[inputs]\nbead = { type = \"bead\" }\n",

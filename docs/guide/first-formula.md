@@ -7,7 +7,8 @@ only from the input of a run.
 
 ## 1. The agent
 
-An agent is a directory under `agents/` with an `agent.toml` and, usually, a role prompt in `prompt.md`.
+An agent is a directory under `agents/` with an `agent.toml`, the prompt template its `ai` steps get in
+`prompt.template.md` (next section) and, usually, a role prompt in `prompt.md`.
 `~/work/hello/agents/helper/agent.toml`:
 
 ```toml
@@ -61,16 +62,15 @@ name = "summarize"
 description = "Write a one-paragraph summary of a file"
 
 [inputs]
-file = { type = "string", required = true }   # bead | string | integer | boolean
+file = { type = "string", required = true }   # task | string | integer | boolean
 
 [[step]]
 kind = "ai"
-agent = "helper"
-prompt = "summarize.md"               # relative to this file
+agent = "helper"                      # the step gets the agent's prompt template
 timeout = "10m"
 ```
 
-`~/work/hello/formulas/summarize.md`, the prompt template: the steps of the work, with the inputs filled in.
+`~/work/hello/agents/helper/prompt.template.md`, the prompt template: the steps of the work, with the inputs filled in.
 
 ```markdown
 Read {{ inputs.file }} in {{ rig.path }} and write a one-paragraph summary of it to SUMMARY.md.
@@ -78,8 +78,16 @@ When you are done, run `aae finish pass --summary "<what you did, in one line>"`
 If you cannot do it, run `aae finish fail --summary "<why>"`.
 ```
 
-The template is checked when the config loads: `inputs.<name>` must be a declared input, and `rig.*`,
-`project.*`, `run.*` and `bead.*` must be fields that exist (see [the config reference](../design/config.md)).
+An agent has one template, and it is checked when the config loads against every formula whose `ai` steps name
+the agent: `inputs.<name>` must be an input each of them declares, `bead.*` needs a `task` input, `steps.<name>.*`
+an earlier step, and `rig.*`, `project.*` and `run.*` must be fields that exist (see
+[the config reference](../design/config.md)). Formulas that need different prompts name different agents.
+
+A project changes the prompt of a pack's agent without touching the pack: its own
+`.aae/agents/<agent>/prompt.template.md`, next to `aae.toml`, replaces the pack's. A template also takes in other
+files of its agent by name: `{{ agent.style }}` is the text of `style.md`, the project's
+`.aae/agents/<agent>/style.md` over the pack's `agents/<agent>/style.md`. That is how a project gives a general agent
+its own text, say the conditions a checker tries; a file found in neither place is a config error naming the path.
 
 ## 3. How a run ends: the finisher
 
@@ -129,6 +137,9 @@ step is named by `name`, or by its position (`"1"`, `"2"`, ...), and sees the ou
 name = "summarize-checked"
 description = "Summarize the README and check the summary is there"
 
+[inputs]
+file = { type = "string", required = true }   # helper's template reads {{ inputs.file }}
+
 [[step]]
 name = "count"
 kind = "exec"
@@ -137,8 +148,7 @@ command = ["wc", "-l", "README.md"]
 [[step]]
 name = "write"
 kind = "ai"
-agent = "helper"
-prompt = "summarize-checked.md"       # may use {{ steps.count.data.stdout }}
+agent = "helper"                      # the template it shares with `summarize` cannot read {{ steps.count.* }}
 
 [[step]]
 name = "check"
@@ -194,8 +204,7 @@ task = { type = "task", required = true }
 [[step]]
 name = "plan"
 kind = "ai"
-agent = "planner"
-prompt = "plan.md"                    # files the beads under {{ bead.id }}
+agent = "planner"                     # its template files the beads under {{ bead.id }}
 
 [[step]]
 name = "work"

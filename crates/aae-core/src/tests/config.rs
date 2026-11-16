@@ -2,6 +2,9 @@ use crate::config::{Config, ConfigError, Name, Source, StepKind};
 use std::{fs, time::Duration};
 
 /// A valid config: an orchestrator with a plugin, a project with a rig and a project trigger, and one pack.
+/// The prompt template of the `implementer` of `BASE`.
+pub(super) const TEMPLATE: &str = "kit/agents/implementer/prompt.template.md";
+
 pub(super) const BASE: &[(&str, &str)] = &[
     (
         "config.toml",
@@ -73,12 +76,11 @@ bead = { type = "task", required = true }
 [[step]]
 kind = "ai"
 agent = "implementer"
-prompt = "implement.md"
 timeout = "45m"
 "#,
     ),
     (
-        "kit/formulas/implement.md",
+        "kit/agents/implementer/prompt.template.md",
         "Implement {{ bead.title }} ({{ inputs.bead }}) in {{ rig.path }}, check with `{{ rig.test_cmd }}`.",
     ),
     (
@@ -249,7 +251,7 @@ fn two_inputs_of_an_exec_step_may_not_share_a_variable() {
 
 #[test]
 fn a_prompt_template_may_use_only_values_its_runs_have() {
-    let template = "kit/formulas/implement.md";
+    let template = TEMPLATE;
     fails(&[(template, "{{ inputs.nope }}")], "`{{ inputs.nope }}`");
     fails(&[(template, "{{ bead.nope }}")], "`{{ bead.nope }}`");
     fails(&[(template, "{{ run.nope }}")], "`{{ run.nope }}`");
@@ -319,7 +321,7 @@ fn files_reject_unknown_keys_and_undeclared_names() {
         &[("kit/agents/implementer/prompt.md", " \n\t\n")],
         "implementer/prompt.md` is empty",
     );
-    fails(&[("kit/formulas/implement.md", "\n  \n")], "implement.md` is empty");
+    fails(&[(TEMPLATE, "\n  \n")], "prompt.template.md` is empty");
     let unreadable_prompt = ("kit/agents/reviewer/prompt.md/.keep", "");
     fails(
         &[
@@ -359,12 +361,12 @@ fn files_reject_unknown_keys_and_undeclared_names() {
 fn every_error_is_reported_with_its_file() {
     let errors = load_with(&[
         ("kit/agents/implementer/agent.toml", "harness = \"codex\"\n"),
-        ("kit/formulas/implement.md", "{{ run.nope }}"),
+        (TEMPLATE, "{{ run.nope }}"),
     ])
     .unwrap_err();
     assert_eq!(errors.len(), 2, "{errors:?}");
     assert!(errors[0].file.ends_with("kit/agents/implementer/agent.toml"));
-    assert!(errors[1].file.ends_with("kit/formulas/implement.md"));
+    assert!(errors[1].file.ends_with(TEMPLATE));
 }
 
 #[test]

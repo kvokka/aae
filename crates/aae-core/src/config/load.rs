@@ -61,6 +61,7 @@ impl Loader {
         }
         for project in &mut projects {
             super::check::project(&mut self, project, &variants);
+            super::prompt::project(&mut self, project);
             super::variants::check_project(&mut self, project, &variants);
         }
         super::check::orchestrator_edits(&mut self, file, edits.keys(), &projects, &variants);
@@ -295,6 +296,7 @@ impl Loader {
             bundled,
             rigs,
             packs,
+            prompts: BTreeMap::new(),
             tracker: super::TrackerLink::default(),
         })
     }

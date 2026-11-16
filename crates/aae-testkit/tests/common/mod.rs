@@ -33,9 +33,9 @@ pub(crate) const FILES: &[(&str, &str)] = &[
     ("shop/agents/dev/agent.toml", "harness = \"scripted\"\n"),
     (
         "shop/formulas/build.toml",
-        "name = \"build\"\n[[step]]\nkind = \"ai\"\nagent = \"dev\"\nprompt = \"build.md\"\n",
+        "name = \"build\"\n[[step]]\nkind = \"ai\"\nagent = \"dev\"\n",
     ),
-    ("shop/formulas/build.md", "Build {{ rig.name }}."),
+    ("shop/agents/dev/prompt.template.md", "Build {{ rig.name }}."),
 ];
 
 /// A plugin with a hook on `run.attempt_failed`: decisions on it wait for its deadline instead of applying at once.

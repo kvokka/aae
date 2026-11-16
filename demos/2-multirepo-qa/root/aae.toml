@@ -1,5 +1,5 @@
 name = "multirepo-qa"
-packs = ["../pack"]                   # the agents and the formulas; the request comes from the user at the start
+packs = ["../pack"]                   # the agents and the formulas; the task comes from the user at the start
 
 # The user's settings: what the agents of the pack run on here, and how.
 [settings]
@@ -14,13 +14,8 @@ model = "luna"
 [agents.qa]
 model = "terra"
 
-[root.vars]
-# The conditions of the qa check: the project's, not the pack's, which knows nothing of the task.
-checks = """
-- The backend starts as its README says and keeps high scores across a restart of it.
-- The game opens from the frontend in a browser (`agent-browser`, headless) and is a snake game that plays: take a
-  screenshot, press arrow keys for a few seconds, take another, and look at both; the snake has moved.
-- A finished game can send its score, and the high scores the backend keeps show in the page."""
+# The conditions of the qa check are the project's, not the pack's, which knows nothing of the task: the project's
+# own file of the agent, `.aae/agents/qa/checks.md`, which its template names as `{{ agent.checks }}`.
 
 [rigs.frontend]
 path = "../frontend"

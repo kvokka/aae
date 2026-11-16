@@ -276,8 +276,6 @@ pub(super) struct ProjectFile {
 pub(super) struct RootFile {
     pub name: Option<String>,
     pub path: Option<PathBuf>,
-    #[serde(default)]
-    pub vars: BTreeMap<String, String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -351,7 +349,7 @@ pub(super) struct OrchestratorHookFile {
 }
 
 /// What an earlier config shape said, and where it is written now: the error then is that one line.
-const RETIRED: [(&str, &str); 4] = [
+const RETIRED: [(&str, &str); 5] = [
     (
         "unknown field `permission_mode`",
         "`permission_mode` is native to a harness: its own key in `[settings.native.<harness>]`",
@@ -361,6 +359,10 @@ const RETIRED: [(&str, &str); 4] = [
         "`[overrides.<agent>]` is `[agents.<agent>]` now",
     ),
     ("unknown variant `prompt`", "step kind `prompt` is `ai` now"),
+    (
+        "unknown field `prompt`",
+        "an `ai` step has no `prompt`: its agent's template is `agents/<agent>/prompt.template.md`",
+    ),
     (
         "unknown variant `bead`",
         "input type `bead` is `task` now: a text, a bead id or `{ next_ready = true }`",

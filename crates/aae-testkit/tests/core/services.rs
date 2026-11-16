@@ -334,7 +334,7 @@ async fn two_projects(scope: &str) -> (usize, [bool; 2]) {
         "harness = \"scripted\"\n[mcp.notes]\ncommand = [\"{PROBE}\", \"{}\"]\nscope = \"{scope}\"\n",
         notes.display()
     );
-    let build = "name = \"build\"\n[[step]]\nkind = \"ai\"\nagent = \"dev\"\nprompt = \"build.md\"\n";
+    let build = "name = \"build\"\n[[step]]\nkind = \"ai\"\nagent = \"dev\"\n";
     let files = [
         ("config.toml", config.as_str()),
         ("mall/aae.toml", "[rigs.web]\npath = \"web\"\n"),
@@ -342,7 +342,7 @@ async fn two_projects(scope: &str) -> (usize, [bool; 2]) {
         ("shop/agents/dev/agent.toml", agent.as_str()),
         ("mall/agents/dev/agent.toml", agent.as_str()),
         ("mall/formulas/build.toml", build),
-        ("mall/formulas/build.md", "Build."),
+        ("mall/agents/dev/prompt.template.md", "Build."),
     ];
     let driver = ScriptedDriver::new(2);
     driver.stall_sessions();

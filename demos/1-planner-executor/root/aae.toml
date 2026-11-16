@@ -1,5 +1,5 @@
 name = "planner-executor"
-packs = ["../pack"]                   # the agents and the formulas; the request comes from the user at the start
+packs = ["../pack"]                   # the agents and the formulas; the task comes from the user at the start
 
 # The user's settings: what the agents of the pack run on here, and how.
 [settings]

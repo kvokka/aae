@@ -5,6 +5,7 @@
 mod common;
 
 mod agent_limit;
+mod agent_prompt;
 mod anthropic;
 mod auth;
 mod bead_events;

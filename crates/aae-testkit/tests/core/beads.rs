@@ -198,7 +198,7 @@ async fn a_trigger_on_the_next_ready_bead_takes_each_bead_once_then_skips_with_n
     let take = "[rigs.web]\npath = \"web\"\n[rigs.api]\npath = \"api\"\n\n[[trigger]]\nname = \"take\"\nevery = \"1h\"\nrun = \"fix\"\nrig = \
     \"web\"\n\
         inputs = { bead = { next_ready = true } }\n";
-    let w = world(&[FIX[0], FIX[1], ("shop/aae.toml", take), ("shop/api/.keep", "")]);
+    let w = world(&[FIX, &[("shop/aae.toml", take), ("shop/api/.keep", "")]].concat());
     let beads = [
         w.tracker.add(&[], None),
         w.tracker.add_in("a", &[], None),
@@ -344,10 +344,11 @@ async fn a_start_without_a_rig_takes_it_from_the_prefix_of_the_bead_id_or_runs_i
 #[tokio::test(start_paused = true)]
 async fn a_bead_names_the_agent_of_its_run_and_the_harness_it_is_for() {
     let pair = "name = \"pair\"\n[inputs]\nbead = { type = \"task\", required = true }\n\
-        [[step]]\nname = \"one\"\nkind = \"ai\"\nagent = \"dev\"\nprompt = \"fix.md\"\n\
-        [[step]]\nname = \"two\"\nkind = \"ai\"\nagent = \"dev\"\nprompt = \"fix.md\"\n";
+        [[step]]\nname = \"one\"\nkind = \"ai\"\nagent = \"fixer\"\n\
+        [[step]]\nname = \"two\"\nkind = \"ai\"\nagent = \"fixer\"\n";
     let extra = [
         ("shop/agents/qa/agent.toml", "harness = \"scripted\"\n"),
+        ("shop/agents/qa/prompt.template.md", "Fix {{ bead.title }}."),
         ("shop/formulas/pair.toml", pair),
     ];
     let w = world(&[FIX, &extra].concat());
@@ -360,7 +361,7 @@ async fn a_bead_names_the_agent_of_its_run_and_the_harness_it_is_for() {
     let refused = async |bead: &str| w.fix(json!(bead)).await.unwrap_err().to_string();
     let why = refused(&codex).await;
     assert!(
-        why.contains("labelled `harness:codex`: the config gives `scripted` to `shop.dev` on `web`"),
+        why.contains("labelled `harness:codex`: the config gives `scripted` to `shop.fixer` on `web`"),
         "{why}"
     );
     assert!(refused(&twice).await.contains("has several `agent:` labels"));

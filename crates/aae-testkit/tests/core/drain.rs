@@ -15,9 +15,10 @@ const ASK: &[(&str, &str)] = &[
     (
         "shop/formulas/ask.toml",
         "name = \"ask\"\n[inputs]\nbead = { type = \"task\", required = true }\n\
-         [[step]]\nkind = \"ai\"\nagent = \"dev\"\nprompt = \"ask.md\"\n",
+         [[step]]\nkind = \"ai\"\nagent = \"asker\"\n",
     ),
-    ("shop/formulas/ask.md", "Do: {{ bead.description }}"),
+    ("shop/agents/asker/agent.toml", "harness = \"scripted\"\n"),
+    ("shop/agents/asker/prompt.template.md", "Do: {{ bead.description }}"),
 ];
 
 const TEXT: &str = "\n  Ship the checkout page  \nwith the new totals.";
@@ -167,7 +168,7 @@ async fn two_tasks_naming_a_bead_not_read_yet_leave_it_to_the_first_and_fail_the
         "shop/aae.toml",
         "[rigs.web]\npath = \"web\"\n[rigs.api]\npath = \"api\"\n",
     );
-    let w = world(&[ASK[0], ASK[1], rigs, ("shop/api/.keep", "")]);
+    let w = world(&[ASK, &[rigs, ("shop/api/.keep", "")]].concat());
     w.changed().await;
     let unseen = w.tracker.add(&[], None);
     // The tracker holds both answers back: neither run owns the bead when the other starts.

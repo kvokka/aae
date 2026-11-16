@@ -59,10 +59,10 @@ async fn a_claude_session_of_a_worktree_formula_works_in_its_worktree() {
             ),
             (
                 shop.join("formulas/build.toml"),
-                "name = \"build\"\nworktree = true\n[[step]]\nkind = \"ai\"\nagent = \"dev\"\nprompt = \"build.md\"\n"
+                "name = \"build\"\nworktree = true\n[[step]]\nkind = \"ai\"\nagent = \"dev\"\n"
                     .to_owned(),
             ),
-            (shop.join("formulas/build.md"), "Build {{ rig.name }}.".to_owned()),
+            (shop.join("agents/dev/prompt.template.md"), "Build {{ rig.name }}.".to_owned()),
         ];
         for (path, text) in files {
             fs::create_dir_all(path.parent().unwrap()).unwrap();

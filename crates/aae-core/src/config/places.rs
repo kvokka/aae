@@ -66,7 +66,7 @@ impl Loader {
         let path = root.path.unwrap_or_default();
         let root = (
             name.clone(),
-            self.place_of(file, dir, ("root", &name), &path, root.vars),
+            self.place_of(file, dir, ("root", &name), &path, BTreeMap::new()),
         );
         let at_root = root.1.path.canonicalize().ok();
         let mut rigs = BTreeMap::new();

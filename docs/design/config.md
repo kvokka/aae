@@ -18,7 +18,8 @@ error in every file.
   error the previous config stays in force, and `aae config check` reports the errors without applying anything
   (it loads the file itself, so it needs no daemon).
 - A retired key is a config error of one line that says where it is written now: `permission_mode` (the native block of
-  the harness), `[overrides.<agent>]` (`[agents.<agent>]`), step kind `prompt` (`ai`).
+  the harness), `[overrides.<agent>]` (`[agents.<agent>]`), step kind `prompt` (`ai`), input type `bead` (`task`), the
+  `prompt` key of an `ai` step (the agent's `prompt.template.md`).
 - A reload is taken by new runs and by the schedules (a schedule whose `cron`/`every` changed, and every `cron` when
   `timezone` changed, is set again from the reload; a removed one is dropped); the snapshot is per step: a running
   step keeps the one it prepared with, and the next step of the run prepares with the config of that moment; an idle
@@ -324,7 +325,6 @@ model = "luna"
 [root]                              # optional, as are both keys
 name = "root"                       # the default; a rig may not take it
 path = "."                          # the default: the directory of aae.toml; relative to it, need not be git
-vars = { test_cmd = "make test" }   # as a rig's
 
 [rigs.backend]
 path = "../backend"                 # must exist
@@ -354,8 +354,8 @@ it, and its triggers are the `[[trigger]]` of `aae.toml`.
 The root (spec §6.1) is where a project works besides its rigs: a run started without a rig works there (unless the
 id of a bead an input names has the prefix of a rig), and so does every session of an agent of scope `root`. It is a place like
 a rig, under its own name: the run's `rig` in events, its gate `rig:<project>/<root name>`, its workdir, `worktree`
-and limits all take it the same way; `{{ rig.name }}`, `{{ rig.path }}` and `{{ rig.<var> }}` of a run in the root
-are the root's. Without `[root]` it is `root`, the directory of `aae.toml`; a project of one repository needs no
+and limits all take it the same way; `{{ rig.name }}` and `{{ rig.path }}` of a run in the root are the root's. The
+root has these two settings and no variables: text a project gives an agent is a file of the agent (see "Agent"). Without `[root]` it is `root`, the directory of `aae.toml`; a project of one repository needs no
 rigs. When `path` points elsewhere, the config files (`.aae/agents/`, packs) and the tracker stay next to
 `aae.toml`. The root need not be a git repository: a run in a plain directory works, and only `worktree = true`
 fails that run (`deny`, naming the directory). A rig at the root's path or under the root's name is a config
@@ -424,7 +424,8 @@ run = "implement"
 inputs = { bead = { next_ready = true, epic = "{{ event.bead.epic }}" } }
 ```
 
-Content: `agents/<agent>/agent.toml` (plus `prompt.md` and any other files of the agent, see "Agent") and
+Content: `agents/<agent>/agent.toml` (plus `prompt.md`, `prompt.template.md` and any other files of the agent, see
+"Agent") and
 `formulas/**/*.toml`: every `.toml` file under `formulas/`, in subdirectories too, is a formula. A pack
 is the unit of content: agents, formulas and triggers. It may require plugins but never contains one; a plugin is
 declared by the orchestrator or the project.
@@ -452,6 +453,21 @@ at its limit parks until a run of that agent ends or leaves its step), then the 
 `harness`, `model` and `effort` are the defaults of the role: a pack, a formula, a variant or an `[agents]` edit may change
 any of them, and an agent that names no `harness` needs a layer that does.
 A role prompt file that is empty or only whitespace is a load error naming the file.
+
+`prompt.template.md` is the template of the agent's prompt (spec §8.1): an `ai` step names the agent and its run gets
+this template, rendered (contracts 2.3); the step has no prompt file of its own. A run whose agent a variant or a
+bead's `agent:` label gives renders that agent's template (a variant's is its base agent's). An agent that an `ai` step
+names and that has no template is a config error naming the path to put it at. The template is checked against every
+formula whose steps name the agent, with that formula's inputs and earlier steps.
+
+A project rewrites an agent of its packs with files, without forking the pack: `.aae/agents/<agent>/` next to
+`aae.toml` lays over the agent's directory. Its `prompt.template.md` replaces the pack's. `{{ agent.<name> }}` in the
+template is the text of `<name>.md`, the project's file over the pack agent's: text the project gives an agent (the
+conditions `qa` checks, say `.aae/agents/qa/checks.md`) is a file of that agent, not a string in `aae.toml`. A
+`{{ agent.<name> }}` with neither file is a config error naming where to put it; so is a directory under
+`.aae/agents/` for an agent no pack of the project has. "Explain config" of a formula names the template file of each
+`ai` step.
+
 Everything of one agent (settings, prompts,
 skills, hooks, scripts) lives in its directory, laid out as its author likes. The core has no role names: whatever a
 role does is configuration.
@@ -485,9 +501,8 @@ task = { type = "task", required = true }   # task | string | integer | boolean
 
 [[step]]
 name = "implement"                  # optional (default: the position, "1", "2", ..)
-kind = "ai"                     # ai: agent + prompt template; exec: command; drain: formula
+kind = "ai"                     # ai: agent (whose prompt.template.md it gets); exec: command; drain: formula
 agent = "implementer"
-prompt = "implement.md"             # relative to the formula file
 timeout = "45m"                     # optional
 model = "opus"                      # optional, ai steps only: layer 8, the launch settings `harness`,
                                     # `model`, `effort`
@@ -512,7 +527,7 @@ is a turn of the agent in a harness session, and its outcome comes from the fini
 `exec` step is a command with no model that the daemon runs in the run's workdir, in a process group of its own, under
 the step timeout; exit 0 is `pass`, 75 (`EX_TEMPFAIL`) a failed attempt (not an outcome), any other `fail`, and a
 bounded tail of its output is kept in the result (contracts 6.2). An `exec` step has `command = ["prog", "arg", ..]`
-(non-empty) and `timeout` instead of `agent` and `prompt`. Nothing is substituted into the command; it gets the run in
+(non-empty) and `timeout` instead of `agent`. Nothing is substituted into the command; it gets the run in
 its environment: `AAE_RUN`, `AAE_BEAD` (when the run has a bead), `AAE_SOCKET` (the API socket, so the command can
 call `aae`) and `AAE_INPUT_<NAME>` per input (the name upper-cased, other characters than letters and digits as `_`; a
 string as it is, any other value as JSON). Two inputs that give one variable (`note-text` and `note_text`) are a
@@ -559,10 +574,10 @@ by id that belongs to another rig, by the prefix of its id, is refused at the st
 its claim (the run fails with `bead_of_another_rig` and the claim is released). `worktree = true` gives each run of the formula, of either step kind,
 a git worktree that aae makes and removes (the bundled `worktree`, see below).
 
-A prompt template is checked at load (contracts 2.3): `inputs.<name>` must be a declared input; `bead.<field>` needs
-a `bead` input and a field of `Bead` (contracts 5.2); `run.<field>` a field of `RunView` (1.3); `project.name`,
-`project.path` (the directory of `aae.toml`); `rig.name`, `rig.path` and `rig.<var>` (a variable of the run's rig, or
-of the root for a run in the root, checked when the run starts).
+A prompt template is checked at load against each formula whose steps name its agent (contracts 2.3):
+`inputs.<name>` must be a declared input; `bead.<field>` needs a `task` input and a field of `Bead` (contracts 5.2); `run.<field>` a field of `RunView` (1.3); `project.name`,
+`project.path` (the directory of `aae.toml`); `rig.name`, `rig.path` and `rig.<var>` (a variable of the run's rig,
+checked when the run starts); `agent.<name>` (a file of the agent, see "Agent").
 A prompt is never empty: a template file of only whitespace is a load error, and a prompt that is empty after
 substitution fails the run (`infrastructure`, `prompt: empty after substitution`) before any process starts.
 

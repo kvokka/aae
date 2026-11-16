@@ -17,19 +17,23 @@ pub(crate) const SWEEP: &[(&str, &str)] = &[
     ),
     ("shop/api/.keep", ""),
     ("shop/agents/qa/agent.toml", "harness = \"scripted\"\n"),
+    ("shop/agents/qa/prompt.template.md", "Work on {{ bead.title }}."),
+    ("shop/agents/scribe/agent.toml", "harness = \"scripted\"\n"),
+    (
+        "shop/agents/scribe/prompt.template.md",
+        "Wrap up: {{ steps.all.summary }}.",
+    ),
     (
         "shop/formulas/work.toml",
         "name = \"work\"\n[inputs]\nbead = { type = \"task\", required = true }\n\
-         [[step]]\nkind = \"ai\"\nagent = \"dev\"\nprompt = \"work.md\"\n",
+         [[step]]\nkind = \"ai\"\nagent = \"dev\"\n",
     ),
-    ("shop/formulas/work.md", "Work on {{ bead.title }}."),
     (
         "shop/formulas/sweep.toml",
         "name = \"sweep\"\n[inputs]\nbead = { type = \"task\", required = true }\n\
          [[step]]\nname = \"all\"\nkind = \"drain\"\nformula = \"work\"\n\
-         [[step]]\nname = \"wrap\"\nkind = \"ai\"\nagent = \"dev\"\nprompt = \"wrap.md\"\n",
+         [[step]]\nname = \"wrap\"\nkind = \"ai\"\nagent = \"scribe\"\n",
     ),
-    ("shop/formulas/wrap.md", "Wrap up: {{ steps.all.summary }}."),
 ];
 
 /// A child run: `(id, bead, state, rig, agent, correlation, depth)`.

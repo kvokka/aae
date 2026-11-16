@@ -22,7 +22,6 @@ pub(crate) const OPEN: &[(&str, &str)] = &[
         "31",
         "a `formula` step runs its formula as a child run; formulas with `internal = true`",
     ),
-    ("33", "an agent's prompt template and files from the project"),
     (
         "34",
         "a step ends once its outcome is declared, without waiting for the background, and leaves no orphan",

@@ -181,10 +181,10 @@ pub(crate) async fn on_live(env: Arc<Env>, live: Live) -> String {
         );
         write(
             root.join("config/aae/shop/formulas/work.toml"),
-            "name = \"work\"\n[[step]]\nkind = \"ai\"\nagent = \"dev\"\nprompt = \"work.md\"\n",
+            "name = \"work\"\n[[step]]\nkind = \"ai\"\nagent = \"dev\"\n",
         );
         write(
-            root.join("config/aae/shop/formulas/work.md"),
+            root.join("config/aae/shop/agents/dev/prompt.template.md"),
             format!(
                 "Run this shell command in the foreground and wait for it: `touch started && ./{hold_name}`. \
                  If it is interrupted or killed (for example exit code 137), run it again from the start and wait \

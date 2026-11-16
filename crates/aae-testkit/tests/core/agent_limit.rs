@@ -54,7 +54,7 @@ async fn pass(w: &World, run: &str, attempt: u32, turn: &Notify) {
 fn shop(steps: &[(&str, &str)]) -> World {
     let mut formula = "name = \"build\"\n".to_owned();
     for (name, agent) in steps {
-        formula += &format!("[[step]]\nname = \"{name}\"\nkind = \"ai\"\nagent = \"{agent}\"\nprompt = \"build.md\"\n");
+        formula += &format!("[[step]]\nname = \"{name}\"\nkind = \"ai\"\nagent = \"{agent}\"\n");
     }
     world(&[
         (
@@ -64,6 +64,7 @@ fn shop(steps: &[(&str, &str)]) -> World {
         ("shop/api/.keep", ""),
         ("shop/agents/dev/agent.toml", "harness = \"scripted\"\nmax_runs = 1\n"),
         ("shop/agents/lead/agent.toml", "harness = \"scripted\"\n"),
+        ("shop/agents/lead/prompt.template.md", "Build {{ rig.name }}."),
         ("shop/formulas/build.toml", &formula),
     ])
 }

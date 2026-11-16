@@ -23,10 +23,10 @@ pub(crate) async fn run(env: Arc<Env>) -> String {
         );
         write(
             root.join("config/aae/shop/formulas/dev.toml"),
-            "name = \"dev\"\n[[step]]\nkind = \"ai\"\nagent = \"dev\"\nprompt = \"dev.md\"\n",
+            "name = \"dev\"\n[[step]]\nkind = \"ai\"\nagent = \"dev\"\n",
         );
         write(
-            root.join("config/aae/shop/formulas/dev.md"),
+            root.join("config/aae/shop/agents/dev/prompt.template.md"),
             format!(
                 "Do exactly these two steps, in this order, and nothing else.\n\
                  1. Start a subagent with the Task tool in the background (run_in_background: true). Its task: \

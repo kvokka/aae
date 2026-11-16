@@ -96,7 +96,7 @@ inputs = { from = "{{ event.run.id }}" }
         ("mall/web/.keep", ""),
         ("mall/agents/dev/agent.toml", "harness = \"scripted\"\n"),
         ("mall/formulas/next.toml", NEXT),
-        ("mall/formulas/build.md", "Next."),
+        ("mall/agents/dev/prompt.template.md", "Next."),
     ] {
         let path = dir.path().join(path);
         fs::create_dir_all(path.parent().unwrap()).unwrap();

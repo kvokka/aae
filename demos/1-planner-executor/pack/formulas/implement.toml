@@ -8,5 +8,4 @@ task = { type = "task", required = true }
 name = "code"
 kind = "ai"
 agent = "coder"
-prompt = "implement.md"
 timeout = "20m"

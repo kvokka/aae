@@ -12,7 +12,7 @@ use std::{fs, path::Path, sync::Arc};
 use tokio::task::JoinHandle;
 
 pub(crate) const NEXT: &str = "name = \"next\"\n[inputs]\nfrom = { type = \"string\" }\n\
-    [[step]]\nkind = \"ai\"\nagent = \"dev\"\nprompt = \"build.md\"\n";
+    [[step]]\nkind = \"ai\"\nagent = \"dev\"\n";
 
 /// `after-build` starts `next` from every `build` run; `chain` starts `next` from every `next` run, so only the depth
 /// limit ends the chain; `gated` names a gate the queued run does not have.

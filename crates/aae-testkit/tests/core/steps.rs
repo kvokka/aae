@@ -22,9 +22,9 @@ fn exec(name: &str, script: &str) -> String {
     )
 }
 
-/// An ai step named `name` of agent `dev` with the prompt file `<name>.md`.
-fn prompt(name: &str) -> String {
-    format!("[[step]]\nname = \"{name}\"\nkind = \"ai\"\nagent = \"dev\"\nprompt = \"{name}.md\"\n")
+/// An ai step named `name` of `agent`, which brings its prompt template.
+fn prompt(name: &str, agent: &str) -> String {
+    format!("[[step]]\nname = \"{name}\"\nkind = \"ai\"\nagent = \"{agent}\"\n")
 }
 
 /// A world with formula `flow` of `steps` and the extra files `extra`, on `hooks`.
@@ -176,7 +176,7 @@ async fn a_failed_step_fails_the_run_and_the_next_does_not_start() {
 async fn exec_then_prompt_then_exec_pass_the_outcome_along() {
     let steps = [
         exec("pre", "printf word"),
-        prompt("work"),
+        prompt("work", "worker"),
         exec(
             "post",
             "printf '%s\\n' \"$AAE_STEP_WORK_RESULT $AAE_STEP_WORK_DATA\" >> log",
@@ -184,10 +184,13 @@ async fn exec_then_prompt_then_exec_pass_the_outcome_along() {
     ];
     let w = flow(
         &steps,
-        &[(
-            "shop/formulas/work.md",
-            "Use {{ steps.pre.data.stdout }} in {{ run.step }}.",
-        )],
+        &[
+            ("shop/agents/worker/agent.toml", "harness = \"scripted\"\n"),
+            (
+                "shop/agents/worker/prompt.template.md",
+                "Use {{ steps.pre.data.stdout }} in {{ run.step }}.",
+            ),
+        ],
         Arc::new(ExecHooks::default()),
     );
     let turn = w.turn();
@@ -219,8 +222,13 @@ async fn exec_then_prompt_then_exec_pass_the_outcome_along() {
 #[tokio::test]
 async fn each_prompt_step_has_a_session_of_its_own() {
     let w = flow(
-        &[prompt("one"), prompt("two")],
-        &[("shop/formulas/one.md", "One."), ("shop/formulas/two.md", "Two.")],
+        &[prompt("one", "one"), prompt("two", "two")],
+        &[
+            ("shop/agents/one/agent.toml", "harness = \"scripted\"\n"),
+            ("shop/agents/one/prompt.template.md", "One."),
+            ("shop/agents/two/agent.toml", "harness = \"scripted\"\n"),
+            ("shop/agents/two/prompt.template.md", "Two."),
+        ],
         Arc::new(ExecHooks::default()),
     );
     let (one, two) = (w.turn(), w.turn());
@@ -241,10 +249,10 @@ async fn each_prompt_step_has_a_session_of_its_own() {
 /// A step resumed before it ever had a session starts a new one: it never takes the session of an earlier step.
 #[tokio::test]
 async fn a_resumed_step_never_takes_the_session_of_an_earlier_step() {
-    let texts = [("shop/formulas/one.md", "One."), ("shop/formulas/two.md", "Two.")];
+    // One agent for both steps: the session of step `one` is the one step `two` could wrongly take.
     let mut w = flow(
-        &[prompt("one"), prompt("two")],
-        &[POLICY, &texts].concat(),
+        &[prompt("one", "dev"), prompt("two", "dev")],
+        POLICY,
         Arc::new(Hanging::default()),
     );
     let one = w.turn();

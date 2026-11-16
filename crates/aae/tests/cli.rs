@@ -174,9 +174,9 @@ fn the_config_is_checked_and_explained_without_a_daemon() {
     )
     .unwrap();
     fs::create_dir_all(files.join("shop/formulas")).unwrap();
-    let formula = "name = \"go\"\n[[step]]\nkind = \"ai\"\nagent = \"dev\"\nprompt = \"go.md\"\neffort = \"low\"\n";
+    let formula = "name = \"go\"\n[[step]]\nkind = \"ai\"\nagent = \"dev\"\neffort = \"low\"\n";
     fs::write(files.join("shop/formulas/go.toml"), formula).unwrap();
-    fs::write(files.join("shop/formulas/go.md"), "Go.\n").unwrap();
+    fs::write(files.join("shop/agents/dev/prompt.template.md"), "Go.\n").unwrap();
     let broken = files.join("broken.toml");
     fs::write(&broken, "projects = [\"shop\"\n").unwrap();
     let broken = broken.to_str().unwrap();
@@ -216,6 +216,10 @@ fn the_config_is_checked_and_explained_without_a_daemon() {
     let reply: Value = serde_json::from_slice(&out.stdout).unwrap();
     let text = reply["text"].as_str().unwrap_or_default();
     assert!(text.contains("effort = \"low\"  # formula shop.go"), "{reply}");
+    assert!(
+        text.contains("# prompt template: ") && text.contains("agents/dev/prompt.template.md\n"),
+        "{reply}"
+    );
     assert_eq!(reply["steps"][0]["agent"], "shop.dev", "{reply}");
     // With no rig, the formula is explained on the project root.
     let out = aae(&["config", "explain", "--project", "shop", "--formula", "go", "--json"]);

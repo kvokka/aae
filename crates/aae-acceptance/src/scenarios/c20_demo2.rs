@@ -44,7 +44,8 @@ fn demo(root: &Path, fakes: [(&str, &Provider); 3]) {
     fs::create_dir_all(demo.join("root")).unwrap();
     let cp = Command::new("cp").arg("-R").arg(src.join("pack")).arg(&demo).status();
     assert!(cp.is_ok_and(|s| s.success()), "cp the pack");
-    for file in [".gitignore", "root/aae.toml"] {
+    for file in [".gitignore", "root/aae.toml", "root/.aae/agents/qa/checks.md"] {
+        fs::create_dir_all(demo.join(file).parent().unwrap()).unwrap();
         fs::copy(src.join(file), demo.join(file)).unwrap();
     }
     for rig in ["frontend", "backend"] {

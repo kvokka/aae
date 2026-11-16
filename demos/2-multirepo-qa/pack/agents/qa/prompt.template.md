@@ -6,7 +6,7 @@ built where (`br list --all --tree`, `br show <id>`), and the project's rigs are
 The project's conditions:
 
 <conditions>
-{{ rig.checks }}
+{{ agent.checks }}
 </conditions>
 
 Work through these steps.

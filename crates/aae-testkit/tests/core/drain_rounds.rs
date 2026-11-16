@@ -14,9 +14,13 @@ const AGAIN: &[(&str, &str)] = &[
         "shop/formulas/again.toml",
         "name = \"again\"\n[inputs]\nbead = { type = \"task\", required = true }\n\
          [[step]]\nname = \"all\"\nkind = \"drain\"\nformula = \"work\"\n\
-         [[step]]\nname = \"check\"\nkind = \"ai\"\nagent = \"dev\"\nprompt = \"check.md\"\nback_to = \"all\"\n",
+         [[step]]\nname = \"check\"\nkind = \"ai\"\nagent = \"checker\"\nback_to = \"all\"\n",
     ),
-    ("shop/formulas/check.md", "Check {{ steps.all.summary }}."),
+    ("shop/agents/checker/agent.toml", "harness = \"scripted\"\n"),
+    (
+        "shop/agents/checker/prompt.template.md",
+        "Check {{ steps.all.summary }}.",
+    ),
 ];
 
 #[tokio::test(start_paused = true)]

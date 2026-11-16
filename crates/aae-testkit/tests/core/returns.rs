@@ -142,13 +142,13 @@ async fn a_check_that_keeps_failing_fails_the_run_after_the_last_round() {
 #[tokio::test]
 async fn the_step_gone_back_to_sees_the_remarks_in_its_prompt() {
     let steps = [
-        "[[step]]\nname = \"plan\"\nkind = \"ai\"\nagent = \"dev\"\nprompt = \"plan.md\"\n".to_owned(),
+        "[[step]]\nname = \"plan\"\nkind = \"ai\"\nagent = \"dev\"\n".to_owned(),
         exec("check", &failing("check", 1, "add tests"), Some("plan")),
     ];
     let w = flow(
         "",
         &steps,
-        &[("shop/formulas/plan.md", "Plan. Remarks: [{{ remarks }}]")],
+        &[("shop/agents/dev/prompt.template.md", "Plan. Remarks: [{{ remarks }}]")],
     );
     let turns = turns(&w, 2);
     let run = w.start_returns().await;
@@ -187,7 +187,7 @@ async fn a_step_gone_back_to_on_another_harness_starts_a_new_session() {
     let check = "n=$(($(cat check 2>/dev/null || echo 0) + 1)); echo $n > check; [ $n -gt 1 ] && exit 0; \
         touch waiting; while [ ! -f go ]; do sleep 0.02; done; echo redo; exit 1";
     let steps = [
-        "[[step]]\nname = \"plan\"\nkind = \"ai\"\nagent = \"dev\"\nprompt = \"plan.md\"\n".to_owned(),
+        "[[step]]\nname = \"plan\"\nkind = \"ai\"\nagent = \"dev\"\n".to_owned(),
         exec("check", check, Some("plan")),
     ];
     let config = "projects = [\"shop\"]\nbuiltin = { default-policy = { enabled = false } }\n[harness.scripted]\n\
@@ -195,7 +195,7 @@ async fn a_step_gone_back_to_on_another_harness_starts_a_new_session() {
     let w = flow(
         "",
         &steps,
-        &[("config.toml", config), ("shop/formulas/plan.md", "Plan.")],
+        &[("config.toml", config), ("shop/agents/dev/prompt.template.md", "Plan.")],
     );
     let turns = turns(&w, 2);
     let run = w.start_returns().await;
@@ -232,16 +232,20 @@ async fn a_step_gone_back_to_on_another_harness_starts_a_new_session() {
 /// A prompt check: the agent declares `fail`, and the run goes back with its summary as the remark.
 #[tokio::test]
 async fn a_prompt_check_that_declares_fail_sends_the_run_back() {
-    let prompt = |name: &str, back: &str| {
-        format!("[[step]]\nname = \"{name}\"\nkind = \"ai\"\nagent = \"dev\"\nprompt = \"{name}.md\"\n{back}")
+    let prompt = |name: &str, agent: &str, back: &str| {
+        format!("[[step]]\nname = \"{name}\"\nkind = \"ai\"\nagent = \"{agent}\"\n{back}")
     };
-    let steps = [prompt("plan", ""), prompt("review", "back_to = \"plan\"\n")];
+    let steps = [
+        prompt("plan", "dev", ""),
+        prompt("review", "lead", "back_to = \"plan\"\n"),
+    ];
     let w = flow(
         "",
         &steps,
         &[
-            ("shop/formulas/plan.md", "Plan. Remarks: [{{ remarks }}]"),
-            ("shop/formulas/review.md", "Review."),
+            ("shop/agents/dev/prompt.template.md", "Plan. Remarks: [{{ remarks }}]"),
+            ("shop/agents/lead/agent.toml", "harness = \"scripted\"\n"),
+            ("shop/agents/lead/prompt.template.md", "Review."),
         ],
     );
     let turns = turns(&w, 4);

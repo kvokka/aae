@@ -40,9 +40,9 @@ async fn daemon_with(provider: &Provider, orchestrator: &str, inherit_host: bool
             ),
             (
                 shop.join("formulas/build.toml"),
-                "name = \"build\"\n[[step]]\nkind = \"ai\"\nagent = \"dev\"\nprompt = \"build.md\"\n".to_owned(),
+                "name = \"build\"\n[[step]]\nkind = \"ai\"\nagent = \"dev\"\n".to_owned(),
             ),
-            (shop.join("formulas/build.md"), "Build {{ rig.name }}.".to_owned()),
+            (shop.join("agents/dev/prompt.template.md"), "Build {{ rig.name }}.".to_owned()),
         ];
         for (path, text) in files {
             fs::create_dir_all(path.parent().unwrap()).unwrap();

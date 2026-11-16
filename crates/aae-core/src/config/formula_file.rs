@@ -2,9 +2,8 @@
 //! formula the core runs (spec §9.1).
 
 use super::{Name, Settings};
-use crate::template::Template;
 use serde::Deserialize;
-use std::{collections::BTreeMap, num::NonZeroU32, path::PathBuf, time::Duration};
+use std::{collections::BTreeMap, num::NonZeroU32, time::Duration};
 
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -47,7 +46,6 @@ pub(super) enum StepFile {
     Ai {
         name: Option<String>,
         agent: String,
-        prompt: PathBuf,
         timeout: Option<String>,
         harness: Option<String>,
         model: Option<String>,
@@ -105,7 +103,6 @@ pub struct Step {
 pub enum StepKind {
     Ai {
         agent: Name,
-        prompt: Template,
         timeout: Option<Duration>,
         /// The launch settings of the step.
         settings: Box<Settings>,
@@ -119,6 +116,14 @@ pub enum StepKind {
 }
 
 impl StepKind {
+    /// The agent of an `ai` step.
+    pub fn agent(&self) -> Option<&Name> {
+        match self {
+            Self::Ai { agent, .. } => Some(agent),
+            _ => None,
+        }
+    }
+
     /// `ai`, `exec` or `drain`, as the state and the API name the kind.
     pub fn name(&self) -> &'static str {
         match self {

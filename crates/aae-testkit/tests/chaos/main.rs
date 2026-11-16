@@ -47,12 +47,13 @@ const POLICY: &[(&str, &str)] = &[
 ];
 
 const FIX: &[(&str, &str)] = &[
+    ("shop/agents/fixer/agent.toml", "harness = \"scripted\"\n"),
+    ("shop/agents/fixer/prompt.template.md", "Fix {{ bead.title }}."),
     (
         "shop/formulas/fix.toml",
         "name = \"fix\"\n[inputs]\nbead = { type = \"task\", required = true }\n\
-         [[step]]\nkind = \"ai\"\nagent = \"dev\"\nprompt = \"fix.md\"\n",
+         [[step]]\nkind = \"ai\"\nagent = \"fixer\"\n",
     ),
-    ("shop/formulas/fix.md", "Fix {{ bead.title }}."),
 ];
 
 /// A formula of three ai steps, named by their position: a run goes through them in order, one session each.
@@ -60,11 +61,11 @@ const SHIP: &[(&str, &str)] = &[
     (
         "shop/formulas/ship.toml",
         "name = \"ship\"\n\
-         [[step]]\nkind = \"ai\"\nagent = \"dev\"\nprompt = \"ship.md\"\n\
-         [[step]]\nkind = \"ai\"\nagent = \"dev\"\nprompt = \"ship.md\"\n\
-         [[step]]\nkind = \"ai\"\nagent = \"dev\"\nprompt = \"ship.md\"\n",
+         [[step]]\nkind = \"ai\"\nagent = \"dev\"\n\
+         [[step]]\nkind = \"ai\"\nagent = \"dev\"\n\
+         [[step]]\nkind = \"ai\"\nagent = \"dev\"\n",
     ),
-    ("shop/formulas/ship.md", "Ship {{ rig.name }}."),
+    ("shop/agents/dev/prompt.template.md", "Ship {{ rig.name }}."),
 ];
 
 /// A drain step that gives every bead under the root a run of `fix`, then an ai step.
@@ -72,7 +73,7 @@ const SWEEP: &[(&str, &str)] = &[(
     "shop/formulas/sweep.toml",
     "name = \"sweep\"\n[inputs]\nbead = { type = \"task\", required = true }\n\
      [[step]]\nkind = \"drain\"\nformula = \"fix\"\n\
-     [[step]]\nkind = \"ai\"\nagent = \"dev\"\nprompt = \"ship.md\"\n",
+     [[step]]\nkind = \"ai\"\nagent = \"dev\"\n",
 )];
 
 /// The beads of the tracker: `b-1` and `b-2` for runs of `fix`, the root `b-3` of `sweep` and its children of `web`.

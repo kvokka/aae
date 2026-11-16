@@ -7,12 +7,13 @@ use serde_json::{Value, json};
 use std::time::Duration;
 
 pub(crate) const FIX: &[(&str, &str)] = &[
+    ("shop/agents/fixer/agent.toml", "harness = \"scripted\"\n"),
+    ("shop/agents/fixer/prompt.template.md", "Fix {{ bead.title }}."),
     (
         "shop/formulas/fix.toml",
         "name = \"fix\"\n[inputs]\nbead = { type = \"task\", required = true }\n\
-         [[step]]\nkind = \"ai\"\nagent = \"dev\"\nprompt = \"fix.md\"\n",
+         [[step]]\nkind = \"ai\"\nagent = \"fixer\"\n",
     ),
-    ("shop/formulas/fix.md", "Fix {{ bead.title }}."),
 ];
 
 impl World {

@@ -8,7 +8,6 @@ task = { type = "task", required = true }   # the request: its text becomes the 
 name = "plan"
 kind = "ai"
 agent = "planner"
-prompt = "plan.md"
 timeout = "20m"
 
 [[step]]

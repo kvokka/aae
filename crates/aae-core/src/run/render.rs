@@ -28,7 +28,7 @@ impl RunHandler {
         };
         let step = formula.step(&row.step).map(|s| &s.kind);
         let step = step.ok_or(format!("step `{}` is gone from `{}`", row.step, row.formula))?;
-        let (prompt, timeout) = match (step, row.step_kind.as_str()) {
+        let timeout = match (step, row.step_kind.as_str()) {
             (StepKind::Exec { command, timeout }, "exec") => {
                 // The tracker by name, as in a session (spec §10.2).
                 let env: serde_json::Map<String, Value> = (project.tracker_env(Some(rig)))
@@ -41,7 +41,7 @@ impl RunHandler {
                 let config = json!({ "drain": formula.to_string() });
                 return Ok((None, timeout_ms(timeout, DRAIN_TIMEOUT_MS), config));
             }
-            (StepKind::Ai { prompt, timeout, .. }, "ai") => (prompt, timeout),
+            (StepKind::Ai { timeout, .. }, "ai") => timeout,
             _ => return Err(format!("step `{}` of `{}` changed its kind", row.step, row.formula)),
         };
         let (agent, config) =
@@ -49,6 +49,8 @@ impl RunHandler {
         if agent != row.agent {
             return Err(format!("`{}` now runs agent `{agent}`", row.formula));
         }
+        // The run's agent brings its template: the step's, or the one a bead's `agent:` label names (spec §8.1).
+        let prompt = self.config.prompt(&row.project, &agent)?;
         let mut rig_view = json!({ "name": row.rig, "path": rig.path });
         for (key, value) in &rig.vars {
             rig_view[key] = json!(value);
@@ -60,8 +62,9 @@ impl RunHandler {
             "project": { "name": project.name, "path": project.dir },
             "steps": step_results(tx.sql(), row).map_err(|e| e.to_string())?,
             "remarks": remarks(tx.sql(), &row.id).map_err(|e| e.to_string())?,
+            "agent": prompt.files,
         });
-        let text = prompt.render(&context).map_err(|e| format!("prompt: {e}"))?;
+        let text = prompt.template.render(&context).map_err(|e| format!("prompt: {e}"))?;
         if text.trim().is_empty() {
             return Err("prompt: empty after substitution".to_owned());
         }
