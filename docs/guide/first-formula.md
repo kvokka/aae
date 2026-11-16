@@ -210,6 +210,8 @@ agent = "planner"                     # its template files the beads under {{ be
 name = "work"
 kind = "drain"
 formula = "implement"                 # takes one `task` input; one run per bead, on the rig of its id prefix
+pool = 2                              # two beads in work at once (default 1)
+on_item_failure = "continue"          # a failed bead stops nothing; soft_stop / hard_stop stop the step
 
 [[step]]
 name = "verify"

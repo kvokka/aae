@@ -171,7 +171,8 @@ line for the host: inherited by the harness and invisible to aae, or off
 they show with `--formula <f> --rig <r>` in place of `--agent`, step by step: for an ai step a header
 ``# step `<s>` of `<f>` on `<r>`: agent <a>`` (the rig's variant if it maps one) and its effective config, for an exec
 step one line ``# step `<s>` of `<f>`: exec `<command>` ``, for a drain step
-``# step `<s>` of `<f>`: drain, a run of `<formula>` per bead``, and after a check
+``# step `<s>` of `<f>`: drain, a run of `<formula>` per bead, <pool> at a time`` (with ``; on a failed bead:
+<on_item_failure>`` unless it is `continue`), and after a check
 ``# a check: on fail, back to `<step>`, at most <n> rounds``, and for a step with `max_attempts` above 1 or a check
 script ``# runs at most <n> times; passes when <script> exits 0`` (each part when it applies). The API answer then has `agent` null and
 `steps: [{step, kind, agent}]`. The effective config serializes to JSON: a run keeps it as its snapshot, and `env` is
@@ -521,6 +522,8 @@ name = "children"
 kind = "drain"
 formula = "fix"                     # the formula of each bead's run
 timeout = "24h"                     # optional (default 24h)
+pool = 2                            # optional (default 1): the most beads in work at once
+on_item_failure = "soft_stop"       # optional: continue (default) | soft_stop | hard_stop
 ```
 
 A formula has a name, a description, declared inputs and one or more steps, which a run goes through in order
@@ -543,8 +546,17 @@ one level deeper, the run as `parent_run`. A bead goes out once per entry of the
 again in it, and an attempt cut by a restart (`daemon_crash`) starts no new entry; a round back to the step does. A
 bead whose start is refused (a `rig:` label, a `harness:` label the config does not give) gets no run and stays
 open. The step has no process (contracts 6.2): it ends once nothing was given, no child is alive and no later
-read of the tracker is queued, always `pass`, with `data = {closed, failed, refused}` — the beads whose runs passed,
-those whose runs failed or were cancelled, and the refused ones with the reason. `formula` must take exactly one
+read of the tracker is queued, with `data = {closed, failed, refused}` — the beads whose runs passed,
+those whose runs failed or were cancelled, and the refused ones with the reason.
+`pool` (default 1) is the most beads of the step in work at once: a child holds its place from its creation, queued
+or running, and the end of one gives out the next ready bead. `on_item_failure` says what a failed run of a bead
+does: `continue` (default) — the other beads go on and the step passes; `soft_stop` — no new bead goes out, the
+started ones end; `hard_stop` — the started ones are cancelled too (reason `drain_hard_stop`), on the read of the
+tracker that the failed run's end queues. A stopped step ends `fail` once no child is alive, its `data` adds
+`stopped_on` (the failed beads) and `not_started` (the ready beads under the root it did not give), and its summary
+is `stopped on <beads>: <n> closed, <n> failed, <n> not started`. The stop follows from the children of the entry,
+so a restart keeps it: no new bead goes out after one; a repeat of the step or a round back to it is a new entry and
+gives the beads again. A cancelled child stops nothing. `formula` must take exactly one
 `bead` input and need no other; a formula with a `drain` step needs a required `bead` input. An epic under the root is
 not ready while it has open beads; once they are closed it is given out as any bead (with an id of no rig: in the
 root).
