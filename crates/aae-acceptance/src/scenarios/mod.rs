@@ -18,6 +18,7 @@ mod c16_beads;
 mod c17_mcp;
 mod c18_journal;
 mod c19_gates;
+mod c20_demo1;
 mod c20_demo2;
 mod c20_format;
 mod c24_drain;
@@ -176,6 +177,12 @@ pub(crate) const ALL: &[Scenario] = &[
     },
     Scenario {
         criterion: "20",
+        title: "demo 1's pack: beads with rig prefixes, coders on claude and codex, the report finds every bead closed",
+        launch: Launch::Ci,
+        run: |env| Box::pin(c20_demo1::run(env)),
+    },
+    Scenario {
+        criterion: "20",
         title: "demo 2's pack in a second round: format fails, the planner gets rumdl's findings and files a fix, the \
         drain runs only the new bead, format and qa pass",
         launch: Launch::Ci,
@@ -286,19 +293,11 @@ impl Live {
         let out = d.cli(&["--json", "doctor"]);
         let found: serde_json::Value = serde_json::from_slice(&out.stdout).expect("doctor --json");
         let check = format!("{} login", self.name());
-        let login = found
-            .as_array()
-            .into_iter()
-            .flatten()
-            .find(|f| f["check"] == check.as_str());
+        let mut rows = found.as_array().into_iter().flatten();
+        let login = rows.find(|f| f["check"] == check.as_str());
         let login = login.unwrap_or_else(|| panic!("no `{check}` in doctor: {found}"));
-        assert!(
-            login["level"] == "ok",
-            "{} has no login: run `{} login` ({})",
-            self.name(),
-            self.name(),
-            login["detail"]
-        );
+        let (name, detail) = (self.name(), &login["detail"]);
+        assert!(login["level"] == "ok", "no {name} login, run `{name} login`: {detail}");
     }
 }
 
