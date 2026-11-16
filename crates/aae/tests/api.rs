@@ -224,7 +224,7 @@ async fn a_trigger_fired_by_hand_starts_a_run_skips_while_it_lives_and_switches_
     );
     let unknown = json!({ "project": "shop", "rig": "web", "trigger": "nope" });
     match d.post("/v1/triggers/fire", unknown, None).await {
-        Err(ClientError::Api { status: 409, error }) => assert_eq!(error["code"], "rejected"),
+        Err(ClientError::Api { status: 404, error }) => assert_eq!(error["code"], "not_found"),
         other => panic!("{other:?}"),
     }
     let off = d.post("/v1/triggers/disable", fire.clone(), None).await.unwrap();
@@ -323,7 +323,7 @@ async fn a_restart_starts_the_daemon_again_in_the_same_process() {
         "exec formulas start no instance"
     );
     match d.post("/v1/instances/nope/stop", json!(null), None).await {
-        Err(ClientError::Api { status: 409, .. }) => {}
+        Err(ClientError::Api { status: 404, .. }) => {}
         other => panic!("{other:?}"),
     }
     let before = d.get("/v1/daemon").await;

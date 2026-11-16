@@ -119,7 +119,7 @@ impl RunHandler {
             })
             .optional()?;
         match found {
-            None => Err(super::rejected(format!("no instance `{id}`"))),
+            None => Err(super::not_found(format!("no instance `{id}`"))),
             Some((state, _)) if state == "stopping" => Ok(()),
             Some((state, _)) if state == "starting" => Err(super::rejected(format!("instance `{id}` is starting"))),
             Some((_, 0)) => Self::stop_instance(tx, id, "operator"),

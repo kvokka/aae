@@ -149,7 +149,8 @@ gate in its decision. Credentials and environment values never enter an event: t
 
 Every refusal of the core to act on its own writes an event with its reason (`run.queued` with `waiting_for`,
 `trigger.skipped`, `gate.closed`, `run.failed` with `reason`, ...): the core never waits silently. A refused API
-request is answered with an error instead.
+request is answered with an error instead: `not_found` (404) when it names a run, instance, trigger, project, rig or
+formula there is none of, `rejected` (409) when the thing is there but refuses the request as it stands.
 
 ## 2. Filter and template language
 

@@ -26,7 +26,7 @@ impl RunHandler {
         let answer = |a: &str| Ok(json!({ "answer": a }));
         let row = match Row::load(tx, run) {
             Ok(row) => row,
-            Err(Error::Rejected(_)) => return answer("invalid"),
+            Err(Error::Rejected(_) | Error::NotFound(_)) => return answer("invalid"),
             Err(e) => return Err(e),
         };
         let n: Option<u32> = tx

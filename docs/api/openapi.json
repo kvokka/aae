@@ -1017,6 +1017,16 @@
               }
             }
           },
+          "404": {
+            "description": "`not_found`: no such instance",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorReply"
+                }
+              }
+            }
+          },
           "409": {
             "description": "`rejected`: the core refused the request; the message says why",
             "content": {
@@ -1389,6 +1399,16 @@
               }
             }
           },
+          "404": {
+            "description": "`not_found`: no such project, rig, parent run or run to continue",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorReply"
+                }
+              }
+            }
+          },
           "409": {
             "description": "`rejected`: the core refused the request; the message says why",
             "content": {
@@ -1566,6 +1586,16 @@
               }
             }
           },
+          "404": {
+            "description": "`not_found`: no such run",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorReply"
+                }
+              }
+            }
+          },
           "409": {
             "description": "`rejected`: the core refused the request; the message says why",
             "content": {
@@ -1667,6 +1697,16 @@
           },
           "401": {
             "description": "`unauthorized`: over TCP, without `Authorization: Bearer <api_token>`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorReply"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`not_found`: no such run",
             "content": {
               "application/json": {
                 "schema": {
@@ -2011,6 +2051,16 @@
               }
             }
           },
+          "404": {
+            "description": "`not_found`: no such trigger on the rig",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorReply"
+                }
+              }
+            }
+          },
           "409": {
             "description": "`rejected`: the core refused the request; the message says why",
             "content": {
@@ -2111,6 +2161,16 @@
               }
             }
           },
+          "404": {
+            "description": "`not_found`: no such trigger on the rig",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorReply"
+                }
+              }
+            }
+          },
           "409": {
             "description": "`rejected`: the core refused the request; the message says why",
             "content": {
@@ -2203,6 +2263,16 @@
           },
           "401": {
             "description": "`unauthorized`: over TCP, without `Authorization: Bearer <api_token>`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorReply"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`not_found`: no such trigger on the rig",
             "content": {
               "application/json": {
                 "schema": {

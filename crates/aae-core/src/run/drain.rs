@@ -145,7 +145,7 @@ impl RunHandler {
                     given += 1;
                     free -= 1;
                 }
-                Err(Error::Rejected(why)) => drop(refused.insert(bead, json!(why))),
+                Err(Error::Rejected(why) | Error::NotFound(why)) => drop(refused.insert(bead, json!(why))),
                 Err(e) => return Err(e),
             }
         }
@@ -260,7 +260,7 @@ impl RunHandler {
             }
         };
         match Self::own_bead(tx, &row.project, &bead, &row.id) {
-            Err(Error::Rejected(reason)) => {
+            Err(Error::Rejected(reason) | Error::NotFound(reason)) => {
                 return self.terminal(tx, row, "failed", Some("infrastructure"), &reason);
             }
             owned => owned?,

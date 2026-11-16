@@ -31,6 +31,8 @@ pub enum Error {
     Storage(rusqlite::Error),
     /// The handler refused the message; nothing of it was committed.
     Rejected(String),
+    /// The message names a run, instance, trigger, project, rig or formula there is none of; nothing was committed.
+    NotFound(String),
     /// The idempotency key was used before for another request; nothing was done.
     KeyReused,
     /// The writer has stopped.
@@ -42,6 +44,7 @@ impl fmt::Display for Error {
         match self {
             Self::Storage(e) => write!(f, "state storage: {e}"),
             Self::Rejected(reason) => write!(f, "rejected: {reason}"),
+            Self::NotFound(reason) => write!(f, "not found: {reason}"),
             Self::KeyReused => f.write_str("the idempotency key was used for another request"),
             Self::Stopped => f.write_str("the core has stopped"),
         }

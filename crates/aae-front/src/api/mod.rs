@@ -274,7 +274,9 @@ impl ApiError {
 
 impl From<aae_core::Error> for ApiError {
     fn from(e: aae_core::Error) -> Self {
-        let (status, code) = match &e {
+        let (status, code) = match e {
+            // The reason alone, as the 404 of a read: `no run `x``.
+            aae_core::Error::NotFound(reason) => return Self::new(StatusCode::NOT_FOUND, "not_found", reason),
             aae_core::Error::Rejected(_) => (StatusCode::CONFLICT, "rejected"),
             aae_core::Error::KeyReused => (StatusCode::UNPROCESSABLE_ENTITY, "idempotency_key_reused"),
             aae_core::Error::Storage(_) => (StatusCode::INTERNAL_SERVER_ERROR, "storage"),

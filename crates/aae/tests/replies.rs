@@ -102,7 +102,7 @@ async fn the_replies_fit_their_schemas() {
 async fn the_errors_answered_are_declared_with_their_codes() {
     let d = Daemon::start(|_| {}).await;
     let doc = serde_json::to_value(aae_front::api::openapi()).unwrap();
-    d.create("check", Some("k")).await;
+    let checked = d.create("check", Some("k")).await;
     let config = d.dir.path().join("config/aae/config.toml");
     let reload = || {
         fs::write(&config, "projects = [\"shop\"\n").unwrap();
@@ -110,27 +110,67 @@ async fn the_errors_answered_are_declared_with_their_codes() {
     };
     let run = json!({ "project": "shop", "rig": "web", "formula": "slow" });
     let nope = json!({ "project": "shop", "rig": "web", "formula": "nope" });
+    let no_rig = json!({ "project": "shop", "rig": "nope", "formula": "check" });
+    let answer = json!({ "request": "req-1", "answer": { "decision": "deny", "message": "no" } });
+    let trigger = json!({ "project": "shop", "rig": "web", "trigger": "nope" });
+    let answer_checked = format!("/v1/runs/{checked}/answer");
+    // A request naming a thing there is none of is 404; one the thing that is refuses is 409.
     let cases = [
-        ("GET", "/v1/runs", "/v1/runs?state=bogus", None, None),
-        ("GET", "/v1/runs/{id}", "/v1/runs/run_999", None, None),
+        ("GET", "/v1/runs", "/v1/runs?state=bogus", None, None, 400),
+        ("GET", "/v1/runs/{id}", "/v1/runs/run_999", None, None, 404),
         (
             "POST",
             "/v1/runs/{id}/cancel",
             "/v1/runs/run_999/cancel",
             Some(json!({})),
             None,
+            404,
         ),
-        ("GET", "/v1/agents", "/v1/agents?project=nope", None, None),
-        ("POST", "/v1/runs", "/v1/runs", Some(nope), None),
-        ("POST", "/v1/runs", "/v1/runs", Some(run), Some("k")),
-        ("POST", "/v1/config/reload", "/v1/config/reload", reload(), None),
+        (
+            "POST",
+            "/v1/runs/{id}/answer",
+            "/v1/runs/run_999/answer",
+            Some(answer.clone()),
+            None,
+            404,
+        ),
+        (
+            "POST",
+            "/v1/runs/{id}/answer",
+            answer_checked.as_str(),
+            Some(answer),
+            None,
+            409,
+        ),
+        (
+            "POST",
+            "/v1/instances/{id}/stop",
+            "/v1/instances/nope/stop",
+            None,
+            None,
+            404,
+        ),
+        (
+            "POST",
+            "/v1/triggers/fire",
+            "/v1/triggers/fire",
+            Some(trigger),
+            None,
+            404,
+        ),
+        ("GET", "/v1/agents", "/v1/agents?project=nope", None, None, 404),
+        ("POST", "/v1/runs", "/v1/runs", Some(nope), None, 404),
+        ("POST", "/v1/runs", "/v1/runs", Some(no_rig), None, 404),
+        ("POST", "/v1/runs", "/v1/runs", Some(run), Some("k"), 422),
+        ("POST", "/v1/config/reload", "/v1/config/reload", reload(), None, 400),
     ];
-    for (method, op, path, body, key) in cases {
+    for (method, op, path, body, key, expected) in cases {
         let at = format!("{method} {path}");
         let (status, error) = match d.client.request(method, path, body.as_ref(), key).await {
             Err(ClientError::Api { status, error }) => (status, error),
             other => panic!("{at}: not an error reply: {other:?}"),
         };
+        assert_eq!(status, expected, "{at}: {error}");
         let declared = &doc["paths"][op][method.to_lowercase()]["responses"][status.to_string()]["description"];
         let code = format!("`{}`", error["code"].as_str().unwrap());
         assert!(

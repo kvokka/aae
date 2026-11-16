@@ -2,7 +2,8 @@
 //! a concurrency slot, then leaves for `preparing`, oldest first.
 
 use super::{
-    Create, RunHandler, drain::NO_PROCESS, events::attempt_live, rejected, row::Row, token_sha256, triggers::MAX_DEPTH,
+    Create, RunHandler, drain::NO_PROCESS, events::attempt_live, not_found, rejected, row::Row, token_sha256,
+    triggers::MAX_DEPTH,
 };
 use crate::{
     config::{Formula, InputType, Step, StepKind},
@@ -84,8 +85,14 @@ impl RunHandler {
             Self::child_of(tx, &mut c, &token)?;
         }
         let project = self.config.projects.iter().find(|p| p.name == c.project);
-        let project = project.ok_or_else(|| rejected(format!("no project `{}`", c.project)))?;
-        let (name, formula) = project.formula(&c.formula).map_err(rejected)?;
+        let project = project.ok_or_else(|| not_found(format!("no project `{}`", c.project)))?;
+        // An ambiguous name is of formulas that are there; only a name of none is "no such thing".
+        let (name, formula) = project
+            .formula(&c.formula)
+            .map_err(|why| match why.starts_with("no formula") {
+                true => not_found(why),
+                false => rejected(why),
+            })?;
         if direct && formula.internal {
             return Err(rejected(format!(
                 "`{name}` is internal: only a step of another formula runs it"
@@ -101,7 +108,7 @@ impl RunHandler {
                 .to_owned()
         });
         let rig = project.place(&rig_name);
-        let rig = rig.ok_or_else(|| rejected(format!("no rig `{rig_name}` in `{}`", c.project)))?;
+        let rig = rig.ok_or_else(|| not_found(format!("no rig `{rig_name}` in `{}`", c.project)))?;
         let first = &formula.steps[0];
         if c.continue_from.is_some() && !matches!(first.kind, StepKind::Ai { .. }) {
             return Err(rejected(format!(
@@ -169,7 +176,7 @@ impl RunHandler {
                             picked = Some(found);
                             break;
                         }
-                        Err(Error::Rejected(why)) if !named => {
+                        Err(Error::Rejected(why) | Error::NotFound(why)) if !named => {
                             passed_over.insert(id, json!(why));
                         }
                         Err(e) => return Err(e),
@@ -196,7 +203,7 @@ impl RunHandler {
                 )
                 .optional()?;
             match found {
-                None => return Err(rejected(format!("no run `{from}` to continue"))),
+                None => return Err(not_found(format!("no run `{from}` to continue"))),
                 Some((state, ..)) if !matches!(state.as_str(), "passed" | "failed" | "cancelled") => {
                     return Err(rejected(format!("`{from}` is still `{state}`")));
                 }

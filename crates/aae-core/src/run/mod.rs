@@ -233,6 +233,11 @@ fn rejected(reason: impl Into<String>) -> Error {
     Error::Rejected(reason.into())
 }
 
+/// The message names a thing there is none of: a 404, where [`rejected`] is a thing that is but refuses.
+fn not_found(reason: String) -> Error {
+    Error::NotFound(reason)
+}
+
 /// An answer as the effect payload and `run.requires_action` decisions write it (contracts 3.2).
 fn answer_json(answer: &Answer) -> Value {
     match answer {

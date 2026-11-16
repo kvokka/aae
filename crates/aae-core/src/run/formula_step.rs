@@ -42,7 +42,9 @@ impl RunHandler {
                 self.terminal(tx, row, "failed", Some("infrastructure"), "nothing_ready")
             }
             Ok(_) => Ok(()),
-            Err(Error::Rejected(why)) => self.terminal(tx, row, "failed", Some("infrastructure"), &why),
+            Err(Error::Rejected(why) | Error::NotFound(why)) => {
+                self.terminal(tx, row, "failed", Some("infrastructure"), &why)
+            }
             Err(e) => Err(e),
         }
     }

@@ -52,7 +52,9 @@ pub(crate) struct ParentAttempt {
 /// chain deeper than 10 is `rejected`.
 #[utoipa::path(post, path = "/v1/runs", request_body = CreateRun,
     params(("Idempotency-Key" = Option<String>, Header, description = "Repeats return the first reply")),
-    responses((status = OK, body = Started), (status = CONFLICT, description = REJECTED, body = ErrorReply), Keyed))]
+    responses((status = OK, body = Started), (status = CONFLICT, description = REJECTED, body = ErrorReply),
+        (status = NOT_FOUND, description = "`not_found`: no such project, rig, parent run or run to continue",
+            body = ErrorReply), Keyed))]
 pub(crate) async fn create(state: State, headers: HeaderMap, Body(body): Body<CreateRun>) -> Reply {
     let create = Create {
         project: body.project,
@@ -134,6 +136,7 @@ pub(crate) struct CancelRun {
     params(("id" = String, Path), ("Idempotency-Key" = Option<String>, Header)),
     responses((status = OK, description = NULL, body = ()),
         (status = CONFLICT, description = REJECTED, body = ErrorReply),
+        (status = NOT_FOUND, description = "`not_found`: no such run", body = ErrorReply),
         Keyed))]
 pub(crate) async fn cancel(
     state: State,
@@ -166,6 +169,7 @@ pub(crate) struct AnswerRun {
     params(("id" = String, Path), ("Idempotency-Key" = Option<String>, Header)),
     responses((status = OK, description = NULL, body = ()),
         (status = CONFLICT, description = REJECTED, body = ErrorReply),
+        (status = NOT_FOUND, description = "`not_found`: no such run", body = ErrorReply),
         Keyed))]
 pub(crate) async fn answer(
     state: State,

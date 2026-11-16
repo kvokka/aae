@@ -373,7 +373,9 @@ impl RunHandler {
                 };
                 match self.answer(tx, run, &request.unwrap_or_default(), &deny) {
                     // Nothing to answer through: the run may not stay in `requires_action` without a deadline.
-                    Err(Error::Rejected(_)) => self.attempt_failed(tx, row, stall(FailureKind::Unknown)),
+                    Err(Error::Rejected(_) | Error::NotFound(_)) => {
+                        self.attempt_failed(tx, row, stall(FailureKind::Unknown))
+                    }
                     other => other,
                 }
             }

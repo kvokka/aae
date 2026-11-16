@@ -1,6 +1,6 @@
 //! A row of `runs` and the attempts of a run as the events of docs/design/contracts.md 1.3 show them.
 
-use super::rejected;
+use super::not_found;
 use crate::{
     journal::rfc3339_ms,
     writer::{Error, Event, Tx},
@@ -48,7 +48,7 @@ const COLUMNS: &str = "id, project, rig, formula, agent, inputs, correlation, de
 
 impl Row {
     pub(super) fn load(tx: &Tx<'_>, run: &str) -> Result<Self, Error> {
-        Self::read(tx.sql(), run)?.ok_or_else(|| rejected(format!("no run `{run}`")))
+        Self::read(tx.sql(), run)?.ok_or_else(|| not_found(format!("no run `{run}`")))
     }
 
     pub(super) fn read(conn: &Connection, run: &str) -> rusqlite::Result<Option<Self>> {

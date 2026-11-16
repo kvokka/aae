@@ -66,8 +66,8 @@ fn every_operation_lists_the_errors_it_can_return() {
                     "{at}: a keyed operation lists 422 and 503"
                 );
             }
-            // A missing run on a POST is the core's 409 (a finish answers `invalid`); a GET of one is 404.
-            if path.contains("{id}") && method == "get" {
+            // A missing run or instance is 404 on any method; the finisher of one answers `invalid` instead.
+            if path.contains("{id}") && !path.ends_with("/finish") {
                 assert!(lists("404"), "{at}: lists 404");
             }
             if !op["requestBody"].is_null() || has("", "query") || has("", "path") {

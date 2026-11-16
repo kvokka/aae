@@ -243,7 +243,7 @@ async fn a_run_continues_the_session_of_a_finished_run_only_when_asked() {
     assert!(matches!(early, Err(Error::Rejected(_))), "still running");
     w.events(&first, Duration::from_secs(11)).await;
     let nobody = w.core.send(None, Msg::Create(create("run_99"))).await;
-    assert!(matches!(nobody, Err(Error::Rejected(_))));
+    assert!(matches!(nobody, Err(Error::NotFound(_))), "{nobody:?}");
     w.driver.script(hollow_turn());
     let reply = w.core.send(None, Msg::Create(create(&first))).await.unwrap();
     let events = w
@@ -272,10 +272,13 @@ async fn a_run_must_name_a_runnable_formula_with_its_inputs() {
         token: None,
         continue_from: None,
     };
-    for (formula, inputs) in [("nope", json!({})), ("build", json!({ "extra": 1 }))] {
-        let sent = w.core.send(None, Msg::Create(create(formula, inputs))).await;
-        assert!(matches!(sent, Err(Error::Rejected(_))), "{formula}");
-    }
+    let sent = w.core.send(None, Msg::Create(create("nope", json!({})))).await;
+    assert!(matches!(sent, Err(Error::NotFound(_))), "{sent:?}");
+    let sent = w
+        .core
+        .send(None, Msg::Create(create("build", json!({ "extra": 1 }))))
+        .await;
+    assert!(matches!(sent, Err(Error::Rejected(_))), "{sent:?}");
 }
 
 #[tokio::test(start_paused = true)]

@@ -51,7 +51,7 @@ fn find<'a>(config: &'a Config, project: &str, rig: &str, name: &str) -> Result<
     let found = assigned(config)
         .into_iter()
         .find(|a| a.project == project && a.rig == rig && (a.name == name || a.name == own));
-    found.ok_or_else(|| super::rejected(format!("no trigger `{name}` on `{project}/{rig}`")))
+    found.ok_or_else(|| super::not_found(format!("no trigger `{name}` on `{project}/{rig}`")))
 }
 
 /// Every trigger on every rig it runs on: the rigs that list it and, for a project trigger, its `rig`.
@@ -345,7 +345,7 @@ impl RunHandler {
                 }
                 return skip(tx, "nothing_ready", why);
             }
-            Err(Error::Rejected(reason)) => return skip(tx, "rejected", reason),
+            Err(Error::Rejected(reason) | Error::NotFound(reason)) => return skip(tx, "rejected", reason),
             Err(e) => return Err(e),
         };
         let row = Row::load(tx, &run)?;

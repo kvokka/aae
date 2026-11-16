@@ -230,7 +230,7 @@ impl RunHandler {
             return Ok(());
         };
         match self.open_gate(tx, key, Some(by)) {
-            Err(Error::Rejected(_)) => Ok(()),
+            Err(Error::Rejected(_) | Error::NotFound(_)) => Ok(()),
             other => other,
         }
     }
