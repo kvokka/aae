@@ -48,7 +48,7 @@ coder → reviewer под мастером (`overseer`), без оператор
   без версии, `Cargo.lock` в git; инструменты — точные версии в `mise.toml` (`mise use <tool>@<x.y.z>`), claude и
   codex — линией (`2.1`, `0`); `mise.lock` нет.
   Без причины не обновлять; обновление — отдельным коммитом.
-- Тулчейн — `mise.toml`: Rust 1.99.1 (clippy, rustfmt, rust-analyzer, цели linux-musl и apple-darwin под обе
+- Тулчейн — `mise.toml`: Rust 1.100 (clippy, rustfmt, rust-analyzer, цели linux-musl и apple-darwin под обе
   архитектуры), cargo-nextest, cargo-deny, cargo-machete, tokei (счётчик строк для бюджетов §14), zig и
   cargo-zigbuild для кросс-сборки. Если команда не находится — `mise exec -- <команда>`.
 - Внешние бинарники (claude, codex, br) закрепляются в `mise.toml` проекта, как требует спека §13.

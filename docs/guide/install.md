@@ -14,7 +14,7 @@ cargo build --release --locked -p aae
 install -m 0755 target/release/aae ~/.local/bin/aae
 ```
 
-mise is a convenience, not a requirement. Without it, install Rust 1.99.1 any way you like (for example with
+mise is a convenience, not a requirement. Without it, install Rust 1.100 any way you like (for example with
 rustup); `cargo build` then works as above.
 
 `mise run build-all` builds all four release targets with `cargo zigbuild` into

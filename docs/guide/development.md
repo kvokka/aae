@@ -6,7 +6,7 @@ Every check below is a mise task (`mise.toml`).
 
 mise is a convenience, not a requirement: install the same tools any way you like.
 
-- Rust 1.99.1 with the components `clippy`, `rustfmt`, `rust-src`, `rust-analyzer`; for the release builds also the
+- Rust 1.100 with the components `clippy`, `rustfmt`, `rust-src`, `rust-analyzer`; for the release builds also the
   targets `x86_64-unknown-linux-musl`, `aarch64-unknown-linux-musl`, `x86_64-apple-darwin`, `aarch64-apple-darwin`.
 - cargo-nextest 0.9.151, cargo-deny 0.20.2, cargo-machete 0.9.2 (`cargo install --locked <crate>@<version>`) and
   tokei 15.0.0 (`scripts/budget.sh`).
