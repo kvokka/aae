@@ -13,17 +13,17 @@ no row, or a row not run holds the score at 6. In a CI run, which runs no model,
 than the last change of `crates/`. A 10 needs criterion 20 not open, which in a full run means every row of it green;
 and the `readiness` marker must name a commit at or after the last change of `crates/`.
 
-Assessed 2026-11-16 at `11839e9`, by the letter of the scale. The last change of `crates/` is `11839e9`; at it every
-row of the spec ran with real models in one full run of `mise run acceptance`, which since `9a88ecf` runs every
-scenario on the release build of `aae` (claude haiku 2.1.325, codex `gpt-5.6-luna` 0.168.0, br 0.7.6): 47 of 49 rows
-passed in 1177 s. The request rows 1 (this host's release build), 2, 4a, 8 and 17 passed, and so did both demos of the
-current config shape: demo 1 (planner and frontend coder on claude haiku, backend coder on codex luna) in 280 s, demo 2
-(planner on sol, coders on luna, qa on terra) in 606 s and one round, its second run in a row on the release build
-after one at `9d366e3` (772 s, one round). Of the other two rows, 22 failed on this file, then still assessed at
-`01851cb`, and criterion 1's build for the four release targets runs only on a tag (`on a tag`). Criterion 20 has no
-open part. The components the demos exercise score 10; the others stay at 8, with what is missing in their row.
-<!-- MEASURE id=full-run date=2026-11-16 ver=11839e9 env=linux-arm64-orbstack src=aae-acceptance note="every row of the spec with real models on the release build, 47 of 49: 22 failed on the readiness file then at 01851cb, criterion 1's four-target build is for a tag; both live demos passed" -->
-<!-- MEASURE id=readiness date=2026-11-16 ver=11839e9 env=linux-arm64-orbstack src=docs/READINESS.md note="scored by the letter of spec 14 against the full run at this commit" -->
+Assessed 2026-11-16 at `b32c55c`, by the letter of the scale. The last change of `crates/` is `dc5453a`; at
+`b32c55c`, which changes only the demos' config after it, every row of the spec ran with real models in one full run of
+`mise run acceptance` on the release build of `aae` (claude haiku 2.1.325, codex `gpt-5.6-luna` 0.168.0, br 0.7.6):
+48 of 50 rows passed in 2650 s. The request rows 1 (this host's release build), 2, 4a, 8 and 17 passed, and so did
+both demos of the current config shape: demo 1 (planner and frontend coder on claude haiku, backend coder on codex
+luna) in 286 s, and demo 2 (planner on sol, coders on luna, qa on terra) twice in a row from what `git clean` leaves,
+in 1260 s and 769 s, one round each. Of the other two rows, 22 failed on this file, then still assessed at `11839e9`,
+and criterion 1's build for the four release targets runs only on a tag (`on a tag`). Criterion 20 has no open part.
+The components the demos exercise score 10; the others stay at 8, with what is missing in their row.
+<!-- MEASURE id=full-run date=2026-11-16 ver=b32c55c env=linux-arm64-orbstack src=aae-acceptance note="every row of the spec with real models on the release build, 48 of 50: 22 failed on the readiness file then at 11839e9, criterion 1's four-target build is for a tag; both live demos passed, demo 2 twice in a row" -->
+<!-- MEASURE id=readiness date=2026-11-16 ver=b32c55c env=linux-arm64-orbstack src=docs/READINESS.md note="scored by the letter of spec 14 against the full run at this commit" -->
 
 | Component | Criteria | Score | Missing for the next point |
 |---|---|---|---|
