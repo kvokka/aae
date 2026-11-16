@@ -113,16 +113,18 @@ fn remove(common: &Path, path: &Path, id: &str, until: Instant) -> Result<(), St
 
 /// Runs `git` in its own process group, killed with the group once `until` passes.
 fn git(dir: &Path, args: &[&str], until: Instant) -> Result<String, String> {
-    let mut child = Command::new("git")
-        .arg("-C")
-        .arg(dir)
-        .args(args)
-        .stdin(Stdio::null())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .process_group(0)
-        .spawn()
-        .map_err(|e| format!("git: {e}"))?;
+    // Dropped once the child was waited for, on every way out.
+    let (mut child, _own) = aae_core::orphans::spawn_std(
+        Command::new("git")
+            .arg("-C")
+            .arg(dir)
+            .args(args)
+            .stdin(Stdio::null())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .process_group(0),
+    )
+    .map_err(|e| format!("git: {e}"))?;
     let drain = |pipe: Option<Box<dyn Read + Send>>| {
         thread::spawn(move || {
             let mut text = String::new();

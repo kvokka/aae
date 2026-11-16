@@ -17,6 +17,8 @@ unreachable_pub = "deny"
 todo = "deny"
 unimplemented = "deny"
 dbg_macro = "deny"
+# Denied by the root of each daemon crate (`clippy.toml`); tests and the acceptance runner spawn freely.
+disallowed_methods = "allow"
 
 # Line tables keep file:line in backtraces at half the target/ size and link time.
 [profile.dev]

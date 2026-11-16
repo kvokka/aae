@@ -74,7 +74,9 @@ pub(crate) fn run(command: Vec<String>, wait: Duration) -> ExitCode {
 
 async fn serve(command: &[String], port: u16, token: &str, wait: Duration) -> Result<std::convert::Infallible, String> {
     let (program, args) = command.split_first().ok_or("no command")?;
-    // The environment goes to the child whole: its `AAE_INSTANCE` marker lets a sweep find it as well.
+    // The environment goes to the child whole: its `AAE_INSTANCE` marker lets a sweep find it as well. The bridge is
+    // a process of its own, with no orphan reaper to take the exit of its child.
+    #[allow(clippy::disallowed_methods)]
     let mut child = tokio::process::Command::new(program)
         .args(args)
         .stdin(Stdio::piped())

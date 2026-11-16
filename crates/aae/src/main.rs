@@ -1,5 +1,7 @@
 //! `aae` binary entry point: the daemon and the CLI.
 
+#![deny(clippy::disallowed_methods)]
+
 mod bridge;
 mod daemon;
 mod doctor;

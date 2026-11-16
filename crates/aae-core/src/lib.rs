@@ -1,5 +1,7 @@
 //! Core of aae: the single writer of the runtime state (spec §4, §5).
 
+#![deny(clippy::disallowed_methods)]
+
 mod clock;
 pub mod config;
 pub mod cron;

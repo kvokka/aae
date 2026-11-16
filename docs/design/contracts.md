@@ -836,7 +836,9 @@ of their own. The adapter reports the account id (4.5, `Driver::account`).
 - The process environment of every instance and service holds `AAE_INSTANCE=<id>`: once the instance is stopped
   or has exited, every process still carrying it is killed (the sweep of invariant 7). The daemon is a child
   subreaper ([experiments](experiments.md#descendants-after-kill--9-invariant-7)): every 5 s it reaps the adopted
-  orphans that exited, never a child it spawned itself (those are reaped by their own `wait`).
+  orphans that exited, never a child it spawned itself (those are reaped by their own `wait`). The daemon's crates
+  spawn every child through `aae_core::orphans`, which registers it; clippy denies a spawn past it
+  (`clippy.toml`).
 - Health: every 30 s the daemon asks the driver for the health of each instance it started; `Dead` counts as an
   `exited` event of the instance (above). A `ready` instance that turns `Degraded` gets `instance.degraded`
   `{instance, reason: text}` and `degraded: <text>` in the instance view (`GET /v1/instances`, `aae instance list`;

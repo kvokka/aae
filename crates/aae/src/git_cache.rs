@@ -147,14 +147,16 @@ fn clone(temp: &Path, url: &str, want: &str, missing: String) -> Result<String, 
 
 /// Runs git without a terminal to ask for a password on, killed past [`DEADLINE`]; its trimmed output.
 fn git(args: &[&str]) -> Result<String, String> {
-    let mut child = Command::new("git")
-        .args(args)
-        .env("GIT_TERMINAL_PROMPT", "0")
-        .stdin(Stdio::null())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
-        .map_err(|e| format!("git: {e}"))?;
+    // Dropped once the child was waited for, on every way out.
+    let (mut child, _own) = aae_core::orphans::spawn_std(
+        Command::new("git")
+            .args(args)
+            .env("GIT_TERMINAL_PROMPT", "0")
+            .stdin(Stdio::null())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped()),
+    )
+    .map_err(|e| format!("git: {e}"))?;
     let drain = |pipe: Option<Box<dyn Read + Send>>| {
         thread::spawn(move || {
             let mut text = String::new();

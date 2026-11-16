@@ -16,7 +16,7 @@ pub(crate) fn binary(name: &str, explicit: Option<&Path>) -> (PathBuf, &'static 
     if let Some(path) = explicit {
         return (path.to_owned(), "config");
     }
-    let mise = std::process::Command::new("mise").args(["which", name]).output();
+    let mise = aae_core::orphans::output_std(std::process::Command::new("mise").args(["which", name]));
     match mise {
         Ok(out) if out.status.success() => {
             let path = String::from_utf8_lossy(&out.stdout).trim().to_owned();

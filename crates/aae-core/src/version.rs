@@ -6,7 +6,7 @@ use std::path::Path;
 /// The `--version` output of `binary`, or why it is not a tested version.
 pub fn tested_version(binary: &Path, tested: [(u32, u32, u32); 2]) -> Result<String, String> {
     let shown = binary.display();
-    let out = match std::process::Command::new(binary).arg("--version").output() {
+    let out = match crate::orphans::output_std(std::process::Command::new(binary).arg("--version")) {
         Ok(out) => String::from_utf8_lossy(&out.stdout).trim().to_owned(),
         Err(e) => return Err(format!("{shown}: {e}")),
     };

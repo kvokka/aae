@@ -1,6 +1,8 @@
 //! The claude adapter (spec §7, docs/design/contracts.md 4.6): one `claude -p` process per session, stream-json
 //! on stdin and stdout.
 
+#![deny(clippy::disallowed_methods)]
+
 mod adapter;
 mod part;
 mod stream;
@@ -367,4 +369,5 @@ fn transcript(session: &Value, key: PromptKey, host: &Path) -> Transcript {
 }
 
 #[cfg(test)]
+#[allow(clippy::disallowed_methods)]
 mod tests;

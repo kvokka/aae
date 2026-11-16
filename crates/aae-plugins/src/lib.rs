@@ -2,6 +2,8 @@
 //! (docs/design/contracts.md 3.1). The core runs them as hooks of their events (`aae_core::config::BUNDLED`) with
 //! their `[builtin.<name>]` table as parameters (`worktree`: the loader's); the daemon checks those at start.
 
+#![deny(clippy::disallowed_methods)]
+
 mod policy;
 mod worktree;
 
@@ -33,4 +35,5 @@ fn parse<T: DeserializeOwned>(name: &str, params: &Value) -> Result<T, String> {
 }
 
 #[cfg(test)]
+#[allow(clippy::disallowed_methods)]
 mod tests;

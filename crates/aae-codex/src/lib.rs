@@ -1,6 +1,8 @@
 //! The codex adapter (spec §7, docs/design/contracts.md 4.6): one `codex app-server` per fingerprint over stdio,
 //! JSON-RPC without the `jsonrpc` field, a thread per session.
 
+#![deny(clippy::disallowed_methods)]
+
 mod adapter;
 mod part;
 mod rpc;
