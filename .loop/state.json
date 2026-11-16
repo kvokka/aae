@@ -1,13 +1,14 @@
 {
   "max_cycles": 121,
-  "status": "done",
+  "status": "running",
   "cycle": 105,
   "phase": null,
   "attempt": 0,
   "base": "ba6b363e1fd7c30468371e7f0218719cc058bd79",
   "started": "2026-11-16T22:16:50+0700",
   "coder_status": "done",
-  "history": [
+  "history": [],
+  "history_round5": [
     {
       "cycle": 96,
       "base": "bb29d5711d557ad0eb66f2958ba26cd5abeb6b73",
@@ -98,6 +99,5 @@
       "verdict": "complete",
       "ended": "2026-11-16T23:54:57+0700"
     }
-  ],
-  "halt_reason": "ревьюер: complete, оценка 9.0/10"
+  ]
 }
