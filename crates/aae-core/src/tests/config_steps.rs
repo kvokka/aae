@@ -216,6 +216,11 @@ fn a_bad_max_attempts_or_check_script_is_one_line() {
     let zero = errors("max_attempts = 0", &[SCRIPT.0]);
     // The parser places a bad key of a tagged table at the table's header.
     assert!(zero.contains("nonzero") && zero.contains("line 2"), "{zero}");
+    assert_eq!(
+        errors("max_attempts = 21", &[SCRIPT.0]),
+        "step `build`: `max_attempts` is at most 20"
+    );
+    load_executable(&[(FLOW, &flow("max_attempts = 20")), SCRIPT], &[SCRIPT.0]).unwrap();
     for (script, executable) in [("none.sh", &[SCRIPT.0][..]), ("check.sh", &[])] {
         let message = errors(&format!("step_check_script_path = \"{script}\""), executable);
         assert!(

@@ -163,6 +163,11 @@ impl Loader {
                     format!("step `{name}`: the check script `{path}` is not an executable file"),
                 );
             }
+            // A repeat spends no session attempt, so the step's own count takes the same ceiling (invariant 16).
+            let ceiling = crate::run::MAX_ATTEMPTS;
+            if max_attempts.is_some_and(|n| n.get() > ceiling) {
+                self.fail(file, format!("step `{name}`: `max_attempts` is at most {ceiling}"));
+            }
             let kind = self.step(file, step)?;
             steps.push(Step {
                 name,

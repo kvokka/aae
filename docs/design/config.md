@@ -559,8 +559,8 @@ rendered prompt with the remarks, not the reconcile prompt of a resumed retry. A
 last of the formula's `rounds` fails the run (class `agent`) with the reason `still failing after <n> rounds:
 <remarks>`. `back_to` must name a step before the check; a `drain` step is no check.
 
-Any step may have `max_attempts` (a positive integer, default 1): the step runs at most that many times, and one that
-does not pass runs again until then; past it the step fails. `step_check_script_path` names a script that says
+Any step may have `max_attempts` (1 to 20, the ceiling of session attempts; default 1): the step runs at most that
+many times, and one that does not pass runs again until then; past it the step fails. `step_check_script_path` names a script that says
 whether the step passed, a path from the directory of the formula file (an absolute one stays; empty is none) that
 must be an executable regular file at load. Its exit code decides: 0 passed, 75 an incurable failure that fails the
 step with no more runs, any other code did not pass. Unlike the exit code 75 of an `exec` step's command, a failed
