@@ -76,7 +76,9 @@ Shared objects:
   and: `reason` (the veto text, the cancel reason, `pass`, or the failure reason), `request` (the open request while in
   `requires_action`, else null), `gate` (the oldest closure of the run's keys while it waits on a gate or is
   `parked`, else null) and `round` (the round of the formula's checks, 6.1: 1, and one more each time a check sends
-  the run back).
+  the run back) and `step_attempt` (the execution of the step in the round, an integer from 1: a repeat under
+  `max_attempts` adds one, a new entry into the step or a `back_to` return sets 1; `attempt` stays the attempt of the
+  session).
 - `Failure`: `{kind, text, scope, retry_at, retried_by_harness, source, raw, account, provider_model}`: `kind` from
   see 4.4, `text` set only for `unknown`, `scope` one of `session | instance | account | provider_model | run | rig`,
   `retry_at` time or null, `source` one of `harness | adapter | core`, `raw` the harness text cut to 4 KiB,
@@ -584,7 +586,7 @@ the actor of an exec step and hands that of a session to the adapter in the sess
 | `starting` | an attempt: instance acquired, session started or resumed, first prompt sent, waiting for `prompt.acked` | `start_timeout` 120 s | attempt failure `stall` |
 | `running` | the agent works (or the `exec` command runs, or the `drain` step gives out beads) | step `timeout` of the formula (default 45 m; `drain` 24 h) per attempt → `runaway_turn`; silence budgets (an announced `retrying` pause adds to the limit): first event after ack 5 min, model thinking 5 min, tool running 10 min, background work after the turn 30 min → `stall` | attempt failure |
 | `requires_action` | waits for an answer to a permission request or question; not silence; the step `timeout` of `running` pauses here and resumes with the time it had left | `human_timeout` 1 h | answer `deny`, back to `running` |
-| `finishing` | outcome declared and the session idle without background; `run.finishing` hooks running | hook deadline | the hooks count as failed → veto → `failed{check, hook_deadline}` (a declared `fail` stays `failed{agent}`) |
+| `finishing` | outcome declared and the session idle without background; `run.finishing` hooks running, then the step check script of `step_check_script_path` if the hooks accepted a `pass` (no decision awaited) | hook deadline; for the script the step `timeout` plus a margin, a lost script counting as not passed | the hooks count as failed → veto → `failed{check, hook_deadline}` (a declared `fail` stays `failed{agent}`); script exit 0 → the next step or `passed`; 75 → `failed{check}` with no repeat; any other result is an execution that did not pass: under `max_attempts` the run repeats the step (`run.step_finished` with outcome `fail`, then `preparing` with `step_attempt` + 1), else `failed{check}` (`failed{agent}` if the step said `fail`); a script that cannot start → `failed{infrastructure}` |
 | `interrupted` | the current attempt ended with a failure (or by a daemon restart); `run.attempt_failed` is deciding | hook deadline, then the decision's `after` | no decision → `failed{infrastructure}` |
 | `parked` | a started run waits for a gate or a slot of its agent; no harness process | `park_timeout` 7 d from parking, or the gate's `until` if later (a gate with `until` opens by its timer first) | `failed{infrastructure, park_timeout}` |
 | `passed`, `failed{class}`, `cancelled` | terminal | — | — |
@@ -595,7 +597,7 @@ are the `[watchdog]` table of the orchestrator config, with these defaults (conf
 `interrupted` is every attempt failure waiting for its decision, a daemon restart among them,
 so that the state machine has one place where `run.attempt_failed` is decided.
 
-- The class of `failed` tells the cause: `agent` (the finisher said `fail`), `check` (a plugin's veto or deny),
+- The class of `failed` tells the cause: `agent` (the finisher said `fail`), `check` (a plugin's veto or deny, or a step check script that refused),
   `hollow_done` (the turn ended without an outcome), `infrastructure` (attempts ran out or the policy ended the run).
 - `queued` has not started: it waits for a concurrency slot, a free workdir or an open gate. `parked` has started and
   waits for a gate or a slot of its agent with no harness process.
@@ -626,7 +628,7 @@ Ceilings of the core (invariant 16): 20 failed attempts per run (the attempts of
 attempts whose `auth_required`, `billing` or `quota_exhausted` failure the decision parked on the run's own `account:`
 gate, closed by it (spec §2, decisions 49, 50: a wait on the account does not spend the ceiling; the attempt is marked
 `waited` in the state; a park on a gate that does not close, `until` passed, or any other park counts), 10 remarks per
-attempt (`continue` after a hollow turn and `remark` after `run.finishing` both count). The eleventh fails the run with
+attempt (`continue` after a hollow turn and `remark` after `run.finishing` both count). A repeat of a step under `max_attempts` spends neither ceiling. The eleventh fails the run with
 reason `remarks_ceiling` and the class the event would give: `hollow_done` for `continue`, `check` for `remark`. Between
 turns (from idle without background to the next prompt) the step `timeout` pauses like in `requires_action`. Trigger
 depth (§9.5): a trigger does not start a run deeper than 10 (`trigger.skipped{depth}`); the limit is fixed, with no
@@ -735,7 +737,7 @@ for it is not.
   and deciding hooks they still had queued dropped, and the command of an exec step killed by its `AAE_INSTANCE` marker
   (random per attempt) before any later attempt runs it. A run that waits for a decision on a deciding event keeps its
   state and waits for the same decision (3.4): `preparing`, `interrupted` waiting for the policy, `finishing`, and
-  `running` after a turn that ended without an outcome. Its hook effect is still queued and its hooks run again; the
+  `running` after a turn that ended without an outcome; `finishing` with a step check script running is one too, but its script is killed by its marker and starts again, and the execution counts only once the script's word is recorded. Its hook effect is still queued and its hooks run again; the
   declared outcome and the result of an exec command stand, the turn and the command do not run again. A run goes on
   from the step it is at: the move to the next step is in the transaction that accepted the outcome (6.1), so a finished
   step never runs again, and an exec command killed by the restart runs again in a new attempt of the same step.

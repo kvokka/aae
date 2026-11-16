@@ -30,6 +30,8 @@ pub(crate) struct Run {
     generation: u32,
     /// The round of the formula's checks the run is in: 1, and one more each time a check sends it back.
     round: u32,
+    /// The execution of the step within its round: 1, and one more each time the step runs again (spec §9.1).
+    step_attempt: u32,
     bead: Option<String>,
     workdir: String,
     depth: i64,

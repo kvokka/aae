@@ -218,4 +218,13 @@ command = ["make", "check"]           # sees AAE_STEP_WORK_DATA: {closed, failed
 back_to = "plan"                      # a failure sends the run back to `plan`, whose prompt shows {{ remarks }}
 ```
 
+A step can also repeat itself before it gives up, and a script can judge its result:
+
+```toml
+[[step]]
+name = "write"
+max_attempts = 3                      # up to three executions; the repeat sees the last remark in {{ remarks }}
+step_check_script_path = "check.sh"   # exit 0 passes, 75 fails the run at once, anything else repeats
+```
+
 Next: [writing a plugin](plugin.md).

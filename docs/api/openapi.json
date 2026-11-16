@@ -3147,6 +3147,7 @@
           "attempt",
           "generation",
           "round",
+          "step_attempt",
           "workdir",
           "depth",
           "correlation",
@@ -3278,6 +3279,12 @@
           "step": {
             "type": "string",
             "description": "The step of the formula the run is at (spec §9.1); `agent` and `step_kind` are of it."
+          },
+          "step_attempt": {
+            "type": "integer",
+            "format": "int32",
+            "description": "The execution of the step within its round: 1, and one more each time the step runs again (spec §9.1).",
+            "minimum": 0
           },
           "step_kind": {
             "type": "string",
