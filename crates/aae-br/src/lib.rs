@@ -298,12 +298,13 @@ impl Tracker for Br {
         description: &'a str,
     ) -> BoxFuture<'a, Result<Bead, TrackerError>> {
         Box::pin(async move {
-            // `br show` does not find an external ref: the whole list, closed beads too, is searched.
+            // `br show` finds no external ref and takes a partial id: the whole list, closed beads too, is searched.
             let all = self.br(READER, &["list", "-a", "--limit", "0"]).await?;
-            let listed = all["issues"].as_array().or(all.as_array()).into_iter().flatten();
-            if let Some(id) = listed
-                .filter(|b| b["external_ref"] == key)
-                .find_map(|b| b["id"].as_str())
+            let mut listed = all["issues"].as_array().or(all.as_array()).into_iter().flatten();
+            let made = listed.clone().find(|b| b["external_ref"] == key);
+            if let Some(id) = made
+                .or_else(|| listed.find(|b| b["id"] == description))
+                .and_then(|b| b["id"].as_str())
             {
                 return self.one(id).await;
             }

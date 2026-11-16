@@ -82,7 +82,8 @@ pub trait Tracker: Send + Sync {
     fn under<'a>(&'a self, root: &'a str) -> BoxFuture<'a, Result<Vec<String>, TrackerError>>;
     /// The writes after `after` (a `seq`, 0 for all), oldest first.
     fn changes(&self, after: i64) -> BoxFuture<'_, Result<Vec<Change>, TrackerError>>;
-    /// Creates an open epic without labels as `actor`, once per `key`: a repeat returns the bead of the first call.
+    /// The root bead of a task (spec §10.3): the bead whose id is exactly `description`, else an open epic without
+    /// labels created as `actor`, once per `key` — a repeat returns the bead of the first call.
     fn create<'a>(
         &'a self,
         actor: &'a str,

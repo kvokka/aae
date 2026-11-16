@@ -19,13 +19,13 @@ pub(crate) const SWEEP: &[(&str, &str)] = &[
     ("shop/agents/qa/agent.toml", "harness = \"scripted\"\n"),
     (
         "shop/formulas/work.toml",
-        "name = \"work\"\n[inputs]\nbead = { type = \"bead\", required = true }\n\
+        "name = \"work\"\n[inputs]\nbead = { type = \"task\", required = true }\n\
          [[step]]\nkind = \"ai\"\nagent = \"dev\"\nprompt = \"work.md\"\n",
     ),
     ("shop/formulas/work.md", "Work on {{ bead.title }}."),
     (
         "shop/formulas/sweep.toml",
-        "name = \"sweep\"\n[inputs]\nbead = { type = \"bead\", required = true }\n\
+        "name = \"sweep\"\n[inputs]\nbead = { type = \"task\", required = true }\n\
          [[step]]\nname = \"all\"\nkind = \"drain\"\nformula = \"work\"\n\
          [[step]]\nname = \"wrap\"\nkind = \"ai\"\nagent = \"dev\"\nprompt = \"wrap.md\"\n",
     ),

@@ -30,7 +30,7 @@ pub(crate) async fn run(env: Arc<Env>) -> String {
             "",
             &format!("\"sh\", \"-c\", {}", serde_json::to_string(plan).unwrap()),
         );
-        exec_formula(root, "work", "bead = { type = \"bead\", required = true }", "\"true\"");
+        exec_formula(root, "work", "bead = { type = \"task\", required = true }", "\"true\"");
         tracker(root);
         br(root, &["create", "Seed", "--silent"]);
     })

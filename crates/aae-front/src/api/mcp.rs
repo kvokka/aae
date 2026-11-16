@@ -204,7 +204,7 @@ pub(super) fn formulas(config: &Config, project: Option<&str>) -> Value {
 
 fn input_type(kind: InputType) -> &'static str {
     match kind {
-        InputType::Bead => "bead",
+        InputType::Task => "task",
         InputType::String => "string",
         InputType::Integer => "integer",
         InputType::Boolean => "boolean",

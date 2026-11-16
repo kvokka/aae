@@ -49,7 +49,7 @@ const POLICY: &[(&str, &str)] = &[
 const FIX: &[(&str, &str)] = &[
     (
         "shop/formulas/fix.toml",
-        "name = \"fix\"\n[inputs]\nbead = { type = \"bead\", required = true }\n\
+        "name = \"fix\"\n[inputs]\nbead = { type = \"task\", required = true }\n\
          [[step]]\nkind = \"ai\"\nagent = \"dev\"\nprompt = \"fix.md\"\n",
     ),
     ("shop/formulas/fix.md", "Fix {{ bead.title }}."),
@@ -70,7 +70,7 @@ const SHIP: &[(&str, &str)] = &[
 /// A drain step that gives every bead under the root a run of `fix`, then an ai step.
 const SWEEP: &[(&str, &str)] = &[(
     "shop/formulas/sweep.toml",
-    "name = \"sweep\"\n[inputs]\nbead = { type = \"bead\", required = true }\n\
+    "name = \"sweep\"\n[inputs]\nbead = { type = \"task\", required = true }\n\
      [[step]]\nkind = \"drain\"\nformula = \"fix\"\n\
      [[step]]\nkind = \"ai\"\nagent = \"dev\"\nprompt = \"ship.md\"\n",
 )];

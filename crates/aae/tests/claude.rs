@@ -43,7 +43,7 @@ async fn daemon_with(provider: &Provider, orchestrator: &str, agent: &str) -> Da
             (shop.join("formulas/build.md"), "Build {{ rig.name }}.".to_owned()),
             (
                 shop.join("formulas/fix.toml"),
-                "name = \"fix\"\n[inputs]\nbead = { type = \"bead\", required = true }\n[[step]]\nkind = \"ai\"\n\
+                "name = \"fix\"\n[inputs]\nbead = { type = \"task\", required = true }\n[[step]]\nkind = \"ai\"\n\
                  agent = \"dev\"\nprompt = \"build.md\"\n"
                     .to_owned(),
             ),

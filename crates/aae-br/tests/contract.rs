@@ -254,3 +254,29 @@ async fn a_key_creates_one_epic_whose_children_run_and_which_is_released_while_t
         "a parent with an open child is released, not closed"
     );
 }
+
+/// A task that names a bead gives that bead and files none; a text files a root that keeps the database's prefix
+/// even where a rig's `BD_ISSUE_PREFIX` is set, as in a daemon started from a rig's shell (spec §10.2, §10.3).
+#[tokio::test(flavor = "multi_thread")]
+async fn a_task_naming_a_bead_gives_it_and_a_text_files_a_root_of_the_database_prefix() {
+    const NAME: &str = "a_task_naming_a_bead_gives_it_and_a_text_files_a_root_of_the_database_prefix";
+    if std::env::var_os("BD_ISSUE_PREFIX").is_none() {
+        // The variable is set for a run of this test alone: the test binary runs it again with it.
+        let me = Command::new(std::env::current_exe().unwrap())
+            .args(["--exact", NAME, "--quiet"])
+            .env("BD_ISSUE_PREFIX", "api")
+            .status();
+        assert!(me.unwrap().success());
+        return;
+    }
+    let (dir, t) = tracker();
+    let named = create(dir.path(), "For the rig", &[]);
+    assert!(named.starts_with("api-"), "{named}");
+    let taken = t.create("aae:run_1", "aae-k1", &named, &named).await.unwrap();
+    assert_eq!(taken.id, named);
+    let root = t.create("aae:run_2", "aae-k2", "Ship it", "Ship it").await.unwrap();
+    assert!(root.id.starts_with("t-"), "{}", root.id);
+    let listed = br(dir.path(), &["list", "-a", "--limit", "0", "--json"]);
+    let listed: serde_json::Value = serde_json::from_str(&listed).unwrap();
+    assert_eq!(listed["issues"].as_array().unwrap().len(), 2, "one bead filed");
+}

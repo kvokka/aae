@@ -33,12 +33,30 @@ impl RunHandler {
                 .is_some_and(|o| o.keys().any(|k| k != "next_ready" && k != "epic"))
         {
             return Err(rejected(
-                "a bead input is a bead id, `{ next_ready = true, epic = <id> }` or `{ request = \"<text>\" }`",
+                "a task is a text, a bead id or `{ next_ready = true, epic = <id> }`",
             ));
         }
         let mut ready = Self::ready_in(tx, &project.name, input["epic"].as_str())?;
         ready.retain(|id| !other(id));
         Ok(ready)
+    }
+
+    /// Whether a task `input` is a text to give a root bead as the run prepares: a string that is not the id of a
+    /// bead the core knows (a ready one, or one a run owned). A blank text is refused.
+    pub(super) fn is_text(tx: &Tx<'_>, project: &str, input: &Value) -> Result<bool, Error> {
+        let Some(text) = input.as_str() else {
+            return Ok(false);
+        };
+        if text.trim().is_empty() {
+            return Err(rejected("a task is a text that is not blank"));
+        }
+        let known: bool = tx.sql().query_row(
+            "SELECT EXISTS (SELECT 1 FROM ready_beads WHERE project = ?1 AND id = ?2) \
+             OR EXISTS (SELECT 1 FROM beads WHERE project = ?1 AND id = ?2)",
+            [project, text],
+            |r| r.get(0),
+        )?;
+        Ok(!known)
     }
 
     /// The ready beads, in the tracker's order, that are in `epic`, have no owner and no closed gate; `None` takes

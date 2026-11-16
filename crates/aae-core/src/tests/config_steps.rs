@@ -73,7 +73,7 @@ fn a_drain_step_names_a_formula_that_takes_one_bead() {
             "name = \"flow\"\n[inputs]\n{inputs}\n[[step]]\nname = \"all\"\nkind = \"drain\"\nformula = \"{each}\"\n"
         )
     };
-    let bead = "root = { type = \"bead\", required = true }";
+    let bead = "root = { type = \"task\", required = true }";
     let config = load_with(&[(FLOW, &ship(bead, "implement"))]).unwrap();
     let step = &config.projects[0].packs[1].formulas["flow"].steps[0];
     let crate::config::StepKind::Drain { formula, timeout: None } = &step.kind else {
@@ -86,17 +86,22 @@ fn a_drain_step_names_a_formula_that_takes_one_bead() {
     fails(&[(FLOW, &ship(bead, "nothing"))], "step `all`: no formula `nothing`");
     fails(
         &[(FLOW, &ship(bead, "audit"))],
-        "`kit.audit` needs exactly one input of type `bead`",
+        "`kit.audit` needs exactly one input of type `task`",
     );
-    let two = "name = \"two\"\n[inputs]\nbead = { type = \"bead\" }\nwhy = { type = \"string\", required = true }\n\
+    let two = "name = \"two\"\n[inputs]\nbead = { type = \"task\" }\nwhy = { type = \"string\", required = true }\n\
                [[step]]\nkind = \"exec\"\ncommand = [\"true\"]\n";
     fails(
         &[(FLOW, &ship(bead, "two")), ("kit/formulas/two.toml", two)],
         "`kit.two` requires input `why`",
     );
     fails(
+        &[(FLOW, &ship("root = { type = \"task\" }", "implement"))],
+        "a formula with a `drain` step needs a required input of type `task`",
+    );
+    // No input takes a bead: a formula takes a task (spec §9.1).
+    fails(
         &[(FLOW, &ship("root = { type = \"bead\" }", "implement"))],
-        "a formula with a `drain` step needs a required input of type `bead`",
+        "unknown variant `bead`, expected one of `task`",
     );
 }
 
@@ -135,7 +140,7 @@ fn a_check_goes_back_to_an_earlier_step() {
     ] {
         fails(&[(FLOW, &flow(rounds, to)), text], error);
     }
-    let drain = "name = \"flow\"\n[inputs]\nb = { type = \"bead\", required = true }\n[[step]]\nname = \"a\"\n\
+    let drain = "name = \"flow\"\n[inputs]\nb = { type = \"task\", required = true }\n[[step]]\nname = \"a\"\n\
                  kind = \"drain\"\nformula = \"implement\"\nback_to = \"a\"\n";
     fails(&[(FLOW, drain)], "unknown field `back_to`");
 }

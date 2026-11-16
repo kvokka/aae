@@ -1,4 +1,5 @@
-//! A request becomes the root bead of its run (spec §10.1), on the scripted driver and the tracker in memory.
+//! A task becomes the root bead of its run, or names the bead it takes up (spec §9.1, §10.3), on the scripted driver
+//! and the tracker in memory.
 
 use crate::common;
 
@@ -13,7 +14,7 @@ use std::time::Duration;
 const ASK: &[(&str, &str)] = &[
     (
         "shop/formulas/ask.toml",
-        "name = \"ask\"\n[inputs]\nbead = { type = \"bead\", required = true }\n\
+        "name = \"ask\"\n[inputs]\nbead = { type = \"task\", required = true }\n\
          [[step]]\nkind = \"ai\"\nagent = \"dev\"\nprompt = \"ask.md\"\n",
     ),
     ("shop/formulas/ask.md", "Do: {{ bead.description }}"),
@@ -47,10 +48,10 @@ impl World {
 }
 
 #[tokio::test(start_paused = true)]
-async fn a_request_becomes_one_root_bead_that_its_run_claims_and_shows_to_the_agent() {
+async fn a_text_task_becomes_one_root_bead_that_its_run_claims_and_shows_to_the_agent() {
     let w = world(ASK);
     w.driver.script(slow_turn());
-    let reply = w.ask(json!({ "request": TEXT })).await.unwrap();
+    let reply = w.ask(json!(TEXT)).await.unwrap();
     let run = reply["run"].as_str().unwrap().to_owned();
     tokio::time::sleep(Duration::from_secs(1)).await;
     let bead = w.tracker.bead("b-1").expect("the root bead");
@@ -72,7 +73,7 @@ async fn a_root_bead_created_before_a_crash_is_the_one_the_run_gets_and_a_repeat
     w.changed().await;
     w.tracker.set_down(true);
     w.driver.script(slow_turn());
-    let reply = w.ask(json!({ "request": "Fix the login" })).await.unwrap();
+    let reply = w.ask(json!("Fix the login")).await.unwrap();
     let run = reply["run"].as_str().unwrap().to_owned();
     tokio::time::sleep(Duration::from_secs(2)).await;
     assert_eq!(w.states(&run).await.last().unwrap(), "preparing");
@@ -109,21 +110,22 @@ async fn a_root_bead_created_before_a_crash_is_the_one_the_run_gets_and_a_repeat
 }
 
 #[tokio::test(start_paused = true)]
-async fn a_request_with_no_text_or_another_key_is_refused_and_one_with_no_rig_runs_in_the_root() {
+async fn a_blank_task_or_another_form_is_refused_and_one_with_no_rig_runs_in_the_root() {
     let w = world(ASK);
     for input in [
-        json!({ "request": "" }),
-        json!({ "request": " \n " }),
-        json!({ "request": 3 }),
-        json!({ "request": "x", "epic": "b-9" }),
+        json!(""),
+        json!(" \n "),
+        json!(3),
+        json!({ "request": "x" }),
+        json!({ "next_ready": true, "request": "x" }),
     ] {
         let refused = w.ask(input.clone()).await.unwrap_err().to_string();
-        assert!(refused.contains("a bead request is"), "{input}: {refused}");
+        assert!(refused.contains("a task is a text"), "{input}: {refused}");
     }
     assert!(w.tracker.bead("b-1").is_none());
-    // With no rig, the request's run works in the project root (spec §6.1).
+    // With no rig, the task's run works in the project root (spec §6.1).
     w.driver.script(slow_turn());
-    let reply = w.start_bead("ask", None, json!({ "request": "x" })).await.unwrap();
+    let reply = w.start_bead("ask", None, json!("x")).await.unwrap();
     let run = reply["run"].as_str().unwrap();
     tokio::time::sleep(Duration::from_secs(1)).await;
     let db = rusqlite::Connection::open(w.dir.path().join("state.db")).unwrap();
@@ -132,4 +134,29 @@ async fn a_request_with_no_text_or_another_key_is_refused_and_one_with_no_rig_ru
         .unwrap();
     assert_eq!(rig, "root");
     assert_eq!(w.run_bead(run).as_deref(), Some("b-1"));
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_task_naming_a_bead_takes_it_up_and_files_no_second_bead() {
+    let w = world(ASK);
+    // One of the ready set, and one the core has not seen yet.
+    let ready = w.tracker.add(&[], None);
+    w.changed().await;
+    let unseen = w.tracker.add(&[], None);
+    let mut runs = Vec::new();
+    for bead in [&unseen, &ready] {
+        w.driver.script(slow_turn());
+        let reply = w.ask(json!(bead)).await.unwrap();
+        runs.push(reply["run"].as_str().unwrap().to_owned());
+    }
+    tokio::time::sleep(Duration::from_secs(1)).await;
+    for (run, bead) in runs.iter().zip([&unseen, &ready]) {
+        assert_eq!(w.run_bead(run).as_deref(), Some(bead.as_str()));
+    }
+    // The second run waits for the one slot; the first claimed the bead the tracker answered with.
+    assert_eq!(w.assignee(&unseen), Some(format!("aae:{}", runs[0])));
+    assert!(w.tracker.bead("b-3").is_none(), "no bead filed");
+    // A bead a run holds is no text either: a second task naming it is refused.
+    let refused = w.ask(json!(unseen)).await.unwrap_err().to_string();
+    assert!(refused.contains("is held by"), "{refused}");
 }

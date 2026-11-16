@@ -169,7 +169,11 @@ fn a_rig_takes_the_acronym_of_its_name_or_its_prefix_key() {
         [rig_of("api-x1"), rig_of("api-x1.2"), rig_of("mp-q59")],
         [Some("web_api"), Some("web_api"), Some("my-project")]
     );
-    assert_eq!([rig_of("root-79u.1"), rig_of("b"), rig_of("x-b-1")], [None, None, None]);
+    // The prefix is all before the last `-`: a root bead of a database prefix `mp-shop` is not `my-project`'s.
+    assert_eq!(
+        [rig_of("root-79u.1"), rig_of("b"), rig_of("x-b-1"), rig_of("mp-shop-x1")],
+        [None; 4]
+    );
 }
 
 #[test]

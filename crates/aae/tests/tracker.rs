@@ -47,7 +47,7 @@ async fn until_event(events: &mut aae_front::client::Events, kind: &str, id: &st
 
 #[tokio::test]
 async fn a_bead_written_by_hand_is_seen_and_a_run_on_it_claims_and_closes_it_in_br() {
-    let fix = "name = \"fix\"\n[inputs]\nbead = { type = \"bead\", required = true }\n\
+    let fix = "name = \"fix\"\n[inputs]\nbead = { type = \"task\", required = true }\n\
                [[step]]\nkind = \"exec\"\ncommand = [\"true\"]\ntimeout = \"10s\"\n";
     let seed = std::cell::RefCell::new(String::new());
     let d = Daemon::start(|dir| {
@@ -159,4 +159,45 @@ async fn a_tracker_that_cannot_be_watched_says_so_in_an_event() {
     assert_eq!(failed["project"], "shop", "{failed}");
     let beads = d.dir.path().join("config/aae/shop/.beads");
     std::fs::set_permissions(beads, std::fs::Permissions::from_mode(0o755)).unwrap();
+}
+
+/// A task names a bead filed a moment ago, before any read saw it: the run takes it up on its rig and files nothing;
+/// a text becomes one root epic (spec §10.3; §15 criterion 28).
+#[tokio::test]
+async fn a_task_takes_up_the_bead_it_names_and_a_text_files_one_root() {
+    let fix = "name = \"fix\"\n[inputs]\ntask = { type = \"task\", required = true }\n\
+               [[step]]\nkind = \"exec\"\ncommand = [\"true\"]\ntimeout = \"10s\"\n";
+    let d = Daemon::start(|dir| {
+        let project = dir.join("config/aae/shop");
+        std::fs::write(project.join("formulas/fix.toml"), fix).unwrap();
+        let git = Command::new("git").args(["init", "-q"]).current_dir(&project).status();
+        assert!(git.unwrap().success());
+        br(&project, &["init", "--prefix", "t", "-q"]);
+    })
+    .await;
+    let project = d.dir.path().join("config/aae/shop");
+    let count = || {
+        let listed: Value = serde_json::from_str(&br(&project, &["list", "-a", "--limit", "0", "--json"])).unwrap();
+        listed["issues"].as_array().unwrap().clone()
+    };
+    let id = br_in(&project, Some("w"), &["create", "Fix the cart", "--silent"]);
+    let start = |task: &str| json!({ "project": "shop", "formula": "fix", "inputs": { "task": task } });
+    let run = d.post("/v1/runs", start(&id), None).await.unwrap()["run"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+    let view = d.until_state(&run, "passed").await;
+    assert_eq!((&view["bead"], &view["rig"]), (&json!(id), &json!("web")));
+    assert_eq!(count().len(), 1, "no second bead");
+    let run = d.post("/v1/runs", start("Add a dark mode"), None).await.unwrap()["run"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+    let view = d.until_state(&run, "passed").await;
+    let beads = count();
+    let root = beads.iter().find(|b| b["id"] == view["bead"]).expect("the root bead");
+    assert_eq!(
+        (beads.len(), &root["title"], &root["issue_type"]),
+        (2, &json!("Add a dark mode"), &json!("epic"))
+    );
 }

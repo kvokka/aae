@@ -142,12 +142,12 @@ impl Loader {
             let kind = self.step(file, &raw.inputs, &steps, step)?;
             steps.push(Step { name, kind, back_to });
         }
-        // The bead a drain step gives out beads under (spec §9.1).
+        // The task bead a drain step gives out beads under (spec §9.1).
         let drains = steps.iter().any(|s| matches!(s.kind, StepKind::Drain { .. }));
-        if drains && !raw.inputs.values().any(|i| i.kind == InputType::Bead && i.required) {
+        if drains && !raw.inputs.values().any(|i| i.kind == InputType::Task && i.required) {
             self.fail(
                 file,
-                "a formula with a `drain` step needs a required input of type `bead`",
+                "a formula with a `drain` step needs a required input of type `task`",
             );
         }
         if steps.iter().any(|s| matches!(s.kind, StepKind::Exec { .. })) {
@@ -318,7 +318,7 @@ fn prompt_path(path: &str, inputs: &BTreeMap<String, super::Input>, before: &[St
     let first = rest.split('.').next().unwrap_or_default();
     match root {
         "inputs" => inputs.contains_key(first),
-        "bead" => inputs.values().any(|i| i.kind == InputType::Bead) && bead_path(rest),
+        "bead" => inputs.values().any(|i| i.kind == InputType::Task) && bead_path(rest),
         "run" => run_path(rest),
         "project" => matches!(rest, "name" | "path"),
         // The remarks of the checks that sent the run back; empty in the first round (spec §9.1).

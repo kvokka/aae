@@ -9,7 +9,7 @@ use std::time::Duration;
 pub(crate) const FIX: &[(&str, &str)] = &[
     (
         "shop/formulas/fix.toml",
-        "name = \"fix\"\n[inputs]\nbead = { type = \"bead\", required = true }\n\
+        "name = \"fix\"\n[inputs]\nbead = { type = \"task\", required = true }\n\
          [[step]]\nkind = \"ai\"\nagent = \"dev\"\nprompt = \"fix.md\"\n",
     ),
     ("shop/formulas/fix.md", "Fix {{ bead.title }}."),

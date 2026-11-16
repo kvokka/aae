@@ -69,7 +69,7 @@ plugins = [{ name = "mail" }]
         "kit/formulas/implement.toml",
         r#"name = "implement"
 [inputs]
-bead = { type = "bead", required = true }
+bead = { type = "task", required = true }
 [[step]]
 kind = "ai"
 agent = "implementer"
@@ -256,7 +256,7 @@ fn a_prompt_template_may_use_only_values_its_runs_have() {
     fails(&[(template, "{{ project.nope }}")], "`{{ project.nope }}`");
     fails(&[(template, "{{ secrets.token }}")], "starts with none of");
     fails(&[(template, "{{ inputs.bead")], "unclosed");
-    let no_bead = BASE[8].1.replace(r#"type = "bead""#, r#"type = "string""#);
+    let no_bead = BASE[8].1.replace(r#"type = "task""#, r#"type = "string""#);
     fails(
         &[("kit/formulas/implement.toml", no_bead.as_str())],
         "`{{ bead.title }}`",

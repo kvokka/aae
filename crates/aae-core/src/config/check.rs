@@ -179,17 +179,17 @@ pub(super) fn resolve(
     }
 }
 
-/// A formula a drain step runs takes the bead and nothing else it needs: one input of type `bead`, no other
+/// A formula a drain step runs takes the bead and nothing else it needs: one input of type `task`, no other
 /// required one (spec §9.1).
 fn executor(formula: &super::Formula) -> Result<(), String> {
-    let beads = formula.inputs.iter().filter(|(_, i)| i.kind == super::InputType::Bead);
+    let beads = formula.inputs.iter().filter(|(_, i)| i.kind == super::InputType::Task);
     if beads.count() != 1 {
-        return Err("needs exactly one input of type `bead` to run a drained bead".to_owned());
+        return Err("needs exactly one input of type `task` to run a drained bead".to_owned());
     }
     match formula
         .inputs
         .iter()
-        .find(|(_, i)| i.required && i.kind != super::InputType::Bead)
+        .find(|(_, i)| i.required && i.kind != super::InputType::Task)
     {
         Some((input, _)) => Err(format!("requires input `{input}` that a drain step does not give")),
         None => Ok(()),

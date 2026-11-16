@@ -96,7 +96,7 @@ fn a_harness_no_layer_names_is_an_error_of_the_formula() {
 fn the_pack_and_the_formula_step_are_layers() {
     let pack = "name = \"kit\"\nversion = \"0.3.0\"\nrequires_plugins = [\"mail\"]\n\
                 [[trigger]]\nname = \"nightly\"\ncron = \"0 3 * * *\"\nrun = \"audit\"\n[settings]\nmodel = \"haiku\"\neffort = \"low\"\n";
-    let formula = "name = \"implement\"\n[inputs]\nbead = { type = \"bead\", required = true }\n\
+    let formula = "name = \"implement\"\n[inputs]\nbead = { type = \"task\", required = true }\n\
                    [[step]]\nkind = \"ai\"\nagent = \"implementer\"\nprompt = \"implement.md\"\neffort = \"max\"\n";
     let config = load(&[("kit/pack.toml", pack), ("kit/formulas/implement.toml", formula)]).unwrap();
     let (agent, e) = run(&config);

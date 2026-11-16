@@ -49,7 +49,7 @@ pub(crate) async fn run(env: Arc<Env>) -> String {
             root.join("config/aae/config.toml"),
             "projects = [\"shop\"]\nbead_failures = 2\n",
         );
-        let input = "bead = { type = \"bead\", required = true }";
+        let input = "bead = { type = \"task\", required = true }";
         exec_formula(
             root,
             "hold",

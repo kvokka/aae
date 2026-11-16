@@ -144,7 +144,7 @@ async fn the_command_gets_the_run_and_its_inputs_in_the_environment_and_inputs_a
 #[tokio::test]
 async fn the_command_gets_the_bead_its_run_took_not_the_request_for_one() {
     let (w, mut create) = check_with(
-        "bead = { type = \"bead\", required = true }\n",
+        "bead = { type = \"task\", required = true }\n",
         "echo \"$AAE_BEAD $AAE_INPUT_BEAD\"",
         ExecHooks::default(),
     );

@@ -63,7 +63,7 @@ async fn an_epic_of_fifteen_beads_each_blocked_by_the_last_runs_to_its_end() {
     let dir = tempfile::tempdir().unwrap();
     let take = "[rigs.web]\npath = \"web\"\n[[trigger]]\nname = \"take\"\non = \"bead.ready\"\nrun = \"close\"\n\
                 rig = \"web\"\ninputs = { bead = \"{{ event.bead.id }}\" }\n";
-    let close = "name = \"close\"\n[inputs]\nbead = { type = \"bead\", required = true }\n\
+    let close = "name = \"close\"\n[inputs]\nbead = { type = \"task\", required = true }\n\
                  [[step]]\nkind = \"exec\"\ncommand = [\"true\"]\ntimeout = \"5s\"\n";
     let files = common::FILES.iter().copied().filter(|(p, _)| *p != "shop/aae.toml");
     for (path, text) in files.chain([("shop/aae.toml", take), ("shop/formulas/close.toml", close)]) {

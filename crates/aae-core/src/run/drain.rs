@@ -1,12 +1,13 @@
-//! The root bead of a run started from a request (spec §10.1): a bead input `{ request = "<text>" }` makes the
-//! tracker create an epic for the run as it prepares, once per key, and the run then claims it as any bead.
+//! The root bead of a run started from a task (spec §9.1, §10.3): a text in a task input that names no bead the core
+//! knows makes the tracker, as the run prepares and once per key, return the bead whose id it is or create an epic
+//! for it; the run then claims that bead as any other.
 //!
 //! The drain step (spec §9.1): an attempt with no process that, on every read of the tracker, gives each ready bead
 //! under the run's bead, at any depth, a run of the step's formula — the one creation every start goes through —
 //! once per entry of the step.
 
 use super::{
-    Create, Outcome, RunHandler, Verdict, beads::tracker_key, new_token, rejected, render::DRAIN_TIMEOUT_MS, row::Row,
+    Create, Outcome, RunHandler, Verdict, beads::tracker_key, new_token, render::DRAIN_TIMEOUT_MS, row::Row,
     triggers::MAX_DEPTH,
 };
 use crate::{
@@ -76,11 +77,7 @@ impl RunHandler {
             .and_then(|c| serde_json::from_str(c).ok())
             .unwrap_or_default();
         let formula = config["drain"].as_str().unwrap_or_default().to_owned();
-        let project = self.config.projects.iter().find(|p| p.name == row.project);
-        let input = (project.and_then(|p| p.formula(&formula).ok()))
-            .and_then(|(_, f)| f.inputs.iter().find(|(_, i)| i.kind == InputType::Bead))
-            .map(|(k, _)| k.clone());
-        let Some(input) = input else {
+        let Some(input) = self.task_key(&row.project, &formula) else {
             let reason = format!("formula `{formula}` of the drain step is gone or takes no bead");
             return self.terminal(tx, row, "failed", Some("infrastructure"), &reason);
         };
@@ -154,18 +151,22 @@ impl RunHandler {
         self.step_done(tx, row, &outcome)
     }
 
-    /// The text of a bead input of the form `{ request = "<text>" }`; `None`: another form. A request with another
-    /// key, or with no text, is refused.
-    pub(super) fn request(input: &Value) -> Result<Option<&str>, Error> {
-        let Some(object) = input.as_object().filter(|o| o.contains_key("request")) else {
-            return Ok(None);
-        };
-        match object["request"].as_str() {
-            Some(text) if object.len() == 1 && !text.trim().is_empty() => Ok(Some(text)),
-            _ => Err(rejected(
-                "a bead request is `{ request = \"<text>\" }` with a text that is not blank",
-            )),
+    /// The key of the task input of `formula` in `project`; `None`: no such formula, or it takes no task.
+    pub(super) fn task_key(&self, project: &str, formula: &str) -> Option<String> {
+        let project = self.config.projects.iter().find(|p| p.name == project)?;
+        let (_, formula) = project.formula(formula).ok()?;
+        let (key, _) = formula.inputs.iter().find(|(_, i)| i.kind == InputType::Task)?;
+        Some(key.clone())
+    }
+
+    /// The text of the task of a run that has no bead yet; `None`: it has no task.
+    pub(super) fn task_text(&self, row: &Row) -> Option<String> {
+        if row.bead.is_some() {
+            return None;
         }
+        let inputs: Value = serde_json::from_str(&row.inputs).ok()?;
+        let key = self.task_key(&row.project, &row.formula)?;
+        Some(inputs.get(&key)?.as_str()?.to_owned())
     }
 
     /// Queues the creation of the root bead of a run started from `text`; the run waits in `preparing` for it, as
@@ -223,8 +224,8 @@ impl RunHandler {
             owned => owned?,
         }
         let mut inputs: Value = serde_json::from_str(&row.inputs).unwrap_or_default();
-        if let Some((_, input)) = requested(&mut inputs) {
-            *input = json!(bead);
+        if let Some(key) = self.task_key(&row.project, &row.formula) {
+            inputs[key] = json!(bead);
         }
         tx.sql().execute(
             "UPDATE runs SET bead = ?2, inputs = ?3 WHERE id = ?1",
@@ -250,11 +251,4 @@ pub(super) fn sync(tx: &Tx<'_>, project: &str) -> Result<Value, Error> {
         json!({ "op": "tracker", "call": "sync", "project": project, "after": after.unwrap_or_default(),
             "under": under }),
     )
-}
-
-/// The text of the request among the inputs of a run (as JSON), and its input; only a bead input holds an object.
-pub(super) fn requested(inputs: &mut Value) -> Option<(String, &mut Value)> {
-    let object = inputs.as_object_mut()?;
-    let input = object.values_mut().find(|v| v.get("request").is_some())?;
-    Some((input["request"].as_str()?.to_owned(), input))
 }

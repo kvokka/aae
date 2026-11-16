@@ -12,7 +12,7 @@ use std::{collections::BTreeSet, time::Duration};
 const AGAIN: &[(&str, &str)] = &[
     (
         "shop/formulas/again.toml",
-        "name = \"again\"\n[inputs]\nbead = { type = \"bead\", required = true }\n\
+        "name = \"again\"\n[inputs]\nbead = { type = \"task\", required = true }\n\
          [[step]]\nname = \"all\"\nkind = \"drain\"\nformula = \"work\"\n\
          [[step]]\nname = \"check\"\nkind = \"ai\"\nagent = \"dev\"\nprompt = \"check.md\"\nback_to = \"all\"\n",
     ),

@@ -22,7 +22,7 @@ pub(super) struct FormulaFile {
 #[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
 pub enum InputType {
-    Bead,
+    Task,
     String,
     Integer,
     Boolean,

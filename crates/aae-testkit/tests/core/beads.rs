@@ -153,10 +153,20 @@ async fn a_bead_someone_else_holds_fails_the_run_as_bead_claimed_and_stays_their
     );
     assert_eq!(w.tracker.bead(&bead).unwrap().assignee.as_deref(), Some("alice"));
     assert!(w.all("resync.diverged").is_empty(), "nothing of alice's was released");
-    // One of another rig is refused by its id, before the ready set has seen it, and stays unclaimed.
-    let unseen = w.tracker.add_in("w", &[], None);
-    let refused = w.fix_on(Some("root"), json!(unseen)).await.unwrap_err().to_string();
+    // One of another rig the core knows is refused by its id and stays unclaimed.
+    let seen = w.tracker.add_in("w", &[], None);
+    w.changed().await;
+    let refused = w.fix_on(Some("root"), json!(seen)).await.unwrap_err().to_string();
     assert!(refused.contains("belongs to another rig than `root`"), "{refused}");
+    assert_eq!(w.assignee(&seen), None);
+    // One the core has not seen yet is the tracker's answer to the task: its claim fails the run and is released.
+    let unseen = w.tracker.add_in("w", &[], None);
+    let run = w.fix_on(Some("root"), json!(unseen)).await.unwrap()["run"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+    let events = w.events(&run, Duration::from_secs(1)).await;
+    assert_eq!(last(&events, "run.failed")["reason"], "bead_of_another_rig");
     assert_eq!(w.assignee(&unseen), None);
 }
 
@@ -333,7 +343,7 @@ async fn a_start_without_a_rig_takes_it_from_the_prefix_of_the_bead_id_or_runs_i
 /// passes over a bead its run cannot take (§10.3).
 #[tokio::test(start_paused = true)]
 async fn a_bead_names_the_agent_of_its_run_and_the_harness_it_is_for() {
-    let pair = "name = \"pair\"\n[inputs]\nbead = { type = \"bead\", required = true }\n\
+    let pair = "name = \"pair\"\n[inputs]\nbead = { type = \"task\", required = true }\n\
         [[step]]\nname = \"one\"\nkind = \"ai\"\nagent = \"dev\"\nprompt = \"fix.md\"\n\
         [[step]]\nname = \"two\"\nkind = \"ai\"\nagent = \"dev\"\nprompt = \"fix.md\"\n";
     let extra = [

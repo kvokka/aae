@@ -15,7 +15,7 @@ pub(crate) async fn run(env: Arc<Env>) -> String {
     let mut d = Daemon::start(&env, |root| {
         claude_agent(root, "dev", &provider.base_url());
         exec_formula(root, "check", "", "\"true\"");
-        exec_formula(root, "fix", "bead = { type = \"bead\", required = true }", "\"true\"");
+        exec_formula(root, "fix", "bead = { type = \"task\", required = true }", "\"true\"");
         tracker(root);
     })
     .await;

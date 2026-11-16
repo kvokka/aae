@@ -19,13 +19,13 @@ use std::{
 
 const WITHIN: Duration = Duration::from_secs(90);
 
-const SHIP: &str = "name = \"ship\"\n[inputs]\nbead = { type = \"bead\", required = true }\n\
+const SHIP: &str = "name = \"ship\"\n[inputs]\nbead = { type = \"task\", required = true }\n\
     [[step]]\nname = \"plan\"\nkind = \"exec\"\ncommand = [\"sh\", \"{dir}/plan.sh\"]\ntimeout = \"120s\"\n\
     [[step]]\nname = \"drain\"\nkind = \"drain\"\nformula = \"work\"\n\
     [[step]]\nname = \"report\"\nkind = \"exec\"\ncommand = [\"sh\", \"{dir}/report.sh\"]\ntimeout = \"120s\"\n";
 
 /// The ai step names `ops`; the label `agent:dev` of a bead gives its run `dev`.
-const WORK: &str = "name = \"work\"\n[inputs]\nbead = { type = \"bead\", required = true }\n\
+const WORK: &str = "name = \"work\"\n[inputs]\nbead = { type = \"task\", required = true }\n\
     [[step]]\nname = \"do\"\nkind = \"exec\"\ncommand = [\"sh\", \"{dir}/work.sh\"]\ntimeout = \"120s\"\n\
     [[step]]\nname = \"sign\"\nkind = \"ai\"\nagent = \"ops\"\nprompt = \"sign.md\"\n";
 

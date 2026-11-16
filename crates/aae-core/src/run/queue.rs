@@ -83,9 +83,9 @@ impl RunHandler {
         let project = self.config.projects.iter().find(|p| p.name == c.project);
         let project = project.ok_or_else(|| rejected(format!("no project `{}`", c.project)))?;
         let (name, formula) = project.formula(&c.formula).map_err(rejected)?;
-        // A start that names no rig runs on the rig of the bead an input names, else on the root.
+        // A start that names no rig runs on the rig of the bead its task names, else on the root.
         let rig_name = c.rig.take().unwrap_or_else(|| {
-            let beads = formula.inputs.iter().filter(|(_, i)| i.kind == InputType::Bead);
+            let beads = formula.inputs.iter().filter(|(_, i)| i.kind == InputType::Task);
             let named = beads.filter_map(|(k, _)| c.inputs.get(k)?.as_str()).next();
             named
                 .and_then(|id| project.rig_of(id))
@@ -135,19 +135,19 @@ impl RunHandler {
         if let Some(why) = mistyped {
             return Err(rejected(why));
         }
-        // A run holds at most one bead (spec §10.3); its input becomes the id of the bead it works on.
+        // A run holds at most one bead (spec §10.3); its task input becomes the id of the bead it works on.
         let bead_input = formula
             .inputs
             .iter()
-            .find(|(k, i)| i.kind == InputType::Bead && c.inputs.contains_key(*k));
+            .find(|(k, i)| i.kind == InputType::Task && c.inputs.contains_key(*k));
         // A bead the run cannot take as labelled is passed over by a pick and refused when named (spec §10.3).
         let mut passed_over = serde_json::Map::new();
         let (bead, as_agent, (agent, model)) = match bead_input {
             Some(_) if !self.trackers.contains_key(&c.project) => {
                 return Err(rejected(format!("`{}` has no tracker", c.project)));
             }
-            // A request gets its bead as the run prepares (spec §10.1).
-            Some((key, _)) if Self::request(&c.inputs[key])?.is_some() => {
+            // A text gets its bead as the run prepares (spec §10.3).
+            Some((key, _)) if Self::is_text(tx, &c.project, &c.inputs[key])? => {
                 self.bead_agent(tx, &c.project, &rig_name, &name.to_string(), formula, None)?
             }
             Some((key, _)) => {

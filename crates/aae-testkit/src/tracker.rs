@@ -250,8 +250,10 @@ impl Tracker for MemoryTracker {
                     text: "down".to_owned(),
                 });
             }
-            let id = match state.keys.iter().find(|(k, _)| k == key) {
-                Some((_, id)) => id.clone(),
+            let named = state.beads.iter().find(|b| b.id == description).map(|b| b.id.clone());
+            let made = state.keys.iter().find(|(k, _)| k == key).map(|(_, id)| id.clone());
+            let id = match made.or(named) {
+                Some(id) => id,
                 None => {
                     let id = state.push("b", Some(title), description, &[], None, actor);
                     state.keys.push((key.to_owned(), id.clone()));
