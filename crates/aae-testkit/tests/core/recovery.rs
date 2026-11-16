@@ -156,12 +156,13 @@ async fn a_restart_does_not_run_again_a_command_whose_run_has_ended() {
 async fn the_next_attempt_of_an_exec_step_starts_only_once_the_command_left_is_gone() {
     // The first attempt leaves behind a keeper without the marker, out of its group, that starts a process carrying
     // the marker again whenever one is killed, until `halt`: one walk of `/proc` is not the end of the sweep. The
-    // next attempt notes a process carrying that marker while it runs.
+    // next attempt notes a process carrying that marker while it runs. The keeper also stops once `old` is gone with
+    // the temporary directory, so a failed test leaves nothing behind for long.
     let script = "if [ -e old ]; then : > started; for i in 1 2 3 4 5 6 7 8 9 10; do \
         grep -qsxz \"AAE_INSTANCE=$(cat old)\" /proc/[0-9]*/environ && echo overlap >> log && break; sleep 0.02; \
         done; echo next >> log; exit 0; fi; \
-        setsid env -u AAE_INSTANCE sh -c 'i=0; while [ ! -e halt ] && [ $i -lt 1000 ]; do \
-        AAE_INSTANCE=$0 sleep 60 & wait $!; i=$((i+1)); done' $AAE_INSTANCE & \
+        setsid env -u AAE_INSTANCE sh -c 'i=0; while [ ! -e halt ] && { [ -e old ] || [ $i -eq 0 ]; } && [ $i -lt 1000 ]; do \
+        AAE_INSTANCE=$0 sleep 5 & wait $!; i=$((i+1)); done' $AAE_INSTANCE & \
         sleep 60 & echo $AAE_INSTANCE > old.tmp; mv old.tmp old; wait";
     let formula = format!(
         "name = \"check\"\n[[step]]\nkind = \"exec\"\ncommand = [\"sh\", \"-c\", {script:?}]\ntimeout = \"120s\"\n"
