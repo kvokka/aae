@@ -19,7 +19,7 @@ use tokio::sync::OnceCell;
 use uuid::Uuid;
 
 /// How long a stopped instance gets before it is killed.
-const STOP_GRACE: Duration = Duration::from_secs(10);
+pub(super) const STOP_GRACE: Duration = Duration::from_secs(10);
 /// How long a launch waits for the processes it replaces to be gone (invariant 6).
 const DEATH_WAIT: Duration = Duration::from_secs(30);
 /// How often a started instance's health is checked.

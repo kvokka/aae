@@ -274,12 +274,14 @@ order); the bundled plugins come after all of them (docs/design/config.md, `[bui
   events a hook failure is "no decision from this plugin", so the "no plugin decision" column applies.
 
 `deadline` of a deciding event = commit time + the sum of the timeouts of its hooks + 5 s (one hook can never hold a run
-longer than its own timeout; the runner reports before it unless it is lost). The deciding hooks of a run run in order:
-when hooks of an earlier deciding event of the run are still queued, the sum counts their timeouts too.
+longer than its own timeout; the runner reports before it unless it is lost). The hooks of a `run.attempt_failed` whose
+attempt stopped its instance first wait for that process (see 3.1): their sum counts the stop grace (10 s) too. The
+deciding hooks of a run run in order: when hooks of an earlier deciding event of the run are still queued, the sum
+counts their timeouts, and their stop grace, too.
 `run.requires_action` keeps waiting for a human after that deadline, until `human_timeout`. While a run in `running`
 waits for the decision on `run.turn_ended_without_outcome`, no clock of the attempt runs: late session events do not
 re-arm the silence deadline. After a daemon restart the deadline of a deciding event still pending counts again from the
-start of the new daemon, as the sum of the timeouts of the hooks queued on the run's deciding queue + 5 s: the hooks run
+start of the new daemon, as the same sum over the hooks queued on the run's deciding queue + 5 s: the hooks run
 again from their start, and the time the daemon was down is not theirs (the `deadline` in the event envelope keeps its
 first value).
 
@@ -527,10 +529,11 @@ codex (`crates/aae-codex`):
   and through it a session without a model still touches the network.
 - app-server is marked `[experimental]` and codex ships often; see [harness updates](../harness-updates.md).
 
-The core does not rely on the harnesses' own watchdogs, whether they fire before its own or after. claude cuts a silent response stream
-after 180 s by bytes (300 s behind `ANTHROPIC_BASE_URL`) and 300 s by events, and a silent background subagent after
-10 min (vendor documentation for 2.1.322, not measured). codex gives up a stream silent for `stream_idle_timeout_ms`
-(300 s) only after `stream_max_retries` (5) reconnects, about 30 min in the worst case (an estimate).
+The core does not rely on the harnesses' own watchdogs, whether they fire before its own or after. claude cuts a silent
+response stream after 180 s by bytes (300 s behind `ANTHROPIC_BASE_URL`) and 300 s by events, and a silent background
+subagent after 10 min (vendor documentation for 2.1.322, not measured). codex gives up a stream silent for
+`stream_idle_timeout_ms` (300 s) only after `stream_max_retries` (5) reconnects, about 30 min in the worst case (an
+estimate).
 
 The failure classification tables (harness wording → kind) are owned by the adapters and pinned by the contract
 tests ([harness updates](../harness-updates.md#how-the-suite-is-built)).

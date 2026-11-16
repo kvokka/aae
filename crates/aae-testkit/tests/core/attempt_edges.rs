@@ -1,6 +1,6 @@
-//! Edges of a new attempt (docs/design/contracts.md 3.4, 6, 6.4): which session it takes after a `new_session`, the
-//! remark a new session inherits from a daemon crash, no prompt past a stopped writer, and a hook on a failed attempt
-//! that runs only once the stopped process is dead.
+//! Edges of a new attempt (docs/design/contracts.md 3.3, 3.4, 6, 6.4): which session it takes after a `new_session`,
+//! the remark a new session inherits from a daemon crash, no prompt past a stopped writer, and a hook on a failed
+//! attempt that runs only once the stopped process is dead, within the deadline of its decision.
 
 use crate::common;
 
@@ -8,7 +8,7 @@ use aae_core::{
     BoxFuture, CoreHandle,
     driver::{Failure, FailureKind, Normalized, Source},
     orphans,
-    run::{Decision, HookRunner, Msg},
+    run::{Create, Decision, HookRunner, Msg},
 };
 use aae_testkit::{ScriptedDriver, Step};
 use common::{POLICY, hollow_turn, last, world, world_on, world_with};
@@ -75,6 +75,70 @@ async fn a_resume_after_a_new_session_that_never_started_starts_a_new_session() 
         session(dir, &run, 1),
         "the given-up session resumed"
     );
+}
+
+/// A run that continued another run's session and gave it up for a new session that never started does not resume
+/// the other run's session.
+#[tokio::test(start_paused = true)]
+async fn a_resume_after_a_new_session_that_never_started_leaves_the_continued_session() {
+    let mut w = world(POLICY);
+    w.driver.script(hollow_turn());
+    let first = w.create().await;
+    w.until(Some(&first), "run.failed", 0).await;
+    w.driver.script(vec![Step::Exit {
+        code: None,
+        signal: Some(9),
+    }]);
+    let create = Create {
+        project: "shop".into(),
+        rig: Some("web".into()),
+        formula: "build".into(),
+        inputs: serde_json::Map::new(),
+        correlation: None,
+        depth: 0,
+        parent_run: None,
+        token: None,
+        continue_from: Some(first.clone()),
+    };
+    let reply = w.core.send(None, Msg::Create(create)).await.unwrap();
+    let run = reply["run"].as_str().unwrap().to_owned();
+    w.until(Some(&run), "run.attempt_failed", 0).await;
+    let dir = w.dir.path().to_owned();
+    assert_eq!(session(&dir, &run, 1), session(&dir, &first, 1), "not continued");
+    w.driver.stall_sessions();
+    w.decide(&run, "run.attempt_failed", 0, new_session()).await;
+    wait_for("the start of attempt 2's session", || {
+        !w.driver.workdir(&run, 2).is_null()
+    })
+    .await;
+    w.restart().await;
+    w.until(Some(&run), "run.attempt_failed", 1).await;
+    let resume = Decision::Resume {
+        after: Duration::ZERO,
+        gate: None,
+    };
+    w.decide(&run, "run.attempt_failed", 1, resume).await;
+    wait_for("attempt 3's session", || session(&dir, &run, 3).is_some()).await;
+    assert_ne!(
+        session(&dir, &run, 3),
+        session(&dir, &first, 1),
+        "the given-up session resumed"
+    );
+}
+
+/// The step's prompt the daemon died under goes into the new session once, as its prompt.
+#[tokio::test(start_paused = true)]
+async fn a_new_session_after_a_daemon_crash_gets_the_step_prompt_once() {
+    let mut w = world(POLICY);
+    w.driver.lose_prompts(true);
+    let run = w.create().await;
+    wait_for("the prompt", || !w.driver.keys().is_empty()).await;
+    w.restart().await;
+    w.driver.lose_prompts(false);
+    w.until(Some(&run), "run.attempt_failed", 0).await;
+    w.decide(&run, "run.attempt_failed", 0, new_session()).await;
+    wait_for("attempt 2's prompt", || w.driver.keys().len() == 2).await;
+    assert_eq!(w.driver.sent(&run, 2).1, ["Build web.", "Build web."]);
 }
 
 /// A `continue` the daemon died under follows the step's prompt into the new session that replaces the old one.
@@ -162,4 +226,75 @@ async fn a_hook_on_a_failed_attempt_runs_after_its_process_died() {
         [false],
         "the hook ran beside the live process"
     );
+}
+
+/// A hook runner that fails the run on each `run.attempt_failed` it is given.
+struct Failer;
+
+impl HookRunner for Failer {
+    fn run<'a>(&'a self, core: &'a CoreHandle<Msg>, payload: &'a Value) -> BoxFuture<'a, ()> {
+        Box::pin(async move {
+            let event = &payload["event"];
+            let msg = Msg::Decide {
+                run: event["run"].as_str().unwrap().into(),
+                seq: event["seq"].as_i64().unwrap(),
+                decision: Decision::Fail {
+                    reason: "policy".into(),
+                    gate: None,
+                },
+            };
+            // The writer of a daemon that died meanwhile drops it; the hook runs again after the restart.
+            let _ = core.send(None, msg).await;
+        })
+    }
+}
+
+/// Whether the decision on a failed attempt whose process outlives the stop grace comes from its hook, the daemon
+/// restarting (`restart`) while the hook waits for that process.
+async fn a_stopped_process_leaves_the_decision_to_the_hook(restart: bool) {
+    let plugin = POLICY[1].1.replace("10s", "1s");
+    let driver = ScriptedDriver::new(1);
+    // Past the stop grace: the hooks start on a live process.
+    driver.real_processes(Duration::from_secs(20));
+    let mut w = world_on(&[POLICY[0], ("policy/plugin.toml", &plugin)], Arc::new(Failer), driver);
+    let overloaded = Failure::new(FailureKind::Overloaded, Source::Adapter);
+    w.driver.script(vec![Step::Emit(Normalized::Failure(overloaded))]);
+    let run = w.create().await;
+    w.until(Some(&run), "run.attempt_failed", 0).await;
+    let spawned = w.driver.spawned();
+    if restart {
+        w.restart().await;
+    }
+    assert_eq!(w.until(Some(&run), "run.failed", 0).await["reason"], "policy");
+    if restart {
+        // The stop of the process died with the old daemon, and nothing of the run is left to clean it up.
+        for (pid, _) in &spawned {
+            let kill = std::process::Command::new("kill")
+                .args(["-9", &pid.to_string()])
+                .status();
+            assert!(kill.unwrap().success());
+        }
+        return;
+    }
+    wait_for("the end of the process", || {
+        spawned
+            .iter()
+            .all(|(pid, start)| orphans::start_time(*pid) != Some(*start))
+    })
+    .await;
+}
+
+/// The wait of a hook for a stopped process that will not die counts in the deadline of its decision: a hook within
+/// its timeout still decides.
+#[cfg(target_os = "linux")] // a process's start time is read from `/proc`
+#[tokio::test(start_paused = true)]
+async fn a_decision_on_a_failed_attempt_waits_for_the_stopped_process() {
+    a_stopped_process_leaves_the_decision_to_the_hook(false).await;
+}
+
+/// The deadline a restart sets again counts the wait for the stopped process too.
+#[cfg(target_os = "linux")] // a process's start time is read from `/proc`
+#[tokio::test(start_paused = true)]
+async fn a_decision_on_a_failed_attempt_waits_for_the_stopped_process_after_a_restart() {
+    a_stopped_process_leaves_the_decision_to_the_hook(true).await;
 }

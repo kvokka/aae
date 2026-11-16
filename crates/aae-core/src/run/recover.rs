@@ -130,11 +130,12 @@ impl RunHandler {
         // The deciding hooks of a run run in order under its key, from the first one's retry time (after a panic of
         // the runner): the decision waits for all of them (contracts 3.3).
         let waiting: Vec<(String, i64)> = {
-            let mut stmt = tx.sql().prepare(
-                "SELECT r.id, MAX(?1, MIN(e.next_at_ms)) + SUM(json_extract(h.value, '$.timeout_ms')) FROM runs r \
+            let mut stmt = tx.sql().prepare(&format!(
+                "SELECT r.id, MAX(?1, MIN(e.next_at_ms)) + {} FROM runs r \
                  JOIN effects e ON e.key = 'hooks:' || r.id, json_each(e.payload, '$.hooks') h \
                  WHERE r.waiting IS NOT NULL AND r.state != 'requires_action' GROUP BY r.id",
-            )?;
+                super::decide::queued()
+            ))?;
             let rows = stmt.query_map([tx.now_ms()], |r| Ok((r.get(0)?, r.get(1)?)))?;
             rows.collect::<Result<_, _>>()?
         };

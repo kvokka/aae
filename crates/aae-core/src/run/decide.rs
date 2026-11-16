@@ -13,6 +13,17 @@ use std::{collections::BTreeMap, path::PathBuf, time::Duration};
 
 /// The slack of a deciding event's deadline (contracts 3.3).
 pub(super) const DECIDE_SLACK_MS: i64 = 5_000;
+/// The longest wait of a hook effect for the death of the process a failed attempt stopped (contracts 3.1).
+const GRACE_MS: i64 = super::exec::STOP_GRACE.as_millis() as i64;
+
+/// The time hook effects `e` with their hooks `h` (`json_each` of `$.hooks`) may take: the hooks' timeouts plus, once
+/// per effect that waits for a stopped process, the stop grace (contracts 3.3).
+pub(super) fn queued() -> String {
+    format!(
+        "SUM(json_extract(h.value, '$.timeout_ms') \
+         + IIF(h.key = 0 AND json_type(e.payload, '$.after') = 'object', {GRACE_MS}, 0))"
+    )
+}
 
 impl RunHandler {
     /// Emits a deciding event; with no hook on its type the "no plugin decision" outcome applies at once, else at
@@ -25,15 +36,24 @@ impl RunHandler {
             .collect();
         // The deciding hooks of the run run in order under one key: those queued ahead run first (contracts 3.3).
         let ahead: Option<i64> = tx.sql().query_row(
-            "SELECT MAX(?2, MIN(e.next_at_ms)) + SUM(json_extract(h.value, '$.timeout_ms')) \
-             FROM effects e, json_each(e.payload, '$.hooks') h WHERE e.key = ?1",
+            &format!(
+                "SELECT MAX(?2, MIN(e.next_at_ms)) + {} FROM effects e, json_each(e.payload, '$.hooks') h \
+                 WHERE e.key = ?1",
+                queued()
+            ),
             params![format!("hooks:{}", row.id), tx.now_ms()],
             |r| r.get(0),
         )?;
+        // The hooks of a failed attempt wait first for the death of the process it stopped (contracts 3.1).
+        let grace = if kind == "run.attempt_failed" && !Self::stopped(tx, &row.id)?.is_null() {
+            GRACE_MS
+        } else {
+            0
+        };
         let at = if timeouts.is_empty() {
             tx.now_ms()
         } else {
-            ahead.unwrap_or(tx.now_ms()) + timeouts.iter().sum::<i64>() + DECIDE_SLACK_MS
+            ahead.unwrap_or(tx.now_ms()) + timeouts.iter().sum::<i64>() + grace + DECIDE_SLACK_MS
         };
         data["deadline"] = json!(rfc3339_ms(at));
         let seq = row.emit(tx, kind, data)?;
