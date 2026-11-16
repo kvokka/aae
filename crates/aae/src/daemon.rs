@@ -311,16 +311,9 @@ fn bv_workspace(config: &Path, br: &Path, beads: &[(String, PathBuf)]) -> Result
         // JSON strings are YAML double-quoted scalars.
         yaml.push_str(&format!("  - name: {}\n    path: {}\n", json!(name), json!(root)));
         // The id prefix br was initialized with; without it bv assumes `<name>-`.
-        let prefix = std::process::Command::new(br)
-            .args(["config", "get", "issue_prefix"])
-            .env("BEADS_DIR", dir)
-            .output();
-        match prefix {
-            Ok(out) if out.status.success() && !out.stdout.trim_ascii().is_empty() => {
-                let prefix = String::from_utf8_lossy(out.stdout.trim_ascii());
-                yaml.push_str(&format!("    prefix: {}\n", json!(format!("{prefix}-"))));
-            }
-            _ => eprintln!("aae daemon: warning: no br id prefix of `{name}`; bv assumes `{name}-`"),
+        match aae_br::issue_prefix(br, dir) {
+            Some(prefix) => yaml.push_str(&format!("    prefix: {}\n", json!(format!("{prefix}-")))),
+            None => eprintln!("aae daemon: warning: no br id prefix of `{name}`; bv assumes `{name}-`"),
         }
     }
     let dir = config.parent().unwrap_or(Path::new(".")).join(".bv");

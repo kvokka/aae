@@ -17,6 +17,17 @@ const LOCK_TIMEOUT_MS: u64 = 10_000;
 /// The actor of the daemon's own reads.
 const READER: &str = "aae";
 
+/// The id prefix the database in the `.beads` directory `dir` was initialized with; none when br does not say.
+pub fn issue_prefix(binary: &Path, dir: &Path) -> Option<String> {
+    let out = std::process::Command::new(binary)
+        .args(["config", "get", "issue_prefix"])
+        .env("BEADS_DIR", dir)
+        .output()
+        .ok()?;
+    let prefix = String::from_utf8_lossy(out.stdout.trim_ascii());
+    (out.status.success() && !prefix.is_empty()).then(|| prefix.into_owned())
+}
+
 /// The tracker of one project: its `.beads` directory.
 pub struct Br {
     binary: PathBuf,

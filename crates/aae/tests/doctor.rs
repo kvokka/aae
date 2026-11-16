@@ -350,3 +350,30 @@ fn with_no_config_file_the_defaults_are_named() {
         "{found:?}"
     );
 }
+
+#[test]
+fn a_rig_with_the_prefix_of_the_br_database_is_warned_about() {
+    let dir = tree("");
+    let shop = dir.path().join("config/aae/shop");
+    let init = Command::new("br")
+        .args(["init", "--prefix", "w", "-q"])
+        .env("BEADS_DIR", shop.join(".beads"))
+        .env("RUST_LOG", "error")
+        .current_dir(&shop)
+        .output()
+        .unwrap();
+    assert!(init.status.success(), "{}", String::from_utf8_lossy(&init.stderr));
+    // The pinned br on the test's PATH, after the fake mise.
+    let path = format!(
+        "{}:{}",
+        dir.path().join("bin").display(),
+        std::env::var("PATH").unwrap()
+    );
+    // Rig `web` takes its acronym `w`, the database's prefix.
+    let (_, found) = doctor_env(dir.path(), &[("PATH", &path)]);
+    let (level, why) = self::level(&found, "br prefix");
+    assert!(level == "warning" && why.contains("`web`") && why.contains("`shop`") && why.contains("`w`"));
+    fs::write(shop.join("aae.toml"), "[rigs.web]\npath = \"web\"\nprefix = \"wb\"\n").unwrap();
+    let (_, found) = doctor_env(dir.path(), &[("PATH", &path)]);
+    assert!(found.iter().all(|f| f.0 != "br prefix"), "{found:?}");
+}

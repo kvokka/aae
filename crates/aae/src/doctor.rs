@@ -75,6 +75,23 @@ pub(crate) fn findings(paths: &Paths) -> Vec<Value> {
                     "br is MIT with an OpenAI/Anthropic rider, not an OSI license; aae only runs the installed \
                      binary — check that the rider fits your use",
                 ));
+                // A rig's beads must not share the prefix of the root's (spec §10.2); the core does not know br.
+                for p in config.projects.iter().filter(|p| p.dir.join(".beads").is_dir()) {
+                    let Some(db) = aae_br::issue_prefix(&path, &p.dir.join(".beads")) else {
+                        continue;
+                    };
+                    for (rig, _) in p.rigs.iter().filter(|(_, r)| r.prefix.as_deref() == Some(db.as_str())) {
+                        found.push(check(
+                            "br prefix",
+                            "warning",
+                            format!(
+                                "rig `{rig}` of project `{}` has the prefix `{db}` of the br database, so the root's \
+                                 beads read as its own; set `prefix` in `[rigs.{rig}]`",
+                                p.name
+                            ),
+                        ));
+                    }
+                }
             }
         }
     }
