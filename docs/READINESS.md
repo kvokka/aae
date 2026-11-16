@@ -17,8 +17,8 @@ Assessed 2026-11-16 at `460b460`, by the letter of the scale. The project root a
 the new criteria 28 to 34 opened work, all of it done now: rig prefixes of beads (24, 32), the task input (28), step
 repeats with their check script (29), `drain` with `pool` and `on_item_failure` (30), the `formula` step and `internal`
 formulas (31), the agent's prompt template with files from the project (33) and the background stopped after an
-outcome (34), each with its rows green. Config assembly and the acceptance spec score 8 with 31 green. Criterion 20 is open too: the demos of the current config shape (runs without a rig, agent scope, `[root]`)
-have not run live, so no component scores 10. The last full run with real models was on `ffaccea` (37 of 37 rows);
+outcome (34), each with its rows green. Config assembly and the acceptance spec score 8 with 31 green. Criterion 20
+is open too: the demos of the current config shape (runs without a rig, agent scope, `[root]`) have not run live, so no component scores 10. The last full run with real models was on `ffaccea` (37 of 37 rows);
 the live demo runs were on `c1fa9bc` (demo 1 on claude haiku and codex luna, demo 2 on codex sol, luna and terra).
 Both are older than the config shape of today and count as history, not as a measure of this code: criteria 1, 2,
 4a and 8 have not run on it as a full run, which holds the event loop, `default-policy` and delivery at 6 too (rows 2

@@ -755,11 +755,10 @@ for it is not.
   the kill of its instance is the stop, so the run settles its turn as idle without background would — `finishing`
   with the declared outcome — and the stop still queued is dropped. The same holds for a background subagent of
   claude, killed with its instance. The deadlines that wait for an effect's answer count again from the start:
-  `decide` (3.3) and
-  the claim of a bead in `preparing` (`start_timeout`); those of real time — gate `until`, schedules (a missed one fires
-  at most once), the `after` of a retry, `queue_timeout`, `park_timeout` — stay. Then resync. Deadlines are wall-clock
-  times: the writer reads the wall clock at least every 30 s, so a deadline passed while the machine slept fires late by
-  at most that.
+  `decide` (3.3) and the claim of a bead in `preparing` (`start_timeout`); those of real time — gate `until`,
+  schedules (a missed one fires at most once), the `after` of a retry, `queue_timeout`, `park_timeout` — stay. Then
+  resync. Deadlines are wall-clock times: the writer reads the wall clock at least every 30 s, so a deadline passed
+  while the machine slept fires late by at most that.
 - Daemon stop (a signal, the end of a drain, `restart`): the core stops first, then the daemon, a child subreaper,
   kills every descendant it still has — sessions, hooks, exec commands — before it exits.
 - A resumed attempt after `daemon_crash` checks the transcript for the last unsettled key: not delivered → send the
