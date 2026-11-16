@@ -13,7 +13,7 @@ no row, or a row not run holds the score at 6. In a CI run, which runs no model,
 than the last change of `crates/`. A 10 needs criterion 20 not open, which in a full run means every row of it green;
 and the `readiness` marker must name a commit at or after the last change of `crates/`.
 
-Assessed 2026-11-16 at `180aa61`, by the letter of the scale. The project root and agent scope (decisions 95, 99) and
+Assessed 2026-11-16 at `0266585`, by the letter of the scale. The project root and agent scope (decisions 95, 99) and
 the new criteria 28 to 34 opened work, of which the `formula` step (31) is not done; rig prefixes of beads (24, 32), the
 task input (28), step repeats with their check script (29), `drain` with `pool` and `on_item_failure` (30), the agent's
 prompt template with files from the project (33) and the background stopped after an outcome (34) are done and their
@@ -26,7 +26,7 @@ Both are older than the config shape of today and count as history, not as a mea
 and 4a passed a live smoke run on `b56aa3e`, before 30 and 34, claude haiku and codex luna; a smoke run moves no
 marker).
 <!-- MEASURE id=full-run date=2026-11-15 ver=ffaccea env=linux-arm64-orbstack src=aae-acceptance note="the last run of the whole spec with real models, 37 of 37 rows" -->
-<!-- MEASURE id=readiness date=2026-11-16 ver=180aa61 env=linux-arm64-orbstack src=docs/READINESS.md note="scored by the letter of spec 14 against the CI rows of acceptance-ci at this commit and the open parts of criteria 20 and 31; no full live run on this code" -->
+<!-- MEASURE id=readiness date=2026-11-16 ver=0266585 env=linux-arm64-orbstack src=docs/READINESS.md note="scored by the letter of spec 14 against the CI rows of acceptance-ci at this commit and the open parts of criteria 20 and 31; no full live run on this code" -->
 
 | Component | Criteria | Score | Missing for the next point |
 |---|---|---|---|
