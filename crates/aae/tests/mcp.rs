@@ -86,8 +86,17 @@ async fn both_epochs_serve_the_same_five_tools() {
 
 #[tokio::test]
 async fn a_run_started_over_mcp_is_followed_listed_and_cancelled_there() {
-    let d = Daemon::start(|_| {}).await;
+    let d = Daemon::start(|aae| {
+        let inner = "name = \"inner\"\ninternal = true\n[[step]]\nkind = \"exec\"\ncommand = [\"true\"]\n";
+        std::fs::write(aae.join("config/aae/shop/formulas/inner.toml"), inner).unwrap();
+    })
+    .await;
     let (formulas, _) = call(&d, "list_formulas", json!({ "project": "shop" })).await;
+    // An internal formula is no part of the catalog a user starts from (spec §12).
+    assert!(
+        formulas.as_array().unwrap().iter().all(|f| f["formula"] != "inner"),
+        "{formulas}"
+    );
     let check = formulas
         .as_array()
         .unwrap()

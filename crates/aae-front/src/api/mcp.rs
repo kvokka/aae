@@ -128,7 +128,14 @@ async fn call(state: State, params: &Value) -> Option<Value> {
             .ok_or_else(|| ApiError::new(StatusCode::BAD_REQUEST, "bad_request", "`id` is required"))
     };
     let reply = match params["name"].as_str()? {
-        "list_formulas" => Ok(Json(formulas(&state.config(), args["project"].as_str()))),
+        "list_formulas" => {
+            let mut all = formulas(&state.config(), args["project"].as_str());
+            // The catalog a user can start (spec §12): an internal formula runs only from a step of another.
+            if let Value::Array(all) = &mut all {
+                all.retain(|f| f["internal"] != true);
+            }
+            Ok(Json(all))
+        }
         "start_run" => match (headers, serde_json::from_value::<CreateRun>(args.clone())) {
             (Ok(headers), Ok(body)) => runs::create(state, headers, Body(body)).await,
             (Err(e), _) => Err(e),
