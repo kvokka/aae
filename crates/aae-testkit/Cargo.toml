@@ -8,6 +8,12 @@ repository.workspace = true
 rust-version.workspace = true
 publish = false
 
+[[bin]]
+name = "mcp-probe"
+path = "src/bin/mcp-probe.rs"
+# With `test = false` a `#[test]` here is silently never run: whoever adds one removes this key first.
+test = false
+
 [lints]
 workspace = true
 
