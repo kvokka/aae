@@ -33,15 +33,15 @@ Each task is a list of plain commands in `[tasks.<name>]` of `mise.toml`; run th
 
 | Task | What it runs | When | Wall time |
 |---|---|---|---|
-| `mise run test` | unit and integration tests (`cargo nextest run`), without the chaos stand | the everyday loop, usually narrowed to a crate or a test | 53 s (2026-11-16, `04984d6`) |
-| `mise run ci` | the above plus formatting, clippy, `cargo deny`, `cargo machete`, the unused-`pub` check, the line budgets, the core boundary (`scripts/core-boundary.sh`: no harness name, `br`, `max_sessions`, `instance_idle_s`, `beads_dir` or `.beads` in the code of `aae-core`), the fixed branch order of its `select!` (`scripts/select-biased.sh`: `biased;` with a comment on the order) and no absolute home paths in the repository | **the gate of a change**: locally before handing work over; CI on every commit | 91 s (2026-11-16, `04984d6`) |
+| `mise run test` | unit and integration tests (`cargo nextest run`), without the chaos stand | the everyday loop, usually narrowed to a crate or a test | 25 s (2026-11-17, `57d8ff8`) |
+| `mise run ci` | the above plus formatting, clippy, `cargo deny`, `cargo machete`, the unused-`pub` check, the line budgets, the core boundary (`scripts/core-boundary.sh`: no harness name, `br`, `max_sessions`, `instance_idle_s`, `beads_dir` or `.beads` in the code of `aae-core`), the fixed branch order of its `select!` (`scripts/select-biased.sh`: `biased;` with a comment on the order) and no absolute home paths in the repository | **the gate of a change**: locally before handing work over; CI on every commit | 33 s (2026-11-17, `57d8ff8`) |
 | `mise run acceptance-ci` | the [acceptance scenarios](../acceptance.md) without a model, each on a real `aae daemon`, and the chaos stand | on request, in the workflow `acceptance` (started by hand) | 144 s (2026-11-16, `04984d6`) |
 | `mise run acceptance-release` | acceptance criterion 1 with `--release`: `cargo zigbuild --release` for the four targets, then this host's binary runs | the workflow `release` on a `v*` tag; no tag is made only to check it | 169 s cold (2026-11-14, `a070cd6`) |
 | `mise run acceptance` | all acceptance scenarios, including those on a real model and the demos, whose result stays in the demo's directory, ignored by git | on request: they cost money and need a harness login | 2650 s (2026-11-16, `b32c55c`) |
 
-<!-- MEASURE id=dev-test-wall date=2026-11-16 ver=04984d6 env=linux-arm64-orbstack-9-cores src="mise run ci" note="warm build; the nextest summary inside the task, 548 tests" -->
-<!-- MEASURE id=dev-ci-wall date=2026-11-16 ver=04984d6 env=linux-arm64-orbstack-9-cores src="mise run ci" note="warm build, wall time of the whole task" -->
-<!-- MEASURE id=dev-acceptance-ci-wall date=2026-11-16 ver=04984d6 env=linux-arm64-orbstack-9-cores src="mise run acceptance-ci" note="warm build, run right after mise run ci; the scenarios concurrently, then the cargo and script checks one by one" -->
+<!-- MEASURE id=dev-test-wall date=2026-11-17 ver=57d8ff8 env=linux-arm64-orbstack-9-cores src="mise run ci" note="warm build; the nextest summary inside the task, 536 tests, without the chaos stand" -->
+<!-- MEASURE id=dev-ci-wall date=2026-11-17 ver=57d8ff8 env=linux-arm64-orbstack-9-cores src="mise run ci" note="warm build, wall time of the whole task" -->
+<!-- MEASURE id=dev-acceptance-ci-wall date=2026-11-16 ver=04984d6 env=linux-arm64-orbstack-9-cores src="mise run acceptance-ci" note="warm build, run right after mise run ci; the scenarios concurrently, then the cargo and script checks one by one; measured before the chaos stand joined it, which adds its own time" -->
 <!-- MEASURE id=dev-acceptance-release-wall date=2026-11-14 ver=a070cd6 env=linux-arm64-orbstack-9-cores src="mise run acceptance-release" note="cold release build of the four targets" -->
 <!-- MEASURE id=dev-acceptance-wall date=2026-11-16 ver=b32c55c env=linux-arm64-orbstack-9-cores src="mise run acceptance" note="warm release build; every row with real models; the two demos take most of it, demo 2 runs twice" -->
 
