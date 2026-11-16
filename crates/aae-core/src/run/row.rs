@@ -38,11 +38,13 @@ pub(super) struct Row {
     pub(super) as_agent: Option<String>,
     /// `ai`, `exec` or `drain`: the kind of `step`.
     pub(super) step_kind: String,
+    /// The execution of the step within its round, from 1 up to the step's `max_attempts` (spec §9.1).
+    pub(super) step_attempt: u32,
 }
 
 const COLUMNS: &str = "id, project, rig, formula, agent, inputs, correlation, depth, parent_run, workdir, state, \
     class, attempt, prompt, timeout_ms, config, next, created_ms, started_ms, bead, bead_data, step, as_agent, \
-    step_kind";
+    step_kind, step_attempt";
 
 impl Row {
     pub(super) fn load(tx: &Tx<'_>, run: &str) -> Result<Self, Error> {
@@ -77,6 +79,7 @@ impl Row {
                 step: r.get(21)?,
                 as_agent: r.get(22)?,
                 step_kind: r.get(23)?,
+                step_attempt: r.get(24)?,
             })
         })
         .optional()
@@ -96,7 +99,8 @@ impl Row {
         let agent = (!self.exec()).then_some(&self.agent);
         json!({
             "id": self.id, "formula": self.formula, "step": self.step, "agent": agent, "step_kind": self.step_kind,
-            "state": self.state, "class": self.class, "attempt": self.attempt, "generation": self.attempt,
+            "step_attempt": self.step_attempt, "state": self.state, "class": self.class, "attempt": self.attempt,
+            "generation": self.attempt,
             "bead": self.bead, "workdir": self.workdir, "depth": self.depth, "parent_run": self.parent_run,
             "created_at": rfc3339_ms(self.created_ms), "started_at": self.started_ms.map(rfc3339_ms),
         })

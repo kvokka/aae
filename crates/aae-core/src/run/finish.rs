@@ -79,18 +79,19 @@ impl RunHandler {
     pub(super) fn finished(&mut self, tx: &mut Tx<'_>, row: Row, veto: Option<&str>) -> Result<(), Error> {
         let outcome = Self::outcome(tx, &row)?;
         match (outcome.map(|o| (o.result, o.summary)), veto) {
-            (Some((Verdict::Pass, _)), None) => self.advance(tx, row, None),
+            (Some((Verdict::Pass, _)), None) => self.check(tx, row),
             (Some((Verdict::Pass, _)), Some(reason)) => self.terminal(tx, row, "failed", Some("check"), reason),
-            (Some((Verdict::Fail, summary)), _) => self.advance(tx, row, Some(&summary)),
+            // A step that fails on its own runs again with no check script (spec §9.1).
+            (Some((Verdict::Fail, _)), _) => self.repeat(tx, row, "agent", false),
             (None, _) => self.terminal(tx, row, "failed", Some("infrastructure"), "outcome lost"),
         }
     }
 
-    /// After a step that passed, or failed with the summary `failed` (spec §9.1): the next step starts at once; the
+    /// After a step that passed, or failed for the class and reason `failed` (spec §9.1): the next step starts at once; the
     /// run passes after the last. A failed step fails the run unless it is a check (`back_to`). Checks in a row all
     /// run; after the last of them, any that failed send the run back together, to the earliest step they name, for
     /// the next round; past the formula's last round the run fails with their remarks.
-    fn advance(&mut self, tx: &mut Tx<'_>, row: Row, failed: Option<&str>) -> Result<(), Error> {
+    pub(super) fn advance(&mut self, tx: &mut Tx<'_>, row: Row, failed: Option<(&str, &str)>) -> Result<(), Error> {
         let project = self.config.projects.iter().find(|p| p.name == row.project);
         let formula = project.and_then(|p| p.formula(&row.formula).ok()).map(|(_, f)| f);
         let at = formula.and_then(|f| f.steps.iter().position(|s| s.name == row.step));
@@ -104,8 +105,8 @@ impl RunHandler {
             .take_while(|s| s.back_to.is_some())
             .collect();
         let next = f.steps.get(at + 1);
-        if let Some(summary) = failed.filter(|_| checks.is_empty()) {
-            return self.terminal(tx, row, "failed", Some("agent"), summary);
+        if let Some((class, reason)) = failed.filter(|_| checks.is_empty()) {
+            return self.terminal(tx, row, "failed", Some(class), reason);
         }
         if !checks.is_empty() && next.is_none_or(|n| n.back_to.is_none()) {
             let mut sent_back = Vec::new();
@@ -138,17 +139,24 @@ impl RunHandler {
                     "UPDATE runs SET round = round + 1, remarks = ?2 WHERE id = ?1",
                     params![row.id, remarks],
                 )?;
-                return self.enter(tx, row, to.clone());
+                return self.enter(tx, row, to.clone(), None);
             }
         }
         match next {
-            Some(next) => self.enter(tx, row, next.clone()),
+            Some(next) => self.enter(tx, row, next.clone(), None),
             None => self.terminal(tx, row, "passed", None, "pass"),
         }
     }
 
-    /// The run ends its step and starts `next` at once.
-    fn enter(&mut self, tx: &mut Tx<'_>, mut row: Row, next: Step) -> Result<(), Error> {
+    /// The run ends its step and starts `next` at once: its first execution, or with the remark `again` the next one
+    /// of the same step (spec §9.1).
+    pub(super) fn enter(
+        &mut self,
+        tx: &mut Tx<'_>,
+        mut row: Row,
+        next: Step,
+        again: Option<&str>,
+    ) -> Result<(), Error> {
         let agent = self.step_agent(&row.project, &row.rig, &row.formula, &next, row.as_agent.as_deref());
         let agent = match agent {
             Ok((agent, _)) => agent,
@@ -162,9 +170,11 @@ impl RunHandler {
             json!({ "run": row.view(), "outcome": outcome }),
         )?;
         tx.sql().execute(
-            "UPDATE runs SET step = ?2, agent = ?3, step_kind = ?4 WHERE id = ?1",
-            params![row.id, next.name, agent, next.kind.name()],
+            "UPDATE runs SET step = ?2, agent = ?3, step_kind = ?4, step_remarks = ?5, \
+             step_attempt = CASE WHEN ?5 IS NULL THEN 1 ELSE step_attempt + 1 END WHERE id = ?1",
+            params![row.id, next.name, agent, next.kind.name(), again],
         )?;
+        row.step_attempt = if again.is_some() { row.step_attempt + 1 } else { 1 };
         let left = std::mem::replace(&mut row.agent, agent);
         (row.step, row.step_kind) = (next.name, next.kind.name().to_owned());
         let frees = left != row.agent && self.config.max_runs(&row.project, &left).is_some();
@@ -218,7 +228,7 @@ impl RunHandler {
 }
 
 /// The remark of a failed check: its name and summary, and the output of an exec check.
-fn remark(step: &str, outcome: &Outcome) -> String {
+pub(super) fn remark(step: &str, outcome: &Outcome) -> String {
     let data = outcome.data.as_ref();
     let output = ["stdout", "stderr"].map(|k| data.and_then(|d| d[k].as_str()).unwrap_or_default().trim());
     let mut text = format!("{step}: {}", outcome.summary);

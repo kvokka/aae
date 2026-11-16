@@ -124,10 +124,12 @@ pub enum Msg {
         failure: Failure,
     },
     Driver(DriverEvent),
-    /// The command of an exec step ended; `stdout` and `stderr` are their last 4 KiB.
+    /// The command of an exec step, or a check script, ended; `stdout` and `stderr` are their last 4 KiB.
     ExecDone {
         run: String,
         attempt: u32,
+        /// The command was the check script of the run's step (spec §9.1).
+        check: bool,
         exit: Exit,
         stdout: String,
         stderr: String,

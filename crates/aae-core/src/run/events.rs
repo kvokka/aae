@@ -350,6 +350,11 @@ impl RunHandler {
             ("state", "preparing") => self.terminal(tx, row, "failed", Some("infrastructure"), "tracker_unavailable"),
             ("state", "starting") | ("silence", "running") => self.attempt_failed(tx, row, stall(FailureKind::Stall)),
             ("state", "running") => self.attempt_failed(tx, row, stall(FailureKind::RunawayTurn)),
+            // The check script of the step was lost on its way back (spec §9.1).
+            ("state", "finishing") => {
+                let attempt = row.attempt;
+                self.check_done(tx, row, attempt, super::Exit::TimedOut, ("", ""))
+            }
             ("state", "interrupted") => {
                 let kind = row.next.clone().unwrap_or_else(|| "new_session".to_owned());
                 self.start_attempt(tx, row, &kind)

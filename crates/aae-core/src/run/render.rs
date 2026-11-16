@@ -28,17 +28,18 @@ impl RunHandler {
         };
         let step = formula.step(&row.step).map(|s| &s.kind);
         let step = step.ok_or(format!("step `{}` is gone from `{}`", row.step, row.formula))?;
+        // The tracker by name, as in a session (spec §10.2).
+        let env: serde_json::Map<String, Value> = (project.tracker_env(Some(rig)))
+            .map(|(name, value)| (name.clone(), json!({ "value": value })))
+            .collect();
         let timeout = match (step, row.step_kind.as_str()) {
             (StepKind::Exec { command, timeout }, "exec") => {
-                // The tracker by name, as in a session (spec §10.2).
-                let env: serde_json::Map<String, Value> = (project.tracker_env(Some(rig)))
-                    .map(|(name, value)| (name.clone(), json!({ "value": value })))
-                    .collect();
                 let config = json!({ "command": command, "env": env });
                 return Ok((None, timeout_ms(timeout, STEP_TIMEOUT_MS), config));
             }
+            // The environment is for the check script of the step (spec §9.1).
             (StepKind::Drain { formula, timeout }, "drain") => {
-                let config = json!({ "drain": formula.to_string() });
+                let config = json!({ "drain": formula.to_string(), "env": env });
                 return Ok((None, timeout_ms(timeout, DRAIN_TIMEOUT_MS), config));
             }
             (StepKind::Ai { timeout, .. }, "ai") => timeout,
@@ -60,11 +61,16 @@ impl RunHandler {
             "rig": rig_view, "run": row.view(),
             "bead": row.bead_data.as_deref().map(serde_json::from_str::<Value>).transpose().ok().flatten(),
             "project": { "name": project.name, "path": project.dir },
-            "steps": step_results(tx.sql(), row).map_err(|e| e.to_string())?,
+            "steps": step_results(tx.sql(), &row.id, &row.step).map_err(|e| e.to_string())?,
             "remarks": remarks(tx.sql(), &row.id).map_err(|e| e.to_string())?,
             "agent": prompt.files,
         });
-        let text = prompt.template.render(&context).map_err(|e| format!("prompt: {e}"))?;
+        let mut text = prompt.template.render(&context).map_err(|e| format!("prompt: {e}"))?;
+        // The remark of a repeat reaches the agent even when its template has no place for remarks (spec §9.1).
+        let repeat = step_remark(tx.sql(), &row.id).map_err(|e| e.to_string())?;
+        if !repeat.is_empty() && prompt.template.paths().all(|p| p != "remarks") {
+            text = format!("{}\n\n{repeat}", text.trim_end());
+        }
         if text.trim().is_empty() {
             return Err("prompt: empty after substitution".to_owned());
         }
@@ -82,23 +88,31 @@ impl RunHandler {
     }
 }
 
-/// The outcome `{result, summary, data}` of each step before the current one, by step name: the last of its
-/// attempts (spec §9.1).
-pub(super) fn step_results(conn: &Connection, row: &Row) -> rusqlite::Result<Map<String, Value>> {
+/// The outcome `{result, summary, data}` of each step of `run` but `except`, by step name: the last of its attempts
+/// (spec §9.1).
+pub(super) fn step_results(conn: &Connection, run: &str, except: &str) -> rusqlite::Result<Map<String, Value>> {
     let mut stmt = conn.prepare(
         "SELECT step, outcome FROM attempts a WHERE run = ?1 AND step != ?2 AND outcome IS NOT NULL \
          AND n = (SELECT MAX(n) FROM attempts WHERE run = a.run AND step = a.step)",
     )?;
-    let rows = stmt.query_map([&row.id, &row.step], |r| {
+    let rows = stmt.query_map([run, except], |r| {
         let outcome: String = r.get(1)?;
         Ok((r.get(0)?, serde_json::from_str(&outcome).unwrap_or_default()))
     })?;
     rows.collect()
 }
 
-/// The remarks of the checks that last sent `run` back to an earlier step; empty in its first round (spec §9.1).
+/// The remarks of the checks that last sent `run` back to an earlier step, then the remark of the execution of its
+/// step before this one; empty in the first execution of its first round (spec §9.1).
 pub(super) fn remarks(conn: &Connection, run: &str) -> rusqlite::Result<String> {
-    conn.query_row("SELECT COALESCE(remarks, '') FROM runs WHERE id = ?1", [run], |r| {
-        r.get(0)
-    })
+    let both = "TRIM(COALESCE(remarks, '') || char(10, 10) || COALESCE(step_remarks, ''), char(10))";
+    conn.query_row(&format!("SELECT {both} FROM runs WHERE id = ?1"), [run], |r| r.get(0))
+}
+
+fn step_remark(conn: &Connection, run: &str) -> rusqlite::Result<String> {
+    conn.query_row(
+        "SELECT COALESCE(step_remarks, '') FROM runs WHERE id = ?1",
+        [run],
+        |r| r.get(0),
+    )
 }

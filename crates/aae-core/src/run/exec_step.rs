@@ -25,13 +25,20 @@ const LOST_SLACK_MS: i64 = 10_000;
 impl RunHandler {
     /// The one attempt kind of an exec step: the command again, from the start.
     pub(super) fn start_exec(&mut self, tx: &mut Tx<'_>, mut row: Row) -> Result<(), Error> {
-        let config: Value = row
-            .config
-            .as_deref()
-            .and_then(|c| serde_json::from_str(c).ok())
-            .unwrap_or_default();
         // No session to start: the command runs from the first moment.
         Self::run_attempt(tx, &mut row, "exec")?;
+        let config: Value = (row.config.as_deref())
+            .and_then(|c| serde_json::from_str(c).ok())
+            .unwrap_or_default();
+        self.command(tx, row, &config["command"], false)
+    }
+
+    /// Runs `command` in the workdir of `row` with the environment of its step: the command of an exec step, or
+    /// with `check` the check script of any step, which also sees the outcome of its step (spec §9.1).
+    pub(super) fn command(&mut self, tx: &mut Tx<'_>, row: Row, command: &Value, check: bool) -> Result<(), Error> {
+        let config: Value = (row.config.as_deref())
+            .and_then(|c| serde_json::from_str(c).ok())
+            .unwrap_or_default();
         let mut env: Vec<(String, Value)> = config["env"]
             .as_object()
             .into_iter()
@@ -53,7 +60,8 @@ impl RunHandler {
             context.push((crate::config::input_variable(&name), json!(text)));
         }
         // The outcomes of the earlier steps (spec §9.1): `AAE_STEP_<NAME>_RESULT`, `_SUMMARY` and `_DATA` (JSON).
-        for (step, outcome) in super::render::step_results(tx.sql(), &row)? {
+        let except = if check { "" } else { row.step.as_str() };
+        for (step, outcome) in super::render::step_results(tx.sql(), &row.id, except)? {
             let prefix = format!("AAE_STEP_{}_", crate::config::upper(&step));
             for (field, value) in [("RESULT", &outcome["result"]), ("SUMMARY", &outcome["summary"])] {
                 context.push((format!("{prefix}{field}"), value.clone()));
@@ -78,11 +86,16 @@ impl RunHandler {
             );
         };
         let payload = json!({
-            "op": "exec", "run": row.id, "attempt": row.attempt, "command": config["command"],
+            "op": "exec", "run": row.id, "attempt": row.attempt, "command": command, "check": check,
             "cwd": row.workdir, "env": env, "timeout_ms": timeout_ms, "marker": format!("x-{}", &token[..16]),
         });
         // Its own key: a `stop_exec` on the run's key must not queue behind the running command.
-        tx.effect(&format!("exec:{}", row.id), &row.attempt.to_string(), &payload)?;
+        let dedupe = if check {
+            format!("check:{}", row.attempt)
+        } else {
+            row.attempt.to_string()
+        };
+        tx.effect(&format!("exec:{}", row.id), &dedupe, &payload)?;
         tx.set_deadline(&row.deadline("state"), tx.now_ms() + timeout_ms + LOST_SLACK_MS)
     }
 
@@ -90,12 +103,15 @@ impl RunHandler {
         &mut self,
         tx: &mut Tx<'_>,
         run: &str,
-        attempt: u32,
+        (attempt, check): (u32, bool),
         exit: Exit,
         stdout: &str,
         stderr: &str,
     ) -> Result<(), Error> {
         let row = Row::load(tx, run)?;
+        if check {
+            return self.check_done(tx, row, attempt, exit, (stdout, stderr));
+        }
         if row.attempt != attempt || row.state != "running" {
             return Ok(());
         }
@@ -187,6 +203,7 @@ pub(super) async fn run(running: &Running, payload: &Value, socket: Option<&Path
     Msg::ExecDone {
         run,
         attempt: super::exec::attempt(payload),
+        check: payload["check"] == true,
         exit: out.exit,
         stdout: String::from_utf8_lossy(&out.stdout).into_owned(),
         stderr: String::from_utf8_lossy(&out.stderr).into_owned(),

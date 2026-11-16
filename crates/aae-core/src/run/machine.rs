@@ -134,16 +134,14 @@ impl RunHandler {
                 .optional()
         };
         let own = last_session(tx, &row.id, Some(&row.step))?;
-        // The first attempt of a step, at its start or when a check sends the run back to it (spec §9.3).
-        let previous: Option<String> = tx
-            .sql()
-            .query_row(
-                "SELECT step FROM attempts WHERE run = ?1 AND n = ?2",
-                params![row.id, row.attempt],
-                |r| r.get(0),
-            )
-            .optional()?;
-        let entering = previous.as_deref() != Some(row.step.as_str());
+        // The first attempt of an execution of a step: at its start, when a check sends the run back to it or when
+        // it runs again (spec §9.1, §9.3); not after an attempt of it that failed.
+        let entering: bool = tx.sql().query_row(
+            "SELECT NOT EXISTS (SELECT 1 FROM attempts WHERE run = ?1 AND n = ?2 AND step = ?3 \
+             AND (outcome IS NULL OR failure IS NOT NULL))",
+            params![row.id, row.attempt, row.step],
+            |r| r.get(0),
+        )?;
         // A run that continues the session of another run (spec §9.3) starts there, and its first step resumes there
         // while it has no session of its own.
         let continued: Option<String> = tx
@@ -325,12 +323,16 @@ impl RunHandler {
         let Some((harness, handle, session, instance)) = live else {
             return Ok(());
         };
-        if harness == "exec" {
-            tx.effect(
-                &row.id,
-                &format!("stop:{}", row.attempt),
-                &json!({ "op": "stop_exec", "run": row.id, "attempt": row.attempt }),
-            )?;
+        // The command of an exec step or the check script of any step (spec §9.1); its own dedupe, apart from the
+        // stop of a session.
+        let command: bool = (tx.sql()).query_row(
+            "SELECT EXISTS (SELECT 1 FROM effects WHERE key = ?1)",
+            [format!("exec:{}", row.id)],
+            |r| r.get(0),
+        )?;
+        if harness == "exec" || command {
+            let payload = json!({ "op": "stop_exec", "run": row.id, "attempt": row.attempt });
+            tx.effect(&row.id, &format!("stop_exec:{}", row.attempt), &payload)?;
         }
         tx.sql().execute(
             "UPDATE attempts SET ended_ms = ?3, failure = ?4 WHERE run = ?1 AND n = ?2",

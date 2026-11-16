@@ -31,6 +31,7 @@ const RUN: Shape = Obj(&[
     ("step", Leaf),
     ("agent", Leaf),
     ("step_kind", Leaf),
+    ("step_attempt", Leaf),
     ("state", Leaf),
     ("class", Leaf),
     ("attempt", Leaf),

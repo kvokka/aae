@@ -20,6 +20,7 @@ mod recover;
 mod registry;
 mod reload;
 mod render;
+mod repeat;
 mod row;
 mod service_proc;
 mod services;
@@ -163,10 +164,11 @@ impl Handler for RunHandler {
             Msg::ExecDone {
                 run,
                 attempt,
+                check,
                 exit,
                 stdout,
                 stderr,
-            } => self.exec_done(tx, &run, attempt, exit, &stdout, &stderr),
+            } => self.exec_done(tx, &run, (attempt, check), exit, &stdout, &stderr),
             Msg::HookFailed { event, data } => Self::hook_failed(tx, &event, data),
             Msg::Tracked { payload, result } => self.tracked(tx, &payload, result),
             Msg::Ready {

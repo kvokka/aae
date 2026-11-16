@@ -243,6 +243,12 @@ pub fn open(path: &Path) -> rusqlite::Result<Connection> {
             "ALTER TABLE runs ADD COLUMN round INTEGER NOT NULL DEFAULT 1; \
              ALTER TABLE runs ADD COLUMN remarks TEXT;",
         ),
+        // The execution of the run's step and the remark of the one before, within a round (spec §9.1).
+        (
+            22,
+            "ALTER TABLE runs ADD COLUMN step_attempt INTEGER NOT NULL DEFAULT 1; \
+             ALTER TABLE runs ADD COLUMN step_remarks TEXT;",
+        ),
     ]
     .into_iter()
     .filter(|(to, _)| *to > version)

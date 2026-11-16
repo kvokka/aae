@@ -75,7 +75,9 @@ impl RunHandler {
                 )?;
             }
             let row = Row::load(tx, id)?;
-            if *waits {
+            // `finishing` with no decision pending: the check script of the step was running (spec §9.1).
+            let checking = !*waits && row.state == "finishing";
+            if *waits || checking {
                 // The session that took the turn is gone with its instance: a decision that needs it fails the
                 // attempt (`next_prompt`), the others apply as they would have. No clock of the turn runs.
                 tx.sql().execute(
@@ -84,6 +86,11 @@ impl RunHandler {
                 )?;
                 for what in ["state", "silence"] {
                     tx.clear_deadline(&row.deadline(what))?;
+                }
+                // The script runs again, after the sweep of the lost one: its execution counts once, when its word
+                // is written.
+                if checking {
+                    self.check(tx, row)?;
                 }
                 continue;
             }

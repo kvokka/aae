@@ -82,11 +82,13 @@ impl RunHandler {
             return self.terminal(tx, row, "failed", Some("infrastructure"), &reason);
         };
         // `(bead, state, given by this entry)` of every child on a bead. The entry is the tail of the run's attempts
-        // on this step: a round back to it always passes through an attempt of another step.
+        // on this step after its last execution: a round back to it passes through an attempt of another step, a
+        // repeat through an attempt of it with an outcome (spec §9.1).
         let kids: Vec<(String, String, bool)> = {
             let mut stmt = tx.sql().prepare(
                 "SELECT r.bead, r.state, r.created_ms >= (SELECT MIN(a.started_ms) FROM attempts a WHERE a.run = ?1 \
-                 AND a.n > (SELECT COALESCE(MAX(n), 0) FROM attempts WHERE run = ?1 AND step != ?2)) \
+                 AND a.n > (SELECT COALESCE(MAX(n), 0) FROM attempts WHERE run = ?1 \
+                 AND (step != ?2 OR (outcome IS NOT NULL AND failure IS NULL)))) \
                  FROM runs r WHERE r.parent_run = ?1 AND r.bead IS NOT NULL ORDER BY r.n",
             )?;
             let rows = stmt.query_map(params![row.id, row.step], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)))?;
