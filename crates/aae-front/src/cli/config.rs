@@ -7,6 +7,7 @@ use crate::{
 };
 use aae_core::config::Config;
 use clap::Subcommand;
+use serde_json::Value;
 use std::{path::PathBuf, process::ExitCode};
 
 #[derive(Subcommand)]
@@ -32,17 +33,16 @@ pub enum FormulaCommand {
 
 #[derive(Subcommand)]
 pub enum ConfigCommand {
-    /// Check the config file as a reload would; exits non-zero when it has errors. Needs no daemon.
+    /// Check the daemon's config file as a reload would; exits non-zero when it has errors.
     Check {
-        /// The orchestrator config (default: `$XDG_CONFIG_HOME/aae/config.toml`).
+        /// Check this file without a daemon.
         #[arg(long)]
         config: Option<PathBuf>,
     },
     /// The effective config of an agent, or of the agent of a formula's run on a rig or in the project root with the
     /// layers of its pack, its step and the rig's variant: every value with its layer, the host layer in one line.
-    /// Needs no daemon.
     Explain {
-        /// The orchestrator config (default: `$XDG_CONFIG_HOME/aae/config.toml`).
+        /// Explain from this file without a daemon.
         #[arg(long)]
         config: Option<PathBuf>,
         #[arg(long)]
@@ -90,37 +90,42 @@ pub(super) async fn formulas(client: &Client, json: bool, command: FormulaComman
     Ok(())
 }
 
-/// `aae config reload`; `check` and `explain` run without a daemon, in [`local`].
-pub(super) async fn reload(client: &Client, json: bool, idempotency: Option<String>) -> Result<(), ClientError> {
-    let reply = client
-        .request("POST", "/v1/config/reload", None, idempotency.as_deref())
-        .await?;
-    print(json, &reply);
-    Ok(())
+/// `aae config` on the daemon; `check` and `explain` of a file named with `--config` run without one, in [`local`].
+pub(super) async fn config(client: &Client, json: bool, command: ConfigCommand) -> Result<ExitCode, ClientError> {
+    let reply = match command {
+        ConfigCommand::Check { .. } => client.request("POST", "/v1/config/check", None, None).await?,
+        ConfigCommand::Explain {
+            project,
+            agent,
+            formula,
+            rig,
+            ..
+        } => {
+            let query = [("agent", agent), ("formula", formula), ("rig", rig)].into_iter();
+            let query: String = (query.filter_map(|(k, v)| v.map(|v| format!("&{k}={}", encode(&v))))).collect();
+            let path = format!("/v1/config/explain?project={}{query}", encode(&project));
+            client.request("GET", &path, None, None).await?
+        }
+        ConfigCommand::Reload { idempotency } => {
+            let reply = client
+                .request("POST", "/v1/config/reload", None, idempotency.as_deref())
+                .await?;
+            print(json, &reply);
+            return Ok(ExitCode::SUCCESS);
+        }
+    };
+    Ok(show(json, &reply))
 }
 
-/// `aae config check|explain` on the config file as the daemon loads it, with no daemon: `load` takes `--config`.
+/// `aae config check|explain` on the file of `--config` as the daemon loads it, with no daemon: `load` takes the file.
 /// Prints what the API would answer; `reload` needs the daemon.
 pub fn local(
     json: bool,
     command: ConfigCommand,
     load: impl FnOnce(Option<PathBuf>) -> Result<Config, Vec<String>>,
 ) -> ExitCode {
-    match command {
-        ConfigCommand::Check { config } => {
-            let reply = checked(load(config));
-            if json {
-                print(json, &reply);
-            }
-            let errors = reply["errors"].as_array().cloned().unwrap_or_default();
-            for error in errors.iter().filter(|_| !json) {
-                eprintln!("{}", error.as_str().unwrap_or_default());
-            }
-            match errors.is_empty() {
-                true => ExitCode::SUCCESS,
-                false => ExitCode::FAILURE,
-            }
-        }
+    let reply = match command {
+        ConfigCommand::Check { config } => checked(load(config)),
         ConfigCommand::Explain {
             config,
             project,
@@ -140,12 +145,29 @@ pub fn local(
             };
             let of = agent.map_or_else(|| Explain::Formula(formula.unwrap_or_default()), Explain::Agent);
             match explained(&config, &project, &of, rig.as_deref()) {
-                Ok(reply) if json => print(json, &reply),
-                Ok(reply) => print!("{}", reply["text"].as_str().unwrap_or_default()),
+                Ok(reply) => reply,
                 Err(e) => return fail(json, "not_found", &e),
             }
-            ExitCode::SUCCESS
         }
-        ConfigCommand::Reload { .. } => fail(json, "usage", "`config reload` needs the daemon"),
+        ConfigCommand::Reload { .. } => return fail(json, "usage", "`config reload` needs the daemon"),
+    };
+    show(json, &reply)
+}
+
+/// Prints the reply of a check or an explain, the daemon's or a file's alike: the text of an explain, the errors of a
+/// check, which fail it; the reply as it is with `--json`.
+fn show(json: bool, reply: &Value) -> ExitCode {
+    match reply["text"].as_str() {
+        _ if json => print(json, reply),
+        Some(text) => print!("{text}"),
+        None => {}
+    }
+    let errors = reply["errors"].as_array().map(Vec::as_slice).unwrap_or_default();
+    for error in errors.iter().filter(|_| !json) {
+        eprintln!("{}", error.as_str().unwrap_or_default());
+    }
+    match errors.is_empty() {
+        true => ExitCode::SUCCESS,
+        false => ExitCode::FAILURE,
     }
 }

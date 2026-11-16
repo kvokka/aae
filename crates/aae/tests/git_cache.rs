@@ -95,9 +95,13 @@ fn cached(dir: &Path) -> BTreeSet<String> {
         .collect()
 }
 
-/// `aae config check --json`: whether the config loaded, and stdout with stderr.
+/// `aae config check --json` on the config file, with no daemon: whether the config loaded, and stdout with stderr.
 fn check(dir: &Path) -> (bool, String) {
-    let (ok, out, err) = aae(dir, &["config", "check", "--json"]);
+    let config = dir.join("config/aae/config.toml");
+    let (ok, out, err) = aae(
+        dir,
+        &["config", "check", "--json", "--config", config.to_str().unwrap()],
+    );
     (ok, format!("{out}{err}"))
 }
 

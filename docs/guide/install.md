@@ -62,15 +62,17 @@ looked up on the daemon's `PATH`; `aae doctor` shows which source each binary ca
 ## Check the setup
 
 ```sh
-aae doctor
+aae doctor --config ~/.config/aae/config.toml   # before the daemon first runs: this file, from this shell
+aae doctor                                      # with the daemon running: as the daemon sees it
 ```
 
-`aae doctor` needs no daemon. It checks the config, each harness binary (where it was found, its version, the
-login), br and its license, the modes of the state and socket directories, and the state with its outbox. It exits
-non-zero on an error; warnings (an untested version, no login file) do not fail it. `aae doctor --json` prints the
-same checks as JSON. `GET /v1/doctor` of a running daemon's API makes the same checks from inside the daemon's
-process, with its environment, `PATH` and config file: a failing check is an `error` level in the reply (still
-200), as in `aae doctor --json`.
+`aae doctor` checks the config, each harness binary (where it was found, its version, the login), br and its
+license, the modes of the state and socket directories, and the state with its outbox. Without `--config` it asks
+the running daemon (`GET /v1/doctor`), which makes the checks from inside its process, with its environment, `PATH`
+and config file; with no daemon it fails and says so. With `--config <file>` it needs no daemon and checks that file
+from the shell it runs in. Either way it prints the same table and exits non-zero on an error; warnings (an
+untested version, no login file) do not fail it. `aae doctor --json` prints the checks as JSON, the API's reply as
+it is (a failing check is an `error` level in it, still 200).
 
 ## Directories
 

@@ -1,6 +1,6 @@
-//! `aae doctor` (docs/guide/install.md), without a daemon or from it (`GET /v1/doctor`): the harness and br binaries
-//! with their versions and logins, the private directories, the state and its outbox; and `aae daemon --service`, the
-//! service file that runs the daemon.
+//! The checks of `aae doctor` (docs/guide/install.md), made by the daemon (`GET /v1/doctor`) or, for a file named with
+//! `--config`, by the CLI without one: the harness and br binaries with their versions and logins, the private
+//! directories, the state and its outbox; and `aae daemon --service`, the service file that runs the daemon.
 
 use crate::{
     daemon::Paths,
@@ -24,28 +24,7 @@ fn check(what: impl Into<String>, level: &str, detail: impl Into<String>) -> Val
     json!({ "check": what.into(), "level": level, "detail": detail.into() })
 }
 
-/// Prints every finding; the exit code fails when one is an error.
-pub(crate) fn run(paths: &Paths, json: bool) -> ExitCode {
-    let found = findings(paths);
-    if json {
-        println!("{}", Value::from(found.clone()));
-    } else {
-        for f in &found {
-            let level = f["level"].as_str().unwrap_or_default();
-            println!("{level:<8} {:<16} {}", text(&f["check"]), text(&f["detail"]));
-        }
-    }
-    match found.iter().any(|f| f["level"] == "error") {
-        true => ExitCode::FAILURE,
-        false => ExitCode::SUCCESS,
-    }
-}
-
-fn text(v: &Value) -> &str {
-    v.as_str().unwrap_or_default()
-}
-
-/// Every check, in the order `aae doctor` prints them; `GET /v1/doctor` makes them from the daemon.
+/// Every check, in the order `aae doctor` prints them.
 pub(crate) fn findings(paths: &Paths) -> Vec<Value> {
     let mut found = Vec::new();
     match load(paths) {

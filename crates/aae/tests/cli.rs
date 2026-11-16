@@ -139,6 +139,14 @@ async fn without_a_daemon_a_client_command_fails_and_names_the_daemon() {
         (out.status.code(), &error["error"]["code"]),
         (Some(1), &"no_daemon".into())
     );
+    // The checks ask the daemon too; without one, a config file can be checked by name.
+    let explain = ["config", "explain", "--project", "shop", "--agent", "dev"];
+    for args in [&["doctor"][..], &["config", "check"], &explain] {
+        let out = d.cli(args, &[("AAE_SOCKET", "/nonexistent/aae.sock")]);
+        let text = String::from_utf8_lossy(&out.stderr);
+        assert_eq!(out.status.code(), Some(1));
+        assert!(text.contains("`--config <file>`"), "{text}");
+    }
 }
 
 #[tokio::test]
@@ -155,7 +163,8 @@ async fn the_finisher_gives_up_on_an_unreachable_daemon_with_tempfail() {
     assert!(String::from_utf8_lossy(&out.stderr).contains("unreachable for 1 s"));
 }
 
-/// `config check` and `config explain` load the file as the daemon would, so they need none (docs/design/config.md).
+/// `config check` and `config explain` of a file named with `--config` load it as the daemon would, so they need none
+/// (docs/design/config.md).
 #[test]
 fn the_config_is_checked_and_explained_without_a_daemon() {
     let dir = tempfile::tempdir().unwrap();
@@ -188,31 +197,24 @@ fn the_config_is_checked_and_explained_without_a_daemon() {
             .output()
             .unwrap()
     };
-    let out = aae(&["config", "check", "--json"]);
+    let config = files.join("config.toml").display().to_string();
+    let local = |args: &[&str]| aae(&[args, &["--config", &config]].concat());
+    let out = local(&["config", "check", "--json"]);
     let reply: Value = serde_json::from_slice(&out.stdout).unwrap();
     assert!(out.status.success(), "{reply}");
     assert_eq!(reply, serde_json::json!({ "ok": true, "errors": [] }));
-    let out = aae(&["config", "explain", "--project", "shop", "--agent", "dev"]);
+    let out = local(&["config", "explain", "--project", "shop", "--agent", "dev"]);
     let text = String::from_utf8_lossy(&out.stdout);
     assert!(
         out.status.success() && text.contains("effort = \"high\"  # agent\n"),
         "{text}"
     );
-    let out = aae(&["config", "explain", "--project", "shop", "--agent", "dev", "--json"]);
+    let out = local(&["config", "explain", "--project", "shop", "--agent", "dev", "--json"]);
     let reply: Value = serde_json::from_slice(&out.stdout).unwrap();
     assert_eq!(reply["inherits_host"], true, "{reply}");
     // With a formula the step's layer counts, over the agent's.
-    let out = aae(&[
-        "config",
-        "explain",
-        "--project",
-        "shop",
-        "--formula",
-        "go",
-        "--rig",
-        "web",
-        "--json",
-    ]);
+    let go = ["config", "explain", "--project", "shop", "--formula", "go"];
+    let out = local(&[&go[..], &["--rig", "web", "--json"]].concat());
     let reply: Value = serde_json::from_slice(&out.stdout).unwrap();
     let text = reply["text"].as_str().unwrap_or_default();
     assert!(text.contains("effort = \"low\"  # formula shop.go"), "{reply}");
@@ -222,11 +224,11 @@ fn the_config_is_checked_and_explained_without_a_daemon() {
     );
     assert_eq!(reply["steps"][0]["agent"], "shop.dev", "{reply}");
     // With no rig, the formula is explained on the project root.
-    let out = aae(&["config", "explain", "--project", "shop", "--formula", "go", "--json"]);
+    let out = local(&[&go[..], &["--json"]].concat());
     let reply: Value = serde_json::from_slice(&out.stdout).unwrap();
     let text = reply["text"].as_str().unwrap_or_default();
     assert!(out.status.success() && text.contains("on `root`"), "{reply}");
-    let out = aae(&["--json", "config", "explain", "--project", "nope", "--agent", "dev"]);
+    let out = local(&["--json", "config", "explain", "--project", "nope", "--agent", "dev"]);
     let error: Value = serde_json::from_slice(&out.stderr).unwrap();
     assert_eq!(
         (out.status.code(), &error["error"]["code"]),
@@ -277,8 +279,7 @@ fn the_config_is_checked_and_explained_without_a_daemon() {
     drop(reader);
     let out = (Command::new(env!("CARGO_BIN_EXE_aae")))
         .args(["config", "explain", "--project", "shop", "--agent", "dev"])
-        .env("AAE_SOCKET", "/nonexistent/aae.sock")
-        .env("XDG_CONFIG_HOME", dir.path().join("config"))
+        .args(["--config", &config])
         .stdout(writer)
         .output()
         .unwrap();
@@ -329,7 +330,9 @@ async fn the_config_from_the_cli_lists_explains_checks_and_reloads() {
     let shop = (plugins.as_array().unwrap().iter()).any(|p| p["project"] == "shop" && p["name"] == "default-policy");
     assert!(shop, "every project's plugins without --project: {plugins}");
     assert!(!d.cli(&["agent", "list", "--project", "nope"], &[]).status.success());
-    let out = d.cli(&["config", "explain", "--project", "shop", "--agent", "dev"], &[]);
+    // Asked from another environment, whose own config file is not the daemon's, the daemon answers by its config.
+    let other = [("XDG_CONFIG_HOME", "/nonexistent")];
+    let out = d.cli(&["config", "explain", "--project", "shop", "--agent", "dev"], &other);
     let text = String::from_utf8_lossy(&out.stdout);
     assert!(text.contains("effort = \"high\"  # agent\n"), "{text}");
     assert!(text.contains("env.LANG = \"C\"  # orchestrator\n"), "{text}");
@@ -340,7 +343,7 @@ async fn the_config_from_the_cli_lists_explains_checks_and_reloads() {
 
     let file = d.dir.path().join("config/aae/config.toml");
     fs::write(&file, "projects = [\"shop\"\n").unwrap();
-    let out = d.cli(&["config", "check"], &[]);
+    let out = d.cli(&["config", "check"], &other);
     assert!(!out.status.success());
     assert!(String::from_utf8_lossy(&out.stderr).contains("config.toml"));
     let out = d.cli(&["config", "reload"], &[]);

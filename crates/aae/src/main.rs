@@ -24,9 +24,11 @@ fn main() -> ExitCode {
             config,
             service: Some(kind),
         } => return doctor::service(kind, config),
-        Command::Doctor { config } => {
-            return match daemon::Paths::resolve(config, cli.socket) {
-                Ok(paths) => doctor::run(&paths, cli.json),
+        // A file named with `--config` is checked here as the daemon would load it, with no daemon; without one the
+        // daemon is asked, as by any other command.
+        Command::Doctor { config: Some(config) } => {
+            return match daemon::Paths::resolve(Some(config), cli.socket) {
+                Ok(paths) => cli::doctor(cli.json, &doctor::findings(&paths).into()),
                 Err(e) => cli::fail(cli.json, "config_error", &format!("doctor: {e}")),
             };
         }
@@ -39,8 +41,9 @@ fn main() -> ExitCode {
         Command::McpBridge { command, timeout } => {
             return bridge::run(command, std::time::Duration::from_secs(timeout));
         }
-        // Loaded here as the daemon loads it, so a check or an explain needs no daemon.
-        Command::Config(command @ (ConfigCommand::Check { .. } | ConfigCommand::Explain { .. })) => {
+        Command::Config(
+            command @ (ConfigCommand::Check { config: Some(_) } | ConfigCommand::Explain { config: Some(_), .. }),
+        ) => {
             return cli::config_local(cli.json, command, |config| {
                 harness::load(&daemon::Paths::resolve(config, cli.socket).map_err(|e| vec![e])?)
             });

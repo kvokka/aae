@@ -42,6 +42,7 @@ set for the whole orchestrator, a project or a rig (`[settings]`), weaker than t
 actually get, and which layer each value comes from:
 
 ```sh
+aae config reload                                        # the daemon takes the new files; explain asks the daemon
 aae config explain --project hello --agent helper
 aae config explain --project hello --formula summarize   # with the formula's layers, in the root (`--rig` for a rig)
 ```
@@ -168,6 +169,7 @@ among the formula's own keys, next to its `name` above the steps, caps the round
 remarks as the reason. `config explain` goes step by step:
 
 ```sh
+aae config reload
 aae config explain --project hello --formula summarize-checked
 # step `count` of `summarize-checked`: exec `wc -l README.md`
 # step `write` of `summarize-checked` on `root`: agent hello.helper

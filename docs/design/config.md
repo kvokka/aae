@@ -11,12 +11,12 @@ error in every file.
 - The daemon loads everything at once from the orchestrator file: the projects it lists, their packs, agents,
   formulas, triggers and the plugins they declare. A missing orchestrator file is an empty config. Before reading,
   `aae` downloads the packs and plugins from git into its cache (see [below](#packs-and-plugins-from-git)), as do
-  `aae config check|explain`, `aae doctor` and `POST /v1/config/check`; the latest revision of an unpinned pack is
-  asked for at every load.
+  `POST /v1/config/check` and `aae config check|explain` and `aae doctor` with `--config <file>`; the latest
+  revision of an unpinned pack is asked for at every load.
 - Load is all or nothing: every error found is reported with its file, and an invalid config is never applied.
   The daemon re-reads only on an explicit command: `aae config reload` (`POST /v1/config/reload`); on
   error the previous config stays in force, and `aae config check` reports the errors without applying anything
-  (it loads the file itself, so it needs no daemon).
+  (the daemon's file; `--config <file>` loads a file in the CLI, with no daemon).
 - A retired key is a config error of one line that says where it is written now: `permission_mode` (the native block of
   the harness), `[overrides.<agent>]` (`[agents.<agent>]`), step kind `prompt` (`ai`), input type `bead` (`task`), the
   `prompt` key of an `ai` step (the agent's `prompt.template.md`).
@@ -176,9 +176,9 @@ and a model the adapter expanded keeps the short name it was given
 (`model = "gpt-6-luna"  # rig [agents], given as "luna"`). The new layers print as `pack <name>`,
 `formula <pack>.<name> step <step>` and `variant <name>`. `explain()` prints one line per value with its layer and one
 line for the host: inherited by the harness and invisible to aae, or off
-(`aae config explain --project <p> --agent <a> [--rig <r>]`, with no daemon, on the file on disk;
-`GET /v1/config/explain`, on the config the daemon holds). The pack, formula and variant layers count only for a run, so
-they show with `--formula <f> --rig <r>` in place of `--agent`, step by step: for an ai step a header
+(`aae config explain --project <p> --agent <a> [--rig <r>]` and `GET /v1/config/explain`, on the config the daemon
+holds; with `--config <file>`, on that file with no daemon). The pack, formula and variant layers count only for a
+run, so they show with `--formula <f> --rig <r>` in place of `--agent`, step by step: for an ai step a header
 ``# step `<s>` of `<f>` on `<r>`: agent <a>`` (the rig's variant if it maps one) and its effective config, for an exec
 step one line ``# step `<s>` of `<f>`: exec `<command>` ``, for a drain step
 ``# step `<s>` of `<f>`: drain, a run of `<formula>` per bead, <pool> at a time`` (with ``; on a failed bead:
@@ -309,8 +309,9 @@ park_timeout = "168h"               # a parked run on a gate without `until`
 Each `[watchdog]` value is a duration with one unit (`ms`, `s`, `m`, `h`) from 1 ms to 8760 h; an unknown key is an
 error. A reload applies to the deadlines set from then on: a deadline already set keeps its time.
 
-The file need not live in `~/.config/aae`: `aae daemon`, `aae doctor` and `aae config check|explain` take another
-one with `--config <file>`. A demo keeps its own orchestrator config, `root/config.toml`, next to its project's
+The file need not live in `~/.config/aae`: `aae daemon` takes another one with `--config <file>`, and so do
+`aae doctor` and `aae config check|explain`, which then check that file with no daemon instead of asking the running
+one. A demo keeps its own orchestrator config, `root/config.toml`, next to its project's
 `root/aae.toml` for that reason: its `run.sh` starts a daemon of the demo's own with `--config root/config.toml`, so
 the demo neither reads nor changes the user's `~/.config/aae/config.toml` ([demos](../../demos/README.md)). The two
 files stay separate: `config.toml` lists the projects and the harnesses of the host, `aae.toml` is the project.
@@ -387,9 +388,10 @@ repository with `pack.toml` / `plugin.toml` at its root: `{ git = "<url>", rev =
 - A pack without `rev` follows the latest revision: the remote's `HEAD`, the tip of its default branch, asked for at
   every load of the config. A plugin must be pinned: a `[[plugin]]` from git without `rev` is a config error.
 
-Whoever loads the config downloads first: the daemon at start and at `aae config reload`, `aae config check|explain`,
-`aae doctor` and `POST /v1/config/check`. The core reads only the finished directories and never runs git. The cache
-is one per user, `$XDG_CACHE_HOME/aae/git` (`~/.cache/aae/git` without it):
+Whoever loads the config downloads first: the daemon at start, at `aae config reload`, `POST /v1/config/check` and
+`GET /v1/doctor`, and the CLI at `aae config check|explain` and `aae doctor` with `--config <file>`. The core reads
+only the finished directories and never runs git. The cache is one per user, `$XDG_CACHE_HOME/aae/git`
+(`~/.cache/aae/git` without it):
 
 - `<cache>/<url>/<commit>/` is a detached checkout of the commit, never changed once in place;
 - `<cache>/<url>/tag-<tag>` names the commit a tag pointed at when it was downloaded;

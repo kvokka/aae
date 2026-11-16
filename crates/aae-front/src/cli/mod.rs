@@ -1,6 +1,6 @@
 //! The CLI (docs/api/frontends.md): a thin client of the API, one command per API operation, JSON output with `--json`.
-//! Without a daemon only `aae daemon`, `aae doctor`, `aae cache clear`, `aae config check|explain` and `aae --version`
-//! work.
+//! Without a daemon only `aae daemon`, `aae cache clear`, `aae --version`, and `aae doctor` and `aae config
+//! check|explain` on a file named with `--config` work.
 
 mod commands;
 mod config;
@@ -16,7 +16,7 @@ use serde_json::{Value, json};
 use std::{path::PathBuf, process::ExitCode};
 
 /// Every API operation and the command that does it: `(command, method, path)`. `config check`, `config explain` and
-/// `doctor` do it locally, without a daemon.
+/// `doctor` with `--config <file>` do it on that file, without a daemon.
 pub const OPERATIONS: &[(&str, &str, &str)] = &[
     ("run start", "POST", "/v1/runs"),
     ("run list", "GET", "/v1/runs"),
@@ -85,7 +85,7 @@ pub enum Command {
     },
     /// Check what the daemon needs: harness and br binaries, versions and logins, directories, the state.
     Doctor {
-        /// The orchestrator config (default: `$XDG_CONFIG_HOME/aae/config.toml`).
+        /// Check this file without a daemon.
         #[arg(long)]
         config: Option<PathBuf>,
     },
@@ -204,10 +204,17 @@ pub fn run(cli: Cli) -> ExitCode {
         Err(e) => return fail(cli.json, "internal", &format!("runtime: {e}")),
     };
     let (client, json) = (Client::new(socket.clone()), cli.json);
+    let checks = matches!(
+        cli.command,
+        Command::Doctor { .. } | Command::Config(ConfigCommand::Check { .. } | ConfigCommand::Explain { .. })
+    );
     let error = match runtime.block_on(execute(&client, cli)) {
         Ok(code) => return code,
         Err(ClientError::Io(e)) => {
-            let message = format!("no daemon on {} ({e}); start it with `aae daemon`", socket.display());
+            let mut message = format!("no daemon on {} ({e}); start it with `aae daemon`", socket.display());
+            if checks {
+                message += ", or check a config file without one: `--config <file>`";
+            }
             json!({ "code": "no_daemon", "message": message })
         }
         Err(e @ ClientError::Api { .. }) if !json => return fail(false, "", &e.to_string()),
@@ -232,18 +239,12 @@ fn report(json: bool, error: Value) -> ExitCode {
 async fn execute(client: &Client, cli: Cli) -> Result<ExitCode, ClientError> {
     let json = cli.json;
     match cli.command {
-        Command::Daemon { .. }
-        | Command::Doctor { .. }
-        | Command::Cache(_)
-        | Command::McpBridge { .. }
-        | Command::Config(ConfigCommand::Check { .. } | ConfigCommand::Explain { .. }) => {
-            return Ok(fail(
-                json,
-                "usage",
-                "`daemon`, `doctor`, `cache clear`, `mcp-bridge` and `config check|explain` run without a daemon, not as its \
-                 client",
-            ));
+        Command::Daemon { .. } | Command::Cache(_) | Command::McpBridge { .. } => {
+            let message = "`daemon`, `cache clear` and `mcp-bridge` run without a daemon, not as its client";
+            return Ok(fail(json, "usage", message));
         }
+        Command::Doctor { .. } => return Ok(doctor(json, &client.request("GET", "/v1/doctor", None, None).await?)),
+        Command::Config(command) => return config::config(client, json, command).await,
         Command::Run(command) => return commands::run(client, json, command).await,
         Command::Gate(command) => commands::gate(client, json, command).await?,
         Command::Instance(command) => commands::instance(client, json, command).await?,
@@ -253,7 +254,6 @@ async fn execute(client: &Client, cli: Cli) -> Result<ExitCode, ClientError> {
         Command::Formula(command) => config::formulas(client, json, command).await?,
         Command::Pack(command) => config::list(client, json, "packs", command).await?,
         Command::Plugin(command) => config::list(client, json, "plugins", command).await?,
-        Command::Config(ConfigCommand::Reload { idempotency }) => config::reload(client, json, idempotency).await?,
         Command::Events { from } => follow(client.events(from).await?, json).await?,
         Command::Finish { result, summary, data } => return finish(client, json, result, summary, data).await,
         Command::Status => print(json, &client.request("GET", "/v1/daemon", None, None).await?),
@@ -271,6 +271,23 @@ async fn execute(client: &Client, cli: Cli) -> Result<ExitCode, ClientError> {
         ),
     }
     Ok(ExitCode::SUCCESS)
+}
+
+/// Prints the findings of `aae doctor`, the daemon's or a file's alike: a line each, or the API's JSON as it is with
+/// `--json`; fails when one is an error.
+pub fn doctor(json: bool, found: &Value) -> ExitCode {
+    if json {
+        println!("{found}");
+    }
+    let found = found.as_array().map(Vec::as_slice).unwrap_or_default();
+    for f in found.iter().filter(|_| !json) {
+        let s = |key: &str| f[key].as_str().unwrap_or_default();
+        println!("{:<8} {:<16} {}", s("level"), s("check"), s("detail"));
+    }
+    match found.iter().any(|f| f["level"] == "error") {
+        true => ExitCode::FAILURE,
+        false => ExitCode::SUCCESS,
+    }
 }
 
 /// Prints the API's JSON: as it is with `--json`; else a `key: value` line per value, nested keys dotted and nulls

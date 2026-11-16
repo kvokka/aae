@@ -63,13 +63,18 @@ fn aae_env(dir: &Path, args: &[&str], env: &[(&str, &str)]) -> Output {
         .unwrap()
 }
 
-/// `aae doctor --json`: whether it passed, and the level and detail of each check by name.
+/// `aae doctor --json` on the config file of `dir`, with no daemon.
 fn doctor(dir: &Path) -> (bool, Vec<(String, String, String)>) {
     doctor_env(dir, &[])
 }
 
 fn doctor_env(dir: &Path, env: &[(&str, &str)]) -> (bool, Vec<(String, String, String)>) {
-    let out = aae_env(dir, &["doctor", "--json"], env);
+    let config = dir.join("config/aae/config.toml").display().to_string();
+    findings(&aae_env(dir, &["doctor", "--json", "--config", &config], env))
+}
+
+/// The output of `aae doctor --json`: whether it passed, and the level and detail of each check by name.
+fn findings(out: &Output) -> (bool, Vec<(String, String, String)>) {
     let found: Value = serde_json::from_slice(&out.stdout).unwrap();
     let found = found.as_array().unwrap().iter().map(|f| {
         let s = |k: &str| f[k].as_str().unwrap().to_owned();
@@ -178,7 +183,8 @@ fn a_harness_with_no_adapter_is_a_config_error_naming_the_known_ones() {
     let (config, why) = level(&found, "config");
     assert!(!passed && config == "error", "{found:?}");
     assert!(why.ends_with("`harness.opencode`: aae has no adapter for harness `opencode`; known: claude, codex"));
-    let out = aae(dir.path(), &["config", "check"]);
+    let config = dir.path().join("config/aae/config.toml");
+    let out = aae(dir.path(), &["config", "check", "--config", config.to_str().unwrap()]);
     assert!(!out.status.success() && String::from_utf8_lossy(&out.stderr).contains("known: claude, codex"));
 }
 
@@ -332,19 +338,31 @@ async fn the_daemon_answers_the_same_checks_over_the_api() {
         found.map(|f| f["check"].as_str().unwrap().to_owned()).collect()
     };
     let api = d.get("/v1/doctor").await;
-    let local = aae(d.dir.path(), &["doctor", "--json"]);
+    let config = d.dir.path().join("config/aae/config.toml").display().to_string();
+    let local = aae(d.dir.path(), &["doctor", "--json", "--config", &config]);
     let local: Value = serde_json::from_slice(&local.stdout).unwrap();
     assert_eq!(names(&api), names(&local), "{api}");
+    // Without `--config` the CLI asks the daemon, whatever config file its own environment names.
+    let other = [("XDG_CONFIG_HOME", "/nonexistent")];
+    let asked = aae_env(d.dir.path(), &["doctor", "--json"], &other);
+    let asked: Value = serde_json::from_slice(&asked.stdout).unwrap();
+    assert_eq!(names(&api), names(&asked), "{asked}");
+    let table = aae_env(d.dir.path(), &["doctor"], &other);
+    let table = String::from_utf8_lossy(&table.stdout);
+    assert!(
+        table.starts_with(&format!("ok       config           {config}\n")),
+        "{table}"
+    );
     let state = api.as_array().unwrap().iter().find(|f| f["check"] == "state").unwrap();
     assert_eq!(state["level"], "ok", "the state the daemon holds open: {state}");
     assert!(state["detail"].as_str().unwrap().starts_with("outbox: "), "{state}");
 }
 
-#[test]
-fn with_no_config_file_the_defaults_are_named() {
-    let dir = tree("");
-    fs::remove_file(dir.path().join("config/aae/config.toml")).unwrap();
-    let (_, found) = doctor(dir.path());
+/// The daemon with no config file at the default path runs on the defaults and says so.
+#[tokio::test(flavor = "multi_thread")]
+async fn with_no_config_file_the_defaults_are_named() {
+    let d = common::Daemon::start(|dir| fs::remove_file(dir.join("config/aae/config.toml")).unwrap()).await;
+    let (_, found) = findings(&aae(d.dir.path(), &["doctor", "--json"]));
     let (config, why) = level(&found, "config");
     assert!(
         config == "ok" && why.starts_with("no config file at ") && why.ends_with(", the defaults"),

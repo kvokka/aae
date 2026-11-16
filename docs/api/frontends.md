@@ -12,8 +12,10 @@ Code: `crates/aae-front/src/api/`. Reference: `docs/api/openapi.json`.
   sets `api_tcp`; the address must be loopback, and every request on it needs `Authorization: Bearer <token>`. The
   token is new at every daemon start and is written to `api.token` in the state directory, readable by the owner
   only. `api_tcp` cannot change on a reload.
-- **Format.** JSON in and out; errors are JSON with a code (`bad_request`, `not_found`, `rejected`, ...). A malformed
-  gate key is `bad_request` (400).
+- **Format.** JSON in and out; errors are JSON with a code (`bad_request`, `not_found`, `rejected`, ...). A request
+  that names a run, instance, trigger, project, rig or formula there is none of is 404 `not_found` on any method (the finisher
+  of an unknown run answers `invalid`); 409 `rejected` is a thing that is there refusing the request as it stands. A
+  malformed gate key is `bad_request` (400).
 - **Idempotency.** Every mutating operation takes an `Idempotency-Key` header; a repeated key returns the first
   answer. The key repeated with another method, path or body is refused with 422 `idempotency_key_reused` and
   changes nothing. Keys are kept a day. `POST /v1/config/check` changes nothing and takes none.
@@ -76,16 +78,18 @@ Code: `crates/aae-front/src/cli/`. The CLI is a thin client of the HTTP API in t
   `tool_silence` above the longest wait. The whole wait still counts against the step's `timeout` (default 45 min).
 - `aae finish` reads the attempt token from the session environment, retries for 60 s under one idempotency key and
   exits 75 when the daemon stays unreachable (an attempt failure, not a failed run).
-- Without a daemon only `aae daemon`, `aae doctor`, `aae cache clear`, `aae config check|explain` and `aae --version`
-  work; `aae cache clear` removes the packs and plugins downloaded from git, and the next load of the config downloads
-  them again;
-  any other command says that no daemon listens on the socket and how to start one. `aae config check` and
-  `aae config explain` load the config file themselves as the daemon would (`--config <file>`, default
-  `$XDG_CONFIG_HOME/aae/config.toml`) and print what the API would answer for it; `explain --formula` without `--rig` is of a run in the project root.
-- `aae doctor` checks the host for a daemon that may not run yet (harness and br binaries, logins, private
-  directories, the state file), from the shell that will start it. `GET /v1/doctor` makes the same checks from the
-  running daemon's process, with its environment and config file; a failing check is an `error` level in the reply
-  (200), as in `aae doctor --json`. The daemon's own state is in `GET /v1/daemon` (journal, outbox, runs in a turn).
+- Without a daemon only `aae daemon`, `aae cache clear`, `aae --version`, and `aae doctor` and
+  `aae config check|explain` with `--config <file>` work; `aae cache clear` removes the packs and plugins downloaded
+  from git, and the next load of the config downloads them again; any other command says that no daemon listens on
+  the socket and how to start one, and for `doctor` and `config check|explain` that `--config <file>` checks a file
+  without one.
+- `aae config check`, `aae config explain` and `aae doctor` ask the daemon (`POST /v1/config/check`,
+  `GET /v1/config/explain`, `GET /v1/doctor`), so they answer for the config, environment and `PATH` the daemon runs
+  with, whatever shell they are typed in. With `--config <file>` they load that file themselves as the daemon would
+  and make the checks from this shell, with no daemon: how a file is checked before a daemon first runs on it. Both
+  ways print the same reply the same way and exit alike: non-zero on a config error or an `error` level check;
+  `--json` prints the API's reply as it is. `explain --formula` without `--rig` is of a run in the project root. The
+  daemon's own state is in `GET /v1/daemon` (journal, outbox, runs in a turn).
 - A refused `aae config reload` prints the errors of the file, one per line.
 
 ## MCP

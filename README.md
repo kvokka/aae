@@ -25,10 +25,10 @@ finisher and by plugins.
 on its `PATH`; a harness may name its binary in the config instead (`[harness.claude] binary = "/path/to/claude"`).
 mise is a convenience, not a requirement: install these binaries any way you like.
 
-- `aae doctor` checks, without a daemon, what the daemon needs: the config, each harness binary with its source,
-  version and login, br and its license, the mode of the state and socket directories, the state and its outbox.
-  It exits non-zero on an error; warnings (an untested version, no login file) do not fail it. `--json` prints
-  the checks as JSON.
+- `aae doctor` checks what the daemon needs: the config, each harness binary with its source, version and login, br
+  and its license, the mode of the state and socket directories, the state and its outbox. It asks the running
+  daemon; before the first start, `aae doctor --config <file>` checks a file with no daemon. It exits non-zero on an
+  error; warnings (an untested version, no login file) do not fail it. `--json` prints the checks as JSON.
 - Packs and plugins from git, at a tag, a commit or (a pack only) the latest revision, are downloaded by `aae` into
   `~/.cache/aae/git` when it loads the config; `aae cache clear` empties that cache (docs/design/config.md).
 - `aae daemon --service systemd` prints a systemd user unit, `aae daemon --service launchd` a launchd agent, both
