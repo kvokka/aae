@@ -3,9 +3,9 @@
 > **Сначала прочитай `docs/agents/loop.md`** (правила цикла: гейт, эксперт, beads) и остальное в `docs/agents/` по
 > указателю из `CLAUDE.md`.
 
-Открытые пакеты — WP-87…WP-91 (запросы владельца 2026-11-17, ниже). Пакеты WP-01…WP-86 закрыты, их тексты — в
+Открытые пакеты — WP-87…WP-101 (запросы владельца 2026-11-17, ниже). Пакеты WP-01…WP-86 закрыты, их тексты — в
 истории git (`git show 6868353:.loop/PLAN.md`, `git show 6868353:.loop/PLAN-archive.md`). Новые пакеты пишутся от
-запроса владельца, номера — с WP-92; формат пакета — в `.claude/agents/coder.md`.
+запроса владельца, номера — с WP-102; формат пакета — в `.claude/agents/coder.md`.
 
 Размеры: S ≈ до 60k рабочего контекста кодера, M ≈ до 150k. L нет. За цикл — один M или два S. Статусы:
 todo | doing | done | blocked | split (разбит, работа — в дочерних пакетах). Пакет с пометкой «критичный» начинается
@@ -170,3 +170,209 @@ find target -type f -newer "$s" -printf '%i %s\n' | sort -u | awk '{s+=$2} END {
   (проверить и убрать); `mise run ci` зелёный; замер записи при правке движка до и после — в отчёте (ожидание по
   размерам артефактов — около −30 %).
 - Не входит: поведение, ключи конфига, интерфейсы; дальнейшее дробление движка.
+
+## Запрос владельца 2026-11-17: watchdog и отказы рантайма агентов
+
+Решения 116–125 и пересмотренное 71 (`docs/agents/decisions.md`), журнал 2026-11-17, записи 18:30 и 19:10. Принцип:
+ядро даёт только то, без чего не собрать примитивный воркфлоу; aae — автономный раннер, всё решается до старта по
+слоям дефолт → оркестратор → проект → формула, после старта человека нет. Компакция, метрики, бюджеты, уведомления,
+формулы-автоматы восстановления — плагины из `docs/roadmap.md`, **в работу не берутся**.
+
+Порядок — после пакетов запроса о пересборке (WP-87…WP-91): WP-92 и WP-93 — первыми; WP-94 → WP-95; WP-96; WP-97 →
+WP-98; WP-99; WP-100 → WP-101.
+
+### WP-92 · Дефолты watchdog: 15m / 40m / 120m · размер S · статус: todo
+- Документы: решение 121, `docs/design/contracts.md` §6.1, `docs/design/config.md` (`[watchdog]`),
+  `docs/design/invariants.md` (инвариант 15).
+- Зависит от: —
+- Сделать: `silence` 5m → 15m, `tool_silence` 10m → 40m, `background_silence` 30m → 120m
+  (`crates/aae-core/src/config/check.rs:296-298`). Остальные ключи не трогать.
+- Результат: `check.rs`, тест дефолтов `crates/aae-core/src/tests/config_layers.rs:242`, документы.
+- Готово, когда: `aae config explain` без `[watchdog]` даёт 15m / 40m / 120m; все места документов с прежними
+  числами исправлены (`git grep -nE '\b(5|10|30) ?(m|min)'` по `docs/` разобран); тесты watchdog, которые полагались
+  на прежние дефолты, задают пороги явно; `mise run ci` зелёный.
+
+### WP-93 · Дефекты восстановления внутри прогона · размер S · статус: todo
+- Документы: `docs/design/contracts.md` §6 (попытки, решения `resume`/`new_session`), инварианты 11 и 17.
+- Зависит от: —
+- Сделать — четыре дефекта, каждый со своим тестом:
+  1. `crates/aae-core/src/run/machine.rs:123-133`: `resume` ищет последнюю непустую сессию шага и может воскресить
+     сессию, которую политика уже бросила (попытка `new_session` после `context_overflow` упала до записи своей
+     сессии, затем `resume` на `unknown`/`daemon_crash`). Искать только среди попыток после последней `new_session`
+     шага.
+  2. `machine.rs:275-278`: `new_session` после `daemon_crash` теряет недоставленный remark или continue
+     (`retry`/`unsettled` зовутся только для `resume`).
+  3. `crates/aae-core/src/run/exec.rs:245`: `let _ = core.send(Msg::Session)` — промпт уходит в сессию, которой нет в
+     БД. Возвращаться при ошибке, как для `Msg::Instance`.
+  4. `machine.rs:330-339`: эффект `stop` и хук `run.attempt_failed` идут параллельно после одного commit — хук,
+     снимающий копию транскрипта, видит его недописанным. Хук получает транскрипт после смерти процесса.
+- Результат: `machine.rs`, `exec.rs`, тесты в `crates/aae-testkit/tests/core`.
+- Готово, когда: по тесту на каждый дефект (падает до правки, проходит после); `mise run ci` зелёный.
+
+### WP-94 · Разрешения решает харнесс, ничего не ждёт человека · размер M · критичный · статус: todo
+- Документы: решения 116, 117, 120, 61, 90, 38, 4; `docs/design/contracts.md` §1.3, §3.3, §4, §6.1;
+  `docs/design/invariants.md` (15); `docs/overview.md:70`; `docs/api/frontends.md:102-105`;
+  `docs/guide/first-formula.md:20, 101-107`; `docs/guide/plugin.md:102, 118`; `docs/design/config.md:300`;
+  `README.md:39`.
+- Зависит от: —
+- Сделать:
+  - claude: `--permission-prompts none` вместо `--permission-prompt-tool stdio`
+    (`crates/aae-claude/src/part.rs:157-168`); `bypassPermissions`, если `native.claude` не задаёт режим. На любой
+    `control_request` от CLI адаптер сразу отвечает `control_response{subtype:"error", request_id, error}` и ничего
+    не шлёт в ядро (сейчас без ответа остаётся всё, кроме `can_use_tool`, например `elicitation` от MCP-сервера —
+    ход висит до `stall`); образец — `crates/aae-codex/src/rpc.rs:163-174`.
+  - codex: `approvalPolicy = "never"`, если `native.codex.approval_policy` не задан
+    (`crates/aae-codex/src/part.rs:131`), рядом с `sandbox_mode` по решению 38. Если пользователь задал другую
+    политику, серверные запросы на одобрение адаптер отклоняет сам: `decline` на `item/*/requestApproval`, ошибка на
+    `item/tool/requestUserInput` и `mcpServer/elicitation/request`.
+  - Из ядра, драйвера и фронта уходят: состояние `requires_action`, событие `run.requires_action`, `human_timeout` и
+    дедлайн `human`, `Msg::Answer`, `Decision::Answer`, `answer()`, эффект `respond`, `Driver::respond`,
+    `Normalized::PermissionRequested`, `RequestKind`, `Answer`, `attempts.request` (решение 114: схема одна, без
+    миграции), API `POST /v1/runs/{id}/answer` и `aae run answer`, `docs/api/openapi.json`. Ключ `[watchdog]
+    human_timeout` становится неизвестным — ошибка загрузки.
+  - Демо: убрать `human_timeout = "2m"` из `demos/*/root/config.toml` — правка разрешена владельцем (журнал 18:30).
+    Демо не запускать.
+  - Документы: как пользователь задаёт свою политику одобрения — только средствами харнесса, до старта, на любом
+    слое: claude `native.claude.permission_mode`, `permissions.allow/deny/ask`, харнесс-хуки `PermissionRequest` и
+    `PreToolUse`; codex `approval_policy` (в том числе гранулярная), `sandbox_mode`, `PreToolUse`. Хук может спросить
+    решение у aae или у другого агента через CLI или MCP aae (env сессии несёт `AAE_RUN`, `AAE_ATTEMPT_TOKEN`,
+    `AAE_SOCKET`).
+- Ловушки: `aae finish` — это Bash-вызов: при разрешающем дефолте проходит, а в примерах со строгими правилами нужен
+  `Bash(aae finish *)`. Фейковый драйвер `crates/aae-testkit/src/lib.rs:291-299`. Тест-снимок аргументов claude
+  `crates/aae-claude/src/tests.rs:12`.
+- Результат: ядро (`driver.rs`, `run/events.rs`, `decide.rs`, `hooks.rs`, `msg.rs`, `mod.rs`, `exec.rs`, `read.rs`,
+  `recover.rs`, `config/{schema,check,mod}.rs`, `store.rs`), адаптеры, фронт, тесты (удалить
+  `crates/aae-testkit/tests/core/requests.rs`; переписать s13 в контрактах обоих адаптеров на «запрос отклонён
+  харнессом, ход завершён»), документы, два конфига демо. Ожидаемо около −450 строк.
+- Готово, когда: в коде и `docs/` нет `requires_action`, `human_timeout`, `run answer`
+  (`git grep -nE 'requires_action|human_timeout|run answer'` пуст вне `.loop/`); контрактные сценарии s13 обоих
+  адаптеров зелёные на фейковом провайдере; тест: неизвестный `control_request` claude получает ответ-ошибку сразу;
+  `mise run ci` зелёный.
+
+### WP-95 · Событие `run.permission_denied` · размер S · статус: todo
+- Документы: решения 124 и 61, `docs/design/contracts.md` §1.3 (события), §4.3 (нормализованные события).
+- Зависит от: WP-94
+- Сделать: claude сообщает отказы в `system/permission_denied` (`tool_name`, `decision_reason_type`; best-effort) и в
+  `result.permission_denials[]` (`tool_name`, `tool_use_id`, `tool_input`). Адаптер нормализует их в одно
+  наблюдательное событие, ядро публикует `run.permission_denied` (без решения, ничего не ждёт). Один отказ — одно
+  событие: не дублировать то, что пришло обоими путями (ключ — `tool_use_id`). codex при `never` запросов не шлёт;
+  при чужой политике — отказ адаптера из WP-94 тоже даёт это событие.
+- Результат: `driver.rs`, `aae-claude/src/stream.rs`, `aae-codex`, `run/events.rs`, `config/schema.rs`, документы.
+- Готово, когда: тесты адаптеров на оба источника claude и на отказ адаптера codex; событие видно в
+  `aae run watch`; `mise run ci` зелёный.
+
+### WP-96 · Формула задаёт `native.<harness>` · размер S · статус: todo
+- Документы: решения 71 (пересмотрено), 90, 120; `docs/design/config.md` (слои, формула, `native`).
+- Зависит от: —
+- Сделать: у формулы, кроме `harness`, `model`, `effort`, появляется `native.<harness>` своих агентов (разрешения
+  среди прочего), слоем поверх проекта и под явной настройкой пользователя — как остальные launch-настройки. Шаг
+  формулы — только если это не добавляет нового механизма слоёв; иначе только формула, с записью в отчёте.
+- Результат: `crates/aae-core/src/config/` (файл формулы, сборка эффективного конфига), `aae config explain`,
+  документы.
+- Готово, когда: тест слоёв — формула переопределяет `native.claude.permission_mode` и `native.codex.approval_policy`
+  проекта, явная настройка пользователя бьёт формулу; `config explain` показывает источник; `mise run ci` зелёный.
+
+### WP-97 · Классификация отказов по структурным полям · размер M · статус: todo
+- Документы: решение 118, `docs/design/contracts.md:478-480, 511-512, 531-532` (сигналы и виды отказа),
+  `docs/harness-updates.md:21-24, 79`.
+- Зависит от: —
+- Проблема: адаптеры склеивают структурные значения с текстом в одну строку и ищут подстроки (`KINDS`:
+  `crates/aae-claude/src/stream.rs:11-31, 209-232`, `crates/aae-codex/src/stream.rs:12-38, 269-292`). Протоколы
+  актуальные, беда в склейке. Дефекты:
+  - C1 claude — подстроки ищутся и в свободном тексте `result`;
+  - C2 claude — после `rate_limit_event{rejected}` любой отказ хода становится `quota_exhausted`;
+  - C3 claude — `credits_required` затирается следующим assistant-сообщением;
+  - C4 claude — у `error_during_execution` текст в `errors[]`, адаптер его не читает;
+  - C8 claude — без `CLAUDE_CODE_STARTUP_FAILURE_RESULTS=1` отказ на старте пишет только stderr, ядро получает
+    `harness_crash` и гоняет resume вместо `config_error`;
+  - C5 codex — «upgrade to Plus» (`usage_not_included`) становится `quota_exhausted` без `retry_at`;
+  - C6 codex — «workspace out of credits» и spend cap становятся квотой, хотя есть `rateLimitReachedType`;
+  - C7 codex — 403, 408, 504, `flexUnavailable`, `policyCapacityUnavailable`, `sandboxError` уходят в `unknown`.
+- Сделать:
+  - claude: убрать `KINDS` и склейку; один `match` в порядке `startup_failure_reason` → `subtype`/`terminal_reason`
+    → `assistant.error` (13 категорий; `rejected`/`credits_required` — только при `rate_limit`) →
+    `api_error_status` → узкий текст → `unknown`. Env `CLAUDE_CODE_STARTUP_FAILURE_RESULTS=1`
+    (`crates/aae-claude/src/part.rs:242-246`). Ранний `auth_required` в `retry()` и при 403,
+    `oauth_org_not_allowed`, `cloud_credential_error`.
+  - codex: убрать `KINDS`; разбирать `codexErrorInfo` как `(вариант, httpStatusCode)`; в снапшоте лимитов хранить
+    `rateLimitReachedType` и `spendControlReached` (→ `billing`); ранний `auth_required` по статусу 401/403, а не по
+    подстроке `:401}` (`stream.rs:150`); `rpc.rs:100-113` — явная ветка для −32001.
+  - Неизвестное значение любого поля — не ошибка: дальше по порядку, в конце `unknown`; текст харнесса или само
+    значение (`terminal_reason=foo`) — в `text`, сырое — в `raw`. Отказ модели по политике, обрыв сети без статуса,
+    неизвестный `startup_failure_reason` — `unknown`.
+  - Значения полей сверять по `sdk.d.ts` пакета `@anthropic-ai/claude-agent-sdk` линии из `mise.toml` и по
+    `codex-rs/app-server-protocol` (v2) тега codex из `mise.toml`; версии — в отчёте.
+- Результат: `stream.rs`, `part.rs` claude; `stream.rs`, `rpc.rs` codex; таблицы тестов
+  `failed_turns_are_classified` (claude) и `every_final_error_has_its_kind` (codex) — по строке на каждое значение и на
+  C1–C8; документы. Около 290 строк диффа.
+- Готово, когда: каждый из C1–C8 закрыт тестом; неизвестное значение каждого поля даёт `unknown` с текстом;
+  контрактные сценарии обоих адаптеров зелёные без правки ожиданий; `mise run ci` зелёный.
+
+### WP-98 · Сбой старта MCP-сервера проваливает попытку · размер S · статус: todo
+- Документы: решение 119, `docs/design/contracts.md:383` («nothing a driver reports is dropped»), `docs/api/mcp.md`.
+- Зависит от: WP-97 (классификация ошибок RPC)
+- Сделать:
+  - codex, серверы aae: ставить `required = true` серверам, которые выдаёт aae (`crates/aae-codex/src/part.rs`, сборка
+    `mcp_servers`). Тогда `thread/start`/`thread/resume` падает ошибкой −32603 «required MCP servers failed to
+    initialize: <name>: <error>» — классифицировать как `tool_failure`. Отказ виден до первого промпта, без токенов.
+  - codex, серверы рига и хоста (`.codex/config.toml`): уведомление `mcpServer/startupStatus/updated{threadId, name,
+    status: failed, error}` → `tool_failure` треду; сейчас выбрасывается в `crates/aae-codex/src/stream.rs:215`.
+    Быстрый `failed` может прийти раньше ответа `thread/start` — держать до привязки сессии.
+  - claude: `init.mcp_servers[].status` `needs-auth` — тоже `tool_failure` (сейчас только `failed`,
+    `crates/aae-claude/src/stream.rs:95-108`); `mcp_server_errors[]` — в текст отказа.
+- Ловушка: при `required = true` `thread/start` ждёт старта серверов до `startup_timeout_sec` (30 с), это в пределах
+  `CALL_TIMEOUT` 60 с. Поведение `required` в параметрах треда (а не в `config.toml`) видно только по коду codex —
+  закрыть контрактным тестом на фейке.
+- Результат: `aae-codex` (`part.rs`, `stream.rs`, `rpc.rs`), `aae-claude/src/stream.rs`, тесты, документы.
+- Готово, когда: тесты — сервер aae с `required` не стартовал → `tool_failure` до промпта; уведомление `failed` для
+  сервера рига → `tool_failure`; claude `needs-auth` → `tool_failure`; `mise run ci` зелёный.
+
+### WP-99 · Фоновый subagent claude после конца хода — под `background_silence` · размер S · статус: todo
+- Документы: решение 121, инвариант 15, `docs/design/experiments.md` («Idle without background», эксперимент 1b),
+  `docs/design/contracts.md` §6.1.
+- Зависит от: WP-92
+- Проблема: по эксперименту 1b после `result` с живым фоновым subagent состояние сессии остаётся `running`, поэтому
+  ядро держит `silence`, а не `background_silence` (`background_silence` взводится только на
+  `State{Idle, background:true}`, `crates/aae-core/src/run/events.rs:203`; адаптер —
+  `crates/aae-claude/src/stream.rs:110-133`). Фоновый агент живёт долго; ему нужен свой бюджет.
+- Сделать: сначала проверить на стенде — claude против локального фейкового API, без модели и аккаунта (разрешено
+  владельцем, журнал 19:10): какие события идут после `result`, пока работает фоновый subagent, и есть ли среди них
+  поток, сбрасывающий `silence`. Затем — правка адаптера и/или ядра, чтобы между `result` и концом фона действовал
+  `background_silence`. Итог замера — в `docs/design/experiments.md` с `MEASURE`, код стенда не коммитить
+  (решение 54).
+- Результат: адаптер claude и/или `run/events.rs`, тест на фейке, запись в `experiments.md`.
+- Готово, когда: тест — после `result` при непустом `background_tasks_changed` с `local_agent` ядро взводит
+  `background_silence`; замер записан; `mise run ci` зелёный.
+
+### WP-100 · Инструменты ручного восстановления · размер S · статус: todo
+- Документы: решение 122, `docs/api/frontends.md` (команды прогона), `docs/design/contracts.md` §6, решения 17, 18, 92.
+- Зависит от: WP-93
+- Суть: прогон, упавший окончательно, человек или его агент разбирает руками; aae даёт инструменты, а не сценарий.
+  Автоматики, конфига «формула на статус» и формулы по умолчанию нет.
+- Сделать — аудит и только недостающее:
+  - увидеть последствия: какие прогоны и сессии упали и с какими видами отказа (`aae run list --state failed`,
+    `aae run show`). Проверить, что видны вид и причина отказа и ссылки на сессии **всех** попыток; фильтр по виду
+    отказа — только если без него список не собрать;
+  - S1, продолжить сессию: `aae run start <формула> --continue <run>` — проверить на прогоне, упавшем на попытке;
+  - S2, новая сессия на ту же задачу: новый прогон формулы на тот же bead — проверить, что bead упавшего прогона
+    можно взять снова;
+  - S3, S2 с запиской «начато раньше, состояние неизвестно, разберись»: самый малый путь — вход формулы в шаблоне
+    промпта, без кода ядра; код ядра — только если так нельзя, с обоснованием в отчёте;
+  - S4, бросить: `aae run cancel` / провал и что происходит с bead.
+  - Новый `docs/guide/recovery.md`: как пройти S1–S4 командами aae.
+- Результат: что окажется недостающим во фронте/ядре, тесты e2e на каждый сценарий, `docs/guide/recovery.md`,
+  ссылка из `docs/README.md`.
+- Готово, когда: по e2e-тесту на S1–S4 на фейковом драйвере; гайд описывает их командами, которые есть;
+  `mise run ci` зелёный.
+
+### WP-101 · Скилл восстановления — плагин Claude Code и Codex · размер S · статус: todo
+- Документы: решения 122 и 125, `docs/guide/recovery.md` (из WP-100), `docs/guide/plugin.md`.
+- Зависит от: WP-100
+- Сделать: скилл для агента пользователя «разгрести последствия сбоя»: найти упавшие прогоны и сессии, показать виды
+  отказа, предложить S1–S4 и выполнить выбранное командами aae. Поставляется плагином систем плагинов Claude Code и
+  Codex (формат обоих сверить по их документации на линии из `mise.toml`; структура почти общая), только для этих
+  двух харнессов. Никакой магии: скилл ведёт пользователя, решает пользователь.
+- Результат: каталог плагина в репозитории (место выбрать по `docs/architecture.md`), проверка формата манифестов в
+  `mise run ci` (без живых харнессов), упоминание в `docs/guide/recovery.md`.
+- Готово, когда: манифесты обоих харнессов проходят проверку в CI; скилл ссылается только на существующие команды;
+  `mise run ci` зелёный.
