@@ -68,9 +68,26 @@ pub(super) enum StepFile {
         name: Option<String>,
         formula: String,
         timeout: Option<String>,
+        /// The most beads in work at once (spec §9.1); default 1.
+        pool: Option<NonZeroU32>,
+        #[serde(default)]
+        on_item_failure: OnItemFailure,
         max_attempts: Option<NonZeroU32>,
         step_check_script_path: Option<String>,
     },
+}
+
+/// What a drain step does once the run of a bead failed (spec §9.1).
+#[derive(Clone, Copy, Debug, Default, Deserialize, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum OnItemFailure {
+    /// It gives the other beads; the failure does not fail the step.
+    #[default]
+    Continue,
+    /// It gives no new bead and lets the started ones end, then fails.
+    SoftStop,
+    /// It cancels the started ones, then fails.
+    HardStop,
 }
 
 #[derive(Clone, Debug)]
@@ -124,7 +141,13 @@ pub enum StepKind {
         timeout: Option<Duration>,
     },
     /// Every ready bead under the run's bead gets a run of `formula` (spec §9.1, §10.1).
-    Drain { formula: Name, timeout: Option<Duration> },
+    Drain {
+        formula: Name,
+        timeout: Option<Duration>,
+        /// The most beads in work at once; at least 1.
+        pool: u32,
+        on_item_failure: OnItemFailure,
+    },
 }
 
 impl StepKind {

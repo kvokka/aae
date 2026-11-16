@@ -77,7 +77,7 @@ const SHIP: &[(&str, &str)] = &[
 const SWEEP: &[(&str, &str)] = &[(
     "shop/formulas/sweep.toml",
     "name = \"sweep\"\n[inputs]\nbead = { type = \"task\", required = true }\n\
-     [[step]]\nkind = \"drain\"\nformula = \"fix\"\n\
+     [[step]]\nkind = \"drain\"\nformula = \"fix\"\npool = 2\n\
      [[step]]\nkind = \"ai\"\nagent = \"dev\"\n",
 )];
 

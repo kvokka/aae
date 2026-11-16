@@ -13,6 +13,7 @@ mod beads;
 mod children;
 mod deciding;
 mod drain;
+mod drain_pool;
 mod drain_rounds;
 mod drain_steps;
 mod driver_events;

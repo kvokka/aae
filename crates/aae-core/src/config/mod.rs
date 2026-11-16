@@ -18,7 +18,7 @@ mod variants;
 use crate::template::{Filter, Inputs};
 pub use assemble::{EffectiveConfig, Layer, Sourced};
 pub use files::{Harness, Hook, Mcp, McpScope, PluginUse, Settings, Skill};
-pub use formula_file::{Formula, Input, InputType, Step, StepKind};
+pub use formula_file::{Formula, Input, InputType, OnItemFailure, Step, StepKind};
 pub use places::Scope;
 pub use prompt::{Prompt, TEMPLATE};
 pub use service::{Health, Service, ServiceScope};

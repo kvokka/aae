@@ -11,7 +11,7 @@ use super::{
     triggers::MAX_DEPTH,
 };
 use crate::{
-    config::InputType,
+    config::{InputType, OnItemFailure},
     tracker::{Bead, TrackerError},
     writer::{Error, Tx},
 };
@@ -62,9 +62,11 @@ impl RunHandler {
     }
 
     /// Gives each ready bead under the run's bead that this entry of the step has not given yet a run of the step's
-    /// formula; a refused bead gets no run and stays open. The step passes once nothing was given, no child is alive
-    /// and no later read is queued, with `{closed, failed, refused}` of the beads of this entry. A restart starts a
-    /// new attempt, not a new entry; a round does.
+    /// formula, at most `pool` in work at once; a refused bead gets no run and stays open. The step passes once
+    /// nothing was given, no child is alive and no later read is queued, with `{closed, failed, refused}` of the beads
+    /// of this entry. Once a bead failed under `soft_stop` no bead is given; under `hard_stop` the alive children are
+    /// cancelled too; the step then fails with `stopped_on` and `not_started` besides. A restart starts a new
+    /// attempt, not a new entry; a round does.
     fn pass(&mut self, tx: &mut Tx<'_>, row: Row, under: &BTreeMap<String, Vec<String>>) -> Result<(), Error> {
         let Some(root) = row.bead.clone().filter(|_| row.state == "running") else {
             return Ok(());
@@ -81,23 +83,43 @@ impl RunHandler {
             let reason = format!("formula `{formula}` of the drain step is gone or takes no bead");
             return self.terminal(tx, row, "failed", Some("infrastructure"), &reason);
         };
-        // `(bead, state, given by this entry)` of every child on a bead. The entry is the tail of the run's attempts
-        // on this step after its last execution: a round back to it passes through an attempt of another step, a
-        // repeat through an attempt of it with an outcome (spec §9.1).
-        let kids: Vec<(String, String, bool)> = {
+        // `(id, bead, state, given by this entry)` of every child on a bead. The entry is the tail of the run's
+        // attempts on this step after its last execution: a round back to it passes through an attempt of another
+        // step, a repeat through an attempt of it with an outcome (spec §9.1).
+        let kids: Vec<(String, String, String, bool)> = {
             let mut stmt = tx.sql().prepare(
-                "SELECT r.bead, r.state, r.created_ms >= (SELECT MIN(a.started_ms) FROM attempts a WHERE a.run = ?1 \
-                 AND a.n > (SELECT COALESCE(MAX(n), 0) FROM attempts WHERE run = ?1 \
+                "SELECT r.id, r.bead, r.state, r.created_ms >= (SELECT MIN(a.started_ms) FROM attempts a \
+                 WHERE a.run = ?1 AND a.n > (SELECT COALESCE(MAX(n), 0) FROM attempts WHERE run = ?1 \
                  AND (step != ?2 OR (outcome IS NOT NULL AND failure IS NULL)))) \
                  FROM runs r WHERE r.parent_run = ?1 AND r.bead IS NOT NULL ORDER BY r.n",
             )?;
-            let rows = stmt.query_map(params![row.id, row.step], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)))?;
+            let rows = stmt.query_map(params![row.id, row.step], |r| {
+                Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?))
+            })?;
             rows.collect::<Result<_, _>>()?
         };
+        let live = |state: &str| !matches!(state, "passed" | "failed" | "cancelled");
+        let policy: OnItemFailure = serde_json::from_value(config["on_item_failure"].clone()).unwrap_or_default();
+        // Stopped: a bead of this entry failed under a policy that stops. Derived from the children, so a restart
+        // keeps it and a new entry (a repeat, a round) clears it.
+        let stopped =
+            policy != OnItemFailure::Continue && (kids.iter()).any(|(_, _, state, mine)| *mine && state == "failed");
+        if stopped && policy == OnItemFailure::HardStop {
+            for (id, ..) in kids.iter().filter(|(_, _, state, _)| live(state)) {
+                self.cancel(tx, id, "drain_hard_stop")?;
+            }
+        }
+        // A child in work holds a place of the pool from its creation, queued or running.
+        let pool = usize::try_from(config["pool"].as_u64().unwrap_or(1)).unwrap_or(usize::MAX);
+        let mut free = pool.saturating_sub(kids.iter().filter(|(_, _, state, _)| live(state)).count());
         let depth = row.depth + 1;
-        let (mut given, mut refused) = (0, Map::new());
+        let (mut given, mut refused, mut not_started) = (0, Map::new(), Vec::new());
         for bead in Self::ready_in(tx, &row.project, None)? {
-            if !under.contains(&bead) || kids.iter().any(|(b, _, mine)| *mine && *b == bead) {
+            if !under.contains(&bead) || kids.iter().any(|(_, b, _, mine)| *mine && *b == bead) {
+                continue;
+            }
+            if stopped || free == 0 {
+                not_started.push(bead);
                 continue;
             }
             if depth > MAX_DEPTH {
@@ -117,12 +139,17 @@ impl RunHandler {
                 continue_from: None,
             };
             match tx.unit(|tx| self.create(tx, create)) {
-                Ok(_) => given += 1,
+                Ok(_) => {
+                    given += 1;
+                    free -= 1;
+                }
                 Err(Error::Rejected(why)) => drop(refused.insert(bead, json!(why))),
                 Err(e) => return Err(e),
             }
         }
-        let alive = (kids.iter()).any(|(_, state, _)| !matches!(state.as_str(), "passed" | "failed" | "cancelled"));
+        // The list is of before the cancels above: a child they ended is still alive in it, and its end queues the
+        // read that ends the step.
+        let alive = (kids.iter()).any(|(_, _, state, _)| live(state));
         // The read in hand is still in the queue. Another one behind it may bring a bead the end of a child made
         // ready (one the child's bead blocked): the step ends on the last read.
         let reads: i64 = tx.sql().query_row(
@@ -135,20 +162,31 @@ impl RunHandler {
         }
         let of = |states: &[&str]| -> Vec<&String> {
             (kids.iter())
-                .filter(|(_, state, mine)| *mine && states.contains(&state.as_str()))
-                .map(|(bead, ..)| bead)
+                .filter(|(_, _, state, mine)| *mine && states.contains(&state.as_str()))
+                .map(|(_, bead, ..)| bead)
                 .collect()
         };
         let (closed, failed) = (of(&["passed"]), of(&["failed", "cancelled"]));
-        let outcome = Outcome {
-            result: Verdict::Pass,
-            summary: format!(
-                "{} closed, {} failed, {} refused",
-                closed.len(),
-                failed.len(),
-                refused.len()
-            ),
-            data: Some(json!({ "closed": closed, "failed": failed, "refused": refused })),
+        let counts = format!("{} closed, {} failed", closed.len(), failed.len());
+        let outcome = if stopped {
+            let on = of(&["failed"]);
+            let on_ids: Vec<&str> = on.iter().map(|b| b.as_str()).collect();
+            Outcome {
+                result: Verdict::Fail,
+                summary: format!(
+                    "stopped on {}: {counts}, {} not started",
+                    on_ids.join(", "),
+                    not_started.len()
+                ),
+                data: Some(json!({ "closed": closed, "failed": failed, "refused": refused,
+                    "stopped_on": on, "not_started": not_started })),
+            }
+        } else {
+            Outcome {
+                result: Verdict::Pass,
+                summary: format!("{counts}, {} refused", refused.len()),
+                data: Some(json!({ "closed": closed, "failed": failed, "refused": refused })),
+            }
         };
         self.step_done(tx, row, &outcome)
     }

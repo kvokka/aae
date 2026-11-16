@@ -15,7 +15,7 @@ pub(super) const DRAIN_TIMEOUT_MS: i64 = 24 * 3_600_000;
 
 impl RunHandler {
     /// The prompt, the step timeout and the config snapshot of a run, from the config of now: the effective config
-    /// of an ai step; `{"command", "env"}` of an exec step; `{"drain"}`, the formula of its runs, of a drain step.
+    /// of an ai step; `{"command", "env"}` of an exec step; `{"drain", "pool", "on_item_failure"}` of a drain step.
     pub(super) fn render(&self, tx: &Tx<'_>, row: &Row) -> Result<(Option<String>, i64, Value), String> {
         let project = self.config.projects.iter().find(|p| p.name == row.project);
         let project = project.ok_or(format!("project `{}` is gone from the config", row.project))?;
@@ -38,8 +38,17 @@ impl RunHandler {
                 return Ok((None, timeout_ms(timeout, STEP_TIMEOUT_MS), config));
             }
             // The environment is for the check script of the step (spec §9.1).
-            (StepKind::Drain { formula, timeout }, "drain") => {
-                let config = json!({ "drain": formula.to_string(), "env": env });
+            (
+                StepKind::Drain {
+                    formula,
+                    timeout,
+                    pool,
+                    on_item_failure,
+                },
+                "drain",
+            ) => {
+                let config = json!({ "drain": formula.to_string(), "pool": pool,
+                    "on_item_failure": on_item_failure, "env": env });
                 return Ok((None, timeout_ms(timeout, DRAIN_TIMEOUT_MS), config));
             }
             (StepKind::Ai { timeout, .. }, "ai") => timeout,

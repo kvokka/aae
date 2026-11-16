@@ -7,7 +7,7 @@ use super::{
     runs::{BAD_QUERY, REJECTED},
 };
 use aae_core::{
-    config::{Config, Name, Project, Rig, StepKind},
+    config::{Config, Name, OnItemFailure, Project, Rig, StepKind},
     run::Msg,
 };
 use axum::{Json, extract::Query, http::HeaderMap, http::StatusCode};
@@ -202,8 +202,20 @@ pub(crate) fn explained(config: &Config, project: &str, of: &Explain, rig: Optio
                         text += &format!("# step `{name}` of `{formula}`: exec `{}`\n", command.join(" "));
                         None
                     }
-                    StepKind::Drain { formula: each, .. } => {
-                        text += &format!("# step `{name}` of `{formula}`: drain, a run of `{each}` per bead\n");
+                    StepKind::Drain {
+                        formula: each,
+                        pool,
+                        on_item_failure,
+                        ..
+                    } => {
+                        let stop = match on_item_failure {
+                            OnItemFailure::Continue => "",
+                            OnItemFailure::SoftStop => "; on a failed bead: soft_stop",
+                            OnItemFailure::HardStop => "; on a failed bead: hard_stop",
+                        };
+                        text += &format!(
+                            "# step `{name}` of `{formula}`: drain, a run of `{each}` per bead, {pool} at a time{stop}\n"
+                        );
                         None
                     }
                     StepKind::Ai { .. } => {

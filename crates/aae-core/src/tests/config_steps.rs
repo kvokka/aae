@@ -78,7 +78,10 @@ fn a_drain_step_names_a_formula_that_takes_one_bead() {
     let bead = "root = { type = \"task\", required = true }";
     let config = load_with(&[(FLOW, &ship(bead, "implement"))]).unwrap();
     let step = &config.projects[0].packs[1].formulas["flow"].steps[0];
-    let crate::config::StepKind::Drain { formula, timeout: None } = &step.kind else {
+    let crate::config::StepKind::Drain {
+        formula, timeout: None, ..
+    } = &step.kind
+    else {
         panic!("{step:?}");
     };
     assert_eq!(
@@ -105,6 +108,44 @@ fn a_drain_step_names_a_formula_that_takes_one_bead() {
         &[(FLOW, &ship("root = { type = \"bead\" }", "implement"))],
         "input type `bead` is `task` now",
     );
+}
+
+/// A drain step keeps `pool` beads in work, 1 unless set, and stops on a failed bead as `on_item_failure` says,
+/// `continue` unless set (spec §9.1); a bad value is one error, placed at the step's header.
+#[test]
+fn a_drain_step_takes_pool_and_on_item_failure() {
+    use crate::config::{OnItemFailure, StepKind};
+    let ship = |keys: &str| {
+        format!(
+            "name = \"flow\"\n[inputs]\nroot = {{ type = \"task\", required = true }}\n\
+             [[step]]\nname = \"all\"\nkind = \"drain\"\nformula = \"implement\"\n{keys}"
+        )
+    };
+    let drain = |keys: &str| {
+        let config = load_with(&[(FLOW, &ship(keys))]).unwrap();
+        match &config.projects[0].packs[1].formulas["flow"].steps[0].kind {
+            StepKind::Drain {
+                pool, on_item_failure, ..
+            } => (*pool, *on_item_failure),
+            kind => panic!("{kind:?}"),
+        }
+    };
+    assert_eq!(drain(""), (1, OnItemFailure::Continue));
+    assert_eq!(
+        drain("pool = 3\non_item_failure = \"hard_stop\"\n"),
+        (3, OnItemFailure::HardStop)
+    );
+    assert_eq!(drain("on_item_failure = \"soft_stop\"\n").1, OnItemFailure::SoftStop);
+    for (keys, needle) in [
+        ("pool = 0\n", "expected a nonzero u32"),
+        ("on_item_failure = \"stop\"\n", "unknown variant `stop`"),
+    ] {
+        let errors = load_with(&[(FLOW, &ship(keys))]).expect_err(keys);
+        assert_eq!(errors.len(), 1, "{errors:?}");
+        assert!(errors[0].message.contains(needle), "{errors:?}");
+    }
+    let exec = "name = \"flow\"\n[[step]]\nkind = \"exec\"\ncommand = [\"true\"]\npool = 2\n";
+    fails(&[(FLOW, exec)], "unknown field `pool`");
 }
 
 /// A check names an earlier step to go back to; the formula bounds the rounds (spec §9.1).

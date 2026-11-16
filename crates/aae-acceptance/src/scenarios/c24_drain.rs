@@ -21,7 +21,7 @@ const WITHIN: Duration = Duration::from_secs(90);
 
 const SHIP: &str = "name = \"ship\"\n[inputs]\ntask = { type = \"task\", required = true }\n\
     [[step]]\nname = \"plan\"\nkind = \"exec\"\ncommand = [\"sh\", \"{dir}/plan.sh\"]\ntimeout = \"120s\"\n\
-    [[step]]\nname = \"drain\"\nkind = \"drain\"\nformula = \"work\"\n\
+    [[step]]\nname = \"drain\"\nkind = \"drain\"\nformula = \"work\"\npool = 4\n\
     [[step]]\nname = \"report\"\nkind = \"exec\"\ncommand = [\"sh\", \"{dir}/report.sh\"]\ntimeout = \"120s\"\n";
 
 /// The ai step names `ops`; the label `agent:dev` of a bead gives its run `dev`, and with it `dev`'s template.

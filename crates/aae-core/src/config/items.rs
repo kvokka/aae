@@ -239,9 +239,17 @@ impl Loader {
                     timeout: self.timeout(file, timeout.as_deref()),
                 }
             }
-            StepFile::Drain { formula, timeout, .. } => StepKind::Drain {
+            StepFile::Drain {
+                formula,
+                timeout,
+                pool,
+                on_item_failure,
+                ..
+            } => StepKind::Drain {
                 formula: reference(&formula),
                 timeout: self.timeout(file, timeout.as_deref()),
+                pool: pool.map_or(1, std::num::NonZeroU32::get),
+                on_item_failure,
             },
         })
     }

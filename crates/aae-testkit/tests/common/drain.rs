@@ -31,7 +31,7 @@ pub(crate) const SWEEP: &[(&str, &str)] = &[
     (
         "shop/formulas/sweep.toml",
         "name = \"sweep\"\n[inputs]\nbead = { type = \"task\", required = true }\n\
-         [[step]]\nname = \"all\"\nkind = \"drain\"\nformula = \"work\"\n\
+         [[step]]\nname = \"all\"\nkind = \"drain\"\nformula = \"work\"\npool = 8\n\
          [[step]]\nname = \"wrap\"\nkind = \"ai\"\nagent = \"scribe\"\n",
     ),
 ];
