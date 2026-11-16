@@ -18,6 +18,7 @@ Cheap experiments came first and the core after them. The set and where each sta
 | 5 | credentials in a session with host inheritance off | config delivery | done for claude and codex API keys; codex subscription login not checked (below) |
 | 6 | finisher from a session: token in the environment, resume, the codex sandbox | finisher | done except the sandbox: deferred until after the release, on a host with user namespaces or macOS; until then the codex adapter sets `danger-full-access` ([config](config.md)) |
 | 7 | opencode, by the open questions of spec §7.6 | next release | deferred to the next release, with the opencode adapter |
+| 8 | background work after the outcome: what stops a command a session left running, without touching other sessions (spec §9.4, §17) | criterion 34 | done for codex and claude on fake providers (below) |
 
 Common setup for the claude experiments: `claude -p --input-format stream-json --output-format stream-json
 --verbose --setting-sources "" --strict-mcp-config --model haiku`, clean environment (only `PATH`, `HOME`, `LANG`,
@@ -326,3 +327,85 @@ Open: refresh of a delivered OAuth token after expiry (spec §6.4).
   Without a key of its own, an isolated process logs in as the host does: the host `auth.json` is linked into its
   `CODEX_HOME`, and a model provider the host config selects comes as the first `-c` flags with its `env_key`
   variable passed from the daemon's environment (`aae-codex/src/part.rs::host_provider`).
+
+## Background work after the outcome (experiment 8, criterion 34)
+
+Code: two throwaway Python scripts outside the product tree (`.loop/cycles/98/notes/wp83_codex.py`,
+`wp83_claude.py`, process helpers in `wp83_proc.py`), each with its own fake provider: codex gets a Responses API that
+answers a `RUN:<cmd>` prompt with one `exec_command` call (`yield_time_ms: 1000`) and then the text "Started.";
+claude gets a Messages API that answers it with one `Bash` call (`run_in_background: true` unless noted) and then
+the text. No live model. The left command is `python3 -m http.server --bind 127.0.0.1 0`, the case seen in demo 2.
+Every session carries `AAE_ATTEMPT_TOKEN` as the adapters set it (codex: `shell_environment_policy.set` of the thread;
+claude: the process environment); a second session (codex: thread B of the same app-server running `sleep 300`;
+claude: a decoy `sleep 300` with another token) must survive every mechanism. After each case the script lists every
+process carrying the markers from `/proc`.
+
+<!-- MEASURE id=bg-after-outcome-exp8 date=2026-11-16 ver=claude-2.1.325,codex-0.168.0 env=linux-arm64-orbstack src=.loop/cycles/98/notes/wp83-experiment.md note="fake providers, no model; n=2 for codex clean/unsubscribe and claude stop_task/SIGTERM, n=1 for the other cases" -->
+
+### codex
+
+The turn ends (`turn/completed{completed}`) while the command still runs; `thread/backgroundTerminals/list`
+(experimental API, the adapter already initializes with `experimentalApi: true`) shows it with its `processId`
+(`osPid` is still `null` in 0.168.0). app-server runs every command in a **new session** (`sid = pgid = pid` of the
+command's shell, parent app-server); a shell that stays (`cmd; true`) keeps its children in that session.
+
+| Mechanism, on thread A after its turn | A's command | thread B's command | What the client sees |
+|---|---|---|---|
+| `thread/backgroundTerminals/clean{threadId}` | gone, with the shell's children | alive | `{}`, then `item/completed` of the command within 10 ms |
+| `thread/backgroundTerminals/terminate{threadId, processId}` | gone | alive | `{terminated: true}`, then `item/completed` |
+| `thread/unsubscribe` (with `thread_unload_delay_secs=0`) | gone | alive | `unsubscribed`, `thread/status/changed{notLoaded}`, `thread/closed`; **no** `item/completed` |
+| `turn/interrupt` on the ended turn | alive | alive | error `-32600` "no active turn to interrupt" |
+| EOF on stdin (app-server exits) | gone | gone | exit code 0 |
+| kill of every process with A's token (outside codex) | gone | alive | `item/completed` of the command, as if it ended |
+
+A command that detaches itself (`setsid … >/dev/null 2>&1 &`) ends its `exec_command` at once: the turn has no
+background, `backgroundTerminals/list` is empty, `clean` does nothing, and the server lives on re-parented to PID 1 (to
+the daemon, the child subreaper, in the product). It still carries A's token, and the token sweep finds and kills it.
+A plain `cmd &` with its output on the command's terminal died with the terminal (nothing was left).
+
+### claude
+
+The turn ends with `result` and `session_state_changed{idle}` while the background task runs (as in experiment 1b).
+The Bash tool's shell runs in a new session; the server is its child in that session.
+
+| Mechanism, after the turn | The task's processes | claude | What the stream shows |
+|---|---|---|---|
+| `control_request{subtype:"stop_task", task_id}` | gone, shell and child | alive, next prompt possible | `task_updated{killed}`, `task_notification{status:"stopped"}`, `background_tasks_changed{tasks:[]}`, `control_response{success}`, `idle`; **no** self-started turn in 4 s |
+| `control_request{subtype:"interrupt"}` | alive | alive | `control_response{still_queued:[]}`, `idle` |
+| `control_request{subtype:"end_session"}` | gone | exits 0 | `task_notification{stopped}`, empty task list, EOF; the session cannot take a next prompt |
+| EOF on stdin | alive | **keeps running** while the task lives | nothing; claude waits for its background task |
+| SIGTERM to claude | gone | exits 143 | `task_notification{stopped}`, empty task list, EOF |
+| kill of the task's processes (outside claude) | gone | alive | `task_notification{status:"failed"}` and a **self-started turn** (`result`, a model request) |
+
+`task_id` comes from `task_started` or `background_tasks_changed`. A `setsid … &` started by a foreground Bash
+escapes as with codex (PID 1 here, the daemon in the product) and is found only by the token sweep. The decoy of the
+other token survived every case.
+
+### Recommended mechanism
+
+Once the outcome is declared and the turn has ended, the adapter stops what the session left, in two steps:
+
+1. **Through the harness**, so it accounts for the stop: codex — `thread/backgroundTerminals/clean{threadId}` (one
+   call per thread; only that thread's commands go; the command's `item/completed` follows and the stream already
+   turns it into "idle without background"); claude — `stop_task` for every task of the last
+   `background_tasks_changed`. Neither ends the session, so a veto remark (§9.4) can still go to it as the next prompt.
+   Not `unsubscribe` or `end_session`: they close the session, and `unsubscribe` gives no `item/completed`.
+2. **Then the token sweep**: kill every process whose `/proc/<pid>/environ` holds this attempt's
+   `AAE_ATTEMPT_TOKEN` and whose session id differs from the harness process's (app-server, or claude itself, which
+   carries the token too). This catches commands that detached themselves; other sessions are never touched, the
+   token is per attempt.
+
+Limits and things to get right:
+
+- claude: a `task_notification` after the last `result` keeps the session in "background" by rule (c) of experiment 1b
+  (`crates/aae-claude/src/stream.rs`, `notified_since_result`). After the adapter's own `stop_task` no turn follows,
+  so a `task_notification{status:"stopped"}` of a task the adapter stopped must not count as a wake-up, or the
+  session waits for the background budget anyway. A task killed from outside (`failed`) does wake claude into a
+  model turn — another reason to stop tasks through `stop_task`, not by signals.
+- `thread/backgroundTerminals/*` is experimental in codex; the contract suite has to cover it on every update. If it
+  goes away, `unsubscribe` is the fallback (the session then needs a resume for a next prompt).
+- The sweep relies on `/proc` (Linux only, like the orphan sweep) and on the command keeping its environment; a
+  process that clears it is caught only by the subreaper as an orphan, not stopped.
+- Not checked: a background subagent of claude (`local_agent`) under `stop_task`; whether codex per-thread MCP
+  servers carry the thread's token (the session-id filter of step 2 is meant to spare them, since they are not
+  started with `setsid`); macOS.
