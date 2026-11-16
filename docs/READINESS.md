@@ -13,18 +13,18 @@ no row, or a row not run holds the score at 6. In a CI run, which runs no model,
 than the last change of `crates/`. A 10 needs criterion 20 not open, which in a full run means every row of it green;
 and the `readiness` marker must name a commit at or after the last change of `crates/`.
 
-Assessed 2026-11-16 at `3ff9329`, by the letter of the scale. The project root and agent scope (decisions 95, 99) and
+Assessed 2026-11-16 at `8963068`, by the letter of the scale. The project root and agent scope (decisions 95, 99) and
 the new criteria 28 to 34 opened work, all of it done now: rig prefixes of beads (24, 32), the task input (28), step
 repeats with their check script (29), `drain` with `pool` and `on_item_failure` (30), the `formula` step and `internal`
 formulas (31), the agent's prompt template with files from the project (33) and the background stopped after an
-outcome (34), each with its rows green. At `3ff9329`, the last change of `crates/`, every row of the spec but those
+outcome (34), each with its rows green. At `8963068`, the last change of `crates/`, every row of the spec but those
 of criteria 20 and 22 ran with real models (claude haiku, codex `gpt-5.6-luna`, claude 2.1.325, codex-cli 0.168.0,
-br 0.7.6): 42 of 42 passed in 530 s, the request rows 1, 2, 4a, 8 and 17 among them. Criterion 22 is this file,
+br 0.7.6): 42 of 42 passed in 536 s, the request rows 1, 2, 4a, 8 and 17 among them. Criterion 22 is this file,
 checked by `acceptance-ci` on the same code. Criterion 20 is open: the demos of the current config shape (runs
 without a rig, agent scope, `[root]`) have not run live (the last live demo runs were on `c1fa9bc`), so no component
 scores 10.
-<!-- MEASURE id=full-run date=2026-11-16 ver=3ff9329 env=linux-arm64-orbstack src=aae-acceptance note="every row of the spec but criteria 20 and 22 with real models, 42 of 42; the live demos of 20 are open, last run on c1fa9bc; 22 and the CI rows of 20 by acceptance-ci on the same code" -->
-<!-- MEASURE id=readiness date=2026-11-16 ver=3ff9329 env=linux-arm64-orbstack src=docs/READINESS.md note="scored by the letter of spec 14 against the full run at this commit and the open part of criterion 20" -->
+<!-- MEASURE id=full-run date=2026-11-16 ver=8963068 env=linux-arm64-orbstack src=aae-acceptance note="every row of the spec but criteria 20 and 22 with real models, 42 of 42; the live demos of 20 are open, last run on c1fa9bc; 22 and the CI rows of 20 by acceptance-ci on the same code" -->
+<!-- MEASURE id=readiness date=2026-11-16 ver=8963068 env=linux-arm64-orbstack src=docs/READINESS.md note="scored by the letter of spec 14 against the full run at this commit and the open part of criterion 20" -->
 
 | Component | Criteria | Score | Missing for the next point |
 |---|---|---|---|
