@@ -481,7 +481,7 @@ worktree = true                     # optional (default false): each run works i
 rounds = 3                          # optional (default 3): the most rounds a check may send the run through
 
 [inputs]
-bead = { type = "bead", required = true }   # bead | string | integer | boolean
+task = { type = "task", required = true }   # task | string | integer | boolean
 
 [[step]]
 name = "implement"                  # optional (default: the position, "1", "2", ..)
@@ -551,12 +551,12 @@ continued.
 
 A run start checks the inputs: no undeclared one, every `required` one present (`null` is no value), an `integer` input
 a JSON integer or its text, a `boolean` one a JSON boolean or `true`/`false` as text, a `string` one a string (the CLI
-sends `--input` values as text). A `bead` input is a bead id, `{ next_ready = true, epic = <id> }` or
-`{ request = "<text>" }`: a request (only that key, a text that is not blank; the rig must be named) has the tracker
-create the run's root bead as the run prepares, titled with the first line of the text and described by all of it, and
-the input then holds its id ([tracker-br.md](tracker-br.md#beads-and-runs)); a bead named by id that belongs to
-another rig, by the prefix of its id, is refused at the start, and its claim checks it again (the run fails with
-`bead_of_another_rig` and the claim is released). `worktree = true` gives each run of the formula, of either step kind,
+sends `--input` values as text). A `task` input (spec §9.1; there is no input type `bead`) is a string or
+`{ next_ready = true, epic = <id> }`. A string that is the id of a bead the run takes it up; any other text (not blank)
+has the tracker create the run's root bead as the run prepares, titled with the first line of the text and described by
+all of it; either way the input then holds the bead id ([tracker-br.md](tracker-br.md#beads-and-runs)). A bead named
+by id that belongs to another rig, by the prefix of its id, is refused at the start if the core has seen it, else at
+its claim (the run fails with `bead_of_another_rig` and the claim is released). `worktree = true` gives each run of the formula, of either step kind,
 a git worktree that aae makes and removes (the bundled `worktree`, see below).
 
 A prompt template is checked at load (contracts 2.3): `inputs.<name>` must be a declared input; `bead.<field>` needs

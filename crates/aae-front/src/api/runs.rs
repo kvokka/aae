@@ -26,7 +26,7 @@ const RUN_VIEWS: &str = "Run views as `GET /v1/runs/{id}` gives them";
 #[derive(Deserialize, ToSchema)]
 pub(crate) struct CreateRun {
     project: String,
-    /// Absent: the rig of the id prefix of the bead an input names; else the run
+    /// Absent: the rig of the id prefix of the bead its task names; else the run
     /// works in the project root.
     rig: Option<String>,
     /// `name` or `<pack>.<name>`, as the project writes it.
@@ -47,7 +47,7 @@ pub(crate) struct ParentAttempt {
     token: String,
 }
 
-/// Starts a run of a formula; the reply is `{"run": "<id>"}`, or `{"nothing_ready": true}` when a bead input
+/// Starts a run of a formula; the reply is `{"run": "<id>"}`, or `{"nothing_ready": true}` when a task input
 /// `{ next_ready = true }` finds no ready bead to take (spec §10.3). With `parent`, a stale token or a chain deeper
 /// than 10 is `rejected`.
 #[utoipa::path(post, path = "/v1/runs", request_body = CreateRun,

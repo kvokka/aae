@@ -13,12 +13,13 @@ pub enum RunCommand {
     #[command(allow_missing_positional = true)]
     Start {
         project: String,
-        /// Optional: without it the run works in the project root, or on the rig of the bead an input names (its
+        /// Optional: without it the run works in the project root, or on the rig of the bead its task names (its
         /// id prefix).
         rig: Option<String>,
         formula: String,
-        /// An input as `name=value`: text, which an integer or a boolean input takes as its number or `true`/`false`;
-        /// a JSON object or array (a bead input's `{"next_ready": true}`) is taken as JSON.
+        /// An input as `name=value`: text, which an integer or a boolean input takes as its number or `true`/`false`
+        /// and a task input as the task or the id of the bead it takes up; a JSON object or array (a task input's
+        /// `{"next_ready": true}`) is taken as JSON.
         #[arg(long = "input", value_name = "NAME=VALUE", value_parser = name_value)]
         inputs: Vec<String>,
         /// A terminal run whose last session this run continues.

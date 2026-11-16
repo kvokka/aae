@@ -193,8 +193,8 @@ spaces, nothing else — no filters, conditions or loops.
   another field, is a config error.
 - `{{` that is not a placeholder is written `{{"{{"}}`.
 
-A bead input is a bead id (string), `{ next_ready = true, epic = <id or absent> }` or `{ request = "<text>" }`
-([tracker-br.md](tracker-br.md#beads-and-runs)).
+A task input is a string — the id of a bead the run takes up, or the text of a task that gets a root bead — or
+`{ next_ready = true, epic = <id or absent> }` ([tracker-br.md](tracker-br.md#beads-and-runs)).
 
 ## 3. Orchestrator hooks: decisions and timeouts
 
@@ -641,7 +641,7 @@ of the parent leaves them alone.
 
 | From | On | To | Effects after commit |
 |---|---|---|---|
-| — | create (API, CLI, MCP, trigger) with an idempotency key | `queued` | — (with a bead input the run is recorded as the bead's owner in this transaction, invariant 3: a bead another live run holds refuses; `{ next_ready = true, epic }` takes the first bead of the last ready set, in the tracker's order, that is in the epic, of the run's rig or of no rig, without an owner and without a closed gate, passing over (reply `passed_over`) a bead whose `harness:` or `agent:` label the run cannot take; none → the reply `{"nothing_ready": true}`, for a trigger `trigger.skipped{nothing_ready}`; the input then holds the bead id) |
+| — | create (API, CLI, MCP, trigger) with an idempotency key | `queued` | — (with a task input that names a bead the core knows, the run is recorded as the bead's owner in this transaction, invariant 3: a bead another live run holds refuses; `{ next_ready = true, epic }` takes the first bead of the last ready set, in the tracker's order, that is in the epic, of the run's rig or of no rig, without an owner and without a closed gate, passing over (reply `passed_over`) a bead whose `harness:` or `agent:` label the run cannot take; none → the reply `{"nothing_ready": true}`, for a trigger `trigger.skipped{nothing_ready}`; the input then holds the bead id; any other text gets its bead on `preparing`, tracker-br.md) |
 | — | create with `continue_from: <run>` (a terminal run with a session; a session is never reused implicitly) | `queued` | in the workdir of that run; the first attempt resumes that run's last session with the formula prompt; a later `resume` uses the run's own session, or that one while it has none; a harness other than the agent's → `failed{infrastructure}`. Only the first step continues that session: a formula whose first step is not `prompt` cannot be continued, and the later steps start sessions of their own |
 | `queued` | slot free, workdir free, no gate of the run closed | `preparing` | with a request: the tracker creates the root bead (`create`, key kept in the effect), the run owns it and its input takes the id; with a bead: the tracker claim as owner `aae:<run>` (queue `tracker:<project>`), and the prompt renders once the claim returned the bead; `run.preparing` hooks |
 | `preparing` | decision `proceed` (or no hooks) | `starting` | attempt 1: instance acquire, `start_session`, `send_prompt` |

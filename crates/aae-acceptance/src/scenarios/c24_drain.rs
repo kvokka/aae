@@ -1,4 +1,4 @@
-//! Criterion 24 on the real br and the real `claude` against a fake Anthropic API: a request becomes the root bead of
+//! Criterion 24 on the real br and the real `claude` against a fake Anthropic API: a task becomes the root bead of
 //! a run of `ship`; its exec step `plan` creates four beads under the root with rig prefixes and agent and harness
 //! labels; the drain step gives each a run of `work` (an exec step, then an ai step on the agent of the bead): A on `web`, B on
 //! `api` once A is closed, F under the epic S fails, H names another harness and gets no run; the exec step `report`
@@ -19,7 +19,7 @@ use std::{
 
 const WITHIN: Duration = Duration::from_secs(90);
 
-const SHIP: &str = "name = \"ship\"\n[inputs]\nbead = { type = \"task\", required = true }\n\
+const SHIP: &str = "name = \"ship\"\n[inputs]\ntask = { type = \"task\", required = true }\n\
     [[step]]\nname = \"plan\"\nkind = \"exec\"\ncommand = [\"sh\", \"{dir}/plan.sh\"]\ntimeout = \"120s\"\n\
     [[step]]\nname = \"drain\"\nkind = \"drain\"\nformula = \"work\"\n\
     [[step]]\nname = \"report\"\nkind = \"exec\"\ncommand = [\"sh\", \"{dir}/report.sh\"]\ntimeout = \"120s\"\n";
@@ -95,7 +95,7 @@ pub(crate) async fn run(env: Arc<Env>) -> String {
     let root_dir = d.dir.path().to_owned();
     let at = |name: &str| -> PathBuf { root_dir.join(name) };
     let body = json!({ "project": "shop", "rig": "web", "formula": "ship",
-        "inputs": { "bead": { "request": "Ship it" } } });
+        "inputs": { "task": "Ship it" } });
     let reply = d.post("/v1/runs", body).await.unwrap();
     let ship = reply["run"].as_str().expect("a run").to_owned();
     for held in ["plan.held", "a.held", "report.held"] {
@@ -142,7 +142,7 @@ async fn until_failed(d: &Daemon, ship: &str, ids: &Path) {
 async fn checked(d: &Daemon, ship: &str, view: &Value, journal: &[(String, Value)], beads: [&str; 5]) {
     let [a, b, f, h, s] = beads;
     let root = d.dir.path();
-    // Two epics: the root, from the request, and S.
+    // Two epics: the root, from the task, and S.
     let listed: Value = serde_json::from_str(&br(root, &["list", "--all", "--json", "-t", "epic"])).unwrap();
     let epics = listed["issues"].as_array().expect("issues");
     let mut titles: Vec<&str> = epics.iter().map(|e| e["title"].as_str().unwrap()).collect();

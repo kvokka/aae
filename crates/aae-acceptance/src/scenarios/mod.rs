@@ -179,7 +179,7 @@ pub(crate) const ALL: &[Scenario] = &[
     },
     Scenario {
         criterion: "24",
-        title: "a request's root gets beads with rig prefixes and agent and harness labels; drain gives each a run; \
+        title: "a task's root gets beads with rig prefixes and agent and harness labels; drain gives each a run; \
         kill -9 in every step: no step and no bead runs twice",
         launch: Launch::Ci,
         run: |env| Box::pin(c24_drain::run(env)),

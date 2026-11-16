@@ -1378,7 +1378,7 @@
         }
       },
       "post": {
-        "summary": "Starts a run of a formula; the reply is `{\"run\": \"<id>\"}`, or `{\"nothing_ready\": true}` when a bead input\n`{ next_ready = true }` finds no ready bead to take (spec §10.3). With `parent`, a stale token or a chain deeper\nthan 10 is `rejected`.",
+        "summary": "Starts a run of a formula; the reply is `{\"run\": \"<id>\"}`, or `{\"nothing_ready\": true}` when a task input\n`{ next_ready = true }` finds no ready bead to take (spec §10.3). With `parent`, a stale token or a chain deeper\nthan 10 is `rejected`.",
         "operationId": "create",
         "parameters": [
           {
@@ -2513,7 +2513,7 @@
               "string",
               "null"
             ],
-            "description": "Absent: the rig of the id prefix of the bead an input names; else the run\nworks in the project root."
+            "description": "Absent: the rig of the id prefix of the bead its task names; else the run\nworks in the project root."
           }
         }
       },
@@ -3301,7 +3301,7 @@
       },
       "Started": {
         "type": "object",
-        "description": "A run started: `run` is its id; `nothing_ready` (and no `run`) when a bead input `{ next_ready = true }` found\nno ready bead the run can take; `passed_over`: the ready beads it skipped, each with why (a `harness:` label the\nconfig does not give, an `agent:` label that does not resolve).",
+        "description": "A run started: `run` is its id; `nothing_ready` (and no `run`) when a task input `{ next_ready = true }` found\nno ready bead the run can take; `passed_over`: the ready beads it skipped, each with why (a `harness:` label the\nconfig does not give, an `agent:` label that does not resolve).",
         "properties": {
           "nothing_ready": {
             "type": [

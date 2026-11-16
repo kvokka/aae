@@ -60,7 +60,7 @@ async fn runs_and_gates_by_hand_from_the_cli() {
         out.status.code() == Some(2) && text.contains("`n` is not NAME=VALUE"),
         "{text}"
     );
-    // The rig is optional: with none and no bead input, the run works in the project root.
+    // The rig is optional: with none and no task input, the run works in the project root.
     let rootless = d.json(&["run", "start", "shop", "check"])["run"]
         .as_str()
         .unwrap()

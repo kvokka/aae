@@ -148,6 +148,23 @@ pub(crate) const ALL: &[Scenario] = &[
             ))
         },
     },
+    Scenario {
+        criterion: "28",
+        title: "a task: a text files one root bead, also across a crash, an id of a bead takes that bead up and files \
+            none, on the real br and a real daemon too; a formula declares no input of type `bead`",
+        launch: Launch::Ci,
+        run: |env| {
+            Box::pin(tests(
+                env,
+                "-p aae-core -p aae-testkit -p aae-br -p aae -E test(/a_text_task_becomes_one_root_bead\
+                 |a_root_bead_created_before_a_crash_is_the_one_the_run_gets|a_blank_task_or_another_form_is_refused\
+                 |a_task_naming_a_bead_takes_it_up_and_files_no_second_bead|a_drain_step_names_a_formula_that_takes_one_bead\
+                 |a_task_naming_a_bead_gives_it_and_a_text_files_a_root_of_the_database_prefix\
+                 |a_task_takes_up_the_bead_it_names_and_a_text_files_one_root/)",
+                7,
+            ))
+        },
+    },
 ];
 
 /// The workspace this binary was built from.

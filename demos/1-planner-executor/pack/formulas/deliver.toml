@@ -2,7 +2,7 @@ name = "deliver"
 description = "A request becomes beads per rig, coders do them, and the report says what got done"
 
 [inputs]
-bead = { type = "bead", required = true }   # `{ request = "<text>" }`: the request becomes the root bead
+task = { type = "task", required = true }   # the request: its text becomes the root bead
 
 [[step]]
 name = "plan"

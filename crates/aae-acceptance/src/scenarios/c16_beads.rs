@@ -36,7 +36,7 @@ async fn until_shown(root: &Path, id: &str, status: &str, assignee: &Value) {
     }
 }
 
-/// Starts `formula` on the bead input `bead`; the reply.
+/// Starts `formula` on the task input `bead`; the reply.
 async fn start(d: &Daemon, formula: &str, bead: Value) -> Value {
     let body = json!({ "project": "shop", "rig": "web", "formula": formula, "inputs": { "bead": bead } });
     d.post("/v1/runs", body).await.unwrap()

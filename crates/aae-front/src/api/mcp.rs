@@ -31,14 +31,15 @@ fn tools() -> Value {
         { "name": "list_formulas", "description": "The formulas a run can start, by project, with their inputs.",
           "inputSchema": { "type": "object", "properties": { "project": text } } },
         { "name": "start_run",
-          "description": "Starts a run of a formula on a rig (named, or that of the bead an input names) \
+          "description": "Starts a run of a formula on a rig (named, or that of the bead its task names) \
             or else in the project root; returns its id.",
           "inputSchema": { "type": "object", "required": ["project", "formula"], "properties": {
               "project": text,
               "rig": { "type": "string", "description": "Optional: without it the run works in the \
-                  project root, or on the rig of the id prefix of the bead an input names." },
+                  project root, or on the rig of the id prefix of the bead its task names." },
               "formula": { "type": "string", "description": "`name`, or `<pack>.<name>`, as list_formulas gives it." },
-              "inputs": { "type": "object" },
+              "inputs": { "type": "object", "description": "By name. A `task` input takes the task as text, \
+                  the id of the bead it takes up, or `{\"next_ready\": true}`." },
               "continue_from": { "type": "string", "description": "A terminal run whose last session to continue." },
               "idempotency_key": key } } },
         { "name": "run_state", "description": "The state of a run: its view, where it waits, its attempts.",

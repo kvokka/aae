@@ -2,7 +2,7 @@ name = "implement"
 description = "A coder does one bead in its rig and tests it"
 
 [inputs]
-bead = { type = "bead", required = true }
+task = { type = "task", required = true }
 
 [[step]]
 name = "code"

@@ -3,7 +3,7 @@ description = "A request becomes beads per rig, coders do them, and checks send 
 rounds = 3                                  # at most three rounds of checks and returns
 
 [inputs]
-bead = { type = "bead", required = true }   # `{ request = "<text>" }`: the request becomes the root bead
+task = { type = "task", required = true }   # the request: its text becomes the root bead
 
 [[step]]
 name = "plan"

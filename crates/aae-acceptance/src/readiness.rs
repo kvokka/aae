@@ -11,10 +11,6 @@ pub(crate) const OPEN: &[(&str, &str)] = &[
         "the demos of the current config shape (runs without a rig, agent scope, the project root) have not run live",
     ),
     (
-        "28",
-        "a task: text files the root bead, an id of a bead takes it up, no second bead",
-    ),
-    (
         "29",
         "a step repeats up to `max_attempts` while its check script fails; exit code 75 fails it at once",
     ),

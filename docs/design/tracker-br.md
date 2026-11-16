@@ -28,8 +28,8 @@ tracker interface and its errors are in [contracts.md](contracts.md) §5; the be
 
 ## Beads and runs
 
-- A project works without a tracker too. A run may get a bead as an input (`type = "bead"`); runs without a bead
-  are allowed.
+- A project works without a tracker too. A run gets its bead from a task input (`type = "task"`); runs without a
+  bead are allowed.
 - The daemon claims, releases and closes; an agent never claims. The run is recorded as the bead's owner in the
   transaction that creates it, and the tracker claim (owner `aae:<run>`) is made when it leaves `queued`. The claim is
   held for the whole run, through all its attempts, and let go only when the run is terminal: `passed` closes the
@@ -61,16 +61,20 @@ tracker interface and its errors are in [contracts.md](contracts.md) §5; the be
   gives `tracker.sync_failed{op: "watch"}` with no retry: that tracker is then read only by the periodic resync (every 5
   min).
 - The agent uses `br` itself for the content of its work: child beads, comments, dependencies.
-- The daemon creates one kind of bead: the root of a run started from a request, an epic without labels whose
+- The daemon creates one kind of bead: the root of a run started from the text of a task, an epic without labels whose
   `external_ref` is the key of the creation (`aae-` and 16 hex digits). The adapter first looks the key up in
   `br list -a`, so a creation repeated after a restart returns the same bead. The children of a claimed root are
   ready; a released root with open children is not.
 - The ready beads under a root, at any depth (`under`, for `drain`), are one command:
   `br ready --unassigned --limit 0 --parent <root> --recursive`. br does not call an epic with open children ready,
   so an inner epic joins that list only once its own children are closed. A root br does not have is exit 3.
-- The root is created when a run with the input `{ request = "<text>" }` leaves `queued`, as an effect on the queue
-  `tracker:<project>`: title the first line of the text that is not blank (at most 80 characters), description the
-  whole text. The key is drawn once and kept in the effect, so a repeat after `kill -9` creates nothing new; a repeated
+- A task input holds a string or `{ next_ready = true, epic }`. A string the core knows as a bead (in the last ready
+  set, or one a run owned) is that bead at once. Any other string goes to the tracker when the run leaves `queued`,
+  as an effect on the queue `tracker:<project>`: the adapter returns the bead whose id is exactly the string (looked
+  up in the same `br list -a`, not by `br show`, which takes partial ids), else creates the root: title the first line
+  of the text that is not blank (at most 80 characters), description the whole text. A bead filed a moment ago is
+  thus taken up, not filed again. Edge: a text that is exactly `<prefix of a rig>-<word>` and names no rig runs on
+  that rig; a bead that another run holds fails the run (`held by`), as the start could not see it. The key is drawn once and kept in the effect, so a repeat after `kill -9` creates nothing new; a repeated
   answer is dropped. The run then owns and claims the root as any bead, and its prompt sees the text as
   `{{ bead.description }}`. Known limit: a tracker that answers after `start_timeout` leaves a root without a run.
 - Two labels of a bead shape every run on it. `agent:<name>` runs every ai step with that agent (a variant by its

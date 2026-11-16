@@ -22,6 +22,7 @@ path = "../frontend"
 vars = { harness = "claude" }         # the coder runs on claude here, as in the whole project
 [rigs.backend]
 path = "../backend"
+prefix = "api"                        # its beads are `api-…`, not the acronym `b-…`
 vars = { harness = "codex" }
 [rigs.backend.agents.coder]           # on this rig the same coder runs on codex
 harness = "codex"

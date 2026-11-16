@@ -26,3 +26,4 @@ checks = """
 path = "../frontend"
 [rigs.backend]
 path = "../backend"
+prefix = "api"                        # its beads are `api-…`, not the acronym `b-…`

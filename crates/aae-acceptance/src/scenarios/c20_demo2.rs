@@ -99,7 +99,7 @@ pub(crate) async fn run(env: Arc<Env>) -> String {
     .await;
 
     let body = json!({ "project": "multirepo-qa", "formula": "dev.deliver",
-        "inputs": { "bead": { "request": "A README for the frontend" } } });
+        "inputs": { "task": "A README for the frontend" } });
     let reply = d.post("/v1/runs", body).await.unwrap();
     let run = reply["run"].as_str().expect("a run").to_owned();
     let view = d.until_state(&run, "passed", WITHIN).await;
