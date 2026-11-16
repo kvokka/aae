@@ -18,7 +18,7 @@ use tokio::sync::Notify;
 
 /// A check script that counts its calls in `check.sh.n` beside itself, runs `body`, then exits with the n-th of
 /// `codes` (0 past them).
-fn script(codes: &str, body: &str) -> String {
+pub(crate) fn script(codes: &str, body: &str) -> String {
     format!(
         "#!/bin/sh\nn=$(($(cat \"$0.n\" 2>/dev/null || echo 0) + 1)); echo $n > \"$0.n\"\n{body}\n\
          set -- {codes}\neval \"code=\\${{$n:-0}}\"\nexit $code\n"
@@ -26,7 +26,7 @@ fn script(codes: &str, body: &str) -> String {
 }
 
 /// The formula `build`: the ai step `work` with `max_attempts` and the check script `codes`, then `more` steps.
-fn repeating(max_attempts: u32, codes: &str, body: &str, more: &str, extra: &[(&str, &str)]) -> World {
+pub(crate) fn repeating(max_attempts: u32, codes: &str, body: &str, more: &str, extra: &[(&str, &str)]) -> World {
     let formula = format!(
         "name = \"build\"\n[[step]]\nname = \"work\"\nkind = \"ai\"\nagent = \"dev\"\nmax_attempts = {max_attempts}\n\
          step_check_script_path = \"check.sh\"\n{more}"
@@ -42,13 +42,13 @@ fn repeating(max_attempts: u32, codes: &str, body: &str, more: &str, extra: &[(&
 
 impl World {
     /// How many times the check script ran.
-    fn check_calls(&self) -> u32 {
+    pub(crate) fn check_calls(&self) -> u32 {
         let n = std::fs::read_to_string(self.dir.path().join("shop/formulas/check.sh.n"));
         n.map_or(0, |n| n.trim().parse().unwrap())
     }
 
     /// Scripts the turn of the next attempt: it ends once `repeat_declare` lets it.
-    fn repeat_turn(&self) -> Arc<Notify> {
+    pub(crate) fn repeat_turn(&self) -> Arc<Notify> {
         let declared = Arc::new(Notify::new());
         self.driver.script(vec![
             Step::Emit(Normalized::TurnStarted),
@@ -65,7 +65,7 @@ impl World {
     }
 
     /// Attempt `attempt` of `run` declares `result`, then its turn ends.
-    async fn repeat_declare(&self, run: &str, attempt: u32, result: Verdict, turn: &Notify) {
+    pub(crate) async fn repeat_declare(&self, run: &str, attempt: u32, result: Verdict, turn: &Notify) {
         let started = Instant::now();
         let token = loop {
             if let Some(token) = self.driver.token(run, attempt) {
@@ -89,7 +89,7 @@ impl World {
     }
 
     /// The event that ended `run` and its data, waiting for it up to 10 s.
-    async fn repeat_end(&self, run: &str) -> (String, Value) {
+    pub(crate) async fn repeat_end(&self, run: &str) -> (String, Value) {
         let started = Instant::now();
         loop {
             for kind in ["run.passed", "run.failed", "run.cancelled"] {
@@ -103,14 +103,14 @@ impl World {
     }
 
     /// The executions of each step `run` finished: `(step, step_attempt)`.
-    fn executions(&self, run: &str) -> Vec<(String, Value)> {
+    pub(crate) fn executions(&self, run: &str) -> Vec<(String, Value)> {
         let all = self.all("run.step_finished").into_iter();
         let of = all.filter(|d| d["run"]["id"] == run).map(|d| d["run"].clone());
         of.map(|r| (r["step"].as_str().unwrap().to_owned(), r["step_attempt"].clone()))
             .collect()
     }
 
-    fn repeat_view(&self, run: &str) -> Value {
+    pub(crate) fn repeat_view(&self, run: &str) -> Value {
         let reader = Reader::open(&self.dir.path().join("state.db")).unwrap();
         reader.run(run).unwrap().unwrap()
     }
