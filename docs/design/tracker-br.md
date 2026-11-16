@@ -35,6 +35,8 @@ tracker interface and its errors are in [contracts.md](contracts.md) §5; the be
   held for the whole run, through all its attempts, and let go only when the run is terminal: `passed` closes the
   bead, `failed` and `cancelled` release it conditionally (owner compared). Transitions:
   [contracts.md 6.2](contracts.md#62-transitions).
+- A `formula` step lends the bead of its run to the child run: the child makes no claim and at its end neither closes
+  nor releases the bead, the parent run does that at its own end.
 - A bead has at most one live owner run; a second request for it is refused with the reason.
 - A bead named by id that belongs to another rig is refused at the start; the claim checks it again
   (`failed{infrastructure, bead_of_another_rig}`, the claim released). A start with no rig takes the rig of

@@ -573,10 +573,14 @@ root).
 A `formula` step runs `formula`, a formula of the run's project (a formula of another project is not in its reach,
 whatever its name), as one child run: the same rig, the run's correlation, one level deeper, the run as
 `parent_run`. The child's outcome (result, summary, data) is the step's. Its inputs are those of the parent it
-declares, but not a `task` input (the parent holds that bead), and on top of them the step's `inputs`: a table as a
-trigger's, each string a template over `inputs`, `steps`, `run`, `bead` and `project`. The step has no process: it
-ends when the child does; a cancelled parent cancels the child, and a restart finds the child it made and makes no
-second one. `max_attempts` and `step_check_script_path` apply as to any step. A formula with `internal = true` runs
+declares (a `task` input too), and on top of them the step's `inputs`: a table as a trigger's, each string a template
+over `inputs`, `steps`, `run`, `bead` and `project`. The child works on the bead its parent holds without owning it
+(an explicit `task` naming that bead works the same way): it makes no claim and at its end neither closes nor releases
+the bead, the parent does that at its own end; `bead` in the child's templates is the parent's snapshot of it, and a
+child of that child may borrow it on. A child that cannot start (the start is refused, or `next_ready` finds no ready
+bead) fails the parent at once with class `infrastructure`, with no count toward `max_attempts`; a parent that fails in
+the step cancels its live child. The step has no process: it ends when the child does; a cancelled parent cancels the
+child, and a restart finds the child it made and makes no second one. `max_attempts` and `step_check_script_path` apply as to any step. A formula with `internal = true` runs
 only from such a step or a `drain` step: a start by hand, from the API, MCP or a session is refused (`` `<name>` is
 internal: only a step of another formula runs it ``), `GET /v1/formulas` marks each formula with `internal`, and
 `aae formula list` hides the internal ones unless `--all`. Config errors: a step that neither gives nor inherits a

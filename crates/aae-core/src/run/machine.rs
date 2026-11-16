@@ -372,6 +372,9 @@ impl RunHandler {
         )?;
         row.class = class.map(str::to_owned);
         row.set_state(tx, state, Some(reason))?;
+        if state == "failed" {
+            self.end_child(tx, &row)?;
+        }
         self.let_go_bead(tx, &row, state, reason)?;
         let usage = super::row::usage(tx.sql(), &row.id)?;
         let data = match state {

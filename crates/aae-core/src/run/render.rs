@@ -2,7 +2,7 @@
 
 use super::{RunHandler, row::Row};
 use crate::{
-    config::{EffectiveConfig, InputType, Scope, StepKind},
+    config::{EffectiveConfig, Scope, StepKind},
     writer::Tx,
 };
 use rusqlite::Connection;
@@ -51,8 +51,8 @@ impl RunHandler {
                     "on_item_failure": on_item_failure, "env": env });
                 return Ok((None, timeout_ms(timeout, DRAIN_TIMEOUT_MS), config));
             }
-            // The inputs of the formula's run: the parent's that it declares, a task aside (the parent holds the
-            // bead), then the step's own over them (spec §9.1).
+            // The inputs of the formula's run: the parent's that it declares, its task among them (the child works on
+            // the bead the parent holds), then the step's own over them (spec §9.1).
             (
                 StepKind::Formula {
                     formula: run,
@@ -63,9 +63,8 @@ impl RunHandler {
             ) => {
                 let (_, child) = project.formula(&run.to_string())?;
                 let own: Value = serde_json::from_str(&row.inputs).unwrap_or_default();
-                let mut given: Map<String, Value> = (child.inputs.iter())
-                    .filter(|(_, i)| i.kind != InputType::Task)
-                    .filter_map(|(k, _)| Some((k.clone(), own.get(k)?.clone())))
+                let mut given: Map<String, Value> = (child.inputs.keys())
+                    .filter_map(|k| Some((k.clone(), own.get(k)?.clone())))
                     .collect();
                 let context = json!({
                     "inputs": own, "run": row.view(),

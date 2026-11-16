@@ -235,7 +235,8 @@ step_check_script_path = "check.sh"   # beside the formula file; 0 passes, 75 fa
 Exit code 75 of the script is a failure for good: the run fails at once, with no repeat and no `back_to` round.
 
 A step can run another formula of the project as a child run, whose outcome is the step's; the child inherits the
-inputs it declares (other than a `task`), and the step adds its own:
+inputs it declares (a `task` too: the child works on the bead of the parent, which closes it), and the step
+adds its own:
 
 ```toml
 [[step]]

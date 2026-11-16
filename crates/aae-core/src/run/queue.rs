@@ -207,13 +207,18 @@ impl RunHandler {
             .query_row("SELECT COALESCE(MAX(n), 0) + 1 FROM runs", [], |r| r.get(0))?;
         let id = format!("run_{n}");
         let correlation = c.correlation.unwrap_or_else(|| format!("cor_{n}"));
-        if let Some(bead) = &bead {
+        // A formula step lends its child the bead the parent holds: the child neither claims nor lets go of it.
+        let lent = match (&bead, direct) {
+            (Some(bead), false) => Self::lent(tx, c.parent_run.as_deref(), bead)?,
+            _ => None,
+        };
+        if let Some(bead) = bead.as_ref().filter(|_| lent.is_none()) {
             Self::own_bead(tx, &c.project, bead, &id)?;
         }
         tx.sql().execute(
             "INSERT INTO runs (n, id, project, rig, formula, agent, inputs, correlation, depth, parent_run, \
-             workdir, state, created_ms, continue_from, bead, step, as_agent, step_kind) \
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, 'queued', ?12, ?13, ?14, ?15, ?16, ?17)",
+             workdir, state, created_ms, continue_from, bead, step, as_agent, step_kind, bead_data) \
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, 'queued', ?12, ?13, ?14, ?15, ?16, ?17, ?18)",
             params![
                 n,
                 id,
@@ -231,7 +236,8 @@ impl RunHandler {
                 bead,
                 first.name,
                 as_agent,
-                first.kind.name()
+                first.kind.name(),
+                lent
             ],
         )?;
         let row = Row::load(tx, &id)?;

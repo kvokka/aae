@@ -21,7 +21,8 @@ impl RunHandler {
             .unwrap_or_default();
         let depth = row.depth + 1;
         if depth > MAX_DEPTH {
-            return self.step_failed(tx, row, format!("depth {depth} is over {MAX_DEPTH}"));
+            let why = format!("depth {depth} is over {MAX_DEPTH}");
+            return self.terminal(tx, row, "failed", Some("infrastructure"), &why);
         }
         let create = Create {
             project: row.project.clone(),
@@ -34,9 +35,13 @@ impl RunHandler {
             token: None,
             continue_from: None,
         };
+        // A child refused, or with no bead ready to take, is no work of the formula: nothing ran (invariant 13).
         match tx.unit(|tx| self.create(tx, create)) {
+            Ok(reply) if reply["run"].is_null() => {
+                self.terminal(tx, row, "failed", Some("infrastructure"), "nothing_ready")
+            }
             Ok(_) => Ok(()),
-            Err(Error::Rejected(why)) => self.step_failed(tx, row, why),
+            Err(Error::Rejected(why)) => self.terminal(tx, row, "failed", Some("infrastructure"), &why),
             Err(e) => Err(e),
         }
     }
@@ -76,13 +81,30 @@ impl RunHandler {
         self.step_done(tx, row, &outcome)
     }
 
-    fn step_failed(&mut self, tx: &mut Tx<'_>, row: Row, why: String) -> Result<(), Error> {
-        let outcome = Outcome {
-            result: Verdict::Fail,
-            summary: why,
-            data: None,
-        };
-        self.step_done(tx, row, &outcome)
+    /// Cancels the live child of the formula step `row` failed in: its bead is no longer held for it.
+    pub(super) fn end_child(&mut self, tx: &mut Tx<'_>, row: &Row) -> Result<(), Error> {
+        if row.step_kind != "formula" {
+            return Ok(());
+        }
+        match Self::entry_child(tx, row)? {
+            Some(child) if Row::load(tx, &child)?.live() => self.cancel(tx, &child, "parent_failed"),
+            _ => Ok(()),
+        }
+    }
+
+    /// The bead data of `parent` when its formula step lends `bead` to its child (spec §9.1, §10.3): the child works
+    /// on the bead and the parent keeps it; a child of that child may borrow it on.
+    pub(super) fn lent(tx: &Tx<'_>, parent: Option<&str>, bead: &str) -> Result<Option<String>, Error> {
+        let Some(parent) = parent else { return Ok(None) };
+        let data: Option<Option<String>> = tx
+            .sql()
+            .query_row(
+                "SELECT bead_data FROM runs WHERE id = ?1 AND bead = ?2 AND step_kind = 'formula'",
+                params![parent, bead],
+                |r| r.get(0),
+            )
+            .optional()?;
+        Ok(data.flatten())
     }
 
     /// The last child the run's current entry of its step made: the entry is the tail of its attempts on the step

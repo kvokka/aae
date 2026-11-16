@@ -314,12 +314,10 @@ fn a_formula_step_names_a_formula_whose_inputs_it_has() {
         ],
         "names nothing a run has",
     );
-    // A task is not inherited: the parent holds its bead.
+    // A task is inherited as any input: the child works on the bead its parent holds (spec §9.1).
     let task = "goal = { type = \"task\", required = true }";
-    fails(
-        &[(FLOW, &flow(task, "")), (SUB, &sub(task, &exec(None)))],
-        "needs input `goal`",
-    );
+    let inherited = load_with(&[(FLOW, &flow(task, "")), (SUB, &sub(task, &exec(None)))]);
+    assert!(inherited.is_ok(), "{inherited:?}");
     let back = "[[step]]\nkind = \"formula\"\nformula = \"flow\"\n";
     fails(
         &[(FLOW, &flow(goal, "")), (SUB, &sub(goal, back))],

@@ -325,7 +325,7 @@ pub(super) fn watchdog(loader: &mut Loader, file: &Path, table: BTreeMap<String,
 }
 
 /// What is wrong with the inputs a `formula` step gives `child`: the ones it names that `child` has not, the
-/// required ones of `child` neither given nor inherited. A task is not inherited: the parent holds its bead.
+/// required ones of `child` neither given nor inherited.
 fn step_inputs(child: &super::Formula, parent: &BTreeMap<String, super::Input>, given: &Inputs) -> Vec<String> {
     let given: Vec<&str> = match given {
         Inputs::Table(entries) => entries.iter().map(|(k, _)| k.as_str()).collect(),
@@ -333,13 +333,9 @@ fn step_inputs(child: &super::Formula, parent: &BTreeMap<String, super::Input>, 
     };
     let unknown = (given.iter()).filter(|k| !child.inputs.contains_key(**k));
     let mut errors: Vec<String> = unknown.map(|k| format!("has no input `{k}`")).collect();
-    let inherited = |k: &str| {
-        parent
-            .get(k)
-            .is_some_and(|i| i.required && i.kind != super::InputType::Task)
-    };
+    let inherited = |k: &str| parent.get(k).is_some_and(|i| i.required);
     for (k, i) in &child.inputs {
-        if i.required && !given.contains(&k.as_str()) && !(i.kind != super::InputType::Task && inherited(k)) {
+        if i.required && !given.contains(&k.as_str()) && !inherited(k) {
             errors.push(format!("needs input `{k}`, which the step neither gives nor inherits"));
         }
     }
