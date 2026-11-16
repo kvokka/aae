@@ -2,11 +2,9 @@
 //! Responses API, no model and no account. Each scenario pins what the adapter reports for one harness behaviour; rerun
 //! them on every codex update (docs/harness-updates.md).
 
-mod common;
-
+use crate::common::{Live, failure_of};
 use aae_core::driver::{Answer, Driver, FailureKind, Normalized, PromptKey, SessionState, StopReason};
 use aae_testkit::openai::Reply;
-use common::{Live, failure_of};
 use std::time::{Duration, Instant};
 
 #[tokio::test]
@@ -262,7 +260,7 @@ async fn a_thread_hook_runs_with_the_attempt_environment() {
         )),
         timeout: None,
     };
-    let hooks = [("record".to_owned(), common::sourced(hook))].into();
+    let hooks = [("record".to_owned(), crate::common::sourced(hook))].into();
     let mut live = Live::open(provider, dir.path(), 0, "never", None, hooks).await.unwrap();
     assert_eq!(live.ended().await, StopReason::Completed, "{:?}", live.seen);
     let until = std::time::Instant::now() + Duration::from_secs(5);

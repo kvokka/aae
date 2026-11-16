@@ -45,7 +45,7 @@ marked `[experimental]`, and codex released every 2–8 days (observed on 2026-1
 
 ## What the claude suite covers
 
-`crates/aae-claude/tests/contract.rs`, one test per scenario above:
+`crates/aae-claude/tests/harness/contract.rs`, one test per scenario above:
 
 | # | Scenario | Expected from the adapter |
 |---|---|---|
@@ -71,7 +71,7 @@ background command running passes the run only after the command (criterion 4a o
 
 ## What the codex suite covers
 
-`crates/aae-codex/tests/contract.rs`, the same 15 scenarios, where codex differs:
+`crates/aae-codex/tests/harness/contract.rs`, the same 15 scenarios, where codex differs:
 
 | # | Scenario | Expected from the adapter |
 |---|---|---|

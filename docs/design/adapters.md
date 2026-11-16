@@ -43,9 +43,9 @@ config ([config](config.md#where-the-bundled-plugins-end-and-the-core-begins)).
    reads nor names it.
 
    A test of the adapter checks the table against the harness's own model list, with no model call (codex:
-   `model/list` of `codex app-server`, `crates/aae-codex/tests/models.rs`). A target the harness does not list, or
-   marks as replaced, fails it: that is a finding for the owner, who picks the new name; the table is never switched
-   to another model silently.
+   `model/list` of `codex app-server`, `crates/aae-codex/tests/harness/models.rs`). A target the harness does not
+   list, or marks as replaced, fails it: that is a finding for the owner, who picks the new name; the table is never
+   switched to another model silently.
 3. One row in `ADAPTERS` (`crates/aae/src/harness.rs`) and the crate in `crates/aae/Cargo.toml`. Nothing else in
    the root names a harness; a `[harness.<name>]` with no row is a config error that lists the known ones.
 4. The binary pinned in `mise.toml` by release line ([harness updates](../harness-updates.md)), a line budget in `scripts/budget.sh`, and the contract suite below.
@@ -93,10 +93,10 @@ the reader task becomes `adapter_crash`) and `config_error`; `stderr_tail` and `
 
 ## Contract suite
 
-Every adapter has `crates/aae-<name>/tests/contract.rs`: the fifteen scenarios of
-[harness updates](../harness-updates.md) on the real binary against a fake provider of `crates/aae-testkit`
-(`anthropic` or `openai`; a harness on either API needs no new fake). They check the events the adapter sends, not
-the fake. A harness update is accepted when the suite passes on it (harness updates, steps).
+Every adapter has `crates/aae-<name>/tests/harness/contract.rs`, the module `contract` of its one integration test
+binary: the fifteen scenarios of [harness updates](../harness-updates.md) on the real binary against a fake provider
+of `crates/aae-testkit` (`anthropic` or `openai`; a harness on either API needs no new fake). They check the events
+the adapter sends, not the fake. A harness update is accepted when the suite passes on it (harness updates, steps).
 
 ## Known limits of the driver interface
 
