@@ -245,12 +245,12 @@ async fn a_step_with_attempts_left_runs_a_new_child() {
     assert_eq!(last(&events, "run.passed")["outcome"]["summary"], "second time");
 }
 
-/// `deliver` runs the internal `mend` on its bead, then a command.
+/// `deliver` runs the internal `mend` on its bead.
 const DELIVER: &[(&str, &str)] = &[
     (
         "shop/formulas/deliver.toml",
         "name = \"deliver\"\n[inputs]\nbead = { type = \"task\", required = true }\n\
-         [[step]]\nkind = \"formula\"\nformula = \"mend\"\n[[step]]\nkind = \"exec\"\ncommand = [\"true\"]\n",
+         [[step]]\nkind = \"formula\"\nformula = \"mend\"\n",
     ),
     (
         "shop/formulas/mend.toml",
@@ -283,8 +283,8 @@ async fn deliver(verdict: Verdict) -> (World, String, String) {
 #[tokio::test(start_paused = true)]
 async fn a_child_works_on_the_bead_its_parent_holds() {
     let (w, run, bead) = deliver(Verdict::Pass).await;
-    // The command of the second step runs in real time.
-    w.until(Some(&run), "run.passed", 0).await;
+    let events = w.events(&run, Duration::from_millis(200)).await;
+    last(&events, "run.passed");
     assert_eq!(w.tracker.bead(&bead).unwrap().status, "closed", "closed by the parent");
     assert!(w.all("resync.diverged").is_empty());
 }
@@ -334,4 +334,23 @@ async fn a_step_that_cannot_start_its_child_fails_as_infrastructure() {
         let events = w.events(run, Duration::from_millis(200)).await;
         assert_eq!(last(&events, "run.failed")["class"], "infrastructure", "{formula}");
     }
+}
+
+/// The depth limit holds over a chain of formula steps (decision 76): the step of a run already at it starts no child.
+#[tokio::test(start_paused = true)]
+async fn a_step_past_the_depth_limit_fails_as_infrastructure() {
+    let w = shipyard();
+    let Msg::Create(mut create) = start("ship") else {
+        unreachable!()
+    };
+    create.depth = 10;
+    let reply = w.core.send(None, Msg::Create(create)).await.unwrap();
+    let run = reply["run"].as_str().unwrap();
+    let events = w.events(run, Duration::from_millis(200)).await;
+    let failed = last(&events, "run.failed");
+    assert_eq!(failed["class"], "infrastructure", "{failed}");
+    assert!(
+        w.all("run.queued").iter().all(|q| q["run"]["parent_run"].is_null()),
+        "no child"
+    );
 }

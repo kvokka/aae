@@ -1,6 +1,6 @@
 //! Daemon start (spec §5.6, criterion 8): a daemon that dies mid-run leaves no process behind once a new one starts,
 //! and the attempt it was running fails with `daemon_crash` for the policy to decide. On the paused clock, except the
-//! test whose exec step runs a real command and is watched through `/proc`.
+//! tests whose exec step runs a real command.
 
 use crate::common;
 
@@ -10,7 +10,7 @@ use aae_core::{
 };
 use common::{POLICY, World, hollow_turn, last, world, world_with};
 use serde_json::{Value, json};
-use std::{sync::Arc, time::Duration};
+use std::{sync::Arc, task::Poll, time::Duration};
 
 fn journal(w: &World, kind: &str) -> Vec<Value> {
     let all = Journal::new(&w.journal).read_from(1, 100_000).unwrap();
@@ -147,6 +147,78 @@ async fn a_restart_does_not_run_again_a_command_whose_run_has_ended() {
     tokio::time::sleep(Duration::from_secs(2)).await;
     let log = std::fs::read_to_string(w.dir.path().join("shop/web/runs.log")).unwrap();
     assert_eq!(log, "ran\n");
+}
+
+/// Invariant 6 on the exec step: the next attempt of the run, decided before the new daemon's first effect, starts
+/// its command only once the sweep of the command the dead daemon left is done and nothing carrying its marker lives.
+#[cfg(target_os = "linux")]
+#[tokio::test]
+async fn the_next_attempt_of_an_exec_step_starts_only_once_the_command_left_is_gone() {
+    // The first attempt leaves its marker and a process group behind; the next one notes a process still carrying
+    // that marker.
+    let script = "if [ -e old ]; then : > started; grep -qsxz \"AAE_INSTANCE=$(cat old)\" /proc/[0-9]*/environ \
+        && echo overlap >> log; echo next >> log; exit 0; fi; \
+        sleep 60 & echo $AAE_INSTANCE > old.tmp; mv old.tmp old; wait";
+    let formula = format!(
+        "name = \"check\"\n[[step]]\nkind = \"exec\"\ncommand = [\"sh\", \"-c\", {script:?}]\ntimeout = \"120s\"\n"
+    );
+    let mut files = common::POLICY.to_vec();
+    files.push(("shop/formulas/check.toml", &formula));
+    let mut w = world_with(&files, Arc::new(ExecHooks::default()));
+    let reply = w.core.send(None, Msg::Create(check())).await.unwrap();
+    let run = reply["run"].as_str().unwrap().to_owned();
+    let rig = w.dir.path().join("shop/web");
+    wait_for(|| rig.join("old").exists().then_some(())).await;
+    tokio::time::sleep(Duration::from_millis(100)).await;
+    let last = Journal::new(&w.journal).read_from(1, 100_000).unwrap().last().unwrap()["seq"]
+        .as_i64()
+        .unwrap();
+
+    w.restart().await;
+    // In the inbox before the new writer runs: the decision lands in the pass that queues the sweep. Every seq but
+    // the one of `run.attempt_failed` is refused.
+    let decide = |seq| {
+        let msg = Msg::Decide {
+            run: run.clone(),
+            seq,
+            decision: Decision::NewSession {
+                after: Duration::ZERO,
+                gate: None,
+            },
+        };
+        Box::pin(w.core.send(None, msg))
+    };
+    let (mut sends, mut applied): (Vec<_>, _) = ((last + 1..=last + 40).map(decide).collect(), 0);
+    // Polled together, so that all are queued at the first poll.
+    std::future::poll_fn(|cx| {
+        sends.retain_mut(|send| match send.as_mut().poll(cx) {
+            Poll::Ready(reply) => {
+                applied += usize::from(reply.is_ok());
+                false
+            }
+            Poll::Pending => true,
+        });
+        if sends.is_empty() {
+            Poll::Ready(())
+        } else {
+            Poll::Pending
+        }
+    })
+    .await;
+    assert_eq!(applied, 1, "one decision applies");
+    // Looked at as soon as the command starts: a sweep still queued then may kill the old command after it.
+    for _ in 0..5000 {
+        if rig.join("started").exists() {
+            break;
+        }
+        tokio::time::sleep(Duration::from_millis(1)).await;
+    }
+    let db = rusqlite::Connection::open(w.dir.path().join("state.db")).unwrap();
+    let sql = "SELECT COUNT(*) FROM effects WHERE json_extract(payload, '$.op') = 'sweep'";
+    let sweeps: i64 = db.query_row(sql, [], |r| r.get(0)).unwrap();
+    assert_eq!(sweeps, 0, "the sweep was done before the command ran again");
+    w.until(Some(&run), "run.passed", 0).await;
+    assert_eq!(std::fs::read_to_string(rig.join("log")).unwrap(), "next\n");
 }
 
 fn check() -> aae_core::run::Create {

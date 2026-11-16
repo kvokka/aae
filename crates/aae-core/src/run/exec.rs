@@ -84,9 +84,10 @@ impl Executor for RunExecutor {
                     }
                 }
                 Some("sweep") => {
-                    let id = payload["instance"].as_str().unwrap_or_default().to_owned();
-                    // Walking `/proc` is synchronous.
-                    let _ = tokio::task::spawn_blocking(move || crate::orphans::sweep(&id)).await;
+                    // Done once nothing carrying the marker is alive: what queues after it under its key starts
+                    // only then (invariant 6). Else retried.
+                    let id = payload["instance"].as_str().unwrap_or_default();
+                    return crate::process::wait_gone(id, None, DEATH_WAIT).await;
                 }
                 _ => {}
             }
