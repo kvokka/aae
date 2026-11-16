@@ -122,15 +122,23 @@ pub(super) fn check_project(loader: &mut Loader, project: &mut Project, outer: &
         agent.is_some_and(|a| a.scope == Scope::Root)
     };
     let root = "works in the root (`scope = \"root\"`), which no rig edits: edit it in the project's `[agents]`";
+    // A variant has the scope of its base; the project's variant shadows the user's of the same name.
+    let outer = outer.iter().filter(|(n, _)| !project.variants.contains_key(*n));
+    let variants: BTreeMap<&String, bool> = (project.variants.iter().chain(outer))
+        .map(|(n, v)| (n, base(project, v).is_ok_and(|a| of_root(&a))))
+        .collect();
     for (rig, r) in &mut project.rigs {
-        for agent in (r.edits.keys()).filter(|a| !project.variants.contains_key(*a) && !outer.contains_key(*a)) {
-            if resolve(packs, &own, &reference(agent), has_agent, "agent").is_ok_and(|a| of_root(&a)) {
+        for agent in r.edits.keys() {
+            let in_root = (variants.get(agent).copied()).unwrap_or_else(|| {
+                resolve(packs, &own, &reference(agent), has_agent, "agent").is_ok_and(|a| of_root(&a))
+            });
+            if in_root {
                 loader.fail(&file, format!("rig `{rig}`: agent `{agent}` {root}"));
             }
         }
         let mut resolved = BTreeMap::new();
         for (agent, variant) in std::mem::take(&mut r.agents) {
-            if !project.variants.contains_key(&variant) && !outer.contains_key(&variant) {
+            if !variants.contains_key(&variant) {
                 loader.fail(&file, format!("rig `{rig}`: `agents`: no agent variant `{variant}`"));
             }
             match resolve(packs, &own, &agent, has_agent, "agent") {

@@ -120,6 +120,17 @@ fn a_rig_neither_edits_nor_maps_an_agent_of_the_root() {
             .any(|e| e.message.contains("agent `kit.implementer` works in the root")),
         "{errors:?}"
     );
+    let variant = BASE[3]
+        .1
+        .replace("[rigs.backend.agents.implementer]\n", "[rigs.backend.agents.fast]\n")
+        + "[agents.fast]\nbase = \"kit.implementer\"\n";
+    let errors = load_with(&[(agent, &text), ("shop/aae.toml", &variant)]).expect_err("the rig edits its variant");
+    assert!(
+        errors
+            .iter()
+            .any(|e| e.message.contains("agent `fast` works in the root")),
+        "{errors:?}"
+    );
 }
 
 fn implementer() -> Name {
