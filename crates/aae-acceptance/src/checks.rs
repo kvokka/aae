@@ -112,7 +112,8 @@ pub(crate) const ALL: &[Scenario] = &[
         criterion: "27",
         title: "a harness of the build needs no section; `[agents.<name>]` edits an agent or declares a variant and \
             explain names its layer; a retired key is one line that says where it went; the root takes a name and \
-            a path, root and next to aae.toml without them, and need not be a git repository",
+            a path, root and next to aae.toml without them, need not be a git repository, and runs the project \
+            triggers without a rig",
         launch: Launch::Ci,
         run: |env| {
             Box::pin(tests(
@@ -121,23 +122,24 @@ pub(crate) const ALL: &[Scenario] = &[
                  |variant_errors|an_agents_table_changes_the_harness|a_rig_runs_a_variant_in_place_of_the_agent\
                  |a_project_without_a_root_section|the_root_takes_a_name_and_a_path|a_rig_at_the_root_path\
                  |a_root_with_a_name_and_a_path_is_where_its_runs_work|a_run_without_a_rig_works_in_the_root_that_is_no_git_repository\
-                 |a_worktree_in_a_directory_without_git_fails_that_run/)",
-                11,
+                 |a_worktree_in_a_directory_without_git_fails_that_run|a_project_trigger_without_a_rig_runs_in_the_root/)",
+                12,
             ))
         },
     },
     Scenario {
         criterion: "32",
-        title: "an ai step of an agent of scope root works in the root, of scope rig in the rig; a project of one \
-            repository runs without rigs, its beads in the root",
+        title: "an ai step of an agent of scope root works in the root, of scope rig in the rig, and no rig edits it; \
+            a project of one repository runs without rigs, its beads in the root",
         launch: Launch::Ci,
         run: |env| {
             Box::pin(tests(
                 env,
                 "-p aae-core -p aae-testkit -E test(/an_agent_of_scope_root_takes_no_rig_layer\
                  |a_project_of_one_repository_checks_its_formulas_on_the_root|a_run_without_a_rig_works_in_the_root\
-                 |a_root_agent_works_in_the_root_whatever_the_rig|a_bead_of_the_root_runs_in_the_root/)",
-                5,
+                 |a_root_agent_works_in_the_root_whatever_the_rig|a_bead_of_the_root_runs_in_the_root\
+                 |a_rig_neither_edits_nor_maps_an_agent_of_the_root/)",
+                6,
             ))
         },
     },
