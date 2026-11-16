@@ -102,18 +102,7 @@ async fn a_restart_kills_the_command_of_an_exec_step_the_dead_daemon_left() {
     let formula = "name = \"check\"\n[[step]]\nkind = \"exec\"\n\
         command = [\"sh\", \"-c\", \"echo $$ > pid; exec sleep 60\"]\ntimeout = \"120s\"\n";
     let mut w = world_with(&[("shop/formulas/check.toml", formula)], Arc::new(ExecHooks::default()));
-    let create = aae_core::run::Create {
-        project: "shop".into(),
-        rig: Some("web".into()),
-        formula: "check".into(),
-        inputs: serde_json::Map::new(),
-        correlation: None,
-        depth: 0,
-        parent_run: None,
-        token: None,
-        continue_from: None,
-    };
-    let reply = w.core.send(None, aae_core::run::Msg::Create(create)).await.unwrap();
+    let reply = w.core.send(None, aae_core::run::Msg::Create(check())).await.unwrap();
     let run = reply["run"].as_str().unwrap().to_owned();
     let pid_file = w.dir.path().join("shop/web/pid");
     let pid = wait_for(|| std::fs::read_to_string(&pid_file).ok().filter(|p| p.ends_with('\n'))).await;
@@ -124,6 +113,54 @@ async fn a_restart_kills_the_command_of_an_exec_step_the_dead_daemon_left() {
     wait_for(|| (!alive(pid)).then_some(())).await;
     let events = w.events(&run, Duration::from_millis(100)).await;
     assert_eq!(last(&events, "run.attempt_failed")["failure"]["kind"], "daemon_crash");
+}
+
+/// The command of an exec step ended and its run with it, but the daemon died before it marked the effect done: the
+/// next one does not run the command again (contracts 6.4).
+#[tokio::test]
+async fn a_restart_does_not_run_again_a_command_whose_run_has_ended() {
+    let formula = "name = \"check\"\n[[step]]\nkind = \"exec\"\n\
+        command = [\"sh\", \"-c\", \"echo ran >> runs.log; sleep 0.5; exit 3\"]\ntimeout = \"60s\"\n";
+    let mut w = world_with(&[("shop/formulas/check.toml", formula)], Arc::new(ExecHooks::default()));
+    let reply = w.core.send(None, aae_core::run::Msg::Create(check())).await.unwrap();
+    let run = reply["run"].as_str().unwrap().to_owned();
+    let db = rusqlite::Connection::open(w.dir.path().join("state.db")).unwrap();
+    let effect = wait_for(|| {
+        db.query_row(
+            "SELECT key, dedupe, payload FROM effects WHERE key = ?1",
+            [format!("exec:{run}")],
+            |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?, r.get::<_, String>(2)?)),
+        )
+        .ok()
+    })
+    .await;
+    w.until(Some(&run), "run.failed", 0).await;
+    // The daemon dies between the end of the run and the end of its effect.
+    w.killer().abort();
+    tokio::time::sleep(Duration::from_millis(100)).await;
+    db.execute(
+        "INSERT OR IGNORE INTO effects (key, dedupe, payload, next_at_ms) VALUES (?1, ?2, ?3, 0)",
+        [&effect.0, &effect.1, &effect.2],
+    )
+    .unwrap();
+    w.restart().await;
+    tokio::time::sleep(Duration::from_secs(2)).await;
+    let log = std::fs::read_to_string(w.dir.path().join("shop/web/runs.log")).unwrap();
+    assert_eq!(log, "ran\n");
+}
+
+fn check() -> aae_core::run::Create {
+    aae_core::run::Create {
+        project: "shop".into(),
+        rig: Some("web".into()),
+        formula: "check".into(),
+        inputs: serde_json::Map::new(),
+        correlation: None,
+        depth: 0,
+        parent_run: None,
+        token: None,
+        continue_from: None,
+    }
 }
 
 /// Live and not a zombie.

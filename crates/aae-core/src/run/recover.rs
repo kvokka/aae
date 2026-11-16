@@ -37,6 +37,26 @@ impl RunHandler {
         if !hooks.is_empty() {
             crate::orphans::sweep_all(&hooks);
         }
+        // The command of an exec step lives on in its own process group: it is killed by its marker, under the key of
+        // the exec effects so that no later attempt runs the command before. One that ended with the dead daemon
+        // before its effect was done does not run again either, whatever the state of its run since (contracts 6.4).
+        let execs: std::collections::BTreeSet<(String, String)> = {
+            let mut stmt = tx.sql().prepare(
+                "SELECT key, COALESCE(json_extract(payload, '$.marker'), json_extract(payload, '$.instance')) \
+                 FROM effects WHERE key LIKE 'exec:%'",
+            )?;
+            let rows = stmt.query_map([], |r| Ok((r.get::<_, String>(0)?, r.get::<_, Option<String>>(1)?)))?;
+            rows.filter_map(|r| r.map(|(k, m)| m.map(|m| (k, m))).transpose())
+                .collect::<Result<_, _>>()?
+        };
+        tx.sql().execute("DELETE FROM effects WHERE key LIKE 'exec:%'", [])?;
+        for (key, marker) in execs {
+            tx.effect(
+                &key,
+                &format!("sweep:{marker}"),
+                &json!({ "op": "sweep", "instance": marker }),
+            )?;
+        }
         // A run whose turn ended waits for the decision on it (`waiting`) and keeps waiting; one whose turn ended with
         // the outcome declared was only waiting for its background to stop, which the kill above did (spec §9.4); the
         // others had an attempt going, which is lost (a drain step's too: its next attempt gives no bead its entry has
@@ -60,25 +80,6 @@ impl RunHandler {
                 'prompt', 'respond', 'stop_background')",
                 [id],
             )?;
-            // The command of an exec step lives on in its own process group: it is killed by its marker, under the
-            // key of the exec effects so that no later attempt runs the command before. One that ended with the
-            // dead daemon before its effect was done does not run again either.
-            let exec = format!("exec:{id}");
-            let markers: Vec<String> = {
-                let mut stmt = tx
-                    .sql()
-                    .prepare("SELECT json_extract(payload, '$.marker') FROM effects WHERE key = ?1")?;
-                let rows = stmt.query_map([&exec], |r| r.get::<_, Option<String>>(0))?;
-                rows.filter_map(Result::transpose).collect::<Result<_, _>>()?
-            };
-            tx.sql().execute("DELETE FROM effects WHERE key = ?1", [&exec])?;
-            for marker in markers {
-                tx.effect(
-                    &exec,
-                    &format!("sweep:{marker}"),
-                    &json!({ "op": "sweep", "instance": marker }),
-                )?;
-            }
             let row = Row::load(tx, id)?;
             // `finishing` with no decision pending: the check script of the step was running (spec §9.1).
             let checking = !*waits && row.state == "finishing";
