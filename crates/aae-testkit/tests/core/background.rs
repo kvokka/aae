@@ -10,7 +10,6 @@ use aae_core::{
 };
 use aae_testkit::Step;
 use common::{POLICY, World, last, world};
-use serde_json::json;
 use std::time::Duration;
 
 fn idle(background: bool) -> Step {
@@ -88,7 +87,7 @@ async fn idle_with_background_inside_a_turn_stops_nothing() {
 }
 
 #[tokio::test(start_paused = true)]
-async fn a_restart_while_the_background_stops_fails_the_attempt_with_daemon_crash() {
+async fn a_restart_while_the_background_stops_keeps_the_declared_outcome() {
     let mut w = world(POLICY);
     // Background the harness does not stop: the run is still `running` when the daemon dies.
     w.driver.script(turn_leaving_a_command());
@@ -96,11 +95,9 @@ async fn a_restart_while_the_background_stops_fails_the_attempt_with_daemon_cras
     tokio::time::sleep(Duration::from_secs(11)).await;
     assert_eq!(w.driver.background_stops(), 1);
     w.restart().await;
+    // The restart killed the instance, which is the stop the run waited for (spec §9.4, §5.6).
     let events = w.events(&run, Duration::from_millis(300)).await;
-    assert_eq!(last(&events, "run.attempt_failed")["failure"]["kind"], "daemon_crash");
-    let changed = last(&events, "run.state_changed");
-    assert_eq!(
-        (&changed["to"], &changed["reason"]),
-        (&json!("interrupted"), &json!("daemon_crash"))
-    );
+    assert!(!events.iter().any(|(t, _)| t == "run.attempt_failed"));
+    assert_eq!(last(&events, "run.finishing")["outcome"]["summary"], "done");
+    assert_eq!(w.states(&run).await[3..], ["finishing", "passed"]);
 }

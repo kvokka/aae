@@ -250,7 +250,7 @@ impl RunHandler {
     }
 
     /// Idle without background: a turn that ended settles; one that has not ended yet is no news.
-    fn turn_settled(&mut self, tx: &mut Tx<'_>, mut row: Row, attempt: u32) -> Result<(), Error> {
+    pub(super) fn turn_settled(&mut self, tx: &mut Tx<'_>, mut row: Row, attempt: u32) -> Result<(), Error> {
         let ended: u8 = tx.sql().query_row(
             "SELECT turn_ended FROM attempts WHERE run = ?1 AND n = ?2",
             params![row.id, attempt],

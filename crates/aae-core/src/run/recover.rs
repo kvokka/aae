@@ -1,6 +1,7 @@
 //! Daemon start (spec §5.6, docs/design/contracts.md 6.4): what the previous daemon left running is killed; the
-//! attempts it was running fail with `daemon_crash` for the policy to decide, and a run that waited for a decision
-//! on a deciding event goes on waiting for it, its hooks run again with their full time. Effects and the outbox are
+//! attempts it was running fail with `daemon_crash` for the policy to decide, a run that waited for a decision on a
+//! deciding event goes on waiting for it, its hooks run again with their full time, and a run that waited only for
+//! its background to stop after the outcome goes to `finishing` with that outcome. Effects and the outbox are
 //! in the state, so they carry on by themselves; schedules are armed after this.
 
 use super::{RunHandler, decide::DECIDE_SLACK_MS, row::Row};
@@ -36,23 +37,27 @@ impl RunHandler {
         if !hooks.is_empty() {
             crate::orphans::sweep_all(&hooks);
         }
-        // A run whose turn ended waits for the decision on it (`waiting`) and keeps waiting; the others had an attempt
-        // going, which is lost (a drain step's too: its next attempt gives no bead its entry has given).
-        let caught: Vec<(String, bool)> = {
+        // A run whose turn ended waits for the decision on it (`waiting`) and keeps waiting; one whose turn ended with
+        // the outcome declared was only waiting for its background to stop, which the kill above did (spec §9.4); the
+        // others had an attempt going, which is lost (a drain step's too: its next attempt gives no bead its entry has
+        // given).
+        let caught: Vec<(String, bool, bool)> = {
             let mut stmt = tx.sql().prepare(
-                "SELECT id, state IN ('running', 'finishing') AND waiting IS NOT NULL FROM runs \
-                 WHERE state IN ('starting', 'running', 'requires_action', 'finishing') ORDER BY n",
+                "SELECT r.id, r.state IN ('running', 'finishing') AND r.waiting IS NOT NULL, \
+                 r.state = 'running' AND r.waiting IS NULL AND EXISTS (SELECT 1 FROM attempts a \
+                 WHERE a.run = r.id AND a.n = r.attempt AND a.outcome IS NOT NULL AND a.turn_ended != 0) FROM runs r \
+                 WHERE r.state IN ('starting', 'running', 'requires_action', 'finishing') ORDER BY r.n",
             )?;
-            let rows = stmt.query_map([], |r| Ok((r.get(0)?, r.get(1)?)))?;
+            let rows = stmt.query_map([], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)))?;
             rows.collect::<Result<_, _>>()?
         };
         self.rearm(tx)?;
         let mut interrupted = 0;
-        for (id, waits) in &caught {
+        for (id, waits, settled) in &caught {
             // What the attempt still had queued belongs to a process that is gone.
             tx.sql().execute(
                 "DELETE FROM effects WHERE key = ?1 AND json_extract(payload, '$.op') IN ('launch', \
-                'prompt', 'respond')",
+                'prompt', 'respond', 'stop_background')",
                 [id],
             )?;
             // The command of an exec step lives on in its own process group: it is killed by its marker, under the
@@ -77,7 +82,7 @@ impl RunHandler {
             let row = Row::load(tx, id)?;
             // `finishing` with no decision pending: the check script of the step was running (spec §9.1).
             let checking = !*waits && row.state == "finishing";
-            if *waits || checking {
+            if *waits || checking || *settled {
                 // The session that took the turn is gone with its instance: a decision that needs it fails the
                 // attempt (`next_prompt`), the others apply as they would have. No clock of the turn runs.
                 tx.sql().execute(
@@ -91,6 +96,9 @@ impl RunHandler {
                 // is written.
                 if checking {
                     self.check(tx, row)?;
+                } else if *settled {
+                    let attempt = row.attempt;
+                    self.turn_settled(tx, row, attempt)?;
                 }
                 continue;
             }

@@ -743,14 +743,19 @@ for it is not.
   and deciding hooks they still had queued dropped, and the command of an exec step killed by its `AAE_INSTANCE` marker
   (random per attempt) before any later attempt runs it. A run that waits for a decision on a deciding event keeps its
   state and waits for the same decision (3.4): `preparing`, `interrupted` waiting for the policy, `finishing`, and
-  `running` after a turn that ended without an outcome; `finishing` with a step check script running is one too, but its script is killed by its marker and starts again, and the execution counts only once the script's word is recorded. Its hook effect is still queued and its hooks run again; the
+  `running` after a turn that ended without an outcome; `finishing` with a step check script running is one too, but
+  its script is killed by its marker and starts again, and the execution counts only once the script's word is
+  recorded. Its hook effect is still queued and its hooks run again; the
   declared outcome and the result of an exec command stand, the turn and the command do not run again. A run goes on
   from the step it is at: the move to the next step is in the transaction that accepted the outcome (6.1), so a finished
   step never runs again, and an exec command killed by the restart runs again in a new attempt of the same step.
   Recovery lets go of the handle of such an attempt, whose session died with its instance, and drops what it still had
-  queued for the session. A daemon that dies while the commands a session left are being stopped (outcome declared,
-idle without background not yet seen) leaves a `running` run in a turn: its attempt is interrupted with `daemon_crash`
-like any other, and a stop still queued finds no instance and does nothing. The deadlines that wait for an effect's answer count again from the start: `decide` (3.3) and
+  queued for the session. A daemon that dies while what a session left in the background is being stopped (outcome
+  declared, turn ended, idle without background not yet seen) leaves a `running` run whose only wait was that stop:
+  the kill of its instance is the stop, so the run settles its turn as idle without background would — `finishing`
+  with the declared outcome — and the stop still queued is dropped. The same holds for a background subagent of
+  claude, killed with its instance. The deadlines that wait for an effect's answer count again from the start:
+  `decide` (3.3) and
   the claim of a bead in `preparing` (`start_timeout`); those of real time — gate `until`, schedules (a missed one fires
   at most once), the `after` of a retry, `queue_timeout`, `park_timeout` — stay. Then resync. Deadlines are wall-clock
   times: the writer reads the wall clock at least every 30 s, so a deadline passed while the machine slept fires late by
