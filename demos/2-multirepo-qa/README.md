@@ -19,7 +19,7 @@ The request is one sentence: "Create me snake game in browser and a simple backe
   Both checks have `back_to = "plan"`: when either fails, the run goes back to `plan` with the remarks of both. A
   check still failing in the third round fails the run.
 - `root/` is the root repository: `aae.toml` (the project, its rigs, what the agents run on and, in
-  `[rigs.root.vars] checks`, the conditions `qa` checks: the project's, not the pack's) and its tracker, made by the
+  `[root.vars] checks`, the conditions `qa` checks: the project's, not the pack's) and its tracker, made by the
   run. `root/config.toml` is the orchestrator config of the demo: `run.sh` starts a daemon of the demo's own with it,
   so the demo neither reads nor changes your `~/.config/aae`.
 - `frontend/` and `backend/` are the two repositories of the project, empty before a run.

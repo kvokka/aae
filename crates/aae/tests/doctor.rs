@@ -165,7 +165,7 @@ fn a_login_counts_only_when_a_session_the_daemon_starts_gets_it() {
     assert_eq!(claude, ("ok", "every claude agent has a key in `env`"), "{found:?}");
     let (codex, why) = level(&found, "codex login");
     assert!(
-        codex == "warning" && why.ends_with("these agents a key in `env`: shop/web@shop.ops"),
+        codex == "warning" && why.ends_with("these agents a key in `env`: shop/root@shop.ops, shop/web@shop.ops"),
         "{found:?}"
     );
 }
@@ -297,8 +297,10 @@ fn the_sandbox_warning_names_each_codex_agent_that_sets_no_sandbox_mode() {
     let (_, found) = doctor(dir.path());
     let (sandbox, why) = level(&found, "codex sandbox");
     assert!(
-        sandbox == "warning" && why.contains("danger-full-access") && why.ends_with(": shop/web@shop.fix"),
-        "only the rig without its own sandbox_mode is named: {why}"
+        sandbox == "warning"
+            && why.contains("danger-full-access")
+            && why.ends_with(": shop/root@shop.fix, shop/web@shop.fix"),
+        "only the places without their own sandbox_mode are named: {why}"
     );
     fs::create_dir_all(dir.path().join(".codex")).unwrap();
     fs::write(

@@ -66,7 +66,9 @@ fn assigned(config: &Config) -> Vec<Assigned<'_>> {
                 };
                 let listed = project.rigs.iter().filter(|(_, r)| r.triggers.contains(&name));
                 let mut rigs: Vec<&str> = listed.map(|(rig, _)| rig.as_str()).collect();
-                rigs.extend(trigger.rig.as_deref());
+                // A project trigger without a rig runs in the root (packs list none).
+                let root = pack.version.is_none().then_some(project.root.0.as_str());
+                rigs.extend(trigger.rig.as_deref().or(root));
                 rigs.sort_unstable();
                 rigs.dedup();
                 out.extend(rigs.into_iter().map(|rig| Assigned {

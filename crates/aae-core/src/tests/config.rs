@@ -171,19 +171,20 @@ fn a_valid_config_loads_with_every_reference_resolved() {
 
 #[test]
 fn a_rig_path_has_no_dot_and_no_dot_dot() {
-    let project = "packs = [\"../kit\"]\n[rigs.here]\npath = \".\"\n[rigs.below]\npath = \"./x/./y/..\"\n\
+    let project = "packs = [\"../kit\"]\n[root]\npath = \"./x/..\"\n[rigs.below]\npath = \"./x/./y/..\"\n\
                    [rigs.beside]\npath = \"../x\"\n";
     // The files make the directories the rigs name.
     let config = load_with(&[("shop/aae.toml", project), ("shop/x/y/f", ""), ("x/f", "")]).unwrap();
     let shop = &config.projects[0];
     let path = |rig: &str| {
-        shop.rigs[rig]
+        shop.place(rig)
+            .unwrap()
             .path
             .strip_prefix(shop.dir.parent().unwrap())
             .unwrap()
             .to_owned()
     };
-    let paths = ["here", "below", "beside"].map(path);
+    let paths = ["root", "below", "beside"].map(path);
     assert_eq!(paths.each_ref().map(|p| p.to_str().unwrap()), ["shop", "shop/x", "x"]);
 }
 

@@ -14,9 +14,7 @@ model = "luna"
 [agents.qa]
 model = "terra"
 
-[rigs.root]
-path = "."                            # the planner and qa work here, next to the beads
-[rigs.root.vars]
+[root.vars]
 # The conditions of the qa check: the project's, not the pack's, which knows nothing of the task.
 checks = """
 - The backend starts as its README says and keeps high scores across a restart of it.

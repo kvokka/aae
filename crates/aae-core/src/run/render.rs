@@ -16,8 +16,7 @@ impl RunHandler {
         let project = self.config.projects.iter().find(|p| p.name == row.project);
         let project = project.ok_or(format!("project `{}` is gone from the config", row.project))?;
         let rig = project
-            .rigs
-            .get(&row.rig)
+            .place(&row.rig)
             .ok_or(format!("rig `{}` is gone from the config", row.rig))?;
         let (_, formula) = project.formula(&row.formula)?;
         let timeout_ms = |t: &Option<std::time::Duration>, default| {

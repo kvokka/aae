@@ -10,6 +10,7 @@ pub(super) fn project(loader: &mut Loader, project: &mut Project, variants: &BTr
     let index = project.packs.clone();
     let Project {
         dir,
+        root,
         edits,
         rigs,
         packs,
@@ -76,7 +77,7 @@ pub(super) fn project(loader: &mut Loader, project: &mut Project, variants: &BTr
                 }
                 Err(e) => loader.fail(&manifest, format!("{what}: {e}")),
             }
-            if let Some(rig) = trigger.rig.as_ref().filter(|r| !rigs.contains_key(*r)) {
+            if let Some(rig) = trigger.rig.as_ref().filter(|r| **r != root.0 && !rigs.contains_key(*r)) {
                 loader.fail(&manifest, format!("{what}: no rig `{rig}`"));
             }
         }

@@ -261,11 +261,23 @@ pub(super) struct ProjectFile {
     #[serde(default)]
     pub agents: BTreeMap<String, toml::Table>,
     #[serde(default)]
+    pub root: RootFile,
+    #[serde(default)]
     pub rigs: BTreeMap<String, RigFile>,
     #[serde(default)]
     pub trigger: Vec<TriggerFile>,
     #[serde(default)]
     pub service: Vec<super::service::ServiceFile>,
+}
+
+/// `[root]`: the project's root, `root` in the directory of `aae.toml` when absent (spec §6.1, decision 99).
+#[derive(Debug, Default, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(super) struct RootFile {
+    pub name: Option<String>,
+    pub path: Option<PathBuf>,
+    #[serde(default)]
+    pub vars: BTreeMap<String, String>,
 }
 
 #[derive(Debug, Deserialize)]

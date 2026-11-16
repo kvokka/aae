@@ -109,7 +109,7 @@ impl RunHandler {
             let steps =
                 formulas.flat_map(|(pack, n, f)| f.steps.iter().map(move |s| (format!("{}.{n}", pack.name), s)));
             for (formula, step) in steps {
-                for rig in p.rigs.keys() {
+                for (rig, _) in p.places() {
                     let Ok((_, config)) = self.config.for_run(&p.name, rig, &formula, &step.name) else {
                         continue;
                     };

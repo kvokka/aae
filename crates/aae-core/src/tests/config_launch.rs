@@ -21,10 +21,10 @@ static CODEX: Adapter = Adapter {
     new: |_| Err(String::new()),
     doctor: |_| Vec::new(),
 };
-static ADAPTERS: &[&Adapter] = &[&CLAUDE, &CODEX];
+pub(super) static ADAPTERS: &[&Adapter] = &[&CLAUDE, &CODEX];
 
 const AGENT: &str = "kit/agents/implementer/agent.toml";
-const HARNESSES: (&str, &str) = (
+pub(super) const HARNESSES: (&str, &str) = (
     "config.toml",
     "projects = [\"shop\"]\n[harness.claude]\nmodel = \"sonnet\"\n[[plugin]]\npath = \"plugins/mail\"\n",
 );

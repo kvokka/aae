@@ -2,7 +2,7 @@
 //! `check`.
 
 use super::{
-    Config, ConfigError, Name, OrchestratorHook, Pack, Plugin, Project, Rig, Settings, Trigger, duration,
+    Config, ConfigError, Name, OrchestratorHook, Pack, Plugin, Project, Settings, Trigger, duration,
     files::{OrchestratorFile, PackFile, PluginDecl, PluginFile, ProjectFile, TriggerFile},
     items::{parent, resolve},
     schema::event_path,
@@ -253,39 +253,7 @@ impl Loader {
         let mut settings = self.settings(&file, dir, raw.settings, &names);
         settings.services = self.services(&file, raw.service, None);
         let (edits, variants) = self.agents(&file, dir, raw.agents, &names);
-        let mut rigs = BTreeMap::new();
-        for (rig, r) in raw.rigs {
-            self.name(&file, "rig", &rig);
-            // The rig is the tracker label `rig:<name>`; the tracker takes labels of `[A-Za-z0-9_:-]`, 50 at most
-            // (§10.2).
-            if rig.len() > 46 || !rig.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_') {
-                self.fail(
-                    &file,
-                    format!("rig name `{rig}`: ASCII letters, digits, `-` and `_`, 46 at most"),
-                );
-            }
-            let path = resolve(dir, &r.path);
-            if !path.is_dir() {
-                self.fail(&file, format!("rig `{rig}`: `{}` is not a directory", path.display()));
-            }
-            if let Some(key) = r.vars.keys().find(|k| ["name", "path"].contains(&k.as_str())) {
-                self.fail(&file, format!("rig `{rig}`: var `{key}` would hide `rig.{key}`"));
-            }
-            let triggers = r.triggers.iter().map(|t| reference(t)).collect();
-            let settings = self.settings(&file, dir, r.settings, &names);
-            let (edits, agents) = self.rig_agents(&file, dir, &rig, r.agents, &names);
-            rigs.insert(
-                rig,
-                Rig {
-                    path,
-                    vars: r.vars,
-                    triggers,
-                    settings,
-                    edits,
-                    agents,
-                },
-            );
-        }
+        let (root, rigs) = self.places(&file, dir, raw.root, raw.rigs, &names);
         let mut packs = vec![self.pack(dir, &file, name.clone(), raw.trigger, true, &names)];
         for source in &raw.packs {
             let Some(root) = self.root(&file, dir, source) else {
@@ -319,6 +287,7 @@ impl Loader {
         Some(Project {
             name,
             dir: dir.to_owned(),
+            root,
             settings,
             edits,
             variants,

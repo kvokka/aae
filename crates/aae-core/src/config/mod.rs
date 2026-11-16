@@ -8,6 +8,7 @@ mod files;
 mod formula_file;
 mod items;
 mod load;
+mod places;
 pub(crate) mod schema;
 mod service;
 mod sources;
@@ -99,6 +100,8 @@ pub struct Project {
     pub name: String,
     /// The directory of `aae.toml`: the config files, packs and tracker of the project live here.
     pub dir: PathBuf,
+    /// The root's name and the root: a place like a rig, without its triggers and settings (spec §6.1).
+    pub root: (String, Rig),
     /// Layer 3.
     pub settings: Settings,
     pub edits: BTreeMap<String, Settings>,

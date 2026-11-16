@@ -15,8 +15,6 @@ model = "haiku"
 [agents.coder]
 model = "haiku"
 
-[rigs.root]
-path = "."                            # the planner works here, next to the beads
 # `vars.harness` tells the planner what the coder of the rig runs on, for the `harness:` label of its beads; a bead
 # whose label disagrees with the config gets no run.
 [rigs.frontend]

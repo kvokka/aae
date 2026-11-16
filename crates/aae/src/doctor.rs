@@ -87,16 +87,13 @@ pub(crate) fn findings(paths: &Paths) -> Vec<Value> {
     found
 }
 
-/// The agents on `harness` in every project and rig, labelled `<project>/<rig or ->@<agent>`, with their effective
+/// The agents on `harness` in every project, root and rig, labelled `<project>/<place>@<agent>`, with their effective
 /// configs: each pack agent alone, `None` where it does not assemble, then as the runs of every prompt formula have
 /// it, a variant by its name.
 fn agents(config: &Config, harness: &str) -> Vec<(String, Option<EffectiveConfig>)> {
     let mut found = std::collections::BTreeMap::new();
     for p in &config.projects {
-        let rigs: Vec<Option<&str>> = match p.rigs.is_empty() {
-            true => vec![None],
-            false => p.rigs.keys().map(|r| Some(r.as_str())).collect(),
-        };
+        let rigs: Vec<&str> = p.places().map(|(r, _)| r).collect();
         for pack in &p.packs {
             for (name, agent) in &pack.agents {
                 let name = Name {
@@ -104,8 +101,8 @@ fn agents(config: &Config, harness: &str) -> Vec<(String, Option<EffectiveConfig
                     name: name.clone(),
                 };
                 for rig in &rigs {
-                    let label = format!("{}/{}@{name}", p.name, rig.unwrap_or("-"));
-                    match config.effective(&p.name, *rig, &name) {
+                    let label = format!("{}/{rig}@{name}", p.name);
+                    match config.effective(&p.name, Some(rig), &name) {
                         Ok(c) if c.harness == harness => drop(found.insert(label, Some(c))),
                         Err(_) if agent.harness.as_deref() == Some(harness) => drop(found.insert(label, None)),
                         _ => {}
@@ -113,7 +110,7 @@ fn agents(config: &Config, harness: &str) -> Vec<(String, Option<EffectiveConfig
                 }
             }
             for (formula, f) in pack.formulas.iter().map(|(n, f)| (format!("{}.{n}", pack.name), f)) {
-                for (rig, step) in p.rigs.keys().flat_map(|r| f.steps.iter().map(move |s| (r, &s.name))) {
+                for (rig, step) in rigs.iter().flat_map(|r| f.steps.iter().map(move |s| (r, &s.name))) {
                     // An exec step has no agent.
                     if let Ok((agent, c)) = config.for_run(&p.name, rig, &formula, step)
                         && c.harness == harness

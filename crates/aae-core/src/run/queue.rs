@@ -83,7 +83,7 @@ impl RunHandler {
                 Self::rig_of_bead(tx, &c.project, named)?
             }
         };
-        let rig = project.rigs.get(&rig_name);
+        let rig = project.place(&rig_name);
         let rig = rig.ok_or_else(|| rejected(format!("no rig `{rig_name}` in `{}`", c.project)))?;
         let first = &formula.steps[0];
         if c.continue_from.is_some() && !matches!(first.kind, StepKind::Ai { .. }) {

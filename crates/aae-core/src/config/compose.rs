@@ -116,7 +116,7 @@ impl Config {
     fn place(&self, project: &str, rig: Option<&str>) -> Result<(&Project, Option<&Rig>), String> {
         let p = (self.projects.iter().find(|p| p.name == project)).ok_or(format!("no project `{project}`"))?;
         let r = rig
-            .map(|r| p.rigs.get(r).ok_or(format!("no rig `{r}` in `{project}`")))
+            .map(|r| p.place(r).ok_or(format!("no rig `{r}` in `{project}`")))
             .transpose()?;
         Ok((p, r))
     }
@@ -226,7 +226,7 @@ pub(super) fn check_runs(loader: &mut Loader, config: &Config) -> BTreeSet<Strin
         for (pack, name, f) in formulas {
             let formula = format!("{}.{name}", pack.name);
             let steps = f.steps.iter().filter(|s| matches!(s.kind, StepKind::Ai { .. }));
-            for (step, rig) in steps.flat_map(|s| p.rigs.keys().map(move |r| (&s.name, r))) {
+            for (step, rig) in steps.flat_map(|s| p.places().map(move |(r, _)| (&s.name, r))) {
                 match config.for_run(&p.name, rig, &formula, step) {
                     Ok((_, e)) => drop(used.insert(e.harness)),
                     Err(e) => loader.fail(&file, format!("formula `{formula}` on rig `{rig}`: {e}")),

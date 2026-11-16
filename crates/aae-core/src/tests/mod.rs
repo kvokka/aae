@@ -2,6 +2,7 @@ mod config;
 mod config_builtin;
 mod config_launch;
 mod config_layers;
+mod config_root;
 mod config_services;
 mod config_sources;
 mod config_steps;
