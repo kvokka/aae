@@ -36,6 +36,8 @@ pub(crate) struct Instance {
     /// The turn in flight of each thread, for `turn/interrupt`.
     pub(crate) turns: Mutex<HashMap<String, String>>,
     pub(crate) live: Mutex<HashMap<String, broadcast::Sender<Value>>>,
+    /// The attempt token of each thread: what the thread's commands carry in their environment.
+    pub(crate) tokens: Mutex<HashMap<String, String>>,
 }
 
 pub(crate) fn lock<T>(m: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {

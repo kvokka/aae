@@ -140,6 +140,10 @@ impl Executor for RunExecutor {
                     }
                     None => Err(Failure::new(FailureKind::Unknown, Source::Core)),
                 },
+                (Some("stop_background"), Ok(handle)) => {
+                    driver.stop_background(&handle, &session).await;
+                    Ok(())
+                }
                 _ => Ok(()),
             };
             if let Err(failure) = result {

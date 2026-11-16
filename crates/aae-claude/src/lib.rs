@@ -304,6 +304,20 @@ impl Driver for Claude {
         })
     }
 
+    /// `stop_task` on every shell task: claude kills it, reports it stopped and comes to idle without starting a
+    /// turn; a signal from outside would wake the model instead (experiment 8).
+    fn stop_background<'a>(&'a self, instance: &'a InstanceHandle, _session: &'a SessionRef) -> BoxFuture<'a, ()> {
+        Box::pin(async move {
+            let Ok(known) = self.instance(&instance.id) else { return };
+            let commands = known.stream.lock().unwrap_or_else(PoisonError::into_inner).commands();
+            for task in commands {
+                let line = json!({ "type": "control_request", "request_id": Uuid::new_v4().to_string(),
+                    "request": { "subtype": "stop_task", "task_id": task } });
+                let _ = self.write(instance, &line).await;
+            }
+        })
+    }
+
     fn close_session<'a>(&'a self, _instance: &'a InstanceHandle, _session: &'a SessionRef) -> BoxFuture<'a, ()> {
         // The process is the session: the registry stops it (no idle time), the transcript stays.
         Box::pin(async {})

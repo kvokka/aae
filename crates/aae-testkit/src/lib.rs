@@ -8,7 +8,8 @@ use aae_core::{
     config::EffectiveConfig,
     driver::{
         Answer, Capabilities, Driver, DriverEvent, EventSink, Failure, FailureKind, Health, InstanceHandle, Normalized,
-        ProcessPart, PromptKey, SessionPart, SessionPlan, SessionRef, Source, Split, StopReason, Transcript,
+        ProcessPart, PromptKey, SessionPart, SessionPlan, SessionRef, SessionState, Source, Split, StopReason,
+        Transcript,
     },
 };
 use serde_json::{Value, json};
@@ -58,6 +59,10 @@ struct State {
     losing: bool,
     /// The key of every prompt sent, in order.
     keys: Vec<PromptKey>,
+    /// Set by [`ScriptedDriver::stoppable_background`].
+    stoppable: bool,
+    /// Calls of `stop_background`.
+    background_stops: usize,
 }
 
 struct Instance {
@@ -291,6 +296,23 @@ impl Driver for ScriptedDriver {
         _answer: &'a Answer,
     ) -> BoxFuture<'a, Result<(), Failure>> {
         ready(self.play(instance, session, None))
+    }
+
+    fn stop_background<'a>(&'a self, instance: &'a InstanceHandle, session: &'a SessionRef) -> BoxFuture<'a, ()> {
+        let stopped = {
+            let mut state = self.lock();
+            state.background_stops += 1;
+            state.stoppable && Self::live_session(&mut state, instance, session).is_ok()
+        };
+        // Stoppable background is gone, and the harness says so; a subagent's is left to run.
+        if stopped {
+            let idle = Normalized::State {
+                state: SessionState::Idle,
+                background: false,
+            };
+            self.emit(&instance.id, Some(session), idle);
+        }
+        ready(())
     }
 
     fn close_session<'a>(&'a self, _instance: &'a InstanceHandle, session: &'a SessionRef) -> BoxFuture<'a, ()> {

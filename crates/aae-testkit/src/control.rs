@@ -51,6 +51,17 @@ impl ScriptedDriver {
         self.lock().losing = losing;
     }
 
+    /// What sessions leave in the background from now on are commands the harness can stop; by default it is work
+    /// that is never stopped, as a subagent.
+    pub fn stoppable_background(&self) {
+        self.lock().stoppable = true;
+    }
+
+    /// How many times the core asked to stop what a session left in the background.
+    pub fn background_stops(&self) -> usize {
+        self.lock().background_stops
+    }
+
     /// Every instance started so far reports `Degraded{text}` to its health checks (`None`: `Ok` again).
     pub fn degrade(&self, text: Option<&str>) {
         for instance in self.lock().instances.values_mut() {

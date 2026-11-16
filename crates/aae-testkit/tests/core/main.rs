@@ -8,6 +8,7 @@ mod agent_limit;
 mod agent_prompt;
 mod anthropic;
 mod auth;
+mod background;
 mod bead_events;
 mod beads;
 mod children;

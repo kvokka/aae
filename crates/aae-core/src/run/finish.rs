@@ -58,7 +58,31 @@ impl RunHandler {
             "UPDATE attempts SET outcome = ?3 WHERE run = ?1 AND n = ?2",
             params![run, n, json!(outcome).to_string()],
         )?;
+        Self::stop_background(tx, &row)?;
         answer("accepted")
+    }
+
+    /// Once the outcome is declared and the turn has ended, the commands the session left running go: the adapter
+    /// stops them, and the session's idle without background then moves the run to `finishing` (spec §9.4).
+    pub(super) fn stop_background(tx: &mut Tx<'_>, row: &Row) -> Result<(), Error> {
+        let found: Option<(String, String, String)> = tx
+            .sql()
+            .query_row(
+                "SELECT harness, handle, session FROM attempts WHERE run = ?1 AND n = ?2 AND turn_ended != 0 \
+                 AND outcome IS NOT NULL AND handle IS NOT NULL AND session IS NOT NULL",
+                params![row.id, row.attempt],
+                |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
+            )
+            .optional()?;
+        let Some((harness, handle, session)) = found else {
+            return Ok(());
+        };
+        let payload = json!({
+            "op": "stop_background", "run": row.id, "attempt": row.attempt, "harness": harness,
+            "handle": serde_json::from_str::<Value>(&handle).unwrap_or_default(),
+            "session": serde_json::from_str::<Value>(&session).unwrap_or_default(),
+        });
+        tx.effect(&row.id, &format!("stop_background:{}", row.attempt), &payload)
     }
 
     /// The outcome of the current attempt as it was declared, if it was.

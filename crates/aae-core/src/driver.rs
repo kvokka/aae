@@ -285,6 +285,10 @@ pub trait Driver: Send + Sync {
         request_id: &'a str,
         answer: &'a Answer,
     ) -> BoxFuture<'a, Result<(), Failure>>;
+    /// Stops the commands the session left running after its turn (spec §9.4); the session stays and takes a next
+    /// prompt. Work the agent may still wait for (a background subagent) is left alone. The harness reports the end
+    /// of what was stopped, and the session comes to `State{Idle, background: false}` by the usual rule. Best effort.
+    fn stop_background<'a>(&'a self, instance: &'a InstanceHandle, session: &'a SessionRef) -> BoxFuture<'a, ()>;
     /// Detaches the session from its instance; the transcript stays, so the session can be resumed later.
     fn close_session<'a>(&'a self, instance: &'a InstanceHandle, session: &'a SessionRef) -> BoxFuture<'a, ()>;
 

@@ -29,7 +29,7 @@ fn slow_turn() -> Vec<Step> {
 }
 
 impl World {
-    async fn finish(&self, run: &str, token: &str, result: Verdict, summary: &str) -> Value {
+    pub(crate) async fn finish(&self, run: &str, token: &str, result: Verdict, summary: &str) -> Value {
         let outcome = Outcome {
             result,
             summary: summary.into(),

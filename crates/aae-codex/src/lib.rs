@@ -96,6 +96,7 @@ impl Codex {
             requests: Mutex::default(),
             turns: Mutex::default(),
             live: Mutex::default(),
+            tokens: Mutex::default(),
         });
         lock(&self.instances).insert(id.to_owned(), instance.clone());
         let handle = InstanceHandle {
@@ -143,7 +144,9 @@ impl Codex {
     }
 
     /// Binds a started or resumed thread: its model names its failures, its messages go to its live channel.
-    fn bind(&self, instance: &Instance, thread: &str, result: &Value) {
+    fn bind(&self, instance: &Instance, thread: &str, result: &Value, part: &Value) {
+        let token = part["config"]["shell_environment_policy"]["set"]["AAE_ATTEMPT_TOKEN"].as_str();
+        lock(&instance.tokens).insert(thread.to_owned(), token.unwrap_or_default().to_owned());
         let model = result["model"].as_str().map(str::to_owned);
         lock(&instance.stream).bind(thread, model);
         lock(&instance.live).insert(thread.to_owned(), broadcast::channel(256).0);
@@ -209,7 +212,7 @@ impl Driver for Codex {
             let known = self.instance(&instance.id)?;
             let result = known.call("thread/start", session.0.clone(), None).await?;
             let thread = result["thread"]["id"].as_str().ok_or_else(crashed)?;
-            self.bind(&known, thread, &result);
+            self.bind(&known, thread, &result, &session.0);
             Ok(rpc::session(thread, &known.home))
         })
     }
@@ -238,7 +241,7 @@ impl Driver for Codex {
             params["threadId"] = json!(thread_id(session));
             params["excludeTurns"] = json!(true);
             let result = known.call("thread/resume", params, None).await?;
-            self.bind(&known, thread_id(session), &result);
+            self.bind(&known, thread_id(session), &result, &part.0);
             Ok(())
         })
     }
@@ -297,13 +300,30 @@ impl Driver for Codex {
         })
     }
 
+    /// Only this thread's commands go; each one's `item/completed` follows, and the stream then reports idle without
+    /// background. Not `thread/unsubscribe`: it closes the thread and reports no command's end (experiment 8).
+    fn stop_background<'a>(&'a self, instance: &'a InstanceHandle, session: &'a SessionRef) -> BoxFuture<'a, ()> {
+        Box::pin(async move {
+            let Ok(known) = self.instance(&instance.id) else { return };
+            let params = json!({ "threadId": thread_id(session) });
+            let _ = known.call("thread/backgroundTerminals/clean", params, None).await;
+        })
+    }
+
     fn close_session<'a>(&'a self, instance: &'a InstanceHandle, session: &'a SessionRef) -> BoxFuture<'a, ()> {
         Box::pin(async move {
             let Ok(known) = self.instance(&instance.id) else { return };
             lock(&known.live).remove(thread_id(session));
+            let token = lock(&known.tokens).remove(thread_id(session)).filter(|t| !t.is_empty());
             let _ = known
                 .call("thread/unsubscribe", json!({ "threadId": thread_id(session) }), None)
                 .await;
+            // A command that detached itself is no background of the thread and would outlive it on the shared
+            // app-server; it still carries the attempt's token (experiment 8). Walking `/proc` is synchronous.
+            if let Some(token) = token {
+                let sweep = move || aae_core::orphans::sweep_var("AAE_ATTEMPT_TOKEN", &token);
+                let _ = tokio::task::spawn_blocking(sweep).await;
+            }
         })
     }
 

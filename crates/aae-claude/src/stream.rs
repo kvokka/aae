@@ -45,6 +45,8 @@ pub(crate) struct Stream {
     rejected: Option<i64>,
     auth_reported: bool,
     background: bool,
+    /// `task_id` of every shell command of the last `background_tasks_changed`: what `stop_task` may stop.
+    commands: Vec<String>,
     notified_since_result: bool,
     activity: Option<(Instant, bool)>,
 }
@@ -60,6 +62,7 @@ impl Stream {
             rejected: None,
             auth_reported: false,
             background: false,
+            commands: Vec::new(),
             notified_since_result: false,
             activity: None,
         }
@@ -69,6 +72,11 @@ impl Stream {
     /// failure. With no turn open there is nothing to cancel, and a later turn's failure stays one.
     pub(crate) fn interrupted(&mut self) {
         self.interrupted = self.open;
+    }
+
+    /// The background shell commands of the session; a subagent is never among them (criterion 4a).
+    pub(crate) fn commands(&self) -> Vec<String> {
+        self.commands.clone()
     }
 
     /// One stdout line seen at `now`; the events it yields, in order. Unknown types yield nothing.
@@ -110,11 +118,17 @@ impl Stream {
                 vec![Normalized::State { state, background }]
             }
             (Some("system"), Some("background_tasks_changed")) => {
-                self.background = msg["tasks"].as_array().is_some_and(|t| !t.is_empty());
+                let tasks = msg["tasks"].as_array().map_or(&[][..], Vec::as_slice);
+                self.background = !tasks.is_empty();
+                let commands = tasks.iter().filter(|t| t["task_type"] == "local_bash");
+                self.commands = commands
+                    .filter_map(|t| t["task_id"].as_str().map(str::to_owned))
+                    .collect();
                 vec![]
             }
+            // A task the adapter stopped wakes no one: no turn follows it (experiment 8).
             (Some("system"), Some("task_notification")) => {
-                self.notified_since_result = true;
+                self.notified_since_result |= msg["status"] != "stopped";
                 vec![]
             }
             (Some("system"), Some("api_retry")) => self.retry(msg),

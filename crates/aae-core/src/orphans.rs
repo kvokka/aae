@@ -95,22 +95,39 @@ pub(crate) fn reap() -> usize {
         .count()
 }
 
-/// The `AAE_INSTANCE` value in the environment of process `pid`.
-fn marker(pid: i32) -> Option<String> {
+/// The value of `name` in the environment of process `pid`.
+fn var(pid: i32, name: &str) -> Option<String> {
     let environ = std::fs::read(format!("/proc/{pid}/environ")).ok()?;
-    let prefix = format!("{INSTANCE_ENV}=");
+    let prefix = format!("{name}=");
     let var = environ
         .split(|b| *b == 0)
         .find_map(|var| var.strip_prefix(prefix.as_bytes()))?;
     String::from_utf8(var.to_vec()).ok()
 }
 
-/// Live processes but this one, with their marker.
-fn marked() -> impl Iterator<Item = (i32, String)> {
+/// Live processes but this one, with their value of `name`.
+fn carrying(name: &str) -> impl Iterator<Item = (i32, String)> {
     let me = getpid().as_raw_nonzero().get();
     processes()
         .filter(move |(pid, state, _)| *pid != me && state != "Z")
-        .filter_map(|(pid, ..)| Some((pid, marker(pid)?)))
+        .filter_map(move |(pid, ..)| Some((pid, var(pid, name)?)))
+}
+
+/// Live processes but this one, with their `AAE_INSTANCE` marker.
+fn marked() -> impl Iterator<Item = (i32, String)> {
+    carrying(INSTANCE_ENV)
+}
+
+/// Kills every process but this one whose environment carries `name=value`, as a token of one attempt; how many it
+/// found.
+pub fn sweep_var(name: &str, value: &str) -> usize {
+    let found = carrying(name).filter(|(_, v)| v == value);
+    found
+        .filter_map(|(pid, _)| Pid::from_raw(pid))
+        .inspect(|pid| {
+            let _ = kill_process(*pid, Signal::KILL);
+        })
+        .count()
 }
 
 /// Kills every process but this one whose environment carries `AAE_INSTANCE=<id>`; the ones it found as (pid, start
@@ -255,6 +272,24 @@ mod tests {
             tokio::time::sleep(Duration::from_millis(20)).await;
         }
         panic!("descendants with the marker are still alive");
+    }
+
+    /// A token sweep kills the processes of its value, wherever they went, and spares those of another value.
+    #[tokio::test]
+    async fn the_token_sweep_kills_only_its_value() {
+        let (name, mine) = ("AAE_TEST_TOKEN", format!("mine-{}", std::process::id()));
+        let start = |value: &str| spawn(Command::new("sleep").arg("300").env(name, value)).unwrap();
+        let (mut a, mut b) = (start(&mine), start("other"));
+        let (a_pid, b_pid) = (a.id(), b.id());
+        assert_eq!(sweep_var(name, &mine), 1);
+        a.wait().await.unwrap();
+        assert!(
+            start_time(i32::try_from(b_pid.unwrap()).unwrap()).is_some(),
+            "the other value lives"
+        );
+        b.kill().await.unwrap();
+        waited(a_pid);
+        waited(b_pid);
     }
 
     /// A listener on `127.0.0.1:<port>` another process may share with `SO_REUSEPORT`.

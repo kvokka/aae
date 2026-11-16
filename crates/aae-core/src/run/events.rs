@@ -204,7 +204,10 @@ impl RunHandler {
             Normalized::State {
                 state: SessionState::Idle,
                 background: true,
-            } => silence(tx, &row, w.background_silence_ms),
+            } => {
+                Self::stop_background(tx, &row)?;
+                silence(tx, &row, w.background_silence_ms)
+            }
             Normalized::State {
                 state: SessionState::Idle,
                 background: false,
