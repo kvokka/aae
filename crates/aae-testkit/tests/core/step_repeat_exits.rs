@@ -2,8 +2,8 @@
 //! lost answer do not pass the step, a script that cannot start fails the run. Real processes, so real time.
 
 use crate::{
-    common::World,
-    step_repeat::{FIRST, again, repeating},
+    common::{World, world},
+    step_repeat::{FIRST, again, repeating, script},
 };
 
 use aae_core::run::{Msg, Verdict};
@@ -102,4 +102,32 @@ async fn a_check_script_that_cannot_start_fails_the_run() {
     assert!(data["reason"].as_str().unwrap().starts_with("check script: "), "{data}");
     assert_eq!(w.check_calls(), 0);
     assert_eq!(w.executions(&run), [], "no repeat");
+}
+
+/// Exit 75 is a failure for good: a check step with `back_to` sends no work back for it (spec §9.1).
+#[tokio::test]
+async fn exit_75_of_the_check_script_of_a_check_step_fails_the_run_with_no_return() {
+    let formula = "name = \"build\"\n[[step]]\nname = \"work\"\nkind = \"ai\"\nagent = \"dev\"\n[[step]]\n\
+        name = \"review\"\nkind = \"exec\"\ncommand = [\"true\"]\nback_to = \"work\"\nmax_attempts = 2\n\
+        step_check_script_path = \"check.sh\"\n";
+    let check = script("75", "");
+    let w = world(&[
+        ("shop/formulas/build.toml", formula),
+        ("shop/formulas/check.sh", &check),
+    ]);
+    let turn = w.repeat_turn();
+    let run = w.create().await;
+    w.repeat_declare(&run, 1, Verdict::Pass, &turn).await;
+    let (kind, data) = w.repeat_end(&run).await;
+    assert_eq!(
+        (kind.as_str(), &data["class"]),
+        ("run.failed", &json!("check")),
+        "{data}"
+    );
+    assert!(
+        data["reason"].as_str().unwrap().contains("check script: exit 75"),
+        "{data}"
+    );
+    assert_eq!(w.check_calls(), 1);
+    assert_eq!(w.repeat_view(&run)["round"], 1, "no return");
 }

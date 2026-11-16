@@ -199,8 +199,9 @@ pub(crate) const ALL: &[Scenario] = &[
                  |a_repeat_stays_in_its_round_and_a_round_starts_the_count_again\
                  |a_step_of_any_kind_takes_max_attempts_and_a_check_script|a_bad_max_attempts_or_check_script_is_one_line\
                  |a_check_script_past_the_step_timeout_does_not_pass_it|a_check_script_killed_by_a_signal_does_not_pass_it\
-                 |a_lost_check_script_is_a_timeout_at_the_deadline_of_finishing|a_check_script_that_cannot_start_fails_the_run/)",
-                14,
+                 |a_lost_check_script_is_a_timeout_at_the_deadline_of_finishing|a_check_script_that_cannot_start_fails_the_run\
+                 |exit_75_of_the_check_script_of_a_check_step_fails_the_run_with_no_return/)",
+                15,
             ))
         },
     },

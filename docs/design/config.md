@@ -564,7 +564,10 @@ does not pass runs again until then; past it the step fails. `step_check_script_
 whether the step passed, a path from the directory of the formula file (an absolute one stays; empty is none) that
 must be an executable regular file at load. Its exit code decides: 0 passed, 75 an incurable failure that fails the
 step with no more runs, any other code did not pass. Unlike the exit code 75 of an `exec` step's command, a failed
-attempt, 75 of the check script is final. The script runs after the step has run on its own and its hooks accepted
+attempt, 75 of the check script is final: it fails the run at once, and a check step with `back_to` sends nothing
+back for it, since an incurable failure is no work for an earlier step. A script that outlives the step timeout, dies
+by a signal or whose answer is lost (the deadline of `finishing`) did not pass; one that cannot start fails the run
+as `infrastructure`. The script runs after the step has run on its own and its hooks accepted
 `pass`; a step that failed on its own (finisher `fail`, a non-zero exit of the command) is a run that did not pass,
 and the script is not started. It gets the environment of an `exec` step plus `AAE_STEP_<NAME>_RESULT`, `_SUMMARY`
 and `_DATA` of its own step, in the run's workdir under the step timeout. A repeat of an `ai` step goes on in its

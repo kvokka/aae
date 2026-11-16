@@ -63,7 +63,8 @@ impl RunHandler {
     }
 
     /// The execution of the step of `row` did not pass: the step runs again, with the remark of this execution,
-    /// while it has executions left and the failure is not `fatal`; else it fails with `class`.
+    /// while it has executions left and the failure is not `fatal`; else it fails with `class`. A `fatal` failure ends
+    /// the run at once.
     pub(super) fn repeat(&mut self, tx: &mut Tx<'_>, row: Row, class: &str, fatal: bool) -> Result<(), Error> {
         let outcome = Self::outcome(tx, &row)?.unwrap_or_else(|| Outcome {
             result: Verdict::Fail,
@@ -71,7 +72,9 @@ impl RunHandler {
             data: None,
         });
         match self.step(&row) {
-            Some(step) if !fatal && row.step_attempt < step.max_attempts => {
+            // A failure for good is no work to send back either: it skips the rounds of a check step's `back_to`.
+            _ if fatal => self.terminal(tx, row, "failed", Some(class), &outcome.summary),
+            Some(step) if row.step_attempt < step.max_attempts => {
                 let again = remark(&row.step, &outcome);
                 self.enter(tx, row, step, Some(&again))
             }
