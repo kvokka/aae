@@ -83,7 +83,7 @@ pub(crate) fn load(paths: &Paths) -> Result<config::Config, Vec<String>> {
     // br is the tracker of a project with a `.beads` directory, always named by an explicit path: its own search
     // would climb to another project's (spec §10.2).
     for p in &mut config.projects {
-        let dir = p.root.join(".beads");
+        let dir = p.dir.join(".beads");
         p.tracker.present = dir.is_dir();
         (p.tracker.env).insert("BEADS_DIR".to_owned(), dir.to_string_lossy().into_owned());
         p.tracker.actor = Some("BD_ACTOR".to_owned());

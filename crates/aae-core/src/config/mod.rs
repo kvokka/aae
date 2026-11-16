@@ -97,7 +97,8 @@ pub struct Bundled {
 #[derive(Clone, Debug)]
 pub struct Project {
     pub name: String,
-    pub root: PathBuf,
+    /// The directory of `aae.toml`: the config files, packs and tracker of the project live here.
+    pub dir: PathBuf,
     /// Layer 3.
     pub settings: Settings,
     pub edits: BTreeMap<String, Settings>,

@@ -52,7 +52,7 @@ pub(crate) async fn list_projects(state: State, Param(Query(query)): Param<Query
             let rigs: Vec<Value> = (p.rigs.iter())
                 .map(|(name, r)| json!({ "name": name, "path": r.path, "vars": r.vars }))
                 .collect();
-            json!({ "name": p.name, "root": p.root, "rigs": rigs })
+            json!({ "name": p.name, "root": p.dir, "rigs": rigs })
         })
         .collect();
     Ok(Json(out.into()))

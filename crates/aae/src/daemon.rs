@@ -117,7 +117,7 @@ pub(crate) async fn run(paths: Paths) -> Result<bool, String> {
     let beads: Vec<(String, PathBuf)> = config
         .projects
         .iter()
-        .map(|p| (p.name.clone(), p.root.join(".beads")))
+        .map(|p| (p.name.clone(), p.dir.join(".beads")))
         .filter(|(_, dir)| dir.is_dir())
         .collect();
     let br = binary("br", None).0;

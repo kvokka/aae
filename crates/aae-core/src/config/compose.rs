@@ -221,7 +221,7 @@ pub(super) fn check_runs(loader: &mut Loader, config: &Config) -> BTreeSet<Strin
         return used;
     }
     for p in &config.projects {
-        let file = p.root.join("aae.toml");
+        let file = p.dir.join("aae.toml");
         let formulas = (p.packs.iter()).flat_map(|pack| pack.formulas.iter().map(move |(f, x)| (pack, f, x)));
         for (pack, name, f) in formulas {
             let formula = format!("{}.{name}", pack.name);

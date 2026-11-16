@@ -66,7 +66,7 @@ pub(crate) fn findings(paths: &Paths) -> Vec<Value> {
                 let checks = (adapter.doctor)(&agents(&config, name));
                 found.extend(checks.into_iter().map(|c| check(c.check, c.level, c.detail)));
             }
-            if config.projects.iter().any(|p| p.root.join(".beads").is_dir()) {
+            if config.projects.iter().any(|p| p.dir.join(".beads").is_dir()) {
                 let (path, source) = binary("br", None);
                 found.push(binary_check("br", &path, source, aae_br::TESTED));
                 found.push(check(

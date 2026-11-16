@@ -54,7 +54,7 @@ impl RunHandler {
             "inputs": serde_json::from_str::<Value>(&row.inputs).unwrap_or_default(),
             "rig": rig_view, "run": row.view(),
             "bead": row.bead_data.as_deref().map(serde_json::from_str::<Value>).transpose().ok().flatten(),
-            "project": { "name": project.name, "path": project.root },
+            "project": { "name": project.name, "path": project.dir },
             "steps": step_results(tx.sql(), row).map_err(|e| e.to_string())?,
             "remarks": remarks(tx.sql(), &row.id).map_err(|e| e.to_string())?,
         });

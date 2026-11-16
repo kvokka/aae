@@ -318,7 +318,7 @@ impl Loader {
         let bundled = super::check::project_bundled(self, &file, bundled, raw.builtin, &packs);
         Some(Project {
             name,
-            root: dir.to_owned(),
+            dir: dir.to_owned(),
             settings,
             edits,
             variants,

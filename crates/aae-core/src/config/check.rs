@@ -9,7 +9,7 @@ use std::{collections::BTreeMap, path::Path};
 pub(super) fn project(loader: &mut Loader, project: &mut Project, variants: &BTreeMap<String, Variant>) {
     let index = project.packs.clone();
     let Project {
-        root,
+        dir,
         edits,
         rigs,
         packs,
@@ -81,7 +81,7 @@ pub(super) fn project(loader: &mut Loader, project: &mut Project, variants: &BTr
             }
         }
     }
-    let file = root.join("aae.toml");
+    let file = dir.join("aae.toml");
     // Project-level references resolve as if written in the project root pack.
     let own = index.first().map(|p| p.name.clone()).unwrap_or_default();
     let mut agents: Vec<&String> = edits.keys().collect();

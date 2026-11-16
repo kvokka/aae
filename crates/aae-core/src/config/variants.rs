@@ -102,7 +102,7 @@ pub(super) fn check_orchestrator(
 /// The variants of a project and the rig tables that name them: `base` is an agent of the project's packs, a
 /// variant's name is no agent's, and a rig maps an agent of the formulas to a variant the project sees.
 pub(super) fn check_project(loader: &mut Loader, project: &mut Project, outer: &BTreeMap<String, Variant>) {
-    let file = project.root.join("aae.toml");
+    let file = project.dir.join("aae.toml");
     for (name, variant) in &project.variants {
         clash(loader, &file, name, &project.packs);
         if let Err(e) = base(project, variant) {

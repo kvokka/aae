@@ -179,7 +179,7 @@ fn a_rig_path_has_no_dot_and_no_dot_dot() {
     let path = |rig: &str| {
         shop.rigs[rig]
             .path
-            .strip_prefix(shop.root.parent().unwrap())
+            .strip_prefix(shop.dir.parent().unwrap())
             .unwrap()
             .to_owned()
     };
