@@ -103,3 +103,15 @@ fn a_template_fits_every_formula_whose_steps_name_its_agent() {
     );
     assert!(load_with(&[review, (TEMPLATE, "Work in {{ rig.path }}.")]).is_ok());
 }
+
+#[test]
+fn a_variant_runs_on_the_template_of_its_base_agent() {
+    let project = format!(
+        "{}[agents.quick]\nbase = \"kit.implementer\"\n",
+        super::config::BASE[3].1
+    );
+    let config = load_with(&[("shop/aae.toml", &project)]).unwrap();
+    let prompt = config.prompt("shop", "quick").unwrap();
+    assert!(prompt.from.ends_with(TEMPLATE), "{}", prompt.from.display());
+    assert!(config.prompt("shop", "nobody").is_err());
+}
