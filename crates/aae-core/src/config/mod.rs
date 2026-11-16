@@ -14,10 +14,10 @@ mod service;
 mod sources;
 mod variants;
 
-use crate::template::{Filter, Inputs, Template};
+use crate::template::{Filter, Inputs};
 pub use assemble::{EffectiveConfig, Layer, Sourced};
 pub use files::{Harness, Hook, Mcp, McpScope, PluginUse, Settings, Skill};
-pub use formula_file::{Input, InputType};
+pub use formula_file::{Formula, Input, InputType, Step, StepKind};
 pub use places::Scope;
 pub use service::{Health, Service, ServiceScope};
 pub use sources::{Checkouts, GitSource, commit_id, git_sources};
@@ -182,68 +182,6 @@ pub struct Variant {
     pub settings: Settings,
     /// Its own limit; the base agent's when absent.
     pub max_runs: Option<u32>,
-}
-
-#[derive(Clone, Debug)]
-pub struct Formula {
-    pub description: String,
-    pub inputs: BTreeMap<String, Input>,
-    /// `worktree = true`: each run gets a git worktree of its own (spec §11.5).
-    pub worktree: bool,
-    /// The most rounds of a run: a failed check with `back_to` starts the next one, past the last the run fails.
-    pub rounds: u32,
-    /// At least one; a run goes through them in order (spec §9.1).
-    pub steps: Vec<Step>,
-}
-
-impl Formula {
-    /// The step named `name`.
-    pub fn step(&self, name: &str) -> Option<&Step> {
-        self.steps.iter().find(|s| s.name == name)
-    }
-
-    /// The step after the one named `name`; `None` after the last.
-    pub fn next(&self, name: &str) -> Option<&Step> {
-        let at = self.steps.iter().position(|s| s.name == name)?;
-        self.steps.get(at + 1)
-    }
-}
-
-#[derive(Clone, Debug)]
-pub struct Step {
-    /// `name` in the file, or the position from 1.
-    pub name: String,
-    pub kind: StepKind,
-    /// A check: when it fails, the run goes back to this earlier step with its remarks (spec §9.1).
-    pub back_to: Option<String>,
-}
-
-#[derive(Clone, Debug)]
-pub enum StepKind {
-    Ai {
-        agent: Name,
-        prompt: Template,
-        timeout: Option<Duration>,
-        /// The launch settings of the step.
-        settings: Box<Settings>,
-    },
-    Exec {
-        command: Vec<String>,
-        timeout: Option<Duration>,
-    },
-    /// Every ready bead under the run's bead gets a run of `formula` (spec §9.1, §10.1).
-    Drain { formula: Name, timeout: Option<Duration> },
-}
-
-impl StepKind {
-    /// `ai`, `exec` or `drain`, as the state and the API name the kind.
-    pub fn name(&self) -> &'static str {
-        match self {
-            Self::Ai { .. } => "ai",
-            Self::Exec { .. } => "exec",
-            Self::Drain { .. } => "drain",
-        }
-    }
 }
 
 #[derive(Clone, Debug)]
