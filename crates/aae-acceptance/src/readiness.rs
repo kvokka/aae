@@ -5,10 +5,7 @@ use crate::checks::root;
 
 /// The parts of §15 no row checks yet, by criterion. The report shows each as an `open` row, so its criterion stays
 /// open whatever its other rows say: green rows of a part of a criterion do not make the criterion green.
-pub(crate) const OPEN: &[(&str, &str)] = &[(
-    "20",
-    "the demos of the current config shape (runs without a rig, agent scope, the project root) have not run live",
-)];
+pub(crate) const OPEN: &[(&str, &str)] = &[];
 
 /// The criteria §15 checks, in whole or in part, by a request: a run with real models or release builds. A CI run
 /// leaves their rows `not run`, so they count only while the last full run is on the code assessed.
