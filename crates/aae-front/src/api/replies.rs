@@ -279,7 +279,10 @@ pub(crate) struct Instance {
 #[derive(ToSchema)]
 pub(crate) struct Project {
     name: String,
-    root: String,
+    /// The directory of `aae.toml`.
+    dir: String,
+    /// The project root: a place of work like a rig, not one of `rigs`.
+    root: Rig,
     rigs: Vec<Rig>,
 }
 

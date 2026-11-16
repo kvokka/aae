@@ -141,7 +141,7 @@
           {
             "name": "rig",
             "in": "path",
-            "description": "The rig of the run; its layer counts when given. A `formula` needs it.",
+            "description": "The rig of the run; its layer counts when given. A `formula` without it is of a run in the project root.",
             "required": true,
             "schema": {
               "type": [
@@ -1214,7 +1214,7 @@
     },
     "/v1/projects": {
       "get": {
-        "summary": "Lists the projects with their rigs.",
+        "summary": "Lists the projects with their roots and rigs.",
         "operationId": "list_projects",
         "parameters": [
           {
@@ -2513,7 +2513,7 @@
               "string",
               "null"
             ],
-            "description": "Absent: the rig of the one `rig:` label of the bead an input names, if the ready list has it."
+            "description": "Absent: the rig of the one `rig:` label of the bead an input names, if the ready list has it; else the run\nworks in the project root."
           }
         }
       },
@@ -3056,10 +3056,15 @@
         "type": "object",
         "required": [
           "name",
+          "dir",
           "root",
           "rigs"
         ],
         "properties": {
+          "dir": {
+            "type": "string",
+            "description": "The directory of `aae.toml`."
+          },
           "name": {
             "type": "string"
           },
@@ -3070,7 +3075,8 @@
             }
           },
           "root": {
-            "type": "string"
+            "$ref": "#/components/schemas/Rig",
+            "description": "The project root: a place of work like a rig, not one of `rigs`."
           }
         }
       },

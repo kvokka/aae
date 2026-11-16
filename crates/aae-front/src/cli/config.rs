@@ -26,8 +26,9 @@ pub enum ConfigCommand {
         #[arg(long)]
         config: Option<PathBuf>,
     },
-    /// The effective config of an agent, or of the agent of a formula's run on a rig with the layers of its pack, its
-    /// step and the rig's variant: every value with its layer, the host layer in one line. Needs no daemon.
+    /// The effective config of an agent, or of the agent of a formula's run on a rig or in the project root with the
+    /// layers of its pack, its step and the rig's variant: every value with its layer, the host layer in one line.
+    /// Needs no daemon.
     Explain {
         /// The orchestrator config (default: `$XDG_CONFIG_HOME/aae/config.toml`).
         #[arg(long)]
@@ -37,9 +38,10 @@ pub enum ConfigCommand {
         /// `<pack>.<name>`, or a bare name of the project's own pack.
         #[arg(long, required_unless_present = "formula", conflicts_with = "formula")]
         agent: Option<String>,
-        /// A formula, as a run start takes it; needs `--rig`.
-        #[arg(long, requires = "rig")]
+        /// A formula, as a run start takes it; on `--rig`, or in the project root without it.
+        #[arg(long)]
         formula: Option<String>,
+        /// The rig of the run; its layer counts when given.
         #[arg(long)]
         rig: Option<String>,
     },

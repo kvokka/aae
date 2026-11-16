@@ -7,7 +7,7 @@ use super::{
     runs::{BAD_QUERY, REJECTED},
 };
 use aae_core::{
-    config::{Config, Name, Project, StepKind},
+    config::{Config, Name, Project, Rig, StepKind},
     run::Msg,
 };
 use axum::{Json, extract::Query, http::HeaderMap, http::StatusCode};
@@ -39,7 +39,7 @@ fn not_found(message: String) -> ApiError {
     ApiError::new(StatusCode::NOT_FOUND, "not_found", message)
 }
 
-/// Lists the projects with their rigs.
+/// Lists the projects with their roots and rigs.
 #[utoipa::path(get, path = "/v1/projects", params(ProjectQuery),
     responses((status = OK, body = [ProjectReply]),
         (status = BAD_REQUEST, description = BAD_QUERY, body = ErrorReply),
@@ -49,10 +49,9 @@ pub(crate) async fn list_projects(state: State, Param(Query(query)): Param<Query
     let out: Vec<Value> = projects(&config, &query)?
         .iter()
         .map(|p| {
-            let rigs: Vec<Value> = (p.rigs.iter())
-                .map(|(name, r)| json!({ "name": name, "path": r.path, "vars": r.vars }))
-                .collect();
-            json!({ "name": p.name, "root": p.dir, "rigs": rigs })
+            let place = |name: &str, r: &Rig| json!({ "name": name, "path": r.path, "vars": r.vars });
+            let rigs: Vec<Value> = p.rigs.iter().map(|(name, r)| place(name, r)).collect();
+            json!({ "name": p.name, "dir": p.dir, "root": place(&p.root.0, &p.root.1), "rigs": rigs })
         })
         .collect();
     Ok(Json(out.into()))
@@ -153,7 +152,7 @@ pub(crate) struct ExplainQuery {
     /// A formula: step by step, the agent each ai step of its run on `rig` is of, with the layers of its pack, its
     /// step and the rig's variant.
     formula: Option<String>,
-    /// The rig of the run; its layer counts when given. A `formula` needs it.
+    /// The rig of the run; its layer counts when given. A `formula` without it is of a run in the project root.
     rig: Option<String>,
 }
 
@@ -190,9 +189,10 @@ pub(crate) fn explained(config: &Config, project: &str, of: &Explain, rig: Optio
     let agent = match of {
         Explain::Agent(agent) => agent,
         Explain::Formula(formula) => {
-            let rig = rig.ok_or("the explain of a formula needs its rig")?;
             let p = (config.projects.iter()).find(|p| p.name == project);
-            let (_, f) = p.ok_or_else(|| format!("no project `{project}`"))?.formula(formula)?;
+            let p = p.ok_or_else(|| format!("no project `{project}`"))?;
+            let rig = rig.unwrap_or(&p.root.0);
+            let (_, f) = p.formula(formula)?;
             let (mut text, mut steps, mut host) = (String::new(), Vec::new(), false);
             for step in &f.steps {
                 let name = &step.name;

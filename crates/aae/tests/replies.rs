@@ -59,6 +59,19 @@ async fn the_replies_fit_their_schemas() {
     check("post", "/v1/runs/{id}/finish", &finished);
     let explain = d.get("/v1/config/explain?project=shop&agent=dev").await;
     check("get", "/v1/config/explain", &explain);
+    // A formula without a rig is explained in the project root.
+    let explain = d.get("/v1/config/explain?project=shop&formula=slow").await;
+    check("get", "/v1/config/explain", &explain);
+    // The root stands apart from the rigs; `dir` is the directory of `aae.toml`, the root's default path.
+    let projects = d.get("/v1/projects").await;
+    let shop = &projects[0];
+    assert!(shop["dir"].as_str().unwrap().ends_with("config/aae/shop"), "{projects}");
+    assert_eq!(
+        (&shop["root"]["name"], &shop["root"]["path"]),
+        (&"root".into(), &shop["dir"]),
+        "{projects}"
+    );
+    assert_eq!(shop["rigs"].as_array().unwrap().len(), 1, "only `web`: {projects}");
     for path in [
         "/v1/daemon",
         "/v1/gates",
