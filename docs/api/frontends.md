@@ -112,8 +112,8 @@ so an agent names it in its own config (`[mcp.aae] url = "${AAE_API}/mcp"`, whic
 
 ## Verified by
 
-- Integration tests on the real daemon: `crates/aae/tests/api.rs`, `cli.rs`, `mcp.rs`; the live view and
-  `run watch` on the real claude (`crates/aae/tests/claude.rs`); the `lagged` path on a real broadcast channel
+- Integration tests on the real daemon: `crates/aae/tests/e2e/api.rs`, `cli.rs`, `mcp.rs`; the live view and
+  `run watch` on the real claude (`crates/aae/tests/e2e/claude.rs`); the `lagged` path on a real broadcast channel
   (`api/live.rs`).
 - The tests of acceptance criterion 17 (a CLI command per operation, OpenAPI equal to the code, five MCP tools) run in
   `mise run ci`. The live scenario `c17_mcp.rs` has a real haiku session call `list_formulas` and report a formula only the tool named.

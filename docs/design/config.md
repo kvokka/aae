@@ -268,7 +268,7 @@ Known limits:
   is not logged in under isolation (and `doctor` reports such a provider's login as not checked).
 
 Checked by acceptance criterion 12 (`crates/aae-acceptance`), the unit tests of both adapters and
-`crates/aae/tests/doctor.rs`.
+`crates/aae/tests/e2e/doctor.rs`.
 
 ## Orchestrator: `~/.config/aae/config.toml`
 

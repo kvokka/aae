@@ -2,10 +2,8 @@
 //! (docs/design/config.md): the session of a formula with `worktree = true` works in its own git worktree, which goes
 //! once the run passes.
 
-mod common;
-
+use crate::common::Daemon;
 use aae_testkit::anthropic::{Provider, Reply};
-use common::Daemon;
 use std::{
     fs,
     path::{Path, PathBuf},

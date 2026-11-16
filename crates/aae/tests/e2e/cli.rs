@@ -1,8 +1,6 @@
 //! The CLI against a real `aae daemon` (docs/api/frontends.md): a thin client with JSON output.
 
-mod common;
-
-use common::Daemon;
+use crate::common::Daemon;
 use serde_json::Value;
 use std::{
     fs,
@@ -168,7 +166,7 @@ async fn the_finisher_gives_up_on_an_unreachable_daemon_with_tempfail() {
 #[test]
 fn the_config_is_checked_and_explained_without_a_daemon() {
     let dir = tempfile::tempdir().unwrap();
-    for (path, text) in common::FILES {
+    for (path, text) in crate::common::FILES {
         let path = dir.path().join(path);
         fs::create_dir_all(path.parent().unwrap()).unwrap();
         fs::write(path, text).unwrap();

@@ -1,9 +1,7 @@
 //! The daemon's start and its stop by a signal (docs/guide/install.md): what its steps started goes with it
 //! (invariant 7), quietly.
 
-mod common;
-
-use common::{Daemon, FILES, WAIT};
+use crate::common::{Daemon, FILES, WAIT};
 use std::{
     fs,
     path::Path,
@@ -37,7 +35,10 @@ async fn a_signal_stop_ends_the_step_processes_and_prints_no_panic() {
                 timeout = \"20m\"\n";
     fs::write(dir.path().join("config/aae/shop/formulas/hold.toml"), hold).unwrap();
     let log = fs::File::create(dir.path().join("daemon.log")).unwrap();
-    let child = common::command(dir.path()).stderr(Stdio::from(log)).spawn().unwrap();
+    let child = crate::common::command(dir.path())
+        .stderr(Stdio::from(log))
+        .spawn()
+        .unwrap();
     let client = aae_front::client::Client::new(dir.path().join("run/aae/aae.sock"));
     let mut d = Daemon { child, dir, client };
     let deadline = Instant::now() + WAIT;

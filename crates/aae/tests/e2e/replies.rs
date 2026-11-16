@@ -1,9 +1,7 @@
 //! The reply schemas of the OpenAPI document are written by hand: the replies of a real daemon must fit them.
 
-mod common;
-
+use crate::common::{Daemon, schema::check};
 use aae_front::client::ClientError;
-use common::{Daemon, schema::check};
 use serde_json::json;
 use std::fs;
 

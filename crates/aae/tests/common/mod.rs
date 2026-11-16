@@ -1,6 +1,4 @@
 //! A real `aae daemon` in a temporary XDG tree with exec formulas, so no harness is needed.
-// Each test crate uses a part of this module.
-#![allow(dead_code)]
 
 pub(crate) mod schema;
 

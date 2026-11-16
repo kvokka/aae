@@ -2,10 +2,8 @@
 //! (docs/harness-updates.md, criteria 2 and 9): the thread calls the finisher with `exec_command`, the run passes. No
 //! model, no account.
 
-mod common;
-
+use crate::common::{Daemon, schema::check};
 use aae_testkit::openai::{Provider, Reply};
-use common::{Daemon, schema::check};
 use serde_json::Value;
 use std::{
     fs,
@@ -203,7 +201,7 @@ async fn a_codex_thread_is_resumed_after_a_daemon_restart_and_its_run_passes() {
     }
     d.child.kill().unwrap();
     d.child.wait().unwrap();
-    d.child = common::spawn(d.dir.path());
+    d.child = crate::common::spawn(d.dir.path());
     while d.client.request("GET", "/v1/daemon", None, None).await.is_err() {
         assert!(
             started.elapsed() < Duration::from_secs(40),

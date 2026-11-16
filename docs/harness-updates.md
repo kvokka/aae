@@ -17,8 +17,8 @@ marked `[experimental]`, and codex released every 2–8 days (observed on 2026-1
    there is no `mise.lock`. Run `mise upgrade claude` (or `codex`) and check that `mise exec -- claude --version`
    shows the new version.
 2. Run the contract suite and the daemon tests of that harness:
-   - claude: `cargo nextest run -p aae-claude` and `cargo nextest run -p aae --test claude`;
-   - codex: `cargo nextest run -p aae-codex` and `cargo nextest run -p aae --test codex`.
+   - claude: `cargo nextest run -p aae-claude` and `cargo nextest run -p aae -E 'test(/^claude::/)'`;
+   - codex: `cargo nextest run -p aae-codex` and `cargo nextest run -p aae -E 'test(/^codex::/)'`.
 3. A red scenario is a change of the harness protocol or of its failure wording. Fix the adapter (the failure
    classification tables live in `crates/aae-claude/src/stream.rs` and `crates/aae-codex/src/`), never the
    scenario's expectation, unless the harness now reports more than before.
@@ -65,7 +65,7 @@ marked `[experimental]`, and codex released every 2–8 days (observed on 2026-1
 | 14 | background command after the turn | idle with `background` first, idle without background after the command |
 | 15 | second writer in the session | claude does not refuse it: one writer per session is the core's to keep |
 
-`crates/aae/tests/claude.rs` adds the daemon side: the finisher passes a prompt run, `kill -9` in a command is
+`crates/aae/tests/e2e/claude.rs` adds the daemon side: the finisher passes a prompt run, `kill -9` in a command is
 typed within a second and resumed with the bead's claim held (criteria 9 and 16), and a finisher called with a
 background command running passes the run only after the command (criterion 4a on the fake).
 

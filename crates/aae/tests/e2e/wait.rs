@@ -1,9 +1,7 @@
 //! `aae run wait` and `aae run start` from a session against a real `aae daemon` (docs/api/frontends.md): the outcomes
 //! on the event stream, the exit codes, a restart of the daemon in between; the session's attempt token checked.
 
-mod common;
-
-use common::{Daemon, WAIT};
+use crate::common::{Daemon, WAIT};
 use serde_json::Value;
 use std::{
     fs,
@@ -83,7 +81,7 @@ async fn wait_runs_out_of_time_with_its_own_code_and_survives_a_restart() {
     let wait = { wait }.stdout(Stdio::piped()).spawn().unwrap();
     d.until_state(&nap, "running").await;
     d.terminate();
-    d.child = common::spawn(d.dir.path());
+    d.child = crate::common::spawn(d.dir.path());
     let (code, all) = waited(&wait.wait_with_output().unwrap());
     assert!(matches!(code, Some(0 | 1)), "{code:?} {all}");
     assert!(

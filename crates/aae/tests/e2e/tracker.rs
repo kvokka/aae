@@ -1,8 +1,6 @@
 //! The br tracker of a project on a real `aae daemon` and the pinned br (docs/design/tracker-br.md; criteria 11, 16).
 
-mod common;
-
-use common::Daemon;
+use crate::common::Daemon;
 use serde_json::{Value, json};
 use std::{path::Path, process::Command, time::Duration};
 
@@ -140,7 +138,7 @@ async fn a_tracker_that_cannot_be_watched_says_so_in_an_event() {
     })
     .await;
     let journal = d.dir.path().join("state/aae/journal/events.jsonl");
-    let deadline = std::time::Instant::now() + common::WAIT;
+    let deadline = std::time::Instant::now() + crate::common::WAIT;
     let failed = loop {
         let text = std::fs::read_to_string(&journal).unwrap_or_default();
         let found = text

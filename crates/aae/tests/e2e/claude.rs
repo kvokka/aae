@@ -2,10 +2,8 @@
 //! docs/acceptance.md criteria 2 and 9): the session calls the finisher with its Bash tool, the run passes. No model,
 //! no account.
 
-mod common;
-
+use crate::common::Daemon;
 use aae_testkit::anthropic::{Provider, Reply};
-use common::Daemon;
 use serde_json::{Value, json};
 use std::{
     fs,

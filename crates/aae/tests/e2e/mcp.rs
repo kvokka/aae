@@ -1,9 +1,7 @@
 //! The MCP frontend (docs/api/frontends.md, criterion 17): five tools on the daemon's socket, in both protocol epochs
 //! (docs/design/config.md).
 
-mod common;
-
-use common::Daemon;
+use crate::common::Daemon;
 use serde_json::{Value, json};
 use std::time::Duration;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};

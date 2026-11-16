@@ -1,9 +1,7 @@
 //! The HTTP API on a real `aae daemon` (docs/api/frontends.md, docs/guide/install.md).
 
-mod common;
-
+use crate::common::{Daemon, WAIT, command, spawn};
 use aae_front::client::{ClientError, SseEvent};
-use common::{Daemon, WAIT, command, spawn};
 use serde_json::{Value, json};
 use std::os::unix::fs::PermissionsExt;
 use std::{fs, time::Duration};
@@ -382,7 +380,7 @@ async fn the_daemon_exits_with_an_error_once_its_core_stops() {
     let run = d.create("long", None).await;
     d.until_state(&run, "running").await;
     // Another writer holds the database: the end of the step cannot be written, and the core stops on the error.
-    let _db = common::lock_once_journalled(d.dir.path()).await;
+    let _db = crate::common::lock_once_journalled(d.dir.path()).await;
     let deadline = std::time::Instant::now() + WAIT;
     let status = loop {
         if let Some(status) = d.child.try_wait().unwrap() {

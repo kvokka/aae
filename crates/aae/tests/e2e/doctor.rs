@@ -1,9 +1,7 @@
 //! `aae doctor` and the service files on fake harness, mise and br binaries (docs/design/config.md,
 //! docs/guide/install.md).
 
-mod common;
-
-use common::FILES;
+use crate::common::FILES;
 use serde_json::Value;
 use std::{
     fs,
@@ -332,7 +330,7 @@ fn the_sandbox_warning_names_each_codex_agent_that_sets_no_sandbox_mode() {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn the_daemon_answers_the_same_checks_over_the_api() {
-    let d = common::Daemon::start(|_| {}).await;
+    let d = crate::common::Daemon::start(|_| {}).await;
     let names = |found: &Value| -> Vec<String> {
         let found = found.as_array().unwrap().iter();
         found.map(|f| f["check"].as_str().unwrap().to_owned()).collect()
@@ -361,7 +359,7 @@ async fn the_daemon_answers_the_same_checks_over_the_api() {
 /// The daemon with no config file at the default path runs on the defaults and says so.
 #[tokio::test(flavor = "multi_thread")]
 async fn with_no_config_file_the_defaults_are_named() {
-    let d = common::Daemon::start(|dir| fs::remove_file(dir.join("config/aae/config.toml")).unwrap()).await;
+    let d = crate::common::Daemon::start(|dir| fs::remove_file(dir.join("config/aae/config.toml")).unwrap()).await;
     let (_, found) = findings(&aae(d.dir.path(), &["doctor", "--json"]));
     let (config, why) = level(&found, "config");
     assert!(

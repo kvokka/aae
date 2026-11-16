@@ -73,10 +73,11 @@
   short intervals. Where no process runs, use the managed clock (`Clock::managed`, `start_paused`), not the wall
   clock.
 - The repository's own `.beads` is not a fixture: tests of aae make their own temporary br directories.
-- The integration tests of the core are modules of one test binary, `crates/aae-testkit/tests/core`; the chaos
-  stand is the only other one. A new test there is a module, not a new file under `tests/`: every binary is one more
-  link on each change of the core. A test that moves keeps its name in the nextest filters of
-  `crates/aae-acceptance/src/checks.rs` and `mise.toml`, or a filter silently selects nothing.
+- The integration tests of the core and those of the binary are modules of one test binary each:
+  `crates/aae-testkit/tests/core` and `crates/aae/tests/e2e`; the chaos stand is a binary of its own. A new test is
+  a module there, not a new file under `tests/`: every binary is one more link on each change. A test that moves
+  keeps its name in the nextest filters of `crates/aae-acceptance/src/checks.rs` and `mise.toml`, or a filter
+  silently selects nothing.
 - On a fake provider, fail an attempt of claude with 529 (`Reply::Overloaded`): with `CLAUDE_CODE_MAX_RETRIES=0`
   that is exactly one request. On a 400 "prompt is too long" claude sends compaction requests of its own, which
   shifts a scripted plan of replies.
