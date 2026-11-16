@@ -4,7 +4,7 @@
 //! The real daemon has no managed clock (contracts 9: no test mode), so this runs on the wall clock with an `every`
 //! of a second. It checks the times the daemon wrote in its journal, never what the test saw at some moment: a loaded
 //! host delays when the test looks, not what the daemon did. The same rules on the managed clock, `cron` included,
-//! are core tests (`aae-testkit/tests/triggers.rs`).
+//! are core tests (`aae-testkit/tests/core/triggers.rs`).
 
 use super::exec_formula;
 use crate::{

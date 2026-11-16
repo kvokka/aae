@@ -45,5 +45,5 @@ it for the next run. Compare with the author's run: `frontend-example/`, `backen
 
 The author's run (2026-11-15, `RESULT-example.md`) needed two rounds: the first round of the checks sent the work
 back to the planner, which added a bead to hide the game overlay during play; in the second round `qa` played the game
-in the browser and saw a score reach the backend. How a return goes is in `crates/aae-testkit/tests/returns.rs`,
+in the browser and saw a score reach the backend. How a return goes is in `crates/aae-testkit/tests/core/returns.rs`,
 without a model.

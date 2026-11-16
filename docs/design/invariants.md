@@ -45,7 +45,7 @@ serves two steps, a run passes from its last step) and the drain step (D1: a bea
 entry into the step; D2: once the step finished, no child run on a bead is alive; D3: the attempt of a drain step
 that a crash of the daemon caught ends with `daemon_crash`). Each full share of seeds kills the daemon mid-drain at least once. Every run
 plays new seeds from a random base it prints; a failure names its seed and `AAE_CHAOS_SEED=<n>` replays it.
-Invariant 6 runs real marked processes (`aae-testkit/tests/old_instances.rs`, `process::tests::wait_gone_*`). The
+Invariant 6 runs real marked processes (`aae-testkit/tests/core/old_instances.rs`, `process::tests::wait_gone_*`). The
 others are covered by the integration suites of `aae-testkit/tests` and by the acceptance scenarios (criterion 8:
 20 `kill -9` of the daemon mid-turn in CI and 5 on each real harness; criterion 24: a `kill -9` of the daemon in
 each step of a formula of `exec`, `drain` and `exec` steps on the real br, no step and no bead run twice).

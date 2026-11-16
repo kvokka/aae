@@ -3,7 +3,7 @@
 //! exactly once, and the trigger on `run.passed` started exactly one run for each passed run, none lost or doubled.
 //!
 //! The step is an exec command: the real daemon has no scripted harness (contracts 9), and a harness turn resumed
-//! after `daemon_crash` is covered on the scripted driver (`aae-testkit/tests/recovery.rs`). The request part of the
+//! after `daemon_crash` is covered on the scripted driver (`aae-testkit/tests/core/recovery.rs`). The request part of the
 //! criterion, [`on_live`], kills the daemon five times in the middle of a real claude or codex turn, mid-tool.
 
 use super::{Live, exec_formula, hold};
