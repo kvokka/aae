@@ -242,7 +242,7 @@ fn a_retired_key_is_one_line_that_says_where_it_went() {
         (
             "kit/formulas/implement.toml",
             &step.replace("\"prompt\"", "\"ai\""),
-            "an `ai` step has no `prompt`: its agent's template is `agents/<agent>/prompt.template.md`",
+            "line 5, column 1: an `ai` step has no `prompt`: its agent's template is `agents/<agent>/prompt.template.md`",
         ),
         (
             "kit/formulas/implement.toml",

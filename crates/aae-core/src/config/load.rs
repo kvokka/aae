@@ -120,7 +120,7 @@ impl Loader {
     pub(super) fn read<T: DeserializeOwned>(&mut self, file: &Path) -> Option<T> {
         let parsed = fs::read_to_string(file)
             .map_err(|e| e.to_string())
-            .and_then(|text| toml::from_str(&text).map_err(|e| super::files::retired(e.to_string())));
+            .and_then(|text| toml::from_str(&text).map_err(|e| super::files::retired(e.to_string(), &text)));
         parsed.map_err(|e| self.fail(file, e)).ok()
     }
 

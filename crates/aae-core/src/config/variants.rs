@@ -64,7 +64,7 @@ impl Loader {
                     Ok(s) => drop(edits.insert(agent, self.settings(file, dir, s, plugins))),
                     Err(e) => self.fail(
                         file,
-                        format!("rig `{rig}`: `agents.{agent}`: {}", retired(e.to_string())),
+                        format!("rig `{rig}`: `agents.{agent}`: {}", retired(e.to_string(), "")),
                     ),
                 },
                 _ => self.fail(

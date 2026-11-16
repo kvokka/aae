@@ -369,17 +369,30 @@ const RETIRED: [(&str, &str); 5] = [
     ),
 ];
 
-/// A parse error as one line with the hint of [`RETIRED`] when it is about a retired key, else as it is.
-pub(super) fn retired(message: String) -> String {
-    let Some((_, hint)) = RETIRED.iter().find(|(said, _)| message.contains(said)) else {
+/// A parse error of `text` as one line with the hint of [`RETIRED`] when it is about a retired key, else as it is.
+pub(super) fn retired(message: String, text: &str) -> String {
+    let Some((said, hint)) = RETIRED.iter().find(|(said, _)| message.contains(said)) else {
         return message.trim_end().to_owned();
     };
-    match message
+    let at = message
         .lines()
         .next()
-        .and_then(|l| l.strip_prefix("TOML parse error at "))
-    {
-        Some(at) => format!("{at}: {hint}"),
+        .and_then(|l| l.strip_prefix("TOML parse error at "));
+    match at {
+        Some(at) => format!("{}: {hint}", key_at(said, at, text).unwrap_or_else(|| at.to_owned())),
         None => (*hint).to_owned(),
     }
+}
+
+/// The place of the retired key itself: the parser points an unknown key of a tagged table at the table's header.
+fn key_at(said: &str, at: &str, text: &str) -> Option<String> {
+    let key = said.strip_prefix("unknown field `")?.strip_suffix('`')?;
+    let header: usize = at.strip_prefix("line ")?.split(',').next()?.parse().ok()?;
+    let (n, line) = text
+        .lines()
+        .enumerate()
+        .skip(header.checked_sub(1)?)
+        .find(|(_, l)| (l.trim_start().strip_prefix(key)).is_some_and(|rest| rest.trim_start().starts_with('=')))?;
+    let column = line.len() - line.trim_start().len() + 1;
+    Some(format!("line {}, column {column}", n + 1))
 }
