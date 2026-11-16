@@ -36,7 +36,7 @@ fn tools() -> Value {
           "inputSchema": { "type": "object", "required": ["project", "formula"], "properties": {
               "project": text,
               "rig": { "type": "string", "description": "Optional: without it the run works in the \
-                  project root, or on the rig of the one `rig:` label of the bead an input names." },
+                  project root, or on the rig of the id prefix of the bead an input names." },
               "formula": { "type": "string", "description": "`name`, or `<pack>.<name>`, as list_formulas gives it." },
               "inputs": { "type": "object" },
               "continue_from": { "type": "string", "description": "A terminal run whose last session to continue." },

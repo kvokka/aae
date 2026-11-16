@@ -19,8 +19,9 @@ Work through these steps.
    - how to start and check the result.
 
 3. File each task under the request, in order:
-   `br create "<short title>" --parent {{ bead.id }} -l rig:<rig>,agent:coder,harness:<harness> --description "<the task>" --silent`
-   prints the id of the new bead. A task that may start only after another one is done also gets
-   `--deps blocks:<id of that one>`.
+   `BD_ISSUE_PREFIX=<prefix> br create "<short title>" --deps parent-child:{{ bead.id }} -l agent:coder,harness:<harness> --description "<the task>" --silent`
+   prints the id of the new bead. The prefix of a rig is the `prefix` of its entry in `aae --json project list`; it makes
+   the rig of the bead. Do not use `--parent`: it gives the id `{{ bead.id }}.<n>` and the bead runs in the root. A task
+   that may start only after another one is done gets `--deps "parent-child:{{ bead.id }},blocks:<id of that one>"`.
 
 4. Finish: `aae finish pass --summary "<the beads you filed: id, rig, title>"`.

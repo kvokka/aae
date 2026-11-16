@@ -11,10 +11,6 @@ pub(crate) const OPEN: &[(&str, &str)] = &[
         "the demos of the current config shape (runs without a rig, agent scope, the project root) have not run live",
     ),
     (
-        "24",
-        "the beads of a rig carry its prefix; the row above checks `rig:` labels",
-    ),
-    (
         "28",
         "a task: text files the root bead, an id of a bead takes it up, no second bead",
     ),
@@ -29,10 +25,6 @@ pub(crate) const OPEN: &[(&str, &str)] = &[
     (
         "31",
         "a `formula` step runs its formula as a child run; formulas with `internal = true`",
-    ),
-    (
-        "32",
-        "the beads of a rig carry its prefix, and `drain` takes the rig of a child run from it",
     ),
     ("33", "an agent's prompt template and files from the project"),
     (

@@ -47,7 +47,8 @@ Code: `crates/aae-front/src/cli/`. The CLI is a thin client of the HTTP API in t
   the API's error object, or for a local error the code `no_daemon`, `usage`, `config_error`, `not_found` or
   `internal`. Arguments that do not parse exit 2 with the usage text.
 - `aae run start <project> [<rig>] <formula>` (options after the positionals) prints the run id; without the rig
-  the run takes the rig of the one `rig:` label of the bead an input names, else works in the project root. When a bead input finds nothing ready it says so on
+  the run takes the rig of the id prefix of the bead an input names, else works in the project root. When a bead
+  input finds nothing ready it says so on
   stderr and exits 3. Inside an agent session (`AAE_RUN` and `AAE_ATTEMPT_TOKEN` set, as for `aae finish`) it sends
   them as `parent` of `POST /v1/runs`: the run is a child of the session's run, with its correlation and one level
   deeper, at most 10 ([contracts](../design/contracts.md#61-states)); a token that is not that of the parent's live

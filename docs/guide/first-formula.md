@@ -181,7 +181,8 @@ bead's claim until it ends. A trigger on `bead.ready` starts such runs as beads 
 
 A run can also start from a request in plain words: `--input 'bead={"request":"Add a dark mode"}'` creates a root
 bead (an epic titled by the first line) and the run works on it. A planner step files the work as beads under that
-root, each with a `rig:` label and, if it wants, `agent:` and `harness:` labels; a `drain` step then gives every
+root, each under the id prefix of its rig (`BD_ISSUE_PREFIX=<prefix> br create ... --deps parent-child:<root>`) and, if it
+wants, with `agent:` and `harness:` labels; a `drain` step then gives every
 ready bead under the root a run of its own formula and ends when none is ready or running:
 
 ```toml
@@ -198,7 +199,7 @@ prompt = "plan.md"                    # files the beads under {{ bead.id }}
 [[step]]
 name = "work"
 kind = "drain"
-formula = "implement"                 # takes one `bead` input; one run per bead, on the rig of its `rig:` label
+formula = "implement"                 # takes one `bead` input; one run per bead, on the rig of its id prefix
 
 [[step]]
 name = "verify"

@@ -2513,7 +2513,7 @@
               "string",
               "null"
             ],
-            "description": "Absent: the rig of the one `rig:` label of the bead an input names, if the ready list has it; else the run\nworks in the project root."
+            "description": "Absent: the rig of the id prefix of the bead an input names; else the run\nworks in the project root."
           }
         }
       },

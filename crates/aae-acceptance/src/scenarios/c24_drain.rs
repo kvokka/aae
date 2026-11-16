@@ -1,6 +1,6 @@
 //! Criterion 24 on the real br and the real `claude` against a fake Anthropic API: a request becomes the root bead of
-//! a run of `ship`; its exec step `plan` creates four beads under the root with rig, agent and harness labels; the
-//! drain step gives each a run of `work` (an exec step, then an ai step on the agent of the bead): A on `web`, B on
+//! a run of `ship`; its exec step `plan` creates four beads under the root with rig prefixes and agent and harness
+//! labels; the drain step gives each a run of `work` (an exec step, then an ai step on the agent of the bead): A on `web`, B on
 //! `api` once A is closed, F under the epic S fails, H names another harness and gets no run; the exec step `report`
 //! sees what was closed, failed and refused. A `kill -9` of the daemon in each step: no step and no bead runs twice.
 
@@ -29,15 +29,16 @@ const WORK: &str = "name = \"work\"\n[inputs]\nbead = { type = \"bead\", require
     [[step]]\nname = \"do\"\nkind = \"exec\"\ncommand = [\"sh\", \"{dir}/work.sh\"]\ntimeout = \"120s\"\n\
     [[step]]\nname = \"sign\"\nkind = \"ai\"\nagent = \"ops\"\nprompt = \"sign.md\"\n";
 
-/// The first attempt holds until the daemon dies; the second creates the beads and keeps their ids. F is a grandchild
-/// of the root, under the epic S: S keeps an open child and is never ready.
+/// The first attempt holds until the daemon dies; the second creates the beads and keeps their ids. A bead of a rig
+/// is filed with the rig's prefix (`w`, `a`) and `parent-child`, as `--parent` would give it the parent's id. F is a
+/// grandchild of the root, under the epic S: S keeps an open child and is never ready.
 const PLAN: &str = "set -e\nD={dir}\nif [ ! -e $D/plan.held ]; then touch $D/plan.held; exec sleep 60; fi\n\
-    new() { br create \"$1\" --parent \"$AAE_BEAD\" -l \"$2\" --silent; }\n\
-    a=$(new A rig:web,agent:dev,harness:claude)\n\
-    b=$(br create B --parent \"$AAE_BEAD\" -l rig:api,agent:dev,harness:claude --deps \"blocks:$a\" --silent)\n\
+    new() { BD_ISSUE_PREFIX=$1 br create \"$2\" --deps \"parent-child:$AAE_BEAD$4\" -l \"$3\" --silent; }\n\
+    a=$(new w A agent:dev,harness:claude)\n\
+    b=$(new a B agent:dev,harness:claude \",blocks:$a\")\n\
     s=$(br create S -t epic --parent \"$AAE_BEAD\" --silent)\n\
-    f=$(br create F --parent \"$s\" -l rig:api,agent:dev,harness:claude --silent)\n\
-    h=$(new H rig:web,agent:dev,harness:codex)\n\
+    f=$(BD_ISSUE_PREFIX=a br create F --deps \"parent-child:$s\" -l agent:dev,harness:claude --silent)\n\
+    h=$(new w H agent:dev,harness:codex)\n\
     printf '%s %s %s %s %s' \"$a\" \"$b\" \"$f\" \"$h\" \"$s\" > $D/ids\n";
 
 /// The first attempt on A holds until the daemon dies; a command that ran to its end is in the log; F fails.
@@ -112,6 +113,8 @@ pub(crate) async fn run(env: Arc<Env>) -> String {
         .await;
     let ids = std::fs::read_to_string(at("ids")).unwrap();
     let [a, b, f, h, s]: [&str; 5] = ids.split(' ').collect::<Vec<_>>().try_into().unwrap();
+    let prefixes = [a, b, f, h].map(|id| id.split_once('-').map_or(id, |(p, _)| p));
+    assert_eq!(prefixes, ["w", "a", "a", "w"], "{ids}");
     checked(&d, &ship, &view, &journal, [a, b, f, h, s]).await;
     format!(
         "ship: plan, drain, report, each through a kill -9; {a}, {b} closed, {f} under {s} failed once, {h} refused"

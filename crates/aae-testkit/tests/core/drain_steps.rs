@@ -15,9 +15,9 @@ use std::{
 async fn a_drain_gives_every_ready_bead_under_the_root_a_run() {
     let w = world(SWEEP);
     let root = w.tracker.add(&[], None);
-    let web = w.tracker.add(&["rig:web", "agent:qa"], Some(&root));
-    let api = w.tracker.add(&["rig:api"], Some(&root));
-    w.tracker.add(&["rig:web"], None);
+    let web = w.tracker.add_in("w", &["agent:qa"], Some(&root));
+    let api = w.tracker.add_in("a", &[], Some(&root));
+    w.tracker.add_in("w", &[], None);
     let run = w.sweep(&root).await;
     let outcome = w.settle(&run, &[], &[], &mut BTreeSet::new()).await;
     assert_eq!(outcome["result"], "pass");
@@ -43,12 +43,12 @@ async fn a_drain_gives_every_ready_bead_under_the_root_a_run() {
 async fn a_bead_added_meanwhile_runs_too() {
     let w = world(SWEEP);
     let root = w.tracker.add(&[], None);
-    let first = w.tracker.add(&["rig:web"], Some(&root));
+    let first = w.tracker.add_in("w", &[], Some(&root));
     let run = w.sweep(&root).await;
     let mut done = BTreeSet::new();
     w.settle(&run, &[], &[first.as_str()], &mut done).await;
     // No word from the tracker: the read after the close of the first bead brings it.
-    let later = w.tracker.add(&["rig:api"], Some(&root));
+    let later = w.tracker.add_in("a", &[], Some(&root));
     let outcome = w.settle(&run, &[], &[], &mut done).await;
     assert_eq!(outcome["data"]["closed"], json!([first, later]));
     assert_eq!(w.kids(&run).len(), 2);
@@ -58,8 +58,8 @@ async fn a_bead_added_meanwhile_runs_too() {
 async fn a_failed_bead_stops_nothing_and_runs_once() {
     let w = world(SWEEP);
     let root = w.tracker.add(&[], None);
-    let bad = w.tracker.add(&["rig:web"], Some(&root));
-    let good = w.tracker.add(&["rig:web"], Some(&root));
+    let bad = w.tracker.add_in("w", &[], Some(&root));
+    let good = w.tracker.add_in("w", &[], Some(&root));
     let run = w.sweep(&root).await;
     let outcome = w.settle(&run, &[bad.as_str()], &[], &mut BTreeSet::new()).await;
     assert_eq!(
@@ -80,7 +80,8 @@ async fn a_failed_bead_stops_nothing_and_runs_once() {
 async fn a_refused_bead_gets_no_run_and_a_reason() {
     let w = world(SWEEP);
     let root = w.tracker.add(&[], None);
-    let codex = w.tracker.add(&["rig:web", "harness:codex"], Some(&root));
+    let codex = w.tracker.add_in("w", &["harness:codex"], Some(&root));
+    let labelled = w.tracker.add(&["rig:web"], Some(&root));
     let run = w.sweep(&root).await;
     let outcome = w.settle(&run, &[], &[], &mut BTreeSet::new()).await;
     let why = outcome["data"]["refused"][&codex].as_str().unwrap();
@@ -88,9 +89,11 @@ async fn a_refused_bead_gets_no_run_and_a_reason() {
         why.contains("labelled `harness:codex`: the config gives `scripted` to `shop.dev`"),
         "{why}"
     );
+    let why = outcome["data"]["refused"][&labelled].as_str().unwrap();
+    assert!(why.contains("the rig of a bead is the prefix of its id"), "{why}");
     assert!(w.kids(&run).is_empty());
     assert_eq!(w.tracker.bead(&codex).unwrap().assignee, None);
-    assert_eq!(w.wrap(&run).await, "Wrap up: 0 closed, 0 failed, 1 refused.");
+    assert_eq!(w.wrap(&run).await, "Wrap up: 0 closed, 0 failed, 2 refused.");
 }
 
 /// A child of a drain is one level deeper than its run, under the common depth limit (spec §9.3).
@@ -98,7 +101,7 @@ async fn a_refused_bead_gets_no_run_and_a_reason() {
 async fn a_drain_at_the_depth_limit_gives_no_bead_a_run() {
     let w = world(SWEEP);
     let root = w.tracker.add(&[], None);
-    let bead = w.tracker.add(&["rig:web"], Some(&root));
+    let bead = w.tracker.add_in("w", &[], Some(&root));
     let create = Create {
         project: "shop".into(),
         rig: Some("web".into()),
@@ -126,7 +129,7 @@ async fn a_restart_mid_drain_fails_the_attempt_and_gives_no_bead_twice() {
     files.extend_from_slice(&SWEEP[1..]);
     let mut w = world(&files);
     let root = w.tracker.add(&[], None);
-    let [one, two, three] = [(); 3].map(|()| w.tracker.add(&["rig:web"], Some(&root)));
+    let [one, two, three] = [(); 3].map(|()| w.tracker.add_in("w", &[], Some(&root)));
     let run = w.sweep(&root).await;
     let mut done = BTreeSet::new();
     w.settle(&run, &[one.as_str()], &[two.as_str()], &mut done).await;
@@ -182,7 +185,7 @@ async fn a_restart_mid_drain_fails_the_attempt_and_gives_no_bead_twice() {
 async fn a_read_older_than_the_end_of_a_child_does_not_end_the_step() {
     let w = world(SWEEP);
     let root = w.tracker.add(&[], None);
-    let first = w.tracker.add(&["rig:web"], Some(&root));
+    let first = w.tracker.add_in("w", &[], Some(&root));
     let run = w.sweep(&root).await;
     let mut done = BTreeSet::new();
     w.settle(&run, &[], &[first.as_str()], &mut done).await;
@@ -199,7 +202,7 @@ async fn a_read_older_than_the_end_of_a_child_does_not_end_the_step() {
         under: [(root.clone(), Vec::new())].into_iter().collect(),
     };
     w.core.send(None, stale).await.unwrap();
-    let later = w.tracker.add(&["rig:web"], Some(&root));
+    let later = w.tracker.add_in("w", &[], Some(&root));
     w.tracker.set_down(false);
     done.insert(kid);
     let outcome = w.settle(&run, &[], &[], &mut done).await;
@@ -217,7 +220,7 @@ async fn a_child_cancelled_in_the_queue_ends_the_step_at_once() {
     };
     w.core.send(None, Msg::CloseGate(gate)).await.unwrap();
     let root = w.tracker.add(&[], None);
-    let bead = w.tracker.add(&["rig:api"], Some(&root));
+    let bead = w.tracker.add_in("a", &[], Some(&root));
     let run = w.sweep(&root).await;
     tokio::time::sleep(Duration::from_secs(5)).await;
     let kid = w.kids(&run)[0].clone();
@@ -241,7 +244,7 @@ async fn a_child_cancelled_in_the_queue_ends_the_step_at_once() {
 async fn a_read_that_does_not_know_the_root_decides_nothing() {
     let w = world(SWEEP);
     let root = w.tracker.add(&[], None);
-    let first = w.tracker.add(&["rig:web"], Some(&root));
+    let first = w.tracker.add_in("w", &[], Some(&root));
     let run = w.sweep(&root).await;
     let mut done = BTreeSet::new();
     w.settle(&run, &[], &[first.as_str()], &mut done).await;
@@ -265,14 +268,14 @@ async fn a_read_that_does_not_know_the_root_decides_nothing() {
 }
 
 /// A bead of an epic under the root runs too; the epic, ready once its beads are closed, is given out as any bead:
-/// with no `rig:` label, its run works in the project root (spec §6.1).
+/// its id has no rig prefix, so its run works in the project root (spec §6.1).
 #[tokio::test(start_paused = true)]
 async fn a_bead_of_a_nested_epic_runs_and_the_emptied_epic_runs_in_the_project_root() {
     let w = world(SWEEP);
     let root = w.tracker.add(&[], None);
     let sub = w.tracker.add(&[], Some(&root));
-    let deep = w.tracker.add(&["rig:web"], Some(&sub));
-    let child = w.tracker.add(&["rig:api"], Some(&root));
+    let deep = w.tracker.add_in("w", &[], Some(&sub));
+    let child = w.tracker.add_in("a", &[], Some(&root));
     let run = w.sweep(&root).await;
     let outcome = w.settle(&run, &[], &[], &mut BTreeSet::new()).await;
     assert_eq!(outcome["data"]["closed"], json!([deep, child, sub]), "{outcome}");

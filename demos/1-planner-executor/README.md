@@ -8,9 +8,9 @@ The request is one sentence: "Create me snake game in browser and a simple backe
 - `pack/` is the pack `dev`, with not a word about the task. Agent `planner` files the work; agent `coder` does one
   bead. Formula `deliver`:
   1. `plan`, an ai step of `planner`: it looks at the rigs and files beads under the request, each with its task
-     and the labels `rig:`, `agent:` and `harness:`;
+     and the labels `agent:` and `harness:`, under the prefix of its rig;
   2. `work`, a `drain` step: every ready bead under the request gets a run of `implement`, where `coder` does it on
-     the rig of its `rig:` label;
+     the rig of the prefix of its id;
   3. `report`, an exec step: the beads as they are and whether every bead under the request is closed, with errors or
      without.
 - `root/` is the root repository: `aae.toml` (the project, its rigs and what the agents run on) and its tracker, the

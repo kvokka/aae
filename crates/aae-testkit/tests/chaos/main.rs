@@ -75,8 +75,8 @@ const SWEEP: &[(&str, &str)] = &[(
      [[step]]\nkind = \"ai\"\nagent = \"dev\"\nprompt = \"ship.md\"\n",
 )];
 
-/// The beads of the tracker: `b-1` and `b-2` for runs of `fix`, the root `b-3` of `sweep` and its children.
-const BEADS: [&str; 5] = ["b-1", "b-2", "b-3", "b-4", "b-5"];
+/// The beads of the tracker: `b-1` and `b-2` for runs of `fix`, the root `b-3` of `sweep` and its children of `web`.
+const BEADS: [&str; 5] = ["b-1", "b-2", "b-3", "w-4", "w-5"];
 
 /// Seeds in all, unless `AAE_CHAOS_SEEDS` says otherwise; the tests split them so that nextest runs them side by side.
 const SEEDS: u64 = 1_000;
@@ -148,8 +148,8 @@ async fn play(seed: u64) -> Result<Played, String> {
     w.tracker.add(&[], None);
     w.tracker.add(&[], None);
     let root = w.tracker.add(&[], None);
-    w.tracker.add(&["rig:web"], Some(&root));
-    w.tracker.add(&["rig:web"], Some(&root));
+    w.tracker.add_in("w", &[], Some(&root));
+    w.tracker.add_in("w", &[], Some(&root));
     let mut play = Play::default();
     // Runs of `ship` and `sweep` from the start: under the faults a run seldom gets past its first step otherwise.
     create_keyed(&w, &mut play, 2).await;

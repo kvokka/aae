@@ -33,8 +33,9 @@ impl RunHandler {
     }
 
     /// What the bead `bead` of a run of `formula` on `rig` makes of it: the bead, the agent its `agent:` label names,
-    /// and the agent and model key of the first step. Refused when a `harness:` label differs from the harness the
-    /// config gives an ai step, or when the named agent does not resolve (spec §9.1).
+    /// and the agent and model key of the first step. Refused when the bead has a `rig:` label, when a `harness:`
+    /// label differs from the harness the config gives an ai step, or when the named agent does not resolve (spec
+    /// §9.1).
     #[expect(clippy::type_complexity, reason = "a private tuple read at its one call site")]
     fn bead_agent(
         &self,
@@ -46,6 +47,13 @@ impl RunHandler {
         bead: Option<&str>,
     ) -> Result<(Option<String>, Option<String>, (String, Option<String>)), Error> {
         let label = |prefix| bead.map_or(Ok(None), |id| Self::label(tx, project, id, prefix));
+        // The rig of a bead was once its `rig:` label; such a bead is refused, not run on the root unnoticed.
+        if !matches!(label("rig"), Ok(None)) {
+            return Err(rejected(format!(
+                "bead `{}` has a `rig:` label: the rig of a bead is the prefix of its id",
+                bead.unwrap_or_default()
+            )));
+        }
         let (as_agent, harness) = (label("agent")?, label("harness")?);
         if let Some(harness) = &harness {
             let prompts = formula.steps.iter().filter(|s| matches!(s.kind, StepKind::Ai { .. }));
@@ -75,14 +83,15 @@ impl RunHandler {
         let project = self.config.projects.iter().find(|p| p.name == c.project);
         let project = project.ok_or_else(|| rejected(format!("no project `{}`", c.project)))?;
         let (name, formula) = project.formula(&c.formula).map_err(rejected)?;
-        let rig_name = match c.rig.take() {
-            Some(rig) => rig,
-            None => {
-                let beads = formula.inputs.iter().filter(|(_, i)| i.kind == InputType::Bead);
-                let named = beads.filter_map(|(k, _)| c.inputs.get(k)?.as_str()).next();
-                Self::rig_of_bead(tx, &c.project, &project.root.0, named)?
-            }
-        };
+        // A start that names no rig runs on the rig of the bead an input names, else on the root.
+        let rig_name = c.rig.take().unwrap_or_else(|| {
+            let beads = formula.inputs.iter().filter(|(_, i)| i.kind == InputType::Bead);
+            let named = beads.filter_map(|(k, _)| c.inputs.get(k)?.as_str()).next();
+            named
+                .and_then(|id| project.rig_of(id))
+                .unwrap_or(&project.root.0)
+                .to_owned()
+        });
         let rig = project.place(&rig_name);
         let rig = rig.ok_or_else(|| rejected(format!("no rig `{rig_name}` in `{}`", c.project)))?;
         let first = &formula.steps[0];
@@ -144,7 +153,7 @@ impl RunHandler {
             Some((key, _)) => {
                 let named = c.inputs[key].is_string();
                 let mut picked = None;
-                for id in Self::pick_bead(tx, &c.project, &rig_name, &c.inputs[key])? {
+                for id in Self::pick_bead(project, tx, &rig_name, &c.inputs[key])? {
                     match self.bead_agent(tx, &c.project, &rig_name, &name.to_string(), formula, Some(&id)) {
                         Ok(found) => {
                             picked = Some(found);

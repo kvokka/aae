@@ -3,6 +3,7 @@
 
 use super::RunHandler;
 use crate::{
+    config::Project,
     tracker::{Bead, Change},
     writer::{Error, Event, Tx},
 };
@@ -12,7 +13,15 @@ use serde_json::{Value, json};
 impl RunHandler {
     /// The writes to a project's tracker after its cursor become `bead.created|updated|closed`, and the beads new to
     /// its ready set `bead.ready` (spec §9.5); the ready set is kept for the next diff and for picking.
-    pub(super) fn ready(tx: &mut Tx<'_>, project: &str, beads: &[Bead], changes: &[Change]) -> Result<(), Error> {
+    pub(super) fn ready(
+        &self,
+        tx: &mut Tx<'_>,
+        project: &str,
+        beads: &[Bead],
+        changes: &[Change],
+    ) -> Result<(), Error> {
+        // A project gone from the config still has its tracker read; its beads then name no rig.
+        let place = (project, self.config.projects.iter().find(|p| p.name == project));
         let cursor: Option<i64> = tx
             .sql()
             .query_row("SELECT seq FROM tracker_cursors WHERE project = ?1", [project], |r| {
@@ -27,7 +36,7 @@ impl RunHandler {
         for change in changes.iter().filter(|c| c.seq > cursor) {
             let by = bead_event(
                 tx,
-                project,
+                place,
                 &format!("bead.{}", change.kind),
                 &change.bead,
                 &change.actor,
@@ -49,7 +58,7 @@ impl RunHandler {
             .query_map([project], |r| r.get(0))?
             .collect::<Result<_, _>>()?;
         for bead in beads.iter().filter(|b| !known.contains(&b.id)) {
-            emit_bead(tx, project, "bead.ready", bead, Value::Null, &[], cause.clone())?;
+            emit_bead(tx, place, "bead.ready", bead, Value::Null, &[], cause.clone())?;
         }
         tx.sql()
             .execute("DELETE FROM ready_beads WHERE project = ?1", [project])?;
@@ -67,7 +76,7 @@ impl RunHandler {
 /// any other actor starts a new chain (§9.5). Returns the run and correlation it carried.
 fn bead_event(
     tx: &mut Tx<'_>,
-    project: &str,
+    place: (&str, Option<&Project>),
     kind: &str,
     bead: &Bead,
     actor: &str,
@@ -82,24 +91,21 @@ fn bead_event(
         None => None,
     };
     let by = (run.map(str::to_owned).filter(|_| correlation.is_some()), correlation);
-    emit_bead(tx, project, kind, bead, json!(actor), changed, by.clone())?;
+    emit_bead(tx, place, kind, bead, json!(actor), changed, by.clone())?;
     Ok(by)
 }
 
+/// `place`: the project's name and config; the rig of the event is the rig of the bead's id (spec §10.2).
 fn emit_bead(
     tx: &mut Tx<'_>,
-    project: &str,
+    (project, config): (&str, Option<&Project>),
     kind: &str,
     bead: &Bead,
     actor: Value,
     changed: &[String],
     (run, correlation): (Option<String>, Option<String>),
 ) -> Result<(), Error> {
-    let rig = bead
-        .labels
-        .iter()
-        .find_map(|l| l.strip_prefix("rig:"))
-        .map(str::to_owned);
+    let rig = config.and_then(|p| p.rig_of(&bead.id)).map(str::to_owned);
     let event = Event {
         kind: kind.to_owned(),
         project: Some(project.to_owned()),

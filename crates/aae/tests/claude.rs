@@ -192,7 +192,16 @@ fn get(port: u16, authorization: &str) -> String {
 
 /// br by hand in the project, as `alice`; its trimmed stdout.
 fn br(project: &Path, args: &[&str]) -> String {
-    let out = Command::new("br")
+    br_in(project, None, args)
+}
+
+/// br by hand, filing new beads with the id prefix `prefix` (a rig's) if any.
+fn br_in(project: &Path, prefix: Option<&str>, args: &[&str]) -> String {
+    let mut br = Command::new("br");
+    if let Some(prefix) = prefix {
+        br.env("BD_ISSUE_PREFIX", prefix);
+    }
+    let out = br
         .args(args)
         .args(["--actor", "alice"])
         .env("BEADS_DIR", project.join(".beads"))
@@ -259,7 +268,7 @@ async fn a_claude_killed_in_a_command_is_resumed_and_its_run_passes() {
     let provider = Provider::start(plan).await;
     let d = daemon(&provider).await;
     let project = d.dir.path().join("config/aae/shop");
-    let id = br(&project, &["create", "Fix the cart", "-l", "rig:web", "--silent"]);
+    let id = br_in(&project, Some("w"), &["create", "Fix the cart", "--silent"]);
     let mut events = d.client.events(Some(1)).await.unwrap();
     let body = json!({ "project": "shop", "rig": "web", "formula": "fix", "inputs": { "bead": id } });
     let run = d.post("/v1/runs", body, None).await.unwrap()["run"]

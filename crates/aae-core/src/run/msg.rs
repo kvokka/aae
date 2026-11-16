@@ -192,7 +192,7 @@ pub enum Verdict {
 /// (`parent_run` and its attempt `token`: the core takes the correlation and the depth from the parent).
 pub struct Create {
     pub project: String,
-    /// `None`: the rig of the one `rig:` label of the bead an input names (spec §9.3).
+    /// `None`: the rig of the prefix of the bead id an input names, else the root (spec §9.3).
     pub rig: Option<String>,
     /// A formula reference as a project writes it: `name` or `<pack>.<name>`.
     pub formula: String,

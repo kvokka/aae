@@ -27,9 +27,15 @@ impl MemoryTracker {
         Self::default()
     }
 
-    /// Adds an open bead with `labels` in `epic`; returns its id (`b-<n>`).
+    /// Adds an open bead of the root with `labels` in `epic`; returns its id (`b-<n>`).
     pub fn add(&self, labels: &[&str], epic: Option<&str>) -> String {
-        self.lock().push(None, "", labels, epic, "human")
+        self.add_in("b", labels, epic)
+    }
+
+    /// Adds an open bead with the id prefix `prefix` (a rig's, for a bead of that rig); returns its id
+    /// (`<prefix>-<n>`, `n` counted across prefixes).
+    pub fn add_in(&self, prefix: &str, labels: &[&str], epic: Option<&str>) -> String {
+        self.lock().push(prefix, None, "", labels, epic, "human")
     }
 
     pub fn bead(&self, id: &str) -> Option<Bead> {
@@ -87,13 +93,14 @@ impl State {
     /// Adds an open bead (titled `Task <id>` without `title`) and logs its creation by `actor`; returns its id.
     fn push(
         &mut self,
+        prefix: &str,
         title: Option<&str>,
         description: &str,
         labels: &[&str],
         epic: Option<&str>,
         actor: &str,
     ) -> String {
-        let id = format!("b-{}", self.beads.len() + 1);
+        let id = format!("{prefix}-{}", self.beads.len() + 1);
         self.beads.push(Bead {
             id: id.clone(),
             title: title.map_or_else(|| format!("Task {id}"), str::to_owned),
@@ -246,7 +253,7 @@ impl Tracker for MemoryTracker {
             let id = match state.keys.iter().find(|(k, _)| k == key) {
                 Some((_, id)) => id.clone(),
                 None => {
-                    let id = state.push(Some(title), description, &[], None, actor);
+                    let id = state.push("b", Some(title), description, &[], None, actor);
                     state.keys.push((key.to_owned(), id.clone()));
                     id
                 }

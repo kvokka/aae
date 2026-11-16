@@ -328,6 +328,7 @@ vars = { test_cmd = "make test" }   # as a rig's
 
 [rigs.backend]
 path = "../backend"                 # must exist
+prefix = "be"                       # optional: the id prefix of the rig's beads; default, the acronym of the name (`b`)
 vars = { test_cmd = "cargo test" }   # `{{ rig.test_cmd }}` in a prompt; `name` and `path` are taken by the rig
 triggers = ["nightly-audit"]        # pack triggers that run on this rig (a pack does not know rig names, §9.5)
 agents = { implementer = "codex-implementer" }  # on this rig the variant runs where a formula names `implementer`
@@ -341,11 +342,17 @@ run = "audit"
 rig = "backend"
 ```
 
+A rig's name is ASCII letters, digits, `-` and `_`. Its prefix is lowercase ASCII letters, digits and `-` inside; it
+is the acronym of the words of the name (split on `-` and `_`: `backend` is `b`, `my-project` is `mp`) unless `prefix`
+is set. Two rigs of a project with one prefix are a config error. The prefix makes the rig of a bead: its id up to the
+last `-` ([tracker-br.md](tracker-br.md#the-rig-of-a-bead)); changing it makes the rig's existing beads beads of the
+root.
+
 The project root is itself a pack named after the project: `agents/` and `formulas/` next to `aae.toml` belong to
 it, and its triggers are the `[[trigger]]` of `aae.toml`.
 
-The root (spec §6.1) is where a project works besides its rigs: a run started without a rig works there (unless a
-bead an input names has a `rig:` label), and so does every session of an agent of scope `root`. It is a place like
+The root (spec §6.1) is where a project works besides its rigs: a run started without a rig works there (unless the
+id of a bead an input names has the prefix of a rig), and so does every session of an agent of scope `root`. It is a place like
 a rig, under its own name: the run's `rig` in events, its gate `rig:<project>/<root name>`, its workdir, `worktree`
 and limits all take it the same way; `{{ rig.name }}`, `{{ rig.path }}` and `{{ rig.<var> }}` of a run in the root
 are the root's. Without `[root]` it is `root`, the directory of `aae.toml`; a project of one repository needs no
@@ -513,15 +520,15 @@ config error.
 
 A `drain` step gives every ready bead under the run's bead, at any depth, a run of `formula`, on each read of
 the tracker, until none is left: the same start as `aae run start` with the bead as the formula's `bead` input, no rig
-named (the bead's `rig:` label gives it, the project root without one, and its `agent:`/`harness:` labels apply as to any run), the run's correlation,
+named (the prefix of the bead's id gives it, the project root when it matches no rig, and its `agent:`/`harness:` labels apply as to any run), the run's correlation,
 one level deeper, the run as `parent_run`. A bead goes out once per entry of the step: a child that failed is not run
 again in it, and an attempt cut by a restart (`daemon_crash`) starts no new entry; a round back to the step does. A
-bead whose start is refused (several `rig:` labels, a `harness:` label the config does not give) gets no run and stays
+bead whose start is refused (a `rig:` label, a `harness:` label the config does not give) gets no run and stays
 open. The step has no process (contracts 6.2): it ends once nothing was given, no child is alive and no later
 read of the tracker is queued, always `pass`, with `data = {closed, failed, refused}` — the beads whose runs passed,
 those whose runs failed or were cancelled, and the refused ones with the reason. `formula` must take exactly one
 `bead` input and need no other; a formula with a `drain` step needs a required `bead` input. An epic under the root is
-not ready while it has open beads; once they are closed it is given out as any bead (with no `rig:` label: in the
+not ready while it has open beads; once they are closed it is given out as any bead (with an id of no rig: in the
 root).
 
 A step with `back_to` is a check. When it fails the run does not fail: the steps after it that are checks too run
@@ -547,8 +554,8 @@ a JSON integer or its text, a `boolean` one a JSON boolean or `true`/`false` as 
 sends `--input` values as text). A `bead` input is a bead id, `{ next_ready = true, epic = <id> }` or
 `{ request = "<text>" }`: a request (only that key, a text that is not blank; the rig must be named) has the tracker
 create the run's root bead as the run prepares, titled with the first line of the text and described by all of it, and
-the input then holds its id ([tracker-br.md](tracker-br.md#beads-and-runs)); a bead named by id that carries a `rig:`
-label of another rig is refused, at the start when the ready set knows the bead, else at its claim (the run fails with
+the input then holds its id ([tracker-br.md](tracker-br.md#beads-and-runs)); a bead named by id that belongs to
+another rig, by the prefix of its id, is refused at the start, and its claim checks it again (the run fails with
 `bead_of_another_rig` and the claim is released). `worktree = true` gives each run of the formula, of either step kind,
 a git worktree that aae makes and removes (the bundled `worktree`, see below).
 

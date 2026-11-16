@@ -13,8 +13,8 @@ pub enum RunCommand {
     #[command(allow_missing_positional = true)]
     Start {
         project: String,
-        /// Optional: without it the run works in the project root, or on the rig of the bead an input names (its one
-        /// `rig:` label).
+        /// Optional: without it the run works in the project root, or on the rig of the bead an input names (its
+        /// id prefix).
         rig: Option<String>,
         formula: String,
         /// An input as `name=value`: text, which an integer or a boolean input takes as its number or `true`/`false`;

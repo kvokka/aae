@@ -21,7 +21,7 @@ async fn tracker_writes_become_bead_events_and_a_write_by_a_run_carries_its_chai
     );
     let ready = w.all("bead.ready");
     assert_eq!((ready.len(), &ready[0]["bead"]["id"]), (1, &json!(old)));
-    let new = w.tracker.add(&["rig:web"], None);
+    let new = w.tracker.add_in("w", &[], None);
     w.changed().await;
     let created = w.all("bead.created");
     assert_eq!(created.len(), 1, "{created:?}");

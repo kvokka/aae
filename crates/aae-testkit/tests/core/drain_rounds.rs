@@ -23,8 +23,8 @@ const AGAIN: &[(&str, &str)] = &[
 async fn a_round_back_to_the_drain_gives_a_failed_bead_another_run() {
     let w = world(&[SWEEP, AGAIN].concat());
     let root = w.tracker.add(&[], None);
-    let bad = w.tracker.add(&["rig:web"], Some(&root));
-    let good = w.tracker.add(&["rig:web"], Some(&root));
+    let bad = w.tracker.add_in("w", &[], Some(&root));
+    let good = w.tracker.add_in("w", &[], Some(&root));
     for _ in 0..8 {
         w.driver.script(slow_turn());
     }
@@ -64,8 +64,8 @@ async fn a_round_back_to_the_drain_gives_a_failed_bead_another_run() {
 async fn a_root_gone_mid_drain_ends_the_step_with_the_beads_given() {
     let w = world(SWEEP);
     let root = w.tracker.add(&[], None);
-    let one = w.tracker.add(&["rig:web"], Some(&root));
-    let two = w.tracker.add(&["rig:api"], Some(&root));
+    let one = w.tracker.add_in("w", &[], Some(&root));
+    let two = w.tracker.add_in("a", &[], Some(&root));
     let run = w.sweep(&root).await;
     let mut done = BTreeSet::new();
     w.settle(&run, &[], &[one.as_str()], &mut done).await;

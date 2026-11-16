@@ -545,8 +545,8 @@ step; the core turns the writes past the cursor into events, moves the cursor (t
 diffs the ready set. The first read of a project's tracker takes its whole history as the starting cursor and raises no
 `bead.created|updated|closed` for it; every bead ready at that read is new to the set and raises `bead.ready`. A write
 whose actor is `aae:<run id>[:<attempt n>]` carries that run and its correlation; `bead.ready` carries those of the last
-such write in the same read (the write that freed the bead is usually that one); the rig of a bead event is the bead's
-`rig:` label, absent without one. The daemon gives a project a tracker when `<project>/.beads` exists, and every session
+such write in the same read (the write that freed the bead is usually that one); the rig of a bead event is the one
+whose prefix is the bead's id up to its last `-`, absent for a bead of the root. The daemon gives a project a tracker when `<project>/.beads` exists, and every session
 and exec step of the project gets `BEADS_DIR` (layer: project) and `BD_ACTOR=aae:<run id>:<attempt n>`; the core sets
 the actor of an exec step and hands that of a session to the adapter in the session plan.
 
@@ -554,7 +554,7 @@ the actor of an exec step and hands that of a session to the adapter in the sess
 
 - `Bead`: `{id, title, description, status: "open"|"in_progress"|"blocked"|"deferred"|"closed", priority, labels,
   assignee, epic, created_at, updated_at, closed_at}`. `epic` is computed by the adapter (br has no such field,
-  §10.2). The rig of a bead is its `rig:<name>` label.
+  §10.2). The rig of a bead is the prefix of its id (no label).
 - `Change`: `{seq, kind: "created"|"updated"|"closed", actor, changed: [field], bead: Bead}`; `seq` orders the writes
   and is the cursor of `changes(after)`, `bead` is the bead when the change is read; the core maps it to `bead.created`,
   `bead.updated`, `bead.closed`, and derives `bead.ready` by diffing `ready()` with the last ready set it keeps in the
@@ -599,9 +599,8 @@ so that the state machine has one place where `run.attempt_failed` is decided.
   waits for a gate or a slot of its agent with no harness process.
 - A run belongs to a project and a place: a rig, or the project root under its name (config.md "Project"), named
   when it is created (API, CLI, MCP) or by the trigger that fires there. A start that names no rig takes it from the
-  one `rig:` label of the bead an input names by id, and runs in the root when the bead has none or no bead is named;
-  only a bead of the ready list has known labels, so for any other the start is refused with "name the rig". An
-  unknown rig, or a bead with several `rig:` labels, is refused before the run exists. Its workdir is the place's
+  id prefix of the bead an input names by id, and runs in the root when the id matches no rig or no bead is named. An
+  unknown rig, or a bead that still carries a `rig:` label, is refused before the run exists. Its workdir is the place's
   directory, or a worktree of it with `worktree = true` in the formula (config.md); in a directory without git that
   run fails (`deny` of `worktree`). The session of an ai step works in the run's workdir, but that of an agent of
   scope `root` works in the root's directory when the run is on a rig (it does not hold that directory). One live run holds a workdir: a second run in the

@@ -8,7 +8,16 @@ use std::{path::Path, process::Command, time::Duration};
 
 /// br by hand in the project, as `alice`; its trimmed stdout.
 fn br(project: &Path, args: &[&str]) -> String {
-    let out = Command::new("br")
+    br_in(project, None, args)
+}
+
+/// br by hand, filing new beads with the id prefix `prefix` (a rig's) if any.
+fn br_in(project: &Path, prefix: Option<&str>, args: &[&str]) -> String {
+    let mut br = Command::new("br");
+    if let Some(prefix) = prefix {
+        br.env("BD_ISSUE_PREFIX", prefix);
+    }
+    let out = br
         .args(args)
         .args(["--actor", "alice"])
         .env("BEADS_DIR", project.join(".beads"))
@@ -52,8 +61,15 @@ async fn a_bead_written_by_hand_is_seen_and_a_run_on_it_claims_and_closes_it_in_
                 .unwrap()
                 .success()
         );
+        // A second rig, `api`, whose bead the run on `web` passes over.
+        std::fs::write(
+            project.join("aae.toml"),
+            "[rigs.web]\npath = \"web\"\n[rigs.api]\npath = \"api\"\n",
+        )
+        .unwrap();
+        std::fs::create_dir(project.join("api")).unwrap();
         br(&project, &["init", "--prefix", "t", "-q"]);
-        *seed.borrow_mut() = br(&project, &["create", "Seed", "-l", "rig:api", "--silent"]);
+        *seed.borrow_mut() = br_in(&project, Some("a"), &["create", "Seed", "--silent"]);
     })
     .await;
     let project = d.dir.path().join("config/aae/shop");
@@ -64,7 +80,8 @@ async fn a_bead_written_by_hand_is_seen_and_a_run_on_it_claims_and_closes_it_in_
     let mut events = d.client.events(Some(1)).await.unwrap();
     // The first read of a tracker is its history, not news: write by hand only after it (the seed turns ready).
     until_event(&mut events, "bead.ready", &seed.into_inner()).await;
-    let id = br(&project, &["create", "Fix the cart", "-l", "rig:web", "--silent"]);
+    let id = br_in(&project, Some("w"), &["create", "Fix the cart", "--silent"]);
+    assert!(id.starts_with("w-"), "{id}");
     let created = until_event(&mut events, "bead.created", &id).await;
     assert_eq!(
         (&created["data"]["actor"], &created["rig"]),

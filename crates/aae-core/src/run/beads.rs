@@ -5,6 +5,7 @@
 
 use super::{GateSpec, Msg, RunHandler, drain::sync, rejected, row::Row};
 use crate::{
+    config::Project,
     tracker::{Bead, Tracker, TrackerError},
     writer::{CoreHandle, Error, Event, Tx},
 };
@@ -16,17 +17,13 @@ pub(super) type Trackers = Arc<BTreeMap<String, Arc<dyn Tracker>>>;
 
 impl RunHandler {
     /// The beads a run created with `input` may work on, the first it can take first: the bead id it names, or the
-    /// ready beads (in the tracker's order) that are in `epic`, belong to `rig` (or to no rig), have no owner and no
-    /// closed gate. Empty: nothing is ready (§10.3).
-    pub(super) fn pick_bead(tx: &Tx<'_>, project: &str, rig: &str, input: &Value) -> Result<Vec<String>, Error> {
+    /// ready beads (in the tracker's order) that are in `epic`, belong to `rig` (or to the root), have no owner and
+    /// no closed gate. Empty: nothing is ready (§10.3).
+    pub(super) fn pick_bead(project: &Project, tx: &Tx<'_>, rig: &str, input: &Value) -> Result<Vec<String>, Error> {
+        let other = |id: &str| project.rig_of(id).is_some_and(|r| r != rig);
         if let Some(id) = input.as_str() {
-            // A bead that names another rig is refused here when the ready list knows it, else when it is claimed.
-            let sql = "SELECT body FROM ready_beads WHERE project = ?1 AND id = ?2";
-            let body: Option<Value> = tx.sql().query_row(sql, [project, id], |r| r.get(0)).optional()?;
-            if body.is_some_and(|b| other_rig(&b, rig)) {
-                return Err(rejected(format!(
-                    "bead `{id}` is labelled for another rig than `{rig}`"
-                )));
+            if other(id) {
+                return Err(rejected(format!("bead `{id}` belongs to another rig than `{rig}`")));
             }
             return Ok(vec![id.to_owned()]);
         }
@@ -39,17 +36,14 @@ impl RunHandler {
                 "a bead input is a bead id, `{ next_ready = true, epic = <id> }` or `{ request = \"<text>\" }`",
             ));
         }
-        Self::ready_in(tx, project, input["epic"].as_str(), Some(rig))
+        let mut ready = Self::ready_in(tx, &project.name, input["epic"].as_str())?;
+        ready.retain(|id| !other(id));
+        Ok(ready)
     }
 
-    /// The ready beads, in the tracker's order, that are in `epic`, belong to `rig` (or to no rig), have no owner
-    /// and no closed gate; `None` takes any epic, or any rig.
-    pub(super) fn ready_in(
-        tx: &Tx<'_>,
-        project: &str,
-        epic: Option<&str>,
-        rig: Option<&str>,
-    ) -> Result<Vec<String>, Error> {
+    /// The ready beads, in the tracker's order, that are in `epic`, have no owner and no closed gate; `None` takes
+    /// any epic.
+    pub(super) fn ready_in(tx: &Tx<'_>, project: &str, epic: Option<&str>) -> Result<Vec<String>, Error> {
         let mut stmt = tx.sql().prepare(
             "SELECT r.id, r.body FROM ready_beads r WHERE r.project = ?1 AND NOT EXISTS \
              (SELECT 1 FROM beads b WHERE b.project = r.project AND b.id = r.id AND b.owner IS NOT \
@@ -59,7 +53,7 @@ impl RunHandler {
         let mut found = Vec::new();
         for bead in ready {
             let (id, body) = bead?;
-            if epic.is_some_and(|e| body["epic"] != e) || rig.is_some_and(|r| other_rig(&body, r)) {
+            if epic.is_some_and(|e| body["epic"] != e) {
                 continue;
             }
             let key = [format!("bead:{project}/{id}")];
@@ -68,25 +62,6 @@ impl RunHandler {
             }
         }
         Ok(found)
-    }
-
-    /// The place of a start that names no rig: the one `rig:` label of the bead `id` an input names, else the `root`.
-    /// Only a bead of the ready list has known labels; for any other the start is refused before a run exists
-    /// (spec §9.3).
-    pub(super) fn rig_of_bead(tx: &Tx<'_>, project: &str, root: &str, id: Option<&str>) -> Result<String, Error> {
-        let Some(id) = id else { return Ok(root.to_owned()) };
-        let sql = "SELECT body FROM ready_beads WHERE project = ?1 AND id = ?2";
-        let body: Option<Value> = tx.sql().query_row(sql, [project, id], |r| r.get(0)).optional()?;
-        let body = body.ok_or_else(|| {
-            rejected(format!(
-                "bead `{id}` is not in the ready list of `{project}`: name the rig"
-            ))
-        })?;
-        match labelled(&body, "rig")[..] {
-            [rig] => Ok(rig.to_owned()),
-            [] => Ok(root.to_owned()),
-            _ => Err(rejected(format!("bead `{id}` is labelled for several rigs: name one"))),
-        }
     }
 
     /// The value of the one `<prefix>:` label of `bead`; `None`: it has none, or it is not in the ready list (only a
@@ -175,7 +150,8 @@ impl RunHandler {
                     return Ok(());
                 }
                 tx.clear_deadline(&row.deadline("state"))?;
-                if other_rig(&json!(data), &row.rig) {
+                let project = self.config.projects.iter().find(|p| p.name == row.project);
+                if project.and_then(|p| p.rig_of(&data.id)).is_some_and(|r| r != row.rig) {
                     // Still owned, so the end of the run releases the claim.
                     return self.terminal(tx, row, "failed", Some("infrastructure"), "bead_of_another_rig");
                 }
@@ -377,12 +353,6 @@ pub(super) async fn execute(trackers: &Trackers, core: &CoreHandle<Msg>, payload
         )
         .await;
     !retry
-}
-
-/// A bead (as JSON) with a `rig:` label, none of them `rig:<rig>`, belongs to another rig (spec §2, decision 52).
-fn other_rig(bead: &Value, rig: &str) -> bool {
-    let rigs = labelled(bead, "rig");
-    !rigs.is_empty() && !rigs.contains(&rig)
 }
 
 /// The values of the `<prefix>:` labels of a bead (as JSON).

@@ -17,7 +17,8 @@ tracker interface and its errors are in [contracts.md](contracts.md) §5; the be
 ## One database per project
 
 - A project with a `<project>/.beads` directory has a br tracker: one database per project, outside the git of its
-  rigs. A rig is the label `rig:<name>`, so an epic spans rigs and `ready` is shared; per-rig id prefixes are lost.
+  rigs. The rig of a bead is the prefix of its id, so an epic spans rigs and `ready` is shared
+  ([below](#the-rig-of-a-bead)).
 - The database path is always explicit: every br call and every session or exec step gets `BEADS_DIR`. br's own
   discovery walks up to `$HOME`, and an agent without an explicit path silently writes to someone else's tracker.
 - Every attempt has its own actor: the adapter passes `--actor` to br, sessions get `BD_ACTOR=aae:<run>:<n>`. br
@@ -35,10 +36,11 @@ tracker interface and its errors are in [contracts.md](contracts.md) §5; the be
   bead, `failed` and `cancelled` release it conditionally (owner compared). Transitions:
   [contracts.md 6.2](contracts.md#62-transitions).
 - A bead has at most one live owner run; a second request for it is refused with the reason.
-- A bead named by id that carries a `rig:` label of another rig is refused: at the start when the ready set knows the
-  bead, else at its claim (`failed{infrastructure, bead_of_another_rig}`, the claim released). A start with no rig
-  takes the rig of the bead's one `rig:` label, if the ready set knows the bead, and works in the project root when
-  the bead has none ([contracts.md 6.1](contracts.md#61-states)).
+- A bead named by id that belongs to another rig is refused at the start; the claim checks it again
+  (`failed{infrastructure, bead_of_another_rig}`, the claim released). A start with no rig takes the rig of
+  the bead's id prefix, and works in the project root when the id matches no rig
+  ([contracts.md 6.1](contracts.md#61-states)). A bead that still carries a `rig:` label is refused at the start,
+  with the hint that the rig of a bead is the prefix of its id.
 - Instead of an id the input may ask for the next ready bead, optionally in an epic: `{ next_ready = true, epic }`.
   The ready list comes from the adapter; the daemon picks and records the owner in one transaction, taking the first
   bead in the tracker's order that is in the epic, of the run's rig or of no rig, without an owner and without a
@@ -77,9 +79,24 @@ tracker interface and its errors are in [contracts.md](contracts.md) §5; the be
   both harness names. Without `agent:` each step runs its own agent, without `harness:` nothing is checked; several of
   either label refuse the start.
 
+## The rig of a bead
+
+- The rig of a bead is its id up to the last `-`, matched against the prefixes of the project's rigs (`api-x1.2` is
+  of the rig with prefix `api`). No match: a bead of the root, which runs in the root whatever the agent's scope. There
+  is no `rig:` label.
+- A rig's prefix is the acronym of the words of its name (`backend` is `b`, `my-project` is `mp`) or its `prefix`
+  key ([config.md](config.md)). A session of a `rig`-scope agent on a rig and an `exec` step on a rig get
+  `BD_ISSUE_PREFIX=<prefix>`, so `br create` there gives the rig's prefix. The daemon's own br calls drop it.
+- An agent of scope `root` files a bead for a rig with
+  `BD_ISSUE_PREFIX=<prefix> br create "<title>" --deps parent-child:<root bead> -l agent:<agent>,harness:<harness>`.
+  Not `--parent`: br's `--parent <root>` gives the id `<root>.<n>` and loses the rig prefix. A dependency on another
+  bead: `--deps "parent-child:<root>,blocks:<id>"`.
+- `aae doctor` warns when a rig's prefix equals the br database's own prefix: the root's beads would read as the
+  rig's. Changing a rig's `prefix` makes its existing beads beads of the root.
+
 ## Generated from the project configs
 
-- `BEADS_DIR` in the environment of every session and every call, and the rig labels.
+- `BEADS_DIR` in the environment of every session and every call, and, for a rig, `BD_ISSUE_PREFIX`.
 - At daemon start, `.bv/workspace.yaml` next to the orchestrator config: one repository per project with a tracker,
   with the id prefix from `br config get issue_prefix` (a project whose prefix br does not give is listed without
   one, and bv assumes `<name>-`). The trackers are fixed for the daemon's life (a reload that changes them is

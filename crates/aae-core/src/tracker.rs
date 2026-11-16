@@ -6,7 +6,7 @@ use crate::writer::BoxFuture;
 use serde::{Deserialize, Serialize};
 use std::fmt;
 
-/// A bead (contracts 5.2); `epic` is computed by the adapter, the rig of a bead is its `rig:<name>` label.
+/// A bead (contracts 5.2); `epic` is computed by the adapter, the rig of a bead is the prefix of its id.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Bead {
     pub id: String,

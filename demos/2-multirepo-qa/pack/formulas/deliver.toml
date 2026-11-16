@@ -15,7 +15,7 @@ timeout = "20m"
 [[step]]
 name = "work"
 kind = "drain"
-formula = "implement"                       # a run per ready bead under the root, on the rig of its `rig:` label
+formula = "implement"                       # a run per ready bead under the root, on the rig of the prefix of its id
 
 # The format of the Markdown in every rig: rumdl fixes what it can; what it cannot goes back to the planner.
 # A rig may sit in a repository that ignores it, so the check does not respect .gitignore and skips what tools fetch.

@@ -15,10 +15,11 @@ use std::{fs, path::Path, process::Command, sync::Arc, time::Duration};
 
 const WITHIN: Duration = Duration::from_secs(120);
 
-/// The first planner files a README; the second, after `format` failed, files its fix. `{dir}` keeps the state.
+/// The first planner files a README; the second, after `format` failed, files its fix, each a bead of `frontend` by
+/// its prefix `f`. `{dir}` keeps the state.
 const PLAN: &str = "set -e\nbead=$({aae} --json run show \"$AAE_RUN\" | jq -r .bead)\n\
     if [ -e {dir}/planned ]; then title='Fix the README'; else title='Write a README'; touch {dir}/planned; fi\n\
-    br create \"$title\" --parent \"$bead\" -l rig:frontend,agent:coder --description \"$title.\" --silent \
+    BD_ISSUE_PREFIX=f br create \"$title\" --deps \"parent-child:$bead\" -l agent:coder --description \"$title.\" --silent \
     >> {dir}/beads\n{aae} finish pass --summary \"$title\"\n";
 
 /// In its rig, the first coder writes a reference without a definition, which rumdl cannot fix (MD052); the second

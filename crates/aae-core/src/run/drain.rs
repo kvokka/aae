@@ -97,7 +97,7 @@ impl RunHandler {
         };
         let depth = row.depth + 1;
         let (mut given, mut refused) = (0, Map::new());
-        for bead in Self::ready_in(tx, &row.project, None, None)? {
+        for bead in Self::ready_in(tx, &row.project, None)? {
             if !under.contains(&bead) || kids.iter().any(|(b, _, mine)| *mine && *b == bead) {
                 continue;
             }
@@ -107,7 +107,7 @@ impl RunHandler {
             }
             let create = Create {
                 project: row.project.clone(),
-                // The rig of the bead's `rig:` label.
+                // The rig of the bead's id prefix.
                 rig: None,
                 formula: formula.clone(),
                 inputs: [(input.clone(), json!(bead))].into_iter().collect(),

@@ -14,7 +14,7 @@ timeout = "20m"
 [[step]]
 name = "work"
 kind = "drain"
-formula = "implement"                       # a run per bead under the root, on the rig of its `rig:` label
+formula = "implement"                       # a run per bead under the root, on the rig of the prefix of its id
 
 # The beads under the root as they are, and whether all of them are closed.
 [[step]]

@@ -130,16 +130,21 @@ pub(crate) const ALL: &[Scenario] = &[
     Scenario {
         criterion: "32",
         title: "an ai step of an agent of scope root works in the root, of scope rig in the rig, and no rig edits it; \
-            a project of one repository runs without rigs, its beads in the root",
+            a project of one repository runs without rigs, its beads in the root; a rig's beads carry its prefix, the \
+            acronym of its name or its `prefix` key, and `drain` takes the rig of a child from it",
         launch: Launch::Ci,
         run: |env| {
             Box::pin(tests(
                 env,
-                "-p aae-core -p aae-testkit -E test(/an_agent_of_scope_root_takes_no_rig_layer\
+                "-p aae-core -p aae-testkit -p aae-br -E test(/an_agent_of_scope_root_takes_no_rig_layer\
                  |a_project_of_one_repository_checks_its_formulas_on_the_root|a_run_without_a_rig_works_in_the_root\
                  |a_root_agent_works_in_the_root_whatever_the_rig|a_bead_of_the_root_runs_in_the_root\
-                 |a_rig_neither_edits_nor_maps_an_agent_of_the_root/)",
-                6,
+                 |a_rig_neither_edits_nor_maps_an_agent_of_the_root|a_rig_takes_the_acronym_of_its_name_or_its_prefix_key\
+                 |two_rigs_with_one_prefix_or_a_prefix_br_rewrites_are_an_error|the_tracker_variables_come_under_every_layer\
+                 |a_bead_filed_with_a_rig_prefix_under_a_root_keeps_it_and_parent_loses_it\
+                 |a_drain_gives_every_ready_bead_under_the_root_a_run\
+                 |a_start_without_a_rig_takes_it_from_the_prefix_of_the_bead_id_or_runs_in_the_root/)",
+                12,
             ))
         },
     },

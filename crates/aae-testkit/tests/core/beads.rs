@@ -153,11 +153,11 @@ async fn a_bead_someone_else_holds_fails_the_run_as_bead_claimed_and_stays_their
     );
     assert_eq!(w.tracker.bead(&bead).unwrap().assignee.as_deref(), Some("alice"));
     assert!(w.all("resync.diverged").is_empty(), "nothing of alice's was released");
-    // One of another rig the ready set has not seen fails at its claim, which is released.
-    let unseen = w.tracker.add(&["rig:api"], None);
-    let events = w.events(&w.run_on(json!(unseen)).await, Duration::from_secs(1)).await;
-    let failed = (&last(&events, "run.failed")["reason"], w.assignee(&unseen));
-    assert_eq!(failed, (&json!("bead_of_another_rig"), None));
+    // One of another rig is refused by its id, before the ready set has seen it, and stays unclaimed.
+    let unseen = w.tracker.add_in("w", &[], None);
+    let refused = w.fix_on(Some("root"), json!(unseen)).await.unwrap_err().to_string();
+    assert!(refused.contains("belongs to another rig than `root`"), "{refused}");
+    assert_eq!(w.assignee(&unseen), None);
 }
 
 #[tokio::test(start_paused = true)]
@@ -185,14 +185,14 @@ async fn an_unavailable_tracker_is_reported_and_the_claim_retried_until_it_answe
 
 #[tokio::test(start_paused = true)]
 async fn a_trigger_on_the_next_ready_bead_takes_each_bead_once_then_skips_with_nothing_ready() {
-    let take = "[rigs.web]\npath = \"web\"\n\n[[trigger]]\nname = \"take\"\nevery = \"1h\"\nrun = \"fix\"\nrig = \
+    let take = "[rigs.web]\npath = \"web\"\n[rigs.api]\npath = \"api\"\n\n[[trigger]]\nname = \"take\"\nevery = \"1h\"\nrun = \"fix\"\nrig = \
     \"web\"\n\
         inputs = { bead = { next_ready = true } }\n";
-    let w = world(&[FIX[0], FIX[1], ("shop/aae.toml", take)]);
+    let w = world(&[FIX[0], FIX[1], ("shop/aae.toml", take), ("shop/api/.keep", "")]);
     let beads = [
         w.tracker.add(&[], None),
-        w.tracker.add(&["rig:api"], None),
-        w.tracker.add(&["rig:web"], None),
+        w.tracker.add_in("a", &[], None),
+        w.tracker.add_in("w", &[], None),
     ];
     w.changed().await;
     let fire = || Msg::Fire {
@@ -216,7 +216,7 @@ async fn a_trigger_on_the_next_ready_bead_takes_each_bead_once_then_skips_with_n
     );
     let third = w.core.send(None, fire()).await.unwrap();
     assert_eq!(third["skipped"], "nothing_ready");
-    // Named by id, a bead of another rig the ready set knows is refused at once.
+    // Named by id, a bead of another rig is refused at once.
     let refused = w.fix(json!(beads[1])).await.unwrap_err().to_string();
     assert!(refused.contains("another rig"), "{refused}");
 }
@@ -299,45 +299,34 @@ async fn claims_that_answer_after_their_runs_failed_neither_count_nor_reach_the_
 }
 
 #[tokio::test(start_paused = true)]
-async fn a_start_without_a_rig_takes_it_from_the_label_of_the_bead_or_runs_in_the_root() {
+async fn a_start_without_a_rig_takes_it_from_the_prefix_of_the_bead_id_or_runs_in_the_root() {
     let w = world(FIX);
-    let [web, none, api, both] = [
-        w.tracker.add(&["rig:web"], None),
+    let [web, none, labelled] = [
+        w.tracker.add_in("w", &[], None),
         w.tracker.add(&[], None),
-        w.tracker.add(&["rig:api"], None),
-        w.tracker.add(&["rig:web", "rig:api"], None),
+        w.tracker.add(&["rig:web"], None),
     ];
-    let refused = async |bead: &str| w.fix_on(None, json!(bead)).await.unwrap_err().to_string();
-    // Before the ready list is read, no bead has known labels.
-    assert!(
-        refused(&web)
-            .await
-            .contains("not in the ready list of `shop`: name the rig")
-    );
+    let workdir = async |bead: &str| {
+        let run = w.fix_on(None, json!(bead)).await.unwrap()["run"]
+            .as_str()
+            .unwrap()
+            .to_owned();
+        let events = w.events(&run, Duration::ZERO).await;
+        last(&events, "run.queued")["run"]["workdir"]
+            .as_str()
+            .unwrap()
+            .to_owned()
+    };
+    // The id gives the rig before the ready list is read; a bead of no rig's prefix runs in the root (§6.1).
+    assert!(workdir(&web).await.ends_with("/shop/web"));
+    assert!(workdir(&none).await.ends_with("/shop"));
+    // A `rig:` label no longer places a bead: its start is refused with the reason.
     w.changed().await;
-    let run = w.fix_on(None, json!(web)).await.unwrap()["run"]
-        .as_str()
-        .unwrap()
-        .to_owned();
-    let events = w.events(&run, Duration::ZERO).await;
-    let workdir = last(&events, "run.queued")["run"]["workdir"]
-        .as_str()
-        .unwrap()
-        .to_owned();
-    assert!(workdir.ends_with("/shop/web"), "{workdir}");
-    assert!(refused(&both).await.contains("is labelled for several rigs: name one"));
-    assert!(refused(&api).await.contains("no rig `api` in `shop`"));
-    // A bead without a `rig:` label runs in the root (spec §6.1).
-    let run = w.fix_on(None, json!(none)).await.unwrap()["run"]
-        .as_str()
-        .unwrap()
-        .to_owned();
-    let events = w.events(&run, Duration::ZERO).await;
-    let workdir = last(&events, "run.queued")["run"]["workdir"]
-        .as_str()
-        .unwrap()
-        .to_owned();
-    assert!(workdir.ends_with("/shop"), "{workdir}");
+    let refused = w.fix_on(None, json!(labelled)).await.unwrap_err().to_string();
+    assert!(
+        refused.contains("has a `rig:` label: the rig of a bead is the prefix of its id"),
+        "{refused}"
+    );
 }
 
 /// The labels of a bead name the agent of every ai step of its run and the harness it is for (spec §9.1); a pick
