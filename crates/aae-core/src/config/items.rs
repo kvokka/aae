@@ -269,24 +269,13 @@ impl Loader {
                 inputs,
                 timeout,
                 ..
-            } => {
-                let inputs = Inputs::parse_step(&Value::Object(inputs))
+            } => StepKind::Formula {
+                inputs: (super::prompt::step_inputs(inputs, own, before))
                     .map_err(|e| self.fail(file, format!("step `{formula}`: {e}")))
-                    .ok()?;
-                for path in inputs.paths() {
-                    if !super::prompt::path(path, own, before) {
-                        self.fail(
-                            file,
-                            format!("step `{formula}`: `{{{{ {path} }}}}` names nothing a run has"),
-                        );
-                    }
-                }
-                StepKind::Formula {
-                    formula: reference(&formula),
-                    inputs,
-                    timeout: self.timeout(file, timeout.as_deref()),
-                }
-            }
+                    .ok()?,
+                formula: reference(&formula),
+                timeout: self.timeout(file, timeout.as_deref()),
+            },
         })
     }
 

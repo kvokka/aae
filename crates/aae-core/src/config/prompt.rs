@@ -2,7 +2,7 @@
 //! directory in its pack, or the project's own in `.aae/agents/<agent>/`, with the files the template names.
 
 use super::{Input, InputType, Name, Project, Step, load::Loader, schema};
-use crate::template::Template;
+use crate::template::{Inputs, Template};
 use std::{
     collections::{BTreeMap, BTreeSet},
     fs,
@@ -119,7 +119,7 @@ fn agent_prompt(loader: &mut Loader, overlay: &Path, agent: &Name, base: &Path, 
 }
 
 /// Whether a prompt template path can be resolved for a run of a formula with `inputs` (contracts 2.3).
-pub(super) fn path(path: &str, inputs: &BTreeMap<String, Input>, before: &[Step]) -> bool {
+fn path(path: &str, inputs: &BTreeMap<String, Input>, before: &[Step]) -> bool {
     let (root, rest) = path.split_once('.').unwrap_or((path, ""));
     let first = rest.split('.').next().unwrap_or_default();
     match root {
@@ -140,5 +140,18 @@ pub(super) fn path(path: &str, inputs: &BTreeMap<String, Input>, before: &[Step]
         }
         // `name`, `path` or a variable of the rig, which is known only when the run starts.
         _ => !rest.is_empty() && !rest.contains('.'),
+    }
+}
+
+/// The `inputs` of a `formula` step: placeholders only of what a run of a formula with `inputs` has before the step.
+pub(super) fn step_inputs(
+    raw: serde_json::Map<String, serde_json::Value>,
+    inputs: &BTreeMap<String, Input>,
+    before: &[Step],
+) -> Result<Inputs, String> {
+    let parsed = Inputs::parse_step(&serde_json::Value::Object(raw)).map_err(|e| e.to_string())?;
+    match parsed.paths().into_iter().find(|p| !path(p, inputs, before)) {
+        Some(bad) => Err(format!("`{{{{ {bad} }}}}` names nothing a run has")),
+        None => Ok(parsed),
     }
 }
