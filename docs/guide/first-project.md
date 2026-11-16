@@ -97,7 +97,8 @@ aae config check      # report the errors of the files on disk, apply nothing; n
 aae config reload     # apply them; on an error the old config stays in force
 ```
 
-Loading is all or nothing, every error is reported with its file, and an unknown key is an error.
+Loading is all or nothing, every error found is reported with its file, and an unknown key is an error. A file
+that does not parse gives its first error only.
 
 ## Triggers
 

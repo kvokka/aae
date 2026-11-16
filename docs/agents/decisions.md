@@ -132,7 +132,7 @@ each heading; this file only marks it as decided.
 | № | Decision |
 |---|---|
 | 29 | Checks run on the owner's host only (Linux arm64); the other three targets are built |
-| 63 | The build for the four targets is checked by a full local run on request; no tag is made for the sake of it |
+| 63 | The four targets are built only for a release (`mise run acceptance-release`, the workflow `release` on a `v*` tag): development, the gate and a local acceptance run build the host's target only. No tag is made only to check the build |
 | 66 | `br` is pinned by an exact version, claude and codex by a release line; there is no `mise.lock` |
 | 87 | mise is a convenience, not a requirement, for development and for the demos; a demo's dependencies are in its own `mise.toml` without a lock |
 
@@ -153,7 +153,7 @@ each heading; this file only marks it as decided.
 | 54 | Results of experiments go to `docs/design/experiments.md` and the code of a recorded experiment is deleted; experiment code stays under 5 000 lines; each of `experiments/*`, `demos/*`, `examples/*` has a short README |
 | 56 | No locked seeds: a test passes on any seed; a random stand takes a new seed each run and prints it |
 | 57 | Unit and integration tests are the everyday loop; nothing new is built on a slow or unstable stand |
-| 64 | The repository is public: research reports are not in it, and the predecessor project is not named |
+| 64 | The repository is public: research reports are not in it, and no other project of the owner, the predecessor among them, is named in it |
 | 67 | Temporary logs of the work process are not committed; git history is not rewritten |
 | 79 | The averaging window of the idle-CPU check is 30 seconds |
 | 86 | Running a demo does not conflict with the files of the repository: what a run creates is in `.gitignore`; the author's result lies beside it with the suffix `-example` and the date it was made |

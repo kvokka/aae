@@ -498,6 +498,9 @@ claude (`crates/aae-claude`):
 - `requires_action` is reported only with `--permission-prompt-tool stdio` and
   `CLAUDE_CODE_EMIT_SESSION_STATE_EVENTS=1`. With an MCP permission tool the state stays `running` and the stream is
   silent, so the watchdog would take a waiting human for a stall.
+- claude asks for permission for some commands even under `bypassPermissions` (seen on 2.1.325: a Bash heredoc
+  into a directory outside the workdir). With no hook and no human to answer, the run waits in `requires_action`
+  until `human_timeout`; an unattended setup shortens it (the demos set two minutes).
 
 codex (`crates/aae-codex`):
 
@@ -514,6 +517,9 @@ codex (`crates/aae-codex`):
   a session's next prompt only after its turn ended (6.2), so this never happens.
 - Hooks run with the environment of the app-server process, not of the thread (4.6 table, attempt environment); so
   the attempt token stands in the `export` of the hook command and is visible in its argv, which is accepted.
+- app-server syncs its plugins over the network by itself (a `git fetch` of the vendor's plugins repository, seen
+  on 0.168), as a child that carries the instance marker. It outlives a killed daemon until a restarted one sweeps it,
+  and through it a session without a model still touches the network.
 - app-server is marked `[experimental]` and codex ships often; see [harness updates](../harness-updates.md).
 
 The harnesses' own watchdogs fire later than the core's and are not relied on. claude cuts a silent response stream
@@ -784,7 +790,7 @@ for it is not.
 - Daemon stop (a signal, the end of a drain, `restart`): the core stops first, then the daemon, a child subreaper,
   kills every descendant it still has — sessions, hooks, exec commands — before it exits.
 - A resumed attempt after `daemon_crash` checks the transcript for the last unsettled key: not delivered → send the
-  same prompt with the same key; delivered → send the reconcile prompt (config text, default
+  same prompt with the same key; delivered → send the reconcile prompt (a constant of the core:
   "Your previous turn was interrupted. Check the current state of the work and continue toward the goal.") with a
   new key.
 

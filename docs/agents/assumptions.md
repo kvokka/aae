@@ -12,6 +12,9 @@ The behaviour itself is described in the document named under each heading; this
 | What | State |
 |---|---|
 | Exit 75 of a check script on a step with `back_to` | the run ends `failed` without a return; chosen by the implementer |
+| A `POST` on an unknown id (`runs/{id}/cancel`, `runs/{id}/answer`, `instances/{id}/stop`) | answers 409 `rejected`, while a `GET` answers 404: the core does not tell "no such thing" from "not allowed" |
+| `aae config check\|explain` and `aae doctor` | work locally on the config file and never ask the daemon, so a session of the daemon may see another config than the daemon runs; the API operations of the same names are not reachable from the CLI |
+| The 14 test binaries of `crates/aae/tests` | left apart; they could be one binary like the tests of the core, but `--test claude`, `--test codex` and the nextest filters of acceptance lean on their names |
 
 ## Product shape — [overview](../overview.md), [event model](../design/event-model.md)
 
@@ -132,6 +135,9 @@ Open questions the code must not lean on without an experiment
 - br's "refuse rather than lose" in a long unattended loop; whether the rider of br's license applies to Claude and
   Codex agents running `br`.
 - Whether claude's `result.usage` counts one turn or the whole process.
+- The stop of what a session left running, beyond the fake providers of one version pair: codex 0.167.2 (in the
+  tested range, `thread/backgroundTerminals/clean` was run on 0.168.0 only), claude's `stop_task` while a background
+  subagent is alive, and whether the MCP servers of a codex thread, which carry the attempt token, die with it.
 - opencode altogether.
 
 ## Risks the owner accepted

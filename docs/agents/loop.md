@@ -61,3 +61,11 @@ The plan is `.loop/PLAN.md`; an expert's plan of a package is an epic in br with
 
 `.claude/`, `scripts/loop/` and `CLAUDE.md` are not changed inside a cycle (a hook blocks it, `loopctl` reverts
 it). A proposal about them is a journal entry.
+
+- The owner changes the harness between cycles and commits it before a cycle opens: `loopctl` reverts every change
+  of these paths since the base of the open cycle, whoever made it, and `scripts/loop/checks` refuses a tree with
+  uncommitted changes outside `.loop/`.
+- Never hide a file of `.loop/` from git (`git update-index --assume-unchanged` or `--skip-worktree`): a commit
+  hook that stashes unstaged changes then rolls the state and the journal back, and a cycle opens twice.
+- The owner prunes `.loop/` by hand from time to time: old cycles go, and what of the journal still holds moves
+  to `docs/` or stays as a short entry. What was pruned is in the git history.

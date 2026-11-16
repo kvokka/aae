@@ -67,7 +67,8 @@ In code the same marker stands in the language's comment syntax. `scripts/budget
 ## Repository
 
 - The repository is public, MIT: no secrets, no absolute paths of a developer's machine (`mise run ci` greps for
-  them), no research reports. The predecessor project is not named in code or docs.
+  them), no research reports. No other project of the owner, the predecessor among them, is named in code, docs or
+  the loop's files.
 - Work goes in `main`. Commits are atomic, messages in English. No force-push, no rewriting of history, no
   `--no-verify`. Temporary logs of the work are not committed.
 - Never `rm -r` or `rm -rf`, in a command or in a script you write: tracked files go by `git rm -r -q <path>`,

@@ -73,3 +73,13 @@
   short intervals. Where no process runs, use the managed clock (`Clock::managed`, `start_paused`), not the wall
   clock.
 - The repository's own `.beads` is not a fixture: tests of aae make their own temporary br directories.
+- The integration tests of the core are modules of one test binary, `crates/aae-testkit/tests/core`; the chaos
+  stand is the only other one. A new test there is a module, not a new file under `tests/`: every binary is one more
+  link on each change of the core. A test that moves keeps its name in the nextest filters of
+  `crates/aae-acceptance/src/checks.rs` and `mise.toml`, or a filter silently selects nothing.
+- On a fake provider, fail an attempt of claude with 529 (`Reply::Overloaded`): with `CLAUDE_CODE_MAX_RETRIES=0`
+  that is exactly one request. On a 400 "prompt is too long" claude sends compaction requests of its own, which
+  shifts a scripted plan of replies.
+- claude hides MCP tools behind its tool search, so a fake provider sees `mcp__<server>__<tool>` only with
+  `ENABLE_TOOL_SEARCH=false` in the agent's environment. codex puts the tools of an MCP server into a
+  `{"type":"namespace","name":"mcp__<server>"}` entry, and the call must carry that `namespace`.

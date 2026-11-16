@@ -1,7 +1,8 @@
 # Installing aae
 
 aae is one binary: the daemon, the CLI and the bundled plugins. It runs on Linux (x86_64, arm64; statically
-linked with musl) and macOS (x86_64, arm64).
+linked with musl) and macOS (x86_64, arm64). It is checked on Linux arm64 only: the other targets are built and not
+exercised ([what the first release leaves out](../overview.md#what-the-first-release-leaves-out)).
 
 ## Build it
 

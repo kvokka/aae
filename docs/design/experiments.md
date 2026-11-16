@@ -99,8 +99,10 @@ subtree — a per-session cgroup is unavailable without root. On GitHub runners 
    recovery after a daemon crash. Known macOS differences until it is checked: no sweep, no subreaper, and a process is
    told by its pid alone (no start time), so a reused pid passes for the old process.
 3. Linux: the daemon is a child subreaper, so descendants that dropped the marker still become its children and are
-   reaped. The daemon must reap only pids it does not manage itself (peek with `waitid(P_ALL, WNOWAIT)` first), or
-   it steals exit statuses of its own session processes.
+   reaped. The daemon must reap only pids it does not manage itself, or it steals exit statuses of its own session
+   processes: it takes the zombies among its children from `/proc` and skips those it spawned. A peek with
+   `waitid(P_ALL, WNOWAIT)` does not do: it returns the same zombie again and again, and while that one is the
+   daemon's own child the orphans behind it are not seen.
 
 cgroups are not needed for the first release. The remaining gap: a descendant that clears its environment and is
 orphaned while the daemon itself is down (it goes to PID 1, not to the restarted daemon).
