@@ -69,10 +69,10 @@ tokens=$(jq -rs '[.[] | select(.type == "run.passed" or .type == "run.failed") |
   echo
   echo "The request: \"$request\"."
   echo
-  echo "The beads (\`br list --all --tree\`):"
+  echo "The beads under the request (\`br dep tree <root> --direction up\`):"
   echo
   echo '```'
-  (cd root && br list --all --tree --no-color)
+  (cd root && br dep tree "$("$aae" --json run show "$run" | jq -r .bead)" --direction up --no-color)
   echo '```'
   echo
   echo "The runs, oldest first:"
