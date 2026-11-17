@@ -52,7 +52,7 @@ These are checked by the build, not kept by agreement.
 The skills for a user's agent are not a crate: `harness-plugin/` is a plugin of Claude Code and Codex, and
 `.claude-plugin/marketplace.json` makes the repository its marketplace for both
 ([recovery](guide/recovery.md)). A test of `aae-front` checks its manifests and that its skills name only commands
-the CLI has.
+and flags the CLI has.
 
 ## The life of a run
 

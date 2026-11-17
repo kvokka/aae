@@ -41,8 +41,8 @@ What the failure kind suggests, as a hint for the user and not a decision:
 - `auth_required`, `billing`, `quota_exhausted`: the account needs the user first (log in, pay, wait for the
   reset); after that the session can be continued.
 - `context_overflow`, `runaway_turn`, `transcript_divergence`: the session is spent; a new session fits better.
-- `stall`, `harness_crash`, `daemon_crash`, `overloaded`, `rate_limited`, `unknown`: the session may be fine to
-  continue; read its end first.
+- `stall`, `harness_crash`, `adapter_crash`, `daemon_crash`, `overloaded`, `rate_limited`, `unknown`: the session
+  may be fine to continue; read its end first.
 - `config_error`, `tool_failure`, `workspace_failure`: fix the config, the MCP server or the workspace first.
 - class `check` or `hollow_done`: the agent finished but its work did not pass; a new session with a note, or a
   look at the work, fits better than a plain continue.

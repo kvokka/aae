@@ -1,8 +1,8 @@
 //! The skills plugin of Claude Code and Codex in `harness-plugin/` (docs/guide/recovery.md): its manifests are the
 //! shape both harnesses install, and its skills name only commands the CLI has.
 
-use aae_front::cli::{Cli, has_command};
-use clap::Parser;
+use aae_front::cli::Cli;
+use clap::{CommandFactory, Parser};
 use serde_json::Value;
 use std::{fs, path::Path};
 
@@ -92,11 +92,26 @@ fn every_command_a_skill_names_exists() {
                 }
                 seen += 1;
             }
-            // A command in running text names an existing command.
+            // A command in running text names an existing command, and its flags exist on it.
             for span in line.split('`').skip(1).step_by(2) {
                 if let Some(rest) = span.strip_prefix("aae ") {
-                    let command: Vec<_> = rest.split(' ').take_while(|w| !w.starts_with(['-', '<'])).collect();
-                    assert!(has_command(&command.join(" ")), "no command `{span}`");
+                    let mut command = Cli::command();
+                    command.build();
+                    let words: Vec<_> = rest.split(' ').collect();
+                    let path = words
+                        .iter()
+                        .position(|w| w.starts_with(['-', '<']))
+                        .unwrap_or(words.len());
+                    for word in &words[..path] {
+                        let sub = command
+                            .find_subcommand(word)
+                            .unwrap_or_else(|| panic!("no command `{span}`"));
+                        command = sub.clone();
+                    }
+                    for flag in words[path..].iter().filter_map(|w| w.strip_prefix("--")) {
+                        let known = command.get_arguments().any(|a| a.get_long() == Some(flag));
+                        assert!(known, "no flag `--{flag}` in `{span}`");
+                    }
                     seen += 1;
                 }
             }

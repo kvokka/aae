@@ -184,12 +184,19 @@ fn a_background_subagent_keeps_the_session_idle_with_background_until_its_wake_u
         !events.iter().any(|e| matches!(e, Normalized::State { .. })),
         "{events:?}"
     );
-    feed(&mut s, &[json!({ "type": "system", "subtype": "init" })]);
-    let events = feed(&mut s, &[agent, result(false, json!({}))]);
+    let retry =
+        json!({ "type": "system", "subtype": "api_retry", "attempt": 1, "retry_delay_ms": 500, "error": "overloaded" });
+    feed(&mut s, &[json!({ "type": "system", "subtype": "init" }), agent]);
+    // In a turn, a retry with a live subagent is the turn's own: the session is not idle.
+    let events = s.line(&retry, Instant::now());
+    assert!(matches!(events[..], [Normalized::Retrying { .. }]), "{events:?}");
+    let events = feed(&mut s, &[result(false, json!({}))]);
     assert_eq!(events.last(), Some(&idle(true)), "{events:?}");
+    let states = events.iter().filter(|e| matches!(e, Normalized::State { .. }));
+    assert_eq!(states.count(), 1, "{events:?}");
     // The subagent's own requests out of the turn keep the background budget.
     for line in [
-        json!({ "type": "system", "subtype": "api_retry", "attempt": 1, "retry_delay_ms": 500, "error": "overloaded" }),
+        retry,
         json!({ "type": "rate_limit_event", "rate_limit_info": { "status": "allowed" } }),
         json!({ "type": "system", "subtype": "permission_denied", "tool_name": "Bash", "tool_use_id": "toolu_9" }),
     ] {
