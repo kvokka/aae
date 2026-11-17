@@ -1,0 +1,14 @@
+{
+  "name": "aae",
+  "description": "The skills plugin of aae for Claude Code and Codex",
+  "owner": {
+    "name": "aae"
+  },
+  "plugins": [
+    {
+      "name": "aae",
+      "source": "./harness-plugin",
+      "description": "Skills for working with aae from Claude Code or Codex: recover runs that failed for good"
+    }
+  ]
+}

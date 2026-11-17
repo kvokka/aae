@@ -7,6 +7,15 @@ failed, then continue the session, start a new session on the same task with or 
 task. The examples use a project `shop` with a formula `fix` whose `task` input takes a bead
 ([runs over a tracker](first-formula.md#runs-over-a-tracker)).
 
+The skill `recover` of the aae plugin for Claude Code and Codex walks your agent through the same steps: it finds the
+failed runs, shows their failure kinds, offers the ways to go on and runs the one you pick. The repository is the
+plugin's marketplace:
+
+```sh
+claude plugin marketplace add kvokka/aae && claude plugin install aae@aae
+codex plugin marketplace add kvokka/aae && codex plugin add aae@aae
+```
+
 ## See what failed
 
 ```sh

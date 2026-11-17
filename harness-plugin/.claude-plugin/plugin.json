@@ -1,0 +1,12 @@
+{
+  "name": "aae",
+  "version": "0.1.0",
+  "description": "Skills for working with aae from Claude Code or Codex: recover runs that failed for good",
+  "homepage": "https://github.com/kvokka/aae",
+  "repository": "https://github.com/kvokka/aae",
+  "license": "MIT",
+  "author": {
+    "name": "aae",
+    "url": "https://github.com/kvokka/aae"
+  }
+}

@@ -49,6 +49,11 @@ These are checked by the build, not kept by agreement.
 | `aae-testkit` | test doubles: the scripted driver, fake providers, a test MCP service. Nothing of it runs in the product | [development](guide/development.md) |
 | `aae-acceptance` | end-to-end scenarios on a real daemon and real binaries, run on request | [acceptance](acceptance.md) |
 
+The skills for a user's agent are not a crate: `harness-plugin/` is a plugin of Claude Code and Codex, and
+`.claude-plugin/marketplace.json` makes the repository its marketplace for both
+([recovery](guide/recovery.md)). A test of `aae-front` checks its manifests and that its skills name only commands
+the CLI has.
+
 ## The life of a run
 
 1. **A start.** A run starts by an explicit call (API, CLI, MCP), by a subscription to an event or by a schedule
