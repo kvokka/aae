@@ -53,7 +53,7 @@ sha=$(git describe --always --dirty 2>/dev/null || echo unknown)
 # The agents and the steps call `aae`: the binary goes first on the PATH the daemon hands them.
 PATH="$(dirname "$aae"):$PATH" "$aae" daemon --config root/config.toml 2>.aae/daemon.log &
 daemon=$!
-trap 'kill $daemon 2>/dev/null; rm -f "$here/.aae/gh/hosts.yml"' EXIT
+trap 'kill $daemon 2>/dev/null || true; rm -f "$here/.aae/gh/hosts.yml"' EXIT
 until "$aae" status >/dev/null 2>&1; do
   kill -0 $daemon 2>/dev/null || { cat .aae/daemon.log; exit 1; }
   sleep 0.2
@@ -61,7 +61,7 @@ done
 # The bridge gives the review's outcome from GitHub to the feature that waits on it.
 AAE="$aae" ./bridge.sh review-gate 2>.aae/bridge.log &
 bridge=$!
-trap 'kill $bridge $daemon 2>/dev/null; rm -f "$here/.aae/gh/hosts.yml"' EXIT
+trap 'kill $bridge $daemon 2>/dev/null || true; rm -f "$here/.aae/gh/hosts.yml"' EXIT
 
 started=$(date +%s)
 run=$("$aae" run start review-gate dev.feature --input "task=$request")
@@ -106,7 +106,8 @@ done)
   echo "The outcome of the run (\`aae run wait\`):"
   echo
   echo '```'
-  sed 's/[[:space:]]*$//' .aae/outcome.txt
+  # The paths under the demo relative to it: a result names no directory of the machine it ran on.
+  sed -e 's/[[:space:]]*$//' -e "s|$here/||g" .aae/outcome.txt
   echo '```'
 } >RESULT.md
 "$aae" drain >/dev/null 2>&1 || true

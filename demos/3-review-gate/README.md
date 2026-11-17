@@ -40,9 +40,9 @@ KISS".
   `owner-review` on `run.awaiting` of a `feature` run. `owner-review` is the project's own formula: its agent `owner`,
   in `root/agents/owner`, stands in for a human reviewer and acts only through `gh`; the first time it leaves one
   comment that asks for a change, the next time it merges the root's pull request. As the author of the pull requests
-  it can neither approve them nor request changes: GitHub does not let one account do that on its own. It runs with
-  the user's home (`inherit_host = true`), where `gh` keeps its login. `root/config.toml` is the orchestrator config
-  of the demo.
+  it can neither approve them nor request changes: GitHub does not let one account do that on its own. It runs as the
+  user does (`inherit_host = true`), and its `gh` takes the demo's login (`GH_CONFIG_DIR`, below). `root/config.toml`
+  is the orchestrator config of the demo.
 - `bridge.sh` is the bridge, below.
 - `gate-demo/`, `gate-demo-backend/` and `gate-demo-frontend/` are the clones of the GitHub repositories of the same
   names, made by `run.sh`; empty before a run.
@@ -87,4 +87,15 @@ OWNER=<your login> ./run.sh                  # or: mise run demo
 the bridge sends the feature back, the reviser works the comment, `owner` merges the root's pull request and the
 bridge passes the review. Then it writes `RESULT.md`: when and on what it ran, the rounds of the review, the root's
 pull request, the runs and the outcome. Everything a run creates is in `.gitignore`; `git clean -ffdX -- .` clears it
-for the next run.
+for the next run. A step gets a clean environment, which a login of `gh` held in a variable or a keyring does not
+reach, so `run.sh` copies the token of yours into a login of the demo's own, `.aae/gh`, removed when it ends: the steps
+and the bridge get it through `.aae/bin/gh`, first on their `PATH`, and `owner` through its `env`. Compare with the
+author's run: `gate-demo-example/`, `gate-demo-backend-example/`, `gate-demo-frontend-example/` and
+`RESULT-example.md`, with its date, versions and models. Your result differs: the agents decide anew each time.
+
+The author's run (2026-11-17, in `RESULT-example.md`) passed in two rounds of the review, as the demo means it to:
+`owner` asked to replace the absolute `cd` paths in the README of the frontend, the reviser did, and `owner` merged
+the root's pull request, [gate-demo#2](https://github.com/kvokka-agent/gate-demo/pull/2); the feature merged
+[gate-demo-backend#2](https://github.com/kvokka-agent/gate-demo-backend/pull/2) and
+[gate-demo-frontend#2](https://github.com/kvokka-agent/gate-demo-frontend/pull/2). The pull requests #1 are of a run
+before it, cancelled while it waited on its review and cleared by `cleanup`.

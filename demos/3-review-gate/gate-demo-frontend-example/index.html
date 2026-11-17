@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Greeting</title>
+  <style>
+    :root { color-scheme: light; font: 16px/1.5 system-ui, sans-serif; color: #172033; background: #f4f6fb; }
+    body { min-height: 100vh; margin: 0; display: grid; place-items: center; }
+    main { box-sizing: border-box; width: min(100% - 2rem, 28rem); padding: 2rem; background: white; border-radius: 1rem; box-shadow: 0 1rem 3rem #17203318; }
+    h1 { margin: 0 0 .4rem; font-size: 1.8rem; }
+    p { margin: 0 0 1.25rem; color: #536078; }
+    label { display: block; margin-bottom: .4rem; font-weight: 600; }
+    input, button { box-sizing: border-box; width: 100%; min-height: 2.8rem; border-radius: .5rem; font: inherit; }
+    input { padding: .55rem .7rem; border: 1px solid #aab4c5; }
+    input:focus { outline: 3px solid #a9c4ff; border-color: #3267d5; }
+    button { margin-top: .8rem; border: 0; color: white; background: #2458c5; font-weight: 650; cursor: pointer; }
+    button:disabled { opacity: .65; cursor: wait; }
+    #result { margin: 1rem 0 0; color: #183f23; font-weight: 600; overflow-wrap: anywhere; }
+    #result.error { color: #a12323; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Get a greeting</h1>
+    <p>Enter your name and we’ll say hello.</p>
+    <form id="greeting-form">
+      <label for="name">Your name</label>
+      <input id="name" name="name" autocomplete="name" required>
+      <button type="submit">Say hello</button>
+    </form>
+    <p id="result" role="status" aria-live="polite"></p>
+  </main>
+  <script>
+    const form = document.querySelector('#greeting-form');
+    const nameInput = document.querySelector('#name');
+    const button = form.querySelector('button');
+    const result = document.querySelector('#result');
+
+    form.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const name = nameInput.value.trim();
+      result.textContent = '';
+      result.classList.remove('error');
+      if (!name) {
+        nameInput.setCustomValidity('Please enter your name.');
+        nameInput.reportValidity();
+        return;
+      }
+      nameInput.setCustomValidity('');
+      button.disabled = true;
+      button.textContent = 'Sending…';
+      try {
+        const response = await fetch(`http://localhost:8000/greeting?name=${encodeURIComponent(name)}`);
+        if (!response.ok) throw new Error(`The server returned ${response.status}.`);
+        const data = await response.json();
+        if (typeof data.greeting !== 'string') throw new Error('The server returned an unexpected response.');
+        result.textContent = data.greeting;
+      } catch (error) {
+        result.textContent = `Sorry, we couldn’t get your greeting. Check that the greeting server is running, then try again. (${error.message})`;
+        result.classList.add('error');
+      } finally {
+        button.disabled = false;
+        button.textContent = 'Say hello';
+      }
+    });
+    nameInput.addEventListener('input', () => nameInput.setCustomValidity(''));
+  </script>
+</body>
+</html>

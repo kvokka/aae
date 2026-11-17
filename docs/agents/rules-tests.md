@@ -47,7 +47,8 @@
 - CI has no access to a model, by design. A run on a real `claude` or `codex` happens only on the owner's request,
   on the cheapest model (claude: haiku; codex: the cheapest available), narrowly: before it you know what is being
   checked, after it the journal has an entry (what, how many runs, the result).
-- The demos run on the models the owner named: demo 1 on `haiku` and `luna`, demo 2 on `sol`, `terra`, `luna`.
+- The demos run on the models the owner named: demo 1 on `haiku` and `luna`, demo 2 on `sol`, `terra`, `luna`;
+  demo 3 on `terra` and `luna`.
 - The model `astra` is never run, anywhere.
 - Burning quota on purpose for the sake of a check is forbidden.
 - Do not write "codex is not logged in" as a fact without `codex login status` and one cheap run.
