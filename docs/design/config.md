@@ -643,13 +643,13 @@ bounded tail of its output is kept in the result (contracts 6.2). An `exec` step
 its environment: `AAE_RUN`, `AAE_BEAD` (when the run has a bead), `AAE_SOCKET` (the API socket, so the command can
 call `aae`) and `AAE_INPUT_<NAME>` per input (the name upper-cased, other characters than letters and digits as `_`; a
 string as it is, any other value as JSON). Two inputs that give one variable (`note-text` and `note_text`) are a
-config error. The environment is clean by default and built in this order, a later entry winning over an earlier one
-of the same name: `PATH`, `HOME` and `LANG` of the daemon, or its whole environment when `inherit_env` is true (a
-scalar: the step's, else the project's `[exec]`, else the orchestrator's; default false); the tracker's variables
-(`BEADS_DIR`, [tracker](tracker-br.md)); the `env` of the orchestrator's `[exec]`, the project's `[exec]` and the
-step, merged by key (see "Environment values"), and over it the `env` of `run.preparing` hooks; then the variables of
-aae: the tracker actor and the `AAE_*` variables (those above, `AAE_REMARKS` and `AAE_STEP_*` below), so
-an `env` key cannot replace them. A rig has no `[exec]`.
+config error. The environment is clean by default and built in this order, a later entry winning over an earlier one of
+the same name: `PATH`, `HOME` and `LANG` of the daemon, or its whole environment when `inherit_env` is true (the
+variables whose name and value are UTF-8; a scalar: the step's, else the project's `[exec]`, else the orchestrator's;
+default false); the tracker's variables (`BEADS_DIR`, [tracker](tracker-br.md)); the `env` of the orchestrator's
+`[exec]`, the project's `[exec]` and the step, merged by key (see "Environment values"), and over it the `env` of
+`run.preparing` hooks; then the variables of aae: the tracker actor and the `AAE_*` variables (those above,
+`AAE_REMARKS` and `AAE_STEP_*` below), so an `env` key cannot replace them. A rig has no `[exec]`.
 
 A `drain` step gives every ready bead under the run's bead, at any depth, a run of `formula`, on each read of the
 tracker, until none is left: the same start as `aae run start` with the bead as the formula's input of type `task`, no
@@ -737,12 +737,13 @@ back for it, since an incurable failure is no work for an earlier step. A script
 by a signal or whose answer is lost (the deadline of `finishing`) did not pass; one that cannot start fails the run
 as `infrastructure`. The script runs after the step has run on its own and its hooks accepted
 `pass`; a step that failed on its own (finisher `fail`, a non-zero exit of the command) is a run that did not pass,
-and the script is not started. It gets the environment of an `exec` step — its own step's, when that is an `exec`
-step, else the one of the orchestrator's and the project's `[exec]`; never the agent's `env` — plus
-`AAE_STEP_<NAME>_RESULT`, `_SUMMARY` and `_DATA` of its own step, in the run's workdir under the step timeout. A
-reference to a variable the daemon does not have keeps the script from starting. A repeat of an `ai` step goes on in its
-session and gets the script's output as a remark: through `{{ remarks }}`, or appended to the prompt when the
-template has none. A repeat of a `drain` step is a new entry. The count is within a round: a round back to the step
+and the script is not started. It gets the environment of an `exec` step — its own step's, when that is an `exec` step,
+else the one of the orchestrator's and the project's `[exec]`, without the `env` of `run.preparing` hooks, which goes to
+the agent's session; never the agent's `env` — plus `AAE_STEP_<NAME>_RESULT`, `_SUMMARY` and `_DATA` of its own step, in
+the run's workdir under the step timeout. A reference to a variable the daemon does not have keeps the script from
+starting and fails the run at once with reason `config_error: …` (see "Environment values"). A repeat of an `ai` step
+goes on in its session and gets the script's output as a remark: through `{{ remarks }}`, or appended to the prompt when
+the template has none. A repeat of a `drain` step is a new entry. The count is within a round: a round back to the step
 gives it the full `max_attempts` again. A repeat spends neither the session attempt ceiling (invariant 16,
 [invariants.md](invariants.md#the-invariants)) nor the rounds, and a failure of the infrastructure does not spend
 `max_attempts`.
