@@ -236,8 +236,26 @@ def open_cycle(st, note=""):
     instruct(st, "coder", coder_prompt(st), note)
 
 
+def open_packages():
+    plan = LOOP / "PLAN.md"
+    return plan.exists() and re.search(r"^### WP-.*статус:\s*(todo|doing)\b", plan.read_text(), re.M) is not None
+
+
+def reopen(st):
+    """Завершённый раунд, а владелец добавил пакеты: новый раунд, история старого — в history_roundN."""
+    k = max([int(m.group(1)) for key in st if (m := re.fullmatch(r"history_round(\d+)", key))] or [0]) + 1
+    st[f"history_round{k}"] = st.pop("history", [])
+    st.update(status="running", phase=None, attempt=0)
+    st.pop("halt_reason", None)
+    save(st)
+    journal("loopctl", "ИТОГ", f"Новый раунд после цикла {st['cycle']}: в плане есть открытые пакеты; "
+            f"история прошлого раунда — history_round{k}.")
+
+
 def cmd_next():
     st = load()
+    if st["status"] == "done" and open_packages():
+        reopen(st)
     if st["status"] in ("done", "halted"):
         return finished(st, st.get("halt_reason") or st["status"])
     n = st["cycle"]
