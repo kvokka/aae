@@ -242,12 +242,13 @@ fn a_dollar_in_a_plugin_bin_and_the_daemons_path_stays_itself() {
     if std::env::var_os(CHILD).is_none() {
         let path = format!("/no/su$ch:{}", std::env::var("PATH").unwrap_or_default());
         let test = format!("{}::{name}", module_path!().split_once("::").unwrap().1);
-        let out = std::process::Command::new(std::env::current_exe().unwrap())
-            .args(["--exact", &test, "--test-threads=1"])
-            .env(CHILD, "1")
-            .env("PATH", path)
-            .output()
-            .unwrap();
+        let out = crate::orphans::output_std(
+            std::process::Command::new(std::env::current_exe().unwrap())
+                .args(["--exact", &test, "--test-threads=1"])
+                .env(CHILD, "1")
+                .env("PATH", path),
+        )
+        .unwrap();
         let stdout = String::from_utf8_lossy(&out.stdout);
         assert!(
             stdout.contains("1 passed"),
