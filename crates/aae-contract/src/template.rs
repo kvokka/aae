@@ -108,6 +108,18 @@ impl Filter {
         self.0.iter().map(|(path, _)| path.as_str())
     }
 
+    pub fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
+
+    /// The values the matcher at `path` accepts.
+    pub fn accepted(&self, path: &str) -> impl Iterator<Item = &Value> {
+        self.0
+            .iter()
+            .filter(move |(p, _)| p == path)
+            .flat_map(|(_, accepted)| accepted)
+    }
+
     pub fn matches(&self, view: &Value) -> bool {
         self.0.iter().all(|(path, accepted)| match lookup(view, path) {
             Some(Value::Array(items)) => items.iter().any(|item| accepted.contains(item)),

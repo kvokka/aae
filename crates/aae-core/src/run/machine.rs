@@ -41,7 +41,8 @@ impl RunHandler {
     pub(super) fn render_and_prepare(&mut self, tx: &mut Tx<'_>, mut row: Row) -> Result<(), Error> {
         let prepared = self.render(tx, &row);
         let (prompt, timeout_ms, config) = match prepared {
-            Ok(p) => p,
+            Ok(Some(p)) => p,
+            Ok(None) => return self.skip(tx, row),
             Err(reason) => return self.terminal(tx, row, "failed", Some("infrastructure"), &reason),
         };
         let env_keys: Vec<&String> = config["env"].as_object().into_iter().flat_map(|e| e.keys()).collect();

@@ -566,6 +566,7 @@ back_to = "implement"               # optional, ai, exec and await steps: a chec
 max_attempts = 2                    # optional, any step but await (default 1): the most times the step runs
 step_check_script_path = "check-test.sh"  # optional, any step but await: passes when it exits 0; from this file's
                                           # directory
+if = { "inputs.quick" = false }     # optional, any step: a `where` table; unless it matches, the step is skipped
 
 [[step]]
 name = "children"
@@ -592,7 +593,7 @@ back_to = "implement"               # optional: a check, as above
 
 A formula has a name, a description, declared inputs and one or more steps, which a run goes through in order
 (contracts 6.1): the next step starts when the one before ended, a failed step that is no check fails the run, and
-the run's outcome is that of its last step. Step names are unique in the formula and contain no `.`. An `ai` step
+the run's outcome is that of the last step that ran. Step names are unique in the formula and contain no `.`. An `ai` step
 is a turn of the agent in a harness session, and its outcome comes from the finisher (`aae finish`, contracts 6.3). An
 `exec` step is a command with no model that the daemon runs in the run's workdir, in a process group of its own, under
 the step timeout; exit 0 is `pass`, 75 (`EX_TEMPFAIL`) a failed attempt (not an outcome), any other `fail`, and a
@@ -667,6 +668,18 @@ rendered prompt with the remarks, not the reconcile prompt of a resumed retry. A
 last of the formula's `rounds` fails the run (class `agent`) with the reason `still failing after <n> rounds:
 <remarks>`. `back_to` must name a step before the check; a `drain` step is no check.
 
+Any step may have `if`, a `where` table (contracts 2.2: the same matchers, all entries must match) over what a prompt
+template sees of the run — `inputs`, `bead`, `rig`, `run`, `project` and `steps` of the steps before it — and
+`back_from`, the names of the checks that sent the run back into its current round (empty in the first round). A path
+is a key with dots, quoted in TOML (`if = { "inputs.deploy" = true }`); paths are checked at load, as those of a
+template, and each value of `back_from` must be the name of a check of the formula. The `if` is asked when the run
+enters the step — at the start, after the step before it, on a return to it — and not on a repeat under
+`max_attempts`. A step whose `if` does not match is skipped: the event `run.step_skipped` (`{run, step}`), no hook on
+`run.preparing`, no attempt and no outcome; the run goes on to the next step at once. A step that runs only after a
+return names its check: `if = { back_from = "review" }`; `back_to` to a step with an `if` does not undo its `if`, and
+`if` makes no jump. A skipped check sends nothing back; the row of checks is that of the formula's text, whatever is
+skipped. A run whose every step is skipped fails (class `infrastructure`, reason `every step was skipped`).
+
 Any step but `await` may have `max_attempts` (1 to 20, the ceiling of session attempts; default 1): the step runs at most that
 many times, and one that does not pass runs again until then; past it the step fails. `step_check_script_path` names a script that says
 whether the step passed, a path from the directory of the formula file (an absolute one stays; empty is none) that
@@ -689,7 +702,10 @@ A step sees the outcomes of the steps before it, by name (the last attempt of ea
 `{{ steps.<name>.result }}`, `.summary` and `.data.<key>` (contracts 2.3; `data` of an exec step is `{exit_code,
 stdout, stderr}`), an exec step as `AAE_STEP_<NAME>_RESULT` (`pass` or `fail`), `AAE_STEP_<NAME>_SUMMARY` and
 `AAE_STEP_<NAME>_DATA` (JSON, when there is data), `<NAME>` formed as for inputs; a step name whose variables collide
-with another step's or an input's is a config error. Each ai step has a session of its own; a run that continues a
+with another step's or an input's is a config error. A skipped step has no outcome until it runs again, even one from
+an earlier round: no `steps.<name>`, no `AAE_STEP_<NAME>_*`. So a prompt template or the `inputs` of a `formula` step
+naming `steps.<name>` of a step with an `if` is a config error; an `if` may name it, and does not match while it has
+none. Each ai step has a session of its own; a run that continues a
 session (`continue_from`) continues it in its first step only, so a formula whose first step is not `ai` cannot be
 continued.
 

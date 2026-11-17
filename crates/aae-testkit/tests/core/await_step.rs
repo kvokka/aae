@@ -310,3 +310,22 @@ async fn a_failed_check_before_an_await_sends_the_run_back_first() {
     let events = w.events(&run, Duration::from_millis(200)).await;
     assert_eq!(count(&events, "run.awaiting"), 1);
 }
+
+/// The checks that sent the run back into its round survive a restart: a step waiting for one runs after it
+/// (docs/design/config.md, invariants "Recovery").
+#[tokio::test(start_paused = true)]
+async fn a_restart_keeps_the_checks_that_sent_the_run_back() {
+    let fix = gate("fix", "if = { back_from = \"check\" }\n");
+    let steps = [gate("a", ""), gate("check", "back_to = \"a\"\n"), gate("hold", ""), fix];
+    let mut w = waiting(&steps, POLICY);
+    let run = w.begin().await;
+    w.awaiting(&run, 0).await;
+    w.resolve(&run, "a", outcome(Verdict::Pass, "")).await.unwrap();
+    w.resolve(&run, "check", outcome(Verdict::Fail, "redo")).await.unwrap();
+    w.resolve(&run, "a", outcome(Verdict::Pass, "")).await.unwrap();
+    w.resolve(&run, "check", outcome(Verdict::Pass, "")).await.unwrap();
+    assert_eq!(w.awaiting(&run, 4).await["run"]["step"], "hold");
+    w.restart().await;
+    w.resolve(&run, "hold", outcome(Verdict::Pass, "")).await.unwrap();
+    assert_eq!(w.awaiting(&run, 5).await["run"]["step"], "fix");
+}

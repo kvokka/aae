@@ -142,19 +142,22 @@ impl RunHandler {
                     .sql()
                     .query_row(
                         "SELECT outcome FROM attempts WHERE run = ?1 AND step = ?2 AND outcome IS NOT NULL \
-                         ORDER BY n DESC LIMIT 1",
+                         AND skipped = 0 ORDER BY n DESC LIMIT 1",
                         params![row.id, check.name],
                         |r| r.get(0),
                     )
                     .optional()?;
                 let outcome: Option<Outcome> = outcome.and_then(|o| serde_json::from_str(&o).ok());
                 if let Some(o) = outcome.filter(|o| o.result == Verdict::Fail) {
-                    sent_back.push((check.back_to.clone().unwrap_or_default(), remark(&check.name, &o)));
+                    let to = check.back_to.clone().unwrap_or_default();
+                    sent_back.push((to, check.name.as_str(), remark(&check.name, &o)));
                 }
             }
-            let to = f.steps.iter().find(|s| sent_back.iter().any(|(to, _)| *to == s.name));
+            let to = f.steps.iter().find(|s| sent_back.iter().any(|(to, ..)| *to == s.name));
             if let Some(to) = to {
-                let remarks = sent_back.into_iter().map(|(_, r)| r).collect::<Vec<_>>().join("\n\n");
+                let names: Vec<_> = sent_back.iter().map(|(_, name, _)| name).collect();
+                let back_from = json!(names).to_string();
+                let remarks = sent_back.into_iter().map(|(.., r)| r).collect::<Vec<_>>().join("\n\n");
                 let round: u32 = tx
                     .sql()
                     .query_row("SELECT round FROM runs WHERE id = ?1", [&row.id], |r| r.get(0))?;
@@ -163,16 +166,31 @@ impl RunHandler {
                     return self.terminal(tx, row, "failed", Some("agent"), &reason);
                 }
                 tx.sql().execute(
-                    "UPDATE runs SET round = round + 1, remarks = ?2 WHERE id = ?1",
-                    params![row.id, remarks],
+                    "UPDATE runs SET round = round + 1, remarks = ?2, back_from = ?3 WHERE id = ?1",
+                    params![row.id, remarks, back_from],
                 )?;
                 return self.enter(tx, row, to.clone(), None);
             }
         }
         match next {
             Some(next) => self.enter(tx, row, next.clone(), None),
+            // Every step skipped, or the last that ran did not pass: there is no outcome to pass with.
+            None if !Self::outcome(tx, &row)?.is_some_and(|o| o.result == Verdict::Pass) => {
+                self.terminal(tx, row, "failed", Some("infrastructure"), "every step was skipped")
+            }
             None => self.terminal(tx, row, "passed", None, "pass"),
         }
+    }
+
+    /// The `if` of the step the run entered does not hold (docs/design/config.md): no hook is asked, no attempt
+    /// starts, and what the step left in an earlier round is no longer its outcome.
+    pub(super) fn skip(&mut self, tx: &mut Tx<'_>, row: Row) -> Result<(), Error> {
+        tx.sql().execute(
+            "UPDATE attempts SET skipped = 1 WHERE run = ?1 AND step = ?2",
+            params![row.id, row.step],
+        )?;
+        row.emit(tx, "run.step_skipped", json!({ "run": row.view(), "step": row.step }))?;
+        self.advance(tx, row, None)
     }
 
     /// The run ends its step and starts `next` at once: its first execution, or with the remark `again` the next one
@@ -189,13 +207,17 @@ impl RunHandler {
             Ok((agent, _)) => agent,
             Err(reason) => return self.terminal(tx, row, "failed", Some("infrastructure"), &reason),
         };
+        // A step that ran comes here `finishing`; a skipped one is still `preparing` and finished nothing.
+        let ran = row.state != "preparing";
         let outcome = Self::outcome(tx, &row)?;
         self.end_attempt(tx, &row, None)?;
-        row.emit(
-            tx,
-            "run.step_finished",
-            json!({ "run": row.view(), "outcome": outcome }),
-        )?;
+        if ran {
+            row.emit(
+                tx,
+                "run.step_finished",
+                json!({ "run": row.view(), "outcome": outcome }),
+            )?;
+        }
         tx.sql().execute(
             "UPDATE runs SET step = ?2, agent = ?3, step_kind = ?4, step_remarks = ?5, \
              step_attempt = CASE WHEN ?5 IS NULL THEN 1 ELSE step_attempt + 1 END WHERE id = ?1",
@@ -205,7 +227,9 @@ impl RunHandler {
         let left = std::mem::replace(&mut row.agent, agent);
         (row.step, row.step_kind) = (next.name, next.kind.name().to_owned());
         let frees = left != row.agent && self.config.max_runs(&row.project, &left).is_some();
-        row.set_state(tx, "preparing", None)?;
+        if ran {
+            row.set_state(tx, "preparing", None)?;
+        }
         self.render_and_prepare(tx, row)?;
         // The step left gives up a slot of its agent's `max_runs`: a run parked for it may go
         // (docs/design/contracts.md 6).

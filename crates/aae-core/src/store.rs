@@ -3,7 +3,7 @@ use std::{os::unix::fs::OpenOptionsExt, path::Path};
 
 /// The number of [`SCHEMA`] in `user_version`. Before the first release there are no migrations: a change of the
 /// schema takes the next number, and a database of another number is refused.
-const VERSION: i32 = 23;
+const VERSION: i32 = 24;
 
 const SCHEMA: &str = "
 CREATE TABLE outbox (
@@ -40,8 +40,8 @@ INSERT INTO consumers (name, seq) VALUES ('journal', 0);
 -- gate keys its attempts reported (contracts 7); `trigger` (`<pack>.<name>`) started it, for the overlap check of
 -- docs/design/config.md; `bead` and `bead_data` are its bead as the claim returned it; `step` and `step_kind` are
 -- the step of the formula it is at (a drain step has no agent, and its state is read in SQL); `as_agent` is the
--- agent the `agent:` label of its bead names for its ai steps; `round` and `remarks` are of the checks that sent it
--- back; `step_attempt` and `step_remarks` are the execution of its step and the remark of the one before.
+-- agent the `agent:` label of its bead names for its ai steps; `round`, `remarks` and `back_from` (a JSON array of
+-- names) are of the checks that sent it back; `step_attempt` and `step_remarks` are the execution of its step and the remark of the one before.
 CREATE TABLE runs (
     n INTEGER PRIMARY KEY,
     id TEXT NOT NULL UNIQUE,
@@ -78,13 +78,15 @@ CREATE TABLE runs (
     round INTEGER NOT NULL DEFAULT 1,
     remarks TEXT,
     step_attempt INTEGER NOT NULL DEFAULT 1,
-    step_remarks TEXT
+    step_remarks TEXT,
+    back_from TEXT
 );
 CREATE INDEX runs_state ON runs (state);
 CREATE INDEX runs_trigger ON runs (trigger);
 -- The finisher (contracts 6.3): the attempt token by its SHA-256, the declared `outcome` and the number of `prompts`
 -- the attempt sent (remarks = prompts - 1). `waited`: its failure parked the run on an account gate, so it is
--- outside the attempts ceiling (invariant 16). The tokens it used (contracts 4.3) and the step it ran.
+-- outside the attempts ceiling (invariant 16). The tokens it used (contracts 4.3) and the step it ran. `skipped`:
+-- the step was skipped by its `if` since, so its outcome is no longer the step's.
 CREATE TABLE attempts (
     run TEXT NOT NULL,
     n INTEGER NOT NULL,
@@ -107,6 +109,7 @@ CREATE TABLE attempts (
     input_tokens INTEGER NOT NULL DEFAULT 0,
     output_tokens INTEGER NOT NULL DEFAULT 0,
     step TEXT NOT NULL DEFAULT '1',
+    skipped INTEGER NOT NULL DEFAULT 0,
     PRIMARY KEY (run, n)
 );
 CREATE INDEX attempts_instance ON attempts (instance);

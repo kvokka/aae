@@ -58,7 +58,7 @@ only; the other three targets are built and trusted to the portability of the la
 | Not included | Why, and what there is instead |
 |---|---|
 | Molecules, wisps, convoys, control beads | Chains are built from formula steps, event subscriptions and child runs |
-| An arbitrary step graph inside a formula: branches, nested steps, parallel branches | A formula is a linear list of steps with a bounded return to an earlier step. A planner agent splits the work: it files beads, and a `drain` step gives them to executors |
+| An arbitrary step graph inside a formula: branches, nested steps, parallel branches | A formula is a linear list of steps with a bounded return to an earlier step; a step may be skipped by its `if`. A planner agent splits the work: it files beads, and a `drain` step gives them to executors |
 | Agents that live permanently | A session per run |
 | Mail and nudges between agents | A separate plugin, later |
 | Storage of sessions and transcripts | The harness's job; the core keeps the reference "harness + id" |

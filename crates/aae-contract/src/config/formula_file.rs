@@ -2,7 +2,7 @@
 //! formula the core runs (docs/design/config.md).
 
 use super::{Name, Settings};
-use crate::template::Inputs;
+use crate::template::{Filter, Inputs};
 use serde::Deserialize;
 use std::{collections::BTreeMap, num::NonZeroU32, path::PathBuf, time::Duration};
 
@@ -49,6 +49,9 @@ pub struct Input {
 pub(super) enum StepFile {
     Ai {
         name: Option<String>,
+        /// `if`: a `where` table over the run (docs/design/config.md); empty, the step always runs.
+        #[serde(rename = "if", default)]
+        condition: serde_json::Map<String, serde_json::Value>,
         agent: String,
         timeout: Option<String>,
         harness: Option<String>,
@@ -65,6 +68,9 @@ pub(super) enum StepFile {
     },
     Exec {
         name: Option<String>,
+        /// `if`: a `where` table over the run (docs/design/config.md); empty, the step always runs.
+        #[serde(rename = "if", default)]
+        condition: serde_json::Map<String, serde_json::Value>,
         command: Vec<String>,
         timeout: Option<String>,
         back_to: Option<String>,
@@ -73,6 +79,9 @@ pub(super) enum StepFile {
     },
     Drain {
         name: Option<String>,
+        /// `if`: a `where` table over the run (docs/design/config.md); empty, the step always runs.
+        #[serde(rename = "if", default)]
+        condition: serde_json::Map<String, serde_json::Value>,
         formula: String,
         timeout: Option<String>,
         /// The most beads in work at once (docs/design/config.md); default 1.
@@ -84,6 +93,9 @@ pub(super) enum StepFile {
     },
     Formula {
         name: Option<String>,
+        /// `if`: a `where` table over the run (docs/design/config.md); empty, the step always runs.
+        #[serde(rename = "if", default)]
+        condition: serde_json::Map<String, serde_json::Value>,
         formula: String,
         /// Inputs of the formula given on the step, as a trigger's `inputs`; stronger than the inherited ones.
         #[serde(default)]
@@ -94,11 +106,27 @@ pub(super) enum StepFile {
     },
     Await {
         name: Option<String>,
+        /// `if`: a `where` table over the run (docs/design/config.md); empty, the step always runs.
+        #[serde(rename = "if", default)]
+        condition: serde_json::Map<String, serde_json::Value>,
         timeout: Option<String>,
         /// What the end of the wait does (docs/design/config.md); default `true`, the run fails.
         fail_on_timeout: Option<bool>,
         back_to: Option<String>,
     },
+}
+
+impl StepFile {
+    /// The `if` table as written.
+    pub(super) fn condition(&self) -> &serde_json::Map<String, serde_json::Value> {
+        match self {
+            Self::Ai { condition, .. }
+            | Self::Exec { condition, .. }
+            | Self::Drain { condition, .. }
+            | Self::Formula { condition, .. }
+            | Self::Await { condition, .. } => condition,
+        }
+    }
 }
 
 /// What a drain step does once the run of a bead failed (docs/design/config.md).
@@ -153,6 +181,8 @@ pub struct Step {
     pub max_attempts: u32,
     /// The script that says whether the step passed, by its exit code (docs/design/config.md).
     pub check: Option<PathBuf>,
+    /// `if`: the step runs only when every entry matches the run (docs/design/config.md); empty, always.
+    pub condition: Filter,
 }
 
 #[derive(Clone, Debug)]

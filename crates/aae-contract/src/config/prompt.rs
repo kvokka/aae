@@ -2,7 +2,7 @@
 //! agent's directory in its pack, or the project's own in `.aae/agents/<agent>/`, with the files the template names.
 
 use super::{Input, InputType, Name, Project, Step, load::Loader, schema};
-use crate::template::{Inputs, Template};
+use crate::template::{Filter, Inputs, Template};
 use std::{
     collections::{BTreeMap, BTreeSet},
     fs,
@@ -60,7 +60,7 @@ pub(super) fn project(loader: &mut Loader, project: &mut Project) {
                 continue;
             };
             let unknown = prompt.template.paths().filter(|p| !p.starts_with("agent."));
-            for bad in unknown.filter(|p| !path(p, &formula.inputs, &formula.steps[..at])) {
+            for bad in unknown.filter(|p| !path(p, &formula.inputs, &formula.steps[..at], false)) {
                 let why = format!(
                     "`{{{{ {bad} }}}}` is not a value of the runs of `{}.{formula_name}`",
                     pack.name
@@ -118,8 +118,9 @@ fn agent_prompt(loader: &mut Loader, overlay: &Path, agent: &Name, base: &Path, 
     Some(Prompt { template, from, files })
 }
 
-/// Whether a prompt template path can be resolved for a run of a formula with `inputs` (contracts 2.3).
-fn path(path: &str, inputs: &BTreeMap<String, Input>, before: &[Step]) -> bool {
+/// Whether a prompt template path can be resolved for a run of a formula with `inputs` (contracts 2.3); a step
+/// with an `if` may have been skipped, so only an `optional` use (another `if`) may name it.
+fn path(path: &str, inputs: &BTreeMap<String, Input>, before: &[Step], optional: bool) -> bool {
     let (root, rest) = path.split_once('.').unwrap_or((path, ""));
     let first = rest.split('.').next().unwrap_or_default();
     match root {
@@ -136,7 +137,7 @@ fn path(path: &str, inputs: &BTreeMap<String, Input>, before: &[Step]) -> bool {
                 (fields.next(), fields.next()),
                 (Some("result" | "summary"), None) | (Some("data"), _)
             );
-            field && before.iter().any(|s| s.name == first)
+            field && (before.iter()).any(|s| s.name == first && (optional || s.condition.is_empty()))
         }
         // `name`, `path` or a variable of the rig, which is known only when the run starts.
         _ => !rest.is_empty() && !rest.contains('.'),
@@ -150,8 +151,47 @@ pub(super) fn step_inputs(
     before: &[Step],
 ) -> Result<Inputs, String> {
     let parsed = Inputs::parse_step(&serde_json::Value::Object(raw)).map_err(|e| e.to_string())?;
-    match parsed.paths().into_iter().find(|p| !path(p, inputs, before)) {
+    match parsed.paths().into_iter().find(|p| !path(p, inputs, before, false)) {
         Some(bad) => Err(format!("`{{{{ {bad} }}}}` names nothing a run has")),
         None => Ok(parsed),
     }
+}
+
+/// The `if` of a step: a `where` table over what a run of a formula with `inputs` has before the step, and
+/// `back_from` (docs/design/config.md).
+pub(super) fn step_if(
+    raw: &serde_json::Map<String, serde_json::Value>,
+    inputs: &BTreeMap<String, Input>,
+    before: &[Step],
+) -> Result<Filter, String> {
+    let parsed = Filter::parse(raw).map_err(|e| format!("`if`: {}", e.0))?;
+    let known = |p: &str| {
+        let root = p.split('.').next().unwrap_or_default();
+        p == "back_from"
+            || (["inputs", "bead", "rig", "run", "project", "steps"].contains(&root) && path(p, inputs, before, true))
+    };
+    if let Some(bad) = parsed.paths().find(|p| !known(p)) {
+        return Err(format!("`if`: a run has no `{bad}`"));
+    }
+    Ok(parsed)
+}
+
+/// The `back_from` values of the `if`s of `steps` that are no check of the formula, as errors.
+pub(super) fn strangers(steps: &[Step]) -> Vec<String> {
+    let checks: BTreeSet<&str> = (steps.iter())
+        .filter(|s| s.back_to.is_some())
+        .map(|s| s.name.as_str())
+        .collect();
+    let mut errors = Vec::new();
+    for step in steps {
+        for name in step.condition.accepted("back_from") {
+            if !name.as_str().is_some_and(|n| checks.contains(n)) {
+                let step = &step.name;
+                errors.push(format!(
+                    "step `{step}`: `if` waits for `back_from` {name}, which is no check of the formula"
+                ));
+            }
+        }
+    }
+    errors
 }

@@ -72,7 +72,7 @@ Shared objects:
   depth of 6.1 (0 for a run started by hand), `parent_run` the run whose event triggered it or whose session started
   it. The read API (`GET /v1/runs/{id}`, `aae run show`) gives the `RunView` with `project`, `rig`, `correlation`,
   `inputs`, `waiting_for`, `outcome`, `steps` (the outcomes of the other steps the run went through, by name: the last
-  attempt of each), `attempts`, `usage` (`{input_tokens, output_tokens}`, summed over every attempt)
+  attempt of each; a skipped step has none), `attempts`, `usage` (`{input_tokens, output_tokens}`, summed over every attempt)
   and: `reason` (the veto text, the cancel reason, `pass`, or the failure reason), `gate` (the oldest closure of the
   run's keys while it waits on a gate or is `parked`, else null) and `round` (the round of the formula's checks, 6.1: 1,
   and one more each time a check sends the run back) and `step_attempt` (the execution of the step in the round, an
@@ -103,6 +103,7 @@ Observed events (plugins and clients read them and cannot change what happens):
 | `run.queued` | `{run: RunView, waiting_for: "concurrency"\|"gate"\|"daemon_stopping"\|null, gate}`; re-emitted when the reason changes |
 | `run.started` | `{run}`; once per run, when it first leaves `queued` |
 | `run.awaiting` | `{run, deadline}`; the run entered an `await` step and waits for its outcome from outside until `deadline` (6.3) |
+| `run.step_skipped` | `{run, step}`; the `if` of the step the run entered does not match, the run goes on without it (6.1) |
 | `run.step_finished` | `{run, outcome: Outcome}`; a step that is not the last passed, `run` is still at that step (6.1) |
 | `run.state_changed` | `{from, to, attempt, generation, reason}` |
 | `run.parked` | `{gate: Gate\|null, then: "resume"\|"new_session"}` (`null`: the daemon is stopping, or the run's agent has as many other started runs as its `max_runs`) |
@@ -157,7 +158,8 @@ formula there is none of, `rejected` (409) when the thing is there but refuses t
 ### 2.1 Paths
 
 A path is a dotted chain of object keys into the event view (see 1.2) or into the run context of a prompt template:
-`bead.epic`, `project`; the word `data` never appears in a path. No indexing, no wildcards. A path that a payload of the
+`bead.epic`, `project`, or into the run context of a step's `if` (config.md, "Formula"); the word `data` never
+appears in a path. No indexing, no wildcards. A path that a payload of the
 event type cannot have is a config error at load time (the payload schemas of 1.3 are known to the loader); so is a
 `where` path that ends on an object, which no matcher can equal.
 
@@ -174,6 +176,9 @@ event of the type.
 A path that is absent or null in the event does not match. There is no negation, no comparison and no regular
 expression in the first release; a trigger that needs more uses an `exec` step that decides. Example — a trigger
 on beads labelled `auto` is written `where = { "bead.labels" = "auto" }`.
+
+The same table is the `if` of a step, over the run context of a prompt template (2.3, without `remarks` and `agent`)
+and `back_from`, the names of the checks that sent the run back into its current round (config.md, "Formula").
 
 ### 2.3 Substitution (`inputs` and prompt templates)
 
@@ -192,8 +197,8 @@ spaces, nothing else — no filters, conditions or loops.
   (`agent.<name>`: the text of the agent's file `<name>.md`, the project's over the pack's; config.md, "Agent"); an
   unresolved path is an error before the run starts and fails the run with class `infrastructure`. `steps` holds the
   outcome of each step before the current one: `steps.<name>.result`, `.summary`, `.data.<key>` (the last attempt of
-  that step; `data` of an exec step is `{exit_code, stdout, stderr}`); a path to the current or a later step, or to
-  another field, is a config error.
+  that step; `data` of an exec step is `{exit_code, stdout, stderr}`); a path to the current or a later step, to
+  a step with an `if` (it may be skipped), or to another field, is a config error.
 - `{{` that is not a placeholder is written `{{"{{"}}`.
 
 A task input is a string — the id of a bead the run takes up, or the text of a task that gets a root bead — or
@@ -687,9 +692,11 @@ so that the state machine has one place where `run.attempt_failed` is decided.
 - A run goes through the steps of its formula in order (config.md, "Formula"); `preparing` to `finishing` are
   states of the current step, named by `step` of the `RunView`. A `pass` of a step that is not the last, once
   accepted, ends the attempt with `run.step_finished` and moves the run from `finishing` to `preparing` of the next
-  step in the same transaction, so `run.preparing` is decided for every step and `run.started` comes once. The `pass`
-  of the last step is `passed`; a failure of a step fails the run, whose outcome is that of its last step, unless the
-  step is a check (`back_to`): then the run goes on to the next check of a row, or back to an earlier step for the
+  step in the same transaction, so `run.preparing` is decided for every step that runs and `run.started` comes once.
+  A step whose `if` does not match on entry is skipped in that transaction: `run.step_skipped`, no `run.preparing`, no
+  attempt, and the run enters the next step or ends. The `pass` of the last step is `passed`, with the outcome of the
+  last step that ran (a run whose every step is skipped is `failed{infrastructure}`, `every step was skipped`); a
+  failure of a step fails the run, whose outcome is that of that step, unless the step is a check (`back_to`): then the run goes on to the next check of a row, or back to an earlier step for the
   next round, the same way from `finishing` to `preparing` (config.md, "Formula").
 - An attempt starts a new session or resumes the previous one of its step, and has its own generation. Each prompt
   step has a session of its own: the first attempt of a step the run went back to resumes it with the step's rendered
@@ -724,6 +731,7 @@ of the parent leaves them alone.
 | — | create with `continue_from: <run>` (a terminal run with a session; a session is never reused implicitly) | `queued` | in the workdir of that run; the first attempt resumes that run's last session with the formula prompt; a later `resume` uses the run's own session, or that one while it has none and started no new one; a harness other than the agent's → `failed{infrastructure}`. Only the first step continues that session: a formula whose first step is not `ai` cannot be continued, and the later steps start sessions of their own |
 | `queued` | slot free, no gate of the run closed | `preparing` | with a task text that names no bead the core knows: the tracker creates the root bead, or returns the bead the text names (`create`, key kept in the effect), the run owns it and its input takes the id; with a bead: the tracker claim as owner `aae:<run>` (queue `tracker:<project>`), and the prompt renders once the claim returned the bead; `run.preparing` hooks |
 | `preparing` | decision `proceed` (or no hooks) | `starting` | attempt 1: instance acquire, `start_session`, `send_prompt` |
+| `preparing` | the `if` of the step does not match, on entry | `preparing` of the next step, or the end of the run | `run.step_skipped`; no hooks, no attempt |
 | `preparing` | `deny`, template error, claim error `Claimed` / `NotFound` / `Invalid`, `create` error other than `Unavailable`, no claim or `create` answer within `start_timeout` | `failed{check}`, `failed{infrastructure}`, `failed{infrastructure, bead_claimed / bead_not_found / bead_invalid}`, `failed{infrastructure, bead_not_created: <error>}`, `failed{infrastructure, tracker_unavailable}` | — |
 | `starting` | `prompt.acked` of the first prompt | `running` | — |
 | `running` | turn ended, idle without background, outcome declared | `finishing` | `run.finishing` hooks |

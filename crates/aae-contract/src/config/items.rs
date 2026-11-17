@@ -177,6 +177,9 @@ impl Loader {
             if max_attempts.is_some_and(|n| n.get() > ceiling) {
                 self.fail(file, format!("step `{name}`: `max_attempts` is at most {ceiling}"));
             }
+            let condition = super::prompt::step_if(step.condition(), &raw.inputs, &steps)
+                .map_err(|e| self.fail(file, format!("step `{name}`: {e}")))
+                .ok()?;
             let kind = self.step(file, step, &raw.inputs, &steps)?;
             steps.push(Step {
                 name,
@@ -184,7 +187,11 @@ impl Loader {
                 back_to,
                 max_attempts: max_attempts.map_or(1, std::num::NonZeroU32::get),
                 check,
+                condition,
             });
+        }
+        for bad in super::prompt::strangers(&steps) {
+            self.fail(file, bad);
         }
         // The task bead a drain step gives out beads under (docs/design/config.md).
         let drains = steps.iter().any(|s| matches!(s.kind, StepKind::Drain { .. }));

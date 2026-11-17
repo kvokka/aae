@@ -184,4 +184,6 @@ fn event_paths_follow_the_payload_schemas() {
     assert_eq!(event_path("run.state_changed", "run.formula", false), Some(false));
     assert_eq!(event_path("run.awaiting", "deadline", true), Some(true));
     assert_eq!(event_path("run.awaiting", "run.formula", true), Some(true));
+    assert_eq!(event_path("run.step_skipped", "step", true), Some(true));
+    assert_eq!(event_path("run.step_skipped", "run.formula", true), Some(true));
 }
