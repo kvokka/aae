@@ -84,7 +84,10 @@ all of them share.
   (criterion 6, `crates/aae-acceptance` scenario `c06_hop.rs`: 30 hops, p50 about 35 ms to the harness launch;
   recorded 2026-11-13, `49e194c`).
   <!-- MEASURE id=hop-latency-p50 date=2026-11-13 ver=49e194c env=linux-arm64-orbstack src=crates/aae-acceptance/src/scenarios/c06_hop.rs note="p50 of 30 hops from the trigger to the harness launch; the run it came from is not recorded, re-measure on the next change of the hop path" -->
-- Tests run the same writer on a managed clock (`aae_core::clock`), which makes every deadline deterministic.
+- Tests run the same writer on a managed clock (`aae_core::clock`), which makes every deadline deterministic. On a
+  current-thread runtime, as in the chaos stand, the effects walk `/proc` in place instead of on a blocking thread:
+  the end of a walk would otherwise land between the other tasks at a moment of the real clock, and a seed would not
+  replay the same.
 
 ## Resync
 

@@ -13,6 +13,7 @@ use std::{
 use tokio::{
     io::{AsyncRead, AsyncReadExt, AsyncWriteExt},
     process::Command,
+    runtime::{Handle, RuntimeFlavor},
     sync::Notify,
     time::timeout,
 };
@@ -209,9 +210,7 @@ pub(crate) async fn wait_gone(id: &str, leader: Option<(i32, u64)>, limit: Durat
     let (mut killed, mut walks) = (Vec::new(), Walks::default());
     loop {
         let marker = id.to_owned();
-        // Walking `/proc` is synchronous.
-        let found = tokio::task::spawn_blocking(move || crate::orphans::sweep(&marker)).await;
-        let found = found.unwrap_or_default();
+        let found = walk(move || crate::orphans::sweep(&marker)).await.unwrap_or_default();
         // A walk that killed something is not empty, though all it killed died: what they started meanwhile may
         // carry the marker by the next walk.
         let any = !found.is_empty();
@@ -223,6 +222,17 @@ pub(crate) async fn wait_gone(id: &str, leader: Option<(i32, u64)>, limit: Durat
         }
         tokio::time::sleep(Duration::from_millis(if walks.0 { 20 } else { 50 })).await;
     }
+}
+
+/// Runs `walk`, a synchronous walk of `/proc`, on a blocking thread; `None` if it panicked there. A current-thread
+/// runtime (the deterministic stand) runs it in place instead, where a panic propagates: a blocking thread would wake
+/// the task at a moment of the real clock, between whatever other tasks the scheduler polled by then, and a seed would
+/// not replay the same.
+pub(crate) async fn walk<T: Send + 'static>(walk: impl FnOnce() -> T + Send + 'static) -> Option<T> {
+    if Handle::current().runtime_flavor() == RuntimeFlavor::CurrentThread {
+        return Some(walk());
+    }
+    tokio::task::spawn_blocking(walk).await.ok()
 }
 
 /// The walks of `/proc` in [`wait_gone`], holding whether the last one found nothing. A process inside `execve`

@@ -194,8 +194,7 @@ async fn ready(health: &Health, id: &str, port: u16, token: &str, env: &[(String
 async fn healthy(health: &Health, id: &str, port: u16, token: &str, env: &[(String, String)]) -> bool {
     if matches!(health, Health::Port | Health::Http(_)) {
         let id = id.to_owned();
-        // Walking `/proc` is synchronous.
-        let alone = tokio::task::spawn_blocking(move || crate::orphans::listens_alone(&id, port)).await;
+        let alone = crate::process::walk(move || crate::orphans::listens_alone(&id, port)).await;
         if !alone.unwrap_or(false) {
             return false;
         }
@@ -244,8 +243,7 @@ pub(super) async fn stop(running: &Running, id: &str) {
         let _ = entry.task.await;
     }
     let id = id.to_owned();
-    // Walking `/proc` is synchronous.
-    let _ = tokio::task::spawn_blocking(move || crate::orphans::sweep(&id)).await;
+    crate::process::walk(move || crate::orphans::sweep(&id)).await;
 }
 
 fn lock(running: &Running) -> std::sync::MutexGuard<'_, HashMap<String, Entry>> {

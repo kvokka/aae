@@ -353,7 +353,7 @@ pub(crate) fn marked(id: &str) -> std::process::Child {
     child
 }
 
-/// Whether `child` is killed within a few real seconds; the sweep walks `/proc` on a blocking thread.
+/// Whether `child` is killed within a few real seconds: a killed process takes real time to die.
 pub(crate) async fn killed(mut child: std::process::Child) -> bool {
     for _ in 0..300 {
         if child.try_wait().unwrap().is_some() {

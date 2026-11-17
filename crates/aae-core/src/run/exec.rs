@@ -86,8 +86,7 @@ impl Executor for RunExecutor {
                     }
                     let lost: BTreeSet<String> = serde_json::from_value(payload["lost"].clone()).unwrap_or_default();
                     if !lost.is_empty() {
-                        // Walking `/proc` is synchronous.
-                        let _ = tokio::task::spawn_blocking(move || crate::orphans::sweep_all(&lost)).await;
+                        crate::process::walk(move || crate::orphans::sweep_all(&lost)).await;
                     }
                 }
                 Some("sweep") => {
