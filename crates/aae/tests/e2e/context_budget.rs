@@ -76,9 +76,15 @@ fn the_params_reach_the_compaction_threshold_of_each_harness_and_the_hooks() {
     }
 }
 
-/// The hook `budget` with `args` and the hook input `input` in `dir`, with a stand-in `aae` that logs its arguments;
-/// its stdout.
+/// The hook `budget` with `args` and the hook input `input` in `dir`, with the stand-in `aae` of `dir/bin`; its
+/// stdout, the hook succeeded.
 fn hook(dir: &Path, bead: Option<&str>, args: &[&str], input: &Value) -> String {
+    let out = run_hook(dir, bead, args, input);
+    assert!(out.status.success(), "budget {args:?}");
+    String::from_utf8(out.stdout).unwrap()
+}
+
+fn run_hook(dir: &Path, bead: Option<&str>, args: &[&str], input: &Value) -> std::process::Output {
     let mut command = Command::new(plugin().join("hooks/budget"));
     command
         .args(args)
@@ -97,9 +103,16 @@ fn hook(dir: &Path, bead: Option<&str>, args: &[&str], input: &Value) -> String 
         .unwrap()
         .write_all(input.to_string().as_bytes())
         .unwrap();
-    let out = child.wait_with_output().unwrap();
-    assert!(out.status.success(), "budget {args:?}");
-    String::from_utf8(out.stdout).unwrap()
+    child.wait_with_output().unwrap()
+}
+
+/// The stand-in `aae` of `dir/bin`: it logs its arguments and answers `answer`, failing unless it is `accepted`.
+fn finisher(dir: &Path, answer: &str) {
+    fs::create_dir_all(dir.join("bin")).unwrap();
+    let fake =
+        format!("#!/bin/sh\necho \"$*\" >>\"$(dirname \"$0\")/finished\"\necho {answer}\n[ {answer} = accepted ]\n");
+    fs::write(dir.join("bin/aae"), fake).unwrap();
+    fs::set_permissions(dir.join("bin/aae"), fs::Permissions::from_mode(0o755)).unwrap();
 }
 
 fn labels(dir: &Path, bead: &str) -> Value {
@@ -127,10 +140,7 @@ fn past_the_budget_the_hook_fails_the_run_and_stops_the_session_on_the_input_of_
         String::from_utf8(out.stdout).unwrap()
     };
     br(&["init", "-q"]);
-    fs::create_dir_all(d.join("bin")).unwrap();
-    let fake = "#!/bin/sh\necho \"$*\" >>\"$(dirname \"$0\")/finished\"\necho accepted\n";
-    fs::write(d.join("bin/aae"), fake).unwrap();
-    fs::set_permissions(d.join("bin/aae"), fs::Permissions::from_mode(0o755)).unwrap();
+    finisher(d, "accepted");
     let data = d.join("data");
     fs::create_dir_all(&data).unwrap();
     let data = data.to_str().unwrap();
@@ -173,4 +183,10 @@ fn past_the_budget_the_hook_fails_the_run_and_stops_the_session_on_the_input_of_
         assert_eq!(hook(d, None, &["compacted", data, "3"], &input), "");
     }
     assert_eq!(fs::read_to_string(d.join("data/s-none.count")).unwrap(), "3\n");
+    // An outcome not accepted (a remark, a daemon out of reach) fails the hook and leaves the session going.
+    finisher(d, "remark");
+    let input = json!({ "session_id": "s-remark", "hook_event_name": "PostCompact" });
+    assert!(!run_hook(d, None, &["compacted", data, "0"], &input).status.success());
+    let tool = json!({ "session_id": "s-remark", "hook_event_name": "PreToolUse", "tool_name": "Bash" });
+    assert_eq!(hook(d, None, &["tool", data], &tool), "");
 }
