@@ -1,14 +1,13 @@
 //! The transitions of docs/design/contracts.md 6.2 that come from the harness, the operator and the clock: driver
-//! events of the current attempt, answers to requests, cancel and the deadlines of 6.1.
+//! events of the current attempt, cancel and the deadlines of 6.1.
 
 use super::{
-    RunHandler, answer_json, rejected,
+    RunHandler, rejected,
     row::{Row, attempts},
 };
 use crate::{
     driver::{
-        Answer, DriverEvent, Failure, FailureKind, InstanceHandle, Normalized, SessionRef, SessionState, Source,
-        StopReason,
+        DriverEvent, Failure, FailureKind, InstanceHandle, Normalized, SessionRef, SessionState, Source, StopReason,
     },
     journal::rfc3339_ms,
     writer::{Error, Tx},
@@ -18,7 +17,7 @@ use serde_json::{Value, json};
 
 /// States in which an attempt is live and its session may report.
 pub(super) fn attempt_live(state: &str) -> bool {
-    matches!(state, "starting" | "running" | "requires_action")
+    matches!(state, "starting" | "running")
 }
 
 impl RunHandler {
@@ -212,39 +211,6 @@ impl RunHandler {
                 state: SessionState::Idle,
                 background: false,
             } => self.turn_settled(tx, row, attempt),
-            Normalized::PermissionRequested {
-                request_id,
-                kind,
-                tool,
-                input,
-                text,
-            } => {
-                let kind = match kind {
-                    crate::driver::RequestKind::Permission => "permission",
-                    crate::driver::RequestKind::Question => "question",
-                };
-                let request = json!({ "id": request_id, "kind": kind, "tool": tool, "input": input, "text": text });
-                // Waiting for an answer is not working: the step timeout pauses until the answer.
-                Self::pause_step(tx, &row)?;
-                tx.sql().execute(
-                    "UPDATE attempts SET request = ?3 WHERE run = ?1 AND n = ?2",
-                    params![row.id, attempt, request.to_string()],
-                )?;
-                row.set_state(tx, "requires_action", None)?;
-                let at = tx.now_ms() + w.human_timeout_ms;
-                tx.set_deadline(&row.deadline("human"), at)?;
-                let seq = row.emit(
-                    tx,
-                    "run.requires_action",
-                    json!({ "run": row.view(), "request": request, "deadline": rfc3339_ms(at) }),
-                )?;
-                // Hooks may answer first; a human may answer any time until `human_timeout` (contracts 3.3).
-                if !self.hooks(Some(&row.project), "run.requires_action").is_empty() {
-                    tx.sql()
-                        .execute("UPDATE runs SET waiting = ?2 WHERE id = ?1", params![row.id, seq])?;
-                }
-                Ok(())
-            }
             _ => silence(tx, &row, w.silence_ms),
         }
     }
@@ -299,48 +265,6 @@ impl RunHandler {
         tx.clear_deadline(&row.deadline("silence"))
     }
 
-    pub(super) fn answer(&mut self, tx: &mut Tx<'_>, run: &str, request: &str, answer: &Answer) -> Result<(), Error> {
-        let mut row = Row::load(tx, run)?;
-        let open: Option<(String, String, String, String)> = tx
-            .sql()
-            .query_row(
-                "SELECT json_extract(request, '$.id'), harness, handle, session FROM attempts \
-                 WHERE run = ?1 AND n = ?2 AND request IS NOT NULL AND handle IS NOT NULL AND session IS NOT NULL",
-                params![run, row.attempt],
-                |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?)),
-            )
-            .optional()?;
-        let Some((id, harness, handle, session)) = open.filter(|o| row.state == "requires_action" && o.0 == request)
-        else {
-            return Err(rejected(format!("`{run}` has no open request `{request}`")));
-        };
-        // `RETURNING` would give the value after the update: read what was left first.
-        let paused: Option<i64> = tx.sql().query_row(
-            "SELECT paused_ms FROM attempts WHERE run = ?1 AND n = ?2",
-            params![run, row.attempt],
-            |r| r.get(0),
-        )?;
-        tx.sql().execute(
-            "UPDATE attempts SET request = NULL, paused_ms = NULL WHERE run = ?1 AND n = ?2",
-            params![run, row.attempt],
-        )?;
-        tx.clear_deadline(&row.deadline("human"))?;
-        tx.sql()
-            .execute("UPDATE runs SET waiting = NULL WHERE id = ?1", [run])?;
-        if let Some(left) = paused {
-            tx.set_deadline(&row.deadline("state"), tx.now_ms() + left)?;
-        }
-        let payload = json!({
-            "op": "respond", "run": run, "attempt": row.attempt, "harness": harness, "request": id,
-            "handle": serde_json::from_str::<serde_json::Value>(&handle).unwrap_or_default(),
-            "session": serde_json::from_str::<serde_json::Value>(&session).unwrap_or_default(),
-            "answer": answer_json(answer),
-        });
-        tx.effect(run, &format!("respond:{}:{id}", row.attempt), &payload)?;
-        row.set_state(tx, "running", None)?;
-        tx.set_deadline(&row.deadline("silence"), tx.now_ms() + self.config.watchdog.silence_ms)
-    }
-
     pub(super) fn on_deadline(&mut self, tx: &mut Tx<'_>, run: &str, what: &str) -> Result<(), Error> {
         let row = Row::load(tx, run)?;
         if !row.live() {
@@ -361,23 +285,6 @@ impl RunHandler {
             ("state", "interrupted") => {
                 let kind = row.next.clone().unwrap_or_else(|| "new_session".to_owned());
                 self.start_attempt(tx, row, &kind)
-            }
-            ("human", "requires_action") => {
-                let request: Option<String> = tx.sql().query_row(
-                    "SELECT json_extract(request, '$.id') FROM attempts WHERE run = ?1 AND n = ?2",
-                    params![run, row.attempt],
-                    |r| r.get(0),
-                )?;
-                let deny = Answer::Deny {
-                    message: "No answer came in time.".to_owned(),
-                };
-                match self.answer(tx, run, &request.unwrap_or_default(), &deny) {
-                    // Nothing to answer through: the run may not stay in `requires_action` without a deadline.
-                    Err(Error::Rejected(_) | Error::NotFound(_)) => {
-                        self.attempt_failed(tx, row, stall(FailureKind::Unknown))
-                    }
-                    other => other,
-                }
             }
             ("decide", _) => self.decide_deadline(tx, row),
             _ => Ok(()),

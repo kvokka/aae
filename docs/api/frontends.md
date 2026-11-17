@@ -14,7 +14,7 @@ Code: `crates/aae-front/src/api/`. Reference: `docs/api/openapi.json`.
   only. `api_tcp` cannot change on a reload.
 - **Format.** JSON in and out; errors are JSON with a code (`bad_request`, `not_found`, `rejected`, ...). A request
   that names a run, instance, trigger, project, rig or formula there is none of is 404 `not_found` on any method (the finisher
-  of an unknown run answers `invalid`); 409 `rejected` is a thing that is there refusing the request as it stands. A
+  answers `invalid` for an unknown run); 409 `rejected` is a thing that is there refusing the request as it stands. A
   malformed gate key is `bad_request` (400).
 - **Idempotency.** Every mutating operation takes an `Idempotency-Key` header; a repeated key returns the first
   answer. The key repeated with another method, path or body is refused with 422 `idempotency_key_reused` and
@@ -37,7 +37,7 @@ The surface: projects with their root and rigs (`GET /v1/projects`: `name`, `dir
 `root` and `rigs`, each `{name, path, vars}`; the root is not among the rigs); agents (`GET /v1/agents` gives each
 agent's harness in the project outside any rig and formula, `null` when its layers do not set one), formulas, packs,
 plugins (list), config check, explain and reload; runs
-(start, list, state, live view, cancel, answer a request, finish); triggers (list, enable, disable, fire by hand);
+(start, list, state, live view, cancel, finish); triggers (list, enable, disable, fire by hand);
 instances and services (list, stop an idle one); issue gates (list, close, open — orchestrator, project, agent, bead,
 account); events; daemon status, drain and planned restart.
 
@@ -101,8 +101,8 @@ so an agent names it in its own config (`[mcp.aae] url = "${AAE_API}/mcp"`, whic
 
 ## Humans and runs
 
-- A human sees runs, follows a run's live view and answers its permission requests and questions through these
-  frontends (`aae run watch`, `aae run answer` or the API).
+- A human sees runs and follows a run's live view through these frontends (`aae run watch` or the API). A human
+  answers no permission request: the harness decides them from the config ([config](../design/config.md#permissions)).
 - The state of a run shows each attempt's `session`: the harness's own session reference (claude
   `{session_id, config_dir, workdir}`, codex `{thread_id, codex_home}`). After the run a human may open that conversation
   with the harness's own tools; aae takes no part in it.

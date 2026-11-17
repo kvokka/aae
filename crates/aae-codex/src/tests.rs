@@ -1,6 +1,6 @@
 use super::*;
 use aae_contract::driver::Normalized;
-use aae_contract::driver::{RateLimit, RequestKind, SessionState, StopReason};
+use aae_contract::driver::{RateLimit, SessionState, StopReason};
 
 pub(crate) fn agent<T>(value: T) -> aae_contract::config::Sourced<T> {
     aae_contract::config::Sourced {
@@ -273,30 +273,11 @@ fn an_interrupt_after_the_turn_ended_does_not_cancel_the_next_turn() {
 }
 
 #[test]
-fn an_approval_is_a_permission_request_and_an_exit_crashes_open_turns() {
+fn an_exit_crashes_open_turns() {
     let mut stream = Stream::new(None);
-    let ask = json!({ "id": 0, "method": "item/commandExecution/requestApproval",
-        "params": { "threadId": "t", "command": "touch x", "availableDecisions": ["accept", "cancel"] } });
-    let events = play(
+    play(
         &mut stream,
-        &[
-            note("turn/started", json!({ "threadId": "t", "turn": { "id": "u" } })),
-            ask,
-        ],
-    );
-    let Normalized::PermissionRequested {
-        request_id,
-        kind,
-        tool,
-        text,
-        ..
-    } = &events[1]
-    else {
-        panic!("{events:?}")
-    };
-    assert_eq!(
-        (request_id.as_str(), *kind, tool.as_str(), text.as_str()),
-        ("0", RequestKind::Permission, "commandExecution", "touch x")
+        &[note("turn/started", json!({ "threadId": "t", "turn": { "id": "u" } }))],
     );
     let exit = stream.exited(None, Some(9), "boom");
     assert!(matches!(&exit[0], (Some(t), Normalized::Failure(f)) if t == "t"
@@ -314,15 +295,35 @@ fn an_approval_is_a_permission_request_and_an_exit_crashes_open_turns() {
     );
 }
 
+/// Nothing waits for a person: an approval with a `decline` is declined and the turn goes on, any other server
+/// request gets an error at once (decision 117).
 #[test]
-fn a_text_answers_every_question_of_a_user_input_request_by_its_id() {
-    let request = json!({ "id": 7, "method": "item/tool/requestUserInput",
-        "params": { "threadId": "t", "questions": [{ "id": "q1" }, { "id": "q2" }] } });
-    let answer = Answer::Text { text: "blue".into() };
-    assert_eq!(
-        reply(&request, &answer),
-        json!({ "id": 7, "result": { "answers": { "q1": { "answers": ["blue"] }, "q2": { "answers": ["blue"] } } } })
-    );
+fn every_server_request_is_refused_at_once() {
+    let request = |method: &str| json!({ "id": 7, "method": method, "params": { "threadId": "t" } });
+    for method in [
+        "item/commandExecution/requestApproval",
+        "item/fileChange/requestApproval",
+    ] {
+        let answer = rpc::refusal(&request(method));
+        assert_eq!(
+            answer,
+            json!({ "id": 7, "result": { "decision": "decline" } }),
+            "{method}"
+        );
+    }
+    for method in [
+        "item/permissions/requestApproval",
+        "item/tool/requestUserInput",
+        "mcpServer/elicitation/request",
+    ] {
+        let answer = rpc::refusal(&request(method));
+        assert_eq!(
+            (answer["id"].clone(), answer["error"]["code"].clone()),
+            (json!(7), json!(-32601)),
+            "{method}"
+        );
+        assert!(answer.get("result").is_none());
+    }
 }
 
 /// A command that outlives its turn (docs/design/contracts.md 4.6): the turn ends idle with background, and the thread

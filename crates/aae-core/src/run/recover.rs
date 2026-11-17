@@ -67,7 +67,7 @@ impl RunHandler {
                 "SELECT r.id, r.state IN ('running', 'finishing') AND r.waiting IS NOT NULL, \
                  r.state = 'running' AND r.waiting IS NULL AND EXISTS (SELECT 1 FROM attempts a \
                  WHERE a.run = r.id AND a.n = r.attempt AND a.outcome IS NOT NULL AND a.turn_ended != 0) FROM runs r \
-                 WHERE r.state IN ('starting', 'running', 'requires_action', 'finishing') ORDER BY r.n",
+                 WHERE r.state IN ('starting', 'running', 'finishing') ORDER BY r.n",
             )?;
             let rows = stmt.query_map([], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)))?;
             rows.collect::<Result<_, _>>()?
@@ -78,7 +78,7 @@ impl RunHandler {
             // What the attempt still had queued belongs to a process that is gone.
             tx.sql().execute(
                 "DELETE FROM effects WHERE key = ?1 AND json_extract(payload, '$.op') IN ('launch', \
-                'prompt', 'respond', 'stop_background')",
+                'prompt', 'stop_background')",
                 [id],
             )?;
             let row = Row::load(tx, id)?;
@@ -104,8 +104,8 @@ impl RunHandler {
                 }
                 continue;
             }
-            // The deciding hooks still queued (`run.requires_action`) judge the lost attempt; their decision would be
-            // refused, and the attempt's failure queues its own under the same key.
+            // The deciding hooks still queued judge the lost attempt; their decision would be refused, and the
+            // attempt's failure queues its own under the same key.
             tx.sql()
                 .execute("DELETE FROM effects WHERE key = ?1", [format!("hooks:{id}")])?;
             self.attempt_failed(tx, row, Failure::new(FailureKind::DaemonCrash, Source::Core))?;
@@ -133,7 +133,7 @@ impl RunHandler {
             let mut stmt = tx.sql().prepare(&format!(
                 "SELECT r.id, MAX(?1, MIN(e.next_at_ms)) + {} FROM runs r \
                  JOIN effects e ON e.key = 'hooks:' || r.id, json_each(e.payload, '$.hooks') h \
-                 WHERE r.waiting IS NOT NULL AND r.state != 'requires_action' GROUP BY r.id",
+                 WHERE r.waiting IS NOT NULL GROUP BY r.id",
                 super::decide::queued()
             ))?;
             let rows = stmt.query_map([tx.now_ms()], |r| Ok((r.get(0)?, r.get(1)?)))?;

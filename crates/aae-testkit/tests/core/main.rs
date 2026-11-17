@@ -31,7 +31,6 @@ mod model_gate;
 mod old_instances;
 mod openai;
 mod recovery;
-mod requests;
 mod restart_decisions;
 mod returns;
 mod root;

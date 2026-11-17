@@ -140,3 +140,19 @@ async fn a_repeated_driver_event_is_dropped_and_a_gap_is_told() {
         .collect();
     assert_eq!(told, [(json!(3), json!(2)), (json!(3), json!(9))]);
 }
+
+#[tokio::test(start_paused = true)]
+async fn a_failure_before_the_ack_ends_the_attempt_at_once() {
+    let w = world(&[]);
+    let quota = Failure::new(FailureKind::QuotaExhausted, Source::Adapter);
+    w.driver
+        .script(vec![Step::NoAck, Step::Emit(Normalized::Failure(quota))]);
+    let run = w.create().await;
+    let states = w.states(&run).await;
+    assert_eq!(states[states.len() - 3..], ["starting", "interrupted", "failed"]);
+    let events = w.events(&run, Duration::ZERO).await;
+    assert_eq!(
+        last(&events, "run.attempt_failed")["failure"]["kind"],
+        "quota_exhausted"
+    );
+}

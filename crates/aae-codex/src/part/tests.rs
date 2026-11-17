@@ -72,6 +72,15 @@ fn the_process_gets_the_native_block_and_the_thread_the_rest() {
         actor: None,
     };
     assert_eq!(driver.split(&config, &other).unwrap().fingerprint, split.fingerprint);
+    // A config naming no policy gets the harness-decides default (decision 117); a named one is kept.
+    let native = &mut config.native.as_mut().unwrap().value;
+    native.as_object_mut().unwrap().remove("approval_policy");
+    let policy = |config: &aae_contract::config::EffectiveConfig| {
+        driver.split(config, &plan).unwrap().session.0["approvalPolicy"].clone()
+    };
+    assert_eq!(policy(&config), "never");
+    config.native.as_mut().unwrap().value["approval_policy"] = json!("untrusted");
+    assert_eq!(policy(&config), "untrusted");
     config.native = Some(agent(json!("x")));
     assert_eq!(driver.split(&config, &plan).unwrap_err().kind, FailureKind::ConfigError);
 }

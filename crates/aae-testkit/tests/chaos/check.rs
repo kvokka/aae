@@ -285,7 +285,7 @@ fn failed(run: &str, data: &Value, play: &Play) -> Result<(), String> {
 }
 
 /// A started run that waits for nobody has a watchdog: a first-event deadline while it starts, a silence deadline
-/// while it runs, a human deadline while it asks (invariant 15).
+/// while it runs (invariant 15).
 fn watched(conn: &rusqlite::Connection, run: &str, state: &str, waiting: bool) -> Result<(), String> {
     let draining: bool = conn
         .query_row("SELECT step_kind = 'drain' FROM runs WHERE id = ?1", [run], |r| {
@@ -297,7 +297,6 @@ fn watched(conn: &rusqlite::Connection, run: &str, state: &str, waiting: bool) -
         // A drain step has no session: the step's timeout is its deadline.
         ("running", false) if draining => "state",
         ("running", false) => "silence",
-        ("requires_action", _) => "human",
         _ => return Ok(()),
     };
     let id = format!("{run}:{what}");
@@ -335,7 +334,7 @@ pub(crate) fn undone(w: &World) -> Vec<&'static str> {
         .map(|op| match op.as_str() {
             "tracker" => "tracker",
             "hooks" => "hooks",
-            "launch" | "prompt" | "respond" | "stop" | "stop_instance" => "harness",
+            "launch" | "prompt" | "stop" | "stop_instance" => "harness",
             _ => "other",
         })
         .collect();

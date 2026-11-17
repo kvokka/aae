@@ -31,26 +31,20 @@ impl Reader {
     }
 
     /// The `RunView` of contracts 1.3 with where the run is, its attempts and the outcome its current attempt
-    /// declared (null if none); why it ended (`reason`), the open request of a run in `requires_action` and the
-    /// closed gate a queued or parked run waits on; `None` if there is no such run.
+    /// declared (null if none); why it ended (`reason`) and the closed gate a queued or parked run waits on; `None` if
+    /// there is no such run.
     pub fn run(&self, id: &str) -> Result<Option<Value>, Error> {
         let conn = self.conn();
         let Some(row) = Row::read(&conn, id)? else {
             return Ok(None);
         };
-        let (waiting_for, reason, outcome, request, round): (
-            Option<String>,
-            Option<String>,
-            Option<String>,
-            Option<String>,
-            u32,
-        ) = conn.query_row(
-            "SELECT waiting_for, reason, outcome, request, round FROM runs \
+        let (waiting_for, reason, outcome, round): (Option<String>, Option<String>, Option<String>, u32) = conn
+            .query_row(
+                "SELECT waiting_for, reason, outcome, round FROM runs \
              LEFT JOIN attempts ON attempts.run = runs.id AND attempts.n = runs.attempt WHERE id = ?1",
-            [id],
-            |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?)),
-        )?;
-        let request = request.filter(|_| row.state == "requires_action");
+                [id],
+                |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?)),
+            )?;
         let gate = match (waiting_for.as_deref(), row.state.as_str()) {
             (Some("gate"), _) | (_, "parked") => {
                 let keys = RunHandler::keys(&conn, &row)?;
@@ -68,7 +62,6 @@ impl Reader {
         view["waiting_for"] = json!(waiting_for);
         view["outcome"] = outcome.and_then(|o| serde_json::from_str(&o).ok()).unwrap_or_default();
         view["reason"] = json!(reason);
-        view["request"] = request.and_then(|r| serde_json::from_str(&r).ok()).unwrap_or_default();
         view["gate"] = json!(gate);
         view["round"] = json!(round);
         view["attempts"] = json!(row::attempts(&conn, id)?);
@@ -121,7 +114,7 @@ impl Reader {
         let active: i64 = conn.query_row(
             &format!(
                 "SELECT COUNT(*) FROM runs \
-                 WHERE (state IN ('preparing', 'starting', 'running', 'requires_action', 'finishing') \
+                 WHERE (state IN ('preparing', 'starting', 'running', 'finishing') \
                  OR (state = 'interrupted' AND waiting IS NOT NULL)) AND NOT {}",
                 super::drain::NO_PROCESS
             ),

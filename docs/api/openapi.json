@@ -1520,125 +1520,6 @@
         }
       }
     },
-    "/v1/runs/{id}/answer": {
-      "post": {
-        "summary": "Answers the open request of a run in `requires_action`.",
-        "operationId": "answer",
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "Idempotency-Key",
-            "in": "header",
-            "required": false,
-            "schema": {
-              "type": [
-                "string",
-                "null"
-              ]
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/AnswerRun"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "Done; the body is JSON `null`",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "default": null
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "`bad_request`: a body unreadable or over 2 MiB, malformed JSON, query or path, or a value the operation refuses",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorReply"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "`unauthorized`: over TCP, without `Authorization: Bearer <api_token>`",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorReply"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "`not_found`: no such run",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorReply"
-                }
-              }
-            }
-          },
-          "409": {
-            "description": "`rejected`: the core refused the request; the message says why",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorReply"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "`idempotency_key_reused`: the key came with another request",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorReply"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "`storage`: the state database failed",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorReply"
-                }
-              }
-            }
-          },
-          "503": {
-            "description": "`stopped`: the core has stopped",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorReply"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
     "/v1/runs/{id}/cancel": {
       "post": {
         "summary": "Cancels a run.",
@@ -2356,22 +2237,6 @@
           },
           "project": {
             "type": "string"
-          }
-        }
-      },
-      "AnswerRun": {
-        "type": "object",
-        "required": [
-          "request",
-          "answer"
-        ],
-        "properties": {
-          "answer": {
-            "description": "`{\"decision\": \"allow\", \"updated_input\"?}`, `{\"decision\": \"deny\", \"message\"}` or\n`{\"decision\": \"answer\", \"text\"}`."
-          },
-          "request": {
-            "type": "string",
-            "description": "The id of the open request."
           }
         }
       },
@@ -3277,13 +3142,6 @@
               "null"
             ],
             "description": "Set once the run ended: why it failed (a plugin's veto, a failure kind) or was cancelled; `pass` for a\npass."
-          },
-          "request": {
-            "type": [
-              "object",
-              "null"
-            ],
-            "description": "The open request of a run in `requires_action`: `{id, kind, tool, input, text}`; its `id` is what\n`POST /v1/runs/{id}/answer` takes."
           },
           "rig": {
             "type": "string"

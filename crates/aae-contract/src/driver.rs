@@ -106,14 +106,6 @@ impl PromptKey {
     }
 }
 
-/// A decision on `run.requires_action`.
-#[derive(Clone, Debug, PartialEq)]
-pub enum Answer {
-    Allow { updated_input: Option<Value> },
-    Deny { message: String },
-    Text { text: String },
-}
-
 /// Whether a session's transcript exists and holds the prompt with a given key. Whether the prompt was answered
 /// does not matter: a resumed session never has a turn in flight, so a delivered prompt is reconciled either way.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -165,13 +157,6 @@ pub enum StopReason {
 pub enum SessionState {
     Running,
     Idle,
-    RequiresAction,
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum RequestKind {
-    Permission,
-    Question,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -194,13 +179,6 @@ pub enum Normalized {
     State {
         state: SessionState,
         background: bool,
-    },
-    PermissionRequested {
-        request_id: String,
-        kind: RequestKind,
-        tool: String,
-        input: Value,
-        text: String,
     },
     Usage {
         input_tokens: u64,
@@ -279,13 +257,6 @@ pub trait Driver: Send + Sync {
         &'a self,
         instance: &'a InstanceHandle,
         session: &'a SessionRef,
-    ) -> BoxFuture<'a, Result<(), Failure>>;
-    fn respond<'a>(
-        &'a self,
-        instance: &'a InstanceHandle,
-        session: &'a SessionRef,
-        request_id: &'a str,
-        answer: &'a Answer,
     ) -> BoxFuture<'a, Result<(), Failure>>;
     /// Stops the commands the session left running after its turn (docs/design/contracts.md 6); the session stays and
     /// takes a next prompt. Work the agent may still wait for (a background subagent) is left alone. The harness

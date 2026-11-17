@@ -30,7 +30,7 @@ mod triggers;
 use crate::{
     clock::Clock,
     config::Config,
-    driver::{Answer, Driver, Failure, Normalized},
+    driver::{Driver, Failure, Normalized},
     journal::Journal,
     tracker::Tracker,
     writer::{self, CoreHandle, Error, Handler, Tx},
@@ -141,7 +141,6 @@ impl Handler for RunHandler {
             Msg::CloseGate(gate) => self.close_gate(tx, &gate, "operator"),
             Msg::OpenGate { key } => self.open_gate(tx, &key, None),
             Msg::Decide { run, seq, decision } => self.decide(tx, &run, seq, decision),
-            Msg::Answer { run, request, answer } => self.answer(tx, &run, &request, &answer),
             Msg::Instance { run, attempt, handle } => Self::instance(tx, &run, attempt, &handle),
             Msg::InstanceReady { id, harness, handle } => Self::instance_ready(tx, &id, &harness, &handle),
             Msg::InstanceFailed { id, failure } => Self::instance_failed(tx, &id, &failure),
@@ -235,30 +234,6 @@ fn rejected(reason: impl Into<String>) -> Error {
 /// The message names a thing there is none of: a 404, where [`rejected`] is a thing that is but refuses.
 fn not_found(reason: String) -> Error {
     Error::NotFound(reason)
-}
-
-/// An answer as the effect payload and `run.requires_action` decisions write it (contracts 3.2).
-fn answer_json(answer: &Answer) -> Value {
-    match answer {
-        Answer::Allow { updated_input } => json!({ "decision": "allow", "updated_input": updated_input }),
-        Answer::Deny { message } => json!({ "decision": "deny", "message": message }),
-        Answer::Text { text } => json!({ "decision": "answer", "text": text }),
-    }
-}
-
-/// An answer in the form of `answer_json` (the API takes it so too); `None` if it is not one.
-pub fn answer_from(value: &Value) -> Option<Answer> {
-    let text = |key: &str| value[key].as_str().map(str::to_owned);
-    Some(match value["decision"].as_str()? {
-        "allow" => Answer::Allow {
-            updated_input: Some(value["updated_input"].clone()).filter(|v| !v.is_null()),
-        },
-        "deny" => Answer::Deny {
-            message: text("message")?,
-        },
-        "answer" => Answer::Text { text: text("text")? },
-        _ => return None,
-    })
 }
 
 /// A fresh token: 32 random bytes as hex (contracts 6.3).

@@ -18,6 +18,9 @@ pub(crate) const CREDENTIALS: [&str; 2] = ["OPENAI_API_KEY", "CODEX_API_KEY"];
 
 /// The sandbox a process runs in when no config sets one (decision 38); `doctor` warns about it.
 pub(crate) const DEFAULT_SANDBOX: &str = "danger-full-access";
+/// The approval policy of a thread when no config sets one: the harness decides every permission and nothing waits for
+/// a person (decision 117).
+const DEFAULT_APPROVAL: &str = "never";
 /// The native key of the approval policy, codex's own config key.
 const APPROVAL: &str = "approval_policy";
 
@@ -129,9 +132,11 @@ pub(crate) fn session(config: &EffectiveConfig, plan: &SessionPlan) -> Result<Va
         }
     }
     // The codex approval policy (`untrusted`, `on-request`, `never`, ...): the native `approval_policy`.
-    if let Some(policy) = config.native.as_ref().and_then(|n| n.value.get(APPROVAL)) {
-        params["approvalPolicy"] = policy.clone();
-    }
+    params["approvalPolicy"] = config
+        .native
+        .as_ref()
+        .and_then(|n| n.value.get(APPROVAL))
+        .map_or_else(|| json!(DEFAULT_APPROVAL), Value::clone);
     Ok(params)
 }
 

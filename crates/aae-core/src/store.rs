@@ -3,7 +3,7 @@ use std::{os::unix::fs::OpenOptionsExt, path::Path};
 
 /// The number of [`SCHEMA`] in `user_version`. Before the first release there are no migrations: a change of the
 /// schema takes the next number, and a database of another number is refused.
-const VERSION: i32 = 22;
+const VERSION: i32 = 23;
 
 const SCHEMA: &str = "
 CREATE TABLE outbox (
@@ -93,9 +93,8 @@ CREATE TABLE attempts (
     instance TEXT,
     handle TEXT,
     session TEXT,
-    request TEXT,
     turn_ended INTEGER NOT NULL DEFAULT 0,
-    -- What was left of the step timeout when the attempt began to wait for an answer.
+    -- What was left of the step timeout when its turn ended: the step timeout pauses between turns.
     paused_ms INTEGER,
     started_ms INTEGER NOT NULL,
     ended_ms INTEGER,

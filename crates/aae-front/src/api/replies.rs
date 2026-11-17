@@ -48,10 +48,6 @@ pub(crate) struct Run {
     waiting_for: Option<String>,
     /// The closed gate a run waiting for a gate, or parked, waits on (the oldest closure of its keys).
     gate: Option<Gate>,
-    /// The open request of a run in `requires_action`: `{id, kind, tool, input, text}`; its `id` is what
-    /// `POST /v1/runs/{id}/answer` takes.
-    #[schema(value_type = Option<Object>)]
-    request: Option<Value>,
     /// The outcome the current attempt declared; for an exec step `data` is `{exit_code, stdout, stderr}`.
     outcome: Option<Outcome>,
     /// The last 20, newest last.

@@ -3,7 +3,7 @@
 //! them on every codex update (docs/harness-updates.md).
 
 use crate::common::{Live, failure_of};
-use aae_contract::driver::{Answer, Driver, FailureKind, Normalized, PromptKey, SessionState, StopReason};
+use aae_contract::driver::{Driver, FailureKind, Normalized, PromptKey, SessionState, StopReason};
 use aae_testkit::openai::Reply;
 use std::time::{Duration, Instant};
 
@@ -145,26 +145,16 @@ async fn s12_a_silent_provider_ends_nothing_until_an_interrupt_cancels_the_turn(
     live.stop().await;
 }
 
+/// A command the policy leaves to the client is declined by the adapter at once: nothing waits for a person, the model
+/// gets the denial and the turn completes.
 #[tokio::test]
-async fn s13_a_permission_request_is_answered_and_the_command_runs() {
+async fn s13_a_request_the_config_does_not_allow_is_denied_by_the_harness_and_the_turn_completes() {
     let dir = tempfile::tempdir().unwrap();
-    let plan = vec![Reply::Command("touch allowed".into()), Reply::Text("OK".into())];
+    let plan = vec![Reply::Command("touch denied".into()), Reply::Text("OK".into())];
     let mut live = Live::start(plan, dir.path(), 0, "untrusted").await;
-    let asked = live
-        .until(Duration::from_secs(30), |e| {
-            matches!(e, Normalized::PermissionRequested { .. })
-        })
-        .await;
-    let Some(Normalized::PermissionRequested { request_id, .. }) = asked else {
-        panic!("no permission request in {:?}", live.seen)
-    };
-    let answer = Answer::Allow { updated_input: None };
-    live.driver
-        .respond(&live.instance, &live.session, &request_id, &answer)
-        .await
-        .unwrap();
     assert_eq!(live.ended().await, StopReason::Completed, "{:?}", live.seen);
-    assert!(live.rig.join("allowed").exists());
+    assert!(live.failures().is_empty(), "{:?}", live.seen);
+    assert!(!live.rig.join("denied").exists());
     live.stop().await;
 }
 

@@ -1,13 +1,13 @@
 //! The scripted driver (docs/agents/rules-tests.md): a fake harness for core tests that plays prepared scenarios —
-//! delays, a turn that ends without an outcome, provider errors, hangs, a process dying mid-turn, permission requests,
-//! events outside a turn, background work; fake providers for the real harnesses ([`anthropic`], [`openai`]) and a test
+//! delays, a turn that ends without an outcome, provider errors, hangs, a process dying mid-turn, events outside a
+//! turn, background work; fake providers for the real harnesses ([`anthropic`], [`openai`]) and a test
 //! MCP service ([`mcp`]). Nothing of it runs in the product.
 
 use aae_contract::{
     BoxFuture,
     config::EffectiveConfig,
     driver::{
-        Answer, Capabilities, Driver, DriverEvent, EventSink, Failure, FailureKind, Health, InstanceHandle, Normalized,
+        Capabilities, Driver, DriverEvent, EventSink, Failure, FailureKind, Health, InstanceHandle, Normalized,
         ProcessPart, PromptKey, SessionPart, SessionPlan, SessionRef, SessionState, Source, Split, StopReason,
         Transcript,
     },
@@ -31,9 +31,8 @@ use play::session_id;
 pub use step::Step;
 pub use tracker::MemoryTracker;
 
-/// Plays one queued scenario per `send_prompt` (after acknowledging the prompt) and per `respond` (the
-/// continuation after a permission request). With no scenario left the prompt is acknowledged and the turn never
-/// ends: a hang. A scenario without `turn.ended` is a hang too.
+/// Plays one queued scenario per `send_prompt`, after acknowledging the prompt. With no scenario left the prompt is
+/// acknowledged and the turn never ends: a hang. A scenario without `turn.ended` is a hang too.
 #[derive(Clone)]
 pub struct ScriptedDriver {
     harness: &'static str,
@@ -291,7 +290,7 @@ impl Driver for ScriptedDriver {
             Self::live_session(&mut state, instance, session).map(|s| (!losing).then(|| s.prompts.push(key)))
         };
         match recorded {
-            Ok(Some(())) => ready(self.play(instance, session, Some(Normalized::PromptAcked { key }))),
+            Ok(Some(())) => ready(self.play(instance, session, Normalized::PromptAcked { key })),
             Ok(None) => ready(Ok(())),
             Err(e) => ready(Err(e)),
         }
@@ -315,16 +314,6 @@ impl Driver for ScriptedDriver {
                 self.emit(&instance.id, Some(session), ended);
             }
         }))
-    }
-
-    fn respond<'a>(
-        &'a self,
-        instance: &'a InstanceHandle,
-        session: &'a SessionRef,
-        _request_id: &'a str,
-        _answer: &'a Answer,
-    ) -> BoxFuture<'a, Result<(), Failure>> {
-        ready(self.play(instance, session, None))
     }
 
     fn stop_background<'a>(&'a self, instance: &'a InstanceHandle, session: &'a SessionRef) -> BoxFuture<'a, ()> {

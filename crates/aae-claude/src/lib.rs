@@ -13,7 +13,7 @@ use aae_contract::{
     BoxFuture,
     config::EffectiveConfig,
     driver::{
-        Answer, Capabilities, Driver, EventSink, Failure, FailureKind, Health, InstanceHandle, Normalized, ProcessPart,
+        Capabilities, Driver, EventSink, Failure, FailureKind, Health, InstanceHandle, Normalized, ProcessPart,
         PromptKey, SessionPart, SessionPlan, SessionRef, Source, Split, Transcript, child,
     },
     orphans,
@@ -50,9 +50,18 @@ struct Instance {
     session: SessionRef,
     stdin: tokio::sync::Mutex<Option<ChildStdin>>,
     stream: Arc<Mutex<Stream>>,
-    /// The input of each open permission request: `allow` hands it back.
-    requests: Arc<Mutex<HashMap<String, Value>>>,
     live: broadcast::Sender<Value>,
+}
+
+impl Instance {
+    async fn write(&self, line: &Value) -> Result<(), Failure> {
+        let mut stdin = self.stdin.lock().await;
+        let crashed = || Failure::new(FailureKind::HarnessCrash, Source::Adapter);
+        let stdin = stdin.as_mut().ok_or_else(crashed)?;
+        let text = format!("{line}\n");
+        stdin.write_all(text.as_bytes()).await.map_err(|_| crashed())?;
+        stdin.flush().await.map_err(|_| crashed())
+    }
 }
 
 impl Claude {
@@ -74,13 +83,7 @@ impl Claude {
     }
 
     async fn write(&self, instance: &InstanceHandle, line: &Value) -> Result<(), Failure> {
-        let instance = self.instance(&instance.id)?;
-        let mut stdin = instance.stdin.lock().await;
-        let crashed = || Failure::new(FailureKind::HarnessCrash, Source::Adapter);
-        let stdin = stdin.as_mut().ok_or_else(crashed)?;
-        let text = format!("{line}\n");
-        stdin.write_all(text.as_bytes()).await.map_err(|_| crashed())?;
-        stdin.flush().await.map_err(|_| crashed())
+        self.instance(&instance.id)?.write(line).await
     }
 
     async fn start(&self, id: &str, p: &Value, sink: EventSink) -> Result<InstanceHandle, Failure> {
@@ -109,14 +112,9 @@ impl Claude {
             session: session.clone(),
             stdin: tokio::sync::Mutex::new(child.stdin.take()),
             stream: Arc::new(Mutex::new(stream)),
-            requests: Arc::default(),
             live: broadcast::channel(256).0,
         });
-        let (stream, requests, live) = (
-            instance.stream.clone(),
-            instance.requests.clone(),
-            instance.live.clone(),
-        );
+        let own = instance.clone();
         let mut lines = BufReader::new(child.stdout.take().expect("stdout is piped")).lines();
         let stderr = tokio::spawn(aae_contract::driver::stderr_tail(
             child.stderr.take().expect("stderr is piped"),
@@ -142,16 +140,21 @@ impl Claude {
                 let Ok(msg) = serde_json::from_str::<Value>(&line) else {
                     continue;
                 };
-                let _ = live.send(msg.clone());
-                let events = stream
+                let _ = own.live.send(msg.clone());
+                // Nothing in aae answers a request of claude's (a permission prompt goes nowhere with
+                // `--permission-prompts none`); an unanswered one, say an MCP server's elicitation, would hold the
+                // turn until `stall`.
+                if msg["type"] == "control_request" {
+                    let refusal = json!({ "type": "control_response", "response": { "subtype": "error",
+                        "request_id": msg["request_id"], "error": "aae answers no control request" } });
+                    let _ = own.write(&refusal).await;
+                }
+                let events = own
+                    .stream
                     .lock()
                     .unwrap_or_else(PoisonError::into_inner)
                     .line(&msg, Instant::now());
                 for event in events {
-                    if let Normalized::PermissionRequested { request_id, input, .. } = &event {
-                        let mut requests = requests.lock().unwrap_or_else(PoisonError::into_inner);
-                        requests.insert(request_id.clone(), input.clone());
-                    }
                     send(Some(&session), event);
                 }
             }
@@ -162,7 +165,8 @@ impl Claude {
             let stderr = tokio::time::timeout(Duration::from_secs(1), stderr).await;
             let stderr = stderr.ok().and_then(Result::ok).unwrap_or_default();
             let (code, signal) = (status.and_then(|s| s.code()), status.and_then(|s| s.signal()));
-            let events = stream
+            let events = own
+                .stream
                 .lock()
                 .unwrap_or_else(PoisonError::into_inner)
                 .exited(code, signal, &stderr);
@@ -274,34 +278,6 @@ impl Driver for Claude {
                 .interrupted();
             let line = json!({ "type": "control_request", "request_id": Uuid::new_v4().to_string(),
                 "request": { "subtype": "interrupt" } });
-            self.write(instance, &line).await
-        })
-    }
-
-    fn respond<'a>(
-        &'a self,
-        instance: &'a InstanceHandle,
-        _session: &'a SessionRef,
-        request_id: &'a str,
-        answer: &'a Answer,
-    ) -> BoxFuture<'a, Result<(), Failure>> {
-        Box::pin(async move {
-            let known = self.instance(&instance.id)?;
-            let input = known
-                .requests
-                .lock()
-                .unwrap_or_else(PoisonError::into_inner)
-                .remove(request_id);
-            let response = match answer {
-                Answer::Allow { updated_input } => {
-                    json!({ "behavior": "allow", "updatedInput": updated_input.clone().or(input).unwrap_or(json!({})) })
-                }
-                Answer::Deny { message } => json!({ "behavior": "deny", "message": message }),
-                // A denial's message reaches the model as the tool result (experiment 1a): the answer is read.
-                Answer::Text { text } => json!({ "behavior": "deny", "message": text }),
-            };
-            let line = json!({ "type": "control_response",
-                "response": { "subtype": "success", "request_id": request_id, "response": response } });
             self.write(instance, &line).await
         })
     }

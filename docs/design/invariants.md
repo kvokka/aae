@@ -29,7 +29,7 @@ times, how long) are config parameters with defaults; the choice of a reaction i
 | 12 | Success only by an explicit outcome: a turn ending without the finisher is not success | contracts 6.3 |
 | 13 | An interruption by the infrastructure (cancel, restart, limit) is not an outcome of the formula; when attempts run out the run fails with class `infrastructure`, distinct from a fail by the agent or by a veto | contracts 6.1, 6.2 |
 | 14 | Every transitional state has a deadline and a terminal exit | contracts 6.1 |
-| 15 | A watchdog on an issued run: a deadline to the first event and a silence budget that depends on the state. Waiting for a human is not silence; a running tool and background subagents have their own, longer budget. A retry the harness announces adds its pause to the limit. The core raises the failure `stall`, the policy chooses the reaction. The thresholds are `[watchdog]` of the orchestrator config (config.md) | contracts 6.1, 4.3 |
+| 15 | A watchdog on an issued run: a deadline to the first event and a silence budget that depends on the state. A running tool and background subagents have their own, longer budget. A retry the harness announces adds its pause to the limit. The core raises the failure `stall`, the policy chooses the reaction. The thresholds are `[watchdog]` of the orchestrator config (config.md) | contracts 6.1, 4.3 |
 | 16 | Attempt and restart counters live in the state and are bounded; the core has an absolute ceiling the policy cannot raise (20 failed attempts per run over all its steps, 10 remarks per attempt); the executions of a step are bounded by its `max_attempts` and counted in the state (`runs.step_attempt`), and a repeat spends neither ceiling; an attempt whose `auth_required`, `billing` or `quota_exhausted` failure parked the run on its own `account:` gate, closed by that decision, is outside the attempts ceiling: a wait for one's own account is not a failed try; any other park, a park on a gate that is not closed included, counts. Limit: a policy may still close that gate for a moment and retry at once — every such round is a real attempt of the harness | contracts 6.1 |
 | 17 | Resume is checked: only when the adapter confirmed the transcript exists. "New session keeping the ownership" is a core mechanism; after how many refused resumes to switch to it is policy | contracts 6.2, 6.4 |
 | 18 | An operator hold beats automation: a pause or cancel by a human is a record in the state read by every automatic decision | contracts 6.2, 7 |
@@ -60,9 +60,9 @@ At daemon start ([contracts](contracts.md) 6.4 has the exact state rules):
    reconnection is an assumption left for later. Then the hook processes the dead daemon left running (the hooks
    still queued) are killed by their `AAE_INSTANCE=h-…` markers in one sweep, before any effect of the new daemon
    starts; a hook that runs again may start before the old process is gone, so hooks are idempotent.
-3. Runs with a live attempt — `starting`, `running` in a turn, `requires_action` — move to `interrupted` with the
-   attempt failure `daemon_crash`, the deciding hooks they still had queued dropped (after the sweep of item 2); the
-   policy decides what follows. A run waiting for a decision on a deciding
+3. Runs with a live attempt — `starting`, `running` in a turn — move to `interrupted` with the attempt failure
+   `daemon_crash`, the deciding hooks they still had queued dropped (after the sweep of item 2); the policy decides
+   what follows. A run waiting for a decision on a deciding
    event (`preparing`, `interrupted`, `finishing`, `running` after a turn without an outcome) keeps waiting for it:
    its hooks run again, the declared outcome and an exec command's result stand. A step check script that was running in `finishing` is killed by its marker and runs again, the repeat counter untouched. A `remark` or `continue` then
    fails the attempt with `daemon_crash`, as the session it needs is gone (contracts 3.4, 6.4). A run goes on from

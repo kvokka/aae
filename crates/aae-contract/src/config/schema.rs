@@ -84,14 +84,6 @@ const SERVICE: Shape = Obj(&[
     ("pgid", Leaf),
 ]);
 
-const REQUEST: Shape = Obj(&[
-    ("id", Leaf),
-    ("kind", Leaf),
-    ("tool", Leaf),
-    ("input", Any),
-    ("text", Leaf),
-]);
-
 /// The envelope fields of the event view (contracts 1.2); `run` is the run id here, hidden by a `RunView` payload.
 const ENVELOPE: &[&str] = &["seq", "ts", "type", "project", "rig", "run", "correlation"];
 
@@ -164,7 +156,6 @@ fn payload(event_type: &str) -> Option<&'static [(&'static str, Shape)]> {
             ("prompt_append", Leaf),
             ("deadline", Leaf),
         ],
-        "run.requires_action" => &[("run", RUN), ("request", REQUEST), ("deadline", Leaf)],
         "run.attempt_failed" => &[
             ("run", RUN),
             ("failure", FAILURE),

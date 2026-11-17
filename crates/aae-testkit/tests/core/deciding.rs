@@ -5,17 +5,18 @@ use crate::common;
 
 use aae_core::{
     BoxFuture, CoreHandle,
-    driver::{Answer, Normalized, RequestKind},
+    driver::Normalized,
     run::{Decision, HookRunner, Msg},
 };
 use aae_testkit::Step;
 use common::{World, hollow_turn, last, world_with};
-use serde_json::{Value, json};
+use serde_json::Value;
 use std::{sync::Arc, time::Duration};
 
 const HOLLOW: &str = "run.turn_ended_without_outcome";
+const FAILED: &str = "run.attempt_failed";
 
-/// A plugin with a 10 s hook on each of `on`.
+/// A plugin with a 30 s hook on each of `on`.
 fn plugin(on: &[&str], watchdog: &str) -> World {
     let config = format!(
         "projects = [\"shop\"]\nbuiltin = {{ default-policy = {{ enabled = false }} }}\n[harness.scripted]\n\
@@ -23,7 +24,7 @@ fn plugin(on: &[&str], watchdog: &str) -> World {
     );
     let hooks: String = on
         .iter()
-        .map(|on| format!("[[hook]]\non = \"{on}\"\ncommand = [\"true\"]\ntimeout = \"10s\"\n"))
+        .map(|on| format!("[[hook]]\non = \"{on}\"\ncommand = [\"true\"]\ntimeout = \"30s\"\n"))
         .collect();
     let manifest = format!("name = \"policy\"\nversion = \"0.1.0\"\n{hooks}");
     let files = [
@@ -33,15 +34,15 @@ fn plugin(on: &[&str], watchdog: &str) -> World {
     world_with(&files, Arc::new(Slow))
 }
 
-/// Every hook runs 9 s, within its timeout; on a hollow turn it then fails the run.
+/// Every hook runs 29 s, within its timeout; on a hollow turn or a failed attempt it then fails the run.
 struct Slow;
 
 impl HookRunner for Slow {
     fn run<'a>(&'a self, core: &'a CoreHandle<Msg>, payload: &'a Value) -> BoxFuture<'a, ()> {
         Box::pin(async move {
-            tokio::time::sleep(Duration::from_secs(9)).await;
+            tokio::time::sleep(Duration::from_secs(29)).await;
             let event = &payload["event"];
-            if event["type"] == HOLLOW {
+            if event["type"] == HOLLOW || event["type"] == FAILED {
                 let msg = Msg::Decide {
                     run: event["run"].as_str().unwrap().into(),
                     seq: event["seq"].as_i64().unwrap(),
@@ -59,26 +60,17 @@ impl HookRunner for Slow {
 
 #[tokio::test(start_paused = true)]
 async fn a_deciding_event_waits_for_the_slow_hook_of_the_run_queued_ahead() {
-    let w = plugin(&["run.requires_action", HOLLOW], "");
-    let request = Normalized::PermissionRequested {
-        request_id: "req-1".into(),
-        kind: RequestKind::Permission,
-        tool: "Bash".into(),
-        input: json!({}),
-        text: String::new(),
-    };
-    w.driver.script(vec![Step::Emit(request)]);
-    w.driver.script(hollow_turn());
+    let w = plugin(&[HOLLOW, FAILED], "");
+    // The process dies while the hook on the hollow turn still runs: the failed attempt's hook waits behind it.
+    let mut turn = hollow_turn();
+    turn.push(Step::Wait(Duration::from_secs(1)));
+    turn.push(Step::Exit {
+        code: None,
+        signal: Some(9),
+    });
+    w.driver.script(turn);
     let run = w.create().await;
-    w.until(Some(&run), "run.requires_action", 0).await;
-    // A human answers while the hook on the request still runs: the hollow turn's hook waits behind it.
-    let answer = Msg::Answer {
-        run: run.clone(),
-        request: "req-1".into(),
-        answer: Answer::Allow { updated_input: None },
-    };
-    w.core.send(None, answer).await.unwrap();
-    let events = w.events(&run, Duration::from_secs(60)).await;
+    let events = w.events(&run, Duration::from_secs(120)).await;
     assert_eq!(last(&events, "run.failed")["reason"], "judged", "{events:?}");
 }
 

@@ -2,10 +2,7 @@
 
 use crate::common;
 
-use aae_core::{
-    driver::{Normalized, RequestKind},
-    run::{ExecHooks, Msg, Outcome, Verdict},
-};
+use aae_core::run::{ExecHooks, Msg, Outcome, Verdict};
 use aae_testkit::Step;
 use common::{World, hollow_turn, world_with};
 use serde_json::{Value, json};
@@ -185,34 +182,6 @@ async fn a_veto_hook_that_times_out_blocks_the_start() {
         (&json!("check"), &json!("hook_failed:policy"))
     );
     assert_eq!(w.until(Some(&run), "plugin.hook_failed", 0).await["error"], "timeout");
-}
-
-#[tokio::test]
-async fn a_hook_answers_a_permission_request() {
-    let w = policy(&[("run.requires_action", r#"echo '{"decision":"allow"}'"#)]);
-    let request = Normalized::PermissionRequested {
-        request_id: "req-1".into(),
-        kind: RequestKind::Permission,
-        tool: "Bash".into(),
-        input: json!({ "command": "ls" }),
-        text: String::new(),
-    };
-    w.driver.script(vec![Step::Emit(request)]);
-    w.driver.script(hollow_turn());
-    let run = w.create().await;
-    assert_eq!(w.until(Some(&run), "run.failed", 0).await["class"], "hollow_done");
-    let mut states = Vec::new();
-    for n in 0.. {
-        let to = w.until(Some(&run), "run.state_changed", n).await["to"].clone();
-        states.push(to.as_str().unwrap().to_owned());
-        if to == "failed" {
-            break;
-        }
-    }
-    assert!(
-        states.ends_with(&["requires_action".into(), "running".into(), "failed".into()]),
-        "{states:?}"
-    );
 }
 
 #[tokio::test]

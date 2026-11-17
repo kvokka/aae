@@ -244,19 +244,17 @@ fn the_watchdog_deadlines_come_from_the_orchestrator_file() {
         silence_ms: 900_000,
         tool_silence_ms: 2_400_000,
         background_silence_ms: 7_200_000,
-        human_timeout_ms: 3_600_000,
         start_timeout_ms: 120_000,
         queue_timeout_ms: 604_800_000,
         park_timeout_ms: 604_800_000,
     };
     assert_eq!(load_with(BASE).unwrap().watchdog, defaults);
     let all = "[watchdog]\nsilence = \"1ms\"\ntool_silence = \"2s\"\nbackground_silence = \"3m\"\n\
-        human_timeout = \"4h\"\nstart_timeout = \"5s\"\nqueue_timeout = \"6m\"\npark_timeout = \"8760h\"";
+        start_timeout = \"5s\"\nqueue_timeout = \"6m\"\npark_timeout = \"8760h\"";
     let expected = Watchdog {
         silence_ms: 1,
         tool_silence_ms: 2_000,
         background_silence_ms: 180_000,
-        human_timeout_ms: 14_400_000,
         start_timeout_ms: 5_000,
         queue_timeout_ms: 360_000,
         park_timeout_ms: 31_536_000_000,
@@ -273,7 +271,7 @@ fn the_watchdog_deadlines_come_from_the_orchestrator_file() {
         "`park_timeout` is from 1ms",
     );
     fails(
-        &[("config.toml", &one("human_timeout = \"5 minutes\""))],
-        "`human_timeout`: `5 minutes`",
+        &[("config.toml", &one("silence = \"5 minutes\""))],
+        "`silence`: `5 minutes`",
     );
 }

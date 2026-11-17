@@ -312,7 +312,7 @@ impl RunHandler {
 
     /// Closes the live attempt of `row`, if any: records its end and stops its session and instance.
     pub(super) fn end_attempt(&mut self, tx: &mut Tx<'_>, row: &Row, failure: Option<&Value>) -> Result<(), Error> {
-        for what in ["state", "silence", "human"] {
+        for what in ["state", "silence"] {
             tx.clear_deadline(&row.deadline(what))?;
         }
         type Live = (String, Option<String>, Option<String>, Option<String>);

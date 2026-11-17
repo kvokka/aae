@@ -1,6 +1,6 @@
 //! The effects of the run machine: driver calls made after commit, with their results sent back as messages.
 
-use super::{Drivers, Msg, answer_from};
+use super::{Drivers, Msg};
 use crate::{
     BoxFuture,
     driver::{
@@ -141,13 +141,6 @@ impl Executor for RunExecutor {
                     }
                     sent
                 }
-                (Some("respond"), Ok(handle)) => match answer_from(&payload["answer"]) {
-                    Some(answer) => {
-                        let request = payload["request"].as_str().unwrap_or_default();
-                        driver.respond(&handle, &session, request, &answer).await
-                    }
-                    None => Err(Failure::new(FailureKind::Unknown, Source::Core)),
-                },
                 (Some("stop_background"), Ok(handle)) => {
                     driver.stop_background(&handle, &session).await;
                     Ok(())

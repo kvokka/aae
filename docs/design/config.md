@@ -58,6 +58,25 @@ the hook counts as failed; `permissionDecision: "ask"` is rejected and the call 
 only with `allow`; `prompt` and `agent` handlers are skipped; there is no `StopFailure`, so a hook cannot catch an
 API error or a quota. Its matchers name `Bash`, `apply_patch` (aliases `Edit`, `Write`) and `mcp__<server>__<tool>`.
 
+### Permissions
+
+A run is unattended: nothing waits for a human, and every permission is decided by the harness from the config set
+before the start, in the `native.<harness>` block of any settings layer (the orchestrator, a project, a rig, an agent
+or its variant). The defaults are permissive: claude runs with `--permission-mode bypassPermissions`, codex with
+`approval_policy = "never"` (beside `sandbox_mode = "danger-full-access"`, "Host inheritance"). What a stricter config
+does not allow is denied at once, and the agent sees the denial.
+
+- claude: `native.claude.permission_mode` (or `permissions.defaultMode`), the rules `permissions.allow`, `deny` and
+  `ask` (an `ask` rule is a denial here: claude runs with `--permission-prompts none`), and the harness hooks
+  `PermissionRequest` and `PreToolUse`.
+- codex: `native.codex.approval_policy` (its granular form included), `sandbox_mode`, and the `PreToolUse` hook. Under
+  a policy other than `never`, a command or file change that needs approval is declined.
+- A hook may ask aae or another agent for the decision through the CLI or the MCP of aae: the session environment
+  carries `AAE_RUN`, `AAE_ATTEMPT_TOKEN` and `AAE_SOCKET`.
+
+`aae finish` is a shell call of the agent. The default lets it through; a strict config must allow it explicitly, for
+claude `permissions = { allow = ["Bash(aae finish *)"] }`.
+
 ### MCP servers and services
 
 - `url` alone: an HTTP server someone else runs. Every session gets it with its own `headers` and the identity
@@ -297,7 +316,6 @@ backoff_cap_s = 300
 silence = "15m"                     # no event after the ack, the model thinking, after a turn ended
 tool_silence = "40m"                # a tool running
 background_silence = "120m"         # background work after the turn
-human_timeout = "1h"                # a request waiting for its answer
 start_timeout = "120s"              # the bead claim, then the ack of the first prompt
 queue_timeout = "168h"              # a run not started
 park_timeout = "168h"               # a parked run on a gate without `until`

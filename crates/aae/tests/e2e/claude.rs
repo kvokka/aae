@@ -31,7 +31,7 @@ async fn daemon_with(provider: &Provider, orchestrator: &str, agent: &str) -> Da
                 shop.join("agents/dev/agent.toml"),
                 format!(
                     "harness = \"claude\"\nmodel = \"claude-haiku-5-5\"\ninherit_host = false\n\
-                     [native.claude]\npermission_mode = \"bypassPermissions\"\n[env]\nANTHROPIC_BASE_URL = \"{base_url}\"\nANTHROPIC_API_KEY = \"fake\"\n\
+                     [env]\nANTHROPIC_BASE_URL = \"{base_url}\"\nANTHROPIC_API_KEY = \"fake\"\n\
                      CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC = \"1\"\nCLAUDE_CODE_MAX_RETRIES = \"0\"\n{agent}"
                 ),
             ),
@@ -39,7 +39,10 @@ async fn daemon_with(provider: &Provider, orchestrator: &str, agent: &str) -> Da
                 shop.join("formulas/build.toml"),
                 "name = \"build\"\n[[step]]\nkind = \"ai\"\nagent = \"dev\"\n".to_owned(),
             ),
-            (shop.join("agents/dev/prompt.template.md"), "Build {{ rig.name }}.".to_owned()),
+            (
+                shop.join("agents/dev/prompt.template.md"),
+                "Build {{ rig.name }}.".to_owned(),
+            ),
             (
                 shop.join("formulas/fix.toml"),
                 "name = \"fix\"\n[inputs]\nbead = { type = \"task\", required = true }\n[[step]]\nkind = \"ai\"\n\

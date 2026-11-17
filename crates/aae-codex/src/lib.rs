@@ -14,7 +14,7 @@ use aae_contract::{
     BoxFuture,
     config::EffectiveConfig,
     driver::{
-        Answer, Capabilities, Driver, EventSink, Failure, FailureKind, Health, InstanceHandle, ProcessPart, PromptKey,
+        Capabilities, Driver, EventSink, Failure, FailureKind, Health, InstanceHandle, ProcessPart, PromptKey,
         SessionPart, SessionPlan, SessionRef, Source, Split, Transcript, child,
     },
     orphans,
@@ -95,7 +95,6 @@ impl Codex {
             pending: Mutex::default(),
             acks: Mutex::default(),
             stream: Mutex::new(Stream::new(Some(part::account(p)))),
-            requests: Mutex::default(),
             turns: Mutex::default(),
             live: Mutex::default(),
             tokens: Mutex::default(),
@@ -284,24 +283,6 @@ impl Driver for Codex {
         })
     }
 
-    fn respond<'a>(
-        &'a self,
-        instance: &'a InstanceHandle,
-        _session: &'a SessionRef,
-        request_id: &'a str,
-        answer: &'a Answer,
-    ) -> BoxFuture<'a, Result<(), Failure>> {
-        Box::pin(async move {
-            let known = self.instance(&instance.id)?;
-            let Some(request) = lock(&known.requests).remove(request_id) else {
-                let mut failure = Failure::new(FailureKind::Unknown, Source::Adapter);
-                failure.raw = format!("no open request `{request_id}`");
-                return Err(failure);
-            };
-            known.write(&reply(&request, answer)).await
-        })
-    }
-
     /// Only this thread's commands go; each one's `item/completed` follows, and the stream then reports idle without
     /// background. Not `thread/unsubscribe`: it closes the thread and reports no command's end (experiment 8).
     fn stop_background<'a>(&'a self, instance: &'a InstanceHandle, session: &'a SessionRef) -> BoxFuture<'a, ()> {
@@ -364,24 +345,6 @@ impl Driver for Codex {
             .values()
             .find_map(|i| lock(&i.live).get(thread).map(broadcast::Sender::subscribe))
     }
-}
-
-/// The JSON-RPC response to a server request of codex.
-fn reply(request: &Value, answer: &Answer) -> Value {
-    let result = match (request["method"].as_str().unwrap_or_default(), answer) {
-        // shortcut: the form is `ToolRequestUserInputResponse` of the pinned codex's generated schema (every
-        // question gets the text), never seen live: the tool is experimental; check it once codex offers it.
-        ("item/tool/requestUserInput", Answer::Text { text }) => {
-            let questions = request["params"]["questions"].as_array().into_iter().flatten();
-            let answers: serde_json::Map<String, Value> = questions
-                .filter_map(|q| Some((q["id"].as_str()?.to_owned(), json!({ "answers": [text] }))))
-                .collect();
-            json!({ "answers": answers })
-        }
-        (_, Answer::Allow { .. }) => json!({ "decision": "accept" }),
-        (_, Answer::Deny { .. } | Answer::Text { .. }) => json!({ "decision": "decline" }),
-    };
-    json!({ "id": request["id"], "result": result })
 }
 
 #[cfg(test)]

@@ -6,7 +6,6 @@ use super::{Decision, Msg, RunHandler, decide::parse};
 use crate::{
     BoxFuture,
     config::Sourced,
-    driver::Answer,
     process::{self, Exit, Spec},
     writer::{CoreHandle, Error, Event, Tx},
 };
@@ -23,9 +22,8 @@ const MAX_STDOUT: u64 = 64 * 1024;
 const STDERR_TAIL: usize = 4 * 1024;
 
 /// The events whose hooks may decide (docs/design/contracts.md 1).
-const DECIDING: [&str; 5] = [
+const DECIDING: [&str; 4] = [
     "run.preparing",
-    "run.requires_action",
     "run.attempt_failed",
     "run.turn_ended_without_outcome",
     "run.finishing",
@@ -362,7 +360,6 @@ fn decision(kind: &str, said: Said, plugin: &str, event: &Value) -> Result<Optio
         Said::Blocked(reason) => {
             return Ok(Some(match kind {
                 "run.preparing" => Decision::Deny { reason },
-                "run.requires_action" => Decision::Answer(Answer::Deny { message: reason }),
                 "run.finishing" => Decision::Veto { reason },
                 _ => Decision::Fail { reason, gate: None },
             }));

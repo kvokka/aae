@@ -90,7 +90,6 @@ fn router() -> OpenApiRouter<Arc<Api>> {
         .routes(routes!(runs::get))
         .routes(routes!(live::live))
         .routes(routes!(runs::cancel))
-        .routes(routes!(runs::answer))
         .routes(routes!(runs::finish))
         .routes(routes!(gates::list, gates::close))
         .routes(routes!(gates::open))

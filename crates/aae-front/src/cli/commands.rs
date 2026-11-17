@@ -2,7 +2,7 @@
 
 use super::{encode, follow, print, run_path, text};
 use crate::client::{Client, ClientError};
-use clap::{Subcommand, ValueEnum};
+use clap::Subcommand;
 use serde_json::{Map, Value, json};
 use std::process::ExitCode;
 
@@ -68,23 +68,6 @@ pub enum RunCommand {
         #[arg(long = "key")]
         idempotency: Option<String>,
     },
-    /// Answer the open request of a run: `allow`, `deny <message>` or `answer <text>`.
-    Answer {
-        id: String,
-        request: String,
-        decision: Decision,
-        text: Option<String>,
-        /// The idempotency key: a repeat with the same key changes nothing.
-        #[arg(long = "key")]
-        idempotency: Option<String>,
-    },
-}
-
-#[derive(Clone, Copy, ValueEnum)]
-pub enum Decision {
-    Allow,
-    Deny,
-    Answer,
 }
 
 #[derive(Subcommand)]
@@ -217,27 +200,6 @@ pub(super) async fn run(client: &Client, json: bool, command: RunCommand) -> Res
         } => {
             let body = json!({ "reason": reason.unwrap_or_default() });
             let path = run_path(&id, "/cancel");
-            print(
-                json,
-                &client
-                    .request("POST", &path, Some(&body), idempotency.as_deref())
-                    .await?,
-            );
-        }
-        RunCommand::Answer {
-            id,
-            request,
-            decision,
-            text,
-            idempotency,
-        } => {
-            let answer = match decision {
-                Decision::Allow => json!({ "decision": "allow" }),
-                Decision::Deny => json!({ "decision": "deny", "message": text.unwrap_or_default() }),
-                Decision::Answer => json!({ "decision": "answer", "text": text.unwrap_or_default() }),
-            };
-            let body = json!({ "request": request, "answer": answer });
-            let path = run_path(&id, "/answer");
             print(
                 json,
                 &client

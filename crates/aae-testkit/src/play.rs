@@ -22,17 +22,17 @@ impl ScriptedDriver {
         }
     }
 
-    /// Plays the next scenario on `session`, after `first` if given.
+    /// Plays the next scenario on `session`, after `first` unless the scenario opens with [`Step::NoAck`].
     pub(crate) fn play(
         &self,
         instance: &InstanceHandle,
         session: &SessionRef,
-        first: Option<Normalized>,
+        first: Normalized,
     ) -> Result<(), Failure> {
         let mut state = self.lock();
         Self::live_session(&mut state, instance, session)?;
         let steps = state.scenarios.pop_front().unwrap_or_default();
-        let first = first.filter(|_| !matches!(steps.first(), Some(Step::NoAck)));
+        let first = (!matches!(steps.first(), Some(Step::NoAck))).then_some(first);
         let target = Self::live_session(&mut state, instance, session)?;
         if let Some(previous) = target.playing.take() {
             previous.abort();

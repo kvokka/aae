@@ -2,7 +2,7 @@
 
 use super::{Exit, GateSpec};
 use crate::{
-    driver::{Answer, DriverEvent, Failure, InstanceHandle, PromptKey, SessionRef},
+    driver::{DriverEvent, Failure, InstanceHandle, PromptKey, SessionRef},
     tracker::{Bead, Change, TrackerError},
 };
 use serde::{Deserialize, Serialize};
@@ -43,12 +43,6 @@ pub enum Msg {
         run: String,
         seq: i64,
         decision: Decision,
-    },
-    /// A human answer to the open request of a run in `requires_action`.
-    Answer {
-        run: String,
-        request: String,
-        answer: Answer,
     },
     /// The registry's instance `id` runs.
     InstanceReady {
@@ -246,8 +240,6 @@ pub enum Decision {
     Continue {
         message: String,
     },
-    /// On `run.requires_action`: the answer to the open request.
-    Answer(Answer),
     Accept,
     Veto {
         reason: String,

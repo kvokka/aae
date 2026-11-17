@@ -15,9 +15,6 @@ An agent is a directory under `agents/` with an `agent.toml`, the prompt templat
 harness = "claude"                    # the agent CLI, `claude` or `codex`
 model = "sonnet"                      # optional; the harness default otherwise; a short name is the latest model
 effort = "medium"                     # optional
-
-[native.claude]
-permission_mode = "acceptEdits"       # claude's --permission-mode (for codex: `approval_policy` in [native.codex])
 ```
 
 `~/work/hello/agents/helper/prompt.md`:
@@ -98,14 +95,18 @@ besides the result and the summary). A turn that ends without a finish gets a re
 one fails the run. Tell the agent about `aae finish` in the prompt, as above, and make sure `aae` is on the `PATH`
 the harness sees.
 
-The agent must be allowed to run that command. With `permission_mode = "acceptEdits"` (in `[native.claude]`) claude asks before
-running a shell command; the run then waits in `requires_action` until you answer (or until the `human_timeout`, one hour
-by default, after which the request is denied). `aae run show` names the open request:
+The agent must be allowed to run that command. By default it is: claude runs in `bypassPermissions` and codex with
+`approval_policy = "never"`. Nothing waits for a human: what the config does not allow is denied at once, and the agent
+sees the denial. A stricter claude mode must allow the call explicitly:
 
-```sh
-aae run show run_2                         # request.id: <request>, request.kind: permission, request.tool: Bash
-aae run answer run_2 <request> allow       # or: deny <message>; answer <text> for a question
+```toml
+[native.claude]
+permission_mode = "acceptEdits"
+permissions = { allow = ["Bash(aae finish *)"] }
 ```
+
+Under a codex `approval_policy` other than `never`, a command that needs approval is declined. More in
+[config](../design/config.md#permissions).
 
 ## 4. Run it
 

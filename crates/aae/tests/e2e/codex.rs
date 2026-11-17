@@ -32,7 +32,7 @@ async fn daemon_with(provider: &Provider, orchestrator: &str, inherit_host: bool
                 format!(
                     "harness = \"codex\"\nmodel = \"gpt-fake\"\ninherit_host = \
                     {inherit_host}\n\
-                     [native.codex]\napproval_policy = \"never\"\nmodel_provider = \"fake\"\nsandbox_mode = \"danger-full-access\"\n\
+                     [native.codex]\nmodel_provider = \"fake\"\nsandbox_mode = \"danger-full-access\"\n\
                      [native.codex.model_providers.fake]\nname = \"fake\"\nbase_url = \"{base_url}\"\n\
                      wire_api = \"responses\"\n{agent}"
                 ),
@@ -41,7 +41,10 @@ async fn daemon_with(provider: &Provider, orchestrator: &str, inherit_host: bool
                 shop.join("formulas/build.toml"),
                 "name = \"build\"\n[[step]]\nkind = \"ai\"\nagent = \"dev\"\n".to_owned(),
             ),
-            (shop.join("agents/dev/prompt.template.md"), "Build {{ rig.name }}.".to_owned()),
+            (
+                shop.join("agents/dev/prompt.template.md"),
+                "Build {{ rig.name }}.".to_owned(),
+            ),
         ];
         for (path, text) in files {
             fs::create_dir_all(path.parent().unwrap()).unwrap();

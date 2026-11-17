@@ -7,6 +7,26 @@ fn agent<T>(value: T) -> aae_contract::config::Sourced<T> {
     }
 }
 
+fn config(native: Option<Value>) -> EffectiveConfig {
+    EffectiveConfig {
+        services: Default::default(),
+        harness: "claude".into(),
+        harness_from: aae_contract::config::Layer::Agent,
+        scope: Default::default(),
+        model_given: None,
+        model: None,
+        effort: None,
+        system_prompt: None,
+        inherit_host: None,
+        env: Default::default(),
+        mcp: Default::default(),
+        hooks: Default::default(),
+        skills: Default::default(),
+        plugins: Vec::new(),
+        native: native.map(agent),
+    }
+}
+
 fn process(resume: bool, inherit: bool) -> Value {
     json!({ "session_id": "s1", "resume": resume, "inherit_host": inherit, "model": "claude-haiku-5-5",
         "effort": null, "system_prompt": "be brief", "permission_mode": null })
@@ -25,6 +45,13 @@ fn every_flag_goes_again_on_a_resume_and_isolation_cuts_the_host() {
     }
     assert_eq!(pair(&new, "--setting-sources"), None, "the host is inherited");
     assert_eq!(pair(&resumed, "--setting-sources").as_deref(), Some("project,local"));
+    assert_eq!(
+        pair(&new, "--permission-prompts").as_deref(),
+        Some("none"),
+        "nothing waits for a person"
+    );
+    let prompts = new.iter().filter(|a| a.starts_with("--permission-prompt"));
+    assert_eq!(prompts.count(), 1, "no prompt tool: {new:?}");
 }
 
 #[test]
@@ -59,23 +86,7 @@ fn the_transcript_tells_where_the_prompt_stands() {
 
 #[test]
 fn the_native_permission_mode_is_a_flag_and_not_a_settings_key() {
-    let config = EffectiveConfig {
-        services: Default::default(),
-        harness: "claude".into(),
-        harness_from: aae_contract::config::Layer::Agent,
-        scope: Default::default(),
-        model_given: None,
-        model: None,
-        effort: None,
-        system_prompt: None,
-        inherit_host: None,
-        env: Default::default(),
-        mcp: Default::default(),
-        hooks: Default::default(),
-        skills: Default::default(),
-        plugins: Vec::new(),
-        native: Some(agent(json!({ "permission_mode": "plan", "env": { "X": "1" } }))),
-    };
+    let mut config = config(Some(json!({ "permission_mode": "plan", "env": { "X": "1" } })));
     let plan = SessionPlan::New {
         workdir: "/w".into(),
         run: "r".into(),
@@ -87,27 +98,25 @@ fn the_native_permission_mode_is_a_flag_and_not_a_settings_key() {
     assert!(part::args(&p).windows(2).any(|w| w == ["--permission-mode", "plan"]));
     assert_eq!(p["settings"]["env"]["X"], "1");
     assert!(p["settings"].get("permission_mode").is_none(), "{}", p["settings"]);
+    // A config naming no mode gets the harness-decides default (decision 117); a native `defaultMode` is its own.
+    config.native = None;
+    let p = part::process(&config, &plan, Path::new("/state")).unwrap();
+    assert_eq!(p["permission_mode"], "bypassPermissions");
+    assert!(
+        part::args(&p)
+            .windows(2)
+            .any(|w| w == ["--permission-mode", "bypassPermissions"])
+    );
+    config.native = Some(agent(json!({ "permissions": { "defaultMode": "plan" } })));
+    let p = part::process(&config, &plan, Path::new("/state")).unwrap();
+    assert!(p["permission_mode"].is_null());
+    assert!(!part::args(&p).iter().any(|a| a == "--permission-mode"));
+    assert_eq!(p["settings"]["permissions"]["defaultMode"], "plan");
 }
 
 #[test]
 fn a_config_the_adapter_cannot_deliver_is_a_config_error() {
-    let mut config = EffectiveConfig {
-        services: Default::default(),
-        harness: "claude".into(),
-        harness_from: aae_contract::config::Layer::Agent,
-        scope: Default::default(),
-        model_given: None,
-        model: None,
-        effort: None,
-        system_prompt: None,
-        inherit_host: None,
-        env: Default::default(),
-        mcp: Default::default(),
-        hooks: Default::default(),
-        skills: Default::default(),
-        plugins: Vec::new(),
-        native: None,
-    };
+    let mut config = config(None);
     let driver = Claude::new("claude".into(), "/state".into(), None);
     let plan = SessionPlan::New {
         workdir: "/w".into(),
@@ -332,6 +341,32 @@ async fn a_process_that_dies_in_a_turn_reports_its_stderr_and_is_forgotten() {
             .await
             .is_err()
     );
+}
+
+/// A request of claude's that nothing in aae answers is refused at once rather than holding the turn.
+#[tokio::test]
+async fn a_control_request_gets_an_error_at_once() {
+    use std::os::unix::fs::PermissionsExt;
+    let dir = tempfile::tempdir().unwrap();
+    let script = dir.path().join("claude");
+    let request = r#"{"type":"control_request","request_id":"r1","request":{"subtype":"elicitation"}}"#;
+    std::fs::write(
+        &script,
+        format!("#!/bin/sh\necho '{request}'\nread line\necho \"$line\" > answer\n"),
+    )
+    .unwrap();
+    std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755)).unwrap();
+    let driver = Claude::new(script, dir.path().join("state"), None);
+    let mut p = process(false, true);
+    p["workdir"] = json!(dir.path());
+    p["files"] = json!(dir.path().join("state/claude/s1"));
+    let (sink, mut events) = tokio::sync::mpsc::unbounded_channel();
+    driver.start("i1", &p, sink).await.unwrap();
+    let first = events.recv().await.unwrap();
+    assert!(matches!(first.event, Normalized::Exited { .. }), "{:?}", first.event);
+    let answer: Value = serde_json::from_str(&std::fs::read_to_string(dir.path().join("answer")).unwrap()).unwrap();
+    assert_eq!(answer["response"]["subtype"], "error");
+    assert_eq!(answer["response"]["request_id"], "r1");
 }
 
 /// Recovery stops an instance a dead daemon started: there is no stdin to close, so no grace is spent waiting on it.

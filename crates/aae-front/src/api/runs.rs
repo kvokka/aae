@@ -1,10 +1,10 @@
-//! Runs: start a formula, list, state, cancel, answer a request, the finisher (docs/api/frontends.md, contracts 6).
+//! Runs: start a formula, list, state, cancel, the finisher (docs/api/frontends.md, contracts 6).
 
 use super::{
     ApiError, Body, ErrorReply, Param, Reply, State, key,
     replies::{Failed, Finished, Keyed, Run, Started},
 };
-use aae_core::run::{Create, Msg, Outcome, RunFilter, answer_from};
+use aae_core::run::{Create, Msg, Outcome, RunFilter};
 use axum::{
     Json,
     extract::{Path, Query},
@@ -71,12 +71,11 @@ pub(crate) async fn create(state: State, headers: HeaderMap, Body(body): Body<Cr
 }
 
 /// The states of a run (docs/design/contracts.md 6.2).
-const STATES: [&str; 11] = [
+const STATES: [&str; 10] = [
     "queued",
     "preparing",
     "starting",
     "running",
-    "requires_action",
     "finishing",
     "interrupted",
     "parked",
@@ -153,38 +152,6 @@ pub(crate) async fn cancel(
             .send_request(key(&headers), Msg::Cancel { run, reason })
             .await?,
     ))
-}
-
-#[derive(Deserialize, ToSchema)]
-pub(crate) struct AnswerRun {
-    /// The id of the open request.
-    request: String,
-    /// `{"decision": "allow", "updated_input"?}`, `{"decision": "deny", "message"}` or
-    /// `{"decision": "answer", "text"}`.
-    answer: Value,
-}
-
-/// Answers the open request of a run in `requires_action`.
-#[utoipa::path(post, path = "/v1/runs/{id}/answer", request_body = AnswerRun,
-    params(("id" = String, Path), ("Idempotency-Key" = Option<String>, Header)),
-    responses((status = OK, description = NULL, body = ()),
-        (status = CONFLICT, description = REJECTED, body = ErrorReply),
-        (status = NOT_FOUND, description = "`not_found`: no such run", body = ErrorReply),
-        Keyed))]
-pub(crate) async fn answer(
-    state: State,
-    headers: HeaderMap,
-    Param(Path(run)): Param<Path<String>>,
-    Body(body): Body<AnswerRun>,
-) -> Reply {
-    let answer = answer_from(&body.answer)
-        .ok_or_else(|| ApiError::new(StatusCode::BAD_REQUEST, "bad_request", "not an answer"))?;
-    let msg = Msg::Answer {
-        run,
-        request: body.request,
-        answer,
-    };
-    Ok(Json(state.core.send_request(key(&headers), msg).await?))
 }
 
 #[derive(Deserialize, ToSchema)]

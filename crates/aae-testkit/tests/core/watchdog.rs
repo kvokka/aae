@@ -1,12 +1,11 @@
-//! The step timeout of a turn (`runaway_turn`, docs/design/contracts.md 6.1) and its pauses while nothing works:
-//! waiting for an answer and waiting between turns; the thresholds of `[watchdog]`. Managed clock, starting at the
-//! epoch.
+//! The step timeout of a turn (`runaway_turn`, docs/design/contracts.md 6.1) and its pause while nothing works
+//! between turns; the thresholds of `[watchdog]`. Managed clock, starting at the epoch.
 
 use crate::common;
 
 use aae_core::{
     Journal,
-    driver::{Answer, Normalized, RequestKind, SessionState},
+    driver::{Normalized, SessionState},
     parse_rfc3339_ms,
     run::{Decision, GateSpec, Msg},
 };
@@ -54,9 +53,9 @@ impl World {
     }
 }
 
-/// Seven distinct thresholds, none of them a default.
+/// Six distinct thresholds, none of them a default.
 const WATCHDOG: &str = "[watchdog]\nstart_timeout = \"30s\"\nsilence = \"1m\"\ntool_silence = \"2m\"\n\
-    background_silence = \"3m\"\nhuman_timeout = \"4m\"\nqueue_timeout = \"6m\"\npark_timeout = \"7m\"\n";
+    background_silence = \"3m\"\nqueue_timeout = \"6m\"\npark_timeout = \"7m\"\n";
 
 /// A world whose `config.toml` is the one of `files` with [`WATCHDOG`].
 fn watched(files: &[(&str, &str)]) -> World {
@@ -92,20 +91,6 @@ async fn every_deadline_comes_from_the_config() {
         background: true,
     });
     assert_eq!(stall_at(background).await, "1970-01-01T00:03:00.000Z");
-
-    let w = watched(FILES);
-    let request = Normalized::PermissionRequested {
-        request_id: "req-1".into(),
-        kind: RequestKind::Question,
-        tool: String::new(),
-        input: Value::Null,
-        text: "Which branch?".into(),
-    };
-    w.driver.script(vec![Step::Emit(request)]);
-    let run = w.create().await;
-    w.events(&run, Duration::from_secs(10 * MIN)).await;
-    let answered = w.ts(&run, "run.state_changed", |d| d["from"] == "requires_action");
-    assert_eq!(answered, "1970-01-01T00:04:00.000Z");
 
     let rig = |until_ms| GateSpec {
         key: "rig:shop/web".into(),
@@ -152,37 +137,6 @@ async fn a_turn_past_the_step_timeout_is_a_runaway() {
     assert_eq!(
         w.attempt_failed(&run),
         ("1970-01-01T00:45:00.000Z".into(), "runaway_turn".into())
-    );
-}
-
-#[tokio::test(start_paused = true)]
-async fn the_step_timeout_pauses_while_a_request_waits_for_its_answer() {
-    let w = world(&[]);
-    let request = Normalized::PermissionRequested {
-        request_id: "req-1".into(),
-        kind: RequestKind::Permission,
-        tool: "Bash".into(),
-        input: serde_json::Value::Null,
-        text: String::new(),
-    };
-    let mut turn = vec![Step::Emit(Normalized::TurnStarted)];
-    turn.extend(busy(36));
-    turn.push(Step::Emit(request));
-    w.driver.script(turn);
-    w.driver.script(busy(27));
-    let run = w.create().await;
-    // 36 minutes of work, then 50 minutes without an answer: 9 minutes of the step are left.
-    w.events(&run, Duration::from_secs(86 * MIN)).await;
-    let answer = Msg::Answer {
-        run: run.clone(),
-        request: "req-1".into(),
-        answer: Answer::Allow { updated_input: None },
-    };
-    w.core.send(None, answer).await.unwrap();
-    w.events(&run, Duration::from_secs(10 * MIN)).await;
-    assert_eq!(
-        w.attempt_failed(&run),
-        ("1970-01-01T01:35:00.000Z".into(), "runaway_turn".into())
     );
 }
 

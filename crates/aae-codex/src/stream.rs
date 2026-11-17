@@ -2,9 +2,7 @@
 //! 4.6; docs/design/experiments.md, experiment 2). A turn ends on `turn/completed` only; the thread status `idle`
 //! comes just before it and ends nothing (docs/design/contracts.md 4.6).
 
-use aae_contract::driver::{
-    Failure, FailureKind, Normalized, RateLimit, RequestKind, SessionState, Source, StopReason,
-};
+use aae_contract::driver::{Failure, FailureKind, Normalized, RateLimit, SessionState, Source, StopReason};
 use serde_json::Value;
 use std::{
     collections::{HashMap, HashSet},
@@ -132,10 +130,7 @@ impl Stream {
                     // In a turn `idle` comes just before `turn/completed`; the state follows the turn end instead.
                     Some("idle") if thread.open => return vec![],
                     Some("idle") => SessionState::Idle,
-                    Some("active") => match status["activeFlags"].as_array().is_some_and(|f| !f.is_empty()) {
-                        true => SessionState::RequiresAction,
-                        false => SessionState::Running,
-                    },
+                    Some("active") => SessionState::Running,
                     _ => return vec![],
                 };
                 let background = !thread.commands.is_empty();
@@ -188,27 +183,6 @@ impl Stream {
                     });
                 }
                 out
-            }
-            "item/commandExecution/requestApproval"
-            | "item/fileChange/requestApproval"
-            | "item/permissions/requestApproval"
-            | "item/tool/requestUserInput" => {
-                let kind = match method {
-                    "item/tool/requestUserInput" => RequestKind::Question,
-                    _ => RequestKind::Permission,
-                };
-                let tool = method.trim_start_matches("item/").split('/').next().unwrap_or_default();
-                let text = params["command"]
-                    .as_str()
-                    .or(params["reason"].as_str())
-                    .unwrap_or_default();
-                vec![Normalized::PermissionRequested {
-                    request_id: msg["id"].to_string(),
-                    kind,
-                    tool: tool.to_owned(),
-                    input: params.clone(),
-                    text: text.to_owned(),
-                }]
             }
             _ if method.ends_with("/delta") => {
                 let busy = !thread.commands.is_empty();

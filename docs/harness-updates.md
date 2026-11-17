@@ -33,8 +33,8 @@ marked `[experimental]`, and codex released every 2–8 days (observed on 2026-1
 
 - Every harness adapter has the same 15 scenarios: 429 then success; endless 429; quota with a reset time; quota in
   unknown words; 529/503; 401; `insufficient_quota`; context overflow; unknown model; `kill -9` in a command; EOF on
-  stdin in a turn; a silent provider; a permission request; a background task after the turn; a second writer in
-  the session. The tables below give the expected outcome per harness.
+  stdin in a turn; a silent provider; a request the config does not allow; a background task after the turn; a second
+  writer in the session. The tables below give the expected outcome per harness.
 - The scenarios run the real binary mise selects against fake provider APIs written in this repository:
   `crates/aae-testkit/src/anthropic.rs` (claude) and `crates/aae-testkit/src/openai.rs` (codex, Responses API).
   They cost no model calls and need no account, so `mise run ci` runs them on every commit (acceptance criterion 11 runs the same tests).
@@ -61,7 +61,7 @@ marked `[experimental]`, and codex released every 2–8 days (observed on 2026-1
 | 10 | `kill -9` in a command | `harness_crash` and `exited` within a second |
 | 11 | EOF on stdin in a turn | the turn finishes unobserved, the command's effect happens, claude exits 0 |
 | 12 | silent provider | no turn end, no failure (the core's watchdog owns the stall); an interrupt cancels the turn |
-| 13 | permission request | `permission.requested` for `Bash`; `allow` runs the command and the turn completes |
+| 13 | a command the permission mode does not allow | claude denies it by itself (`manual` mode, `--permission-prompts none`), the command does not run, the turn completes |
 | 14 | background command after the turn | idle with `background` first, idle without background after the command |
 | 15 | second writer in the session | claude does not refuse it: one writer per session is the core's to keep |
 
@@ -79,10 +79,11 @@ background command running passes the run only after the command (criterion 4a o
 | 3 | quota with a reset time | `quota_exhausted` with `retry_at` from the rate-limit snapshot |
 | 7 | `insufficient_quota` | codex words it as `usageLimitExceeded` "… check your plan and billing details": `billing` |
 | 11 | EOF on stdin in a turn | the app-server exits at once with code 0, the turn left open: `harness_crash` |
+| 13 | policy `untrusted` | the adapter declines the approval, the command does not run, the turn completes |
 | 14 | command that outlives its turn | `exec_command` yields while the command runs: the turn ends idle with `background`, idle without background on the command's late `item/completed`, no turn follows |
 | 15 | second writer in the thread | refused ("already has an active writer"): `transcript_divergence` |
 
-The rest match claude: rate limits, overload, 401, context, unknown model, `kill -9`, silence and permission.
+The rest match claude: rate limits, overload, 401, context, unknown model, `kill -9` and silence.
 
 ## Log
 

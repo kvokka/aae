@@ -33,8 +33,6 @@ pub(crate) struct Instance {
     /// The `turn/start` requests in flight: their answer acknowledges the prompt of the thread.
     pub(crate) acks: Mutex<HashMap<u64, (String, PromptKey)>>,
     pub(crate) stream: Mutex<Stream>,
-    /// The open server requests, whole, by the id the core knows.
-    pub(crate) requests: Mutex<HashMap<String, Value>>,
     /// The turn in flight of each thread, for `turn/interrupt`.
     pub(crate) turns: Mutex<HashMap<String, String>>,
     pub(crate) live: Mutex<HashMap<String, broadcast::Sender<Value>>>,
@@ -163,19 +161,25 @@ pub(crate) async fn read(
         }
         let events = lock(&instance.stream).message(&msg, Instant::now());
         if msg.get("id").is_some() {
-            let asks = events
-                .iter()
-                .any(|(_, e)| matches!(e, Normalized::PermissionRequested { .. }));
-            if asks {
-                lock(&instance.requests).insert(msg["id"].to_string(), msg.clone());
-            } else {
-                // A server request the adapter has no answer for would hold the turn forever.
-                let error = json!({ "code": -32601, "message": format!("aae does not answer `{method}`") });
-                let _ = instance.write(&json!({ "id": msg["id"], "error": error })).await;
-            }
+            // An unanswered server request would hold the turn forever: each is refused at once.
+            let _ = instance.write(&refusal(&msg)).await;
         }
         for (thread, event) in events {
             send(thread, event);
+        }
+    }
+}
+
+/// The answer to a server request: nothing in aae waits for a person (decision 117), so an approval the policy left
+/// to the client is declined and the turn goes on; any other request, which has no `decline`, gets an error.
+pub(crate) fn refusal(msg: &Value) -> Value {
+    match msg["method"].as_str().unwrap_or_default() {
+        "item/commandExecution/requestApproval" | "item/fileChange/requestApproval" => {
+            json!({ "id": msg["id"], "result": { "decision": "decline" } })
+        }
+        method => {
+            let error = json!({ "code": -32601, "message": format!("aae does not answer `{method}`") });
+            json!({ "id": msg["id"], "error": error })
         }
     }
 }

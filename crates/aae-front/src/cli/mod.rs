@@ -9,7 +9,7 @@ mod wait;
 
 use crate::client::{Client, ClientError, Events};
 use clap::{CommandFactory, Parser, Subcommand, ValueEnum};
-pub use commands::{Decision, GateCommand, InstanceCommand, RunCommand, TriggerCommand};
+pub use commands::{GateCommand, InstanceCommand, RunCommand, TriggerCommand};
 pub use config::{ConfigCommand, FormulaCommand, ListCommand, local as config_local};
 use finish::finish;
 use serde_json::{Value, json};
@@ -23,7 +23,6 @@ pub const OPERATIONS: &[(&str, &str, &str)] = &[
     ("run show", "GET", "/v1/runs/{id}"),
     ("run watch", "GET", "/v1/runs/{id}/live"),
     ("run cancel", "POST", "/v1/runs/{id}/cancel"),
-    ("run answer", "POST", "/v1/runs/{id}/answer"),
     ("finish", "POST", "/v1/runs/{id}/finish"),
     ("gate list", "GET", "/v1/gates"),
     ("gate close", "POST", "/v1/gates"),

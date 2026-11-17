@@ -66,8 +66,8 @@
 ## How tests are written
 
 - Tests run against the real harness binaries. A fake driver is only a scripted one (a delay, a turn that ends
-  without an outcome, a provider error, exit 75, a hang, a channel cut mid-turn, a permission request, an event
-  outside a turn) or a replay of real transcripts.
+  without an outcome, a provider error, exit 75, a hang, a channel cut mid-turn, an event outside a
+  turn) or a replay of real transcripts.
 - The [invariants](../design/invariants.md) are checked deterministically: a managed clock, a seed, a check after
   every step. Failure injection: `kill -9` of the daemon at every transaction boundary and between the write to the
   state and the call of the tracker; recovery must converge. Idempotency: any operation applied twice, any event

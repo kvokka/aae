@@ -109,9 +109,9 @@ async fn the_errors_answered_are_declared_with_their_codes() {
     let run = json!({ "project": "shop", "rig": "web", "formula": "slow" });
     let nope = json!({ "project": "shop", "rig": "web", "formula": "nope" });
     let no_rig = json!({ "project": "shop", "rig": "nope", "formula": "check" });
-    let answer = json!({ "request": "req-1", "answer": { "decision": "deny", "message": "no" } });
     let trigger = json!({ "project": "shop", "rig": "web", "trigger": "nope" });
-    let answer_checked = format!("/v1/runs/{checked}/answer");
+    let cancel_checked = format!("/v1/runs/{checked}/cancel");
+    d.until_state(&checked, "passed").await;
     // A request naming a thing there is none of is 404; one the thing that is refuses is 409.
     let cases = [
         ("GET", "/v1/runs", "/v1/runs?state=bogus", None, None, 400),
@@ -126,17 +126,9 @@ async fn the_errors_answered_are_declared_with_their_codes() {
         ),
         (
             "POST",
-            "/v1/runs/{id}/answer",
-            "/v1/runs/run_999/answer",
-            Some(answer.clone()),
-            None,
-            404,
-        ),
-        (
-            "POST",
-            "/v1/runs/{id}/answer",
-            answer_checked.as_str(),
-            Some(answer),
+            "/v1/runs/{id}/cancel",
+            cancel_checked.as_str(),
+            Some(json!({})),
             None,
             409,
         ),

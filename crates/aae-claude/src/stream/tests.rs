@@ -78,15 +78,9 @@ fn a_reply_is_acked_started_and_completed() {
 }
 
 #[test]
-fn a_permission_request_and_an_interrupted_turn() {
+fn an_interrupted_turn_is_cancelled() {
     let mut s = stream();
-    let request = json!({ "type": "control_request", "request_id": "r1", "request": { "subtype": "can_use_tool",
-        "tool_name": "Bash", "input": { "command": "touch x" }, "description": "touch x" } });
-    let events = feed(&mut s, &[json!({ "type": "system", "subtype": "init" }), request]);
-    assert!(matches!(&events[1..], [Normalized::PermissionRequested { request_id,
-            kind: RequestKind::Permission, tool, text, ..
-        }]
-        if request_id == "r1" && tool == "Bash" && text == "touch x"));
+    feed(&mut s, &[json!({ "type": "system", "subtype": "init" })]);
     s.interrupted();
     let aborted = json!({ "subtype": "error_during_execution", "terminal_reason": "aborted_tools" });
     let events = feed(&mut s, &[result(true, aborted)]);

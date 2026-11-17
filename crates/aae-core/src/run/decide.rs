@@ -1,7 +1,7 @@
 //! Deciding events (docs/design/contracts.md 3.2–3.4) as the run machine waits on them: their deadline, the
 //! decisions hooks may give and the run machine applies, and the retry of an interrupted run.
 
-use super::{Decision, GateSpec, MAX_ATTEMPTS, RunHandler, answer_from, gates::valid_key, rejected, row::Row};
+use super::{Decision, GateSpec, MAX_ATTEMPTS, RunHandler, gates::valid_key, rejected, row::Row};
 use crate::{
     config::{Layer, Sourced},
     journal::{parse_rfc3339_ms, rfc3339_ms},
@@ -101,16 +101,6 @@ impl RunHandler {
                     prompt_append,
                 }),
             ) => self.prepared(tx, row, workdir, env, prompt_append),
-            // A hook without an answer leaves the request to a human until `human_timeout`.
-            ("requires_action", None) => Ok(()),
-            ("requires_action", Some(Decision::Answer(answer))) => {
-                let request: String = tx.sql().query_row(
-                    "SELECT json_extract(request, '$.id') FROM attempts WHERE run = ?1 AND n = ?2",
-                    params![row.id, row.attempt],
-                    |r| r.get(0),
-                )?;
-                self.answer(tx, &row.id, &request, &answer)
-            }
             ("preparing", Some(Decision::Deny { reason })) => self.terminal(tx, row, "failed", Some("check"), &reason),
             ("interrupted", None) => self.terminal(tx, row, "failed", Some("infrastructure"), "no_decision"),
             ("interrupted", Some(Decision::Fail { reason, gate })) => {
@@ -224,8 +214,6 @@ pub(super) fn parse(kind: &str, v: &Value, plugin: &str, event: &Value) -> Optio
         ("run.preparing", "deny") => Decision::Deny {
             reason: text("reason")?,
         },
-        ("run.requires_action", "answer") if event["data"]["request"]["kind"] != "question" => return None,
-        ("run.requires_action", _) => Decision::Answer(answer_from(v)?),
         ("run.attempt_failed", "resume") => Decision::Resume {
             after: after()?,
             gate: gate_spec(&v["gate"])?,

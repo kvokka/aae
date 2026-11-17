@@ -69,7 +69,6 @@ pub struct Watchdog {
     pub silence_ms: i64,
     pub tool_silence_ms: i64,
     pub background_silence_ms: i64,
-    pub human_timeout_ms: i64,
     pub start_timeout_ms: i64,
     pub queue_timeout_ms: i64,
     pub park_timeout_ms: i64,

@@ -72,12 +72,11 @@ Shared objects:
   depth of 6.1 (0 for a run started by hand), `parent_run` the run whose event triggered it or whose session started
   it. The read API (`GET /v1/runs/{id}`, `aae run show`) gives the `RunView` with `project`, `rig`, `correlation`,
   `inputs`, `waiting_for`, `outcome`, `attempts`, `usage` (`{input_tokens, output_tokens}`, summed over every attempt)
-  and: `reason` (the veto text, the cancel reason, `pass`, or the failure reason), `request` (the open request while in
-  `requires_action`, else null), `gate` (the oldest closure of the run's keys while it waits on a gate or is
-  `parked`, else null) and `round` (the round of the formula's checks, 6.1: 1, and one more each time a check sends
-  the run back) and `step_attempt` (the execution of the step in the round, an integer from 1: a repeat under
-  `max_attempts` adds one, a new entry into the step or a `back_to` return sets 1; `attempt` stays the attempt of the
-  session).
+  and: `reason` (the veto text, the cancel reason, `pass`, or the failure reason), `gate` (the oldest closure of the
+  run's keys while it waits on a gate or is `parked`, else null) and `round` (the round of the formula's checks, 6.1: 1,
+  and one more each time a check sends the run back) and `step_attempt` (the execution of the step in the round, an
+  integer from 1: a repeat under `max_attempts` adds one, a new entry into the step or a `back_to` return sets 1;
+  `attempt` stays the attempt of the session).
 - `Failure`: `{kind, text, scope, retry_at, retried_by_harness, source, raw, account, provider_model}`: `kind` from
   see 4.4, `text` set only for `unknown`, `scope` one of `session | instance | account | provider_model | run | rig`,
   `retry_at` time or null, `source` one of `harness | adapter | core`, `raw` the harness text cut to 4 KiB,
@@ -126,7 +125,6 @@ core does when no plugin decides, `default-policy` switched off included:
 | Type | What a hook may do | No plugin decision |
 |---|---|---|
 | `run.preparing` | change the workdir and the env, add to the prompt, deny the start | start as is |
-| `run.requires_action` | answer the permission request or the question | wait for a human answer through the API until `human_timeout` (default 1 h), then answer `deny`; the run goes back to `running` |
 | `run.attempt_failed` | choose the reaction to the typed failure: resume, new session, park on a gate until a time, fail | `failed{infrastructure}`, reason `no_decision` |
 | `run.turn_ended_without_outcome` | return a remark to the agent and go on, or fail | `failed{hollow_done}`, reason `no_decision` |
 | `run.finishing` | veto a `pass` with a reason, or return a remark to the agent | the outcome is taken as declared |
@@ -136,7 +134,6 @@ Each of them carries `deadline`, the time after which the core applies the "no p
 | Type | `data` |
 |---|---|
 | `run.preparing` | `{run, workdir, env_keys: [name], prompt_append, deadline}`; `env_keys` lists names only, never values |
-| `run.requires_action` | `{run, request: {id, kind: "permission"\|"question", tool, input, text}, deadline}` |
 | `run.attempt_failed` | `{run, failure: Failure, rate_limit: {utilization, resets_at}\|null, attempts: Attempts, gates: [Gate], keys: [string], agent_failures_1h: [{run, kind, at}], deadline}` |
 | `run.turn_ended_without_outcome` | `{run, stop_reason, remarks, attempts: Attempts, deadline}` |
 | `run.finishing` | `{run, outcome: Outcome, remarks, deadline}` |
@@ -244,7 +241,6 @@ timeout = "30s"
 | Event | Allowed decisions | Exit 2 means | Hook failure means |
 |---|---|---|---|
 | `run.preparing` | `{"decision":"proceed","workdir":"/abs/path","env":{"NAME":"value","DROP_ME":null},"prompt_append":"text"}` — every field but `decision` optional; `{"decision":"deny","reason":"…"}` | deny | deny (a veto hook) |
-| `run.requires_action` | `{"decision":"allow","updated_input":{…}}` (`updated_input` optional); `{"decision":"deny","message":"…"}`; `{"decision":"answer","text":"…"}` (only for `kind: "question"`) | deny with the stderr text as message | no decision from this plugin |
 | `run.attempt_failed` | `{"decision":"resume","after":"30s"}`; `{"decision":"new_session","after":"0s"}`; `{"decision":"park","gate":{"key":"…","until":"<time>"\|null,"reason":"…"},"then":"resume"\|"new_session"}`; `{"decision":"fail","reason":"…"}`; `gate` is required on `park` and optional on the other three (the gate is closed in the same transaction) | `fail` with the stderr reason | no decision from this plugin |
 | `run.turn_ended_without_outcome` | `{"decision":"continue","message":"…"}`; `{"decision":"fail","reason":"…"}` | `fail` | no decision from this plugin |
 | `run.finishing` | `{"decision":"accept"}`; `{"decision":"veto","reason":"…"}`; `{"decision":"remark","message":"…"}` | veto | veto with reason `hook_failed:<plugin>` (a veto hook) |
@@ -262,13 +258,12 @@ order); the bundled plugins come after all of them (docs/design/config.md, `[bui
 - `run.finishing`: every hook runs. Any `veto` → `failed{check}` with the first veto reason; otherwise any
   `remark` → one remark, messages joined with a blank line in plugin order; otherwise accept. A `veto` on a declared
   `fail` changes nothing: the run fails with class `agent`.
-- `run.requires_action`, `run.attempt_failed`, `run.turn_ended_without_outcome`: the first decision in plugin order
-  wins; later hooks are not started once a decision exists.
+- `run.attempt_failed`, `run.turn_ended_without_outcome`: the first decision in plugin order wins; later hooks are
+  not started once a decision exists.
 - Every hook done and no decision: the hook runner sends an explicit "no decision" message, and the "no plugin decision"
-  column of the table in 1.3 applies at once — start as is; wait for a human answer through the API until
-  `human_timeout` (default 1 h), then answer `deny`; `failed{class: infrastructure}`; `failed{class: hollow_done}`;
-  accept. A hook that timed out is a hook failure (3.2), not "no decision": on `run.preparing` and `run.finishing` it
-  blocks.
+  column of the table in 1.3 applies at once — start as is; `failed{class: infrastructure}`;
+  `failed{class: hollow_done}`; accept. A hook that timed out is a hook failure (3.2), not "no decision": on
+  `run.preparing` and `run.finishing` it blocks.
 - The `deadline` reached with no message from the runner: the hooks count as failed. On the veto events
   (`run.preparing`, `run.finishing`) that blocks — `failed{check}` with reason `hook_deadline`; on the other deciding
   events a hook failure is "no decision from this plugin", so the "no plugin decision" column applies.
@@ -277,13 +272,11 @@ order); the bundled plugins come after all of them (docs/design/config.md, `[bui
 longer than its own timeout; the runner reports before it unless it is lost). The hooks of a `run.attempt_failed` whose
 attempt stopped its instance first wait for that process (see 3.1): their sum counts the stop grace (10 s) too. The
 deciding hooks of a run run in order: when hooks of an earlier deciding event of the run are still queued, the sum
-counts their timeouts, and their stop grace, too.
-`run.requires_action` keeps waiting for a human after that deadline, until `human_timeout`. While a run in `running`
-waits for the decision on `run.turn_ended_without_outcome`, no clock of the attempt runs: late session events do not
-re-arm the silence deadline. After a daemon restart the deadline of a deciding event still pending counts again from the
-start of the new daemon, as the same sum over the hooks queued on the run's deciding queue + 5 s: the hooks run
-again from their start, and the time the daemon was down is not theirs (the `deadline` in the event envelope keeps its
-first value).
+counts their timeouts, and their stop grace, too. While a run in `running` waits for the decision on
+`run.turn_ended_without_outcome`, no clock of the attempt runs: late session events do not re-arm the silence
+deadline. After a daemon restart the deadline of a deciding event still pending counts again from the start of the new
+daemon, as the same sum over the hooks queued on the run's deciding queue + 5 s: the hooks run again from their start,
+and the time the daemon was down is not theirs (the `deadline` in the event envelope keeps its first value).
 
 ### 3.4 Decisions and restarts
 
@@ -297,7 +290,7 @@ needs it — `remark` on `run.finishing`, `continue` on `run.turn_ended_without_
 `daemon_crash` in the transaction of the decision, and its text waits as the unsettled prompt of the next attempt
 (6.4: a resume checks the transcript for it, a new session gets it after the step's prompt); the other decisions apply
 as they would have. Recovery drops the pending deciding hooks only of a run whose attempt was live (`starting`,
-`running` in a turn, `requires_action`, 6.4): they judge the lost attempt, and that attempt's `attempt_failed` queues
+`running` in a turn, 6.4): they judge the lost attempt, and that attempt's `attempt_failed` queues
 its own hooks.
 
 ### 3.5 Outbox lifetime
@@ -330,10 +323,11 @@ its own hooks.
 The core owns one driver per harness, behind one object-safe trait; the binary lists one `Adapter` per harness and knows
 no harness by name ([adapters](adapters.md)), tests wire the scripted driver in (`crates/aae-testkit`). Futures are
 boxed; events go to the core through a sink handed to `start_instance`. The adapter translates and executes; it never
-retries a turn, parks or decides an outcome (adapter duties in 4.4–4.6 and [adapters](adapters.md#what-the-core-expects-of-a-driver)): decisions are policy, which lives in plugins and config. Its semantics follow ACP v2: a session is `running`, `idle` or
-`requires_action` (4.3), and a turn fails with a typed failure (4.4). The interface has no steer in the middle of
-a turn, no model change inside a live session and no way for a human to join a live session
-([frontends](../api/frontends.md#humans-and-runs)).
+retries a turn, parks or decides an outcome (adapter duties in 4.4–4.6 and
+[adapters](adapters.md#what-the-core-expects-of-a-driver)): decisions are policy, which lives in plugins and config. Its
+semantics follow ACP v2: a session is `running` or `idle` (4.3), and a turn fails with a typed failure (4.4). The
+interface has no steer in the middle of a turn, no model change inside a live session and no way for a human to join a
+live session ([frontends](../api/frontends.md#humans-and-runs)).
 
 ```rust
 trait Driver: Send + Sync {
@@ -352,7 +346,6 @@ trait Driver: Send + Sync {
     fn resume_session(&self, instance: &InstanceHandle, session: &SessionRef, part: &SessionPart) -> BoxFuture<Result<(), Failure>>;
     fn send_prompt(&self, instance: &InstanceHandle, session: &SessionRef, text: &str, key: PromptKey) -> BoxFuture<Result<(), Failure>>;
     fn cancel_turn(&self, instance: &InstanceHandle, session: &SessionRef) -> BoxFuture<Result<(), Failure>>;
-    fn respond(&self, instance: &InstanceHandle, session: &SessionRef, request_id: &str, answer: &Answer) -> BoxFuture<Result<(), Failure>>;
     fn stop_background(&self, instance: &InstanceHandle, session: &SessionRef) -> BoxFuture<()>; // commands left after the turn; session stays
     fn close_session(&self, instance: &InstanceHandle, session: &SessionRef) -> BoxFuture<()>; // transcript stays
 
@@ -372,7 +365,6 @@ trait Driver: Send + Sync {
 | `InstanceHandle` | `{ id, pid, start_time, pgid }`; `start_time` is the kernel start time of `pid` (`/proc/<pid>/stat`), pid + start time identify the process ([event model](event-model.md#state)) |
 | `SessionRef` | opaque JSON the adapter fills with everything resume needs; the core stores and returns it. claude: `{session_id, config_dir, workdir}` (`config_dir` null: the session inherits the host, and its transcript is under the daemon's `CLAUDE_CONFIG_DIR`, else `~/.claude`); codex: `{thread_id, codex_home}` (the transcript lives in `CODEX_HOME`; `codex_home` is not read yet: a resume takes the home of the process part) |
 | `PromptKey` | UUID v5 of `"aae:prompt:<run>/<attempt n>/<prompt n>"` in the URL namespace; the idempotency key of one prompt (see 6.4) |
-| `Answer` | `Allow { updated_input }`, `Deny { message }`, `Text { text }` (decisions of `run.requires_action`) |
 | `Transcript` | `Missing` or `Present { delivered: bool }` — whether the session exists and whether the prompt with `key` is in it; answered or not is not told apart: a resumed session never has a turn in flight (the old process is always stopped before the resume), so a delivered prompt is reconciled either way |
 | `Health` | `Ok`, `Degraded { text }` (the instance stays `ready` and keeps its sessions; `instance.degraded`, 8), `Dead` |
 
@@ -394,8 +386,7 @@ the stop reason of a turn reach the policy and the observers through those event
 | `prompt.acked` | `key` | prompt delivery `sent → acked`; ends `starting` |
 | `turn.started` | — | watchdog: first event seen |
 | `turn.ended` | `stop_reason: completed \| cancelled \| failed` | candidate end of the attempt's work; `failed` follows a `failure` event; `stop_reason` goes to `run.turn_ended_without_outcome` |
-| `state` | `state: running \| idle \| requires_action`, `background: bool` | "idle without background" = `idle` and `background == false`; the adapter applies the harness rule. `idle` with `background` after the turn ended and with the outcome declared makes the core call `stop_background` (6.3) |
-| `permission.requested` | `request_id, kind: permission \| question, tool, input, text` | `requires_action`, `run.requires_action` |
+| `state` | `state: running \| idle`, `background: bool` | "idle without background" = `idle` and `background == false`; the adapter applies the harness rule. `idle` with `background` after the turn ended and with the outcome declared makes the core call `stop_background` (6.3) |
 | `usage` | `input_tokens, output_tokens, rate_limit: {utilization, resets_at} \| null` | the core adds the tokens (increments) to the attempt; keeps the last `rate_limit` per account key (`account:<harness>/<id>`, one row, replaced by each report); still activity for the watchdog |
 | `retrying` | `attempt, delay, text` | in `running`: journals `run.retrying` (`next_retry_at` = now + `delay`) and sets the silence deadline to silence + `delay` (an announced pause is not silence) |
 | `activity` | `tool_running: bool` | watchdog only: moves the silence deadline, kept in memory, no transaction; the adapter coalesces it to at most one per second per session |
@@ -404,9 +395,9 @@ the stop reason of a turn reach the policy and the observers through those event
 
 ### 4.4 Failure kinds
 
-Every failure kind there is. Waiting for a human and background work outside a turn are states (4.3), not
-failures. Emitted by the adapter unless marked core; default `scope` in the last column (the adapter
-may report a narrower or wider scope when the harness says so).
+Every failure kind there is. Background work outside a turn is a state (4.3), not a failure. Emitted by the adapter
+unless marked core; default `scope` in the last column (the adapter may report a narrower or wider scope when the
+harness says so).
 
 | Kind | Source | Scope |
 |---|---|---|
@@ -484,8 +475,7 @@ claude (`crates/aae-claude`):
 - Signals read: `system/api_retry` (`retrying`), `rate_limit_event` with the reset time, the turn `result` with
   its error flag, `session_state_changed`, `background_tasks_changed`, `task_notification`, and the
   `tool_progress` heartbeat of a long tool every 30 s ([experiments](experiments.md#heartbeat-of-a-long-tool)).
-  No heartbeat comes from inside a subagent or while a permission request waits; the watchdog's budgets allow for
-  that (invariant 15).
+  No heartbeat comes from inside a subagent; the watchdog's budgets allow for that (invariant 15).
 - The reset time of a limit comes only with a subscription login; with an API key a limit is a plain `rate_limit`
   without it. The shape of the event when a real quota runs out has not been seen live (the claude half of
   criterion 10 stays open).
@@ -502,12 +492,12 @@ claude (`crates/aae-claude`):
   <!-- MEASURE id=claude-coldstart-init date=2026-11-10 ver=claude-2.1.322 env=linux-arm64-orbstack src=reports/42 note="haiku, n=5–7, medians from spawn; re-measure on the role models" -->
 - `CLAUDE_CODE_RETRY_WATCHDOG=1` is never set in a session's environment: claude then waits out a 429 or 529 in
   silence (one `api_retry{max_retries: 300}` with a pause of an hour), which the core's watchdog reads as a stall.
-- `requires_action` is reported only with `--permission-prompt-tool stdio` and
-  `CLAUDE_CODE_EMIT_SESSION_STATE_EVENTS=1`. With an MCP permission tool the state stays `running` and the stream is
-  silent, so the watchdog would take a waiting human for a stall.
-- claude asks for permission for some commands even under `bypassPermissions` (seen on 2.1.325: a Bash heredoc
-  into a directory outside the workdir). With no hook and no human to answer, the run waits in `requires_action`
-  until `human_timeout`; an unattended setup shortens it (the demos set two minutes).
+- claude runs with `--permission-prompts none`: whatever would prompt is denied by claude itself and the model sees
+  the denial; the permission mode decides the rest. The mode is `bypassPermissions` unless `native.claude` sets
+  `permission_mode` or `permissions.defaultMode` ([config](config.md#permissions)). Any `control_request` of the CLI
+  gets an error `control_response` at once, so nothing waits. claude prompts for some commands even under
+  `bypassPermissions` (seen on 2.1.325: a Bash heredoc into a directory outside the workdir); such a command is denied
+  at once.
 
 codex (`crates/aae-codex`):
 
@@ -520,6 +510,9 @@ codex (`crates/aae-codex`):
   it runs) runs while the status is `idle`: the turn ends `idle` with `background`, and its late `item/completed` makes
   the thread idle without background (contract scenario 14). While the provider is silent before its response headers
   there is no notification at all and codex has no timeout of its own: the core's watchdog owns it.
+- The thread starts with `approvalPolicy = "never"` unless `native.codex.approval_policy` sets another
+  ([config](config.md#permissions)); under another policy the adapter declines command and file-change approvals
+  (`{"decision":"decline"}`, the turn goes on) and answers every other server request with an error.
 - Two `turn/start` on one thread are not queued but merged: the second becomes a steer of the first. The core sends
   a session's next prompt only after its turn ended (6.2), so this never happens.
 - Hooks run with the environment of the app-server process, not of the thread (4.6 table, attempt environment); so
@@ -618,13 +611,12 @@ the actor of an exec step and hands that of a session to the adapter in the sess
 | `preparing` | the bead claim confirmed, `run.preparing` hooks running, workdir and environment being fixed, snapshot of the effective config written | `start_timeout` for the claim, then the hook deadline (see 3.3) | the hooks count as failed → deny → `failed{check, hook_deadline}` |
 | `starting` | an attempt: instance acquired, session started or resumed, first prompt sent, waiting for `prompt.acked` | `start_timeout` 120 s | attempt failure `stall` |
 | `running` | the agent works (or the `exec` command runs, or the `drain` step gives out beads) | step `timeout` of the formula (default 45 m; `drain` and `formula` 24 h) per attempt → `runaway_turn`; silence budgets (an announced `retrying` pause adds to the limit): first event after ack 15 min, model thinking 15 min, tool running 40 min, background work after the turn 120 min → `stall` | attempt failure |
-| `requires_action` | waits for an answer to a permission request or question; not silence; the step `timeout` of `running` pauses here and resumes with the time it had left | `human_timeout` 1 h | answer `deny`, back to `running` |
 | `finishing` | outcome declared and the session idle without background; `run.finishing` hooks running, then the step check script of `step_check_script_path` if the hooks accepted a `pass` (no decision awaited) | hook deadline; for the script the step `timeout` plus a margin, a lost script counting as not passed | the hooks count as failed → veto → `failed{check, hook_deadline}` (a declared `fail` stays `failed{agent}`); script exit 0 → the next step or `passed`; 75 → `failed{check}` with no repeat and no `back_to` round; any other result is an execution that did not pass: under `max_attempts` the run repeats the step (`run.step_finished` with outcome `fail`, then `preparing` with `step_attempt` + 1), else `failed{check}` (`failed{agent}` if the step said `fail`); a script that cannot start → `failed{infrastructure}` |
 | `interrupted` | the current attempt ended with a failure (or by a daemon restart); `run.attempt_failed` is deciding | hook deadline, then the decision's `after` | no decision → `failed{infrastructure}` |
 | `parked` | a started run waits for a gate or a slot of its agent; no harness process | `park_timeout` 7 d from parking, or the gate's `until` if later (a gate with `until` opens by its timer first) | `failed{infrastructure, park_timeout}` |
 | `passed`, `failed{class}`, `cancelled` | terminal | — | — |
 
-The thresholds named here (`queue_timeout`, `start_timeout`, the silence budgets, `human_timeout`, `park_timeout`)
+The thresholds named here (`queue_timeout`, `start_timeout`, the silence budgets, `park_timeout`)
 are the `[watchdog]` table of the orchestrator config, with these defaults (config.md, orchestrator).
 
 `interrupted` is every attempt failure waiting for its decision, a daemon restart among them,
@@ -666,7 +658,8 @@ gate, closed by it (a wait on the account does not spend the ceiling; the attemp
 `waited` in the state; a park on a gate that does not close, `until` passed, or any other park counts), 10 remarks per
 attempt (`continue` after a hollow turn and `remark` after `run.finishing` both count). A repeat of a step under `max_attempts` spends neither ceiling. The eleventh fails the run with
 reason `remarks_ceiling` and the class the event would give: `hollow_done` for `continue`, `check` for `remark`. Between
-turns (from idle without background to the next prompt) the step `timeout` pauses like in `requires_action`. Trigger
+turns (from idle without background to the next prompt) the step `timeout` pauses and resumes with the time it had
+left. Trigger
 depth: a trigger does not start a run deeper than 10 (`trigger.skipped{depth}`); the limit is fixed, with no
 setting. A run started on `bead.ready` keeps the depth of the run that caused it, with no level added: a bead made ready
 is the next work of the tracker, not a run the parent started, so a long epic stays legal. A run started from an agent
@@ -687,8 +680,6 @@ of the parent leaves them alone.
 | `preparing` | decision `proceed` (or no hooks) | `starting` | attempt 1: instance acquire, `start_session`, `send_prompt` |
 | `preparing` | `deny`, template error, claim error `Claimed` / `NotFound` / `Invalid`, `create` error other than `Unavailable`, no claim or `create` answer within `start_timeout` | `failed{check}`, `failed{infrastructure}`, `failed{infrastructure, bead_claimed / bead_not_found / bead_invalid}`, `failed{infrastructure, bead_not_created: <error>}`, `failed{infrastructure, tracker_unavailable}` | — |
 | `starting` | `prompt.acked` of the first prompt | `running` | — |
-| `running` | `permission.requested` | `requires_action` | `run.requires_action` hooks |
-| `requires_action` | answer from a hook or a human, or `human_timeout` | `running` | `respond` |
 | `running` | turn ended, idle without background, outcome declared | `finishing` | `run.finishing` hooks |
 | `running` | turn ended, idle with background, outcome declared | `running` | the adapter stops the commands the session left (`stop_background`); `finishing` follows on idle without background |
 | `running` | turn ended, idle without background, no outcome | `running` | `run.turn_ended_without_outcome` hooks; `continue` → next prompt in the same attempt; `fail` or no decision → `failed{hollow_done}` (with the hook reason for `fail`) |
@@ -703,7 +694,7 @@ of the parent leaves them alone.
 | `running` (drain) | a read after a bead of this entry failed under `hard_stop` | `running` | the cancel of each alive child, reason `drain_hard_stop` (its children go with it) |
 | `running` (drain) | a read that gave nothing, with no child alive and no later read queued | `finishing` with outcome `pass`, `summary` `<n> closed, <n> failed, <n> refused`, `data` `{closed, failed, refused: {<bead>: <reason>}}` of this entry's beads; after a stop `fail`, `summary` `stopped on <beads>: <n> closed, <n> failed, <n> not started`, `data` adds `stopped_on` and `not_started` | `run.finishing` hooks |
 | `running` (exec) | exit 75 / timeout / spawn error | `interrupted` with failure `unknown` (`text` `exit 75 (EX_TEMPFAIL)`, scope `run`) / `runaway_turn` / `workspace_failure` | `run.attempt_failed` hooks; every attempt runs the command again |
-| `starting`, `running`, `requires_action` | `failure`, `exited`, deadline, exec exit 75 | `interrupted` | stop the session (cancel, then stop the instance if it is the session's own, then sweep descendants); `run.attempt_failed` hooks |
+| `starting`, `running` | `failure`, `exited`, deadline, exec exit 75 | `interrupted` | stop the session (cancel, then stop the instance if it is the session's own, then sweep descendants); `run.attempt_failed` hooks |
 | `finishing` | accept of a `pass` of a step that is not the last | `preparing` of the next step | `run.step_finished`; the next step's prompt renders (the workdir and the bead claim stay) and its `run.preparing` hooks run |
 | `finishing` | accept / veto / remark | `passed` or `failed{agent}` / `failed{check}` / `running` | bead close or conditional release; on remark the message goes as the next prompt of the same attempt, the declared outcome is cleared, the token stays valid. A remark for an exec or a drain step is not allowed (hook failure) |
 | `interrupted` | `resume` / `new_session` | `starting` after `after` | new attempt: `generation + 1`, new token; `resume` first checks the transcript (invariant 17), `Missing` → attempt failure `transcript_divergence` |
@@ -776,10 +767,10 @@ for it is not.
   (invariants 6, 7); every hook still queued is first killed by its `AAE_INSTANCE` marker, with what it started, so a
   hook the dead daemon left running does not outlive it. A hook process is killed with SIGKILL without waiting for its
   death, so the hook that runs again may start before the old process is gone: hooks must be idempotent (3.1).
-  Runs with a live attempt — `starting`, `running` in a turn, `requires_action` — → `interrupted` with `daemon_crash` (a
-  `drain` attempt too: its next attempt gives no bead its entry of the step gave out), the launches, prompts, answers
-  and deciding hooks they still had queued dropped, and the command of an exec step killed by its `AAE_INSTANCE` marker
-  (random per attempt) before any later attempt runs it. A run that waits for a decision on a deciding event keeps its
+  Runs with a live attempt — `starting`, `running` in a turn — → `interrupted` with `daemon_crash` (a `drain` attempt
+  too: its next attempt gives no bead its entry of the step gave out), the launches, prompts and deciding hooks they
+  still had queued dropped, and the command of an exec step killed by its `AAE_INSTANCE` marker (random per attempt)
+  before any later attempt runs it. A run that waits for a decision on a deciding event keeps its
   state and waits for the same decision (3.4): `preparing`, `interrupted` waiting for the policy, `finishing`, and
   `running` after a turn that ended without an outcome; `finishing` with a step check script running is one too, but
   its script is killed by its marker and starts again, and the execution counts only once the script's word is
@@ -941,4 +932,4 @@ pause and three failed resumes before a new session come from the code of an ear
 | `unknown` | `resume{after: 30 s}` up to 3 consecutive, then `fail` |
 | a gate of the run already closed after its attempt started | `park` on that gate, no new closure (absorb); an absorbed failure decides no escalation, the run whose failure closed the gate does, and the attempts ceiling bounds the rest |
 | `run.turn_ended_without_outcome` | 1st `continue` with a reminder to call the finisher, 2nd `fail` |
-| `run.requires_action`, `run.finishing`, `run.preparing` | no decision |
+| `run.finishing`, `run.preparing` | no decision |

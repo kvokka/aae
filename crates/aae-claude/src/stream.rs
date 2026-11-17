@@ -1,9 +1,7 @@
 //! The stdout of one `claude -p --output-format stream-json` session read into normalized events
 //! (docs/design/contracts.md 4.3, 4.6; docs/design/experiments.md, experiment 1a and "Idle without background").
 
-use aae_contract::driver::{
-    Failure, FailureKind, Normalized, PromptKey, RateLimit, RequestKind, SessionState, Source, StopReason,
-};
+use aae_contract::driver::{Failure, FailureKind, Normalized, PromptKey, RateLimit, SessionState, Source, StopReason};
 use serde_json::Value;
 use std::time::{Duration, Instant};
 use uuid::Uuid;
@@ -110,7 +108,6 @@ impl Stream {
             (Some("system"), Some("session_state_changed")) => {
                 let state = match msg["state"].as_str() {
                     Some("idle") => SessionState::Idle,
-                    Some("requires_action") => SessionState::RequiresAction,
                     Some("running") => SessionState::Running,
                     _ => return vec![],
                 };
@@ -133,21 +130,6 @@ impl Stream {
             }
             (Some("system"), Some("api_retry")) => self.retry(msg),
             (Some("rate_limit_event"), _) => self.rate_limit(&msg["rate_limit_info"]),
-            (Some("control_request"), _) if msg["request"]["subtype"] == "can_use_tool" => {
-                let request = &msg["request"];
-                let tool = text(&request["tool_name"]);
-                let kind = match tool.as_str() {
-                    "AskUserQuestion" => RequestKind::Question,
-                    _ => RequestKind::Permission,
-                };
-                vec![Normalized::PermissionRequested {
-                    request_id: text(&msg["request_id"]),
-                    kind,
-                    tool,
-                    input: request["input"].clone(),
-                    text: text(&request["description"]),
-                }]
-            }
             (Some("result"), _) => self.result(msg),
             (Some("assistant"), _) => {
                 if let Some(error) = msg["error"].as_str() {

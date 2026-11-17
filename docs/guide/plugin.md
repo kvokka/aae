@@ -5,7 +5,7 @@ A plugin is a directory with a `plugin.toml`. It has two independent sides:
 - the **agent side** (`[agent]`): settings the agents that attach the plugin get, such as skills, harness hooks,
   MCP servers and environment variables;
 - the **orchestrator side** (`[[hook]]`): programs aae runs on its own events, which may observe them or decide what
-  happens next (veto a pass, retry a failed attempt, answer a permission request...).
+  happens next (veto a pass, retry a failed attempt, remark on a turn...).
 
 A plugin is not a pack: a pack brings agents and formulas, a plugin extends the agents that attach it and the
 orchestrator. A plugin is a directory, not a library: hooks are any executables, in any language. The complete example
@@ -99,7 +99,6 @@ the deciding events may return a decision:
 | Event | Decisions |
 |---|---|
 | `run.preparing` | `proceed` (optionally with `workdir`, `env`, `prompt_append`), `deny` |
-| `run.requires_action` | `allow`, `deny`, `answer` (for a question) |
 | `run.attempt_failed` | `resume`, `new_session`, `park` (with a gate), `fail` |
 | `run.turn_ended_without_outcome` | `continue` (with a message), `fail` |
 | `run.finishing` | `accept`, `veto`, `remark` (sends the agent back with a message) |
@@ -115,9 +114,8 @@ the `require` parameter, so the run fails with class `check` and the reason from
 - **Be idempotent.** Delivery is at least once: a hook cut by a daemon crash runs again after the restart, with the
   same `seq`, if its run is still waiting for the decision on that event — on `run.preparing`, `run.finishing`,
   `run.attempt_failed` and `run.turn_ended_without_outcome` it is, and its deadline counts again from the restart.
-  The copy the dead daemon left running is killed first. A `run.requires_action` hook does not run again: the
-  restart interrupts that attempt, and the policy's next attempt emits fresh events. After a restart, a `remark` or
-  `continue` cannot reach the session that took the turn; the attempt fails as `daemon_crash` and the policy decides.
+  The copy the dead daemon left running is killed first. After a restart, a `remark` or `continue` cannot reach the
+  session that took the turn; the attempt fails as `daemon_crash` and the policy decides.
 - **Be quick.** A deciding hook holds its run until it answers or times out.
 - **Parse JSON properly.** The example uses `sed` to stay dependency-free; a real hook should use `jq` or a real
   JSON parser.

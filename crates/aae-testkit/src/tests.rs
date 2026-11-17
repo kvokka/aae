@@ -1,5 +1,5 @@
 use super::*;
-use aae_contract::driver::{RequestKind, SessionState};
+use aae_contract::driver::SessionState;
 use tokio::{sync::mpsc, time::Instant};
 
 type Events = mpsc::UnboundedReceiver<DriverEvent>;
@@ -207,51 +207,6 @@ async fn the_process_dies_mid_turn_and_later_calls_fail() {
         .unwrap();
     let first = events.recv().await.unwrap();
     assert_eq!((first.seq, first.event), (1, Normalized::PromptAcked { key: key(2) }));
-}
-
-#[tokio::test(start_paused = true)]
-async fn a_permission_request_continues_after_the_answer() {
-    let mut s = setup().await;
-    let request = Normalized::PermissionRequested {
-        request_id: "r1".into(),
-        kind: RequestKind::Permission,
-        tool: "Bash".into(),
-        input: json!({ "command": "rm -rf build" }),
-        text: String::new(),
-    };
-    s.driver.script(vec![
-        Step::Emit(request.clone()),
-        state(SessionState::RequiresAction, false),
-    ]);
-    s.driver
-        .script(vec![state(SessionState::Running, false), ended(StopReason::Completed)]);
-    s.prompt(1).await;
-    next(&mut s.events).await;
-    assert_eq!(next(&mut s.events).await, Some(request));
-    assert_eq!(
-        next(&mut s.events).await,
-        Some(Normalized::State {
-            state: SessionState::RequiresAction,
-            background: false
-        })
-    );
-    assert_eq!(next(&mut s.events).await, None, "waits for the answer");
-    let answer = Answer::Allow { updated_input: None };
-    s.driver.respond(&s.instance, &s.session, "r1", &answer).await.unwrap();
-    assert_eq!(
-        next(&mut s.events).await,
-        Some(Normalized::State {
-            state: SessionState::Running,
-            background: false
-        })
-    );
-    assert_eq!(
-        next(&mut s.events).await,
-        Some(Normalized::TurnEnded {
-            stop_reason: StopReason::Completed
-        })
-    );
-    assert_eq!(s.transcript(1).await, Transcript::Present { delivered: true });
 }
 
 #[tokio::test(start_paused = true)]

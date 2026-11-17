@@ -78,8 +78,13 @@ pub(crate) fn process(config: &EffectiveConfig, plan: &SessionPlan, state: &Path
     }))
 }
 
+/// The permission mode of a session whose config names none: the harness decides every permission and nothing waits
+/// for a person (decision 117).
+const DEFAULT_PERMISSION_MODE: &str = "bypassPermissions";
+
 /// The `--settings` JSON: the native block (claude's own settings keys) with the enabled hooks added to its own; and
-/// the `--permission-mode` the block's `permission_mode` gives, which is a flag and not a settings key.
+/// the `--permission-mode` the block's `permission_mode` gives, which is a flag and not a settings key, or the default
+/// when neither it nor `permissions.defaultMode` names a mode.
 fn settings(config: &EffectiveConfig) -> Result<(Value, Option<String>), Failure> {
     let mut settings = match config.native.as_ref().map(|n| &n.value) {
         None => json!({}),
@@ -91,6 +96,7 @@ fn settings(config: &EffectiveConfig) -> Result<(Value, Option<String>), Failure
         }
     };
     let mode = match settings.as_object_mut().and_then(|s| s.remove("permission_mode")) {
+        None if settings["permissions"]["defaultMode"].is_null() => Some(DEFAULT_PERMISSION_MODE.to_owned()),
         None => None,
         Some(Value::String(mode)) => Some(mode),
         Some(_) => return Err(config_error("the claude native `permission_mode` is a string".into())),
@@ -163,8 +169,8 @@ pub(crate) fn args(p: &Value) -> Vec<String> {
         "--output-format",
         "stream-json",
         "--verbose",
-        "--permission-prompt-tool",
-        "stdio",
+        "--permission-prompts",
+        "none",
     ]
     .map(str::to_owned)
     .into();
