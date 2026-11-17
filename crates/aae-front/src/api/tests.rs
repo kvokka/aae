@@ -14,7 +14,8 @@ async fn a_malformed_query_is_an_error_reply() {
     assert_eq!(body["error"]["code"], "bad_request", "{body}");
 }
 
-/// `explain --formula` names the layer of `rounds` and of each input value the config gives (docs/design/config.md).
+/// `explain --formula` names the layer of `rounds` and of each input value the config gives, and the `if` of a step
+/// (docs/design/config.md).
 #[test]
 fn a_formula_is_explained_with_the_layers_of_its_rounds_and_input_values() {
     let dir = tempfile::tempdir().unwrap();
@@ -27,7 +28,9 @@ fn a_formula_is_explained_with_the_layers_of_its_rounds_and_input_values() {
         (
             "shop/formulas/flow.toml",
             "name = \"flow\"\n[inputs]\nfocus = { type = \"string\" }\nn = { type = \"integer\" }\n\
-             [[step]]\nkind = \"exec\"\ncommand = [\"true\"]\n",
+             [[step]]\nname = \"work\"\nkind = \"exec\"\ncommand = [\"true\"]\n\
+             [[step]]\nname = \"review\"\nkind = \"exec\"\ncommand = [\"true\"]\nback_to = \"work\"\n\
+             if = { \"inputs.n\" = [4, 5], back_from = \"review\" }\n",
         ),
     ];
     for (path, text) in files {
@@ -41,4 +44,8 @@ fn a_formula_is_explained_with_the_layers_of_its_rounds_and_input_values() {
     let text = reply["text"].as_str().unwrap();
     let head = "rounds = 2  # orchestrator\ninputs.focus = \"top\"  # orchestrator\ninputs.n = 4  # project\n";
     assert!(text.starts_with(head), "{text}");
+    let check =
+        "# runs only if { \"back_from\" = \"review\", \"inputs.n\" = [4,5] }\n# a check: on fail, back to `work`";
+    assert!(text.contains(check), "{text}");
+    assert_eq!(text.matches("# runs only if").count(), 1, "{text}");
 }

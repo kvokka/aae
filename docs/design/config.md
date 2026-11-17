@@ -227,7 +227,8 @@ per input value the config gives (`inputs.focus = "security"  # orchestrator`), 
 ``# step `<s>` of `<f>` on `<r>`: agent <a>`` (the rig's variant if it maps one) and its effective config, for an exec
 step one line ``# step `<s>` of `<f>`: exec `<command>` ``, for a drain step
 ``# step `<s>` of `<f>`: drain, a run of `<formula>` per bead, <pool> at a time`` (with ``; on a failed bead:
-<on_item_failure>`` unless it is `continue`), and after a check
+<on_item_failure>`` unless it is `continue`), then for a step with `if` its table with every path quoted, keys
+sorted and a single matcher bare, ``# runs only if { "back_from" = "review", "inputs.n" = [4,5] }``, after a check
 ``# a check: on fail, back to `<step>`, at most <n> rounds``, and for a step with `max_attempts` above 1 or a check
 script ``# runs at most <n> times; passes when <script> exits 0`` (each part when it applies). The environment an
 exec step or a check script gets follows as `exec.inherit_env = true  # <layer>` (when a layer says so) and one line

@@ -244,6 +244,17 @@ pub(crate) fn explained(config: &Config, project: &str, of: &Explain, rig: Optio
                         Some(agent)
                     }
                 };
+                if !step.condition.is_empty() {
+                    let entries: Vec<String> = (step.condition.paths())
+                        .map(
+                            |path| match step.condition.accepted(path).collect::<Vec<_>>().as_slice() {
+                                [one] => format!("{} = {one}", json!(path)),
+                                many => format!("{} = {}", json!(path), json!(many)),
+                            },
+                        )
+                        .collect();
+                    text += &format!("# runs only if {{ {} }}\n", entries.join(", "));
+                }
                 if let Some(to) = &step.back_to {
                     text += &format!(
                         "# a check: on fail, back to `{to}`, at most {} rounds\n",
