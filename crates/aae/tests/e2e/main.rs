@@ -9,6 +9,7 @@ mod await_step;
 mod bridge;
 mod claude;
 mod cli;
+mod cli_local;
 mod codex;
 mod context_budget;
 mod doctor;
