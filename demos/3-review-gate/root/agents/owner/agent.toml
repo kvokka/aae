@@ -4,4 +4,4 @@ harness = "codex"
 model = "terra"
 effort = "medium"
 inherit_host = true                   # it works as the user does: the user's shell and tools
-env = { GH_CONFIG_DIR = "../.aae/gh" } # the login of `gh` run.sh makes, from the project root
+env = { GITHUB_TOKEN = "${GITHUB_TOKEN}" } # the login of `gh`: the daemon's token, which run.sh sets

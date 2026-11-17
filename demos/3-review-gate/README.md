@@ -41,8 +41,8 @@ KISS".
   in `root/agents/owner`, stands in for a human reviewer and acts only through `gh`; the first time it leaves one
   comment that asks for a change, the next time it merges the root's pull request. As the author of the pull requests
   it can neither approve them nor request changes: GitHub does not let one account do that on its own. It runs as the
-  user does (`inherit_host = true`), and its `gh` takes the demo's login (`GH_CONFIG_DIR`, below). `root/config.toml`
-  is the orchestrator config of the demo.
+  user does (`inherit_host = true`), and its `gh` takes the token of the host's login (`GITHUB_TOKEN`, below).
+  `root/config.toml` is the orchestrator config of the demo; its `[exec]` is what the steps get, below.
 - `bridge.sh` is the bridge, below.
 - `gate-demo/`, `gate-demo-backend/` and `gate-demo-frontend/` are the clones of the GitHub repositories of the same
   names, made by `run.sh`; empty before a run.
@@ -73,7 +73,8 @@ without a model and without GitHub: the real `codex` on fake model APIs, a fake 
 
 ## Run
 
-You need `aae`, a login of `codex`, `gh` logged in as an account that may push to the repositories, `br` and `jq`.
+You need `aae`, a login of `codex`, `gh` logged in as an account that may push to the repositories (or its token in
+`GITHUB_TOKEN`), `br` and `jq`.
 `mise install` in this directory installs all but `aae` (mise is a convenience, any install does). The repositories
 `gate-demo`, `gate-demo-backend` and `gate-demo-frontend` must exist under the GitHub account `OWNER`
 (`kvokka-agent` by default), each with a default branch. The run spends real tokens and opens real pull requests.
@@ -87,9 +88,11 @@ OWNER=<your login> ./run.sh                  # or: mise run demo
 the bridge sends the feature back, the reviser works the comment, `owner` merges the root's pull request and the
 bridge passes the review. Then it writes `RESULT.md`: when and on what it ran, the rounds of the review, the root's
 pull request, the runs and the outcome. Everything a run creates is in `.gitignore`; `git clean -ffdX -- .` clears it
-for the next run. A step gets a clean environment, which a login of `gh` held in a variable or a keyring does not
-reach, so `run.sh` copies the token of yours into a login of the demo's own, `.aae/gh`, removed when it ends: the steps
-and the bridge get it through `.aae/bin/gh`, first on their `PATH`, and `owner` through its `env`. Compare with the
+for the next run. An exec step gets a clean environment (`PATH`, `HOME`, `LANG`), which a login of `gh` in a keyring
+does not reach: `run.sh` puts the token of the host's `gh` into `GITHUB_TOKEN`, unless it is set already, and the
+steps and `owner` name it by reference, `GITHUB_TOKEN = "${GITHUB_TOKEN}"`, in `[exec] env` of `root/config.toml` and
+in the `env` of `owner`. The same `[exec] env` gives the steps a literal, `MY_AWESOME_ENV_VAR`, which the step `merge`
+prints. Keys, layers and references: `docs/design/config.md`, "Environment values". Compare with the
 author's run: `gate-demo-example/`, `gate-demo-backend-example/`, `gate-demo-frontend-example/` and
 `RESULT-example.md`, with its date, versions and models. Your result differs: the agents decide anew each time.
 

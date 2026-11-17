@@ -77,8 +77,19 @@ fn lay_out(dir: &Path, fakes: &[(&str, &Provider)]) {
         fs::write(&path, fs::read_to_string(&path).unwrap() + &native).unwrap();
     }
     let root = demo.join("root");
-    let config = format!("projects = [\"{}\"]\n", root.display());
+    // The demo's `[exec]`, the last table of its orchestrator config, with the daemon's GITHUB_TOKEN by reference.
+    let demo_config = fs::read_to_string(src.join("root/config.toml")).unwrap();
+    let exec = &demo_config[demo_config.find("\n[exec]").unwrap()..];
+    let config = format!("projects = [\"{}\"]\n{exec}", root.display());
     fs::write(dir.join("config/aae/config.toml"), config).unwrap();
+    let daemon = dir.join("bin/aae");
+    fs::create_dir_all(dir.join("bin")).unwrap();
+    let wrapper = format!(
+        "#!/bin/sh\nGITHUB_TOKEN=gate-token exec {} \"$@\"\n",
+        env!("CARGO_BIN_EXE_aae")
+    );
+    fs::write(&daemon, wrapper).unwrap();
+    run(Command::new("chmod").arg("+x").arg(&daemon));
     run(Command::new("br").args(["init", "-q"]).current_dir(&root));
     for repo in REPOS {
         let (remote, clone) = (dir.join("remotes").join(format!("{repo}.git")), demo.join(repo));
@@ -252,6 +263,8 @@ async fn a_merge_of_the_root_pull_request_passes_the_review() {
         "{view}"
     );
     assert_eq!(view["step"], "merge", "{view}");
+    let merged = view["outcome"]["data"]["stdout"].as_str().unwrap();
+    assert!(merged.contains("MY_AWESOME_ENV_VAR is something"), "{merged}");
     assert_eq!(g.backend_pr(&view).1, "MERGED", "{view}");
     // `merge` took each repository back to its default branch.
     for repo in REPOS {

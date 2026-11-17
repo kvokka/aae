@@ -114,6 +114,7 @@ kind = "exec"
 max_attempts = 3
 command = ["sh", "-c", '''
 set -eu
+echo "merge: MY_AWESOME_ENV_VAR is ${MY_AWESOME_ENV_VAR:-not set}"   # a literal of [exec] in root/config.toml
 branch="feature/$AAE_BEAD"
 project=$(aae --json run show "$AAE_RUN" | jq -r .project)
 places=$(aae --json project list --project "$project")

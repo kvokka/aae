@@ -3,3 +3,12 @@
 # claude and codex need no section here: a section only sets a harness's defaults (model, binary).
 # aae.toml beside it is the project: its rigs, its pack, what the agents run on, its triggers and its reviewer.
 projects = ["."]
+
+# What the exec steps of the formulas (and the check scripts) get besides PATH, HOME and LANG, which is all they get
+# by default (docs/design/config.md, "Environment values").
+[exec]
+# A reference: the step gets the daemon's GITHUB_TOKEN, which run.sh sets from the login of the host's `gh`; `gh` and
+# `git push` in the steps use it. The token itself is never written into the config, the journal or a run.
+env.GITHUB_TOKEN = "${GITHUB_TOKEN}"
+# A literal: the step `merge` of dev.feature prints it. A `$` in a literal is written `$$`.
+env.MY_AWESOME_ENV_VAR = "something"
