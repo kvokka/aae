@@ -9,32 +9,13 @@ use std::{
     time::{Duration, Instant},
 };
 
-/// The harness wording of a failed turn → its kind; the first rule with a matching needle wins. Needles are looked
-/// for in `<codexErrorInfo> <message> <additionalDetails>` of the turn's final error.
-const KINDS: &[(&[&str], FailureKind)] = &[
-    // codex reports a provider's `insufficient_quota` as `usageLimitExceeded` too, worded "Quota exceeded. Check
-    // your plan and billing details." (contract scenario 7): billing goes first.
-    (
-        &["insufficient_quota", "usage_not_included", "billing"],
-        FailureKind::Billing,
-    ),
-    (&["usageLimitExceeded"], FailureKind::QuotaExhausted),
-    (&["rateLimitExceeded", ":429}"], FailureKind::RateLimited),
-    (
-        &[
-            "serverOverloaded",
-            "internalServerError",
-            ":500}",
-            ":502}",
-            ":503}",
-            ":529}",
-        ],
-        FailureKind::Overloaded,
-    ),
-    (&["unauthorized", ":401}"], FailureKind::AuthRequired),
-    (&["contextWindowExceeded"], FailureKind::ContextOverflow),
-    (&["modelNotFound", "badRequest", ":404}"], FailureKind::ConfigError),
-    (&["sessionBudgetExceeded"], FailureKind::RunawayTurn),
+/// The first words of a `usageLimitExceeded` that is no limit to wait out but a plan or credit matter (the
+/// messages of `QuotaExceeded`, `UsageNotIncluded` and the workspace credit and spend cap of codex 0.168).
+const BILLING_WORDS: &[&str] = &[
+    "Quota exceeded.",
+    "To use Codex with your ChatGPT plan",
+    "Your workspace is out of credits.",
+    "You hit your spend cap",
 ];
 
 /// How much of a harness message a failure keeps.
@@ -156,7 +137,7 @@ impl Stream {
                     text: params["error"]["message"].as_str().unwrap_or_default().to_owned(),
                 }];
                 // codex retries a 401 a few times; the account is known to be logged out at the first one.
-                let auth = params["error"]["codexErrorInfo"].to_string().contains(":401}");
+                let auth = matches!(info(&params["error"]), ("unauthorized", _) | (_, Some(401 | 403)));
                 if auth && !std::mem::replace(&mut thread.auth_reported, true) {
                     let mut failure = fail(&self.account, &thread.model, FailureKind::AuthRequired, msg.to_string());
                     failure.retried_by_harness = true;
@@ -254,29 +235,48 @@ impl Stream {
         out.into_iter().map(|e| (Some(id.to_owned()), e)).collect()
     }
 
+    /// The kind of a turn's final error by its `codexErrorInfo` (variant and HTTP status); the variants are those of
+    /// `codex-rs/app-server-protocol` v2 of codex 0.168. What no variant or status names is `unknown`.
     fn classify(&self, error: &Value, thread: &Thread) -> Failure {
-        let words = format!(
-            "{} {} {}",
-            error["codexErrorInfo"].to_string().replace(' ', ""),
-            error["message"],
-            error["additionalDetails"]
-        );
-        let found = KINDS
-            .iter()
-            .find(|(needles, _)| needles.iter().any(|n| words.contains(n)));
-        let Some((_, kind)) = found else {
-            let mut failure = fail(&self.account, &thread.model, FailureKind::Unknown, error.to_string());
-            failure.text = error["message"].as_str().map(str::to_owned);
-            return failure;
+        let kind = match info(error) {
+            ("usageLimitExceeded", _) => self.usage_limit(error),
+            ("rateLimitExceeded", _) | (_, Some(429)) => FailureKind::RateLimited,
+            ("serverOverloaded" | "internalServerError" | "flexUnavailable" | "policyCapacityUnavailable", _)
+            | (_, Some(408 | 500..=504 | 529)) => FailureKind::Overloaded,
+            ("unauthorized", _) | (_, Some(401 | 403)) => FailureKind::AuthRequired,
+            ("contextWindowExceeded", _) => FailureKind::ContextOverflow,
+            ("modelNotFound" | "badRequest" | "sandboxError", _) | (_, Some(404)) => FailureKind::ConfigError,
+            ("sessionBudgetExceeded", _) => FailureKind::RunawayTurn,
+            _ => FailureKind::Unknown,
         };
-        let mut failure = fail(&self.account, &thread.model, *kind, error.to_string());
-        if *kind == FailureKind::QuotaExhausted {
-            failure.retry_at_ms = self.reset_at();
+        let mut failure = fail(&self.account, &thread.model, kind, error.to_string());
+        match kind {
+            FailureKind::QuotaExhausted => failure.retry_at_ms = self.reset_at(),
+            FailureKind::Unknown => {
+                let text = error["message"].as_str().map(str::to_owned);
+                failure.text = text.or_else(|| Some(format!("codexErrorInfo={}", error["codexErrorInfo"])));
+            }
+            _ => {}
         }
         // codex retries 5xx itself; a 429 only when the provider sent `retry-after` (the turn saw a retry).
         failure.retried_by_harness =
-            *kind == FailureKind::Overloaded || (*kind == FailureKind::RateLimited && thread.retries > 0);
+            kind == FailureKind::Overloaded || (kind == FailureKind::RateLimited && thread.retries > 0);
         failure
+    }
+
+    /// codex words a used-up plan, a missing plan, no credit and a spend cap all as `usageLimitExceeded`: the
+    /// snapshot tells the workspace credit and spend cap apart, the message the plan matters.
+    fn usage_limit(&self, error: &Value) -> FailureKind {
+        let reached = self.limits["rateLimitReachedType"].as_str().unwrap_or_default();
+        let message = error["message"].as_str().unwrap_or_default();
+        if reached.starts_with("workspace_")
+            || self.limits["spendControlReached"] == true
+            || BILLING_WORDS.iter().any(|w| message.starts_with(w))
+        {
+            FailureKind::Billing
+        } else {
+            FailureKind::QuotaExhausted
+        }
     }
 
     /// When the exhausted window of the last snapshot resets, in ms.
@@ -295,6 +295,9 @@ impl Stream {
         let now_s = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .map_or(0, |d| i64::try_from(d.as_secs()).unwrap_or(i64::MAX));
+        for field in ["rateLimitReachedType", "spendControlReached"] {
+            self.limits[field] = limits[field].clone();
+        }
         for window in ["primary", "secondary"] {
             if !limits[window].is_null() {
                 self.limits[window] = limits[window].clone();
@@ -328,6 +331,19 @@ impl Stream {
                 (Some(id), usage)
             })
             .collect()
+    }
+}
+
+/// The variant of a `codexErrorInfo` and its `httpStatusCode`: `"modelNotFound"` or
+/// `{"httpConnectionFailed":{"httpStatusCode":401}}`.
+fn info(error: &Value) -> (&str, Option<u64>) {
+    match &error["codexErrorInfo"] {
+        Value::String(variant) => (variant, None),
+        Value::Object(map) => map
+            .iter()
+            .next()
+            .map_or(("", None), |(variant, v)| (variant, v["httpStatusCode"].as_u64())),
+        _ => ("", None),
     }
 }
 

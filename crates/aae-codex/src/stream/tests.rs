@@ -3,8 +3,10 @@ use crate::rpc;
 use aae_contract::driver::RateLimit;
 use serde_json::json;
 
+mod classify;
+
 /// The events of `messages` (notification bodies with a `method`), thread ids dropped.
-fn play(stream: &mut Stream, messages: &[Value]) -> Vec<Normalized> {
+pub(super) fn play(stream: &mut Stream, messages: &[Value]) -> Vec<Normalized> {
     let now = Instant::now();
     messages
         .iter()
@@ -13,11 +15,11 @@ fn play(stream: &mut Stream, messages: &[Value]) -> Vec<Normalized> {
         .collect()
 }
 
-fn note(method: &str, params: Value) -> Value {
+pub(super) fn note(method: &str, params: Value) -> Value {
     json!({ "method": method, "params": params })
 }
 
-fn turn_completed(status: &str, error: Value) -> Value {
+pub(super) fn turn_completed(status: &str, error: Value) -> Value {
     note(
         "turn/completed",
         json!({ "threadId": "t", "turn": { "id": "u", "status": status, "error": error } }),
@@ -152,42 +154,6 @@ fn a_window_past_its_reset_no_longer_counts() {
         }),
     };
     assert_eq!(events[1..], [usage(1.0, 1_000), usage(0.5, 4_000_000_000)]);
-}
-
-#[test]
-fn every_final_error_has_its_kind() {
-    let cases = [
-        (
-            json!({ "responseTooManyFailedAttempts": { "httpStatusCode": 429 } }),
-            FailureKind::RateLimited,
-            false,
-        ),
-        (json!("serverOverloaded"), FailureKind::Overloaded, true),
-        (
-            json!({ "httpConnectionFailed": { "httpStatusCode": 401 } }),
-            FailureKind::AuthRequired,
-            false,
-        ),
-        (json!("contextWindowExceeded"), FailureKind::ContextOverflow, false),
-        (json!("modelNotFound"), FailureKind::ConfigError, false),
-        (json!("other"), FailureKind::Unknown, false),
-    ];
-    for (info, kind, retried) in cases {
-        let mut stream = Stream::new(None);
-        let error = json!({ "message": "it failed", "codexErrorInfo": info });
-        let events = play(
-            &mut stream,
-            &[
-                note("turn/started", json!({ "threadId": "t", "turn": { "id": "u" } })),
-                note("error", json!({ "threadId": "t", "willRetry": false, "error": error })),
-                turn_completed("failed", error.clone()),
-            ],
-        );
-        let Normalized::Failure(failure) = &events[1] else {
-            panic!("{events:?}")
-        };
-        assert_eq!((failure.kind, failure.retried_by_harness), (kind, retried), "{info}");
-    }
 }
 
 #[test]
