@@ -1,0 +1,343 @@
+//! The split of an effective config into the app-server process and the thread.
+
+use crate::{
+    Codex, part,
+    tests::{agent, config},
+};
+use loop_manager_contract::driver::{Driver, FailureKind, SessionPlan};
+use serde_json::{Value, json};
+use std::path::Path;
+
+#[test]
+fn the_process_gets_the_native_block_and_the_thread_the_rest() {
+    let mut config = config();
+    config.hooks.insert(
+        "stop".into(),
+        agent(loop_manager_contract::config::Hook {
+            enabled: true,
+            event: Some("Stop".into()),
+            matcher: None,
+            command: Some("true".into()),
+            timeout: None,
+        }),
+    );
+    let plan = SessionPlan::New {
+        workdir: "/w".into(),
+        run: "r".into(),
+        attempt: 1,
+        token: "tok".into(),
+        actor: Some(("BD_ACTOR".into(), "loop-manager:r:1".into())),
+        bead: Some("bd-1".into()),
+    };
+    let driver = Codex::new("codex".into(), "/state".into(), None, 8);
+    let split = driver.split(&config, &plan).unwrap();
+    let p = &split.process.0;
+    let args = part::args(p);
+    assert!(
+        args.contains(&"sandbox_mode=\"danger-full-access\"".to_owned()),
+        "{args:?}"
+    );
+    // The native approval policy is the thread's `approvalPolicy`, not a process override.
+    assert!(!args.iter().any(|a| a.starts_with("approval_policy")), "{args:?}");
+    let provider = args.iter().find(|a| a.starts_with("model_providers=")).unwrap();
+    let parsed: toml::Table = toml::from_str(provider).unwrap();
+    assert_eq!(
+        parsed["model_providers"]["fake"]["wire_api"].as_str(),
+        Some("responses")
+    );
+    assert!(p["home"].as_str().unwrap().starts_with("/state/codex/"));
+    let env = part::env(p, "i1", None).unwrap();
+    assert!(env.contains(&("OPENAI_API_KEY".to_owned(), "sk-fake".to_owned())));
+    assert!(env.iter().any(|(k, v)| k == "HOME" && v.ends_with("/home")));
+    let s = &split.session.0;
+    assert_eq!(s["cwd"], "/w");
+    assert_eq!(
+        (s["model"].as_str(), s["approvalPolicy"].as_str()),
+        (Some("gpt-fake"), Some("never"))
+    );
+    assert_eq!(
+        s["config"]["shell_environment_policy"]["set"],
+        json!({ "LOOP_MANAGER_RUN": "r", "LOOP_MANAGER_ATTEMPT_TOKEN": "tok", "BD_ACTOR": "loop-manager:r:1", "LOOP_MANAGER_BEAD": "bd-1" })
+    );
+    // A hook runs with the process environment: the attempt's goes on its command line.
+    let exports = "export BD_ACTOR='loop-manager:r:1' LOOP_MANAGER_ATTEMPT_TOKEN='tok' LOOP_MANAGER_BEAD='bd-1' LOOP_MANAGER_RUN='r'; true";
+    assert_eq!(s["config"]["hooks"]["Stop"][0]["hooks"][0]["command"], exports);
+    assert_eq!(s["config"]["bypass_hook_trust"], true);
+    assert_eq!(s["config"]["model_reasoning_effort"], "low");
+    assert!(
+        s["config"]["agents"].is_null() && s["roles"].is_null(),
+        "no target, no role"
+    );
+    // The session part is not in the fingerprint: two runs of one agent share a process.
+    let other = SessionPlan::New {
+        workdir: "/v".into(),
+        run: "q".into(),
+        attempt: 2,
+        token: "t2".into(),
+        actor: None,
+        bead: None,
+    };
+    let other = driver.split(&config, &other).unwrap();
+    assert_eq!(other.fingerprint, split.fingerprint);
+    let set = &other.session.0["config"]["shell_environment_policy"]["set"];
+    assert!(
+        set.get("LOOP_MANAGER_BEAD").is_none(),
+        "a run without a bead has no LOOP_MANAGER_BEAD: {set}"
+    );
+    // A config naming no policy gets the harness-decides default (decision 117); a named one is kept.
+    let native = &mut config.native.as_mut().unwrap().value;
+    native.as_object_mut().unwrap().remove("approval_policy");
+    let policy = |config: &loop_manager_contract::config::EffectiveConfig| {
+        driver.split(config, &plan).unwrap().session.0["approvalPolicy"].clone()
+    };
+    assert_eq!(policy(&config), "never");
+    config.native.as_mut().unwrap().value["approval_policy"] = json!("untrusted");
+    assert_eq!(policy(&config), "untrusted");
+    config.native = Some(agent(json!("x")));
+    assert_eq!(driver.split(&config, &plan).unwrap_err().kind, FailureKind::ConfigError);
+}
+
+#[test]
+fn a_process_without_a_key_of_its_own_logs_in_by_the_host_provider() {
+    let host = tempfile::tempdir().unwrap();
+    let login = |isolated: bool| {
+        let mut p = json!({ "home": "/h", "env": {}, "overrides": ["model=\"m\""] });
+        part::host_provider(&mut p, host.path(), isolated);
+        let keyed = part::env(&p, "i1", None)
+            .unwrap()
+            .iter()
+            .any(|(k, _)| k == "CARGO_MANIFEST_DIR");
+        (keyed, part::args(&p))
+    };
+    assert!(!login(false).0, "no host config, no key");
+    std::fs::write(
+        host.path().join("config.toml"),
+        "model_provider = \"my.proxy\"\n[model_providers.\"my.proxy\"]\nenv_key = \"CARGO_MANIFEST_DIR\"\n\
+         base_url = \"http://proxy\"\nexperimental_bearer_token = \"secret\"\nhttp_headers = { a = \"secret\" }\n",
+    )
+    .unwrap();
+    let (keyed, args) = login(false);
+    assert!(keyed);
+    assert!(
+        !args.iter().any(|a| a.contains("proxy")),
+        "codex reads the host config itself: {args:?}"
+    );
+    // An isolated process does not read the host config: the provider comes as flags before the native block's.
+    let (keyed, args) = login(true);
+    assert!(keyed);
+    let at = |flag: &str| args.iter().position(|a| a.starts_with(flag)).expect(flag);
+    assert!(at("model_provider=\"my.proxy\"") < at("model=\"m\""), "{args:?}");
+    let table: toml::Table = toml::from_str(&args[at("model_providers=")]).unwrap();
+    assert_eq!(
+        table["model_providers"]["my.proxy"]["base_url"].as_str(),
+        Some("http://proxy")
+    );
+    assert!(
+        !args.iter().any(|a| a.contains("secret")),
+        "secrets stay out of argv: {args:?}"
+    );
+}
+
+#[test]
+fn no_sandbox_unless_the_config_or_the_inherited_host_config_sets_one() {
+    let host = tempfile::tempdir().unwrap();
+    let sandbox = |config: &loop_manager_contract::config::EffectiveConfig| -> Vec<String> {
+        let p = part::process(config, Path::new("/state"), host.path()).unwrap();
+        part::args(&p)
+            .into_iter()
+            .filter(|a| a.starts_with("sandbox_mode="))
+            .collect()
+    };
+    let mut config = config();
+    config.native = Some(agent(json!({ "sandbox_mode": "read-only" })));
+    assert_eq!(sandbox(&config), ["sandbox_mode=\"read-only\""]);
+    config.native = None;
+    assert_eq!(sandbox(&config), ["sandbox_mode=\"danger-full-access\""]);
+    config.inherit_host = Some(agent(true));
+    assert_eq!(sandbox(&config), ["sandbox_mode=\"danger-full-access\""]);
+    std::fs::write(host.path().join("config.toml"), "sandbox_mode = \"workspace-write\"\n").unwrap();
+    assert_eq!(sandbox(&config), Vec::<String>::new(), "the host's own choice stands");
+    config.inherit_host = Some(agent(false));
+    assert_eq!(
+        sandbox(&config),
+        ["sandbox_mode=\"danger-full-access\""],
+        "an isolated one does not read it"
+    );
+}
+
+#[test]
+fn a_process_inheriting_the_host_with_skills_gets_a_home_linking_the_hosts() {
+    let (host, state, skill) = (
+        tempfile::tempdir().unwrap(),
+        tempfile::tempdir().unwrap(),
+        tempfile::tempdir().unwrap(),
+    );
+    for file in ["auth.json", "config.toml", "AGENTS.md"] {
+        std::fs::write(host.path().join(file), "").unwrap();
+    }
+    for dir in ["skills/mail", "skills/notes", "skills/.system"] {
+        std::fs::create_dir_all(host.path().join(dir)).unwrap();
+    }
+    let mut config = config();
+    config.inherit_host = Some(agent(true));
+    let p = part::process(&config, state.path(), host.path()).unwrap();
+    assert_eq!(p["home"], json!(host.path()), "without skills the host's home itself");
+    assert!(p["user_home"].is_null());
+    let mail = loop_manager_contract::config::Skill {
+        enabled: true,
+        path: Some(skill.path().to_owned()),
+    };
+    config.skills.insert("mail".into(), agent(mail));
+    let p = part::process(&config, state.path(), host.path()).unwrap();
+    let home = Path::new(p["home"].as_str().unwrap());
+    assert!(home.starts_with(state.path()), "{p}");
+    assert!(p["user_home"].is_null(), "HOME stays the host's");
+    part::materialize(&p).unwrap();
+    for (link, target) in [
+        ("auth.json", host.path().join("auth.json")),
+        ("config.toml", host.path().join("config.toml")),
+        ("AGENTS.md", host.path().join("AGENTS.md")),
+        ("skills/mail", skill.path().to_owned()),
+        ("skills/notes", host.path().join("skills/notes")),
+    ] {
+        assert_eq!(std::fs::read_link(home.join(link)).unwrap(), target, "{link}");
+    }
+    assert!(
+        home.join("skills/.system").symlink_metadata().is_err(),
+        "codex makes its own"
+    );
+    let env = part::env(&p, "i1", None).unwrap();
+    assert!(env.contains(&("CODEX_HOME".to_owned(), home.to_string_lossy().into_owned())));
+}
+
+#[test]
+fn only_a_process_inheriting_the_host_gets_its_network_settings() {
+    let vars = |p: Value| part::daemon_vars(&p).collect::<Vec<_>>();
+    let inheriting = vars(json!({ "home": "/h" }));
+    for var in ["PATH", "HTTPS_PROXY", "NO_PROXY", "SSL_CERT_FILE"] {
+        assert!(inheriting.contains(&var), "{var}");
+    }
+    let isolated = vars(json!({ "home": "/h", "user_home": "/u" }));
+    assert!(isolated.contains(&"PATH") && !isolated.contains(&"HTTPS_PROXY"));
+}
+
+#[test]
+fn a_thread_read_that_got_no_answer_is_no_missing_transcript() {
+    use loop_manager_contract::driver::{Failure, Source, Transcript};
+    let failed = |kind| crate::rpc::unread(Failure::new(kind, Source::Adapter));
+    assert_eq!(failed(FailureKind::Stall).unwrap_err().kind, FailureKind::Stall);
+    assert_eq!(
+        failed(FailureKind::HarnessCrash).unwrap_err().kind,
+        FailureKind::HarnessCrash
+    );
+    assert_eq!(failed(FailureKind::Unknown).unwrap(), Transcript::Missing);
+}
+
+#[test]
+fn the_process_part_keeps_the_reference_and_the_process_gets_the_value() {
+    let mut config = config();
+    let plan = SessionPlan::New {
+        workdir: "/w".into(),
+        run: "r".into(),
+        attempt: 1,
+        token: "tok".into(),
+        actor: None,
+        bead: None,
+    };
+    let driver = Codex::new("codex".into(), "/state".into(), None, 8);
+    let mut key = |value: &str| {
+        config.env.insert("OPENAI_API_KEY".into(), agent(value.into()));
+        driver.split(&config, &plan).unwrap().process.0
+    };
+    let p = key("${CARGO_PKG_NAME}");
+    assert_eq!(
+        p["env"]["OPENAI_API_KEY"], "${CARGO_PKG_NAME}",
+        "the fingerprint and the account too"
+    );
+    let env = part::env(&p, "i1", None).unwrap();
+    assert!(
+        env.contains(&("OPENAI_API_KEY".to_owned(), "loop-manager-codex".to_owned())),
+        "{env:?}"
+    );
+    let p = key("${LOOP_MANAGER_TEST_NO_SUCH_VARIABLE}");
+    assert_eq!(part::env(&p, "i1", None).unwrap_err().kind, FailureKind::ConfigError);
+}
+
+#[test]
+fn a_thread_gets_a_role_per_target_and_the_process_their_skills() {
+    let skill = |path: &str| {
+        agent(loop_manager_contract::config::Skill {
+            enabled: true,
+            path: Some(path.into()),
+        })
+    };
+    let mut config = config();
+    config.skills.insert("own".into(), skill("/s/own"));
+    config.native.as_mut().unwrap().value["agents"] = json!({ "max_threads": 15 });
+    let mut qa = config.clone();
+    qa.description = Some(agent("Checks.".into()));
+    qa.system_prompt = Some(agent("Check.".into()));
+    qa.model = Some(agent("gpt-role".into()));
+    qa.effort = Some(agent("high".into()));
+    qa.skills = [("qa".to_owned(), skill("/s/qa"))].into();
+    let mut bare = config.clone();
+    bare.description = Some(agent("Bare.".into()));
+    (bare.model, bare.effort, bare.skills) = (None, None, Default::default());
+    let mut empty = bare.clone();
+    empty.system_prompt = Some(agent(String::new()));
+    let targets = [("kit.qa", qa), ("bare", bare), ("empty", empty)];
+    config.targets = targets.map(|(n, t)| (n.to_owned(), t)).into();
+    let driver = Codex::new("codex".into(), "/state".into(), None, 8);
+    let new = SessionPlan::New {
+        workdir: "/w".into(),
+        run: "r".into(),
+        attempt: 1,
+        token: "tok".into(),
+        actor: None,
+        bead: None,
+    };
+    let split = driver.split(&config, &new).unwrap();
+    assert_eq!(split.process.0["skills"], json!({ "own": "/s/own", "qa": "/s/qa" }));
+    let s = &split.session.0;
+    let agents = &s["config"]["agents"];
+    assert_eq!(agents["max_threads"], 15, "the native table stays: {agents}");
+    assert_eq!(agents["kit.qa"]["description"], "Checks.");
+    let role = |name: &str| -> toml::Table {
+        let file = agents[name]["config_file"].as_str().unwrap();
+        assert!(
+            file.starts_with("/state/codex/roles/") && file.ends_with(".toml"),
+            "{file}"
+        );
+        toml::from_str(s["roles"][file].as_str().unwrap()).unwrap()
+    };
+    let off = |paths: &[&str]| {
+        let entries: Vec<_> = (paths.iter())
+            .map(|p| toml::toml! { path = (format!("{p}/SKILL.md")) enabled = false })
+            .map(toml::Value::Table)
+            .collect();
+        toml::Value::Table(toml::Table::from_iter([("config".to_owned(), entries.into())]))
+    };
+    let qa = role("kit.qa");
+    assert_eq!(qa["developer_instructions"].as_str(), Some("Check."));
+    assert_eq!(qa["model"].as_str(), Some("gpt-role"));
+    assert_eq!(qa["model_reasoning_effort"].as_str(), Some("high"));
+    assert_eq!(qa["skills"], off(&["/s/own"]));
+    // No role prompt: the session's instructions stay; every skill of the process is off.
+    let bare = role("bare");
+    assert_eq!(bare.keys().collect::<Vec<_>>(), ["skills"]);
+    assert_eq!(bare["skills"], off(&["/s/own", "/s/qa"]));
+    // An empty role prompt is none: codex drops a role whose `developer_instructions` is empty.
+    assert_eq!(role("empty"), bare);
+    // A resume gives them again.
+    let resume = SessionPlan::Resume {
+        session: loop_manager_contract::driver::SessionRef(json!({ "thread_id": "t" })),
+        workdir: "/w".into(),
+        run: "r".into(),
+        attempt: 2,
+        token: "t2".into(),
+        actor: None,
+        bead: None,
+    };
+    let again = driver.split(&config, &resume).unwrap().session.0;
+    assert_eq!((&again["config"]["agents"], &again["roles"]), (agents, &s["roles"]));
+}

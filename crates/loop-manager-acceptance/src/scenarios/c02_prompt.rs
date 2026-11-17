@@ -1,0 +1,32 @@
+//! Criterion 2: a formula of one ai step passes through a real run of the cheapest model of claude and of
+//! codex with the host login, ending `pass` by the finisher. Costs money; runs only on an explicit spec run.
+
+use super::Live;
+use crate::{
+    Env,
+    daemon::{Daemon, write},
+};
+use std::{sync::Arc, time::Duration};
+
+pub(crate) async fn run(env: Arc<Env>, live: Live) -> String {
+    let loop_manager = env.loop_manager.display().to_string();
+    let d = Daemon::start_on_host(&env, |root| {
+        live.agent(root);
+        write(
+            root.join("config/loop-manager/shop/formulas/dev.toml"),
+            "name = \"dev\"\n[[step]]\nkind = \"ai\"\nagent = \"dev\"\n",
+        );
+        write(
+            root.join("config/loop-manager/shop/agents/dev/prompt.template.md"),
+            format!(
+                "Run this shell command once and nothing else: `{loop_manager} finish pass --summary done`. Then stop."
+            ),
+        );
+    })
+    .await;
+    live.logged_in(&d);
+    let run = d.create("dev").await;
+    let view = d.until_state(&run, "passed", Duration::from_secs(300)).await;
+    assert_eq!(view["attempts"].as_array().map(Vec::len), Some(1), "{view}");
+    live.describe()
+}

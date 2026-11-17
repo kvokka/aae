@@ -10,12 +10,12 @@ error in every file.
 
 - The daemon loads everything at once from the orchestrator file: the projects it lists, their packs, agents,
   formulas, triggers and the addons they declare. A missing orchestrator file is an empty config. Before reading,
-  `aae` downloads the packs and addons from git into its cache (see [below](#packs-and-addons-from-git)), as do
-  `POST /v1/config/check` and `aae config check|explain` and `aae doctor` with `--config <file>`; the latest
-  revision of an unpinned pack is asked for at every load.
+  `loop-manager` downloads the packs and addons from git into its cache (see [below](#packs-and-addons-from-git)), as do
+  `POST /v1/config/check` and `loop-manager config check|explain` and `loop-manager doctor` with `--config <file>`; the
+  latest revision of an unpinned pack is asked for at every load.
 - Load is all or nothing: every error found is reported with its file, and an invalid config is never applied.
-  The daemon re-reads only on an explicit command: `aae config reload` (`POST /v1/config/reload`); on
-  error the previous config stays in force, and `aae config check` reports the errors without applying anything
+  The daemon re-reads only on an explicit command: `loop-manager config reload` (`POST /v1/config/reload`); on
+  error the previous config stays in force, and `loop-manager config check` reports the errors without applying anything
   (the daemon's file; `--config <file>` loads a file in the CLI, with no daemon).
 - A retired key is a config error of one line that says where it is written now: `permission_mode` (the native block of
   the harness), `[overrides.<agent>]` (`[agents.<agent>]`), step kind `prompt` (`ai`), input type `bead` (`task`), the
@@ -63,17 +63,17 @@ API error or a quota. Its matchers name `Bash`, `apply_patch` (aliases `Edit`, `
 
 An `env` value of an agent (`[settings]` of any layer, `agent.toml`, a variant, an edit), of `[exec]` (orchestrator
 and project) and of an `exec` step is text in which `${NAME}` stands for the variable `NAME` of the daemon's
-environment (`NAME` is `[A-Za-z_][A-Za-z0-9_]*`) and `$$` for a literal `$`: `GH_TOKEN = "${AAE_GH_TOKEN}"` gives a
-session a key the config file does not hold, under a name of its own. Any other `$` (`$HOME`, `${A:-b}`, an unclosed
-`${`) is a load error naming the file and the key (`` `env.KEY`: a `$` is written `$$`, a variable of the daemon
-`${NAME}` ``); the load checks the form only, not that the variable exists. A reference is resolved when the process
-starts and is never stored resolved: the run's snapshot, the journal, the instance fingerprint, the account id
+environment (`NAME` is `[A-Za-z_][A-Za-z0-9_]*`) and `$$` for a literal `$`: `GH_TOKEN = "${LOOP_MANAGER_GH_TOKEN}"`
+gives a session a key the config file does not hold, under a name of its own. Any other `$` (`$HOME`, `${A:-b}`, an
+unclosed `${`) is a load error naming the file and the key (`` `env.KEY`: a `$` is written `$$`, a variable of the
+daemon `${NAME}` ``); the load checks the form only, not that the variable exists. A reference is resolved when the
+process starts and is never stored resolved: the run's snapshot, the journal, the instance fingerprint, the account id
 (contracts 4.5) and `config explain` keep `${NAME}`. A variable the daemon does not have fails the start as
 `config_error` naming the key and the variable, never quoting the value: an `exec` step's attempt, or the agent's
 session (from the adapter); a check script it keeps from starting fails the run at once, with no repeat, as
 `failed{infrastructure}` with reason `config_error: check script: …`. The `env` of an MCP server, of a `[[service]]`
-and of an orchestrator hook takes no references: its values are literal. What aae
-puts into an `env` itself (the tracker's variables, `${AAE_ADDON_DIR}` of an addon, `PATH` with addon `bin/`
+and of an orchestrator hook takes no references: its values are literal. What loop-manager
+puts into an `env` itself (the tracker's variables, `${LOOP_MANAGER_ADDON_DIR}` of an addon, `PATH` with addon `bin/`
 directories, the `env` of a `run.preparing` decision) is literal too, a `$` in it no reference. Output a command
 prints goes into the step's result in the journal, so a command must not print a secret it was given.
 
@@ -91,34 +91,36 @@ does not allow is denied at once, and the agent sees the denial; each denial the
   `PermissionRequest` and `PreToolUse`.
 - codex: `native.codex.approval_policy` (its granular form included), `sandbox_mode`, and the `PreToolUse` hook. Under
   a policy other than `never`, a command or file change that needs approval is declined.
-- A hook may ask aae or another agent for the decision through the CLI or the MCP of aae: the session environment
-  carries `AAE_RUN`, `AAE_ATTEMPT_TOKEN`, `AAE_SOCKET` and, when the run has a bead, `AAE_BEAD`.
+- A hook may ask loop-manager or another agent for the decision through the CLI or the MCP of loop-manager: the session
+  environment carries `LOOP_MANAGER_RUN`, `LOOP_MANAGER_ATTEMPT_TOKEN`, `LOOP_MANAGER_SOCKET` and, when the run has a
+  bead, `LOOP_MANAGER_BEAD`.
 
 claude refuses `bypassPermissions` when it runs as root (a container, CI): it exits before `init` with
 "--dangerously-skip-permissions cannot be used with root/sudo privileges", and the attempt fails. Under root, either
 tell claude it runs in a sandbox, `env = { IS_SANDBOX = "1" }`, which keeps the default, or name another mode in
 `native.claude.permission_mode` (as `dontAsk` or `acceptEdits`) with the `permissions.allow` rules the agents need.
 
-`aae finish` is a shell call of the agent. The default lets it through; a strict config must allow it explicitly, for
-claude `permissions = { allow = ["Bash(aae finish *)"] }`.
+`loop-manager finish` is a shell call of the agent. The default lets it through; a strict config must allow it
+explicitly, for claude `permissions = { allow = ["Bash(loop-manager finish *)"] }`.
 
 ### MCP servers and services
 
 - `url` alone: an HTTP server someone else runs. Every session gets it with its own `headers` and the identity
-  headers `X-Aae-Project`, `X-Aae-Rig`, `X-Aae-Agent` and `X-Aae-Run`.
+  headers `X-Loop-Manager-Project`, `X-Loop-Manager-Rig`, `X-Loop-Manager-Agent` and `X-Loop-Manager-Run`.
 - `command` alone: a stdio server. With `scope = "session"` the harness starts it in each session. Otherwise
   (`orchestrator`, the default, or `project`) it is shared: the daemon runs it as a service behind the bridge
-  `aae mcp-bridge -- <command>` (internal subcommand of the `aae` binary, `crates/aae/src/bridge.rs`; the bridge is
-  not part of the core), whose MCP endpoint `/mcp` the sessions get as for a service with `mcp`. The bridge
-  initializes the server once, answers every client's handshake itself in both protocol epochs, passes each request
-  under its own id with the identity headers as `params._meta` (`aae/project`, `aae/rig`, `aae/agent`, `aae/run`),
-  and does not pass the server's own requests and notifications to clients. A server with state per client (a
-  browser) or that needs the session's working directory (the bridge starts in `/`) needs `scope = "session"`.
+  `loop-manager mcp-bridge -- <command>` (internal subcommand of the `loop-manager` binary,
+  `crates/loop-manager/src/bridge.rs`; the bridge is not part of the core), whose MCP endpoint `/mcp` the sessions get
+  as for a service with `mcp`. The bridge initializes the server once, answers every client's handshake itself in both
+  protocol epochs, passes each request under its own id with the identity headers as `params._meta`
+  (`loop-manager/project`, `loop-manager/rig`, `loop-manager/agent`, `loop-manager/run`), and does not pass the server's
+  own requests and notifications to clients. A server with state per client (a browser) or that needs the session's
+  working directory (the bridge starts in `/`) needs `scope = "session"`.
 - `command` and `url` together: an error; a server the daemon runs is a `[[service]]` with `mcp` (below).
 - One server per scope, not per session, is the default: one HTTP MCP server served claude, codex and pi, and the
   identity reached it in the headers (2026-11-10; claude 2.1.321, codex 0.166.0, pi 1.5.0).
   <!-- MEASURE id=shared-http-mcp date=2026-11-10 ver=claude-2.1.321,codex-0.166.0,pi-1.5.0 env=linux-arm64-orbstack src=reports/36 note="6 calls, 2 per harness; not checked under load" -->
-- The server aae serves, and any shared server recommended with it, speaks both MCP protocol epochs: stateless
+- The server loop-manager serves, and any shared server recommended with it, speaks both MCP protocol epochs: stateless
   2026-07-28 and the `initialize` epoch ([mcp.md](../api/mcp.md#protocol-epochs)). codex 0.166 speaks only
   2025-06-18 and refuses a server of the new epoch only.
 - A restart of a shared server has to be quick: claude reconnects to a restarted stateful server in 7–26 s, and in
@@ -126,13 +128,13 @@ claude `permissions = { allow = ["Bash(aae finish *)"] }`.
   <!-- MEASURE id=claude-mcp-reconnect date=2026-11-10 ver=claude-2.1.321 env=linux-arm64-orbstack src=reports/36 note="4 runs: 6.8 / 15.7 / 20.6 / 25.7 s; stateful HTTP MCP, restarted on the same port; on stateless 2026-07-28 the restart is transparent" -->
   A failed MCP server is a failed tool, not a failed run.
 
-A **service** is a `[[service]]` table at the top level of the orchestrator config, a project's `aae.toml` or a
+A **service** is a `[[service]]` table at the top level of the orchestrator config, a project's `loop-manager.toml` or a
 `addon.toml` (not of `[settings]`): a long-lived process the daemon supervises, with MCP optional.
 
 ```toml
 [[service]]
 name = "mail"                                  # required; no `.`; unique in its file
-command = ["mail-d", "--port", "${AAE_SERVICE_PORT}"]  # required, non-empty
+command = ["mail-d", "--port", "${LOOP_MANAGER_SERVICE_PORT}"]  # required, non-empty
 env = { MAIL_DIR = "/srv/mail" }               # optional, added to its clean environment
 scope = "orchestrator"                         # | "project"; `session` is an error
 health = { http = "/health" }                  # | "http" (= /health) | { command = [...] }; none: the port accepts
@@ -141,49 +143,50 @@ mcp = { url = "/mcp" }                         # | true (= /mcp); none: no MCP e
 
 - Layers: services merge by name like `mcp` entries; a stronger layer replaces a service whole. An orchestrator or
   project service is used by every session of its level; an addon's by the sessions of the agents that attach the
-  addon. `${AAE_ADDON_DIR}` in an addon's service `command`, `env` and `health.command` is the addon directory.
+  addon. `${LOOP_MANAGER_ADDON_DIR}` in an addon's service `command`, `env` and `health.command` is the addon directory.
   `explain` prints `service.<name>` with its layer.
 - The daemon runs `command` once per scope (`orchestrator`, the default, or `project`), lazily, when the first
   session that uses it starts, and stops it 5 minutes after its last session ended. The process starts in `/` with a
-  clean environment with `env`, `AAE_SERVICE_PORT` (a free port on 127.0.0.1 picked by the daemon; also replaces
-  `${AAE_SERVICE_PORT}` in `command`) and `AAE_SERVICE_TOKEN`; it must refuse requests without
-  `Authorization: Bearer <token>`.
+  clean environment with `env`, `LOOP_MANAGER_SERVICE_PORT` (a free port on 127.0.0.1 picked by the daemon; also
+  replaces `${LOOP_MANAGER_SERVICE_PORT}` in `command`) and `LOOP_MANAGER_SERVICE_TOKEN`; it must refuse requests
+  without `Authorization: Bearer <token>`.
 - With `mcp`, sessions get `http://127.0.0.1:<port><path>` as an MCP server of the service's name (it replaces an
   `mcp` entry of that name) with the token and the identity headers. Without `mcp`, sessions get
-  `AAE_SERVICE_<NAME>_URL` (`http://127.0.0.1:<port>`) and `AAE_SERVICE_<NAME>_TOKEN` in their environment
-  (`<NAME>`: the name in upper case, other characters than letters and digits as `_`). Either way a session start
-  waits up to 30 s for the service to be `ready` and gets the port it is ready on.
+  `LOOP_MANAGER_SERVICE_<NAME>_URL` (`http://127.0.0.1:<port>`) and `LOOP_MANAGER_SERVICE_<NAME>_TOKEN` in their
+  environment (`<NAME>`: the name in upper case, other characters than letters and digits as `_`). Either way a session
+  start waits up to 30 s for the service to be `ready` and gets the port it is ready on.
 - Health decides readiness only: the service is `ready` once its check passes (checked every 100 ms, each check
   up to 5 s; `http` is a `GET` with the token answering 2xx; `command` runs with the service's environment and
   passes on exit 0). Not ready within 30 s, it is stopped and fails. Once ready, a live service is one whose
   process lives: there is no periodic check. A server that is not up is a tool failure, not a failed run.
 - The port is checked free right before each start; one taken (someone else listens there and would get the token) fails
   that start without running `command`. A port or `http` check passes only while the service's processes (the ones with
-  its `AAE_INSTANCE` marker) alone listen on the port where a connection to `127.0.0.1` reaches (`127.0.0.1`, `0.0.0.0`,
-  `::`, `::ffff:127.0.0.1`), so a process that takes the port while the service starts gets no check and no token; the
-  service then fails to bind and starts again. So a service whose listener is not its own process (`docker run -p`: the
-  Docker daemon's proxy listens; a wrapper that clears the environment, as `env -i` or `sudo` without `-E`) never passes
-  a port or `http` check: give it `health = { command = [...] }`. A `command` check checks what it likes, and does not
-  tell who listens: a process that takes the port while such a service starts may get the token. A service that dies or
-  fails is started again (with the effect backoff) while sessions use it: on a new port until it was first `ready`, then
-  on the same port, so the sessions holding its URL reconnect, unless two starts in a row find someone else listening
-  there: then on a new port with a new token, which new sessions get; the sessions holding the old URL lose the tool,
-  and whoever holds the old port cannot use the old token. Every move to a new port comes with a new token. With no
-  sessions it is dropped. A session start that waited 30 s in vain gets port 0 and no token: the port the service was
-  not ready on may be someone else's. On macOS the listener is not told (`/proc` only), any listener passes the check. A
-  changed `command`, `env` or `health` is a new service; the old one idles out. Events: `service.starting`,
-  `service.ready`, `service.failed`, `service.stopped`; `aae instance list` lists services too.
-- `url` with `${AAE_API}`: the daemon's own API on TCP, e.g. `url = "${AAE_API}/mcp"` for its MCP frontend. The
-  placeholder becomes `http://<api_tcp>` and the session gets `Authorization: Bearer <token>` with the token of the
-  daemon's start. With no `api_tcp` the session goes without the server, as with a service that is not up.
+  its `LOOP_MANAGER_INSTANCE` marker) alone listen on the port where a connection to `127.0.0.1` reaches (`127.0.0.1`,
+  `0.0.0.0`, `::`, `::ffff:127.0.0.1`), so a process that takes the port while the service starts gets no check and no
+  token; the service then fails to bind and starts again. So a service whose listener is not its own process
+  (`docker run -p`: the Docker daemon's proxy listens; a wrapper that clears the environment, as `env -i` or `sudo`
+  without `-E`) never passes a port or `http` check: give it `health = { command = [...] }`. A `command` check checks
+  what it likes, and does not tell who listens: a process that takes the port while such a service starts may get the
+  token. A service that dies or fails is started again (with the effect backoff) while sessions use it: on a new port
+  until it was first `ready`, then on the same port, so the sessions holding its URL reconnect, unless two starts in a
+  row find someone else listening there: then on a new port with a new token, which new sessions get; the sessions
+  holding the old URL lose the tool, and whoever holds the old port cannot use the old token. Every move to a new port
+  comes with a new token. With no sessions it is dropped. A session start that waited 30 s in vain gets port 0 and no
+  token: the port the service was not ready on may be someone else's. On macOS the listener is not told (`/proc` only),
+  any listener passes the check. A changed `command`, `env` or `health` is a new service; the old one idles out. Events:
+  `service.starting`, `service.ready`, `service.failed`, `service.stopped`; `loop-manager instance list` lists services
+  too.
+- `url` with `${LOOP_MANAGER_API}`: the daemon's own API on TCP, e.g. `url = "${LOOP_MANAGER_API}/mcp"` for its MCP
+  frontend. The placeholder becomes `http://<api_tcp>` and the session gets `Authorization: Bearer <token>` with the
+  token of the daemon's start. With no `api_tcp` the session goes without the server, as with a service that is not up.
 
 ## Effective config and "explain config"
 
-Settings live on three levels: the orchestrator (`~/.config/aae/config.toml`: the harnesses with the default model of
-each, shared MCP, hooks, skills, env, addons), the project (`aae.toml`: rigs, packs, project addons, `[agents]` edits) and
-the rig (a section of `aae.toml`: repository path, variables, `[agents]` edits). An agent is not a level but a consumer: its
-`agent.toml` gives the defaults of the role, and every setting, the harness and the model too, comes from the
-layers, weakest first:
+Settings live on three levels: the orchestrator (`~/.config/loop-manager/config.toml`: the harnesses with the default
+model of each, shared MCP, hooks, skills, env, addons), the project (`loop-manager.toml`: rigs, packs, project addons,
+`[agents]` edits) and the rig (a section of `loop-manager.toml`: repository path, variables, `[agents]` edits). An agent
+is not a level but a consumer: its `agent.toml` gives the defaults of the role, and every setting, the harness and the
+model too, comes from the layers, weakest first:
 
 1. the harness's own host config (`~/.claude`, `~/.codex`), when `inherit_host` is on;
 2. the orchestrator's `[settings]`, over the default model of the harness;
@@ -198,14 +201,14 @@ layers, weakest first:
     of an outside pack without forking the pack. A variant is edited by an `[agents.<variant>]` table of a stronger
     level, not by the edits of its base agent. An edit may not set `max_runs`; an unknown name without `base` is an error.
 
-Layers 7 and 8 belong to a run: the agent alone (`explain` without a formula, `aae doctor`) has none of them. What
-the user says for the agent (9, 10) is stronger than what the pack and the formula say.
+Layers 7 and 8 belong to a run: the agent alone (`explain` without a formula, `loop-manager doctor`) has none of them.
+What the user says for the agent (9, 10) is stronger than what the pack and the formula say.
 
 A scalar takes the strongest layer's value; a table (`env`, `mcp`, `native`) merges by key, an entry replaced whole;
 a named list (`hooks`, `skills`, `addons`) is the union, and a stronger layer turns an element off by name;
 `subagents` is replaced whole by the strongest layer that sets it. The host
-layer is the exception: the harness merges it itself, aae neither reads nor parses it, and it is turned off only as a
-whole (`inherit_host = false`), never one element by name. The harness config inside the rig (`CLAUDE.md`,
+layer is the exception: the harness merges it itself, loop-manager neither reads nor parses it, and it is turned off
+only as a whole (`inherit_host = false`), never one element by name. The harness config inside the rig (`CLAUDE.md`,
 `.claude/`, `.mcp.json`, `AGENTS.md`) belongs to the repository, not the host: it applies with inheritance off too
 (see "Host inheritance").
 
@@ -222,10 +225,10 @@ and a model the adapter expanded keeps the short name it was given
 (`model = "gpt-6-luna"  # rig [agents], given as "luna"`). The new layers print as `pack <name>`,
 `formula <pack>.<name> step <step>` and `variant <name>`. `subagents` prints resolved, the agent itself in it
 (`subagents = ["kit.implementer","kit.qa"]  # agent`), and only when a layer sets a list. `explain()` prints one line per value with its layer and one
-line for the host: inherited by the harness and invisible to aae, or off
-(`aae config explain --project <p> --agent <a> [--rig <r>]` and `GET /v1/config/explain`, on the config the daemon
-holds; with `--config <file>`, on that file with no daemon). The pack, formula and variant layers count only for a
-run, so they show with `--formula <f> --rig <r>` in place of `--agent`. The formula's `rounds` comes first with its
+line for the host: inherited by the harness and invisible to loop-manager, or off
+(`loop-manager config explain --project <p> --agent <a> [--rig <r>]` and `GET /v1/config/explain`, on the config the
+daemon holds; with `--config <file>`, on that file with no daemon). The pack, formula and variant layers count only for
+a run, so they show with `--formula <f> --rig <r>` in place of `--agent`. The formula's `rounds` comes first with its
 layer (`rounds = 2  # project`; `formula <f>` when the formula sets it, `default` when no layer does), then one line
 per input value the config gives (`inputs.focus = "security"  # orchestrator`), then the steps one by one: for an ai step a header
 ``# step `<s>` of `<f>` on `<r>`: agent <a>`` (the rig's variant if it maps one) and its effective config, for an exec
@@ -236,9 +239,9 @@ sorted and a single matcher bare, ``# runs only if { "back_from" = "review", "in
 ``# a check: on fail, back to `<step>`, at most <n> rounds``, and for a step with `max_attempts` above 1 or a check
 script ``# runs at most <n> times; passes when <script> exits 0`` (each part when it applies). The environment an
 exec step or a check script gets follows as `exec.inherit_env = true  # <layer>` (when a layer says so) and one line
-per key, `exec.env.GH_TOKEN = "${AAE_GH_TOKEN}"  # <layer>`: after the header of an exec step, and after the check
-script line of a step of another kind. The API answer then has `agent` null and `steps: [{step, kind, agent}]`. The
-effective config serializes to JSON: a run keeps it as its snapshot, and `env` is the whole session environment
+per key, `exec.env.GH_TOKEN = "${LOOP_MANAGER_GH_TOKEN}"  # <layer>`: after the header of an exec step, and after the
+check script line of a step of another kind. The API answer then has `agent` null and `steps: [{step, kind, agent}]`.
+The effective config serializes to JSON: a run keeps it as its snapshot, and `env` is the whole session environment
 besides what the adapter adds, its references unresolved (see "Environment values"): a session does not inherit the
 daemon's environment wholesale. The core assembles it when the run prepares, right before the session starts; the
 adapter materializes it into launch flags, session parameters or a generated harness config directory, which lives
@@ -266,9 +269,9 @@ resolves `fable`, `opus`, `sonnet`, `haiku` itself, so they go to it as they are
 ## Host inheritance
 
 `inherit_host` is on by default and is a scalar setting of any layer. On, the harness reads the operator's own
-config (`~/.claude`, `~/.codex`) as it would outside `aae`; `aae` does not see that layer and shows it as one line
-in "explain config". Off, the session gets its own config directory in the state directory and only what `aae`
-assembled, plus the rig's own files (see "Consequences" in `docs/design/experiments.md`).
+config (`~/.claude`, `~/.codex`) as it would outside `loop-manager`; `loop-manager` does not see that layer and shows it
+as one line in "explain config". Off, the session gets its own config directory in the state directory and only what
+`loop-manager` assembled, plus the rig's own files (see "Consequences" in `docs/design/experiments.md`).
 
 What inheritance costs, and what the user should know:
 
@@ -276,8 +279,8 @@ What inheritance costs, and what the user should know:
   servers;
   <!-- MEASURE id=claude-host-config-start date=2026-11-10 ver=claude-2.1.322 env=linux-arm64-orbstack src=reports/42 note="haiku, n=3-7; +1.97 s until init; version taken from CONTEXT.md, report 42 does not record it; re-measure on the owner's current config" -->
 - the operator's stdio MCP servers start in every session, about 45 MB per session on the owner's setup. Shared
-  MCP (one process for many sessions) covers only the servers declared in the `aae` config; `aae doctor` warns
-  when it sees stdio MCP servers in the host settings (`crates/aae/src/doctor.rs`);
+  MCP (one process for many sessions) covers only the servers declared in the `loop-manager` config;
+  `loop-manager doctor` warns when it sees stdio MCP servers in the host settings (`crates/loop-manager/src/doctor.rs`);
   <!-- MEASURE id=stdio-mcp-per-session date=2026-11-10 ver=prior-a86d05bd7 env=linux-arm64-orbstack src=reports/02,reports/18 note="deja server, PSS 42-62 MB per session; deja version not recorded; depends on the operator's MCP set" -->
 - the operator's own hooks and addons run in agent sessions;
 - codex runs every command through the login shell named by `SHELL` (`$SHELL -lc '<command>'`) and snapshots that
@@ -295,18 +298,18 @@ nothing else in `~/.codex` reaches such an agent, and `HOME` stays the operator'
 
 codex runs with `sandbox_mode = "danger-full-access"` unless the native block, or the host's `config.toml` of an
 inheriting process, sets `sandbox_mode`: the codex sandbox needs unprivileged user namespaces,
-which many hosts forbid (`docs/design/experiments.md`). Commands are then not confined to the workdir; `aae doctor`
-names each such agent, as `<project>/<rig>@<pack>.<agent>`, in a warning; an agent whose config does not assemble
-cannot be shown to set it and is named too.
+which many hosts forbid (`docs/design/experiments.md`). Commands are then not confined to the workdir;
+`loop-manager doctor` names each such agent, as `<project>/<rig>@<pack>.<agent>`, in a warning; an agent whose config
+does not assemble cannot be shown to set it and is named too.
 
 With inheritance off, credentials still come from the host; a session whose `env` carries a credential of its
 own uses that one instead.
 
-- claude (`crates/aae-claude/src/part.rs`): an own `CLAUDE_CONFIG_DIR` and `--setting-sources project,local`;
+- claude (`crates/loop-manager-claude/src/part.rs`): an own `CLAUDE_CONFIG_DIR` and `--setting-sources project,local`;
   the subscription access token is read from the host's `.credentials.json` at every spawn and passed as
   `CLAUDE_CODE_OAUTH_TOKEN`, so a token the host refreshed reaches the next process. Own credentials:
   `ANTHROPIC_API_KEY`, `ANTHROPIC_AUTH_TOKEN`, `CLAUDE_CODE_OAUTH_TOKEN`.
-- codex (`crates/aae-codex/src/part.rs`): an own `CODEX_HOME` and `HOME`; the host's `auth.json` is linked into
+- codex (`crates/loop-manager-codex/src/part.rs`): an own `CODEX_HOME` and `HOME`; the host's `auth.json` is linked into
   that `CODEX_HOME`, and the model provider the host config selects comes as the first `-c` flags, its `env_key`
   variable passed from the daemon's environment (`host_provider`). The same variable is passed when inheriting.
   Own credentials: `OPENAI_API_KEY`, `CODEX_API_KEY`.
@@ -320,13 +323,13 @@ Known limits:
   gets the provider without `http_headers` and `experimental_bearer_token`, so a provider whose login is only there
   is not logged in under isolation (and `doctor` reports such a provider's login as not checked).
 
-Checked by acceptance criterion 12 (`crates/aae-acceptance`), the unit tests of both adapters and
-`crates/aae/tests/e2e/doctor.rs`.
+Checked by acceptance criterion 12 (`crates/loop-manager-acceptance`), the unit tests of both adapters and
+`crates/loop-manager/tests/e2e/doctor.rs`.
 
-## Orchestrator: `~/.config/aae/config.toml`
+## Orchestrator: `~/.config/loop-manager/config.toml`
 
 ```toml
-projects = ["~/work/shop"]          # project directories, each with an aae.toml
+projects = ["~/work/shop"]          # project directories, each with a loop-manager.toml
 max_runs = 8                        # runs started at once across all projects (default 8, at least 1)
 bead_failures = 3                   # failed runs of a bead before the core closes its gate (default 3, at least 1)
 api_tcp = "127.0.0.1:7171"          # the API on TCP too (off by default; loopback only; a reload cannot change it)
@@ -342,7 +345,7 @@ max_sessions = 8                    # codex: threads per app-server before a sec
 instance_idle_s = 60                # codex: seconds an app-server without threads lives on (default 60; 0 stops it at once)
 
 [[addon]]                          # an installed addon; its orchestrator side is enabled
-path = "~/aae-addons/aae-addon-mail"
+path = "~/loop-manager-addons/loop-manager-addon-mail"
 
 [builtin.default-policy]            # a bundled addon (see below); on with no table
 backoff_cap_s = 300
@@ -360,7 +363,7 @@ focus = "security"
 
 [exec]                              # the environment of exec steps and check scripts (see "Formula")
 inherit_env = false                 # the daemon's whole environment (default false: PATH, HOME, LANG only)
-env = { GH_TOKEN = "${AAE_GH_TOKEN}" }  # merged by key under the project's and the step's
+env = { GH_TOKEN = "${LOOP_MANAGER_GH_TOKEN}" }  # merged by key under the project's and the step's
 
 [settings]                          # layer 2
 [agents.implementer]                # layer 10: an edit of an agent of any project (no `base`)
@@ -369,21 +372,22 @@ env = { GH_TOKEN = "${AAE_GH_TOKEN}" }  # merged by key under the project's and 
 Each `[watchdog]` value is a duration with one unit (`ms`, `s`, `m`, `h`) from 1 ms to 8760 h; an unknown key is an
 error. A reload applies to the deadlines set from then on: a deadline already set keeps its time.
 
-The file need not live in `~/.config/aae`: `aae daemon` takes another one with `--config <file>`, and so do
-`aae doctor` and `aae config check|explain`, which then check that file with no daemon instead of asking the running
-one. A demo keeps its own orchestrator config, `root/config.toml`, next to its project's
-`root/aae.toml` for that reason: its `run.sh` starts a daemon of the demo's own with `--config root/config.toml`, so
-the demo neither reads nor changes the user's `~/.config/aae/config.toml` ([demos](../../demos/README.md)). The two
-files stay separate: `config.toml` lists the projects and the harnesses of the host, `aae.toml` is the project.
+The file need not live in `~/.config/loop-manager`: `loop-manager daemon` takes another one with `--config <file>`, and
+so do `loop-manager doctor` and `loop-manager config check|explain`, which then check that file with no daemon instead
+of asking the running one. A demo keeps its own orchestrator config, `root/config.toml`, next to its project's
+`root/loop-manager.toml` for that reason: its `run.sh` starts a daemon of the demo's own with
+`--config root/config.toml`, so the demo neither reads nor changes the user's `~/.config/loop-manager/config.toml`
+([demos](../../demos/README.md)). The two files stay separate: `config.toml` lists the projects and the harnesses of the
+host, `loop-manager.toml` is the project.
 
-## Project: `<project>/aae.toml`
+## Project: `<project>/loop-manager.toml`
 
 ```toml
 name = "shop"                       # optional, defaults to the directory name; unique among projects
 packs = [
   "../packs/kit",                    # a local pack directory
-  { git = "https://github.com/acme/aae-pack-review", rev = "v1.2.0" },  # pinned to a tag or a full commit id
-  { git = "https://github.com/acme/aae-pack-tools" },  # no pin: the latest revision of the default branch
+  { git = "https://github.com/acme/loop-manager-pack-review", rev = "v1.2.0" },  # pinned to a tag or a full commit id
+  { git = "https://github.com/acme/loop-manager-pack-tools" },  # no pin: the latest revision of the default branch
 ]
 rounds = 2                          # over the orchestrator's `rounds`, under a formula's own
 
@@ -391,7 +395,7 @@ rounds = 2                          # over the orchestrator's `rounds`, under a 
 focus = "performance"
 
 [[addon]]
-path = "addons/aae-addon-notes"
+path = "addons/loop-manager-addon-notes"
 
 [exec]                              # over the orchestrator's `[exec]`, under a step's own keys
 env = { TEST_DB = "postgres://localhost/shop" }
@@ -406,7 +410,7 @@ model = "luna"
 
 [root]                              # optional, as are both keys
 name = "root"                       # the default; a rig may not take it
-path = "."                          # the default: the directory of aae.toml; relative to it, need not be git
+path = "."                          # the default: the directory of loop-manager.toml; relative to it, need not be git
 
 [rigs.backend]
 path = "../backend"                 # must exist
@@ -430,16 +434,16 @@ is set. Two rigs of a project with one prefix are a config error. The prefix mak
 last `-` ([tracker-br.md](tracker-br.md#the-rig-of-a-bead)); changing it makes the rig's existing beads beads of the
 root.
 
-The project root is itself a pack named after the project: `agents/` and `formulas/` next to `aae.toml` belong to
-it, and its triggers are the `[[trigger]]` of `aae.toml`.
+The project root is itself a pack named after the project: `agents/` and `formulas/` next to `loop-manager.toml` belong
+to it, and its triggers are the `[[trigger]]` of `loop-manager.toml`.
 
 The root is where a project works besides its rigs: a run started without a rig works there (unless the
 id of a bead an input names has the prefix of a rig), and so does every session of an agent of scope `root`. It is a place like
 a rig, under its own name: the run's `rig` in events, its gate `rig:<project>/<root name>`, its workdir, `worktree`
 and limits all take it the same way; `{{ rig.name }}` and `{{ rig.path }}` of a run in the root are the root's. The
-root has these two settings and no variables: text a project gives an agent is a file of the agent (see "Agent"). Without `[root]` it is `root`, the directory of `aae.toml`; a project of one repository needs no
-rigs. When `path` points elsewhere, the config files (`.aae/agents/`, packs) and the tracker stay next to
-`aae.toml`. The root need not be a git repository: a run in a plain directory works, and only `worktree = true`
+root has these two settings and no variables: text a project gives an agent is a file of the agent (see "Agent"). Without `[root]` it is `root`, the directory of `loop-manager.toml`; a project of one repository needs no
+rigs. When `path` points elsewhere, the config files (`.loop-manager/agents/`, packs) and the tracker stay next to
+`loop-manager.toml`. The root need not be a git repository: a run in a plain directory works, and only `worktree = true`
 fails that run (`deny`, naming the directory). A rig at the root's path or under the root's name is a config
 error. `[root]` takes no `settings`, `agents` or `triggers`: the project's own are the root's, and a project
 `[[trigger]]` that names no `rig` fires in the root.
@@ -457,10 +461,10 @@ may live in a directory of the repository: `dir = "addons/mail"` (relative, insi
 - A pack without `rev` follows the latest revision: the remote's `HEAD`, the tip of its default branch, asked for at
   every load of the config. An addon must be pinned: an `[[addon]]` from git without `rev` is a config error.
 
-Whoever loads the config downloads first: the daemon at start, at `aae config reload`, `POST /v1/config/check` and
-`GET /v1/doctor`, and the CLI at `aae config check|explain` and `aae doctor` with `--config <file>`. The core reads
-only the finished directories and never runs git. The cache is one per user, `$XDG_CACHE_HOME/aae/git`
-(`~/.cache/aae/git` without it):
+Whoever loads the config downloads first: the daemon at start, at `loop-manager config reload`, `POST /v1/config/check`
+and `GET /v1/doctor`, and the CLI at `loop-manager config check|explain` and `loop-manager doctor` with
+`--config <file>`. The core reads only the finished directories and never runs git. The cache is one per user,
+`$XDG_CACHE_HOME/loop-manager/git` (`~/.cache/loop-manager/git` without it):
 
 - `<cache>/<url>/<commit>/` is a detached checkout of the commit, never changed once in place;
 - `<cache>/<url>/tag-<tag>` names the commit a tag pointed at when it was downloaded;
@@ -476,10 +480,11 @@ checked out detached at its commit and renamed into place. The network:
 - no pin: `git ls-remote <url> HEAD` at every load; a commit already in the cache is used as is, any other is cloned.
   When the remote cannot be asked (any failure of `ls-remote`) and the cache names a last seen revision, that
   checkout is used with a warning on the stderr of the process that loaded the config (the daemon's log, the output
-  of `aae config check`); with none, it is a config error.
+  of `loop-manager config check`); with none, it is a config error.
 
-`aae cache clear` runs without a daemon and removes the whole cache; the next load downloads everything again. A
-running daemon keeps reading the removed directories until `aae config reload`, so reload right after clearing.
+`loop-manager cache clear` runs without a daemon and removes the whole cache; the next load downloads everything again.
+A running daemon keeps reading the removed directories until `loop-manager config reload`, so reload right after
+clearing.
 
 There is no lock file and no command that pins: a pin is only what the config writes in `rev`. Edits to the files
 of a checkout in the cache are not detected. git must be in `PATH`; access to the remote (ssh keys, credential
@@ -496,7 +501,7 @@ addon from git runs only at the tag or commit its declaration pins.
 name = "kit"
 version = "0.3.0"
 requires_addons = ["mail"]         # must be declared by the orchestrator or the project
-min_aae = "0.1.0"                   # optional
+min_loop_manager = "0.1.0"                   # optional
 
 [settings]                          # layer 7: launch settings of the runs of its formulas
 model = "sonnet"
@@ -554,13 +559,13 @@ bead's `agent:` label gives renders that agent's template (a variant's is its ba
 names and that has no template is a config error naming the path to put it at. The template is checked against every
 formula whose steps name the agent, with that formula's inputs and earlier steps.
 
-A project rewrites an agent of its packs with files, without forking the pack: `.aae/agents/<agent>/` next to
-`aae.toml` lays over the agent's directory. Its `prompt.template.md` replaces the pack's. `{{ agent.<name> }}` in the
-template is the text of `<name>.md`, the project's file over the pack agent's: text the project gives an agent (the
-conditions `qa` checks, say `.aae/agents/qa/checks.md`) is a file of that agent, not a string in `aae.toml`. A
-`{{ agent.<name> }}` with neither file is a config error naming where to put it; so is a directory under
-`.aae/agents/` for an agent no pack of the project has. "Explain config" of a formula names the template file of each
-`ai` step.
+A project rewrites an agent of its packs with files, without forking the pack: `.loop-manager/agents/<agent>/` next to
+`loop-manager.toml` lays over the agent's directory. Its `prompt.template.md` replaces the pack's. `{{ agent.<name> }}`
+in the template is the text of `<name>.md`, the project's file over the pack agent's: text the project gives an agent
+(the conditions `qa` checks, say `.loop-manager/agents/qa/checks.md`) is a file of that agent, not a string in
+`loop-manager.toml`. A `{{ agent.<name> }}` with neither file is a config error naming where to put it; so is a
+directory under `.loop-manager/agents/` for an agent no pack of the project has. "Explain config" of a formula names the
+template file of each `ai` step.
 
 Everything of one agent (settings, prompts,
 skills, hooks, scripts) lives in its directory, laid out as its author likes. The core has no role names: whatever a
@@ -686,42 +691,43 @@ back_to = "implement"               # optional: a check, as above
 A formula has a name, a description, declared inputs and one or more steps, which a run goes through in order
 (contracts 6.1): the next step starts when the one before ended, a failed step that is no check fails the run, and
 the run's outcome is that of the last step that ran. Step names are unique in the formula and contain no `.`. An `ai` step
-is a turn of the agent in a harness session, and its outcome comes from the finisher (`aae finish`, contracts 6.3). An
-`exec` step is a command with no model that the daemon runs in the run's workdir, in a process group of its own, under
-the step timeout; exit 0 is `pass`, 75 (`EX_TEMPFAIL`) a failed attempt (not an outcome), any other `fail`, and a
-bounded tail of its output is kept in the result (contracts 6.2). An `exec` step has `command = ["prog", "arg", ..]`
-(non-empty) and `timeout` instead of `agent`. Nothing is substituted into the command; it gets the run in
-its environment: `AAE_RUN`, `AAE_BEAD` (when the run has a bead), `AAE_SOCKET` (the API socket, so the command can
-call `aae`) and `AAE_INPUT_<NAME>` per input (the name upper-cased, other characters than letters and digits as `_`; a
-string as it is, any other value as JSON). Two inputs that give one variable (`note-text` and `note_text`) are a
-config error. The environment is clean by default and built in this order, a later entry winning over an earlier one of
-the same name: `PATH`, `HOME` and `LANG` of the daemon, or its whole environment when `inherit_env` is true (the
-variables whose name and value are UTF-8; a scalar: the step's, else the project's `[exec]`, else the orchestrator's;
-default false); the tracker's variables (`BEADS_DIR`, [tracker](tracker-br.md)); the `env` of the orchestrator's
-`[exec]`, the project's `[exec]` and the step, merged by key (see "Environment values"), and over it the `env` of
-`run.preparing` hooks; then the variables of aae: the tracker actor and the `AAE_*` variables (those above,
-`AAE_REMARKS` and `AAE_STEP_*` below), so an `env` key cannot replace them. A rig has no `[exec]`.
+is a turn of the agent in a harness session, and its outcome comes from the finisher (`loop-manager finish`, contracts
+6.3). An `exec` step is a command with no model that the daemon runs in the run's workdir, in a process group of its
+own, under the step timeout; exit 0 is `pass`, 75 (`EX_TEMPFAIL`) a failed attempt (not an outcome), any other `fail`,
+and a bounded tail of its output is kept in the result (contracts 6.2). An `exec` step has
+`command = ["prog", "arg", ..]` (non-empty) and `timeout` instead of `agent`. Nothing is substituted into the command;
+it gets the run in its environment: `LOOP_MANAGER_RUN`, `LOOP_MANAGER_BEAD` (when the run has a bead),
+`LOOP_MANAGER_SOCKET` (the API socket, so the command can call `loop-manager`) and `LOOP_MANAGER_INPUT_<NAME>` per input
+(the name upper-cased, other characters than letters and digits as `_`; a string as it is, any other value as JSON). Two
+inputs that give one variable (`note-text` and `note_text`) are a config error. The environment is clean by default and
+built in this order, a later entry winning over an earlier one of the same name: `PATH`, `HOME` and `LANG` of the
+daemon, or its whole environment when `inherit_env` is true (the variables whose name and value are UTF-8; a scalar: the
+step's, else the project's `[exec]`, else the orchestrator's; default false); the tracker's variables (`BEADS_DIR`,
+[tracker](tracker-br.md)); the `env` of the orchestrator's `[exec]`, the project's `[exec]` and the step, merged by key
+(see "Environment values"), and over it the `env` of `run.preparing` hooks; then the variables of loop-manager: the
+tracker actor and the `LOOP_MANAGER_*` variables (those above, `LOOP_MANAGER_REMARKS` and `LOOP_MANAGER_STEP_*` below),
+so an `env` key cannot replace them. A rig has no `[exec]`.
 
 A `drain` step gives every ready bead under the run's bead, at any depth, a run of `formula`, on each read of the
-tracker, until none is left: the same start as `aae run start` with the bead as the formula's input of type `task`, no
-rig named (the prefix of the bead's id gives it, the project root when it matches no rig, and its `agent:`/`harness:`
-labels apply as to any run), the run's correlation, one level deeper, the run as `parent_run`. A bead goes out once
-per entry of the step: a child that failed is not run again in it, and an attempt cut by a restart (`daemon_crash`)
-starts no new entry; a round back to the step does. A bead whose start is refused (a `rig:` label, a `harness:` label
-the config does not give) gets no run and stays open. The step has no process (contracts 6.2): it ends once nothing
-was given, no child is alive and no later read of the tracker is queued, with `data = {closed, failed, refused}` — the
-beads whose runs passed, those whose runs failed or were cancelled, and the refused ones with the reason. `pool`
-(default 1) is the most beads of the step in work at once: a child holds its place from its creation, queued or
-running, and the end of one gives out the next ready bead. `on_item_failure` says what a failed run of a bead does:
-`continue` (default) — the other beads go on and the step passes; `soft_stop` — no new bead goes out, the started ones
-end; `hard_stop` — the started ones are cancelled too (reason `drain_hard_stop`), on the read of the tracker that the
-failed run's end queues. A stopped step ends `fail` once no child is alive, its `data` adds `stopped_on` (the failed
-beads) and `not_started` (the ready beads under the root it did not give), and its summary is `stopped on <beads>: <n>
-closed, <n> failed, <n> not started`. The stop follows from the children of the entry, so a restart keeps it: no new
-bead goes out after one; a repeat of the step or a round back to it is a new entry and gives the beads again. A
-cancelled child stops nothing. `formula` must take exactly one input of type `task` and need no other; a formula with
-a `drain` step needs a required `task` input. An epic under the root is not ready while it has open beads; once they
-are closed it is given out as any bead (with an id of no rig prefix: in the root).
+tracker, until none is left: the same start as `loop-manager run start` with the bead as the formula's input of type
+`task`, no rig named (the prefix of the bead's id gives it, the project root when it matches no rig, and its
+`agent:`/`harness:` labels apply as to any run), the run's correlation, one level deeper, the run as `parent_run`. A
+bead goes out once per entry of the step: a child that failed is not run again in it, and an attempt cut by a restart
+(`daemon_crash`) starts no new entry; a round back to the step does. A bead whose start is refused (a `rig:` label, a
+`harness:` label the config does not give) gets no run and stays open. The step has no process (contracts 6.2): it ends
+once nothing was given, no child is alive and no later read of the tracker is queued, with
+`data = {closed, failed, refused}` — the beads whose runs passed, those whose runs failed or were cancelled, and the
+refused ones with the reason. `pool` (default 1) is the most beads of the step in work at once: a child holds its place
+from its creation, queued or running, and the end of one gives out the next ready bead. `on_item_failure` says what a
+failed run of a bead does: `continue` (default) — the other beads go on and the step passes; `soft_stop` — no new bead
+goes out, the started ones end; `hard_stop` — the started ones are cancelled too (reason `drain_hard_stop`), on the read
+of the tracker that the failed run's end queues. A stopped step ends `fail` once no child is alive, its `data` adds
+`stopped_on` (the failed beads) and `not_started` (the ready beads under the root it did not give), and its summary is
+`stopped on <beads>: <n> closed, <n> failed, <n> not started`. The stop follows from the children of the entry, so a
+restart keeps it: no new bead goes out after one; a repeat of the step or a round back to it is a new entry and gives
+the beads again. A cancelled child stops nothing. `formula` must take exactly one input of type `task` and need no
+other; a formula with a `drain` step needs a required `task` input. An epic under the root is not ready while it has
+open beads; once they are closed it is given out as any bead (with an id of no rig prefix: in the root).
 
 A `formula` step runs `formula`, a formula of the run's project (a formula of another project is not in its reach,
 whatever its name), as one child run: the same rig, the run's correlation, one level deeper, the run as
@@ -737,13 +743,13 @@ child, and a restart finds the child it made and makes no second one. `max_attem
 apply as to any step. A formula with `internal = true` runs only from such a step or a `drain` step: a start by
 hand, from the API, MCP or a session is refused (`` `<name>` is internal: only a step of another formula runs
 it ``), `GET /v1/formulas` marks each formula with `internal`, and
-`aae formula list` hides the internal ones unless `--all`. Config errors: a step that neither gives nor inherits a
-required input of its formula (``needs input `goal`, which the step neither gives nor inherits``), one that gives an
-input the formula does not declare, a formula that runs itself through its `formula` steps, at any depth, and a
+`loop-manager formula list` hides the internal ones unless `--all`. Config errors: a step that neither gives nor
+inherits a required input of its formula (``needs input `goal`, which the step neither gives nor inherits``), one that
+gives an input the formula does not declare, a formula that runs itself through its `formula` steps, at any depth, and a
 trigger on an internal formula.
 
 An `await` step waits for an outcome given from outside, by a human, a script or an addon, through
-`POST /v1/runs/{id}/resolve` or `aae run resolve <run> <step> pass|fail` (contracts 6.3): `pass` or `fail`, a
+`POST /v1/runs/{id}/resolve` or `loop-manager run resolve <run> <step> pass|fail` (contracts 6.3): `pass` or `fail`, a
 summary and data, as the finisher's. Entering the step is the event `run.awaiting` with its deadline. The step has no
 process and holds no concurrency slot; the wait is a state, not a timer of the daemon's: a restart leaves it as it
 is, and its deadline is wall time. An outcome for another step, or for a run that does not wait on this one, is
@@ -760,7 +766,7 @@ step they name, which starts at once as the next round. An `await` step ends the
 reaches it only when they all passed, and failed ones send the run back first; the checks after an `await` step
 belong to its row. Their remarks — per check its name, its summary and, for an
 exec check, the output it kept — reach the steps of the new round as `{{ remarks }}` in a prompt template and
-`AAE_REMARKS` in the environment of an exec step (empty and absent in the first round). An ai step of the new
+`LOOP_MANAGER_REMARKS` in the environment of an exec step (empty and absent in the first round). An ai step of the new
 round that already has a session goes on in it: its first attempt resumes the session and gets the
 rendered prompt with the remarks, not the reconcile prompt of a resumed retry. A check that fails in the
 last of the formula's `rounds` fails the run (class `agent`) with the reason `still failing after <n> rounds:
@@ -778,7 +784,8 @@ return names its check: `if = { back_from = "review" }`; `back_to` to a step wit
 `if` makes no jump. A skipped check sends nothing back; the row of checks is that of the formula's text, whatever is
 skipped. A run whose every step is skipped fails (class `infrastructure`, reason `every step was skipped`), and so
 does one sent back into a round that skips every step (reason `every step of round <n> was skipped`). A run that
-skips its last steps ends at the step that ran last: that is its `step` in `aae run show` and `aae run list`.
+skips its last steps ends at the step that ran last: that is its `step` in `loop-manager run show` and
+`loop-manager run list`.
 
 Any step but `await` may have `max_attempts` (1 to 20, the ceiling of session attempts; default 1): the step runs at most that
 many times, and one that does not pass runs again until then; past it the step fails. `step_check_script_path` names a script that says
@@ -792,28 +799,28 @@ as `infrastructure`. The script runs after the step has run on its own and its h
 `pass`; a step that failed on its own (finisher `fail`, a non-zero exit of the command) is a run that did not pass,
 and the script is not started. It gets the environment of an `exec` step — its own step's, when that is an `exec` step,
 else the one of the orchestrator's and the project's `[exec]`, without the `env` of `run.preparing` hooks, which goes to
-the agent's session; never the agent's `env` — plus `AAE_STEP_<NAME>_RESULT`, `_SUMMARY` and `_DATA` of its own step, in
-the run's workdir under the step timeout. A reference to a variable the daemon does not have keeps the script from
-starting and fails the run at once with reason `config_error: …` (see "Environment values"). A repeat of an `ai` step
-goes on in its session and gets the script's output as a remark: through `{{ remarks }}`, or appended to the prompt when
-the template has none. A repeat of a `drain` step is a new entry. The count is within a round: a round back to the step
-gives it the full `max_attempts` again. A repeat spends neither the session attempt ceiling (invariant 16,
+the agent's session; never the agent's `env` — plus `LOOP_MANAGER_STEP_<NAME>_RESULT`, `_SUMMARY` and `_DATA` of its own
+step, in the run's workdir under the step timeout. A reference to a variable the daemon does not have keeps the script
+from starting and fails the run at once with reason `config_error: …` (see "Environment values"). A repeat of an `ai`
+step goes on in its session and gets the script's output as a remark: through `{{ remarks }}`, or appended to the prompt
+when the template has none. A repeat of a `drain` step is a new entry. The count is within a round: a round back to the
+step gives it the full `max_attempts` again. A repeat spends neither the session attempt ceiling (invariant 16,
 [invariants.md](invariants.md#the-invariants)) nor the rounds, and a failure of the infrastructure does not spend
 `max_attempts`.
 
 A step sees the outcomes of the steps before it, by name (the last attempt of each): a prompt template as
 `{{ steps.<name>.result }}`, `.summary` and `.data.<key>` (contracts 2.3; `data` of an exec step is `{exit_code,
-stdout, stderr}`), an exec step as `AAE_STEP_<NAME>_RESULT` (`pass` or `fail`), `AAE_STEP_<NAME>_SUMMARY` and
-`AAE_STEP_<NAME>_DATA` (JSON, when there is data), `<NAME>` formed as for inputs; a step name whose variables collide
-with another step's or an input's is a config error. A skipped step has no outcome until it runs again, even one from
-an earlier round: no `steps.<name>`, no `AAE_STEP_<NAME>_*`. So a prompt template or the `inputs` of a `formula` step
-naming `steps.<name>` of a step with an `if` is a config error; an `if` may name it, and does not match while it has
-none. Each ai step has a session of its own; a run that continues a
+stdout, stderr}`), an exec step as `LOOP_MANAGER_STEP_<NAME>_RESULT` (`pass` or `fail`),
+`LOOP_MANAGER_STEP_<NAME>_SUMMARY` and `LOOP_MANAGER_STEP_<NAME>_DATA` (JSON, when there is data), `<NAME>` formed as
+for inputs; a step name whose variables collide with another step's or an input's is a config error. A skipped step has
+no outcome until it runs again, even one from an earlier round: no `steps.<name>`, no `LOOP_MANAGER_STEP_<NAME>_*`. So a
+prompt template or the `inputs` of a `formula` step naming `steps.<name>` of a step with an `if` is a config error; an
+`if` may name it, and does not match while it has none. Each ai step has a session of its own; a run that continues a
 session (`continue_from`) continues it in its first step only, so a formula whose first step is not `ai`, or has an
 `if`, cannot be continued.
 
-An input a start does not give, or gives `null`, takes the value of `[inputs]` of the project's `aae.toml`, else
-that of the orchestrator config: a table of values by input name, for any formula of the project that declares an
+An input a start does not give, or gives `null`, takes the value of `[inputs]` of the project's `loop-manager.toml`,
+else that of the orchestrator config: a table of values by input name, for any formula of the project that declares an
 input of that name; a formula that declares none ignores it. What the caller gives — the start, a trigger, the
 `inputs` of a `formula` step and what such a step's child inherits — beats both. A value is checked at load as a
 start checks it, for every formula it applies to; a value for an input of type `task`, or of the wrong type, is an
@@ -828,14 +835,14 @@ sends `--input` values as text). A `task` input (there is no input type `bead`: 
 described by all of it; either way the input then holds the bead id ([tracker-br.md](tracker-br.md#beads-and-runs)). A bead named
 by id that belongs to another rig, by the prefix of its id, is refused at the start if the core has seen it, else at
 its claim (the run fails with `bead_of_another_rig` and the claim is released). `worktree = true` gives each run of the formula, of either step kind,
-a git worktree that aae makes and removes (the bundled `worktree`, see below). aae does not serialize runs by
-directory: without a worktree, runs of one rig share its directory, and keeping them apart is the user's choice
+a git worktree that loop-manager makes and removes (the bundled `worktree`, see below). loop-manager does not serialize
+runs by directory: without a worktree, runs of one rig share its directory, and keeping them apart is the user's choice
 (`worktree`, `pool`, `max_runs`).
 
 A prompt template is checked at load against each formula whose steps name its agent (contracts 2.3):
 `inputs.<name>` must be a declared input; `bead.<field>` needs a `task` input and a field of `Bead` (contracts 5.2); `run.<field>` a field of `RunView` (1.3); `project.name`,
-`project.path` (the directory of `aae.toml`); `rig.name`, `rig.path` and `rig.<var>` (a variable of the run's rig,
-checked when the run starts); `agent.<name>` (a file of the agent, see "Agent").
+`project.path` (the directory of `loop-manager.toml`); `rig.name`, `rig.path` and `rig.<var>` (a variable of the run's
+rig, checked when the run starts); `agent.<name>` (a file of the agent, see "Agent").
 A prompt is never empty: a template file of only whitespace is a load error, and a prompt that is empty after
 substitution fails the run (`infrastructure`, `prompt: empty after substitution`) before any process starts.
 
@@ -868,11 +875,11 @@ payload, as do the paths of `where`. `rig` is allowed only in a project's `[[tri
 
 ### How runs start and what a firing guarantees
 
-A run starts in one of three ways, all in the core: an explicit call (`POST /v1/runs`, `aae run start`, the MCP tool
-`start_run`), an event subscription (`on`) or a schedule (`cron`, `every`). A trigger can also be fired by hand
-(`POST /v1/triggers/fire`, `aae trigger fire`) and switched off and on per rig by the operator
-(`POST /v1/triggers/disable|enable`, `aae trigger disable|enable`, event `trigger.switched`); a trigger that is off
-fires neither on its schedule nor on events, only by hand, and stays off across restarts.
+A run starts in one of three ways, all in the core: an explicit call (`POST /v1/runs`, `loop-manager run start`, the MCP
+tool `start_run`), an event subscription (`on`) or a schedule (`cron`, `every`). A trigger can also be fired by hand
+(`POST /v1/triggers/fire`, `loop-manager trigger fire`) and switched off and on per rig by the operator
+(`POST /v1/triggers/disable|enable`, `loop-manager trigger disable|enable`, event `trigger.switched`); a trigger that is
+off fires neither on its schedule nor on events, only by hand, and stays off across restarts.
 
 - A firing is idempotent on `(trigger, event seq)`. Triggers match in the transaction that commits the event, not
   on the JSONL journal, so the new run (or its `trigger.skipped`) commits with the event or not at all: a `kill -9`
@@ -880,8 +887,8 @@ fires neither on its schedule nor on events, only by hand, and stays off across 
 - Overlap: while a run started by the same trigger with the same inputs is alive, a new firing is skipped with
   `trigger.skipped{overlap}`.
 - A run started by a trigger inherits the correlation of its event. A tracker event carries the correlation of the
-  run whose attempt made the write, known from the br actor `aae:<run>[:<attempt>]`; a write by a human starts a
-  new chain ([contracts 5](contracts.md#5-tracker-interface)).
+  run whose attempt made the write, known from the br actor `loop-manager:<run>[:<attempt>]`; a write by a human starts
+  a new chain ([contracts 5](contracts.md#5-tracker-interface)).
 - Tracker events are `bead.created`, `bead.updated`, `bead.closed` and `bead.ready`; `bead.ready` is raised when a
   bead first enters the ready set: open, unclaimed, every blocker closed.
 - The event schema and its version, the `where` and `inputs` language, hook decisions and timeouts and the outbox
@@ -912,7 +919,7 @@ timeout = "10s"                     # optional
 
 [[service]]                         # as in "MCP servers and services"
 name = "inbox"
-command = ["${AAE_ADDON_DIR}/bin/inbox", "--folder", "${params.folder}"]
+command = ["${LOOP_MANAGER_ADDON_DIR}/bin/inbox", "--folder", "${params.folder}"]
 ```
 
 A declaration only names where an addon is: `[[addon]]` with `path`, or `git`, `rev` and an optional `dir` (see
@@ -936,17 +943,17 @@ filled in for each agent when its effective config is put together, since each a
 
 - `${params.<key>}` is the value of the parameter in force for that agent. A string of a `native` table that is one
   such reference and nothing else takes the value with its type (`window = "${params.window}"` is the integer).
-- `${AAE_ADDON_DIR}` is the addon's directory, so the parts reach the addon's own files; skill paths are relative
-  to it.
-- `${AAE_ADDON_DATA}` is `<state>/addons/<name>/`, a directory the daemon makes for each declared addon and never
-  reads: the place for the files the addon's hooks keep.
+- `${LOOP_MANAGER_ADDON_DIR}` is the addon's directory, so the parts reach the addon's own files; skill paths are
+  relative to it.
+- `${LOOP_MANAGER_ADDON_DATA}` is `<state>/addons/<name>/`, a directory the daemon makes for each declared addon and
+  never reads: the place for the files the addon's hooks keep.
 
 The strings filled in are the harness hook `command`s, the `env` values (where what is put in is a literal: a `$` in it
 is no reference), MCP servers (`command`, `url`, `env`, `headers`), every string of a `native` table, and a service's
-`command`, health `command` and `env`. Outside an addon, `${AAE_ADDON_DIR}` and `${AAE_ADDON_DATA}` in an `env` value
-are references to variables of the daemon like any other. Its orchestrator hooks run on the events of the runs whose
-agent attaches it, and get the params in force for that agent in `AAE_ADDON_PARAMS`; the events of no agent go to the
-addons `[settings]` of the orchestrator and the project attach (contracts 3.1).
+`command`, health `command` and `env`. Outside an addon, `${LOOP_MANAGER_ADDON_DIR}` and `${LOOP_MANAGER_ADDON_DATA}` in
+an `env` value are references to variables of the daemon like any other. Its orchestrator hooks run on the events of the
+runs whose agent attaches it, and get the params in force for that agent in `LOOP_MANAGER_ADDON_PARAMS`; the events of
+no agent go to the addons `[settings]` of the orchestrator and the project attach (contracts 3.1).
 
 A Claude Code plugin directory (`--plugin-dir`) cannot be handed over: the adapter takes that flag for skills, so an
 addon gives its skills, hooks and MCP servers through `[agent]`. Beyond its `[agent]` an addon gives its attached
@@ -966,11 +973,11 @@ and the core has no storage for addons.
 
 ## Bundled addons: `[builtin.<name>]`
 
-The addons bundled with aae run in process as hooks of the contract of contracts 3, after every
+The addons bundled with loop-manager run in process as hooks of the contract of contracts 3, after every
 declared addon, so a declared addon decides first. `enabled` (boolean) turns one on or off; every other key is a
 parameter, checked when the daemon starts. A table with parameters and no `enabled` turns the addon on. A
-project's `aae.toml` may have `[builtin.<name>]` tables too: for the runs of that project such a table replaces the
-orchestrator's table of that addon whole, since the orchestrator side of an addon is turned on for the orchestrator
+project's `loop-manager.toml` may have `[builtin.<name>]` tables too: for the runs of that project such a table replaces
+the orchestrator's table of that addon whole, since the orchestrator side of an addon is turned on for the orchestrator
 or for a project.
 
 - `default-policy` (on unless `enabled = false`) decides on `run.attempt_failed` and `run.turn_ended_without_outcome` as
@@ -983,12 +990,12 @@ or for a project.
   `crash_loop` must be at least 1; `quota_margin_s`, `rapid_s` and `unknown_after_s` must not be negative.
 - `worktree` has no table: it is on for the runs of the formulas with `worktree = true` (a formula setting; there is no central
   list and no agent-level switch), and a `[builtin.worktree]` table is a config error saying so. Each such run gets a git worktree of its
-  rig on the branch `aae/<run>`, in `<git common dir>/aae/worktrees/<run>`, as its workdir. When the run ends the
-  worktree is removed unless it has uncommitted changes or a HEAD no ref reaches (then `addon.hook_failed` says why);
-  the branch is deleted only when it is merged. A run with `continue_from` starts in the workdir of the run it continues
-  (a session resumes where it ran); when that is a worktree of this addon, it is brought back on its branch if it was
-  removed, whatever the run's formula says. A reload that leaves a project no formula with `worktree = true` turns the
-  addon off there: the worktrees of its runs still going are left in place, as are their branches. Runs of one
+  rig on the branch `loop-manager/<run>`, in `<git common dir>/loop-manager/worktrees/<run>`, as its workdir. When the
+  run ends the worktree is removed unless it has uncommitted changes or a HEAD no ref reaches (then `addon.hook_failed`
+  says why); the branch is deleted only when it is merged. A run with `continue_from` starts in the workdir of the run
+  it continues (a session resumes where it ran); when that is a worktree of this addon, it is brought back on its branch
+  if it was removed, whatever the run's formula says. A reload that leaves a project no formula with `worktree = true`
+  turns the addon off there: the worktrees of its runs still going are left in place, as are their branches. Runs of one
   repository that start or end at once make and remove their worktrees one at a time, under an OS lock on the git
   common dir: two `git worktree add` at once can race on the repository config. Its hook has the 30 s timeout of a
   hook, the wait for that lock included; a `git` still running at that timeout is killed with its process group and

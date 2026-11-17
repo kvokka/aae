@@ -1,4 +1,4 @@
-# What the demo needs besides aae; mise is a convenience, any install of these tools does.
+# What the demo needs besides loop-manager; mise is a convenience, any install of these tools does.
 [tools]
 claude = "2.1"
 codex = "0"
@@ -7,7 +7,7 @@ jq = "1.8.2"
 
 [tasks.check]
 description = "The pack, the project and the addon load"
-run = "aae config check --config root/config.toml"
+run = "loop-manager config check --config root/config.toml"
 
 [tasks.demo]
 description = "The demo from the requests to its report; EXAMPLE=1 keeps the result as the *-example"

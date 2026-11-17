@@ -1,11 +1,11 @@
 {
-  "name": "aae",
+  "name": "loop-manager",
   "interface": {
-    "displayName": "aae"
+    "displayName": "loop-manager"
   },
   "plugins": [
     {
-      "name": "aae",
+      "name": "loop-manager",
       "source": {
         "source": "local",
         "path": "./plugin"

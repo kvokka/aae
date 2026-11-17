@@ -21,8 +21,8 @@ pool = 2                                    # two beads in work at once
 name = "report"
 kind = "exec"
 command = ["sh", "-c", """
-br dep tree "$AAE_BEAD" --direction up --no-color
-echo "drain: $AAE_STEP_WORK_DATA"
-br show "$AAE_BEAD" --json | jq -e '(if type == "array" then .[0] else . end).dependents // []
+br dep tree "$LOOP_MANAGER_BEAD" --direction up --no-color
+echo "drain: $LOOP_MANAGER_STEP_WORK_DATA"
+br show "$LOOP_MANAGER_BEAD" --json | jq -e '(if type == "array" then .[0] else . end).dependents // []
   | map(select(.dependency_type == "parent-child")) | length > 0 and all(.status == "closed")' >/dev/null
 """]

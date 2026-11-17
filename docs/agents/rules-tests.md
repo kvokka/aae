@@ -16,12 +16,13 @@
   own judgement, however large the change. They run when the owner's request, the plan package or a journal entry of
   the owner names them, and only the part it names. You may say in your report that a change deserves a scenario; you
   do not run it.
-- `aae-acceptance` is not a default member of the workspace: plain `cargo build`, `clippy` and `nextest` skip it,
-  `mise run ci` checks it with `--workspace`. Check a change to it with `--workspace` too
-  (`cargo clippy --workspace --all-targets -q -- -D warnings`), not `-p aae-acceptance`: that package alone takes
-  other features of `tokio`, `mio` and `uuid`, and cargo builds a second copy of those dependencies.
+- `loop-manager-acceptance` is not a default member of the workspace: plain `cargo build`, `clippy` and `nextest` skip
+  it, `mise run ci` checks it with `--workspace`. Check a change to it with `--workspace` too
+  (`cargo clippy --workspace --all-targets -q -- -D warnings`), not `-p loop-manager-acceptance`: that package alone
+  takes other features of `tokio`, `mio` and `uuid`, and cargo builds a second copy of those dependencies.
 - The one exception is a scenario you edited yourself: run that criterion alone
-  (`cargo build -q -p aae && cargo run -q -p aae-acceptance -- --ci <N>`), as the test of what you touched.
+  (`cargo build -q -p loop-manager && cargo run -q -p loop-manager-acceptance -- --ci <N>`), as the test of what you
+  touched.
 - Acceptance is allowed to be slow, which is why it is kept out of the way: its model-free rows run in CI only, in
   the workflow `acceptance` that starts by hand, never as a local habit. Do not move a slow check into the gate, and
   do not make a test of the gate slow to cover what an acceptance row covers.
@@ -29,12 +30,13 @@
   that grows the time of the gate without a reason is a defect.
 - The chaos stand with its 1000 seeds is acceptance criterion 35 and is not in the gate. While you change the run
   machine of the core, a few dozen seeds are a targeted test that takes seconds:
-  `AAE_CHAOS_SEEDS=96 cargo nextest run -p aae-testkit --test chaos`.
-- Every command that may not return (a build, tests, a daemon, a harness, `aae run wait`, the network, a wait for a
-  file or a port) runs with an explicit limit: the tool's `timeout` or `timeout <sec> <command>`. A timeout that
+  `LOOP_MANAGER_CHAOS_SEEDS=96 cargo nextest run -p loop-manager-testkit --test chaos`.
+- Every command that may not return (a build, tests, a daemon, a harness, `loop-manager run wait`, the network, a wait
+  for a file or a port) runs with an explicit limit: the tool's `timeout` or `timeout <sec> <command>`. A timeout that
   fired is a finding: write down what hung, do not repeat the command without a limit.
 - No second `CARGO_TARGET_DIR` and no git worktree of this repository: the disk is nearly full. Do not run
-  `mise run test` and an acceptance run side by side: each rewrites `target/debug/aae` under the other's daemons.
+  `mise run test` and an acceptance run side by side: each rewrites `target/debug/loop-manager` under the other's
+  daemons.
 - Command output is always cut: `cargo nextest run --no-fail-fast --status-level fail --final-status-level fail
   2>&1 | tail -80`.
 - The dev profile carries no debug info: a panic names its file and line, a backtrace names functions without
@@ -81,12 +83,12 @@
   the runtime waits for the process the virtual clock jumps to the next timer. Such a test runs on real time with
   short intervals. Where no process runs, use the managed clock (`Clock::managed`, `start_paused`), not the wall
   clock.
-- The repository's own `.beads` is not a fixture: tests of aae make their own temporary br directories.
+- The repository's own `.beads` is not a fixture: tests of loop-manager make their own temporary br directories.
 - The integration tests of the core and those of the binary are modules of one test binary each:
-  `crates/aae-testkit/tests/core` and `crates/aae/tests/e2e`; the chaos stand is a binary of its own. A new test is
-  a module there, not a new file under `tests/`: every binary is one more link on each change. A test that moves
-  keeps its name in the nextest filters of `crates/aae-acceptance/src/checks.rs` and `mise.toml`, or a filter
-  silently selects nothing.
+  `crates/loop-manager-testkit/tests/core` and `crates/loop-manager/tests/e2e`; the chaos stand is a binary of its own.
+  A new test is a module there, not a new file under `tests/`: every binary is one more link on each change. A test that
+  moves keeps its name in the nextest filters of `crates/loop-manager-acceptance/src/checks.rs` and `mise.toml`, or a
+  filter silently selects nothing.
 - On a fake provider, fail an attempt of claude with 529 (`Reply::Overloaded`): with `CLAUDE_CODE_MAX_RETRIES=0`
   that is exactly one request. On a 400 "prompt is too long" claude sends compaction requests of its own, which
   shifts a scripted plan of replies.

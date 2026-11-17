@@ -196,7 +196,7 @@ Code: `experiments/05-br-events` (one scenario, fresh workspace with an isolated
 2. On a signal, open `beads.db` read-only, read `events` after the stored cursor, close. Map rows to `bead.*` events;
    `bead.ready` is derived by re-reading `br ready` and diffing with the last set. On start and after recovery, read
    from the stored cursor without waiting for a signal.
-3. Attribution: every session gets `BD_ACTOR=<attempt actor>` in its environment, and aae's own calls pass
+3. Attribution: every session gets `BD_ACTOR=<attempt actor>` in its environment, and loop-manager's own calls pass
    `--actor`; `events.actor` then names the run behind every change (correlation, [contracts 5.1](contracts.md#51-operations)).
 4. Guard against the private schema: the exact `br` version is pinned ([tracker-br](tracker-br.md#versions)) and a contract test reads
    `events` on that version.
@@ -246,9 +246,9 @@ route: generated types are not needed, it reads by hand the few fields it uses, 
 ([harness updates](../harness-updates.md)) catches a changed field on every codex update. The generator is kept only
 in the commit named above.
 
-**Fake provider** (the sketch of `crates/aae-testkit/src/openai.rs`): an HTTP server on `127.0.0.1` given to codex as
-`[model_providers.fake] base_url = "http://…/v1", wire_api = "responses"` in `CODEX_HOME/config.toml`. A turn is
-answered with `content-length` SSE of three events — `response.created`, `response.output_item.done` with a
+**Fake provider** (the sketch of `crates/loop-manager-testkit/src/openai.rs`): an HTTP server on `127.0.0.1` given to
+codex as `[model_providers.fake] base_url = "http://…/v1", wire_api = "responses"` in `CODEX_HOME/config.toml`. A turn
+is answered with `content-length` SSE of three events — `response.created`, `response.output_item.done` with a
 `message` item of one `output_text`, `response.completed` with `usage` — and `connection: close`. Unknown model
 names only cause a `warning` "Model metadata for `<model>` not found".
 
@@ -264,10 +264,10 @@ Consequences for the codex adapter and the instance registry:
 ## Finisher from a session (experiment 6, partly)
 
 Code: `experiments/06-finisher` (`src/bin/finish.rs` stands in for the finisher CLI: it connects to the unix socket
-named in `AAE_SOCKET` and reports `AAE_ATTEMPT_TOKEN`, `AAE_PROC_TOKEN` and its arguments; `src/main.rs` plays the
-daemon side; last in commit `3f59356`). codex runs on the fake provider of experiment 2, which answers `RUN:<cmd>`
-with an `exec_command` call; claude runs on haiku with `--permission-mode bypassPermissions`. Output:
-`experiments/06-finisher/logs/`.
+named in `LOOP_MANAGER_SOCKET` and reports `LOOP_MANAGER_ATTEMPT_TOKEN`, `LOOP_MANAGER_PROC_TOKEN` and its arguments;
+`src/main.rs` plays the daemon side; last in commit `3f59356`). codex runs on the fake provider of experiment 2, which
+answers `RUN:<cmd>` with an `exec_command` call; claude runs on haiku with `--permission-mode bypassPermissions`.
+Output: `experiments/06-finisher/logs/`.
 
 <!-- MEASURE id=finisher-exp6 date=2026-11-12 ver=claude-2.1.322,codex-0.167.2 env=linux-arm64-orbstack src=experiments/06-finisher/logs/run.txt note="n=1 per round; codex without a live model, claude haiku with a subscription login; codex sandbox not exercised (see below)" -->
 
@@ -304,7 +304,7 @@ touched.
 | Hooks: `--settings <file outside the rig>` | yes | `UserPromptSubmit` and `Stop` fired once each |
 | Hooks: `--settings '<inline JSON>'` | yes | the same, no file at all |
 | Hooks: `hooks/hooks.json` inside a `--plugin-dir` plugin | yes | fired next to the `--settings` ones |
-| Skills: `--plugin-dir` (`.claude-plugin/plugin.json` + `skills/<name>/SKILL.md`) | yes | `init.skills` holds `aae-p:p-skill` |
+| Skills: `--plugin-dir` (`.claude-plugin/plugin.json` + `skills/<name>/SKILL.md`) | yes | `init.skills` holds `loop-manager-p:p-skill` |
 | MCP: `--mcp-config <file>` and `--mcp-config '<inline JSON>'` (twice in one run) + `--strict-mcp-config` | yes | both `connected` in `init.mcp_servers` |
 | Flags on `--resume` | **not kept** | resume without the flags: same session, but no plugin skill, no MCP, no hook fired. The adapter passes the full flag set on every resume |
 | `--setting-sources ""` | cuts host and rig | no rig hook, skill, `CLAUDE.md` or `.mcp.json`; 19 built-in skills and 4 plugins stay |
@@ -327,7 +327,7 @@ Open: refresh of a delivered OAuth token after expiry ([config](config.md#host-i
 | Channel | Scope | Works? | Evidence and notes |
 |---|---|---|---|
 | stdio MCP: `thread/start.config.mcp_servers.<n> = {command, args}` | thread | yes | each of two threads saw only its own tool in the provider request; one server process per thread (plus one short-lived start that exited at once); `mcpServerStatus/list{threadId}` names the thread's server |
-| HTTP MCP: `config.mcp_servers.<n> = {url, http_headers}` | thread | yes | codex POSTed `/mcp` with the custom header (`x-aae-agent`) and `user-agent: codex-mcp-client/0.167.2` |
+| HTTP MCP: `config.mcp_servers.<n> = {url, http_headers}` | thread | yes | codex POSTed `/mcp` with the custom header (`x-loop-manager-agent`) and `user-agent: codex-mcp-client/0.167.2` |
 | MCP server lifetime | — | — | `thread/unsubscribe` does not stop the thread's server; when app-server exits on stdin EOF, every server it started is gone (no orphans) |
 | Skills: `$CODEX_HOME/skills/<name>/SKILL.md` | process | yes | scope `user` in `skills/list`, named in the provider request |
 | Skills: `skills/extraRoots/set` | process | yes | an extra root outside rig and homes; scope `user` |
@@ -359,7 +359,7 @@ Open: refresh of a delivered OAuth token after expiry ([config](config.md#host-i
   `.codex/`, `AGENTS.md` and `.agents/skills` keep working — the rig-config rule of `config.md` holds for codex too.
   Without a key of its own, an isolated process logs in as the host does: the host `auth.json` is linked into its
   `CODEX_HOME`, and a model provider the host config selects comes as the first `-c` flags with its `env_key`
-  variable passed from the daemon's environment (`aae-codex/src/part.rs::host_provider`).
+  variable passed from the daemon's environment (`loop-manager-codex/src/part.rs::host_provider`).
 
 ## Background work after the outcome (experiment 8, criterion 34)
 
@@ -368,8 +368,8 @@ Code: two throwaway Python scripts outside the product tree (`.loop/cycles/98/no
 answers a `RUN:<cmd>` prompt with one `exec_command` call (`yield_time_ms: 1000`) and then the text "Started.";
 claude gets a Messages API that answers it with one `Bash` call (`run_in_background: true` unless noted) and then
 the text. No live model. The left command is `python3 -m http.server --bind 127.0.0.1 0`, the case seen in demo 2.
-Every session carries `AAE_ATTEMPT_TOKEN` as the adapters set it (codex: `shell_environment_policy.set` of the thread;
-claude: the process environment); a second session (codex: thread B of the same app-server running `sleep 300`;
+Every session carries `LOOP_MANAGER_ATTEMPT_TOKEN` as the adapters set it (codex: `shell_environment_policy.set` of the
+thread; claude: the process environment); a second session (codex: thread B of the same app-server running `sleep 300`;
 claude: a decoy `sleep 300` with another token) must survive every mechanism. After each case the script lists every
 process carrying the markers from `/proc`.
 
@@ -424,15 +424,15 @@ Once the outcome is declared and the turn has ended, the adapter stops what the 
    `background_tasks_changed`. Neither ends the session, so a veto remark ([contracts 6.3](contracts.md#63-finisher)) can still go to it as the next prompt.
    Not `unsubscribe` or `end_session`: they close the session, and `unsubscribe` gives no `item/completed`.
 2. **Then the token sweep**: kill every process whose `/proc/<pid>/environ` holds this attempt's
-   `AAE_ATTEMPT_TOKEN` and whose session id differs from the harness process's (app-server, or claude itself, which
-   carries the token too). This catches commands that detached themselves; other sessions are never touched, the
+   `LOOP_MANAGER_ATTEMPT_TOKEN` and whose session id differs from the harness process's (app-server, or claude itself,
+   which carries the token too). This catches commands that detached themselves; other sessions are never touched, the
    token is per attempt.
 
 Limits and things to get right:
 
 - claude: a `task_notification` after the last `result` keeps the session in "background" by rule (c) of experiment 1b
-  (`crates/aae-claude/src/stream.rs`, `notified_since_result`). After the adapter's own `stop_task` no turn follows,
-  so a `task_notification{status:"stopped"}` of a task the adapter stopped must not count as a wake-up, or the
+  (`crates/loop-manager-claude/src/stream.rs`, `notified_since_result`). After the adapter's own `stop_task` no turn
+  follows, so a `task_notification{status:"stopped"}` of a task the adapter stopped must not count as a wake-up, or the
   session waits for the background budget anyway. A task killed from outside (`failed`) does wake claude into a
   model turn — another reason to stop tasks through `stop_task`, not by signals.
 - `thread/backgroundTerminals/*` is experimental in codex; the contract suite has to cover it on every update. If it
@@ -449,14 +449,14 @@ a finisher that comes after the turn. claude stops only `local_bash` tasks: a ba
 (criterion 4a), and while one lives the state stays `running`, so the call does not come at all. Rule (c) of
 experiment 1b skips a `stopped` notification. Step 2 comes when the session ends, not with the stop: a command that
 detached itself holds no step, so the run does not wait for it. With claude it goes with the session's process on
-the orphan sweep by `AAE_INSTANCE`; with codex `close_session` kills every process with the thread's attempt token
-(the app-server does not carry one, the other threads have tokens of their own).
+the orphan sweep by `LOOP_MANAGER_INSTANCE`; with codex `close_session` kills every process with the thread's attempt
+token (the app-server does not carry one, the other threads have tokens of their own).
 
 ## Compaction and native subagents (experiment 9)
 
 Code: throwaway Python scripts in a temporary directory, not kept: a fake Messages API and a fake Responses API in the
-shape of `aae-testkit`, except that the `usage.input_tokens` a reply reports is set per run (the testkit fakes always
-report 10 tokens, too few for a compaction); a hook script that logs its stdin and prints a prepared answer; an
+shape of `loop-manager-testkit`, except that the `usage.input_tokens` a reply reports is set per run (the testkit fakes
+always report 10 tokens, too few for a compaction); a hook script that logs its stdin and prints a prepared answer; an
 app-server client. claude 2.1.326 runs as the adapter starts it (`-p`, stream-json both ways, `--setting-sources
 project,local`, hooks in `--settings <file>`, `--permission-mode bypassPermissions`, model `claude-haiku-5-5`, whose
 window is 1 000 000 by `modelUsage.contextWindow`) with the environment of the adapter tests and its own
@@ -481,7 +481,7 @@ fixed summary.
 
 Stopping from a hook (window 100000, 150000 tokens; a hook answers `{"continue": false, "stopReason": "…"}` or exits 2):
 
-| Hook | Effect | `result` | aae adapter |
+| Hook | Effect | `result` | loop-manager adapter |
 |---|---|---|---|
 | `PreCompact`, `PostCompact`, `SessionStart` (`compact`): `continue:false` | none: the compaction and the turn go on | `subtype:"success"` | `completed` |
 | `PreCompact`: exit 2 | the compaction is skipped (`status:null` without `compact_result`, no `PostCompact`), the turn goes on with the full context | `success` | `completed` |
@@ -501,7 +501,7 @@ Stopping from a hook (window 100000, 150000 tokens; a hook answers `{"continue":
 | `PostCompact`: `continue:false` | The compaction is done, the turn ends `interrupted`; the next turn runs. |
 | `PreCompact`: exit 2 | The hook is `failed`, the compaction happens anyway. |
 | Other hooks: `continue:false` | `PreToolUse`: unsupported (`failed`, "PreToolUse hook returned unsupported continue:false"), the command runs. `UserPromptSubmit`: `stopped`, the turn ends `completed` without a model request. |
-| aae adapter | A turn `interrupted` that the adapter did not interrupt maps to `cancelled`, without a failure (`crates/aae-codex/src/stream.rs`). |
+| loop-manager adapter | A turn `interrupted` that the adapter did not interrupt maps to `cancelled`, without a failure (`crates/loop-manager-codex/src/stream.rs`). |
 
 ### codex roles and skills per thread
 
@@ -576,8 +576,8 @@ For the context-budget addon:
   a main-thread `PreToolUse` or `UserPromptSubmit` answering `continue:false` does, and the adapter sees a successful
   `result` (`terminal_reason: "hook_stopped"` for `PreToolUse`), today a completed turn. On codex `continue:false` from
   `PostCompact` (or `PreCompact`) ends the turn `interrupted`, today a cancelled turn; in a child it ends only the
-  child. On both, then, the run ends only if aae tells the hook's stop from a normal end: the addon's hook leaves its
-  verdict where the core reads it (the run's bead or the finisher), or the adapters map `hook_stopped` and an
+  child. On both, then, the run ends only if loop-manager tells the hook's stop from a normal end: the addon's hook
+  leaves its verdict where the core reads it (the run's bead or the finisher), or the adapters map `hook_stopped` and an
   unrequested `interrupted` to a stop of their own.
 
 For codex native subagents: per-thread roles (`config.agents.<role>`) and per-thread skill allow-lists

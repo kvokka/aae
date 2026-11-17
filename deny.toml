@@ -1,4 +1,4 @@
-# Dependencies must be compatible with distributing aae under MIT (docs/guide/install.md).
+# Dependencies must be compatible with distributing loop-manager under MIT (docs/guide/install.md).
 
 [advisories]
 ignore = []

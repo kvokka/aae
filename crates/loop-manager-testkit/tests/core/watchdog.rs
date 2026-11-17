@@ -1,0 +1,218 @@
+//! The step timeout of a turn (`runaway_turn`, docs/design/contracts.md 6.1) and its pause while nothing works
+//! between turns; the thresholds of `[watchdog]`. Managed clock, starting at the epoch.
+
+use crate::common;
+
+use common::{FILES, POLICY, World, hollow_turn, world};
+use loop_manager_core::{
+    Journal,
+    driver::{Normalized, SessionState},
+    parse_rfc3339_ms,
+    run::{Decision, GateSpec, Msg},
+};
+use loop_manager_testkit::Step;
+use serde_json::Value;
+use std::time::Duration;
+
+const MIN: u64 = 60;
+
+/// Tool work for `minutes` (a multiple of 9): never silent, since a running tool may be quiet for 10 minutes.
+fn busy(minutes: u64) -> Vec<Step> {
+    (0..minutes / 9)
+        .flat_map(|_| {
+            [
+                Step::Emit(Normalized::Activity { tool_running: true }),
+                Step::Wait(Duration::from_secs(9 * MIN)),
+            ]
+        })
+        .collect()
+}
+
+impl World {
+    /// The time of the first `run.attempt_failed` of `run` and its failure kind.
+    fn attempt_failed(&self, run: &str) -> (String, String) {
+        let all = Journal::new(&self.journal).read_from(1, 100_000).unwrap();
+        let failed = all
+            .into_iter()
+            .find(|e| e["run"] == run && e["type"] == "run.attempt_failed")
+            .expect("no run.attempt_failed");
+        let kind = failed["data"]["failure"]["kind"].as_str().unwrap().to_owned();
+        (failed["ts"].as_str().unwrap().to_owned(), kind)
+    }
+
+    /// The time of the first event `kind` of `run` whose data `pick` accepts.
+    fn ts(&self, run: &str, kind: &str, pick: impl Fn(&Value) -> bool) -> String {
+        let all = Journal::new(&self.journal).read_from(1, 100_000).unwrap();
+        let found = all
+            .into_iter()
+            .find(|e| e["run"] == run && e["type"] == kind && pick(&e["data"]));
+        found.unwrap_or_else(|| panic!("no {kind}"))["ts"]
+            .as_str()
+            .unwrap()
+            .to_owned()
+    }
+}
+
+/// Six distinct thresholds, none of them a default.
+const WATCHDOG: &str = "[watchdog]\nstart_timeout = \"30s\"\nsilence = \"1m\"\ntool_silence = \"2m\"\n\
+    background_silence = \"3m\"\nqueue_timeout = \"6m\"\npark_timeout = \"7m\"\n";
+
+/// A world whose `config.toml` is the one of `files` with [`WATCHDOG`].
+fn watched(files: &[(&str, &str)]) -> World {
+    let config = format!("{}{WATCHDOG}", files[0].1);
+    let mut extra = files.to_vec();
+    extra[0] = ("config.toml", &config);
+    world(&extra)
+}
+
+/// The time the attempt of a run playing `scenario` fails with `stall`.
+async fn stall_at(scenario: Vec<Step>) -> String {
+    let w = watched(FILES);
+    w.driver.script(scenario);
+    let run = w.create().await;
+    w.events(&run, Duration::from_secs(10 * MIN)).await;
+    let (ts, kind) = w.attempt_failed(&run);
+    assert_eq!(kind, "stall");
+    ts
+}
+
+#[tokio::test(start_paused = true)]
+async fn every_deadline_comes_from_the_config() {
+    assert_eq!(stall_at(vec![Step::NoAck]).await, "1970-01-01T00:00:30.000Z");
+    assert_eq!(stall_at(Vec::new()).await, "1970-01-01T00:01:00.000Z");
+    let tool = vec![
+        Step::Emit(Normalized::TurnStarted),
+        Step::Emit(Normalized::Activity { tool_running: true }),
+    ];
+    assert_eq!(stall_at(tool).await, "1970-01-01T00:02:00.000Z");
+    let mut background = hollow_turn();
+    background[2] = Step::Emit(Normalized::State {
+        state: SessionState::Idle,
+        background: true,
+    });
+    assert_eq!(stall_at(background).await, "1970-01-01T00:03:00.000Z");
+
+    let rig = |until_ms| GateSpec {
+        key: "rig:shop/web".into(),
+        until_ms,
+        reason: "quota".into(),
+    };
+    let w = watched(FILES);
+    w.core.send(None, Msg::CloseGate(rig(None))).await.unwrap();
+    let run = w.create().await;
+    w.events(&run, Duration::from_secs(10 * MIN)).await;
+    let failed = w.ts(&run, "run.failed", |d| d["reason"] == "queue_timeout");
+    assert_eq!(failed, "1970-01-01T00:06:00.000Z");
+
+    // As in `a_retry_under_an_operator_pause_parks_and_times_out` of gates.rs.
+    let w = watched(POLICY);
+    let crash = Step::Exit {
+        code: None,
+        signal: Some(9),
+    };
+    w.driver.script(vec![Step::Wait(Duration::from_secs(10)), crash]);
+    let run = w.create().await;
+    tokio::time::sleep(Duration::from_secs(1)).await;
+    w.core.send(None, Msg::CloseGate(rig(None))).await.unwrap();
+    tokio::time::sleep(Duration::from_secs(10)).await;
+    let resume = Decision::Resume {
+        after: Duration::ZERO,
+        gate: None,
+    };
+    w.decide(&run, "run.attempt_failed", 0, resume).await;
+    w.events(&run, Duration::from_secs(10 * MIN)).await;
+    let parked = parse_rfc3339_ms(&w.ts(&run, "run.parked", |_| true)).unwrap();
+    let failed = parse_rfc3339_ms(&w.ts(&run, "run.failed", |d| d["reason"] == "park_timeout")).unwrap();
+    assert_eq!(failed - parked, 7 * 60_000);
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_turn_past_the_step_timeout_is_a_runaway() {
+    let w = world(&[]);
+    let mut turn = vec![Step::Emit(Normalized::TurnStarted)];
+    turn.extend(busy(54));
+    w.driver.script(turn);
+    let run = w.create().await;
+    w.events(&run, Duration::from_secs(46 * MIN)).await;
+    assert_eq!(
+        w.attempt_failed(&run),
+        ("1970-01-01T00:45:00.000Z".into(), "runaway_turn".into())
+    );
+}
+
+#[tokio::test(start_paused = true)]
+async fn the_step_timeout_pauses_between_turns() {
+    let addon = POLICY[1]
+        .1
+        .replace("run.attempt_failed", "run.turn_ended_without_outcome");
+    let w = world(&[POLICY[0], ("policy/addon.toml", &addon)]);
+    let mut first = vec![Step::Emit(Normalized::TurnStarted)];
+    first.extend(busy(36));
+    first.extend(hollow_turn().into_iter().skip(1));
+    w.driver.script(first);
+    w.driver.script(busy(18));
+    let run = w.create().await;
+    // The decision comes 10 s after the turn ended: the next turn has the 9 minutes that were left.
+    w.events(&run, Duration::from_secs(36 * MIN + 10)).await;
+    let seq = w.seq_of(&run, "run.turn_ended_without_outcome", 0).await;
+    let message = "Go on.".to_owned();
+    let decide = Msg::Decide {
+        run: run.clone(),
+        seq,
+        decision: Decision::Continue { message },
+    };
+    w.core.send(None, decide).await.unwrap();
+    w.events(&run, Duration::from_secs(10 * MIN)).await;
+    assert_eq!(
+        w.attempt_failed(&run),
+        ("1970-01-01T00:45:10.200Z".into(), "runaway_turn".into())
+    );
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_retry_the_harness_announces_adds_its_pause_to_the_silence_limit() {
+    let retrying = Normalized::Retrying {
+        attempt: 1,
+        delay: Duration::from_secs(90),
+        text: "overloaded".into(),
+    };
+    let scenario = vec![Step::Emit(Normalized::TurnStarted), Step::Emit(retrying)];
+    assert_eq!(stall_at(scenario.clone()).await, "1970-01-01T00:02:30.000Z");
+    let w = watched(FILES);
+    w.driver.script(scenario);
+    let run = w.create().await;
+    let retry = w.until(Some(&run), "run.retrying", 0).await;
+    assert_eq!(
+        (&retry["retry"], &retry["next_retry_at"], &retry["text"]),
+        (&1.into(), &"1970-01-01T00:01:30.000Z".into(), &"overloaded".into())
+    );
+}
+
+/// A denial is activity: in `running` it restarts the silence; in `starting` it is told and the start timeout stands
+/// (contracts 4.3).
+#[tokio::test(start_paused = true)]
+async fn a_denied_permission_is_activity_for_the_watchdog() {
+    let denied = || {
+        Step::Emit(Normalized::PermissionDenied {
+            tool: "Bash".into(),
+            tool_use_id: None,
+            input: Value::Null,
+            reason: None,
+        })
+    };
+    let wait = Step::Wait(Duration::from_secs(50));
+    let running = vec![Step::Emit(Normalized::TurnStarted), wait, denied()];
+    assert_eq!(stall_at(running).await, "1970-01-01T00:01:50.000Z");
+
+    let w = watched(FILES);
+    w.driver
+        .script(vec![Step::NoAck, Step::Wait(Duration::from_secs(20)), denied()]);
+    let run = w.create().await;
+    w.events(&run, Duration::from_secs(10 * MIN)).await;
+    let told = w.ts(&run, "run.permission_denied", |_| true);
+    assert_eq!(told, "1970-01-01T00:00:20.000Z");
+    assert_eq!(
+        w.attempt_failed(&run),
+        ("1970-01-01T00:00:30.000Z".into(), "stall".into())
+    );
+}

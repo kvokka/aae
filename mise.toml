@@ -43,19 +43,19 @@ done
 """
 
 [tasks.acceptance]
-description = "The whole acceptance spec (docs/acceptance.md) on the release build of aae; scenarios with a real model cost money and need a login"
+description = "The whole acceptance spec (docs/acceptance.md) on the release build of loop-manager; scenarios with a real model cost money and need a login"
 run = [
-  "cargo build -q --locked --release -p aae",
-  "cargo run -q --locked -p aae-acceptance -- --aae {{config_root}}/target/release/aae",
+  "cargo build -q --locked --release -p loop-manager",
+  "cargo run -q --locked -p loop-manager-acceptance -- --loop-manager {{config_root}}/target/release/loop-manager",
 ]
 
 [tasks.acceptance-release]
 description = "Criterion 1 of the acceptance with the four release targets, and this host's build runs; CI runs it on tags"
-run = "cargo run -q --locked -p aae-acceptance -- --release 1"
+run = "cargo run -q --locked -p loop-manager-acceptance -- --release 1"
 
 [tasks.acceptance-ci]
 description = "The model-free acceptance scenarios, without the release builds; run on request"
 run = [
-  "cargo build -q --locked -p aae",
-  "cargo run -q --locked -p aae-acceptance -- --ci",
+  "cargo build -q --locked -p loop-manager",
+  "cargo run -q --locked -p loop-manager-acceptance -- --ci",
 ]

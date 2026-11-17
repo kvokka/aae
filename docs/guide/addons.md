@@ -10,14 +10,14 @@ which bounds how often a session may compact its context. To write an addon, see
 
 ## Declare it
 
-A declaration only says where the addon is. It goes in the orchestrator config or in a project's `aae.toml`:
+A declaration only says where the addon is. It goes in the orchestrator config or in a project's `loop-manager.toml`:
 
 ```toml
-# ~/.config/aae/config.toml
+# ~/.config/loop-manager/config.toml
 projects = ["~/src/shop"]
 
 [[addon]]
-path = "~/aae-addons/context-budget"
+path = "~/loop-manager-addons/context-budget"
 
 [settings]
 addons = [{ name = "context-budget" }]
@@ -28,14 +28,14 @@ root of the repository:
 
 ```toml
 [[addon]]
-git = "https://github.com/acme/aae"
+git = "https://github.com/acme/loop-manager"
 rev = "v1.4.0"                      # a tag or a full commit id; required for an addon
 dir = "addons/context-budget"
 ```
 
-`aae` downloads it into its cache when it loads the config and runs it only at that tag or commit
+`loop-manager` downloads it into its cache when it loads the config and runs it only at that tag or commit
 ([packs and addons from git](../design/config.md#packs-and-addons-from-git)). Addon names are unique across the
-orchestrator and the project. `aae addon list` lists the declared addons and the bundled ones.
+orchestrator and the project. `loop-manager addon list` lists the declared addons and the bundled ones.
 
 ## Attach it
 
@@ -78,8 +78,8 @@ attaches it is a load error; so is a subagent target whose addon is not for the 
 ### Check what an agent gets
 
 ```sh
-aae config check
-aae config explain --project shop --agent dev
+loop-manager config check
+loop-manager config explain --project shop --agent dev
 ```
 
 `explain` prints each value with the layer it came from: what an addon adds is marked `# addon <name>`, and each
@@ -109,8 +109,8 @@ caller's process. A target must be on the caller's harness and fit it in other w
 load error of the project ([subagents](../design/config.md#subagents)). The set of targets is one per session: a
 nested subagent calls within it.
 
-`aae agent list` (and `GET /v1/agents`) shows the call graph of each agent: `subagents`, the agents it may call, and
-`called_by`, the agents that may call it.
+`loop-manager agent list` (and `GET /v1/agents`) shows the call graph of each agent: `subagents`, the agents it may
+call, and `called_by`, the agents that may call it.
 
 ### What is left to the harness
 

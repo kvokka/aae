@@ -1,0 +1,47 @@
+name = "review-gate"
+packs = ["../pack"]                   # the agents and the formulas; the task comes from the user at the start
+
+[inputs]
+feedback_from = "kvokka-agent"        # whose comments on the pull requests reach the reviser: put your login here
+
+# The user's settings: what the agents of the pack run on here, and how.
+[settings]
+inherit_host = false                  # only what this config sets reaches the agents; the logins come from the host
+[settings.native.codex]               # codex's own settings
+approval_policy = "never"             # its approval policy: the demo runs unattended
+
+[agents.planner]                      # the pack's agents, over their defaults
+model = "terra"
+[agents.coder]
+model = "luna"
+[agents.reviser]
+model = "luna"
+[agents.owner]                        # the project's own reviewer, agents/owner
+model = "terra"
+
+# The root is the repository of the feature as a whole; its configuration and its tracker stay here, next to loop-manager.toml.
+[root]
+path = "../gate-demo"
+
+[rigs.backend]
+path = "../gate-demo-backend"
+prefix = "api"                        # its beads are `api-…`, not the acronym `b-…`
+[rigs.frontend]
+path = "../gate-demo-frontend"
+
+# A cancelled feature leaves pull requests, branches and its bead: the pack's `cleanup` clears them. A failed one is
+# left as it is, for a human to look into.
+[[trigger]]
+name = "cleanup-cancelled"
+on = "run.cancelled"
+where = { "run.formula" = "dev.feature" }
+run = "dev.cleanup"
+inputs = { bead = "{{ event.run.bead }}" }
+
+# The demo's stand-in for a human: when a feature waits for its review, the agent `owner` reviews it on GitHub.
+[[trigger]]
+name = "owner-review"
+on = "run.awaiting"
+where = { "run.formula" = "dev.feature" }
+run = "owner-review"
+inputs = { feature = "{{ event.run.id }}" }

@@ -3,154 +3,6 @@
 version = 4
 
 [[package]]
-name = "aae"
-version = "0.1.0"
-dependencies = [
- "aae-addons",
- "aae-br",
- "aae-claude",
- "aae-codex",
- "aae-core",
- "aae-front",
- "aae-testkit",
- "axum",
- "clap",
- "rusqlite",
- "serde_json",
- "tempfile",
- "tokio",
- "toml",
-]
-
-[[package]]
-name = "aae-acceptance"
-version = "0.1.0"
-dependencies = [
- "aae-core",
- "aae-front",
- "aae-testkit",
- "serde_json",
- "tempfile",
- "tokio",
-]
-
-[[package]]
-name = "aae-addons"
-version = "0.1.0"
-dependencies = [
- "aae-contract",
- "rustix",
- "serde",
- "serde_json",
- "tempfile",
-]
-
-[[package]]
-name = "aae-br"
-version = "0.1.0"
-dependencies = [
- "aae-contract",
- "notify",
- "rusqlite",
- "serde_json",
- "tempfile",
- "tokio",
-]
-
-[[package]]
-name = "aae-claude"
-version = "0.1.0"
-dependencies = [
- "aae-contract",
- "aae-testkit",
- "rustix",
- "serde_json",
- "tempfile",
- "tokio",
- "uuid",
-]
-
-[[package]]
-name = "aae-codex"
-version = "0.1.0"
-dependencies = [
- "aae-contract",
- "aae-testkit",
- "rustix",
- "serde",
- "serde_json",
- "tempfile",
- "tokio",
- "toml",
-]
-
-[[package]]
-name = "aae-contract"
-version = "0.1.0"
-dependencies = [
- "jiff",
- "rustix",
- "serde",
- "serde_json",
- "sha2",
- "tempfile",
- "tokio",
- "toml",
- "uuid",
-]
-
-[[package]]
-name = "aae-core"
-version = "0.1.0"
-dependencies = [
- "aae-contract",
- "getrandom",
- "jiff",
- "rusqlite",
- "rustix",
- "serde",
- "serde_json",
- "sha2",
- "tempfile",
- "tokio",
- "uuid",
-]
-
-[[package]]
-name = "aae-front"
-version = "0.1.0"
-dependencies = [
- "aae-core",
- "axum",
- "clap",
- "http-body-util",
- "hyper",
- "hyper-util",
- "serde",
- "serde_json",
- "tempfile",
- "tokio",
- "tokio-stream",
- "utoipa",
- "utoipa-axum",
-]
-
-[[package]]
-name = "aae-testkit"
-version = "0.1.0"
-dependencies = [
- "aae-addons",
- "aae-contract",
- "aae-core",
- "axum",
- "rusqlite",
- "serde_json",
- "tempfile",
- "tokio",
- "tokio-stream",
-]
-
-[[package]]
 name = "aho-corasick"
 version = "1.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -731,6 +583,154 @@ name = "log"
 version = "0.4.35"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5d15f86d12da44cd8d4ec3c73984537eb7f4cadcb9776a575a0a8a05ca11005c"
+
+[[package]]
+name = "loop-manager"
+version = "0.1.0"
+dependencies = [
+ "axum",
+ "clap",
+ "loop-manager-addons",
+ "loop-manager-br",
+ "loop-manager-claude",
+ "loop-manager-codex",
+ "loop-manager-core",
+ "loop-manager-front",
+ "loop-manager-testkit",
+ "rusqlite",
+ "serde_json",
+ "tempfile",
+ "tokio",
+ "toml",
+]
+
+[[package]]
+name = "loop-manager-acceptance"
+version = "0.1.0"
+dependencies = [
+ "loop-manager-core",
+ "loop-manager-front",
+ "loop-manager-testkit",
+ "serde_json",
+ "tempfile",
+ "tokio",
+]
+
+[[package]]
+name = "loop-manager-addons"
+version = "0.1.0"
+dependencies = [
+ "loop-manager-contract",
+ "rustix",
+ "serde",
+ "serde_json",
+ "tempfile",
+]
+
+[[package]]
+name = "loop-manager-br"
+version = "0.1.0"
+dependencies = [
+ "loop-manager-contract",
+ "notify",
+ "rusqlite",
+ "serde_json",
+ "tempfile",
+ "tokio",
+]
+
+[[package]]
+name = "loop-manager-claude"
+version = "0.1.0"
+dependencies = [
+ "loop-manager-contract",
+ "loop-manager-testkit",
+ "rustix",
+ "serde_json",
+ "tempfile",
+ "tokio",
+ "uuid",
+]
+
+[[package]]
+name = "loop-manager-codex"
+version = "0.1.0"
+dependencies = [
+ "loop-manager-contract",
+ "loop-manager-testkit",
+ "rustix",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "tokio",
+ "toml",
+]
+
+[[package]]
+name = "loop-manager-contract"
+version = "0.1.0"
+dependencies = [
+ "jiff",
+ "rustix",
+ "serde",
+ "serde_json",
+ "sha2",
+ "tempfile",
+ "tokio",
+ "toml",
+ "uuid",
+]
+
+[[package]]
+name = "loop-manager-core"
+version = "0.1.0"
+dependencies = [
+ "getrandom",
+ "jiff",
+ "loop-manager-contract",
+ "rusqlite",
+ "rustix",
+ "serde",
+ "serde_json",
+ "sha2",
+ "tempfile",
+ "tokio",
+ "uuid",
+]
+
+[[package]]
+name = "loop-manager-front"
+version = "0.1.0"
+dependencies = [
+ "axum",
+ "clap",
+ "http-body-util",
+ "hyper",
+ "hyper-util",
+ "loop-manager-core",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "tokio",
+ "tokio-stream",
+ "utoipa",
+ "utoipa-axum",
+]
+
+[[package]]
+name = "loop-manager-testkit"
+version = "0.1.0"
+dependencies = [
+ "axum",
+ "loop-manager-addons",
+ "loop-manager-contract",
+ "loop-manager-core",
+ "rusqlite",
+ "serde_json",
+ "tempfile",
+ "tokio",
+ "tokio-stream",
+]
 
 [[package]]
 name = "matchit"

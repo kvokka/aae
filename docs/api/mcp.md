@@ -5,9 +5,10 @@ descriptions cost tokens in every session, so an agent gets it only by naming it
 reason the set stays at the five tools below: an agent that needs more, a planner for one, uses the CLI.
 
 A harness reaches it over TCP: set `api_tcp = "127.0.0.1:<port>"` in the orchestrator config and give the agent
-`[mcp.aae] url = "${AAE_API}/mcp"`; the session gets the URL and the bearer token (docs/design/config.md). Every
-request on the TCP listener needs `Authorization: Bearer <token>`; the daemon writes a new token at every start to
-`api.token` in its state directory, readable by the owner only. The unix socket needs no token.
+`[mcp.loop-manager] url = "${LOOP_MANAGER_API}/mcp"`; the session gets the URL and the bearer token
+(docs/design/config.md). Every request on the TCP listener needs `Authorization: Bearer <token>`; the daemon writes a
+new token at every start to `api.token` in its state directory, readable by the owner only. The unix socket needs no
+token.
 
 ## Tools
 
@@ -20,7 +21,7 @@ request on the TCP listener needs `Authorization: Bearer <token>`; the daemon wr
 | `cancel_run` | `id`, `reason`?, `idempotency_key`? | `POST /v1/runs/{id}/cancel` |
 
 An MCP session carries no attempt of an agent session, so `start_run` starts a run at depth 0 with a new
-correlation; an agent starts a child of its own run with `aae run start` from its session's shell
+correlation; an agent starts a child of its own run with `loop-manager run start` from its session's shell
 ([frontends](frontends.md#cli)).
 
 A tool result carries the API's JSON reply as text. An API error (`bad_request`, `not_found`, `rejected`, ...) is a

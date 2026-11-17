@@ -1,6 +1,6 @@
 # Architecture
 
-How the parts of aae fit together and where each lives. The terms are in the [glossary](overview.md#glossary).
+How the parts of loop-manager fit together and where each lives. The terms are in the [glossary](overview.md#glossary).
 
 ```
             HTTP API (full)    CLI (full)    MCP (small)
@@ -22,14 +22,14 @@ How the parts of aae fit together and where each lives. The terms are in the [gl
 
 These are checked by the build, not kept by agreement.
 
-- The core is two crates: `aae-contract`, the contracts adapters, the tracker adapter, addons and test doubles are
-  written against, and `aae-core`, the engine over them. The core depends on no adapter, frontend or addon, and
-  neither crate names a harness or a tracker (`codex`, `br`, `max_sessions`, `BEADS_DIR`, `.beads`): what the core
+- The core is two crates: `loop-manager-contract`, the contracts adapters, the tracker adapter, addons and test doubles
+  are written against, and `loop-manager-core`, the engine over them. The core depends on no adapter, frontend or addon,
+  and neither crate names a harness or a tracker (`codex`, `br`, `max_sessions`, `BEADS_DIR`, `.beads`): what the core
   needs comes through the driver's capabilities and the tracker interface, and `scripts/core-boundary.sh` checks the
-  sources of both in CI, and that the adapters (`aae-claude`, `aae-codex`, `aae-br`, `aae-addons`) build without
-  `aae-core`.
+  sources of both in CI, and that the adapters (`loop-manager-claude`, `loop-manager-codex`, `loop-manager-br`,
+  `loop-manager-addons`) build without `loop-manager-core`.
 - A harness is an abstraction to the core. The root of the build holds the one table of adapters
-  (`crates/aae/src/harness.rs`), the only place that names a harness.
+  (`crates/loop-manager/src/harness.rs`), the only place that names a harness.
 - Adapters and frontends only translate protocols.
 - Policy (retry, park, refuse) lives in addons and config, judgement ("is the work done well") in prompts and the
   checks of addons; the core keeps only mechanisms
@@ -39,19 +39,19 @@ These are checked by the build, not kept by agreement.
 
 | Crate | What it is | Read |
 |---|---|---|
-| `aae-contract` | the contracts of the core: config assembly, the driver and tracker interfaces, the event envelope, templates and schedules, the registry of child processes. The adapters, `aae-br`, `aae-addons` and the test doubles depend on it, not on the engine | [contracts](design/contracts.md), [config](design/config.md) |
-| `aae-core` | the engine, the single writer of the runtime state: runs, attempts, triggers, deadlines, gates, the instance registry, hook execution, recovery. It re-exports the modules of `aae-contract` | [event model](design/event-model.md), [invariants](design/invariants.md) |
-| `aae-claude` | the claude adapter: one `claude -p` process per session, stream-json | [adapters](design/adapters.md), [contracts 4.6](design/contracts.md#46-harness-specifics-the-contract-relies-on) |
-| `aae-codex` | the codex adapter: one `codex app-server` per fingerprint over stdio, a thread per session | the same |
-| `aae-br` | the br tracker adapter: every call is one `br` process on the project's database | [tracker](design/tracker-br.md) |
-| `aae-front` | the frontends: the HTTP API on the daemon's unix socket, the CLI and its client, the MCP server | [frontends](api/frontends.md), [MCP](api/mcp.md), [OpenAPI](api/openapi.json) |
-| `aae-addons` | the bundled addons `default-policy` and `worktree`, in-process executors of the hook contract | [config: bundled addons](design/config.md#bundled-addons-builtinname), [contracts 10](design/contracts.md#10-default-policy-as-decisions) |
-| `aae` | the binary: the daemon, the adapter table, `doctor`, the git cache of packs and addons, the stdio→HTTP MCP bridge | [install](guide/install.md) |
-| `aae-testkit` | test doubles: the scripted driver, fake providers, a test MCP service. Nothing of it runs in the product | [development](guide/development.md) |
-| `aae-acceptance` | end-to-end scenarios on a real daemon and real binaries, run on request | [acceptance](acceptance.md) |
+| `loop-manager-contract` | the contracts of the core: config assembly, the driver and tracker interfaces, the event envelope, templates and schedules, the registry of child processes. The adapters, `loop-manager-br`, `loop-manager-addons` and the test doubles depend on it, not on the engine | [contracts](design/contracts.md), [config](design/config.md) |
+| `loop-manager-core` | the engine, the single writer of the runtime state: runs, attempts, triggers, deadlines, gates, the instance registry, hook execution, recovery. It re-exports the modules of `loop-manager-contract` | [event model](design/event-model.md), [invariants](design/invariants.md) |
+| `loop-manager-claude` | the claude adapter: one `claude -p` process per session, stream-json | [adapters](design/adapters.md), [contracts 4.6](design/contracts.md#46-harness-specifics-the-contract-relies-on) |
+| `loop-manager-codex` | the codex adapter: one `codex app-server` per fingerprint over stdio, a thread per session | the same |
+| `loop-manager-br` | the br tracker adapter: every call is one `br` process on the project's database | [tracker](design/tracker-br.md) |
+| `loop-manager-front` | the frontends: the HTTP API on the daemon's unix socket, the CLI and its client, the MCP server | [frontends](api/frontends.md), [MCP](api/mcp.md), [OpenAPI](api/openapi.json) |
+| `loop-manager-addons` | the bundled addons `default-policy` and `worktree`, in-process executors of the hook contract | [config: bundled addons](design/config.md#bundled-addons-builtinname), [contracts 10](design/contracts.md#10-default-policy-as-decisions) |
+| `loop-manager` | the binary: the daemon, the adapter table, `doctor`, the git cache of packs and addons, the stdio→HTTP MCP bridge | [install](guide/install.md) |
+| `loop-manager-testkit` | test doubles: the scripted driver, fake providers, a test MCP service. Nothing of it runs in the product | [development](guide/development.md) |
+| `loop-manager-acceptance` | end-to-end scenarios on a real daemon and real binaries, run on request | [acceptance](acceptance.md) |
 
-aae's own addons are not crates either: each lives in `addons/<name>/` of this repository and is self-contained —
-its `addon.toml`, a `README.md`, its own files and its own version — so moving one to a repository of its own
+loop-manager's own addons are not crates either: each lives in `addons/<name>/` of this repository and is self-contained
+— its `addon.toml`, a `README.md`, its own files and its own version — so moving one to a repository of its own
 changes only its declaration. A config declares an addon by `[[addon]]` with a `path`, or with `git` + `rev` + `dir`
 for a directory of a repository ([config: packs and addons from git](design/config.md#packs-and-addons-from-git)),
 and an agent attaches it with `addons = [{ name, params }]`
@@ -60,11 +60,11 @@ and an agent attaches it with `addons = [{ name, params }]`
 budget of compactions per session.
 
 The skills for a user's agent are a different thing: `plugin/` is a plugin of the operator's harness, Claude
-Code or Codex, with the skills by which the operator drives aae, each harness in its current format. Claude Code reads
-`.claude-plugin/marketplace.json` and the plugin's `.claude-plugin/plugin.json`; Codex reads
+Code or Codex, with the skills by which the operator drives loop-manager, each harness in its current format. Claude
+Code reads `.claude-plugin/marketplace.json` and the plugin's `.claude-plugin/plugin.json`; Codex reads
 `.agents/plugins/marketplace.json` and the plugin's root `plugin.json`
-([recovery](guide/recovery.md)). A test of `aae-front` checks its manifests and that its skills name only commands
-and flags the CLI has.
+([recovery](guide/recovery.md)). A test of `loop-manager-front` checks its manifests and that its skills name only
+commands and flags the CLI has.
 
 ## The life of a run
 

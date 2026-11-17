@@ -4,8 +4,8 @@ An addon is a directory with an `addon.toml`. It has two independent sides:
 
 - the **agent side**: what the sessions of the agents that attach it get (skills, harness hooks, MCP servers,
   services, environment variables, native harness keys, a prompt fragment, scripts on `PATH`);
-- the **orchestrator side** (`[[hook]]`): programs aae runs on the events of those agents' runs, which may observe
-  them or decide what happens next (veto a pass, retry a failed attempt, remark on a turn...).
+- the **orchestrator side** (`[[hook]]`): programs loop-manager runs on the events of those agents' runs, which may
+  observe them or decide what happens next (veto a pass, retry a failed attempt, remark on a turn...).
 
 An addon is not a pack: a pack brings agents and formulas, an addon extends the agents that attach it. It is a
 directory, not a library: hooks are any executables, in any language. How an addon is declared and attached is in
@@ -26,7 +26,7 @@ review/
 ```
 
 ```toml
-# ~/aae-addons/review/addon.toml
+# ~/loop-manager-addons/review/addon.toml
 name = "review"
 version = "0.1.0"
 harnesses = ["claude", "codex"]     # optional: the harnesses it is for; any when absent
@@ -41,7 +41,7 @@ skills.review-checklist = { path = "skills/review-checklist" }
 
 [agent.hooks.review-remind]
 event = "UserPromptSubmit"
-command = "'${AAE_ADDON_DIR}/hooks/remind' '${params.word}'"
+command = "'${LOOP_MANAGER_ADDON_DIR}/hooks/remind' '${params.word}'"
 timeout = "10s"
 
 [[hook]]
@@ -59,10 +59,10 @@ effective config is put together:
 
 - `${params.<key>}` is the parameter's value in force for that agent. A `native` string that is only such a reference
   takes the value with its type: `"${params.window}"` is an integer. A reference to an undeclared key is a load error.
-- `${AAE_ADDON_DIR}` is the addon's directory, so a command reaches the addon's own files; skill paths and
+- `${LOOP_MANAGER_ADDON_DIR}` is the addon's directory, so a command reaches the addon's own files; skill paths and
   `prompt` are relative to it.
-- `${AAE_ADDON_DATA}` is `<state>/addons/<name>/`, a directory the daemon makes for each declared addon and never
-  reads: the place for the files the addon's hooks keep.
+- `${LOOP_MANAGER_ADDON_DATA}` is `<state>/addons/<name>/`, a directory the daemon makes for each declared addon and
+  never reads: the place for the files the addon's hooks keep.
 
 What is filled in is literal: a `$` in a value put in is no reference. Any other `${NAME}` in an `[agent]` `env`
 value is a variable of the daemon's environment, resolved when the session starts
@@ -79,31 +79,32 @@ value is a variable of the daemon's environment, resolved when the session start
 
 Harness hooks use the Claude Code dialect (`event`, `matcher`, `command`, `timeout`); claude and codex take them in
 the same form, with differences listed in [settings](../design/config.md#settings-any-layer). A hook runs in the
-session's environment, which has `AAE_RUN`, `AAE_ATTEMPT_TOKEN`, `AAE_SOCKET` and, when the run has a bead,
-`AAE_BEAD`, so it can call `aae` (`aae finish`, for one) and `br` on the run's behalf. What `hooks/remind` prints on
-`UserPromptSubmit` joins the prompt:
+session's environment, which has `LOOP_MANAGER_RUN`, `LOOP_MANAGER_ATTEMPT_TOKEN`, `LOOP_MANAGER_SOCKET` and, when the
+run has a bead, `LOOP_MANAGER_BEAD`, so it can call `loop-manager` (`loop-manager finish`, for one) and `br` on the
+run's behalf. What `hooks/remind` prints on `UserPromptSubmit` joins the prompt:
 
 ```sh
 #!/bin/sh
-# ~/aae-addons/review/hooks/remind
+# ~/loop-manager-addons/review/hooks/remind
 echo "Before you finish, say in your summary whether the change is $1."
 ```
 
 On claude a hook fires inside the session's subagents too, with `agent_id` in its input.
 
-A service listens on `$AAE_SERVICE_PORT`, refuses requests without `Authorization: Bearer $AAE_SERVICE_TOKEN`, and
-with `mcp` the sessions get its endpoint `/mcp` as an MCP server of the service's name; without it they get
-`AAE_SERVICE_<NAME>_URL` and `_TOKEN` ([MCP servers and services](../design/config.md#mcp-servers-and-services)):
+A service listens on `$LOOP_MANAGER_SERVICE_PORT`, refuses requests without
+`Authorization: Bearer $LOOP_MANAGER_SERVICE_TOKEN`, and with `mcp` the sessions get its endpoint `/mcp` as an MCP
+server of the service's name; without it they get `LOOP_MANAGER_SERVICE_<NAME>_URL` and `_TOKEN` ([MCP servers and
+services](../design/config.md#mcp-servers-and-services)):
 
 ```toml
 [[service]]
 name = "notes"
-command = ["${AAE_ADDON_DIR}/bin/notes-mcp", "--dir", "${AAE_ADDON_DATA}"]
+command = ["${LOOP_MANAGER_ADDON_DIR}/bin/notes-mcp", "--dir", "${LOOP_MANAGER_ADDON_DATA}"]
 mcp = true
 ```
 
-An aae addon is not handed to claude as a Claude Code plugin directory (`--plugin-dir`): its skills, hooks and MCP
-servers reach a session only through `[agent]`.
+A loop-manager addon is not handed to claude as a Claude Code plugin directory (`--plugin-dir`): its skills, hooks and
+MCP servers reach a session only through `[agent]`.
 
 ## The orchestrator side
 
@@ -115,8 +116,9 @@ orchestrator or the project. The full contract is in
 
 - **stdin**: the event as one JSON line (`{"schema", "seq", "ts", "type", "project", "rig", "run", "data", ...}`),
   then EOF.
-- **cwd**: the addon directory. **Environment**: only `PATH`, `HOME`, `LANG`, `AAE_SOCKET` (to call back into aae),
-  `AAE_ADDON_DIR`, `AAE_ADDON_PARAMS` (the params in force for the run's agent as a JSON object) and `AAE_INSTANCE`.
+- **cwd**: the addon directory. **Environment**: only `PATH`, `HOME`, `LANG`, `LOOP_MANAGER_SOCKET` (to call back into
+  loop-manager), `LOOP_MANAGER_ADDON_DIR`, `LOOP_MANAGER_ADDON_PARAMS` (the params in force for the run's agent as a
+  JSON object) and `LOOP_MANAGER_INSTANCE`.
 - **Result**: exit 0 with empty stdout means no objection; exit 0 with one JSON object on stdout is a decision;
   exit 2 blocks, with stderr as the reason; anything else (another exit code, a timeout, bad JSON) is a hook
   failure, reported as the `addon.hook_failed` event.
@@ -125,9 +127,9 @@ orchestrator or the project. The full contract is in
 
 ```sh
 #!/bin/sh
-# ~/aae-addons/review/hooks/check
+# ~/loop-manager-addons/review/hooks/check
 set -eu
-word=$(printf '%s' "$AAE_ADDON_PARAMS" | jq -r .word)
+word=$(printf '%s' "$LOOP_MANAGER_ADDON_PARAMS" | jq -r .word)
 summary=$(jq -r 'select(.data.outcome.result == "pass") | .data.outcome.summary')
 case $summary in
 "" | *"$word"*) ;;
@@ -156,7 +158,7 @@ Rules worth keeping:
   cannot reach the session that took the turn; the attempt fails as `daemon_crash` and the policy decides.
 - **Be quick.** A deciding hook holds its run until it answers or times out.
 - **Keep no state in the hook.** An event carries the attempts, times and gates a policy needs; files an addon must
-  keep go in `${AAE_ADDON_DATA}`.
+  keep go in `${LOOP_MANAGER_ADDON_DATA}`.
 - **Parse JSON properly**, with `jq` or a real JSON parser.
 
 ## A worked example: `context-budget`
@@ -181,21 +183,21 @@ native.codex.model_auto_compact_token_limit = "${params.window}"
 
 [agent.hooks.context-budget-count]
 event = "PostCompact"
-command = "'${AAE_ADDON_DIR}/hooks/budget' compacted '${AAE_ADDON_DATA}' ${params.max_compactions}"
+command = "'${LOOP_MANAGER_ADDON_DIR}/hooks/budget' compacted '${LOOP_MANAGER_ADDON_DATA}' ${params.max_compactions}"
 
 [agent.hooks.context-budget-stop]
 event = "PreToolUse"
-command = "'${AAE_ADDON_DIR}/hooks/budget' tool '${AAE_ADDON_DATA}'"
+command = "'${LOOP_MANAGER_ADDON_DIR}/hooks/budget' tool '${LOOP_MANAGER_ADDON_DATA}'"
 ```
 
 - **One parameter, two harnesses.** `window` reaches each harness in its own key: claude's `autoCompactWindow` (in
   its `--settings`) and codex's `model_auto_compact_token_limit`. Each string is only `${params.window}`, so each
   harness gets an integer.
 - **State in the data directory.** `hooks/budget compacted` counts by the hook input's `session_id` in
-  `${AAE_ADDON_DATA}/<session>.count`; the paths are quoted, since the directories may hold spaces.
-- **The bead.** With `AAE_BEAD` set, it replaces the bead's `compactions:*` label with `br`, as the session's
+  `${LOOP_MANAGER_ADDON_DATA}/<session>.count`; the paths are quoted, since the directories may hold spaces.
+- **The bead.** With `LOOP_MANAGER_BEAD` set, it replaces the bead's `compactions:*` label with `br`, as the session's
   tracker actor.
-- **Stopping.** Past the budget it declares the outcome with `aae finish fail --summary ...` and answers
+- **Stopping.** Past the budget it declares the outcome with `loop-manager finish fail --summary ...` and answers
   `{"continue": false}`, which ends a codex turn. claude does not stop on a compaction hook's answer, so the
   `PreToolUse` hook denies every tool call of a session past its budget, and the turn ends. An outcome that is not
   accepted fails the hook and the session goes on: the next compaction tries again.
@@ -203,16 +205,17 @@ command = "'${AAE_ADDON_DIR}/hooks/budget' tool '${AAE_ADDON_DATA}'"
 
 ## Testing an addon
 
-- **The manifest**: a small config that declares and attaches the addon, then `aae config check --config <file>`
-  and `aae config explain --config <file> --project <p> --agent <a>`, run without a daemon. `explain` shows each
+- **The manifest**: a small config that declares and attaches the addon, then
+  `loop-manager config check --config <file>` and
+  `loop-manager config explain --config <file> --project <p> --agent <a>`, run without a daemon. `explain` shows each
   string filled in for that agent and each parameter with its layer.
 - **The hooks**: run each one by hand with its input on stdin: a harness hook takes the hook input JSON of the
-  harness and the session environment (`AAE_BEAD` and the rest); an orchestrator hook takes an event line and
-  `AAE_ADDON_PARAMS`. Put stand-ins for the commands it calls (`aae`, `br`) first on its `PATH`.
+  harness and the session environment (`LOOP_MANAGER_BEAD` and the rest); an orchestrator hook takes an event line and
+  `LOOP_MANAGER_ADDON_PARAMS`. Put stand-ins for the commands it calls (`loop-manager`, `br`) first on its `PATH`.
 
-The tests of `context-budget` do both: `crates/aae/tests/e2e/context_budget.rs` checks with `config explain` that
-the params reach each harness and drives `hooks/budget` with the `PostCompact` and `PreToolUse` inputs of claude and
-codex, a stand-in `aae` and a real `br` tracker.
+The tests of `context-budget` do both: `crates/loop-manager/tests/e2e/context_budget.rs` checks with `config explain`
+that the params reach each harness and drives `hooks/budget` with the `PostCompact` and `PreToolUse` inputs of claude
+and codex, a stand-in `loop-manager` and a real `br` tracker.
 
 ## Moving it to its own repository
 
@@ -222,7 +225,7 @@ root:
 
 ```toml
 [[addon]]
-git = "https://github.com/acme/aae-addon-review"
+git = "https://github.com/acme/loop-manager-addon-review"
 rev = "v0.1.0"
 ```
 

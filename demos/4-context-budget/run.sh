@@ -1,55 +1,55 @@
 #!/bin/sh
 # Runs the demo from its two requests to its report on a daemon of the demo's own. What the run creates stays in this
 # directory and in .gitignore: the documents and what the agents wrote in library/, the beads in root/.beads, the
-# daemon's state in .aae/ and RESULT.md. EXAMPLE=1 also keeps the result as the author's library-example/ and
-# RESULT-example.md. AAE names the aae binary.
+# daemon's state in .loop-manager/ and RESULT.md. EXAMPLE=1 also keeps the result as the author's library-example/ and
+# RESULT-example.md. LOOP_MANAGER names the loop-manager binary.
 set -eu
 here=$(cd "$(dirname "$0")" && pwd)
 demo=$(basename "$here")
-aae=$(command -v "${AAE:-aae}") || { echo "no aae: install it or set AAE"; exit 1; }
+loop_manager=$(command -v "${LOOP_MANAGER:-loop-manager}") || { echo "no loop-manager: install it or set LOOP_MANAGER"; exit 1; }
 glossary="List every term the documents in docs/ define, each with a one-line definition and the document that defines it, in GLOSSARY.md"
 index="Write INDEX.md: for each document in docs/, its sections, each with one line on what it says"
 cd "$here"
-if [ -n "$(ls -A library root/.beads .aae 2>/dev/null | grep -v -e '^\.gitkeep$' -e ':$' -e '^$')" ]; then
+if [ -n "$(ls -A library root/.beads .loop-manager 2>/dev/null | grep -v -e '^\.gitkeep$' -e ':$' -e '^$')" ]; then
   echo "$demo: a run is left over; start clean with: git clean -ffdX -- $here"
   exit 1
 fi
 
-mkdir -p .aae
-export XDG_STATE_HOME="$here/.aae/state" XDG_CONFIG_HOME="$here/.aae/config" XDG_CACHE_HOME="$here/.aae/cache"
+mkdir -p .loop-manager
+export XDG_STATE_HOME="$here/.loop-manager/state" XDG_CONFIG_HOME="$here/.loop-manager/config" XDG_CACHE_HOME="$here/.loop-manager/cache"
 # A socket path has a length limit: it goes to a short temporary directory.
-AAE_SOCKET="$(mktemp -d)/aae.sock"
-export AAE_SOCKET
+LOOP_MANAGER_SOCKET="$(mktemp -d)/loop-manager.sock"
+export LOOP_MANAGER_SOCKET
 (cd root && br init -q >/dev/null)
-# What the agents read: the documentation of aae as this checkout has it, about 100000 tokens.
+# What the agents read: the documentation of loop-manager as this checkout has it, about 100000 tokens.
 cp -R ../../docs library/docs
 sha=$(git describe --always --dirty 2>/dev/null || echo unknown)
-# The agents and the addon's hook call `aae`: the binary goes first on the PATH the daemon hands them.
-PATH="$(dirname "$aae"):$PATH" "$aae" daemon --config root/config.toml 2>.aae/daemon.log &
+# The agents and the addon's hook call `loop-manager`: the binary goes first on the PATH the daemon hands them.
+PATH="$(dirname "$loop_manager"):$PATH" "$loop_manager" daemon --config root/config.toml 2>.loop-manager/daemon.log &
 daemon=$!
 trap 'kill $daemon 2>/dev/null || true' EXIT
-until "$aae" status >/dev/null 2>&1; do
-  kill -0 $daemon 2>/dev/null || { cat .aae/daemon.log; exit 1; }
+until "$loop_manager" status >/dev/null 2>&1; do
+  kill -0 $daemon 2>/dev/null || { cat .loop-manager/daemon.log; exit 1; }
   sleep 0.2
 done
 
 # The two runs side by side, each with its own request and so its own bead.
 started=$(date +%s)
-"$aae" run start library study.glossary --input "task=$glossary" >.aae/glossarist.run
-"$aae" run start library study.index --input "task=$index" >.aae/indexer.run
+"$loop_manager" run start library study.glossary --input "task=$glossary" >.loop-manager/glossarist.run
+"$loop_manager" run start library study.index --input "task=$index" >.loop-manager/indexer.run
 result=passed
 for agent in glossarist indexer; do
-  "$aae" run wait "$(cat .aae/$agent.run)" --timeout 60m >".aae/$agent.txt" || result=failed
+  "$loop_manager" run wait "$(cat .loop-manager/$agent.run)" --timeout 60m >".loop-manager/$agent.txt" || result=failed
 done
 seconds=$(($(date +%s) - started))
 # The demo shows a compaction of each agent: a bead without the addon's label fails it.
 for agent in glossarist indexer; do
-  "$aae" --json run show "$(cat .aae/$agent.run)" | jq -r .bead >".aae/$agent.bead"
-  (cd root && br label list "$(cat ../.aae/$agent.bead)") >".aae/$agent.labels"
-  grep -q 'compactions:' ".aae/$agent.labels" || result=failed
+  "$loop_manager" --json run show "$(cat .loop-manager/$agent.run)" | jq -r .bead >".loop-manager/$agent.bead"
+  (cd root && br label list "$(cat ../.loop-manager/$agent.bead)") >".loop-manager/$agent.labels"
+  grep -q 'compactions:' ".loop-manager/$agent.labels" || result=failed
 done
 
-versions="aae-$("$aae" --version | cut -d' ' -f2)@$sha"
+versions="loop-manager-$("$loop_manager" --version | cut -d' ' -f2)@$sha"
 for harness in claude codex; do
   versions="$versions,$harness-$("$harness" --version 2>/dev/null | grep -Eo '[0-9]+\.[0-9]+\.[0-9]+' | head -1)"
 done
@@ -65,33 +65,33 @@ done
     echo
     echo "## $agent"
     echo
-    "$aae" config explain --config root/config.toml --project library --agent "study.$agent" |
+    "$loop_manager" config explain --config root/config.toml --project library --agent "study.$agent" |
       grep -e '^harness =' -e '^model =' -e '^native\.' -e '^addons\.context-budget\.params\.' | sed 's/^/    /'
     echo
     echo "The request: \"$(if [ $agent = glossarist ]; then echo "$glossary"; else echo "$index"; fi)\"."
     echo
-    echo "The labels of its bead \`$(cat .aae/$agent.bead)\` (\`br label list\`):"
+    echo "The labels of its bead \`$(cat .loop-manager/$agent.bead)\` (\`br label list\`):"
     echo
     echo '```'
-    cat ".aae/$agent.labels"
+    cat ".loop-manager/$agent.labels"
     echo '```'
     echo
-    echo "The outcome of the run (\`aae run wait\`):"
+    echo "The outcome of the run (\`loop-manager run wait\`):"
     echo
     echo '```'
-    sed 's/[[:space:]]*$//' ".aae/$agent.txt"
+    sed 's/[[:space:]]*$//' ".loop-manager/$agent.txt"
     echo '```'
   done
   echo
-  echo "The compactions the addon counted, per session (\`<state>/aae/addons/context-budget/<session>.count\`):"
+  echo "The compactions the addon counted, per session (\`<state>/loop-manager/addons/context-budget/<session>.count\`):"
   echo
   echo '```'
-  for count in "$XDG_STATE_HOME"/aae/addons/context-budget/*.count; do
+  for count in "$XDG_STATE_HOME"/loop-manager/addons/context-budget/*.count; do
     if [ -e "$count" ]; then echo "$(basename "$count" .count): $(cat "$count")"; fi
   done
   echo '```'
 } >RESULT.md
-"$aae" drain >/dev/null 2>&1 || true
+"$loop_manager" drain >/dev/null 2>&1 || true
 wait "$daemon" 2>/dev/null || true
 
 if [ "${EXAMPLE:-}" = 1 ]; then
@@ -100,5 +100,5 @@ if [ "${EXAMPLE:-}" = 1 ]; then
   cp library/GLOSSARY.md library/INDEX.md library-example/ 2>/dev/null || true
   cp RESULT.md RESULT-example.md
 fi
-echo "$demo: $result in ${seconds}s; see RESULT.md, the daemon's log is .aae/daemon.log"
+echo "$demo: $result in ${seconds}s; see RESULT.md, the daemon's log is .loop-manager/daemon.log"
 [ "$result" = passed ]

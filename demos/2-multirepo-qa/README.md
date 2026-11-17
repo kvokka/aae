@@ -21,23 +21,23 @@ The request is one sentence: "Create me snake game in browser and a simple backe
 
   Both checks have `back_to = "plan"`: when either fails, the run goes back to `plan` with the remarks of both. A
   check still failing in the third round fails the run.
-- `root/` is the root repository: `aae.toml` (the project, its rigs and what the agents run on),
-  `.aae/agents/qa/checks.md` (the conditions `qa` checks: the project's, not the pack's; the template of `qa` takes
+- `root/` is the root repository: `loop-manager.toml` (the project, its rigs and what the agents run on),
+  `.loop-manager/agents/qa/checks.md` (the conditions `qa` checks: the project's, not the pack's; the template of `qa` takes
   them as `{{ agent.checks }}`) and its tracker, made by the run. `root/config.toml` is the orchestrator config of the demo: `run.sh` starts a daemon of the demo's own with it,
-  so the demo neither reads nor changes your `~/.config/aae`.
+  so the demo neither reads nor changes your `~/.config/loop-manager`.
 - `frontend/` and `backend/` are the two repositories of the project, empty before a run.
 
 Every agent runs on codex, on the openai models: `planner` on `sol`, `coder` on `luna`, `qa` on `terra`.
 
 ## Run
 
-You need `aae`, a login of `codex`, `br`, `jq`, `rumdl` and `agent-browser` with a browser: `agent-browser install`
+You need `loop-manager`, a login of `codex`, `br`, `jq`, `rumdl` and `agent-browser` with a browser: `agent-browser install`
 fetches Chrome once; where Chrome has no build (Linux on arm64), set `executablePath` of a Chromium in
-`~/.agent-browser/config.json`. `mise install` in this directory installs all but `aae` and the browser (mise is a
+`~/.agent-browser/config.json`. `mise install` in this directory installs all but `loop-manager` and the browser (mise is a
 convenience, any install does). The run spends real tokens.
 
 ```sh
-aae config check --config root/config.toml   # the pack and the project load
+loop-manager config check --config root/config.toml   # the pack and the project load
 ./run.sh                                     # or: mise run demo
 ```
 
@@ -49,4 +49,4 @@ it for the next run. Compare with the author's run: `frontend-example/`, `backen
 The author's runs (2026-11-16, two in a row, the second in `RESULT-example.md`) each passed in one round: the
 format check and `qa` in the browser found nothing to send back. An earlier one (2026-11-15) needed two rounds: the
 checks sent the work back to the planner, which added a bead to hide the game overlay during play. How a return goes
-is in `crates/aae-testkit/tests/core/returns.rs` and in the second-round row of criterion 20, without a model.
+is in `crates/loop-manager-testkit/tests/core/returns.rs` and in the second-round row of criterion 20, without a model.

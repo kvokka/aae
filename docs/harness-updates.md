@@ -1,9 +1,9 @@
 # Harness updates
 
-aae drives `claude` and `codex` through their own protocols, so every new harness version is checked before the
+loop-manager drives `claude` and `codex` through their own protocols, so every new harness version is checked before the
 adapter's tested range takes it in. The check is the contract suite below: the real binary against a fake provider
-API, no model and no account. Keeping the harness up to date is the user's or the aae developer's job; aae itself
-only warns outside the tested range.
+API, no model and no account. Keeping the harness up to date is the user's or the loop-manager developer's job;
+loop-manager itself only warns outside the tested range.
 
 `mise.toml` selects a release line of each harness, not an exact version: a newer release of the line is taken on
 `mise upgrade`, and the contract suite is what guards the protocol. That matters most for codex: app-server is
@@ -17,17 +17,18 @@ marked `[experimental]`, and codex released every 2–8 days (observed on 2026-1
    there is no `mise.lock`. Run `mise upgrade claude` (or `codex`) and check that `mise exec -- claude --version`
    shows the new version.
 2. Run the contract suite and the daemon tests of that harness:
-   - claude: `cargo nextest run -p aae-claude` and `cargo nextest run -p aae -E 'test(/^claude::/)'`;
-   - codex: `cargo nextest run -p aae-codex` and `cargo nextest run -p aae -E 'test(/^codex::/)'`.
+   - claude: `cargo nextest run -p loop-manager-claude` and `cargo nextest run -p loop-manager -E 'test(/^claude::/)'`;
+   - codex: `cargo nextest run -p loop-manager-codex` and `cargo nextest run -p loop-manager -E 'test(/^codex::/)'`.
 3. A red scenario is a change of the harness protocol or of its failure fields. Fix the adapter (the failure
-   classification lives in `crates/aae-claude/src/stream/classify.rs` and `crates/aae-codex/src/stream.rs`), never the
-   scenario's expectation, unless the harness now reports more than before.
+   classification lives in `crates/loop-manager-claude/src/stream/classify.rs` and
+   `crates/loop-manager-codex/src/stream.rs`), never the scenario's expectation, unless the harness now reports more
+   than before.
 4. When all is green, run one real turn on the cheapest model of the harness: the request row of criterion 2,
-   `cargo build -p aae && cargo run -p aae-acceptance -- 2`, does it on both harnesses (it costs model calls and
-   needs a login). The suite runs against fake providers; this turn is the only check against the real one, so it
-   is not skipped.
-5. Then widen the tested range in the adapter's `capabilities().versions` (outside it the daemon and `aae doctor`
-   warn) and add a line to the log below, naming the real turn.
+   `cargo build -p loop-manager && cargo run -p loop-manager-acceptance -- 2`, does it on both harnesses (it costs model
+   calls and needs a login). The suite runs against fake providers; this turn is the only check against the real one, so
+   it is not skipped.
+5. Then widen the tested range in the adapter's `capabilities().versions` (outside it the daemon and
+   `loop-manager doctor` warn) and add a line to the log below, naming the real turn.
 
 ## How the suite is built
 
@@ -35,10 +36,11 @@ marked `[experimental]`, and codex released every 2–8 days (observed on 2026-1
   unknown words; 529/503; 401; `insufficient_quota`; context overflow; unknown model; `kill -9` in a command; EOF on
   stdin in a turn; a silent provider; a request the config does not allow; a background task after the turn; a second
   writer in the session. The tables below give the expected outcome per harness. codex has a 16th: an MCP server
-  aae gives that does not start.
+  loop-manager gives that does not start.
 - The scenarios run the real binary mise selects against fake provider APIs written in this repository:
-  `crates/aae-testkit/src/anthropic.rs` (claude) and `crates/aae-testkit/src/openai.rs` (codex, Responses API).
-  They cost no model calls and need no account, so `mise run ci` runs them on every commit (acceptance criterion 11 runs the same tests).
+  `crates/loop-manager-testkit/src/anthropic.rs` (claude) and `crates/loop-manager-testkit/src/openai.rs` (codex,
+  Responses API). They cost no model calls and need no account, so `mise run ci` runs them on every commit (acceptance
+  criterion 11 runs the same tests).
 - The suite is rerun on every harness update (above), and beyond it one real turn on the cheapest model of the
   harness confirms the path end to end.
 - Known limit: claude logged in with an API key gets no quota reset time from the provider, so its "quota with a
@@ -46,7 +48,7 @@ marked `[experimental]`, and codex released every 2–8 days (observed on 2026-1
 
 ## What the claude suite covers
 
-`crates/aae-claude/tests/harness/contract.rs`, one test per scenario above:
+`crates/loop-manager-claude/tests/harness/contract.rs`, one test per scenario above:
 
 | # | Scenario | Expected from the adapter |
 |---|---|---|
@@ -66,13 +68,13 @@ marked `[experimental]`, and codex released every 2–8 days (observed on 2026-1
 | 14 | background command after the turn | idle with `background` first, idle without background after the command |
 | 15 | second writer in the session | claude does not refuse it: one writer per session is the core's to keep |
 
-`crates/aae/tests/e2e/claude.rs` adds the daemon side: the finisher passes a prompt run, `kill -9` in a command is
-typed within a second and resumed with the bead's claim held (criteria 9 and 16), and a finisher called with a
+`crates/loop-manager/tests/e2e/claude.rs` adds the daemon side: the finisher passes a prompt run, `kill -9` in a command
+is typed within a second and resumed with the bead's claim held (criteria 9 and 16), and a finisher called with a
 background command running passes the run only after the command (criterion 4a on the fake).
 
 ## What the codex suite covers
 
-`crates/aae-codex/tests/harness/contract.rs`, the same 15 scenarios and the 16th, where codex differs:
+`crates/loop-manager-codex/tests/harness/contract.rs`, the same 15 scenarios and the 16th, where codex differs:
 
 | # | Scenario | Expected from the adapter |
 |---|---|---|
@@ -83,7 +85,7 @@ background command running passes the run only after the command (criterion 4a o
 | 13 | policy `untrusted` | the adapter declines the approval, the command does not run, the turn completes |
 | 14 | command that outlives its turn | `exec_command` yields while the command runs: the turn ends idle with `background`, idle without background on the command's late `item/completed`, no turn follows |
 | 15 | second writer in the thread | refused ("already has an active writer"): `transcript_divergence` |
-| 16 | an MCP server aae gives that does not start | `start_session` fails with `tool_failure`, no request reaches the provider |
+| 16 | an MCP server loop-manager gives that does not start | `start_session` fails with `tool_failure`, no request reaches the provider |
 
 The rest match claude: rate limits, overload, 401, context, unknown model, `kill -9` and silence.
 

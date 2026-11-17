@@ -9,9 +9,9 @@ name = "cleanup"
 kind = "exec"
 command = ["sh", "-c", '''
 set -eu
-branch="feature/$AAE_INPUT_BEAD"
-project=$(aae --json run show "$AAE_RUN" | jq -r .project)
-places=$(aae --json project list --project "$project")
+branch="feature/$LOOP_MANAGER_INPUT_BEAD"
+project=$(loop-manager --json run show "$LOOP_MANAGER_RUN" | jq -r .project)
+places=$(loop-manager --json project list --project "$project")
 for repo in $(printf '%s' "$places" | jq -r '.[0] | .rigs[].path, .root.path'); do
   cd "$repo"
   state=$(gh pr view "$branch" --json state -q .state 2>/dev/null) || state=none
@@ -24,7 +24,7 @@ for repo in $(printf '%s' "$places" | jq -r '.[0] | .rigs[].path, .root.path'); 
 done
 cd "$(printf '%s' "$places" | jq -r '.[0].dir')"
 # The beads under it stay as they are: nothing gives them out once their root is closed.
-[ "$(br show "$AAE_INPUT_BEAD" --json | jq -r '.[0].status')" = closed ] ||
-  br close "$AAE_INPUT_BEAD" --force --reason "the feature was cancelled" --json >/dev/null
-echo "cleanup: $AAE_INPUT_BEAD"
+[ "$(br show "$LOOP_MANAGER_INPUT_BEAD" --json | jq -r '.[0].status')" = closed ] ||
+  br close "$LOOP_MANAGER_INPUT_BEAD" --force --reason "the feature was cancelled" --json >/dev/null
+echo "cleanup: $LOOP_MANAGER_INPUT_BEAD"
 ''']

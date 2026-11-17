@@ -6,9 +6,9 @@ all of them share.
 
 ## Messages, one transaction, effects after commit
 
-- Everything that happens enters the core as a message to the single writer (`crates/aae-core/src/writer.rs`): a
-  frontend command, an event of a harness adapter, a tracker event, a deadline firing, the answer of an exec hook.
-  The run messages are `aae_core::run::Msg`.
+- Everything that happens enters the core as a message to the single writer (`crates/loop-manager-core/src/writer.rs`):
+  a frontend command, an event of a harness adapter, a tracker event, a deadline firing, the answer of an exec hook.
+  The run messages are `loop_manager_core::run::Msg`.
 - The writer handles one message in one SQLite transaction. That transaction changes the state and records
   everything the message caused: the events it emits (the outbox, each with its `seq`), the effects to run and the
   deadlines to set or clear (`Tx::emit`, `Tx::effect`, `Tx::set_deadline`, `Tx::clear_deadline`). Nothing outside
@@ -22,9 +22,9 @@ all of them share.
 
 ## State
 
-- One SQLite database, `$XDG_STATE_HOME/aae/state.db`, in WAL mode; SQLite is linked statically (rusqlite
-  `bundled`). The daemon is its only writer (`crates/aae-core/src/store.rs` opens it, the writer changes it). The CLI,
-  addons and agents change the state only through the API. A lock held by another connection is waited out for
+- One SQLite database, `$XDG_STATE_HOME/loop-manager/state.db`, in WAL mode; SQLite is linked statically (rusqlite
+  `bundled`). The daemon is its only writer (`crates/loop-manager-core/src/store.rs` opens it, the writer changes it).
+  The CLI, addons and agents change the state only through the API. A lock held by another connection is waited out for
   5 s (`BUSY` in `store.rs`). Every transaction of the daemon's connection takes the write lock at `BEGIN`
   (`IMMEDIATE`; the creation of the schema at the first open too), so the wait covers it whatever its first statement.
   The writer calls SQLite synchronously, so while it waits it holds one runtime worker thread; the API's reads go
@@ -44,16 +44,16 @@ all of them share.
   "what did this run with" and is reproducible. The repeat of a step lives in `runs.step_attempt` (from 1) and
   `runs.step_remarks` (the remark of the last execution, shown as `{{ remarks }}`).
 - No status files, PID files or lock files. One daemon per state directory: the daemon holds an exclusive `flock`
-  on the state directory itself (`crates/aae/src/daemon.rs`, `lock`); the OS drops it with the process, so a crash
-  leaves nothing stale. Whether a process is alive is read from the process table: pid plus its kernel start time.
+  on the state directory itself (`crates/loop-manager/src/daemon.rs`, `lock`); the OS drops it with the process, so a
+  crash leaves nothing stale. Whether a process is alive is read from the process table: pid plus its kernel start time.
 - The state directory and `journal/` are 0700, the database and journal files 0600, whatever the umask.
 
 ## Journal
 
-- One JSONL journal per orchestrator, for all its projects: `$XDG_STATE_HOME/aae/journal/events.jsonl`, one line
-  per event in the envelope of [contracts.md 1.1](contracts.md#11-envelope-schema-version-1) (`seq` from the one
+- One JSONL journal per orchestrator, for all its projects: `$XDG_STATE_HOME/loop-manager/journal/events.jsonl`, one
+  line per event in the envelope of [contracts.md 1.1](contracts.md#11-envelope-schema-version-1) (`seq` from the one
   counter of the orchestrator, schema version, time, type, project, rig, run, correlation, payload). It is rotated
-  by size: 10 MB per file, 5 files (`events.1.jsonl` … `events.4.jsonl`; `crates/aae-core/src/journal.rs`).
+  by size: 10 MB per file, 5 files (`events.1.jsonl` … `events.4.jsonl`; `crates/loop-manager-core/src/journal.rs`).
 - The journal is an observation channel, not the source of truth: past 50 MB the oldest history is dropped. The
   truth is the state.
 - A consumer continues reading from a `seq`. A `seq` already rotated away is an explicit "gap" error (the `gap` event
@@ -66,7 +66,7 @@ all of them share.
 ## Effects
 
 - Effects run after commit through a queue keyed by subject (a run, a harness instance, `daemon`; see
-  `crates/aae-core/src/effects.rs`): one effect at a time per key, in order.
+  `crates/loop-manager-core/src/effects.rs`): one effect at a time per key, in order.
 - A pending effect with the same `(key, dedupe)` absorbs a new one, so repeating a message does not repeat its
   effect.
 - A failed effect is retried with backoff 500 ms, 1 s, 2 s, … capped at 5 minutes; a panicking effect is logged and
@@ -81,11 +81,11 @@ all of them share.
 - The safety timers — the orphan reaper, the instance health check, resync — move nothing forward in normal
   operation; they only catch what a lost signal left.
 - The latency from an event to the core's reaction contains no polling interval. Acceptance checks it as the hop
-  (criterion 6, `crates/aae-acceptance` scenario `c06_hop.rs`: 30 hops, p50 about 35 ms to the harness launch;
+  (criterion 6, `crates/loop-manager-acceptance` scenario `c06_hop.rs`: 30 hops, p50 about 35 ms to the harness launch;
   recorded 2026-11-13, `49e194c`).
-  <!-- MEASURE id=hop-latency-p50 date=2026-11-13 ver=49e194c env=linux-arm64-orbstack src=crates/aae-acceptance/src/scenarios/c06_hop.rs note="p50 of 30 hops from the trigger to the harness launch; the run it came from is not recorded, re-measure on the next change of the hop path" -->
-- Tests run the same writer on a managed clock (`aae_core::clock`), which makes every deadline deterministic. On a
-  current-thread runtime, as in the chaos stand, the effects walk `/proc` in place instead of on a blocking thread:
+  <!-- MEASURE id=hop-latency-p50 date=2026-11-13 ver=49e194c env=linux-arm64-orbstack src=crates/loop-manager-acceptance/src/scenarios/c06_hop.rs note="p50 of 30 hops from the trigger to the harness launch; the run it came from is not recorded, re-measure on the next change of the hop path" -->
+- Tests run the same writer on a managed clock (`loop_manager_core::clock`), which makes every deadline deterministic.
+  On a current-thread runtime, as in the chaos stand, the effects walk `/proc` in place instead of on a blocking thread:
   the end of a walk would otherwise land between the other tasks at a moment of the real clock, and a seed would not
   replay the same.
 
@@ -103,7 +103,7 @@ Resync is not a tick: it advances nothing in normal operation and only catches l
 - A process found dead whose record still holds that process and is not `stopping` is taken as its lost exit: the
   instance fails as `harness_crash` and so do the attempts on it. A gone process is not ambiguous, so this is a
   normal transition, not `resync.diverged`. A record that changed since the check is left alone.
-- With the health check, every process still carrying the marker (`AAE_INSTANCE`) of an instance this state ran
+- With the health check, every process still carrying the marker (`LOOP_MANAGER_INSTANCE`) of an instance this state ran
   (an attempt names it, live or ended within the hour) and no longer records is a sweep a descendant outran: it is
   swept again (invariants 7, 20), a normal transition with no event. A recorded instance and a marker this state
   never gave (another daemon's) are left alone. `/proc` is walked only when there is such an instance. Markers of

@@ -1,0 +1,242 @@
+//! The exec step (docs/design/config.md, docs/design/contracts.md 6.2): real commands, so real time.
+
+use crate::common;
+
+use common::{World, world_with};
+use loop_manager_core::{
+    Journal,
+    run::{Create, ExecHooks, Msg},
+};
+use serde_json::{Value, json};
+use std::{
+    sync::Arc,
+    time::{Duration, Instant},
+};
+
+/// A world with the exec formula `check` running `sh -c <script>` with a 2 s timeout.
+fn check(script: &str) -> (World, Create) {
+    check_with("", script, ExecHooks::default())
+}
+
+/// [`check`] with the `[inputs]` table `inputs`, run by `hooks`.
+fn check_with(inputs: &str, script: &str, hooks: ExecHooks) -> (World, Create) {
+    check_within("2s", inputs, script, hooks)
+}
+
+/// [`check_with`] with the step timeout `timeout`.
+fn check_within(timeout: &str, inputs: &str, script: &str, hooks: ExecHooks) -> (World, Create) {
+    let formula = format!(
+        "name = \"check\"\n[inputs]\n{inputs}[[step]]\nkind = \"exec\"\ncommand = [\"sh\", \"-c\", {}]\n\
+         timeout = \"{timeout}\"\n",
+        json!(script)
+    );
+    let w = world_with(&[("shop/formulas/check.toml", &formula)], Arc::new(hooks));
+    let create = Create {
+        project: "shop".into(),
+        rig: Some("web".into()),
+        formula: "check".into(),
+        inputs: serde_json::Map::new(),
+        correlation: None,
+        depth: 0,
+        parent_run: None,
+        token: None,
+        continue_from: None,
+    };
+    (w, create)
+}
+
+impl World {
+    async fn start_run(&self, create: Create) -> String {
+        let reply = self.core.send(None, Msg::Create(create)).await.unwrap();
+        reply["run"].as_str().unwrap().to_owned()
+    }
+
+    /// The first event of `run` among `kinds`, waiting for it up to 10 s.
+    async fn first(&self, run: &str, kinds: &[&str]) -> (String, Value) {
+        let started = Instant::now();
+        loop {
+            let all = Journal::new(&self.journal).read_from(1, 100_000).unwrap_or_default();
+            let found = all
+                .into_iter()
+                .find(|e| e["run"] == run && kinds.iter().any(|k| e["type"] == *k));
+            if let Some(e) = found {
+                return (e["type"].as_str().unwrap().to_owned(), e["data"].clone());
+            }
+            assert!(started.elapsed() < Duration::from_secs(10), "none of {kinds:?}");
+            tokio::time::sleep(Duration::from_millis(20)).await;
+        }
+    }
+
+    async fn run_end(&self, run: &str) -> (String, Value) {
+        self.first(run, &["run.passed", "run.failed", "run.cancelled"]).await
+    }
+}
+
+#[tokio::test]
+async fn exit_0_passes_with_the_output_tail_in_the_outcome() {
+    let (w, create) = check("echo \"$TRACKER_ACTOR\"; pwd; echo \"$TRACKER_PREFIX\"; echo warn >&2");
+    let run = w.start_run(create).await;
+    let (kind, data) = w.run_end(&run).await;
+    assert_eq!(kind, "run.passed");
+    assert_eq!(
+        (&data["run"]["step_kind"], &data["run"]["agent"]),
+        (&json!("exec"), &Value::Null)
+    );
+    let out = &data["outcome"]["data"];
+    assert_eq!((&out["exit_code"], &out["stderr"]), (&json!(0), &json!("warn\n")));
+    let stdout = out["stdout"].as_str().unwrap();
+    assert!(
+        stdout.ends_with("/shop/web\nw\n"),
+        "runs in the rig, its beads with its prefix: {out}"
+    );
+    assert!(
+        stdout.starts_with(&format!("loop-manager:{run}:1\n")),
+        "the attempt is the tracker actor: {out}"
+    );
+}
+
+#[tokio::test]
+async fn the_command_gets_the_run_and_its_inputs_in_the_environment_and_inputs_are_typed() {
+    let inputs = "n = { type = \"integer\" }\nflag = { type = \"boolean\" }\nnote-text = { type = \"string\" }\n";
+    let (w, _) = check_with(
+        inputs,
+        "echo \"$LOOP_MANAGER_RUN $LOOP_MANAGER_INPUT_N $LOOP_MANAGER_INPUT_FLAG $LOOP_MANAGER_INPUT_NOTE_TEXT ${LOOP_MANAGER_BEAD-none}\"",
+        ExecHooks::default(),
+    );
+    let with = |inputs: Value| Create {
+        project: "shop".into(),
+        rig: Some("web".into()),
+        formula: "check".into(),
+        inputs: inputs.as_object().unwrap().clone(),
+        correlation: None,
+        depth: 0,
+        parent_run: None,
+        token: None,
+        continue_from: None,
+    };
+    let run = w
+        .start_run(with(json!({ "n": 3, "flag": true, "note-text": "a {b}" })))
+        .await;
+    let (kind, data) = w.run_end(&run).await;
+    assert_eq!(kind, "run.passed", "{data}");
+    let stdout = &data["outcome"]["data"]["stdout"];
+    assert_eq!(stdout, &json!(format!("{run} 3 true a {{b}} none\n")));
+    // Text is read by the input's type (the CLI gives text); a null is no value, not the text `null`.
+    let run = w
+        .start_run(with(json!({ "n": "4", "flag": "false", "note-text": null })))
+        .await;
+    let (kind, data) = w.run_end(&run).await;
+    assert_eq!(kind, "run.passed", "{data}");
+    assert_eq!(
+        data["outcome"]["data"]["stdout"],
+        json!(format!("{run} 4 false  none\n"))
+    );
+    for (input, value) in [("n", json!("three")), ("flag", json!(1)), ("note-text", json!(7))] {
+        let refused = w
+            .core
+            .send(None, Msg::Create(with(json!({ input: value }))))
+            .await
+            .unwrap_err();
+        assert!(refused.to_string().contains("must be a"), "{input}: {refused}");
+    }
+}
+
+#[tokio::test]
+async fn the_command_gets_the_bead_its_run_took_not_the_request_for_one() {
+    let (w, mut create) = check_with(
+        "bead = { type = \"task\", required = true }\n",
+        "echo \"$LOOP_MANAGER_BEAD $LOOP_MANAGER_INPUT_BEAD\"",
+        ExecHooks::default(),
+    );
+    let bead = w.tracker.add(&[], None);
+    w.core.send(None, Msg::TrackerChanged("shop".into())).await.unwrap();
+    create.inputs.insert("bead".into(), json!({ "next_ready": true }));
+    let run = w.start_run(create).await;
+    let (kind, data) = w.run_end(&run).await;
+    assert_eq!(kind, "run.passed", "{data}");
+    assert_eq!(data["outcome"]["data"]["stdout"], json!(format!("{bead} {bead}\n")));
+}
+
+#[tokio::test]
+async fn another_code_fails_the_run() {
+    let (w, create) = check("exit 3");
+    let run = w.start_run(create).await;
+    let (kind, data) = w.run_end(&run).await;
+    assert_eq!(
+        (kind.as_str(), &data["class"], &data["reason"]),
+        ("run.failed", &json!("agent"), &json!("exit 3"))
+    );
+}
+
+#[tokio::test]
+async fn exit_75_is_an_attempt_failure_not_an_outcome() {
+    let (w, create) = check("exit 75");
+    let run = w.start_run(create).await;
+    let (_, failed) = w.first(&run, &["run.attempt_failed"]).await;
+    assert_eq!(failed["failure"]["text"], "exit 75 (EX_TEMPFAIL)");
+    let (kind, data) = w.run_end(&run).await;
+    assert_eq!(
+        (kind.as_str(), &data["class"]),
+        ("run.failed", &json!("infrastructure"))
+    );
+}
+
+#[tokio::test]
+async fn a_command_past_its_timeout_is_a_runaway() {
+    let (w, create) = check("sleep 30");
+    let run = w.start_run(create).await;
+    let (_, failed) = w.first(&run, &["run.attempt_failed"]).await;
+    assert_eq!(failed["failure"]["kind"], "runaway_turn");
+}
+
+#[tokio::test]
+async fn cancelling_the_run_stops_the_command() {
+    // Far past the wait below: the command's own timeout must not stand in for the stop.
+    let (w, create) = check_within("60s", "", "echo $$ > pid; exec sleep 30", ExecHooks::default());
+    let pid_file = w.journal.parent().unwrap().join("shop/web/pid");
+    let run = w.start_run(create).await;
+    let started = Instant::now();
+    let pid = loop {
+        if let Some(pid) = std::fs::read_to_string(&pid_file).ok().filter(|p| p.ends_with('\n')) {
+            break pid.trim().to_owned();
+        }
+        assert!(started.elapsed() < Duration::from_secs(5), "the command did not start");
+        tokio::time::sleep(Duration::from_millis(20)).await;
+    };
+    let cancel = Msg::Cancel {
+        run: run.clone(),
+        reason: "enough".into(),
+    };
+    w.core.send(None, cancel).await.unwrap();
+    let cancelled = Instant::now();
+    assert_eq!(w.run_end(&run).await.0, "run.cancelled");
+    let alive = || {
+        std::process::Command::new("kill")
+            .args(["-0", &pid])
+            .status()
+            .is_ok_and(|s| s.success())
+    };
+    while alive() {
+        assert!(
+            cancelled.elapsed() < Duration::from_secs(5),
+            "the command outlived the run"
+        );
+        tokio::time::sleep(Duration::from_millis(50)).await;
+    }
+}
+
+#[tokio::test]
+async fn the_command_gets_the_daemon_socket_so_it_can_call_loop_manager() {
+    let hooks = ExecHooks {
+        socket: Some("/run/loop-manager/loop-manager.sock".into()),
+        bundled: None,
+    };
+    let (w, create) = check_with("", "echo \"$LOOP_MANAGER_SOCKET\"", hooks);
+    let run = w.start_run(create).await;
+    let (kind, data) = w.run_end(&run).await;
+    assert_eq!(kind, "run.passed", "{data}");
+    assert_eq!(
+        data["outcome"]["data"]["stdout"],
+        json!("/run/loop-manager/loop-manager.sock\n")
+    );
+}

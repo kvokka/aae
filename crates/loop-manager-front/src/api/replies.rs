@@ -1,0 +1,357 @@
+//! The schemas of the replies the OpenAPI document shows: the core and the handlers build them as JSON, so these
+//! types only describe them.
+#![expect(dead_code, reason = "schemas of replies built as JSON; never constructed")]
+
+use super::ErrorReply;
+use serde_json::{Map, Value};
+use std::collections::BTreeMap;
+use utoipa::{IntoResponses, ToSchema};
+
+/// A run: `RunView` of docs/design/contracts.md 1.3 with where it is, its attempts and its outcome.
+#[derive(ToSchema)]
+pub(crate) struct Run {
+    id: String,
+    project: String,
+    rig: String,
+    formula: String,
+    /// The step of the formula the run is at (docs/design/config.md); `agent` and `step_kind` are of it.
+    step: String,
+    /// Absent for a step other than `ai`.
+    agent: Option<String>,
+    /// `ai`, `exec`, `drain`, `formula` or `await`.
+    step_kind: String,
+    state: String,
+    /// Set once `failed`: `agent`, `check`, `hollow_done` or `infrastructure`.
+    class: Option<String>,
+    /// Set once the run ended: why it failed (an addon's veto, a failure kind) or was cancelled; `pass` for a
+    /// pass.
+    reason: Option<String>,
+    attempt: u32,
+    generation: u32,
+    /// The round of the formula's checks the run is in: 1, and one more each time a check sends it back.
+    #[schema(minimum = 1)]
+    round: u32,
+    /// The execution of the step within its round: 1, and one more each time the step runs again
+    /// (docs/design/config.md).
+    #[schema(minimum = 1)]
+    step_attempt: u32,
+    bead: Option<String>,
+    workdir: String,
+    depth: i64,
+    parent_run: Option<String>,
+    correlation: String,
+    created_at: String,
+    started_at: Option<String>,
+    #[schema(value_type = Object)]
+    inputs: Map<String, Value>,
+    /// What a queued run waits for: `concurrency`, `gate` or `daemon_stopping`.
+    waiting_for: Option<String>,
+    /// The closed gate a run waiting for a gate, or parked, waits on (the oldest closure of its keys).
+    gate: Option<Gate>,
+    /// The outcome the current attempt declared; for an exec step `data` is `{exit_code, stdout, stderr}`.
+    outcome: Option<Outcome>,
+    /// The outcomes of the other steps the run went through, by step name: the last attempt of each.
+    #[schema(value_type = Object)]
+    steps: Map<String, Value>,
+    /// The last 20, newest last.
+    attempts: Vec<Attempt>,
+    /// The tokens of every attempt of the run.
+    usage: Usage,
+}
+
+/// The tokens the harness reported (docs/design/contracts.md 4.3 `usage`).
+#[derive(ToSchema)]
+pub(crate) struct Usage {
+    input_tokens: u64,
+    output_tokens: u64,
+}
+
+/// `Outcome` of docs/design/contracts.md 1.3.
+#[derive(ToSchema)]
+pub(crate) struct Outcome {
+    /// `pass` or `fail`.
+    result: String,
+    summary: String,
+    /// Any JSON.
+    data: Option<Value>,
+}
+
+#[derive(ToSchema)]
+pub(crate) struct Attempt {
+    n: u32,
+    generation: u32,
+    /// `new_session` or `resume`.
+    kind: String,
+    /// The step of the formula the attempt ran.
+    step: String,
+    started_at: String,
+    ended_at: Option<String>,
+    failure_kind: Option<String>,
+    harness: String,
+    /// The harness's own session reference (docs/api/frontends.md).
+    #[schema(value_type = Option<Object>)]
+    session: Option<Value>,
+    input_tokens: u64,
+    output_tokens: u64,
+}
+
+/// The errors of an operation that takes an `Idempotency-Key`: the core carries it out.
+#[derive(IntoResponses)]
+pub(crate) enum Keyed {
+    #[response(
+        status = 400,
+        description = "`bad_request`: a body unreadable or over 2 MiB, malformed JSON, \
+        query or path, or a value the operation refuses"
+    )]
+    BadRequest(ErrorReply),
+    #[response(
+        status = 422,
+        description = "`idempotency_key_reused`: the key came with another request"
+    )]
+    KeyReused(ErrorReply),
+    #[response(status = 500, description = "`storage`: the state database failed")]
+    Storage(ErrorReply),
+    #[response(status = 503, description = "`stopped`: the core has stopped")]
+    Stopped(ErrorReply),
+}
+
+/// `storage`, or `journal` on an event stream: the daemon could not read its state or journal.
+#[derive(IntoResponses)]
+#[response(
+    status = 500,
+    description = "`storage` or `journal`: the daemon could not read its state"
+)]
+pub(crate) struct Failed(ErrorReply);
+
+/// A run started: `run` is its id; `nothing_ready` (and no `run`) when a task input `{ next_ready = true }` found
+/// no ready bead the run can take; `passed_over`: the ready beads it skipped, each with why (a `harness:` label the
+/// config does not give, an `agent:` label that does not resolve).
+#[derive(ToSchema)]
+pub(crate) struct Started {
+    run: Option<String>,
+    nothing_ready: Option<bool>,
+    passed_over: Option<BTreeMap<String, String>>,
+}
+
+/// A trigger fired by hand: `run`, or `skipped` (`overlap`, `depth`, `nothing_ready`, `input_unresolved`,
+/// `rejected`, ...) with `detail` when no run started.
+#[derive(ToSchema)]
+pub(crate) struct Fired {
+    run: Option<String>,
+    skipped: Option<String>,
+    detail: Option<String>,
+}
+
+#[derive(ToSchema)]
+pub(crate) struct Switched {
+    trigger: String,
+    enabled: bool,
+}
+
+#[derive(ToSchema)]
+pub(crate) struct Finished {
+    /// `accepted`, `stale_attempt`, `run_terminal` or `invalid`.
+    answer: String,
+}
+
+#[derive(ToSchema)]
+pub(crate) struct Reloaded {
+    config_generation: u64,
+    /// The idle instances stopped because no agent of the new config uses them.
+    restarted_instances: Vec<String>,
+}
+
+#[derive(ToSchema)]
+pub(crate) struct Stopping {
+    /// The `seq` of `daemon.stopping`.
+    seq: i64,
+    /// `drain` or `restart`.
+    reason: String,
+    active_runs: i64,
+}
+
+#[derive(ToSchema)]
+pub(crate) struct InstanceStopping {
+    stopping: bool,
+}
+
+#[derive(ToSchema)]
+pub(crate) struct Checked {
+    ok: bool,
+    errors: Vec<String>,
+}
+
+#[derive(ToSchema)]
+pub(crate) struct Explained {
+    /// `<pack>.<name>` of an explained agent; null for a formula.
+    agent: Option<String>,
+    /// The steps of an explained formula, in order; empty for an agent.
+    steps: Vec<ExplainedStep>,
+    /// One line per value with its layer.
+    text: String,
+    inherits_host: bool,
+}
+
+#[derive(ToSchema)]
+pub(crate) struct ExplainedStep {
+    step: String,
+    /// `ai`, `exec` or `drain`.
+    kind: String,
+    /// The pack agent or the rig's variant an ai step runs; null for another kind.
+    agent: Option<String>,
+}
+
+#[derive(ToSchema)]
+pub(crate) struct Daemon {
+    version: String,
+    pid: u32,
+    socket: String,
+    started_at: String,
+    /// The last `seq` the journal wrote.
+    journal_seq: i64,
+    journal: JournalHealth,
+    /// Outbox rows the journal has not acknowledged, and the age of the oldest one.
+    outbox_depth: i64,
+    outbox_oldest_age_ms: Option<i64>,
+    /// Runs in a turn, a hook or a preparation: what a drain waits for.
+    active_runs: i64,
+    /// `drain` or `restart` from the moment a drain begins; null while the daemon runs on.
+    stopping: Option<String>,
+}
+
+/// One check of `loop-manager doctor`.
+#[derive(ToSchema)]
+pub(crate) struct Finding {
+    /// What is checked: `config`, a harness name, `<harness> login`, `dir <path>`, `state`, ...
+    check: String,
+    /// `ok`, `warning` or `error`.
+    level: String,
+    detail: String,
+}
+
+/// Failed journal writes in a row and the last error.
+#[derive(ToSchema)]
+pub(crate) struct JournalHealth {
+    failures: u32,
+    last_error: Option<String>,
+}
+
+/// An active gate closure.
+#[derive(ToSchema)]
+pub(crate) struct Gate {
+    key: String,
+    /// Absent: until opened by hand.
+    until: Option<String>,
+    reason: String,
+    /// `operator`, `policy` or `core`.
+    closed_by: String,
+    closed_at: String,
+}
+
+/// A trigger on a rig: `on` for an event trigger, `schedule` and `next_at` for a scheduled one.
+#[derive(ToSchema)]
+pub(crate) struct Trigger {
+    project: String,
+    rig: String,
+    trigger: String,
+    formula: String,
+    /// `event`, `cron` or `every`.
+    source: String,
+    on: Option<String>,
+    schedule: Option<String>,
+    next_at: Option<String>,
+    enabled: bool,
+}
+
+/// A harness instance or service of the registry.
+#[derive(ToSchema)]
+pub(crate) struct Instance {
+    id: String,
+    kind: String,
+    harness: String,
+    fingerprint: String,
+    state: String,
+    sessions: i64,
+    capacity: i64,
+    pid: Option<i64>,
+    pgid: Option<i64>,
+    idle_since: Option<String>,
+    /// Why the harness says a ready instance is degraded; it keeps its sessions.
+    degraded: Option<String>,
+}
+
+#[derive(ToSchema)]
+pub(crate) struct Project {
+    name: String,
+    /// The directory of `loop-manager.toml`.
+    dir: String,
+    /// The project root: a place of work like a rig, not one of `rigs`.
+    root: Rig,
+    rigs: Vec<Rig>,
+}
+
+#[derive(ToSchema)]
+pub(crate) struct Rig {
+    name: String,
+    path: String,
+    /// The prefix of the ids of the rig's beads; null for the root, whose beads carry the tracker's own.
+    prefix: Option<String>,
+    vars: BTreeMap<String, String>,
+}
+
+#[derive(ToSchema)]
+pub(crate) struct Agent {
+    project: String,
+    /// `<pack>.<name>`.
+    agent: String,
+    /// The harness it runs on in the project outside any rig and formula; null when its layers do not decide it.
+    harness: Option<String>,
+    /// Runs of the agent at once in its project; null for no limit but the daemon's.
+    max_runs: Option<u32>,
+    /// The agents (`<pack>.<name>`) and variants its session may call as subagents there, sorted.
+    subagents: Vec<String>,
+    /// The agents whose `subagents` name it there.
+    called_by: Vec<String>,
+}
+
+#[derive(ToSchema)]
+pub(crate) struct Formula {
+    project: String,
+    /// As a run start takes it: `<pack>.<name>`, or the bare name in the project's own pack.
+    formula: String,
+    description: String,
+    inputs: BTreeMap<String, FormulaInput>,
+    /// Started only by a step of another formula, not directly (docs/design/config.md); `loop-manager formula list` hides it
+    /// without `--all`.
+    internal: bool,
+}
+
+#[derive(ToSchema)]
+pub(crate) struct FormulaInput {
+    #[schema(rename = "type")]
+    kind: String,
+    required: bool,
+}
+
+/// A pack; the project's own pack has no version.
+#[derive(ToSchema)]
+pub(crate) struct Pack {
+    project: String,
+    name: String,
+    version: Option<String>,
+    root: String,
+    requires_addons: Vec<String>,
+}
+
+/// A declared addon, or an enabled bundled one (no version nor root).
+#[derive(ToSchema)]
+pub(crate) struct Addon {
+    /// The project whose runs it is on; null for the orchestrator's.
+    project: Option<String>,
+    name: String,
+    version: Option<String>,
+    root: Option<String>,
+    /// The events its hooks run on.
+    on: Vec<String>,
+    bundled: bool,
+}

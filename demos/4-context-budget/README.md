@@ -11,25 +11,25 @@ There are two requests, one per agent, run side by side:
   in GLOSSARY.md";
 - "Write INDEX.md: for each document in docs/, its sections, each with one line on what it says".
 
-The documents are the `docs/` of this checkout of aae, copied by `run.sh`.
+The documents are the `docs/` of this checkout of loop-manager, copied by `run.sh`.
 
 - `pack/` is the pack `study`, with not a word about the addon. Agent `glossarist` runs on claude, agent `indexer`
   on codex; each has the prompt its step gets, `agents/<agent>/prompt.template.md`: read every document to its end,
   write the one file the request asks for. Formula `glossary` is one ai step of `glossarist`, formula `index` one of
   `indexer`.
-- `root/` is the project `library`: `aae.toml` (its pack and what the agents run on) and its tracker, the beads, made
+- `root/` is the project `library`: `loop-manager.toml` (its pack and what the agents run on) and its tracker, the beads, made
   by the run. The project has no rigs; its root is `library/`, where `run.sh` copies the documents and the agents
   write. `root/config.toml` is the orchestrator config of the demo: `run.sh` starts a daemon of the demo's own with
-  it, so the demo neither reads nor changes your `~/.config/aae`.
+  it, so the demo neither reads nor changes your `~/.config/loop-manager`.
 
 ## Run
 
-You need `aae`, logins of `claude` and `codex`, `br` and `jq`; `mise install` in this directory installs all but
-`aae`. The addon's hook calls `jq`, `br` and `aae` too. The run spends real tokens on the cheapest models: claude
+You need `loop-manager`, logins of `claude` and `codex`, `br` and `jq`; `mise install` in this directory installs all but
+`loop-manager`. The addon's hook calls `jq`, `br` and `loop-manager` too. The run spends real tokens on the cheapest models: claude
 `haiku` and codex `luna`.
 
 ```sh
-aae config check --config root/config.toml   # the pack, the project and the addon load
+loop-manager config check --config root/config.toml   # the pack, the project and the addon load
 ./run.sh                                     # or: mise run demo
 ```
 
@@ -53,7 +53,7 @@ addons = [{ name = "context-budget", params = { window = 100000, max_compactions
 ```
 
 claude takes a window of 100000 at the least and compacts at about 67000 tokens of it. codex takes any size, so the
-project gives `indexer` a smaller window of its own in `root/aae.toml`; `max_compactions` stays the one of
+project gives `indexer` a smaller window of its own in `root/loop-manager.toml`; `max_compactions` stays the one of
 `config.toml`:
 
 ```toml
@@ -61,7 +61,7 @@ project gives `indexer` a smaller window of its own in `root/aae.toml`; `max_com
 addons = [{ name = "context-budget", params = { window = 50000 } }]
 ```
 
-`aae config explain --config root/config.toml --project library --agent study.indexer` shows each param with the
+`loop-manager config explain --config root/config.toml --project library --agent study.indexer` shows each param with the
 layer that set it, and the native key it reaches: `autoCompactWindow` of claude, `model_auto_compact_token_limit` of
 codex. A session past `max_compactions` fails its run with `context budget: <n> compactions`; set it to 0 to see
 that.
@@ -70,4 +70,4 @@ that.
 
 - `br label list <bead>` in `root/` (the beads are in `RESULT.md`): `compactions:<n>`, one label, the count of the
   session's compactions.
-- `.aae/state/aae/addons/context-budget/`: a `<session>.count` per session that compacted.
+- `.loop-manager/state/loop-manager/addons/context-budget/`: a `<session>.count` per session that compacted.

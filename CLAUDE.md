@@ -1,7 +1,7 @@
-# aae — правила для агентов
+# loop-manager — правила для агентов
 
-`aae` — событийный оркестратор агентов-кодеров на Rust. Что это и как устроено — в `docs/` (по-английски, для людей
-и агентов). Правила работы над самим репозиторием — в `docs/agents/`. Этот файл — указатель: читай то, что нужно
+`loop-manager` — событийный оркестратор агентов-кодеров на Rust. Что это и как устроено — в `docs/` (по-английски, для
+людей и агентов). Правила работы над самим репозиторием — в `docs/agents/`. Этот файл — указатель: читай то, что нужно
 задаче, а не всё подряд.
 
 ## Что читать и когда
@@ -42,7 +42,7 @@
 - Вывод команд всегда обрезан: `cargo build -q --message-format short 2>&1 | head -60`,
   `cargo clippy --all-targets -q --message-format short -- -D warnings 2>&1 | head -60`,
   `cargo nextest run --no-fail-fast --status-level fail --final-status-level fail 2>&1 | tail -80`.
-  Крейт `aae-acceptance` не входит в `default-members`: трогаешь его — добавляй `--workspace`.
+  Крейт `loop-manager-acceptance` не входит в `default-members`: трогаешь его — добавляй `--workspace`.
 - Grep до Read; Read с offset/limit; не читать `Cargo.lock`, `target/`, длинные логи целиком.
 - Структурный поиск по Rust — `ast-grep`: `ast-grep -l rust -p '$X.unwrap()' crates/ | head -40`.
 - Тяжёлое чтение и прогоны — субагентам; они возвращают выжимку, детали — в файл.

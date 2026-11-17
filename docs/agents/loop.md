@@ -1,6 +1,6 @@
 # The autonomous loop
 
-aae is developed by a loop of coder → reviewer under a master (`overseer`), with no operator. The protocol of a
+loop-manager is developed by a loop of coder → reviewer under a master (`overseer`), with no operator. The protocol of a
 cycle is in the agent definitions (`.claude/agents/`) and in `scripts/loop/loopctl`; this page holds what is common
 to the roles.
 

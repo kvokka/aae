@@ -1,8 +1,8 @@
 {
   "openapi": "3.1.0",
   "info": {
-    "title": "aae",
-    "description": "The API of the aae daemon (docs/api/frontends.md). Over TCP every operation needs `Authorization: Bearer <api_token>`; without it the reply is 401 `unauthorized`, an `ErrorReply`.",
+    "title": "loop-manager",
+    "description": "The API of the loop-manager daemon (docs/api/frontends.md). Over TCP every operation needs `Authorization: Bearer <api_token>`; without it the reply is 401 `unauthorized`, an `ErrorReply`.",
     "license": {
       "name": "MIT",
       "identifier": "MIT"
@@ -574,7 +574,7 @@
     },
     "/v1/doctor": {
       "get": {
-        "summary": "The checks of `aae doctor` (docs/guide/install.md) as the daemon's process sees them: its config, the harness and br\nbinaries it would run with their versions and logins, its private directories and its state. A check failing is an\n`error` level in the reply, not an error reply.",
+        "summary": "The checks of `loop-manager doctor` (docs/guide/install.md) as the daemon's process sees them: its config, the harness and br\nbinaries it would run with their versions and logins, its private directories and its state. A check failing is an\n`error` level in the reply, not an error reply.",
         "operationId": "doctor",
         "responses": {
           "200": {
@@ -2572,7 +2572,7 @@
             "oneOf": [
               {
                 "$ref": "#/components/schemas/ParentAttempt",
-                "description": "The agent session that starts this run (`AAE_RUN`, `AAE_ATTEMPT_TOKEN`): the run is its child, with its\ncorrelation, one level deeper (docs/design/contracts.md 6.1). Absent: a new correlation at depth 0."
+                "description": "The agent session that starts this run (`LOOP_MANAGER_RUN`, `LOOP_MANAGER_ATTEMPT_TOKEN`): the run is its child, with its\ncorrelation, one level deeper (docs/design/contracts.md 6.1). Absent: a new correlation at depth 0."
               },
               {
                 "type": "null"
@@ -2737,7 +2737,7 @@
       },
       "Finding": {
         "type": "object",
-        "description": "One check of `aae doctor`.",
+        "description": "One check of `loop-manager doctor`.",
         "required": [
           "check",
           "level",
@@ -2838,7 +2838,7 @@
           },
           "internal": {
             "type": "boolean",
-            "description": "Started only by a step of another formula, not directly (docs/design/config.md); `aae formula list` hides it\nwithout `--all`."
+            "description": "Started only by a step of another formula, not directly (docs/design/config.md); `loop-manager formula list` hides it\nwithout `--all`."
           },
           "project": {
             "type": "string"
@@ -3099,7 +3099,7 @@
         "properties": {
           "dir": {
             "type": "string",
-            "description": "The directory of `aae.toml`."
+            "description": "The directory of `loop-manager.toml`."
           },
           "name": {
             "type": "string"

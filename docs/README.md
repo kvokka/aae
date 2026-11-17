@@ -1,15 +1,15 @@
 # Documentation
 
-Start with [aae in one page](overview.md) and the [architecture](architecture.md); after that, read by need. The big
-references (`design/contracts.md`, `design/config.md`) are meant to be read by section.
+Start with [loop-manager in one page](overview.md) and the [architecture](architecture.md); after that, read by need.
+The big references (`design/contracts.md`, `design/config.md`) are meant to be read by section.
 
-## Using aae
+## Using loop-manager
 
 | Document | What is in it |
 |---|---|
-| [overview.md](overview.md) | what aae is, the glossary, what the first release leaves out |
+| [overview.md](overview.md) | what loop-manager is, the glossary, what the first release leaves out |
 | [roadmap.md](roadmap.md) | what lies ahead as addons; a hint, not a work list |
-| [guide/install.md](guide/install.md) | installing, what aae runs, the daemon as a service, upgrading |
+| [guide/install.md](guide/install.md) | installing, what loop-manager runs, the daemon as a service, upgrading |
 | [guide/first-project.md](guide/first-project.md) | a project, its root and rigs |
 | [guide/first-formula.md](guide/first-formula.md) | a formula with an agent, from the config to a passed run |
 | [guide/recovery.md](guide/recovery.md) | a run that failed for good: what failed, continue the session, a new session with or without a note, abandon |
@@ -33,7 +33,7 @@ references (`design/contracts.md`, `design/config.md`) are meant to be read by s
 | [design/tracker-br.md](design/tracker-br.md) | the br tracker: beads and runs, rig prefixes, the limits of br |
 | [design/experiments.md](design/experiments.md) | what was measured on the real harnesses, and what was not |
 
-## Working on aae
+## Working on loop-manager
 
 | Document | What is in it |
 |---|---|

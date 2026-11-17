@@ -1,16 +1,16 @@
 #!/usr/bin/env python3
-"""Хуки харнесса автономного цикла aae (одна точка входа на все события).
+"""Хуки харнесса автономного цикла loop-manager (одна точка входа на все события).
 
 Что делает:
-  * контекст субагентов: >= AAE_CTX_SOFT (300k) — просьба сворачиваться (повтор каждые +30k),
-    >= AAE_CTX_HARD (420k) — принудительная остановка субагента и автоматический дамп
+  * контекст субагентов: >= LOOP_MANAGER_CTX_SOFT (300k) — просьба сворачиваться (повтор каждые +30k),
+    >= LOOP_MANAGER_CTX_HARD (420k) — принудительная остановка субагента и автоматический дамп
     в .loop/handoffs/ для родителя;
-  * PreCompact: при AAE_LOOP=1 сжатие разрешено только главному потоку (overseer),
+  * PreCompact: при LOOP_MANAGER_LOOP=1 сжатие разрешено только главному потоку (overseer),
     у рабочих агентов оно блокируется — их режет порог выше;
-  * политика Agent при AAE_LOOP=1: кто кого может запускать, без переопределения model,
-    не больше AAE_MAX_CHILDREN одновременно живых субагентов у кодера;
+  * политика Agent при LOOP_MANAGER_LOOP=1: кто кого может запускать, без переопределения model,
+    не больше LOOP_MANAGER_MAX_CHILDREN одновременно живых субагентов у кодера;
   * защита файлов харнесса и опасных git-команд;
-  * Stop/SessionStart главного потока при AAE_LOOP=1: не даёт мастеру остановиться,
+  * Stop/SessionStart главного потока при LOOP_MANAGER_LOOP=1: не даёт мастеру остановиться,
     пока цикл не завершён, и после сжатия напоминает, где состояние;
   * SubagentStop coder/reviewer: не отпускает без отчёта нужного формата.
 
@@ -27,13 +27,13 @@ import sys
 import time
 from pathlib import Path
 
-SOFT = int(os.environ.get("AAE_CTX_SOFT", "300000"))
-HARD = int(os.environ.get("AAE_CTX_HARD", "420000"))
-WARN_STEP = int(os.environ.get("AAE_CTX_WARN_STEP", "30000"))
-MAX_CHILDREN = int(os.environ.get("AAE_MAX_CHILDREN", "3"))
+SOFT = int(os.environ.get("LOOP_MANAGER_CTX_SOFT", "300000"))
+HARD = int(os.environ.get("LOOP_MANAGER_CTX_HARD", "420000"))
+WARN_STEP = int(os.environ.get("LOOP_MANAGER_CTX_WARN_STEP", "30000"))
+MAX_CHILDREN = int(os.environ.get("LOOP_MANAGER_MAX_CHILDREN", "3"))
 # Мастер (Sonnet) сжимается при окне modelSettings.claude-sonnet-5-5.autoCompactWindow=300000 (порог ~267k).
-MASTER_COMPACT_AT = int(os.environ.get("AAE_MASTER_COMPACT_AT", "240000"))
-LOOP = os.environ.get("AAE_LOOP") == "1"
+MASTER_COMPACT_AT = int(os.environ.get("LOOP_MANAGER_MASTER_COMPACT_AT", "240000"))
+LOOP = os.environ.get("LOOP_MANAGER_LOOP") == "1"
 
 ROOT = Path(os.environ.get("CLAUDE_PROJECT_DIR") or os.getcwd())
 LOOPDIR = ROOT / ".loop"

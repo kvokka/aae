@@ -16,13 +16,13 @@ jobs:
       - uses: jdx/mise-action@v5
       - uses: Swatinem/rust-cache@v2
       - run: mise run acceptance-ci
-      # A failed scenario keeps its daemon's tree (aae-acceptance names it in the report row).
+      # A failed scenario keeps its daemon's tree (loop-manager-acceptance names it in the report row).
       - if: failure()
         uses: actions/upload-artifact@v7
         with:
           name: acceptance-failures
           path: |
-            /tmp/aae-acceptance-*/daemon.log
-            /tmp/aae-acceptance-*/state/aae/journal/
-            /tmp/aae-acceptance-*/state/aae/state.db*
+            /tmp/loop-manager-acceptance-*/daemon.log
+            /tmp/loop-manager-acceptance-*/state/loop-manager/journal/
+            /tmp/loop-manager-acceptance-*/state/loop-manager/state.db*
           if-no-files-found: ignore

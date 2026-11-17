@@ -1,8 +1,8 @@
 # 1-planner-executor: passed
 
-<!-- MEASURE id=demo-1-planner-executor date=2026-11-16 ver=aae-0.1.0@b32c55c,claude-2.1.325,codex-0.168.0 env=Linux-aarch64 src=demos/1-planner-executor/run.sh note="passed in 286 s from the request, n=1" -->
+<!-- MEASURE id=demo-1-planner-executor date=2026-11-16 ver=loop-manager-0.1.0@b32c55c,claude-2.1.325,codex-0.168.0 env=Linux-aarch64 src=demos/1-planner-executor/run.sh note="passed in 286 s from the request, n=1" -->
 
-Run on 2026-11-16 with aae-0.1.0@b32c55c,claude-2.1.325,codex-0.168.0 (`Linux aarch64`): passed in 286 s from the request.
+Run on 2026-11-16 with loop-manager-0.1.0@b32c55c,claude-2.1.325,codex-0.168.0 (`Linux aarch64`): passed in 286 s from the request.
 Models: planner on root: claude haiku; coder on frontend: claude haiku; coder on backend: codex gpt-6-luna.
 Tokens the harnesses reported for the runs: input 177502, output 35183.
 
@@ -25,7 +25,7 @@ The runs, oldest first:
 | run_2 | dev.implement | code | backend | dev.coder | passed |
 | run_3 | dev.implement | code | frontend | dev.coder | passed |
 
-The outcome of the run (`aae run wait`):
+The outcome of the run (`loop-manager run wait`):
 
 ```
 data.exit_code: 0

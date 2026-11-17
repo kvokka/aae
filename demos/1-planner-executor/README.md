@@ -15,18 +15,18 @@ The request is one sentence: "Create me snake game in browser and a simple backe
      the rig of the prefix of its id, two beads at once (`pool = 2`);
   3. `report`, an exec step: the beads as they are and whether every bead under the request is closed, with errors or
      without.
-- `root/` is the root repository: `aae.toml` (the project, its rigs and what the agents run on) and its tracker, the
+- `root/` is the root repository: `loop-manager.toml` (the project, its rigs and what the agents run on) and its tracker, the
   beads, made by the run. `root/config.toml` is the orchestrator config of the demo: `run.sh` starts a daemon of the
-  demo's own with it, so the demo neither reads nor changes your `~/.config/aae`.
+  demo's own with it, so the demo neither reads nor changes your `~/.config/loop-manager`.
 - `frontend/` and `backend/` are the two repositories of the project, empty before a run.
 
 ## Run
 
-You need `aae`, logins of `claude` and `codex`, `br` and `jq`; `mise install` in this directory installs all but
-`aae` (mise is a convenience, any install does). The run spends real tokens on the cheapest models.
+You need `loop-manager`, logins of `claude` and `codex`, `br` and `jq`; `mise install` in this directory installs all but
+`loop-manager` (mise is a convenience, any install does). The run spends real tokens on the cheapest models.
 
 ```sh
-aae config check --config root/config.toml   # the pack and the project load
+loop-manager config check --config root/config.toml   # the pack and the project load
 ./run.sh                                     # or: mise run demo
 ```
 
@@ -37,7 +37,7 @@ models. Your result differs: the agents decide anew each time.
 
 ## The harness of a coder
 
-There is one agent `coder`; what it runs on is the user's config, not the pack's. `root/aae.toml` runs it on claude
+There is one agent `coder`; what it runs on is the user's config, not the pack's. `root/loop-manager.toml` runs it on claude
 `haiku` in the whole project and on codex `luna` on the rig `backend`, with the rig's settings for that agent:
 
 ```toml
@@ -73,5 +73,5 @@ agents = { coder = "codex-coder" }
 
 A variant is an agent of its own name: its runs, gates and `max_runs` are apart from `coder`'s. Either way,
 `vars.harness` of a rig tells the planner what to put in the `harness:` label of a bead; a bead whose label
-disagrees with the config gets no run. `aae config explain --config root/config.toml --project planner-executor
+disagrees with the config gets no run. `loop-manager config explain --config root/config.toml --project planner-executor
 --agent dev.coder --rig backend` shows what a coder gets and from which layer.

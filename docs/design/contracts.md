@@ -71,14 +71,14 @@ Shared objects:
   it skipped after it do not count); `agent` and `step_kind` are of that step, `agent` is null
   for a step other than `ai`, `class` is null until `failed`, `bead` is the bead id or null, `depth` is the chain
   depth of 6.1 (0 for a run started by hand), `parent_run` the run whose event triggered it or whose session started
-  it. The read API (`GET /v1/runs/{id}`, `aae run show`) gives the `RunView` with `project`, `rig`, `correlation`,
-  `inputs`, `waiting_for`, `outcome`, `steps` (the outcomes of the other steps the run went through, by name: the last
-  attempt of each; a skipped step has none), `attempts`, `usage` (`{input_tokens, output_tokens}`, summed over every attempt)
-  and: `reason` (the veto text, the cancel reason, `pass`, or the failure reason), `gate` (the oldest closure of the
-  run's keys while it waits on a gate or is `parked`, else null) and `round` (the round of the formula's checks, 6.1: 1,
-  and one more each time a check sends the run back) and `step_attempt` (the execution of the step in the round, an
-  integer from 1: a repeat under `max_attempts` adds one, a new entry into the step or a `back_to` return sets 1;
-  `attempt` stays the attempt of the session).
+  it. The read API (`GET /v1/runs/{id}`, `loop-manager run show`) gives the `RunView` with `project`, `rig`,
+  `correlation`, `inputs`, `waiting_for`, `outcome`, `steps` (the outcomes of the other steps the run went through, by
+  name: the last attempt of each; a skipped step has none), `attempts`, `usage` (`{input_tokens, output_tokens}`, summed
+  over every attempt) and: `reason` (the veto text, the cancel reason, `pass`, or the failure reason), `gate` (the
+  oldest closure of the run's keys while it waits on a gate or is `parked`, else null) and `round` (the round of the
+  formula's checks, 6.1: 1, and one more each time a check sends the run back) and `step_attempt` (the execution of the
+  step in the round, an integer from 1: a repeat under `max_attempts` adds one, a new entry into the step or a `back_to`
+  return sets 1; `attempt` stays the attempt of the session).
 - `Failure`: `{kind, text, scope, retry_at, retried_by_harness, source, raw, account, provider_model}`: `kind` from
   see 4.4, `text` set only for `unknown`, `scope` one of `session | instance | account | provider_model | run | rig`,
   `retry_at` time or null, `source` one of `harness | adapter | core`, `raw` the harness text cut to 4 KiB,
@@ -225,10 +225,10 @@ timeout = "30s"
   agent step prepares) goes to the addons `[settings]` of the orchestrator and of the event's project attach, with
   the params those two layers give.
 - stdin: the event envelope (see 1.1) as one JSON line, then EOF.
-- cwd: the addon directory. Environment: `PATH`, `HOME`, `LANG`, plus `AAE_SOCKET` (API socket),
-  `AAE_ADDON_DIR` and `AAE_ADDON_PARAMS` (the values of the addon's params in force where it is attached, as a
-  JSON object, `{}` without params), and `AAE_INSTANCE` (a marker random per queued hook effect, kept by its descendants).
-  Nothing else is inherited from the daemon.
+- cwd: the addon directory. Environment: `PATH`, `HOME`, `LANG`, plus `LOOP_MANAGER_SOCKET` (API socket),
+  `LOOP_MANAGER_ADDON_DIR` and `LOOP_MANAGER_ADDON_PARAMS` (the values of the addon's params in force where it is
+  attached, as a JSON object, `{}` without params), and `LOOP_MANAGER_INSTANCE` (a marker random per queued hook effect,
+  kept by its descendants). Nothing else is inherited from the daemon.
 - A program path with a `/` is relative to the addon directory; a bare name is looked up on `PATH`.
 - Own process group; at the timeout `SIGTERM` to the group, `SIGKILL` 2 s later.
 - stdout is read up to 64 KiB (more is an `output` failure); the last 4 KiB of stderr are kept.
@@ -326,7 +326,7 @@ its own hooks.
   until its decision is handled, so a crash neither loses nor doubles a journal line, a trigger or a hook decision.
   Both are bounded in time (hook timeouts, journal write errors retried with the effect backoff), so the outbox
   drains. The depth and the age of the oldest row are part
-  of the daemon status (API) and of `aae doctor`.
+  of the daemon status (API) and of `loop-manager doctor`.
 - API event streams are not outbox consumers: they read the journal from a `seq` (1.1, [event model](event-model.md)
   "Journal") and get the "gap" error when it is rotated away.
 
@@ -335,9 +335,9 @@ its own hooks.
 ### 4.1 Shape
 
 The core owns one driver per harness, behind one object-safe trait; the binary lists one `Adapter` per harness and knows
-no harness by name ([adapters](adapters.md)), tests wire the scripted driver in (`crates/aae-testkit`). Futures are
-boxed; events go to the core through a sink handed to `start_instance`. The adapter translates and executes; it never
-retries a turn, parks or decides an outcome (adapter duties in 4.4–4.6 and
+no harness by name ([adapters](adapters.md)), tests wire the scripted driver in (`crates/loop-manager-testkit`). Futures
+are boxed; events go to the core through a sink handed to `start_instance`. The adapter translates and executes; it
+never retries a turn, parks or decides an outcome (adapter duties in 4.4–4.6 and
 [adapters](adapters.md#what-the-core-expects-of-a-driver)): decisions are policy, which lives in addons and config. Its
 semantics follow ACP v2: a session is `running` or `idle` (4.3), and a turn fails with a typed failure (4.4). The
 interface has no steer in the middle of a turn, no model change inside a live session and no way for a human to join a
@@ -378,7 +378,7 @@ trait Driver: Send + Sync {
 | `Split` | `{ process: ProcessPart, session: SessionPart, fingerprint: Fingerprint }`; the two parts are opaque serializable values of the adapter; `fingerprint` = SHA-256 of the harness name and the canonical JSON of `process` (see 8) |
 | `InstanceHandle` | `{ id, pid, start_time, pgid }`; `start_time` is the kernel start time of `pid` (`/proc/<pid>/stat`), pid + start time identify the process ([event model](event-model.md#state)) |
 | `SessionRef` | opaque JSON the adapter fills with everything resume needs; the core stores and returns it. claude: `{session_id, config_dir, workdir}` (`config_dir` null: the session inherits the host, and its transcript is under the daemon's `CLAUDE_CONFIG_DIR`, else `~/.claude`); codex: `{thread_id, codex_home}` (the transcript lives in `CODEX_HOME`; `codex_home` is not read yet: a resume takes the home of the process part) |
-| `PromptKey` | UUID v5 of `"aae:prompt:<run>/<attempt n>/<prompt n>"` in the URL namespace; the idempotency key of one prompt (see 6.4) |
+| `PromptKey` | UUID v5 of `"loop-manager:prompt:<run>/<attempt n>/<prompt n>"` in the URL namespace; the idempotency key of one prompt (see 6.4) |
 | `Transcript` | `Missing` or `Present { delivered: bool }` — whether the session exists and whether the prompt with `key` is in it; answered or not is not told apart: a resumed session never has a turn in flight (the old process is always stopped before the resume), so a delivered prompt is reconciled either way |
 | `Health` | `Ok`, `Degraded { text }` (the instance stays `ready` and keeps its sessions; `instance.degraded`, 8), `Dead` |
 
@@ -454,7 +454,7 @@ Success traps are the adapter's: claude `subtype:"success"` with `is_error:true`
   update).
   <!-- MEASURE id=claude-self-retries date=2026-11-10 ver=claude-2.1.322 env=linux-arm64-orbstack src=reports/34 note="delays 0.57→32.8 s on a fake API; set by CLAUDE_CODE_MAX_RETRIES" -->
 - `versions`: the tested range of the harness binary, `[lowest, highest]` inclusive, the same as `Adapter.tested`
-  ([adapters](adapters.md)); outside it the daemon warns at start, and `aae doctor` does.
+  ([adapters](adapters.md)); outside it the daemon warns at start, and `loop-manager doctor` does.
 
 `account(process)` returns the account id the gates use (7): a stable hash of the credential source of the
 process part, never the credential itself; an `env` reference counts as written (`${NAME}`), so the id says where
@@ -477,7 +477,7 @@ the key comes from, not what it is.
 Every adapter runs each session process (claude) or instance process (codex) in its own process group, and takes
 the end of a turn from the harness's authoritative signal, never from the answer to a request.
 
-claude (`crates/aae-claude`):
+claude (`crates/loop-manager-claude`):
 
 - Transport: `claude -p` with stream-json input and output, a given `--session-id`, resume by `--resume`. The
   session config is flags and files in the state directory: setting sources (the host inheritance switch),
@@ -530,10 +530,10 @@ claude (`crates/aae-claude`):
   `decision_reason_type`, `input` only from the `result`). A denial without `tool_use_id` is sent as it is. The
   `result` list was seen live (2.1.322); the shape of `system/permission_denied` is read from the code of 2.1.326.
 
-codex (`crates/aae-codex`):
+codex (`crates/loop-manager-codex`):
 
-- Transport: aae's own `codex app-server` over stdio; the user's own codex daemon is never used. Protocol types are
-  not generated from the schema: the adapter reads the fields it uses by hand, and the contract suite
+- Transport: loop-manager's own `codex app-server` over stdio; the user's own codex daemon is never used. Protocol types
+  are not generated from the schema: the adapter reads the fields it uses by hand, and the contract suite
   ([harness updates](../harness-updates.md)) catches a change on every codex update.
 - Signals read: `error` with `willRetry` and `codexErrorInfo`, `turn/completed` with its status,
   `thread/status/changed`, `account/rateLimits/updated` with the reset time, `rateLimitReachedType` and
@@ -546,11 +546,11 @@ codex (`crates/aae-codex`):
   ([config](config.md#permissions)); under another policy the adapter declines command and file-change approvals
   (`{"decision":"decline"}`, the turn goes on) and answers every other server request with an error; each refused
   request of a thread is a `permission_denied`.
-- Every MCP server aae gives a thread is `required`: one that does not start fails `thread/start` or `thread/resume`
-  (`required MCP servers failed to initialize`), which is a `tool_failure` before the first prompt. A server of the
-  rig or the host that does not start comes as `mcpServer/startupStatus/updated{status: failed}`: a `tool_failure`
-  of the thread, told at once in a turn and otherwise held until the thread is known to the core (the end of
-  `start_session`/`resume_session`, the next `send_prompt` or `turn/started`, whichever comes first).
+- Every MCP server loop-manager gives a thread is `required`: one that does not start fails `thread/start` or
+  `thread/resume` (`required MCP servers failed to initialize`), which is a `tool_failure` before the first prompt. A
+  server of the rig or the host that does not start comes as `mcpServer/startupStatus/updated{status: failed}`: a
+  `tool_failure` of the thread, told at once in a turn and otherwise held until the thread is known to the core (the end
+  of `start_session`/`resume_session`, the next `send_prompt` or `turn/started`, whichever comes first).
 - Two `turn/start` on one thread are not queued but merged: the second becomes a steer of the first. The core sends
   a session's next prompt only after its turn ended (6.2), so this never happens.
 - Hooks run with the environment of the app-server process, not of the thread (4.6 table, attempt environment); so
@@ -603,9 +603,9 @@ The tables are owned by the adapters and pinned by the contract tests ([harness 
 ### 5.1 Operations
 
 The trait has the seven operations the core calls; an operation is added only when a caller needs it.
-Every call names the actor: `aae:<run id>` when the daemon acts for a run, `aae` for
-the daemon's own reads. Sessions and exec steps get `BD_ACTOR=aae:<run id>:<attempt n>` and the database path in
-their environment ([experiments](experiments.md#br-as-an-event-source-experiment-3)). An actor of any other form is a
+Every call names the actor: `loop-manager:<run id>` when the daemon acts for a run, `loop-manager` for
+the daemon's own reads. Sessions and exec steps get `BD_ACTOR=loop-manager:<run id>:<attempt n>` and the database path
+in their environment ([experiments](experiments.md#br-as-an-event-source-experiment-3)). An actor of any other form is a
 human or an outside tool and starts a new correlation chain (`correlation`, 1.1).
 
 ```rust
@@ -621,9 +621,9 @@ trait Tracker: Send + Sync {
 }
 ```
 
-`release` and `close` carry no generation (invariant 4): the condition `assignee == aae:<run id>` is the same check,
-because a run id is not reused within one state directory (it is a counter there: a fresh state directory counts from
-`run_1` again) and a run owns at most one bead once. A claim answer carries the generation it was made for and is
+`release` and `close` carry no generation (invariant 4): the condition `assignee == loop-manager:<run id>` is the same
+check, because a run id is not reused within one state directory (it is a counter there: a fresh state directory counts
+from `run_1` again) and a run owns at most one bead once. A claim answer carries the generation it was made for and is
 dropped unless the run still owns the bead in that generation and still waits for it in `preparing`.
 
 `create` makes an open epic without labels: the root bead of a run whose task is a text that names no bead the core
@@ -641,11 +641,12 @@ queue `tracker:<project>` reads `changes(cursor)`, then `ready()`, then `under` 
 step; the core turns the writes past the cursor into events, moves the cursor (table `tracker_cursors`, never back) and
 diffs the ready set. The first read of a project's tracker takes its whole history as the starting cursor and raises no
 `bead.created|updated|closed` for it; every bead ready at that read is new to the set and raises `bead.ready`. A write
-whose actor is `aae:<run id>[:<attempt n>]` carries that run and its correlation; `bead.ready` carries those of the last
-such write in the same read (the write that freed the bead is usually that one); the rig of a bead event is the one
-whose prefix is the bead's id up to its last `-`, absent for a bead of the root. The daemon gives a project a tracker when `<project>/.beads` exists, and every session
-and exec step of the project gets `BEADS_DIR` (layer: project) and `BD_ACTOR=aae:<run id>:<attempt n>`; the core sets
-the actor of an exec step and hands that of a session to the adapter in the session plan.
+whose actor is `loop-manager:<run id>[:<attempt n>]` carries that run and its correlation; `bead.ready` carries those of
+the last such write in the same read (the write that freed the bead is usually that one); the rig of a bead event is the
+one whose prefix is the bead's id up to its last `-`, absent for a bead of the root. The daemon gives a project a
+tracker when `<project>/.beads` exists, and every session and exec step of the project gets `BEADS_DIR` (layer: project)
+and `BD_ACTOR=loop-manager:<run id>:<attempt n>`; the core sets the actor of an exec step and hands that of a session to
+the adapter in the session plan.
 
 ### 5.2 Types and errors
 
@@ -699,8 +700,8 @@ so that the state machine has one place where `run.attempt_failed` is decided.
   unknown rig, or a bead that still carries a `rig:` label, is refused before the run exists. Its workdir is the place's
   directory, or a worktree of it with `worktree = true` in the formula (config.md); in a directory without git that
   run fails (`deny` of `worktree`). The session of an ai step works in the run's workdir, but that of an agent of
-  scope `root` works in the root's directory when the run is on a rig. aae does not serialize runs by directory: two
-  runs may work in one directory at once. Keeping parallel writers apart in one rig is the user's choice:
+  scope `root` works in the root's directory when the run is on a rig. loop-manager does not serialize runs by
+  directory: two runs may work in one directory at once. Keeping parallel writers apart in one rig is the user's choice:
   `worktree = true` gives each run its own directory, and `pool` and `max_runs` bound how many run at once.
 - Concurrency is bounded per orchestrator (`max_runs`, default 8) and per agent (`max_runs` in `agent.toml`). A run
   that started keeps its orchestrator slot from step to step; a step of an agent at its limit parks until a run of
@@ -733,12 +734,12 @@ left. Trigger
 depth: a trigger does not start a run deeper than 10 (`trigger.skipped{depth}`); the limit is fixed, with no
 setting. A run started on `bead.ready` keeps the depth of the run that caused it, with no level added: a bead made ready
 is the next work of the tracker, not a run the parent started, so a long epic stays legal. A run started from an agent
-session (`aae run start` with `AAE_RUN` and `AAE_ATTEMPT_TOKEN` in its environment, `parent` of `POST /v1/runs`) is a
-child of the session's run: the token must be that of the parent's live current attempt, as for the finisher (6.3),
-else the start is `rejected` ("stale attempt"); the child takes the parent's correlation and `parent_run`, one level
-deeper, under the same ceiling of 10 (`rejected` beyond it). Cancelling a run cancels its live children started from its
-sessions, with reason `parent_cancelled` (runs its events triggered are not its children to cancel); a pass or a failure
-of the parent leaves them alone.
+session (`loop-manager run start` with `LOOP_MANAGER_RUN` and `LOOP_MANAGER_ATTEMPT_TOKEN` in its environment, `parent`
+of `POST /v1/runs`) is a child of the session's run: the token must be that of the parent's live current attempt, as for
+the finisher (6.3), else the start is `rejected` ("stale attempt"); the child takes the parent's correlation and
+`parent_run`, one level deeper, under the same ceiling of 10 (`rejected` beyond it). Cancelling a run cancels its live
+children started from its sessions, with reason `parent_cancelled` (runs its events triggered are not its children to
+cancel); a pass or a failure of the parent leaves them alone.
 
 ### 6.2 Transitions
 
@@ -746,7 +747,7 @@ of the parent leaves them alone.
 |---|---|---|---|
 | — | create (API, CLI, MCP, trigger) with an idempotency key | `queued` | — (with a task input that names a bead the core knows, the run is recorded as the bead's owner in this transaction, invariant 3: a bead another live run holds refuses; `{ next_ready = true, epic }` takes the first bead of the last ready set, in the tracker's order, that is in the epic, of the run's rig or of no rig, without an owner and without a closed gate, passing over (reply `passed_over`) a bead whose `harness:` or `agent:` label the run cannot take; none → the reply `{"nothing_ready": true}`, for a trigger `trigger.skipped{nothing_ready}`; the input then holds the bead id; any other text gets its bead on `preparing`, tracker-br.md) |
 | — | create with `continue_from: <run>` (a terminal run with a session; a session is never reused implicitly) | `queued` | in the workdir of that run; the first attempt resumes that run's last session with the formula prompt; a later `resume` uses the run's own session, or that one while it has none and started no new one; a harness other than the agent's → `failed{infrastructure}`. Only the first step continues that session: a formula whose first step is not `ai`, or has an `if`, cannot be continued, and the later steps start sessions of their own |
-| `queued` | slot free, no gate of the run closed | `preparing` | with a task text that names no bead the core knows: the tracker creates the root bead, or returns the bead the text names (`create`, key kept in the effect), the run owns it and its input takes the id; with a bead: the tracker claim as owner `aae:<run>` (queue `tracker:<project>`), and the prompt renders once the claim returned the bead; `run.preparing` hooks |
+| `queued` | slot free, no gate of the run closed | `preparing` | with a task text that names no bead the core knows: the tracker creates the root bead, or returns the bead the text names (`create`, key kept in the effect), the run owns it and its input takes the id; with a bead: the tracker claim as owner `loop-manager:<run>` (queue `tracker:<project>`), and the prompt renders once the claim returned the bead; `run.preparing` hooks |
 | `preparing` | decision `proceed` (or no hooks) | `starting` | attempt 1: instance acquire, `start_session`, `send_prompt` |
 | `preparing` | the `if` of the step does not match, on entry | `preparing` of the next step, or the end of the run | `run.step_skipped`; no hooks, no attempt |
 | `preparing` | `deny`, template error, claim error `Claimed` / `NotFound` / `Invalid`, `create` error other than `Unavailable`, no claim or `create` answer within `start_timeout` | `failed{check}`, `failed{infrastructure}`, `failed{infrastructure, bead_claimed / bead_not_found / bead_invalid}`, `failed{infrastructure, bead_not_created: <error>}`, `failed{infrastructure, tracker_unavailable}` | — |
@@ -754,14 +755,14 @@ of the parent leaves them alone.
 | `running` | turn ended, idle without background, outcome declared | `finishing` | `run.finishing` hooks |
 | `running` | turn ended, idle with background, outcome declared | `running` | the adapter stops the commands the session left (`stop_background`); `finishing` follows on idle without background |
 | `running` | turn ended, idle without background, no outcome | `running` | `run.turn_ended_without_outcome` hooks; `continue` → next prompt in the same attempt; `fail` or no decision → `failed{hollow_done}` (with the hook reason for `fail`) |
-| `preparing` (exec) | decision `proceed` (or no hooks) | `running` (no session to start: the command is spawned at once) | the command runs in the workdir with `PATH`, `HOME`, `LANG` of the daemon (its whole environment with `inherit_env`), the `env` of `[exec]` and of the step with its references resolved (config.md, "Formula"), the `env` of `run.preparing`, `AAE_SOCKET` (the API socket), `AAE_INPUT_<NAME>` per input and, per earlier step, `AAE_STEP_<NAME>_RESULT` (`pass`\|`fail`), `AAE_STEP_<NAME>_SUMMARY` and `AAE_STEP_<NAME>_DATA` (the `data` as JSON, when there is one); `<NAME>` is formed as for inputs (config.md, "Formula") |
+| `preparing` (exec) | decision `proceed` (or no hooks) | `running` (no session to start: the command is spawned at once) | the command runs in the workdir with `PATH`, `HOME`, `LANG` of the daemon (its whole environment with `inherit_env`), the `env` of `[exec]` and of the step with its references resolved (config.md, "Formula"), the `env` of `run.preparing`, `LOOP_MANAGER_SOCKET` (the API socket), `LOOP_MANAGER_INPUT_<NAME>` per input and, per earlier step, `LOOP_MANAGER_STEP_<NAME>_RESULT` (`pass`\|`fail`), `LOOP_MANAGER_STEP_<NAME>_SUMMARY` and `LOOP_MANAGER_STEP_<NAME>_DATA` (the `data` as JSON, when there is one); `<NAME>` is formed as for inputs (config.md, "Formula") |
 | `running` (exec) | exit 0 / other code or a signal | `finishing` with outcome `pass` / `fail`, `summary` `exit <code>` or `signal <n>`, `data` `{exit_code, stdout, stderr}` (last 4 KiB each) | `run.finishing` hooks |
 | `preparing` (drain) | decision `proceed` (or no hooks) | `running` (an attempt with no process, `harness = drain`) | a read of the tracker; the config snapshot is `{drain: <formula>, pool, on_item_failure}` |
 | `running` (drain) | a read of the tracker (`Ready`) | `running` | while fewer than `pool` children are alive (queued or running) and no bead of this entry failed under `soft_stop`/`hard_stop`, each ready bead under the run's bead, at any depth, not given in this entry of the step (a restart starts a new attempt, not a new entry): the create of the first row with the bead as input, no rig, the run's correlation, `depth + 1`, `parent_run` the run (a refusal leaves the bead without a run); a run in a drain step holds no concurrency slot |
 | `preparing` (formula) | decision `proceed` (or no hooks) | `running` (an attempt with no process, `harness = formula`) | the child run of the step's formula is created, or found if a restart cut the attempt that made it |
 | `running` (formula) | the child cannot start: refused (depth, a bead held by another run) or `next_ready` finds no ready bead (`nothing_ready`) | `failed{infrastructure}`, no attempt left to `max_attempts` | — |
 | `preparing` (await) | decision `proceed` (or no hooks) | `running` (an attempt with no process, `harness = await`) | `run.awaiting {run, deadline}`; the config snapshot is `{fail_on_timeout}`; a run waiting in the step holds no concurrency slot |
-| `running` (await) | an outcome for the step (`POST /v1/runs/{id}/resolve`, `aae run resolve`) | `finishing` with that outcome | `run.finishing` hooks; an outcome for another step or a run not waiting is refused (`rejected`) and changes nothing |
+| `running` (await) | an outcome for the step (`POST /v1/runs/{id}/resolve`, `loop-manager run resolve`) | `finishing` with that outcome | `run.finishing` hooks; an outcome for another step or a run not waiting is refused (`rejected`) and changes nothing |
 | `running` (await) | the deadline, no outcome | `failed{check, await_timeout}`, no return to `back_to`; with `fail_on_timeout = false` `finishing` with `pass`, summary `timeout` | — |
 | `running` (formula) | the child ends | `finishing` with the child's outcome (or its reason, without one) | `run.finishing` hooks |
 | `running` (formula) | the run fails in the step (`runaway_turn` with no retry) | `failed` | the live child is cancelled, reason `parent_failed` |
@@ -794,15 +795,15 @@ of a run whose gate the operator closed parks it instead (invariant 18).
   generation)`; the token itself reaches the adapter through `SessionPlan` and lives only in the attempt's launch
   effect until it runs. The token is valid while its attempt is the run's current one and the run is not
   terminal.
-- The session environment carries `AAE_RUN`, `AAE_ATTEMPT_TOKEN`, `AAE_SOCKET` and, when the run has a bead,
-  `AAE_BEAD`, as an exec step's does (see 4.6 for how each harness gets it).
-- CLI: `aae finish pass|fail --summary <text> [--data <json>|@<file>]` → `POST` of the outcome to the API with the
-  token. Answers: accepted; `stale_attempt` (an older or ended attempt — nothing changes); `run_terminal`; `invalid`
+- The session environment carries `LOOP_MANAGER_RUN`, `LOOP_MANAGER_ATTEMPT_TOKEN`, `LOOP_MANAGER_SOCKET` and, when the
+  run has a bead, `LOOP_MANAGER_BEAD`, as an exec step's does (see 4.6 for how each harness gets it).
+- CLI: `loop-manager finish pass|fail --summary <text> [--data <json>|@<file>]` → `POST` of the outcome to the API with
+  the token. Answers: accepted; `stale_attempt` (an older or ended attempt — nothing changes); `run_terminal`; `invalid`
   (unknown token or run, `summary` over 4 KiB, `data` over 64 KiB, a call while the run is `finishing`: the declared
   outcome is under check, or a call while the run waits for the decision on `run.turn_ended_without_outcome`: the turn
   is over, and an outcome now would decide nothing). With the daemon unreachable the command retries with backoff for 60
-  s (`AAE_FINISH_RETRY` seconds overrides it), then exits with code 75; every try carries the same idempotency key, a
-  hash of the request, so a retry after a lost reply gets the first answer.
+  s (`LOOP_MANAGER_FINISH_RETRY` seconds overrides it), then exits with code 75; every try carries the same idempotency
+  key, a hash of the request, so a retry after a lost reply gets the first answer.
 - The finisher is the agent's word on the outcome: `pass` or `fail`, a short summary, optional data. A failure of
   the infrastructure is not an outcome: it raises `run.attempt_failed`. The outcome is kept in the run's result
   and reaches triggers as `outcome` of `run.passed` and `run.failed` (`outcome.data.<key>` in `where` and `inputs`).
@@ -826,7 +827,7 @@ How the finisher behaves, on the transitions of 6.2:
 The token belongs to the attempt, not to one call. Returning a remark is the check loop; the number of returns is
 bounded by the core's ceiling (6.1, invariant 16).
 
-The outcome of an `await` step comes from outside, not from a session: `POST /v1/runs/{id}/resolve` (`aae run
+The outcome of an `await` step comes from outside, not from a session: `POST /v1/runs/{id}/resolve` (`loop-manager run
 resolve`) with `{step, outcome}` and no token. It is taken while the run waits on that step (`running`, the step
 named), with the finisher's limits (`summary` up to 4 KiB, `data` up to 64 KiB), and goes on as a declared outcome
 (`finishing`, the `run.finishing` hooks); otherwise it is `rejected` and the state does not change. A repeat is
@@ -843,19 +844,19 @@ for it is not.
   ended. No marker in the prompt text: both harnesses keep the key in the transcript natively
   ([experiments](experiments.md)), so the transcript check finds it.
 - Daemon start ([invariants](invariants.md#recovery)): open the state and drain the outbox; for every recorded instance check pid + start time, kill its
-  process group and sweep every process carrying its marker `AAE_INSTANCE=<id>` in the environment, wait for the end
-  (invariants 6, 7); every hook still queued is first killed by its `AAE_INSTANCE` marker, with what it started, so a
-  hook the dead daemon left running does not outlive it. A hook process is killed with SIGKILL without waiting for its
-  death, so the hook that runs again may start before the old process is gone: hooks must be idempotent (3.1).
-  Runs with a live attempt — `starting`, `running` in a turn — → `interrupted` with `daemon_crash` (not a run waiting
-  in an `await` step: its attempt and deadline stay, and a deadline passed while the daemon was down fires at start) (a `drain` attempt
-  too: its next attempt gives no bead its entry of the step gave out), the launches, prompts and deciding hooks they
-  still had queued dropped, and the command of an exec step killed by its `AAE_INSTANCE` marker (random per attempt)
-  before any later attempt runs it. A run that waits for a decision on a deciding event keeps its
-  state and waits for the same decision (3.4): `preparing`, `interrupted` waiting for the policy, `finishing`, and
-  `running` after a turn that ended without an outcome; `finishing` with a step check script running is one too, but
-  its script is killed by its marker and starts again, and the execution counts only once the script's word is
-  recorded. Its hook effect is still queued and its hooks run again; the
+  process group and sweep every process carrying its marker `LOOP_MANAGER_INSTANCE=<id>` in the environment, wait for
+  the end (invariants 6, 7); every hook still queued is first killed by its `LOOP_MANAGER_INSTANCE` marker, with what it
+  started, so a hook the dead daemon left running does not outlive it. A hook process is killed with SIGKILL without
+  waiting for its death, so the hook that runs again may start before the old process is gone: hooks must be idempotent
+  (3.1). Runs with a live attempt — `starting`, `running` in a turn — → `interrupted` with `daemon_crash` (not a run
+  waiting in an `await` step: its attempt and deadline stay, and a deadline passed while the daemon was down fires at
+  start) (a `drain` attempt too: its next attempt gives no bead its entry of the step gave out), the launches, prompts
+  and deciding hooks they still had queued dropped, and the command of an exec step killed by its
+  `LOOP_MANAGER_INSTANCE` marker (random per attempt) before any later attempt runs it. A run that waits for a decision
+  on a deciding event keeps its state and waits for the same decision (3.4): `preparing`, `interrupted` waiting for the
+  policy, `finishing`, and `running` after a turn that ended without an outcome; `finishing` with a step check script
+  running is one too, but its script is killed by its marker and starts again, and the execution counts only once the
+  script's word is recorded. Its hook effect is still queued and its hooks run again; the
   declared outcome and the result of an exec command stand, the turn and the command do not run again. A run goes on
   from the step it is at: the move to the next step is in the transaction that accepted the outcome (6.1), so a finished
   step never runs again, and an exec command killed by the restart runs again in a new attempt of the same step.
@@ -883,9 +884,9 @@ Issue gates are the core's only "do not start yet" mechanism: a record "key clos
 by hand". A run with a closed key waits in `queued` (or `parked`, once started) with the gate as the visible reason.
 Three parties close gates: the policy in answer to a failure (an account limit, an agent quarantined after a crash
 series), the operator (a pause) and the core itself (a bead after a series of failed runs, see 6.2). Gates are rows
-in the state: they survive a restart, are listed by the API (`/v1/gates`, `aae gate`), and every closure and opening
-is an event. The account traffic light and the operator hold are built from this one mechanism, with no subsystem
-of their own. The adapter reports the account id (4.5, `Driver::account`).
+in the state: they survive a restart, are listed by the API (`/v1/gates`, `loop-manager gate`), and every closure and
+opening is an event. The account traffic light and the operator hold are built from this one mechanism, with no
+subsystem of their own. The adapter reports the account id (4.5, `Driver::account`).
 
 - Keys: `orchestrator`, `project:<project>`, `rig:<project>/<rig>`, `agent:<agent>` (the qualified agent name of
   `config.md` "Names", or the name of a variant), `bead:<project>/<bead id>`, `account:<harness>/<account id>`,
@@ -940,17 +941,17 @@ of their own. The adapter reports the account id (4.5, `Driver::account`).
   time, `/proc/<pid>/stat`), then every process still carrying its marker is killed until none is found and each one
   killed is a zombie or gone (a dying process loses its environment, so its marker, first), up to 30 s in all; past
   that the attempt fails with `unknown`. A live shared instance is never waited for.
-- The process environment of every instance and service holds `AAE_INSTANCE=<id>`: once the instance is stopped
+- The process environment of every instance and service holds `LOOP_MANAGER_INSTANCE=<id>`: once the instance is stopped
   or has exited, every process still carrying it is killed (the sweep of invariant 7). The daemon is a child
   subreaper ([experiments](experiments.md#descendants-after-kill--9-invariant-7)): every 5 s it reaps the adopted
   orphans that exited, never a child it spawned itself (those are reaped by their own `wait`). The daemon's crates
-  spawn every child through `aae_contract::orphans`, which registers it; clippy denies a spawn past it
+  spawn every child through `loop_manager_contract::orphans`, which registers it; clippy denies a spawn past it
   (`clippy.toml`).
 - Health: every 30 s the daemon asks the driver for the health of each instance it started; `Dead` counts as an
   `exited` event of the instance (above). A `ready` instance that turns `Degraded` gets `instance.degraded`
-  `{instance, reason: text}` and `degraded: <text>` in the instance view (`GET /v1/instances`, `aae instance list`;
-  null otherwise); it keeps the state `ready` and its sessions. When it is well, `instance.ready` with `reason: null`
-  is emitted again.
+  `{instance, reason: text}` and `degraded: <text>` in the instance view (`GET /v1/instances`,
+  `loop-manager instance list`; null otherwise); it keeps the state `ready` and its sessions. When it is well,
+  `instance.ready` with `reason: null` is emitted again.
 - Resync ([event model](event-model.md#resync)): every 5 minutes, with the trackers, the driver is asked for the health of every instance not `stopping`
   that has a process (pid + start time for claude and codex). One found `Dead` whose record still holds that process and
   is not `stopping` counts as its `exited` event, as above: a gone process is not ambiguous, so no `resync.diverged`. A
@@ -963,13 +964,13 @@ of their own. The adapter reports the account id (4.5, `Driver::account`).
   attempt's services are in `attempts.services`). The launch transaction acquires them (a new record emits
   `service.starting` and the `start_service` effect) and rewrites the session's config before the split (the services
   of the session's subagent targets are bound with it, those with an MCP server only), with
-  `${AAE_SERVICE_PORT:<id>}` for the port: the launch waits for the service's own health check and puts in the port it
-  passed on. A start finds its port free or fails without a process. Its health check (the port accepting connections,
-  an HTTP `GET` or a command) passing gives `service.ready` and `ready: true` in the process column; a process that ends
-  or is not up within 30 s gives `service.failed`, then a restart after the effect backoff of its restarts while it has
-  consumers (on a new port until `ready`, then on the same one), else the record goes. Idle, operator and recovery stops
-  go through `stop_service`, which ends the process group and sweeps the marker; a reload leaves services alone. pid and
-  pgid of the view are null: the process is tracked by its task and marker, not by pid.
+  `${LOOP_MANAGER_SERVICE_PORT:<id>}` for the port: the launch waits for the service's own health check and puts in the
+  port it passed on. A start finds its port free or fails without a process. Its health check (the port accepting
+  connections, an HTTP `GET` or a command) passing gives `service.ready` and `ready: true` in the process column; a
+  process that ends or is not up within 30 s gives `service.failed`, then a restart after the effect backoff of its
+  restarts while it has consumers (on a new port until `ready`, then on the same one), else the record goes. Idle,
+  operator and recovery stops go through `stop_service`, which ends the process group and sweeps the marker; a reload
+  leaves services alone. pid and pgid of the view are null: the process is tracked by its task and marker, not by pid.
 
 ## 9. Fakes in the real daemon
 
@@ -978,8 +979,8 @@ The daemon has no test mode. Harness binaries are resolved through mise or taken
 
 - the real `claude`/`codex` against a fake provider, configured by ordinary settings (claude: `ANTHROPIC_BASE_URL`
   in the agent env; codex: a `model_providers` entry in the native block);
-- or, below the adapters, the in-process scripted driver of `crates/aae-testkit`, which the core's tests wire in
-  instead of an adapter.
+- or, below the adapters, the in-process scripted driver of `crates/loop-manager-testkit`, which the core's tests wire
+  in instead of an adapter.
 
 The adapters cannot tell the fake provider from the real thing; nothing in the product exists only for tests.
 
@@ -990,7 +991,7 @@ Thresholds are its config parameters (docs/design/config.md); "consecutive" coun
 event, times from its `ts`, and the gate keys come from its `keys`. A `park` on a key the run does not have (an exec run
 has no agent key, a run whose harness reported no account has no account key) becomes a `resume` after the same wait,
 except a `park` with no `until` (a lasting `auth_required`, `billing`), which becomes `fail`; a `fail` names no gate
-then. Implemented in `crates/aae-addons`.
+then. Implemented in `crates/loop-manager-addons`.
 
 The thresholds below are uncalibrated defaults, not measurements: the 30 s rapid crash, five in a row before a 5 min
 pause and three failed resumes before a new session come from the code of an earlier orchestrator, the

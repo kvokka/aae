@@ -6,10 +6,10 @@
 # - the root's closed without a merge: the run is cancelled;
 # - a comment or a review of an author in the run's `feedback_from` that the account of `gh` has not marked with the
 #   reaction "eyes" (the step `collect` marks each it takes): `fail`, with the comment's address in the summary.
-# Anyone else's comments change nothing. Usage: bridge.sh <project>; AAE names the aae binary.
+# Anyone else's comments change nothing. Usage: bridge.sh <project>; LOOP_MANAGER names the loop-manager binary.
 set -eu
 project=$1
-aae=${AAE:-aae}
+loop_manager=${LOOP_MANAGER:-loop-manager}
 interval=${INTERVAL:-30}
 fields='id url body author { login } reactionGroups { content viewerHasReacted }'
 query="query(\$url: URI!) { resource(url: \$url) { ... on PullRequest {
@@ -18,7 +18,7 @@ query="query(\$url: URI!) { resource(url: \$url) { ... on PullRequest {
 
 # Gives the outcome of `review` to the run $1 waiting on it, or cancels the run, once GitHub has one.
 look() {
-  show=$("$aae" --json run show "$1")
+  show=$("$loop_manager" --json run show "$1")
   root=$(printf '%s' "$show" | jq -r '.steps.pr.data.stdout // "" | rtrimstr("\n") | split("\n") | last // ""')
   [ -n "$root" ] || return 0
   # One key per round: a repeat of the same outcome changes nothing, the next round's is new.
@@ -26,16 +26,16 @@ look() {
   pr=$(gh pr view "$root" --json state,mergedBy) || return 1
   case $(printf '%s' "$pr" | jq -r .state) in
     MERGED)
-      "$aae" run resolve "$1" review pass --summary "merged: $root" --key "$key" \
+      "$loop_manager" run resolve "$1" review pass --summary "merged: $root" --key "$key" \
         --data "$(printf '%s' "$pr" | jq -c '{merged_by: .mergedBy.login}')" >/dev/null
       return ;;
     CLOSED)
-      "$aae" run cancel "$1" --reason "closed without a merge: $root" --key "$key" >/dev/null
+      "$loop_manager" run cancel "$1" --reason "closed without a merge: $root" --key "$key" >/dev/null
       return ;;
   esac
   who=$(printf '%s' "$show" | jq -r '.inputs.feedback_from // ""')
   branch="feature/$(printf '%s' "$show" | jq -r .bead)"
-  places=$("$aae" --json project list --project "$project")
+  places=$("$loop_manager" --json project list --project "$project")
   for repo in $(printf '%s' "$places" | jq -r '.[0] | .root.path, .rigs[].path'); do
     url=$(cd "$repo" && gh pr view "$branch" --json url -q .url 2>/dev/null) || continue
     reply=$(gh api graphql -f query="$query" -f url="$url") || return 1
@@ -45,7 +45,7 @@ look() {
       | select(.body != "" and (.author.login as $a | $who | index($a)))
       | select(any(.reactionGroups[]; .content == "EYES" and .viewerHasReacted) | not) | .url' | head -1)
     if [ -n "$new" ]; then
-      "$aae" run resolve "$1" review fail --summary "review: $new" --key "$key" >/dev/null
+      "$loop_manager" run resolve "$1" review fail --summary "review: $new" --key "$key" >/dev/null
       return
     fi
   done
@@ -53,15 +53,15 @@ look() {
 
 # The events from now on: a run that starts to wait wakes the bridge at once.
 events=$(mktemp)
-"$aae" --json events >"$events" &
+"$loop_manager" --json events >"$events" &
 follower=$!
 trap 'kill $follower 2>/dev/null || true' EXIT
 trap 'exit 0' INT TERM
 seen=0
 while :; do
-  runs=$("$aae" --json run list --awaiting --project "$project" | jq -r '.[] | select(.step == "review") | .id')
+  runs=$("$loop_manager" --json run list --awaiting --project "$project" | jq -r '.[] | select(.step == "review") | .id')
   for run in $runs; do
-    look "$run" || echo "bridge: $run: no answer from GitHub or aae, asking again in ${interval}s" >&2
+    look "$run" || echo "bridge: $run: no answer from GitHub or loop-manager, asking again in ${interval}s" >&2
   done
   # GitHub is asked only while a run waits; with none, a new `run.awaiting` ends the wait, and so does the interval,
   # which covers one that came before the events were followed.

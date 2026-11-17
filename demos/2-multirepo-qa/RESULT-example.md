@@ -1,8 +1,8 @@
 # 2-multirepo-qa: passed
 
-<!-- MEASURE id=demo-2-multirepo-qa date=2026-11-16 ver=aae-0.1.0@b32c55c,codex-0.168.0,rumdl-0.3.4,agent-browser-0.39.0 env=Linux-aarch64 src=demos/2-multirepo-qa/run.sh note="passed in 769 s and 1 rounds from the request, n=1" -->
+<!-- MEASURE id=demo-2-multirepo-qa date=2026-11-16 ver=loop-manager-0.1.0@b32c55c,codex-0.168.0,rumdl-0.3.4,agent-browser-0.39.0 env=Linux-aarch64 src=demos/2-multirepo-qa/run.sh note="passed in 769 s and 1 rounds from the request, n=1" -->
 
-Run on 2026-11-16 with aae-0.1.0@b32c55c,codex-0.168.0,rumdl-0.3.4,agent-browser-0.39.0 (`Linux aarch64`): passed in 769 s from the request,
+Run on 2026-11-16 with loop-manager-0.1.0@b32c55c,codex-0.168.0,rumdl-0.3.4,agent-browser-0.39.0 (`Linux aarch64`): passed in 769 s from the request,
 after 1 round(s) of the checks (at most 3).
 Models: planner on root: codex gpt-6.1-sol; coder on frontend: codex gpt-6-luna; coder on backend: codex gpt-6-luna; qa on root: codex gpt-6.1-terra.
 Tokens the harnesses reported for the runs: input 1377333, output 24837.
@@ -26,7 +26,7 @@ The runs, oldest first:
 | run_2 | dev.implement | code | backend | dev.coder | passed |
 | run_3 | dev.implement | code | frontend | dev.coder | passed |
 
-The outcome of the run (`aae run wait`):
+The outcome of the run (`loop-manager run wait`):
 
 ```
 id: run_1

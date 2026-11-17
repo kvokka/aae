@@ -1,0 +1,32 @@
+[package]
+name = "loop-manager-testkit"
+description = "Test doubles of loop-manager: the scripted driver and fake providers"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+publish = false
+
+[[bin]]
+name = "mcp-probe"
+path = "src/bin/mcp-probe.rs"
+# With `test = false` a `#[test]` here is silently never run: whoever adds one removes this key first.
+test = false
+
+[lints]
+workspace = true
+
+[dependencies]
+loop-manager-contract = { version = "0.1.0", path = "../loop-manager-contract" }
+axum = { version = "0.8.9", default-features = false, features = ["http1", "tokio"] }
+serde_json = "1.0.154"
+tokio = { version = "1.54.1", features = ["rt", "time", "sync", "net", "macros"] }
+tokio-stream = "0.1.19"
+
+[dev-dependencies]
+loop-manager-core = { version = "0.1.0", path = "../loop-manager-core" }
+loop-manager-addons = { version = "0.1.0", path = "../loop-manager-addons" }
+rusqlite = "0.42.0"
+tempfile = "3.27.0"
+tokio = { version = "1.54.1", features = ["rt", "rt-multi-thread", "macros", "time", "test-util", "io-util", "net"] }

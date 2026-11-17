@@ -1,9 +1,9 @@
 # Documentation index
 
 ## `docs/README.md` — Documentation
-- **Using aae:** Guides readers to the product, usage guides, API references, and demos.
+- **Using loop-manager:** Guides readers to the product, usage guides, API references, and demos.
 - **How it works inside:** Points to the architecture and design references for the daemon and its adapters.
-- **Working on aae:** Lists developer guidance, acceptance criteria, and repository agent rules.
+- **Working on loop-manager:** Lists developer guidance, acceptance criteria, and repository agent rules.
 
 ## `docs/acceptance.md` — Acceptance scenarios
 - **Criteria and run modes:** Explains which end-to-end scenarios run in CI or on request and what each command needs.
@@ -43,7 +43,7 @@
 - **HTTP API and CLI:** Describes how people inspect and control runs through the API and command line.
 
 ## `docs/api/mcp.md` — MCP
-- **MCP server:** Documents the MCP interface and tools exposed by aae.
+- **MCP server:** Documents the MCP interface and tools exposed by loop-manager.
 
 ## `docs/architecture.md` — Architecture
 - **System structure:** Explains component boundaries, crates, and how a run moves through the system.
@@ -112,7 +112,7 @@
 - **Subagents:** Describes native subagent configuration and inherited settings.
 - **What is left to the harness:** Lists nesting, built-in agent types, and codex-specific controls.
 
-## `docs/guide/development.md` — Developing aae
+## `docs/guide/development.md` — Developing loop-manager
 - **Toolchain and tasks:** Lists pinned developer tools and the mise commands for checks and builds.
 - **Where each kind of test runs:** Compares test, CI, acceptance, and release checks with their purpose and costs.
 - **The chaos stand:** Explains randomized invariant testing and seed replay.
@@ -134,10 +134,10 @@
 - **Change the config:** Explains validation and explicit reload.
 - **Triggers:** Starts workflows from schedules or events.
 
-## `docs/guide/install.md` — Installing aae
+## `docs/guide/install.md` — Installing loop-manager
 - **Build it:** Gives source build and multi-platform release build instructions.
-- **What aae runs:** Lists external harness and tracker dependencies and their setup.
-- **Check the setup:** Describes `aae doctor` checks and output.
+- **What loop-manager runs:** Lists external harness and tracker dependencies and their setup.
+- **Check the setup:** Describes `loop-manager doctor` checks and output.
 - **Directories:** Lists XDG config, state, socket, and cache locations.
 - **Run the daemon:** Explains service manager setup, drain, stop, and restart.
 
@@ -155,7 +155,7 @@
 - **What the codex suite covers:** Lists Codex-specific protocol expectations.
 - **Log:** Records tested harness versions and outcomes.
 
-## `docs/overview.md` — aae in one page
+## `docs/overview.md` — loop-manager in one page
 - **What shapes it:** Summarizes design principles and supported builds.
 - **Glossary:** Defines the main product terms.
 - **What the first release leaves out:** Lists deferred or excluded capabilities and current alternatives.

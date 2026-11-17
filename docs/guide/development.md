@@ -1,4 +1,4 @@
-# Developing aae
+# Developing loop-manager
 
 The repository pins its toolchain with [mise](https://mise.jdx.dev); `mise install` brings Rust, the cargo
 tools, br (an exact version) and claude and codex (a release line: `2.1`, `0`; there is no `mise.lock`).
@@ -20,16 +20,18 @@ mise is a convenience, not a requirement: install the same tools any way you lik
 Each task is a list of plain commands in `[tasks.<name>]` of `mise.toml`; run them by hand in that order:
 
 - `test`: `cargo nextest run --locked -E 'not binary(chaos)'`. Without `-p` or `--workspace` cargo builds the
-  `default-members` of the workspace: every crate but the acceptance runner `aae-acceptance`.
+  `default-members` of the workspace: every crate but the acceptance runner `loop-manager-acceptance`.
 - `ci`: `cargo fmt --all --check`, `cargo clippy --workspace --all-targets --locked -q -- -D warnings`,
   `cargo nextest run --workspace --locked --no-tests=warn -E 'not binary(chaos)'`, `cargo deny check`,
   `cargo machete`, then `scripts/unused-pub.sh`,
   `scripts/core-boundary.sh`, `scripts/select-biased.sh`, `scripts/budget-selftest.sh`, `scripts/budget.sh`, and a
   `git grep` that fails on an absolute home path (`/home/…`, `/Users/…`) outside `.loop/`.
-- `acceptance-ci`: `cargo build -q --locked -p aae`, then `cargo run -q --locked -p aae-acceptance -- --ci`.
-- `acceptance`: `cargo build -q --locked --release -p aae`, then `cargo run -q --locked -p aae-acceptance -- --aae
-  <repo>/target/release/aae`: every scenario, the demos among them, runs the release build a user installs.
-- `acceptance-release`: `cargo run -q --locked -p aae-acceptance -- --release 1`.
+- `acceptance-ci`: `cargo build -q --locked -p loop-manager`, then
+  `cargo run -q --locked -p loop-manager-acceptance -- --ci`.
+- `acceptance`: `cargo build -q --locked --release -p loop-manager`, then `cargo run -q --locked -p
+  loop-manager-acceptance -- --loop-manager
+  <repo>/target/release/loop-manager`: every scenario, the demos among them, runs the release build a user installs.
+- `acceptance-release`: `cargo run -q --locked -p loop-manager-acceptance -- --release 1`.
 - `build-all`: `cargo zigbuild --release --locked --target <target>` for each of the four targets.
 
 ## Where each kind of test runs
@@ -37,8 +39,8 @@ Each task is a list of plain commands in `[tasks.<name>]` of `mise.toml`; run th
 | Task | What it runs | When | Wall time |
 |---|---|---|---|
 | `mise run test` | unit and integration tests (`cargo nextest run`), without the chaos stand | the everyday loop, usually narrowed to a crate or a test | 25 s (2026-11-17, `57d8ff8`) |
-| `mise run ci` | the above plus formatting, clippy, `cargo deny`, `cargo machete`, the unused-`pub` check, the line budgets, the core boundary (`scripts/core-boundary.sh`: no harness name, `br`, `max_sessions`, `instance_idle_s`, `beads_dir` or `.beads` in the code of the core, `aae-contract` and `aae-core`, and no `aae-core` among the normal and build dependencies of `aae-claude`, `aae-codex`, `aae-br` and `aae-addons`), the fixed branch order of its `select!` (`scripts/select-biased.sh`: `biased;` with a comment on the order) and no absolute home paths in the repository | **the gate of a change**: locally before handing work over; CI on every commit | 33 s (2026-11-17, `57d8ff8`) |
-| `mise run acceptance-ci` | the [acceptance scenarios](../acceptance.md) without a model, each on a real `aae daemon`, and the chaos stand | on request, in the workflow `acceptance` (started by hand) | 144 s (2026-11-16, `04984d6`) |
+| `mise run ci` | the above plus formatting, clippy, `cargo deny`, `cargo machete`, the unused-`pub` check, the line budgets, the core boundary (`scripts/core-boundary.sh`: no harness name, `br`, `max_sessions`, `instance_idle_s`, `beads_dir` or `.beads` in the code of the core, `loop-manager-contract` and `loop-manager-core`, and no `loop-manager-core` among the normal and build dependencies of `loop-manager-claude`, `loop-manager-codex`, `loop-manager-br` and `loop-manager-addons`), the fixed branch order of its `select!` (`scripts/select-biased.sh`: `biased;` with a comment on the order) and no absolute home paths in the repository | **the gate of a change**: locally before handing work over; CI on every commit | 33 s (2026-11-17, `57d8ff8`) |
+| `mise run acceptance-ci` | the [acceptance scenarios](../acceptance.md) without a model, each on a real `loop-manager daemon`, and the chaos stand | on request, in the workflow `acceptance` (started by hand) | 144 s (2026-11-16, `04984d6`) |
 | `mise run acceptance-release` | acceptance criterion 1 with `--release`: `cargo zigbuild --release` for the four targets, then this host's binary runs | the workflow `release` on a `v*` tag; no tag is made only to check it | 169 s cold (2026-11-14, `a070cd6`) |
 | `mise run acceptance` | all acceptance scenarios, including those on a real model and the demos, whose result stays in the demo's directory, ignored by git | on request: they cost money and need a harness login | 2650 s (2026-11-16, `b32c55c`) |
 
@@ -57,22 +59,22 @@ Dependencies must have MIT-compatible licenses (`cargo deny` checks them); no co
 The repository is public: no secrets and no absolute paths of a developer's machine enter it.
 
 Run `mise run test` and `mise run acceptance-ci` one after the other, not side by side: the first builds
-`target/debug/aae` with the features of the test dependencies, the second without them, and each rewrites the binary
-the other's daemons are running.
+`target/debug/loop-manager` with the features of the test dependencies, the second without them, and each rewrites the
+binary the other's daemons are running.
 
 ## The chaos stand
 
 <!-- MEASURE id=dev-chaos-share date=2026-11-14 ver=1a732a4 env=linux-arm64-orbstack-9-cores src="mise run test" note="the per-test times of the eight chaos shares in the nextest output" -->
-`crates/aae-testkit/tests/chaos` checks the invariants of the core on random sequences of steps. It is acceptance
-criterion 35, not a part of `mise run test` or `mise run ci`: it plays 1000 new seeds on every run, in eight shares
-that run in parallel (14–17 s each on the machine above). Each share prints its random base seed; a failure names its
-seed and the command that replays it:
+`crates/loop-manager-testkit/tests/chaos` checks the invariants of the core on random sequences of steps. It is
+acceptance criterion 35, not a part of `mise run test` or `mise run ci`: it plays 1000 new seeds on every run, in eight
+shares that run in parallel (14–17 s each on the machine above). Each share prints its random base seed; a failure names
+its seed and the command that replays it:
 
 ```sh
-AAE_CHAOS_SEED=<n> cargo nextest run -p aae-testkit --test chaos
+LOOP_MANAGER_CHAOS_SEED=<n> cargo nextest run -p loop-manager-testkit --test chaos
 ```
 
-A failing seed is a bug of the core, not of the test. `AAE_CHAOS_SEEDS=<n>` plays another number of seeds: a few
-dozen take seconds and make a targeted test while you change the core.
+A failing seed is a bug of the core, not of the test. `LOOP_MANAGER_CHAOS_SEEDS=<n>` plays another number of seeds: a
+few dozen take seconds and make a targeted test while you change the core.
 
 The rules of work on this repository (budgets, tests, what is decided) are in [docs/agents](../agents/README.md).

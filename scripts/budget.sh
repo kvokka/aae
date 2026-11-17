@@ -9,7 +9,7 @@ err() { echo "budget: $*" >&2; fail=1; }
 
 # Product code is everything under crates/*/src except test-only crates, test files and generated code.
 mapfile -t files < <(git ls-files -co --exclude-standard -- 'crates/*/src/*' \
-  | grep -Ev '^crates/aae-(testkit|acceptance)/|(^|/)tests(\.rs$|/)|/generated/' || true)
+  | grep -Ev '^crates/loop-manager-(testkit|acceptance)/|(^|/)tests(\.rs$|/)|/generated/' || true)
 
 # Code lines (no blanks, no comments) per budget part, counted by tokei.
 declare -A limit=([core]=18000 [claude]=3500 [codex]=3500 [tracker]=1200 [frontends]=4000 [addons]=1500 [reserve]=4300)
@@ -18,13 +18,13 @@ total=0
 if ((${#files[@]})); then
   while IFS=$'\t' read -r code path; do
     case "$path" in
-      crates/aae-core/* | crates/aae-contract/*) part=core ;;
-      crates/aae-claude/*) part=claude ;;
-      crates/aae-codex/*) part=codex ;;
-      crates/aae-br/*) part=tracker ;;
-      crates/aae-front/*) part=frontends ;;
-      crates/aae-addons/*) part=addons ;;
-      crates/aae/*) part=reserve ;;
+      crates/loop-manager-core/* | crates/loop-manager-contract/*) part=core ;;
+      crates/loop-manager-claude/*) part=claude ;;
+      crates/loop-manager-codex/*) part=codex ;;
+      crates/loop-manager-br/*) part=tracker ;;
+      crates/loop-manager-front/*) part=frontends ;;
+      crates/loop-manager-addons/*) part=addons ;;
+      crates/loop-manager/*) part=reserve ;;
       *) err "$path belongs to no budget part (docs/agents/rules-code.md)"; continue ;;
     esac
     used[$part]=$((${used[$part]:-0} + code))

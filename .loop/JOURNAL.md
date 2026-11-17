@@ -1120,3 +1120,10 @@ WP-128 (plugin → addon) сделан одним коммитом `85ffc72`, г
 ## 2026-11-18T03:39:01+0700 · цикл 129 · loopctl · ИТОГ
 
 Цикл завершён: ревьюер: complete, оценка 9.4/10. Оценки: [3.5, 4.0, 4.8, 6.6, 7.8, 8.6, 9.4]
+
+## 2026-11-18T12:00 · вне цикла · владелец · РЕШЕНИЕ
+
+Продукт переименован: `aae` → `loop-manager` (решение 1 в docs/agents/decisions.md). Крейты `crates/loop-manager-*`,
+бинарь `loop-manager`, конфиг проекта `loop-manager.toml`, env `LOOP_MANAGER_*` (в харнессе тоже: `LOOP_MANAGER_LOOP`,
+`LOOP_MANAGER_CTX_*`), заголовки `X-Loop-Manager-*`, ключ `min_loop_manager`. Пути и имена в старых планах и отчётах
+`.loop/` читать с этой поправкой.

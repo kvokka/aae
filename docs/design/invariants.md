@@ -15,7 +15,7 @@ times, how long) are config parameters with defaults; the choice of a reaction i
 
 | № | Invariant | Where it lives |
 |---|---|---|
-| 1 | One writer of the state: the daemon | `aae-core/src/writer.rs`, [event model](event-model.md) |
+| 1 | One writer of the state: the daemon | `loop-manager-core/src/writer.rs`, [event model](event-model.md) |
 | 2 | Ownership with a generation: a run and a bead have at most one live owner; every effect of an attempt (finisher, close, release) checks the generation, a stale one is dropped | contracts 6.2, 6.3, 5.1 |
 | 3 | The daemon claims a bead in the same transaction as the decision to launch; an agent never claims | contracts 5.1, 6.2 |
 | 4 | A bead is released only conditionally: owner and generation compared | contracts 5.1 |
@@ -33,10 +33,10 @@ times, how long) are config parameters with defaults; the choice of a reaction i
 | 16 | Attempt and restart counters live in the state and are bounded; the core has an absolute ceiling the policy cannot raise (20 failed attempts per run over all its steps, 10 remarks per attempt); the executions of a step are bounded by its `max_attempts` and counted in the state (`runs.step_attempt`), and a repeat spends neither ceiling; an attempt whose `auth_required`, `billing` or `quota_exhausted` failure parked the run on its own `account:` gate, closed by that decision, is outside the attempts ceiling: a wait for one's own account is not a failed try; any other park, a park on a gate that is not closed included, counts. Limit: a policy may still close that gate for a moment and retry at once — every such round is a real attempt of the harness | contracts 6.1 |
 | 17 | Resume is checked: only when the adapter confirmed the transcript exists. "New session keeping the ownership" is a core mechanism; after how many refused resumes to switch to it is policy | contracts 6.2, 6.4 |
 | 18 | An operator hold beats automation: a pause or cancel by a human is a record in the state read by every automatic decision | contracts 6.2, 7 |
-| 19 | A worktree has one owner and is removed only when its commits are reachable from refs (the `worktree` addon) | `aae-addons/src/worktree.rs` |
+| 19 | A worktree has one owner and is removed only when its commits are reachable from refs (the `worktree` addon) | `loop-manager-addons/src/worktree.rs` |
 | 20 | An event is a reason to re-read the state; resync is mandatory; ambiguity means zero effects and a loud `resync.diverged` (a repeated or skipped driver `seq` included) | [event model](event-model.md) |
 
-How they are checked: the deterministic chaos stand (`aae-testkit/tests/chaos`) plays seeded sequences of
+How they are checked: the deterministic chaos stand (`loop-manager-testkit/tests/chaos`) plays seeded sequences of
 commands, harness behaviour, policy hooks, operator actions, lost and repeated deliveries and daemon crashes, and
 checks invariants 2, 3, 10, 12, 13, 14, 15, 16 and 17 on the state and the journal after every step. Its formulas
 have several steps, and one starts with a `drain` step over a root bead with two children; besides the invariants
@@ -44,11 +44,12 @@ the stand checks the steps (S1–S4: each step finishes once and in order, attem
 serves two steps, a run passes from its last step) and the drain step (D1: a bead gets at most one child run per
 entry into the step; D2: once the step finished, no child run on a bead is alive; D3: the attempt of a drain step
 that a crash of the daemon caught ends with `daemon_crash`). Each full share of seeds kills the daemon mid-drain at least once. Every run
-plays new seeds from a random base it prints; a failure names its seed and `AAE_CHAOS_SEED=<n>` replays it.
-Invariant 6 runs real marked processes (`aae-testkit/tests/core/old_instances.rs`, `process::tests::wait_gone_*`). The
-others are covered by the integration suites of `aae-testkit/tests` and by the acceptance scenarios (criterion 8:
-20 `kill -9` of the daemon mid-turn on the scripted driver and 5 on each real harness; criterion 24: a `kill -9` of the daemon in
-each step of a formula of `exec`, `drain` and `exec` steps on the real br, no step and no bead run twice).
+plays new seeds from a random base it prints; a failure names its seed and `LOOP_MANAGER_CHAOS_SEED=<n>` replays it.
+Invariant 6 runs real marked processes (`loop-manager-testkit/tests/core/old_instances.rs`,
+`process::tests::wait_gone_*`). The others are covered by the integration suites of `loop-manager-testkit/tests` and by
+the acceptance scenarios (criterion 8: 20 `kill -9` of the daemon mid-turn on the scripted driver and 5 on each real
+harness; criterion 24: a `kill -9` of the daemon in each step of a formula of `exec`, `drain` and `exec` steps on the
+real br, no step and no bead run twice).
 
 ## Recovery
 
@@ -58,8 +59,8 @@ At daemon start ([contracts](contracts.md) 6.4 has the exact state rules):
 2. For every recorded harness instance check pid + start time, kill its process group, sweep every process with
    its marker and wait for the end. Instances that survived the restart are not reconnected in the first release:
    reconnection is an assumption left for later. Then the hook processes the dead daemon left running (the hooks
-   still queued) are killed by their `AAE_INSTANCE=h-…` markers in one sweep, before any effect of the new daemon
-   starts; a hook that runs again may start before the old process is gone, so hooks are idempotent.
+   still queued) are killed by their `LOOP_MANAGER_INSTANCE=h-…` markers in one sweep, before any effect of the new
+   daemon starts; a hook that runs again may start before the old process is gone, so hooks are idempotent.
 3. Runs with a live attempt — `starting`, `running` in a turn — move to `interrupted` with the attempt failure
    `daemon_crash`, the deciding hooks they still had queued dropped (after the sweep of item 2); the policy decides
    what follows. A run waiting for a decision on a deciding
@@ -77,22 +78,22 @@ At daemon start ([contracts](contracts.md) 6.4 has the exact state rules):
    the deadlines of real time stay, and the schedules are armed (a missed schedule fires at most once). Resync, the
    process table included: what carries the marker of an instance this state no longer records is swept.
 
-A planned restart drains first (`POST /v1/daemon/drain`, `POST /v1/daemon/restart`, `aae drain`, `aae restart`):
-no new run starts and no new attempt either (a retry decided meanwhile parks with `run.parked{gate: null}` and the
-next daemon starts it, `run.resumed{gate_key: "daemon_stopping"}`), the active runs — a run in a turn, a hook, a
-policy decision or a preparation — go on until none is left or the drain timeout (default 300 s) passes; a `remark`
-or `continue` at the turn boundary starts no turn but fails the attempt with `daemon_crash`, so its retry parks
-with the remark kept for the next daemon. Then the daemon stops (`daemon.stopping{reason}`) and recovery resumes
-what the drain cut.
+A planned restart drains first (`POST /v1/daemon/drain`, `POST /v1/daemon/restart`, `loop-manager drain`,
+`loop-manager restart`): no new run starts and no new attempt either (a retry decided meanwhile parks with
+`run.parked{gate: null}` and the next daemon starts it, `run.resumed{gate_key: "daemon_stopping"}`), the active runs — a
+run in a turn, a hook, a policy decision or a preparation — go on until none is left or the drain timeout (default 300
+s) passes; a `remark` or `continue` at the turn boundary starts no turn but fails the attempt with `daemon_crash`, so
+its retry parks with the remark kept for the next daemon. Then the daemon stops (`daemon.stopping{reason}`) and recovery
+resumes what the drain cut.
 
 Prompt delivery is "at least once with an idempotent effect": the per-attempt record `intent → sent → acked →
 settled` and the prompt key the harness keeps in its transcript (contracts 6.4). Harness protocols give no
 idempotency of their own.
 
-Measured on the owner's host (2026-11-13, aae 0.1.0; criterion 8, 20 kills mid-step): after a `kill -9` the daemon
-answers again within 0.13 s, far under the 30 s bound; every run reaches its end exactly once, every trigger fires once,
-no orphan process is left.
-<!-- MEASURE id=crash-restart date=2026-11-13 ver=aae-0.1.0 env=linux-arm64-orbstack src=aae-acceptance note="criterion 8 CI scenario, slowest restart to the first answer of 20; 0.03-0.13 s across runs" -->
+Measured on the owner's host (2026-11-13, loop-manager 0.1.0; criterion 8, 20 kills mid-step): after a `kill -9` the
+daemon answers again within 0.13 s, far under the 30 s bound; every run reaches its end exactly once, every trigger
+fires once, no orphan process is left.
+<!-- MEASURE id=crash-restart date=2026-11-13 ver=loop-manager-0.1.0 env=linux-arm64-orbstack src=loop-manager-acceptance note="criterion 8 CI scenario, slowest restart to the first answer of 20; 0.03-0.13 s across runs" -->
 
 ## Limits
 

@@ -7,7 +7,7 @@ feedback_from = { type = "string" }         # whose comments reach the reviser: 
                                             # none given, nobody's
 
 # Each repository keeps the work of the feature on one branch, `feature/<bead>`, across every round, so the formula
-# has no `worktree`: a worktree is a branch per run. The scripts find the repositories with `aae project list`.
+# has no `worktree`: a worktree is a branch per run. The scripts find the repositories with `loop-manager project list`.
 
 # The request becomes beads, and the coders do them.
 [[step]]
@@ -23,11 +23,11 @@ kind = "exec"
 if = { back_from = "review" }
 command = ["sh", "-c", '''
 set -eu
-branch="feature/$AAE_BEAD"
-project=$(aae --json run show "$AAE_RUN" | jq -r .project)
-places=$(aae --json project list --project "$project")
+branch="feature/$LOOP_MANAGER_BEAD"
+project=$(loop-manager --json run show "$LOOP_MANAGER_RUN" | jq -r .project)
+places=$(loop-manager --json project list --project "$project")
 dir=$(printf '%s' "$places" | jq -r '.[0].dir')
-[ -n "${AAE_INPUT_FEEDBACK_FROM:-}" ] || { echo "collect: no feedback_from, nobody's comments are taken"; exit 0; }
+[ -n "${LOOP_MANAGER_INPUT_FEEDBACK_FROM:-}" ] || { echo "collect: no feedback_from, nobody's comments are taken"; exit 0; }
 fields='id url body author { login } reactionGroups { content viewerHasReacted }'
 query="query(\$url: URI!) { resource(url: \$url) { ... on PullRequest {
   comments(first: 100) { nodes { $fields } }
@@ -35,7 +35,7 @@ query="query(\$url: URI!) { resource(url: \$url) { ... on PullRequest {
 taken=$(mktemp)
 for repo in $(printf '%s' "$places" | jq -r '.[0] | .root.path, .rigs[].path'); do
   url=$(cd "$repo" && gh pr view "$branch" --json url -q .url 2>/dev/null) || continue
-  gh api graphql -f query="$query" -f url="$url" | jq -c --arg who "$AAE_INPUT_FEEDBACK_FROM" '
+  gh api graphql -f query="$query" -f url="$url" | jq -c --arg who "$LOOP_MANAGER_INPUT_FEEDBACK_FROM" '
     ($who | split(",") | map(gsub("^\\s+|\\s+$"; ""))) as $who
     | .data.resource | .comments.nodes + [.reviews.nodes[] | ., .comments.nodes[]] | .[]
     | select(.body != "" and (.author.login as $a | $who | index($a)))
@@ -44,12 +44,12 @@ done
 [ -s "$taken" ] || { echo "collect: no new comment"; exit 0; }
 # A repeat of the step finds no new comment and keeps the file of the one before.
 mkdir -p "$dir/feedback"
-jq -r '"## \(.url)\(if .path then " (`\(.path)`)" else "" end)\n\n\(.body)\n"' "$taken" >"$dir/feedback/$AAE_BEAD.md"
+jq -r '"## \(.url)\(if .path then " (`\(.path)`)" else "" end)\n\n\(.body)\n"' "$taken" >"$dir/feedback/$LOOP_MANAGER_BEAD.md"
 for id in $(jq -r .id "$taken"); do
   gh api graphql -f id="$id" \
     -f query='mutation($id: ID!) { addReaction(input: {subjectId: $id, content: EYES}) { clientMutationId } }' >/dev/null
 done
-echo "collect: $(wc -l <"$taken" | tr -d ' ') comment(s) in $dir/feedback/$AAE_BEAD.md"
+echo "collect: $(wc -l <"$taken" | tr -d ' ') comment(s) in $dir/feedback/$LOOP_MANAGER_BEAD.md"
 ''']
 
 # The reviser works the comments, from the file only.
@@ -67,12 +67,12 @@ name = "pr"
 kind = "exec"
 command = ["sh", "-c", '''
 set -eu
-branch="feature/$AAE_BEAD"
-project=$(aae --json run show "$AAE_RUN" | jq -r .project)
-places=$(aae --json project list --project "$project")
-title=$(cd "$(printf '%s' "$places" | jq -r '.[0].dir')" && br show "$AAE_BEAD" --json | jq -r '.[0].title')
+branch="feature/$LOOP_MANAGER_BEAD"
+project=$(loop-manager --json run show "$LOOP_MANAGER_RUN" | jq -r .project)
+places=$(loop-manager --json project list --project "$project")
+title=$(cd "$(printf '%s' "$places" | jq -r '.[0].dir')" && br show "$LOOP_MANAGER_BEAD" --json | jq -r '.[0].title')
 page=$(mktemp)
-printf '# %s\n\nThe feature `%s`. Its pull requests in the other repositories:\n\n' "$title" "$AAE_BEAD" >"$page"
+printf '# %s\n\nThe feature `%s`. Its pull requests in the other repositories:\n\n' "$title" "$LOOP_MANAGER_BEAD" >"$page"
 # The work of the repository in $1 on the branch of the feature, pushed, with its pull request; prints its address.
 publish() {
   cd "$1"
@@ -94,7 +94,7 @@ for repo in $(printf '%s' "$places" | jq -r '.[0].rigs[].path'); do
 done
 root=$(printf '%s' "$places" | jq -r '.[0].root.path')
 mkdir -p "$root/features"
-cp "$page" "$root/features/$AAE_BEAD.md"
+cp "$page" "$root/features/$LOOP_MANAGER_BEAD.md"
 url=$(publish "$root")
 cd "$root" && gh pr edit "$url" -F "$page" >/dev/null
 echo "$url"
@@ -115,9 +115,9 @@ max_attempts = 3
 command = ["sh", "-c", '''
 set -eu
 echo "merge: MY_AWESOME_ENV_VAR is ${MY_AWESOME_ENV_VAR:-not set}"   # a literal of [exec] in root/config.toml
-branch="feature/$AAE_BEAD"
-project=$(aae --json run show "$AAE_RUN" | jq -r .project)
-places=$(aae --json project list --project "$project")
+branch="feature/$LOOP_MANAGER_BEAD"
+project=$(loop-manager --json run show "$LOOP_MANAGER_RUN" | jq -r .project)
+places=$(loop-manager --json project list --project "$project")
 failed=0
 for repo in $(printf '%s' "$places" | jq -r '.[0].rigs[].path'); do
   state=$(cd "$repo" && gh pr view "$branch" --json state -q .state 2>/dev/null) || continue

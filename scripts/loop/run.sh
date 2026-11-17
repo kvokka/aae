@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Запуск (или продолжение) автономного цикла aae в интерактивной TUI-сессии.
+# Запуск (или продолжение) автономного цикла loop-manager в интерактивной TUI-сессии.
 # Интерактивно, а не `claude -p`: headless расходует лимит подписки заметно быстрее
 # (anthropics/claude-code#97074). Состояние цикла — на диске, повторный запуск продолжает с того же места.
 set -euo pipefail
@@ -10,7 +10,7 @@ branch=$(git branch --show-current)
 command -v claude >/dev/null || { echo "claude не найден в PATH" >&2; exit 1; }
 mise install -q >/dev/null
 
-export AAE_LOOP=1
+export LOOP_MANAGER_LOOP=1
 # Окно сжатия 300k (сжатие при ~267k) задано только модели Sonnet: так его получает мастер.
 # Глобальный autoCompactWindow протекает во всех субагентов, а modelSettings — только в
 # субагентов той же модели (проверено на 2.1.322): Opus/Fable-агенты видят полное окно 1M,

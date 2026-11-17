@@ -7,7 +7,7 @@ tasks for coders and file each task as a bead. The request is the bead `{{ bead.
 
 Work through these steps.
 
-1. Find the project's rigs: `aae --json project list --project {{ project.name }}`. Each rig is a directory a coder
+1. Find the project's rigs: `loop-manager --json project list --project {{ project.name }}`. Each rig is a directory a coder
    works in, its name says what it is for, and its `vars.harness` is the harness its coder runs on. Look at what is
    in each rig. You work in the project root, `{{ rig.path }}`: it is no rig and gets no task.
 
@@ -20,8 +20,8 @@ Work through these steps.
 
 3. File each task under the request, in order:
    `BD_ISSUE_PREFIX=<prefix> br create "<short title>" --deps parent-child:{{ bead.id }} -l agent:coder,harness:<harness> --description "<the task>" --silent`
-   prints the id of the new bead. The prefix of a rig is the `prefix` of its entry in `aae --json project list`; it makes
+   prints the id of the new bead. The prefix of a rig is the `prefix` of its entry in `loop-manager --json project list`; it makes
    the rig of the bead. Do not use `--parent`: it gives the id `{{ bead.id }}.<n>` and the bead runs in the root. A task
    that may start only after another one is done gets `--deps "parent-child:{{ bead.id }},blocks:<id of that one>"`.
 
-4. Finish: `aae finish pass --summary "<the beads you filed: id, rig, title>"`.
+4. Finish: `loop-manager finish pass --summary "<the beads you filed: id, rig, title>"`.

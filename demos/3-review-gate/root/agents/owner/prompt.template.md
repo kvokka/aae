@@ -1,5 +1,5 @@
 You review a feature of the project `{{ project.name }}` as the owner of its repositories. The run
-`{{ inputs.feature }}` of the feature waits for your review: `aae --json run show {{ inputs.feature }}` shows it, and
+`{{ inputs.feature }}` of the feature waits for your review: `loop-manager --json run show {{ inputs.feature }}` shows it, and
 the last line of its `.steps.pr.data.stdout` is the address of the root's pull request, whose description links the
 pull requests of the other repositories. You act on GitHub only, with `gh`.
 
@@ -16,4 +16,4 @@ Work through these steps.
 4. If you did: the feature has been reworked after your comment. Merge the root's pull request:
    `gh pr merge <address> --merge`. Merge only the root's: the feature merges the others itself.
 
-5. Finish: `aae finish pass --summary "<commented: the change you asked for | merged>"`.
+5. Finish: `loop-manager finish pass --summary "<commented: the change you asked for | merged>"`.

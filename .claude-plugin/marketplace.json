@@ -1,14 +1,14 @@
 {
-  "name": "aae",
-  "description": "The skills plugin of aae for Claude Code and Codex",
+  "name": "loop-manager",
+  "description": "The skills plugin of loop-manager for Claude Code and Codex",
   "owner": {
-    "name": "aae"
+    "name": "loop-manager"
   },
   "plugins": [
     {
-      "name": "aae",
+      "name": "loop-manager",
       "source": "./plugin",
-      "description": "Skills for working with aae from Claude Code or Codex: recover runs that failed for good, decide on runs that wait on an await step"
+      "description": "Skills for working with loop-manager from Claude Code or Codex: recover runs that failed for good, decide on runs that wait on an await step"
     }
   ]
 }

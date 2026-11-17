@@ -13,9 +13,9 @@
 - The core knows no harness, no role and no br: those come through the driver and tracker interfaces
   (`scripts/core-boundary.sh`). Policy lives in addons and config, not in the core
   ([architecture](../architecture.md#boundaries)).
-- `tokio::select!` in the core (`aae-contract`, `aae-core`) is written only with `biased;` and a comment on why the
-  branches stand in that order (`scripts/select-biased.sh`): a random choice between ready branches breaks the replay
-  of a seed.
+- `tokio::select!` in the core (`loop-manager-contract`, `loop-manager-core`) is written only with `biased;` and a
+  comment on why the branches stand in that order (`scripts/select-biased.sh`): a random choice between ready branches
+  breaks the replay of a seed.
 
 ## Budgets
 
@@ -24,7 +24,7 @@ Lines of code without blanks and comments, counted by `tokei`; tests and generat
 
 | Part | Limit |
 |---|---|
-| the core (`aae-contract`, `aae-core`) | 18 000 |
+| the core (`loop-manager-contract`, `loop-manager-core`) | 18 000 |
 | **the whole first release** | **30 000** |
 | **hard stop** | **35 000** |
 | a harness adapter, each | 3 500 |

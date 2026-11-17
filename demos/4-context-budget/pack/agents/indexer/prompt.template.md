@@ -11,5 +11,5 @@ Work through these steps.
 
 2. Write `{{ rig.path }}/INDEX.md` as the task asks. Change nothing else.
 
-3. Finish. When the file is written: `aae finish pass --summary "<what INDEX.md holds>"`.
-   If you cannot write it: `aae finish fail --summary "<why>"`.
+3. Finish. When the file is written: `loop-manager finish pass --summary "<what INDEX.md holds>"`.
+   If you cannot write it: `loop-manager finish fail --summary "<why>"`.

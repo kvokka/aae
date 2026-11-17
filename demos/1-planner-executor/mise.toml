@@ -1,4 +1,4 @@
-# What the demo needs besides aae; mise is a convenience, any install of these tools does.
+# What the demo needs besides loop-manager; mise is a convenience, any install of these tools does.
 [tools]
 claude = "2.1"
 codex = "0"
@@ -8,7 +8,7 @@ python = "3.15.0"                     # for a backend the coders may write in Py
 
 [tasks.check]
 description = "The pack and the project load"
-run = "aae config check --config root/config.toml"
+run = "loop-manager config check --config root/config.toml"
 
 [tasks.demo]
 description = "The demo from the request to its report; EXAMPLE=1 keeps the result as the *-example"

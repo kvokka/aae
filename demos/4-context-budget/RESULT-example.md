@@ -1,8 +1,8 @@
 # 4-context-budget: passed
 
-<!-- MEASURE id=demo-4-context-budget date=2026-11-17 ver=aae-0.1.0@54c37ca-dirty,claude-2.1.326,codex-0.169.0 env=Linux-aarch64 src=demos/4-context-budget/run.sh note="passed in 356 s from the requests, n=1" -->
+<!-- MEASURE id=demo-4-context-budget date=2026-11-17 ver=loop-manager-0.1.0@54c37ca-dirty,claude-2.1.326,codex-0.169.0 env=Linux-aarch64 src=demos/4-context-budget/run.sh note="passed in 356 s from the requests, n=1" -->
 
-Run on 2026-11-17 with aae-0.1.0@54c37ca-dirty,claude-2.1.326,codex-0.169.0 (`Linux aarch64`): passed in 356 s from the requests.
+Run on 2026-11-17 with loop-manager-0.1.0@54c37ca-dirty,claude-2.1.326,codex-0.169.0 (`Linux aarch64`): passed in 356 s from the requests.
 
 ## glossarist
 
@@ -21,7 +21,7 @@ Labels for root-mm0:
   compactions:5
 ```
 
-The outcome of the run (`aae run wait`):
+The outcome of the run (`loop-manager run wait`):
 
 ```
 id: run_1
@@ -47,7 +47,7 @@ Labels for root-561:
   compactions:3
 ```
 
-The outcome of the run (`aae run wait`):
+The outcome of the run (`loop-manager run wait`):
 
 ```
 id: run_2
@@ -56,7 +56,7 @@ state: passed
 summary: INDEX.md maps every docs Markdown document to its sections with a one-line description of each.
 ```
 
-The compactions the addon counted, per session (`<state>/aae/addons/context-budget/<session>.count`):
+The compactions the addon counted, per session (`<state>/loop-manager/addons/context-budget/<session>.count`):
 
 ```
 01a1eb27-3976-7f42-8c6f-7ce99c619341: 3

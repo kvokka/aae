@@ -4,22 +4,22 @@ members = ["crates/*"]
 # Everything but the acceptance runner, which is needed only on request: `cargo build`, `clippy` and `nextest` without
 # `-p` or `--workspace` leave it out. The gate (`mise run ci`) checks the whole workspace.
 default-members = [
-  "crates/aae",
-  "crates/aae-br",
-  "crates/aae-claude",
-  "crates/aae-codex",
-  "crates/aae-contract",
-  "crates/aae-core",
-  "crates/aae-front",
-  "crates/aae-addons",
-  "crates/aae-testkit",
+  "crates/loop-manager",
+  "crates/loop-manager-br",
+  "crates/loop-manager-claude",
+  "crates/loop-manager-codex",
+  "crates/loop-manager-contract",
+  "crates/loop-manager-core",
+  "crates/loop-manager-front",
+  "crates/loop-manager-addons",
+  "crates/loop-manager-testkit",
 ]
 
 [workspace.package]
 version = "0.1.0"
 edition = "2024"
 license = "MIT"
-repository = "https://github.com/kvokka/aae"
+repository = "https://github.com/kvokka/loop-manager"
 rust-version = "1.100"
 
 [workspace.lints.rust]

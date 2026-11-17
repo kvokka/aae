@@ -19,16 +19,16 @@ compacted)
     count="$2/$session.count"
     n=$(($(cat "$count" 2>/dev/null || echo 0) + 1))
     echo "$n" >"$count"
-    if [ -n "${AAE_BEAD:-}" ]; then
-        old=$(br label list "$AAE_BEAD" --json | jq -r '[.[] | select(startswith("compactions:"))] | join(",")') &&
-            { [ -z "$old" ] || br label remove "$AAE_BEAD" -l "$old" >/dev/null; } &&
-            br label add "$AAE_BEAD" -l "compactions:$n" >/dev/null ||
-            echo "context-budget: the label compactions:$n is not on $AAE_BEAD" >&2
+    if [ -n "${LOOP_MANAGER_BEAD:-}" ]; then
+        old=$(br label list "$LOOP_MANAGER_BEAD" --json | jq -r '[.[] | select(startswith("compactions:"))] | join(",")') &&
+            { [ -z "$old" ] || br label remove "$LOOP_MANAGER_BEAD" -l "$old" >/dev/null; } &&
+            br label add "$LOOP_MANAGER_BEAD" -l "compactions:$n" >/dev/null ||
+            echo "context-budget: the label compactions:$n is not on $LOOP_MANAGER_BEAD" >&2
     fi
     [ "$n" -gt "$3" ] || exit 0
     reason="context budget: $n compactions"
     # The session stops only on an accepted outcome: a finisher that failed or got a remark leaves it going.
-    aae finish fail --summary "$reason" >&2
+    loop-manager finish fail --summary "$reason" >&2
     printf '%s' "$reason" >"$stop"
     jq -nc --arg r "$reason" '{continue: false, stopReason: $r}'
     ;;

@@ -1,11 +1,11 @@
 # context-budget
 
-An addon of aae for claude and codex agents: it sets the context window at which the harness compacts a session,
-counts the compactions of the session, keeps the label `compactions:<n>` on the run's bead and fails the run past
-`max_compactions`. [Demo 4](../../demos/4-context-budget/README.md) runs it on an agent of each harness.
+An addon of loop-manager for claude and codex agents: it sets the context window at which the harness compacts a
+session, counts the compactions of the session, keeps the label `compactions:<n>` on the run's bead and fails the run
+past `max_compactions`. [Demo 4](../../demos/4-context-budget/README.md) runs it on an agent of each harness.
 
 ```toml
-# the orchestrator's config.toml or a project's aae.toml
+# the orchestrator's config.toml or a project's loop-manager.toml
 [[addon]]
 path = "<this directory>"            # or git = "<this repository>", rev = "<tag>", dir = "addons/context-budget"
 
@@ -28,9 +28,10 @@ less 33k tokens; codex takes any size and compacts after the tool call whose rep
 The hook `hooks/budget` runs in the agent's session, on two harness hooks:
 
 - `PostCompact`: the count of the session (by its `session_id`) goes up by one in `<state>/addons/context-budget/`.
-  When the run has a bead (`AAE_BEAD`), the bead's `compactions:*` label is replaced by `compactions:<n>`, written as
-  the session's tracker actor. Past `max_compactions` the hook declares the outcome `fail` with the summary
-  `context budget: <n> compactions` (`aae finish`) and answers `{"continue": false}`: codex ends the turn there.
+  When the run has a bead (`LOOP_MANAGER_BEAD`), the bead's `compactions:*` label is replaced by `compactions:<n>`,
+  written as the session's tracker actor. Past `max_compactions` the hook declares the outcome `fail` with the summary
+  `context budget: <n> compactions` (`loop-manager finish`) and answers `{"continue": false}`: codex ends the turn
+  there.
 - `PreToolUse`: once the session is past its budget, every tool call of claude is denied and the turn stops; this is
   what stops claude, which does not stop on an answer of a compaction hook. codex marks this answer of a tool hook
   failed and runs the tool: codex stops on `PostCompact` alone.
@@ -43,5 +44,5 @@ session of the run, after an attempt failed, starts from zero.
 
 ## Needs on the host
 
-`jq`, `br` (the label; it finds the tracker by the session's `BEADS_DIR`, as the agent's own calls do) and `aae` (the
-finisher) on the `PATH` of the harness's hooks.
+`jq`, `br` (the label; it finds the tracker by the session's `BEADS_DIR`, as the agent's own calls do) and
+`loop-manager` (the finisher) on the `PATH` of the harness's hooks.

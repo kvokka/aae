@@ -1,6 +1,6 @@
 # Demos
 
-Small live examples of aae (criterion 20), each in a directory of its own. The user's request is one
+Small live examples of loop-manager (criterion 20), each in a directory of its own. The user's request is one
 sentence; how to do it and in what order the agents decide. They run real models, so they need the harness logins
 and spend tokens; CI only checks that each demo's pack and project load.
 
@@ -17,9 +17,9 @@ repository of its own (demos 1 and 2: `frontend/` and `backend/`) or a clone of 
 coder's commit stays in it. Demo 4's project has no rigs: `run.sh` copies the documents its agents read into its root,
 `library/`. `run.sh` of a demo runs it on a
 daemon of its own; what it creates is in `.gitignore`, and the author's run is
-next to it as `*-example`, with when and on what it ran. `cargo run -p aae-acceptance -- 20` runs the demos as rows
+next to it as `*-example`, with when and on what it ran. `cargo run -p loop-manager-acceptance -- 20` runs the demos as rows
 of the acceptance report.
 
 ## Roadmap
 
-aae develops itself: the agent setup of this repository as an aae pack. Not in the first release.
+loop-manager develops itself: the agent setup of this repository as a loop-manager pack. Not in the first release.

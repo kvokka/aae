@@ -1,0 +1,245 @@
+//! A real `loop-manager daemon` with its XDG directories and `HOME` in a temporary tree: project `shop` with rig `web`.
+
+use crate::Env;
+use loop_manager_front::client::{Client, ClientError};
+use serde_json::{Value, json};
+use std::{
+    collections::HashSet,
+    fs,
+    path::{Path, PathBuf},
+    process::{Child, Command},
+    sync::{Arc, Mutex},
+    time::{Duration, Instant},
+};
+
+/// The trees of the daemons a scenario starts, kept when it fails: its `daemon.log`, journal and state are what
+/// tells why. `execute` scopes it over a scenario and removes the trees when it passes.
+pub(crate) type Trees = Arc<Mutex<Vec<PathBuf>>>;
+
+tokio::task_local! {
+    pub(crate) static TREES: Trees;
+}
+
+/// The prefix of a scenario's tree in the temporary directory; CI uploads the kept ones as an artifact.
+const TREE_PREFIX: &str = "loop-manager-acceptance-";
+
+const FILES: &[(&str, &str)] = &[
+    ("config/loop-manager/config.toml", "projects = [\"shop\"]\n"),
+    (
+        "config/loop-manager/shop/loop-manager.toml",
+        "[rigs.web]\npath = \"web\"\n",
+    ),
+    ("config/loop-manager/shop/web/.keep", ""),
+];
+
+/// The processes, other than `daemon`, whose environment names the scenario's tree: the daemon's step commands
+/// and harness processes with their descendants.
+pub(crate) fn steps(root: &Path, daemon: u32) -> HashSet<u32> {
+    let needle = root.to_string_lossy().into_owned();
+    let pids = fs::read_dir("/proc").unwrap().flatten();
+    let pids = pids.filter_map(|e| e.file_name().to_str()?.parse::<u32>().ok());
+    pids.filter(|&pid| pid != daemon)
+        .filter(|pid| {
+            fs::read(format!("/proc/{pid}/environ"))
+                .is_ok_and(|env| env.windows(needle.len()).any(|w| w == needle.as_bytes()))
+        })
+        .collect()
+}
+
+/// Writes `text` to `path`, creating its directories.
+pub(crate) fn write(path: impl AsRef<Path>, text: impl AsRef<str>) {
+    let path = path.as_ref();
+    fs::create_dir_all(path.parent().expect("a file path")).unwrap();
+    fs::write(path, text.as_ref()).unwrap();
+}
+
+/// A fresh tree for a daemon; inside a scenario it is left for `execute` to remove or keep.
+pub(crate) fn tree() -> tempfile::TempDir {
+    let mut dir = tempfile::Builder::new().prefix(TREE_PREFIX).tempdir().unwrap();
+    if TREES
+        .try_with(|t| t.lock().unwrap().push(dir.path().to_owned()))
+        .is_ok()
+    {
+        dir.disable_cleanup(true);
+    }
+    dir
+}
+
+pub(crate) struct Daemon {
+    env: Arc<Env>,
+    home: PathBuf,
+    child: Child,
+    pub(crate) dir: tempfile::TempDir,
+    pub(crate) client: Client,
+}
+
+impl Daemon {
+    /// A daemon on a fresh tree, `HOME` included; `before` adds to the tree before the daemon starts.
+    pub(crate) async fn start(env: &Arc<Env>, before: impl FnOnce(&Path)) -> Self {
+        Self::launch(env, before, None).await
+    }
+
+    /// As [`Daemon::start`], but with the user's `HOME`: agents that inherit the host find the host login there.
+    pub(crate) async fn start_on_host(env: &Arc<Env>, before: impl FnOnce(&Path)) -> Self {
+        let home = std::env::var_os("HOME").expect("HOME is set");
+        Self::launch(env, before, Some(home.into())).await
+    }
+
+    async fn launch(env: &Arc<Env>, before: impl FnOnce(&Path), home: Option<PathBuf>) -> Self {
+        let dir = tree();
+        for (path, text) in FILES {
+            write(dir.path().join(path), text);
+        }
+        before(dir.path());
+        let home = home.unwrap_or_else(|| dir.path().to_owned());
+        let child = spawn(env, dir.path(), &home);
+        let client = Client::new(dir.path().join("run/loop-manager/loop-manager.sock"));
+        let daemon = Self {
+            env: env.clone(),
+            home,
+            child,
+            dir,
+            client,
+        };
+        daemon.until_up().await;
+        daemon
+    }
+
+    /// `loop-manager <args>` as a client of this daemon.
+    pub(crate) fn cli(&self, args: &[&str]) -> std::process::Output {
+        command(&self.env, self.dir.path(), &self.home)
+            .args(args)
+            .output()
+            .unwrap()
+    }
+
+    pub(crate) fn path(&self, rel: &str) -> PathBuf {
+        self.dir.path().join(rel)
+    }
+
+    pub(crate) fn pid(&self) -> u32 {
+        self.child.id()
+    }
+
+    async fn until_up(&self) {
+        let deadline = Instant::now() + Duration::from_secs(30);
+        while self.client.request("GET", "/v1/daemon", None, None).await.is_err() {
+            assert!(Instant::now() < deadline, "the daemon did not come up");
+            tokio::time::sleep(Duration::from_millis(20)).await;
+        }
+    }
+
+    /// Kills the daemon with SIGKILL and starts it again on the same tree.
+    pub(crate) async fn restart(&mut self) {
+        self.restart_after(Duration::ZERO).await;
+    }
+
+    /// Kills the daemon with SIGKILL and starts it again on the same tree after `down`.
+    pub(crate) async fn restart_after(&mut self, down: Duration) {
+        let _ = self.child.kill();
+        let _ = self.child.wait();
+        tokio::time::sleep(down).await;
+        self.child = spawn(&self.env, self.dir.path(), &self.home);
+        self.until_up().await;
+    }
+
+    pub(crate) async fn get(&self, path: &str) -> Value {
+        self.client.request("GET", path, None, None).await.unwrap()
+    }
+
+    pub(crate) async fn post(&self, path: &str, body: Value) -> Result<Value, ClientError> {
+        self.client.request("POST", path, Some(&body), None).await
+    }
+
+    /// Starts `formula` on rig `web` of `shop`; the id of the run.
+    pub(crate) async fn create(&self, formula: &str) -> String {
+        let body = json!({ "project": "shop", "rig": "web", "formula": formula });
+        let reply = self.post("/v1/runs", body).await.unwrap();
+        reply["run"].as_str().unwrap().to_owned()
+    }
+
+    /// Waits up to `within` until the run is in `state`; its view.
+    pub(crate) async fn until_state(&self, run: &str, state: &str, within: Duration) -> Value {
+        let deadline = Instant::now() + within;
+        loop {
+            let view = self.get(&format!("/v1/runs/{run}")).await;
+            if view["state"] == state {
+                return view;
+            }
+            let ended = ["passed", "failed", "cancelled"].iter().any(|s| view["state"] == *s);
+            assert!(!ended, "{run} ended, not {state}: {view}");
+            assert!(Instant::now() < deadline, "{run} stays {}, not {state}", view["state"]);
+            tokio::time::sleep(Duration::from_millis(20)).await;
+        }
+    }
+}
+
+impl Daemon {
+    /// The journal from its start as `(type, envelope)`, read until `done` holds for what was read, up to `within`.
+    pub(crate) async fn journal_until(
+        &self,
+        within: Duration,
+        mut done: impl FnMut(&[(String, Value)]) -> bool,
+    ) -> Vec<(String, Value)> {
+        let deadline = tokio::time::Instant::now() + within;
+        let mut events = self.client.events(Some(1)).await.unwrap();
+        let mut seen = Vec::new();
+        while !done(&seen) {
+            let next = tokio::time::timeout_at(deadline, events.next()).await;
+            let Ok(Some(event)) = next.map(Result::unwrap) else {
+                panic!("the journal did not get there within {within:?}: {seen:?}");
+            };
+            seen.push((event.event.clone(), serde_json::from_str(&event.data).unwrap()));
+        }
+        seen
+    }
+}
+
+impl Drop for Daemon {
+    /// No later daemon sweeps this tree's instances, so the scenario ends what its daemon left: codex's own
+    /// children (an addon sync) outlive a killed daemon otherwise.
+    fn drop(&mut self) {
+        let _ = self.child.kill();
+        let _ = self.child.wait();
+        let left = steps(self.dir.path(), self.child.id());
+        if !left.is_empty() {
+            let _ = Command::new("kill")
+                .arg("-KILL")
+                .args(left.iter().map(u32::to_string))
+                .output();
+        }
+    }
+}
+
+/// `loop-manager daemon` on the tree in `dir`; its stderr goes to `dir/daemon.log`, out of the run's output.
+fn spawn(env: &Env, dir: &Path, home: &Path) -> Child {
+    let log = fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(dir.join("daemon.log"))
+        .unwrap();
+    // Steps call `loop-manager`, as a demo's do: the binary under test goes first on the PATH the daemon hands them.
+    let bin = env.loop_manager.parent().expect("the directory of loop-manager");
+    let path = std::env::join_paths(
+        std::iter::once(bin.to_owned()).chain(std::env::split_paths(&std::env::var_os("PATH").unwrap_or_default())),
+    )
+    .unwrap();
+    command(env, dir, home)
+        .arg("daemon")
+        .env("PATH", path)
+        .stderr(log)
+        .spawn()
+        .unwrap()
+}
+
+/// `loop-manager` with the XDG directories in `dir`.
+fn command(env: &Env, dir: &Path, home: &Path) -> Command {
+    let mut command = Command::new(&env.loop_manager);
+    command
+        .env("HOME", home)
+        .env("XDG_CONFIG_HOME", dir.join("config"))
+        .env("XDG_CACHE_HOME", dir.join("cache"))
+        .env("XDG_STATE_HOME", dir.join("state"))
+        .env("XDG_RUNTIME_DIR", dir.join("run"));
+    command
+}

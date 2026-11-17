@@ -25,7 +25,7 @@ KISS".
     4. `pr`, an exec step: in each repository with work of the feature it moves that work to the branch
        `feature/<bead>`, pushes it and opens or updates the pull request; the root's comes last, with a page that
        links the others, and its address is the last line of the step's output;
-    5. `review`, an `await` step with `back_to = "collect"`: it waits for `aae run resolve <run> review pass|fail`,
+    5. `review`, an `await` step with `back_to = "collect"`: it waits for `loop-manager run resolve <run> review pass|fail`,
        which the bridge sends;
     6. `merge`, an exec step: it merges the children's pull requests still open (`max_attempts = 3`, a repeat merges
        what is left) and takes each repository back to its default branch.
@@ -35,7 +35,7 @@ KISS".
   - formula `cleanup`: closes the open pull requests of a feature, deletes its branches, takes each repository back to
     its default branch as the remote has it and closes its bead.
 - `root/` holds the configuration and the tracker of the project; its repository, `[root] path`, is `gate-demo/`.
-  `aae.toml` sets the models, `feedback_from` (`kvokka-agent`; put your login there) and two triggers: `cleanup` on
+  `loop-manager.toml` sets the models, `feedback_from` (`kvokka-agent`; put your login there) and two triggers: `cleanup` on
   `run.cancelled` of a `feature` run, and on nothing else (a failed run is left for a human to look into), and
   `owner-review` on `run.awaiting` of a `feature` run. `owner-review` is the project's own formula: its agent `owner`,
   in `root/agents/owner`, stands in for a human reviewer and acts only through `gh`; the first time it leaves one
@@ -52,35 +52,35 @@ The agents run on codex: `planner` and `owner` on `terra`, `coder` and `reviser`
 ## The bridge
 
 `bridge.sh <project>` is a script that `run.sh` starts next to the daemon; it is not a `[[service]]`, which lives only
-while there are sessions and gets no socket of the API. It follows the daemon's events (`aae events`): a
-`run.awaiting` wakes it, and it reads the runs that wait with `aae run list --awaiting`, also once every interval,
+while there are sessions and gets no socket of the API. It follows the daemon's events (`loop-manager events`): a
+`run.awaiting` wakes it, and it reads the runs that wait with `loop-manager run list --awaiting`, also once every interval,
 which covers a run that waited before it started. While a run of the project waits on `review`, it looks at the
 feature's pull requests through `gh` every `INTERVAL` seconds (30 by default); with no run waiting, it asks GitHub
 nothing. The root's pull request is the last line of the output of `pr`, the others are those of the branch
 `feature/<bead>` in each repository.
 
-- The root's pull request merged: `aae run resolve <run> review pass`, with `{"merged_by": <login>}` as the data.
-- Closed without a merge: `aae run cancel <run>` with the reason `closed without a merge: <address>`; the trigger
+- The root's pull request merged: `loop-manager run resolve <run> review pass`, with `{"merged_by": <login>}` as the data.
+- Closed without a merge: `loop-manager run cancel <run>` with the reason `closed without a merge: <address>`; the trigger
   `cleanup-cancelled` then clears the feature.
 - A comment or a review on any of the feature's pull requests, by an author in the run's `feedback_from`, that the
-  account of `gh` has not marked with the reaction "eyes": `aae run resolve <run> review fail` with
+  account of `gh` has not marked with the reaction "eyes": `loop-manager run resolve <run> review fail` with
   `review: <the comment's address>` as the summary. `collect` marks each comment it takes, so a comment sends the
   feature back once. The comments of anyone else, and every comment when `feedback_from` is empty, change nothing.
 
 Each outcome goes with the idempotency key `bridge-<run>-<round>`: a repeat of it changes nothing, and it cannot
-reach the next round's `review`. `crates/aae/tests/e2e/review_gate.rs` runs the pack, the scripts and the bridge
+reach the next round's `review`. `crates/loop-manager/tests/e2e/review_gate.rs` runs the pack, the scripts and the bridge
 without a model and without GitHub: the real `codex` on fake model APIs, a fake `gh` over local remotes.
 
 ## Run
 
-You need `aae`, a login of `codex`, `gh` logged in as an account that may push to the repositories (or its token in
+You need `loop-manager`, a login of `codex`, `gh` logged in as an account that may push to the repositories (or its token in
 `GITHUB_TOKEN`), `br` and `jq`.
-`mise install` in this directory installs all but `aae` (mise is a convenience, any install does). The repositories
+`mise install` in this directory installs all but `loop-manager` (mise is a convenience, any install does). The repositories
 `gate-demo`, `gate-demo-backend` and `gate-demo-frontend` must exist under the GitHub account `OWNER`
 (`kvokka-agent` by default), each with a default branch. The run spends real tokens and opens real pull requests.
 
 ```sh
-aae config check --config root/config.toml   # the pack and the project load
+loop-manager config check --config root/config.toml   # the pack and the project load
 OWNER=<your login> ./run.sh                  # or: mise run demo
 ```
 

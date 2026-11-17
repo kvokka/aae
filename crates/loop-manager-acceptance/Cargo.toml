@@ -1,0 +1,20 @@
+[package]
+name = "loop-manager-acceptance"
+description = "The acceptance spec of loop-manager (docs/acceptance.md): scenarios on a real daemon and real binaries"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+publish = false
+
+[lints]
+workspace = true
+
+[dependencies]
+loop-manager-core = { version = "0.1.0", path = "../loop-manager-core" }
+loop-manager-front = { version = "0.1.0", path = "../loop-manager-front" }
+loop-manager-testkit = { version = "0.1.0", path = "../loop-manager-testkit" }
+serde_json = "1.0.154"
+tempfile = "3.27.0"
+tokio = { version = "1.54.1", features = ["rt-multi-thread", "macros", "time", "process", "net"] }

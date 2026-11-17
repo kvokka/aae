@@ -1,9 +1,12 @@
-# aae in one page
+# loop-manager in one page
 
-`aae` (Adaptive Agent Executor) is an event-driven orchestrator for coding agents. One daemon per user of a machine
-runs **formulas** on **agents** in the **rigs** (repositories) of **projects**, through the agents' own harnesses
-(Claude Code, Codex), and takes every run to an explicit outcome through harness failures, account limits and its own
-restarts.
+`loop-manager` is an event-driven orchestrator for coding agents. One daemon per user of a machine runs **formulas** on
+**agents** in the **rigs** (repositories) of **projects**, through the agents' own harnesses (Claude Code, Codex), and
+takes every run to an explicit outcome through harness failures, account limits and its own restarts.
+
+A loop is work that comes round again until it reaches an outcome: a step retried until its check passes, a check that
+sends the work back to an earlier step for another round, a `drain` that hands out beads until none is left, a trigger
+that starts a formula on every matching event or tick of a schedule.
 
 ## What shapes it
 
@@ -16,16 +19,16 @@ restarts.
 4. **Less code is better.** Only what a described result needs is written: no stubs, no extension points, no fields
    or flags for later. What is deferred is absent from the code altogether.
 
-aae ships as one binary for Linux and macOS, x86_64 and arm64, under the MIT license. It is checked on Linux arm64
-only; the other three targets are built and trusted to the portability of the language.
+loop-manager ships as one binary for Linux and macOS, x86_64 and arm64, under the MIT license. It is checked on Linux
+arm64 only; the other three targets are built and trusted to the portability of the language.
 
 ## Glossary
 
-| Term | Meaning in aae |
+| Term | Meaning in loop-manager |
 |---|---|
-| **orchestrator** | the `aae` daemon and its machine-level settings |
-| **project** | a directory with `aae.toml`: a root, a set of rigs, packs, addons and one tracker database |
-| **root** | the root directory of a project: where agents of scope `root` work, and in a one-repository project the executors too. By default the directory of `aae.toml`, named `root`; both are settings. It need not be a git repository |
+| **orchestrator** | the `loop-manager` daemon and its machine-level settings |
+| **project** | a directory with `loop-manager.toml`: a root, a set of rigs, packs, addons and one tracker database |
+| **root** | the root directory of a project: where agents of scope `root` work, and in a one-repository project the executors too. By default the directory of `loop-manager.toml`, named `root`; both are settings. It need not be a git repository |
 | **rig** | a repository of a project on disk, with its bead prefix and variables (`test_cmd`, `lint_cmd`, …) |
 | **harness** | a kind of agent CLI: `claude`, `codex`. One adapter each |
 | **harness instance** | a running harness process (an app-server or a session process) that serves one or several sessions |
@@ -79,7 +82,7 @@ only; the other three targets are built and trusted to the portability of the la
 | A generic ACP adapter, one adapter for several harnesses | When a third harness appears |
 | A model provider setting apart from the harness | The user names a harness; the provider inside it is the harness's native setting |
 | A chain of several formulas over one bead | `pass` closes the bead; the next work comes by taking the next ready bead |
-| A demo "aae develops itself" | Later: the agent setup of this repository as an aae pack |
+| A demo "loop-manager develops itself" | Later: the agent setup of this repository as a loop-manager pack |
 | Migration of data and packs from other orchestrators | A separate task |
 
 Next: [architecture](architecture.md), then the [guides](guide/install.md).

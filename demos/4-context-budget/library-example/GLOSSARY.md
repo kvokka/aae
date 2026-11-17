@@ -7,10 +7,10 @@ Terms are listed by the document where they are first defined; a term used acros
 
 | Term | Definition | Defined in |
 |---|---|---|
-| aae (Adaptive Agent Executor) | An event-driven orchestrator for coding agents: one daemon per user, running formulas on agents through their harnesses | [overview](docs/overview.md) |
-| orchestrator | The `aae` daemon and its machine-level settings | [overview](docs/overview.md#glossary) |
-| project | A directory with `aae.toml`: a root, a set of rigs, packs, addons and one tracker database | [overview](docs/overview.md#glossary) |
-| root (of a project) | The project's root directory, where agents of scope `root` work; named `root` and located at the `aae.toml` directory by default, both settings; need not be git | [overview](docs/overview.md#glossary) |
+| loop-manager (Adaptive Agent Executor) | An event-driven orchestrator for coding agents: one daemon per user, running formulas on agents through their harnesses | [overview](docs/overview.md) |
+| orchestrator | The `loop-manager` daemon and its machine-level settings | [overview](docs/overview.md#glossary) |
+| project | A directory with `loop-manager.toml`: a root, a set of rigs, packs, addons and one tracker database | [overview](docs/overview.md#glossary) |
+| root (of a project) | The project's root directory, where agents of scope `root` work; named `root` and located at the `loop-manager.toml` directory by default, both settings; need not be git | [overview](docs/overview.md#glossary) |
 | rig | A repository of a project on disk, with its bead prefix and variables such as `test_cmd` and `lint_cmd` | [overview](docs/overview.md#glossary) |
 | harness | A kind of agent CLI (`claude`, `codex`), with one adapter each | [overview](docs/overview.md#glossary) |
 | harness instance | A running harness process (an app-server or a session process) serving one or more sessions | [overview](docs/overview.md#glossary) |
@@ -27,7 +27,7 @@ Terms are listed by the document where they are first defined; a term used acros
 | run | One execution of a formula with concrete inputs; it has attempts and an outcome | [overview](docs/overview.md#glossary) |
 | child run | A run started by a `drain` or `formula` step of another run, or from an agent's session; it inherits the correlation | [overview](docs/overview.md#glossary) |
 | attempt | One start or resume of a session within a run | [overview](docs/overview.md#glossary) |
-| finisher | The call by which an agent reports the outcome of its step (`aae finish`) | [overview](docs/overview.md#glossary) |
+| finisher | The call by which an agent reports the outcome of its step (`loop-manager finish`) | [overview](docs/overview.md#glossary) |
 | trigger | A rule "an event or a schedule starts a formula" | [overview](docs/overview.md#glossary) |
 | correlation | The id of a chain of runs that started one another | [overview](docs/overview.md#glossary) |
 | pack | Content fit for any project: agents, formulas and triggers | [overview](docs/overview.md#glossary) |
@@ -47,20 +47,20 @@ Terms are listed by the document where they are first defined; a term used acros
 | adapter | A component that binds the core to an external system: a harness, a tracker or a frontend | [architecture](docs/architecture.md) |
 | frontend | An adapter exposing the core to people and tools: the HTTP API, the CLI and MCP | [architecture](docs/architecture.md), [frontends](docs/api/frontends.md) |
 | single writer | The core's rule that one writer changes state, one SQLite transaction per message, with effects run after commit | [event-model](docs/design/event-model.md) |
-| `aae-core` `Msg` | The message type of the single writer in `aae_core::run` | [event-model](docs/design/event-model.md) |
+| `loop-manager-core` `Msg` | The message type of the single writer in `loop_manager_core::run` | [event-model](docs/design/event-model.md) |
 | deadline | A time at which the core must react, set by `Tx::set_deadline` and cleared by `Tx::clear_deadline`; a safety timer, not a poll | [event-model](docs/design/event-model.md) |
 | effect | Work the core asks for after a commit (a process start, a call), retried with backoff (500 ms, 1 s, 2 s, capped at 5 min) | [event-model](docs/design/event-model.md) |
-| state database | The SQLite store in WAL mode at `$XDG_STATE_HOME/aae/state.db`, with `user_version` as its schema version | [event-model](docs/design/event-model.md) |
-| journal | The JSONL event log at `$XDG_STATE_HOME/aae/journal/events.jsonl`, with one `seq` counter per orchestrator, rotated at 10 MB, 5 files kept | [event-model](docs/design/event-model.md), [overview](docs/overview.md) |
+| state database | The SQLite store in WAL mode at `$XDG_STATE_HOME/loop-manager/state.db`, with `user_version` as its schema version | [event-model](docs/design/event-model.md) |
+| journal | The JSONL event log at `$XDG_STATE_HOME/loop-manager/journal/events.jsonl`, with one `seq` counter per orchestrator, rotated at 10 MB, 5 files kept | [event-model](docs/design/event-model.md), [overview](docs/overview.md) |
 | seq | The journal's sequence number, by which a reader continues; a rotated-away `seq` gives an explicit gap | [event-model](docs/design/event-model.md), [acceptance](docs/acceptance.md) |
 | resync | The periodic re-read of state (every 5 minutes, `daemon:resync`); a diverging result is `resync.diverged` | [event-model](docs/design/event-model.md) |
 | invariant | One of the 20 rules the core keeps after every step | [invariants](docs/design/invariants.md) |
 | recovery step | A step the core takes to restore a run after a restart or a failure | [invariants](docs/design/invariants.md) |
 | prompt delivery | "At least once, with an idempotent effect" | [invariants](docs/design/invariants.md) |
 | drain (of the daemon) | A planned restart: `POST /v1/daemon/drain`, with a 300 s drain timeout | [invariants](docs/design/invariants.md) |
-| chaos stand | The randomized check of the core over 1000 seeds, with `AAE_CHAOS_SEED` and `AAE_CHAOS_SEEDS` | [development](docs/guide/development.md#the-chaos-stand), [acceptance](docs/acceptance.md) |
-| crate | A Rust crate of the workspace: `aae-contract`, `aae-core`, `aae-claude`, `aae-codex`, `aae-br`, `aae-front`, `aae-addons`, `aae`, `aae-testkit`, `aae-acceptance` | [architecture](docs/architecture.md) |
-| operator plugin | The plugin of the operator's harness that drives aae, in `plugin/` | [decisions](docs/agents/decisions.md) (142) |
+| chaos stand | The randomized check of the core over 1000 seeds, with `LOOP_MANAGER_CHAOS_SEED` and `LOOP_MANAGER_CHAOS_SEEDS` | [development](docs/guide/development.md#the-chaos-stand), [acceptance](docs/acceptance.md) |
+| crate | A Rust crate of the workspace: `loop-manager-contract`, `loop-manager-core`, `loop-manager-claude`, `loop-manager-codex`, `loop-manager-br`, `loop-manager-front`, `loop-manager-addons`, `loop-manager`, `loop-manager-testkit`, `loop-manager-acceptance` | [architecture](docs/architecture.md) |
+| operator plugin | The plugin of the operator's harness that drives loop-manager, in `plugin/` | [decisions](docs/agents/decisions.md) (142) |
 
 ## Contracts
 
@@ -83,7 +83,7 @@ Terms are listed by the document where they are first defined; a term used acros
 | capabilities | What a harness adapter declares it can do (its tested `versions` among them) | [contracts §4.5](docs/design/contracts.md#4-driver-interface) |
 | `Tracker` | The tracker interface (§5) and its `TrackerError` | [contracts §5](docs/design/contracts.md#5-tracker-interface) |
 | run states | The states of a run (§6.1–6.2), including `passed`, `failed` and `waiting_for`; a run classes its failure | [contracts §6](docs/design/contracts.md#6-run) |
-| finisher (contract) | The `aae finish pass\|fail` contract (§6.3); a turn that ends without it is a failure | [contracts §6.3](docs/design/contracts.md#6-run) |
+| finisher (contract) | The `loop-manager finish pass\|fail` contract (§6.3); a turn that ends without it is a failure | [contracts §6.3](docs/design/contracts.md#6-run) |
 | prompt acked | The `PromptAcked` event: the harness took the prompt | [adapters](docs/design/adapters.md) |
 | turn ended | The `TurnEnded` event: a harness turn finished | [adapters](docs/design/adapters.md) |
 | `stop_background` | The adapter operation that stops background work a session left | [adapters](docs/design/adapters.md) |
@@ -92,7 +92,7 @@ Terms are listed by the document where they are first defined; a term used acros
 | instance registry | The registry of harness instances, keyed by fingerprint; lazy by decision 9 | [contracts §8](docs/design/contracts.md#8-instance-and-service-registry) |
 | service registry | The registry of supervised services | [contracts §8](docs/design/contracts.md#8-instance-and-service-registry) |
 | fingerprint | The key of an instance: the concrete set of settings it was started with | [contracts §8](docs/design/contracts.md#8-instance-and-service-registry) |
-| `AAE_INSTANCE` | The environment variable naming the instance a process belongs to | [contracts §8](docs/design/contracts.md#8-instance-and-service-registry) |
+| `LOOP_MANAGER_INSTANCE` | The environment variable naming the instance a process belongs to | [contracts §8](docs/design/contracts.md#8-instance-and-service-registry) |
 | default policy | The orchestrator's built-in decisions for a run (retry, resume, new session), in `default-policy` | [contracts §10](docs/design/contracts.md#10-default-policy-as-decisions) |
 | attempt token | The token that identifies an attempt, so that a stale attempt's finisher is refused | [contracts §6.3](docs/design/contracts.md#6-run) |
 
@@ -101,11 +101,11 @@ Terms are listed by the document where they are first defined; a term used acros
 | Term | Definition | Defined in |
 |---|---|---|
 | `ADAPTER` const | The constant every harness adapter exports: `name`, `models`, `tested`, `agent_types`, `subagents_inherit`, `new`, `doctor` | [adapters](docs/design/adapters.md) |
-| `aae_contract::driver::child` | The shared helper of the harness child processes | [adapters](docs/design/adapters.md) |
-| `${AAE_SERVICE_PORT:<id>}` | The port reference of a service, resolved at start | [adapters](docs/design/adapters.md) |
+| `loop_manager_contract::driver::child` | The shared helper of the harness child processes | [adapters](docs/design/adapters.md) |
+| `${LOOP_MANAGER_SERVICE_PORT:<id>}` | The port reference of a service, resolved at start | [adapters](docs/design/adapters.md) |
 | contract suite | The 15 scenarios each harness adapter must pass against fake provider APIs, plus codex's 16th | [adapters](docs/design/adapters.md), [harness-updates](docs/harness-updates.md) |
-| `aae-claude` | The claude adapter: one `claude -p` per session, stream-json | [adapters](docs/design/adapters.md), [architecture](docs/architecture.md) |
-| `aae-codex` | The codex adapter: one `codex app-server` per fingerprint over stdio | [adapters](docs/design/adapters.md), [architecture](docs/architecture.md) |
+| `loop-manager-claude` | The claude adapter: one `claude -p` per session, stream-json | [adapters](docs/design/adapters.md), [architecture](docs/architecture.md) |
+| `loop-manager-codex` | The codex adapter: one `codex app-server` per fingerprint over stdio | [adapters](docs/design/adapters.md), [architecture](docs/architecture.md) |
 | ACP v2 semantics | The model the driver interface follows, without ACP as transport | [decisions](docs/agents/decisions.md) (4), [overview](docs/overview.md) |
 | `permission_mode` | A claude-native setting; lives in `native.claude` | [decisions](docs/agents/decisions.md) (90), [config](docs/design/config.md) |
 | `approval_policy` | The codex-native setting that decides approvals; `never` by default | [decisions](docs/agents/decisions.md) (38, 116, 117) |
@@ -119,9 +119,9 @@ Terms are listed by the document where they are first defined; a term used acros
 |---|---|---|
 | br (beads_rust) | The external tracker binary (0.7.6, pinned), behind the tracker adapter; one database per project | [tracker-br](docs/design/tracker-br.md) |
 | `BEADS_DIR` | The environment variable pointing br at the project's database | [tracker-br](docs/design/tracker-br.md) |
-| `BD_ACTOR` | The actor of a br operation, `aae:<run>:<n>`, marking who holds a claim | [tracker-br](docs/design/tracker-br.md) |
+| `BD_ACTOR` | The actor of a br operation, `loop-manager:<run>:<n>`, marking who holds a claim | [tracker-br](docs/design/tracker-br.md) |
 | `BD_ISSUE_PREFIX` | The bead id prefix of a project | [tracker-br](docs/design/tracker-br.md) |
-| `external_ref` | The bead field keyed `aae-` plus 16 hex digits, linking a bead to its run | [tracker-br](docs/design/tracker-br.md) |
+| `external_ref` | The bead field keyed `loop-manager-` plus 16 hex digits, linking a bead to its run | [tracker-br](docs/design/tracker-br.md) |
 | claim | The hold a run takes on its bead for the run's whole life | [tracker-br](docs/design/tracker-br.md) |
 | `next_ready` | The tracker input that gives the next ready bead; `nothing_ready` when none | [tracker-br](docs/design/tracker-br.md) |
 | `bead_failures` | The number of failures after which a bead is no longer given out (default 3) | [tracker-br](docs/design/tracker-br.md) |
@@ -147,24 +147,24 @@ Terms are listed by the document where they are first defined; a term used acros
 | `native.<harness>` | The table of a harness's native settings (permissions among them) | [config](docs/design/config.md), [decisions](docs/agents/decisions.md) (71) |
 | `inherit_host` | The option taking the host's harness configuration into a session; on by default | [config](docs/design/config.md), [decisions](docs/agents/decisions.md) (8) |
 | `${NAME}` | An environment reference in config values, resolved when the process starts; `$$` is a literal `$`, any other `$` is a load error | [config](docs/design/config.md), [decisions](docs/agents/decisions.md) (137) |
-| `AAE_INPUT_<NAME>` | The environment variable through which an exec step receives an input | [config](docs/design/config.md) |
-| `AAE_STEP_<NAME>_RESULT` | The environment variable carrying a named step's result | [config](docs/design/config.md) |
-| `AAE_REMARKS` | The environment variable carrying the remarks of a return | [config](docs/design/config.md) |
-| `AAE_RUN`, `AAE_BEAD` | The environment variables naming the run and its bead for an exec step | [decisions](docs/agents/decisions.md) (47) |
+| `LOOP_MANAGER_INPUT_<NAME>` | The environment variable through which an exec step receives an input | [config](docs/design/config.md) |
+| `LOOP_MANAGER_STEP_<NAME>_RESULT` | The environment variable carrying a named step's result | [config](docs/design/config.md) |
+| `LOOP_MANAGER_REMARKS` | The environment variable carrying the remarks of a return | [config](docs/design/config.md) |
+| `LOOP_MANAGER_RUN`, `LOOP_MANAGER_BEAD` | The environment variables naming the run and its bead for an exec step | [decisions](docs/agents/decisions.md) (47) |
 | pack (`pack.toml`) | A directory or git repository of agents and formulas, pinned by sha or tag | [config](docs/design/config.md), [decisions](docs/agents/decisions.md) (70, 85) |
 | addon (`addon.toml`) | The addon manifest: `harnesses`, `prompt`, `[params]`, `[agent]`, `[[hook]]`, `[[service]]` | [config](docs/design/config.md), [addon-development](docs/guide/addon-development.md) |
-| addon params | The addon's `[params]`: defaults that any attachment layer overrides by key; `${params.<key>}` on the agent side, `AAE_ADDON_PARAMS` for hooks | [addon-development](docs/guide/addon-development.md), [decisions](docs/agents/decisions.md) (141) |
-| `${AAE_ADDON_DIR}`, `${AAE_ADDON_DATA}` | The addon's own directory and its data directory | [addon-development](docs/guide/addon-development.md) |
+| addon params | The addon's `[params]`: defaults that any attachment layer overrides by key; `${params.<key>}` on the agent side, `LOOP_MANAGER_ADDON_PARAMS` for hooks | [addon-development](docs/guide/addon-development.md), [decisions](docs/agents/decisions.md) (141) |
+| `${LOOP_MANAGER_ADDON_DIR}`, `${LOOP_MANAGER_ADDON_DATA}` | The addon's own directory and its data directory | [addon-development](docs/guide/addon-development.md) |
 | `addons` (attachment) | The key `addons = [{ name, params, enabled }]` attaching an addon to agents, a variant or all agents | [addons](docs/guide/addons.md), [decisions](docs/agents/decisions.md) (141) |
 | `default-policy` | The built-in addon of default decisions, with its parameters | [config](docs/design/config.md) |
-| `worktree` | The addon, and the formula setting `worktree = true`, giving a run its own git worktree on branch `aae/<run>` | [config](docs/design/config.md), [decisions](docs/agents/decisions.md) (21, 48) |
-| `context-budget` | The first addon of aae: sets the compaction window, counts compactions, ends a run past `max_compactions` | [addon-development](docs/guide/addon-development.md), [experiments](docs/design/experiments.md), [decisions](docs/agents/decisions.md) (144) |
+| `worktree` | The addon, and the formula setting `worktree = true`, giving a run its own git worktree on branch `loop-manager/<run>` | [config](docs/design/config.md), [decisions](docs/agents/decisions.md) (21, 48) |
+| `context-budget` | The first addon of loop-manager: sets the compaction window, counts compactions, ends a run past `max_compactions` | [addon-development](docs/guide/addon-development.md), [experiments](docs/design/experiments.md), [decisions](docs/agents/decisions.md) (144) |
 | agent definition (`agent.toml`) | The file of an agent's launch settings, `subagents` and `description` | [first-formula](docs/guide/first-formula.md), [config](docs/design/config.md) |
 | `prompt.md`, `prompt.template.md` | An agent's role prompt, and its prompt template, both in its directory | [first-formula](docs/guide/first-formula.md), [decisions](docs/agents/decisions.md) (97) |
-| `.aae/agents/<agent>/` | The project's directory of agent files (prompt template, check conditions) in the root | [decisions](docs/agents/decisions.md) (97, 98) |
+| `.loop-manager/agents/<agent>/` | The project's directory of agent files (prompt template, check conditions) in the root | [decisions](docs/agents/decisions.md) (97, 98) |
 | `subagents` | The agent key listing the agents (by name or `*`) it may call as native subagents | [addons](docs/guide/addons.md), [decisions](docs/agents/decisions.md) (143) |
 | `description` | The agent key required for a callable agent | [addons](docs/guide/addons.md), [decisions](docs/agents/decisions.md) (143) |
-| `called_by` | The field of `aae agent list` naming the callers of an agent | [addons](docs/guide/addons.md) |
+| `called_by` | The field of `loop-manager agent list` naming the callers of an agent | [addons](docs/guide/addons.md) |
 | variant | See agent variant | [overview](docs/overview.md#glossary) |
 | `max_attempts` | The step key giving the repeat count of a step (default 1, at most 20) | [config](docs/design/config.md), [decisions](docs/agents/decisions.md) (93, 110) |
 | `step_check_script_path` | The step key naming a script that decides whether the step passed: 0 passed, 75 fatal, else not passed | [first-formula](docs/guide/first-formula.md), [decisions](docs/agents/decisions.md) (93, 111) |
@@ -187,7 +187,7 @@ Terms are listed by the document where they are first defined; a term used acros
 
 | Term | Definition | Defined in |
 |---|---|---|
-| `aae finish pass\|fail` | The finisher command giving a step's outcome | [first-formula](docs/guide/first-formula.md), [frontends](docs/api/frontends.md) |
+| `loop-manager finish pass\|fail` | The finisher command giving a step's outcome | [first-formula](docs/guide/first-formula.md), [frontends](docs/api/frontends.md) |
 | `waiting_for` | The field of a run showing what it waits for | [first-formula](docs/guide/first-formula.md) |
 | `{{ steps.<name>.result }}` | The template reference to a named step's result | [first-formula](docs/guide/first-formula.md) |
 | `worktree = true` | The formula setting giving a run a worktree | [first-formula](docs/guide/first-formula.md), [decisions](docs/agents/decisions.md) (48) |
@@ -203,7 +203,7 @@ Terms are listed by the document where they are first defined; a term used acros
 | MCP tools | The five tools: `list_formulas`, `start_run`, `run_state`, `list_runs`, `cancel_run` | [mcp](docs/api/mcp.md) |
 | protocol epochs | The MCP protocol versions `2026-07-28` and the `initialize` versions (2025-11-25, 2025-06-18, 2025-03-26) | [mcp](docs/api/mcp.md) |
 | exit codes | CLI exit codes, including 124 (timeout) and 75 (fail for good) | [frontends](docs/api/frontends.md) |
-| `AAE_CRASH_SEED` | The variable replaying the pause seed of the crash scenario | [acceptance](docs/acceptance.md) |
+| `LOOP_MANAGER_CRASH_SEED` | The variable replaying the pause seed of the crash scenario | [acceptance](docs/acceptance.md) |
 | criterion | One of the acceptance criteria 1–35 (there is no 21) | [acceptance](docs/acceptance.md) |
 | live row | An acceptance row calling a real model | [acceptance](docs/acceptance.md) |
 | model-free row | An acceptance row needing no login | [acceptance](docs/acceptance.md) |
@@ -233,7 +233,7 @@ Terms are listed by the document where they are first defined; a term used acros
 | `acceptance-ci`, `acceptance`, `acceptance-release` | The mise tasks running model-free rows, all rows, and the release build | [development](docs/guide/development.md), [acceptance](docs/acceptance.md) |
 | demos | The live examples: `demos/1-planner-executor/` to `demos/4-…`, each with its own `mise.toml` | [acceptance](docs/acceptance.md), [decisions](docs/agents/decisions.md) (39, 86) |
 | `-example` suffix | The suffix of an author's demo result beside the run's output | [decisions](docs/agents/decisions.md) (86) |
-| loop | The autonomous cycle of agent roles that develops aae itself | [loop](docs/agents/loop.md) |
+| loop | The autonomous cycle of agent roles that develops loop-manager itself | [loop](docs/agents/loop.md) |
 | loop role | `overseer`, `coder`, `reviewer`, `expert`, `helper` or `subcoder` | [loop](docs/agents/loop.md) |
 | `loopctl` | The script driving the loop's coder → reviewer cycles | [loop](docs/agents/loop.md) |
 | `.loop/JOURNAL.md` | The loop's journal, in Russian; entry kinds ВОПРОС, НАХОДКА, РЕШЕНИЕ, БЛОКЕР | [loop](docs/agents/loop.md), [rules-code](docs/agents/rules-code.md) |

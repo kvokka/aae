@@ -19,5 +19,5 @@ Work through these steps.
 4. Commit your work in the repository of the rig, on the branch that is checked out. Do not push and do not open a
    pull request: the formula does both for the whole feature.
 
-5. Finish. When it works: `aae finish pass --summary "<what you made and how to start it>"`.
-   If you cannot make it work: `aae finish fail --summary "<what does not work and why>"`.
+5. Finish. When it works: `loop-manager finish pass --summary "<what you made and how to start it>"`.
+   If you cannot make it work: `loop-manager finish fail --summary "<what does not work and why>"`.

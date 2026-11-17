@@ -1,12 +1,12 @@
 {
-  "name": "aae",
+  "name": "loop-manager",
   "version": "0.1.0",
-  "description": "Skills for working with aae from Claude Code or Codex: recover runs that failed for good, decide on runs that wait on an await step",
-  "homepage": "https://github.com/kvokka/aae",
-  "repository": "https://github.com/kvokka/aae",
+  "description": "Skills for working with loop-manager from Claude Code or Codex: recover runs that failed for good, decide on runs that wait on an await step",
+  "homepage": "https://github.com/kvokka/loop-manager",
+  "repository": "https://github.com/kvokka/loop-manager",
   "license": "MIT",
   "author": {
-    "name": "aae",
-    "url": "https://github.com/kvokka/aae"
+    "name": "loop-manager",
+    "url": "https://github.com/kvokka/loop-manager"
   }
 }

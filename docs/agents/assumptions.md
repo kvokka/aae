@@ -31,7 +31,7 @@ The behaviour itself is described in the document named under each heading; this
 ## Config — [config](../design/config.md)
 
 - The root has a section of its own (a name and a path), not a rig among the rigs. With a root path other than the
-  directory of `aae.toml`, the config files and the tracker database stay next to `aae.toml`.
+  directory of `loop-manager.toml`, the config files and the tracker database stay next to `loop-manager.toml`.
 - In a rig, `agents.<name>` is either settings or the name of a variant.
 - Merging: a scalar is the stronger layer's; a table merges by key with whole entries replaced; a named list is a
   union, an element switched off by name on a stronger layer.
@@ -42,8 +42,8 @@ The behaviour itself is described in the document named under each heading; this
 - A harness binary is resolved as: explicit path in the config → `mise which` → `PATH`.
 - An `env` reference has one strict form: `${NAME}` and `$$`; any other `$` is a load error, so a shell-style
   `$NAME` does not pass silently as text.
-- `${AAE_ADDON_DIR}` in an `env` value outside an addon's `[agent]` is a reference like any other, so it fails the
-  start as `config_error` unless the daemon has that variable.
+- `${LOOP_MANAGER_ADDON_DIR}` in an `env` value outside an addon's `[agent]` is a reference like any other, so it fails
+  the start as `config_error` unless the daemon has that variable.
 - Names the owner did not name: the root's section and its keys, the input type `task`, the `native.<harness>`
   block for the permission mode, the way a template takes an agent's file (`{{ agent.<name> }}`).
 
@@ -114,7 +114,7 @@ The behaviour itself is described in the document named under each heading; this
 ## Delivery and process — [install](../guide/install.md), [code rules](rules-code.md)
 
 - Directories follow XDG; the daemon runs in the foreground; a command generates service files; the CLI never
-  starts a daemon by itself. Packs and addons from git are downloaded by `aae` outside the core; mise does not
+  starts a daemon by itself. Packs and addons from git are downloaded by `loop-manager` outside the core; mise does not
   touch them.
 - The budget limits of the parts (adapters, tracker, frontends, addons, the rest) are estimates; the release limit
   and the hard stop the owner confirmed.

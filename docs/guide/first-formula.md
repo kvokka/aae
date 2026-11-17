@@ -25,7 +25,7 @@ You are a careful assistant working in this repository.
 
 `harness`, `model` and `effort` in `agent.toml` are only the role's defaults. What the agent runs on in
 your project is your setting, stronger than the agent's: an edit of the agent for the whole project or one rig, here the
-cheapest model while you try things out, in `~/work/hello/aae.toml`:
+cheapest model while you try things out, in `~/work/hello/loop-manager.toml`:
 
 ```toml
 [agents.helper]                       # or [rigs.<r>.agents.helper] for one rig of a project with rigs
@@ -39,16 +39,16 @@ set for the whole orchestrator, a project or a rig (`[settings]`), weaker than t
 actually get, and which layer each value comes from:
 
 ```sh
-aae config reload                                        # the daemon takes the new files; explain asks the daemon
-aae config explain --project hello --agent helper
-aae config explain --project hello --formula summarize   # with the formula's layers, in the root (`--rig` for a rig)
+loop-manager config reload                                        # the daemon takes the new files; explain asks the daemon
+loop-manager config explain --project hello --agent helper
+loop-manager config explain --project hello --formula summarize   # with the formula's layers, in the root (`--rig` for a rig)
 ```
 
 By default the harness also reads your own host settings (`~/.claude`, `~/.codex`); `inherit_host = false` turns
 that off.
 
 A codex agent runs with `sandbox_mode = "danger-full-access"` unless its `[native.codex]` table (or your
-`~/.codex/config.toml`) sets `sandbox_mode`: its commands can touch anything your user can. `aae doctor` names
+`~/.codex/config.toml`) sets `sandbox_mode`: its commands can touch anything your user can. `loop-manager doctor` names
 each such agent in a warning; set `sandbox_mode = "workspace-write"` where the host allows user namespaces.
 
 ## 2. The formula
@@ -72,8 +72,8 @@ timeout = "10m"
 
 ```markdown
 Read {{ inputs.file }} in {{ rig.path }} and write a one-paragraph summary of it to SUMMARY.md.
-When you are done, run `aae finish pass --summary "<what you did, in one line>"`.
-If you cannot do it, run `aae finish fail --summary "<why>"`.
+When you are done, run `loop-manager finish pass --summary "<what you did, in one line>"`.
+If you cannot do it, run `loop-manager finish fail --summary "<why>"`.
 ```
 
 An agent has one template, and it is checked when the config loads against every formula whose `ai` steps name
@@ -82,18 +82,18 @@ an earlier step, and `rig.*`, `project.*` and `run.*` must be fields that exist 
 [the config reference](../design/config.md)). Formulas that need different prompts name different agents.
 
 A project changes the prompt of a pack's agent without touching the pack: its own
-`.aae/agents/<agent>/prompt.template.md`, next to `aae.toml`, replaces the pack's. A template also takes in other
-files of its agent by name: `{{ agent.style }}` is the text of `style.md`, the project's
-`.aae/agents/<agent>/style.md` over the pack's `agents/<agent>/style.md`. That is how a project gives a general agent
-its own text, say the conditions a checker tries; a file found in neither place is a config error naming the path.
+`.loop-manager/agents/<agent>/prompt.template.md`, next to `loop-manager.toml`, replaces the pack's. A template also
+takes in other files of its agent by name: `{{ agent.style }}` is the text of `style.md`, the project's
+`.loop-manager/agents/<agent>/style.md` over the pack's `agents/<agent>/style.md`. That is how a project gives a general
+agent its own text, say the conditions a checker tries; a file found in neither place is a config error naming the path.
 
 ## 3. How a run ends: the finisher
 
-An `ai` step does not pass because the agent stopped talking. It passes when the agent calls `aae finish pass`
+An `ai` step does not pass because the agent stopped talking. It passes when the agent calls `loop-manager finish pass`
 from its session (the session's environment carries the run and an attempt token, so the call needs no arguments
 besides the result and the summary). A turn that ends without a finish gets a reminder; one that still ends without
-one fails the run. Tell the agent about `aae finish` in the prompt, as above, and make sure `aae` is on the `PATH`
-the harness sees.
+one fails the run. Tell the agent about `loop-manager finish` in the prompt, as above, and make sure `loop-manager` is
+on the `PATH` the harness sees.
 
 The agent must be allowed to run that command. By default it is: claude runs in `bypassPermissions` and codex with
 `approval_policy = "never"`. Nothing waits for a human: what the config does not allow is denied at once, and the agent
@@ -102,7 +102,7 @@ sees the denial. A stricter claude mode must allow the call explicitly:
 ```toml
 [native.claude]
 permission_mode = "acceptEdits"
-permissions = { allow = ["Bash(aae finish *)"] }
+permissions = { allow = ["Bash(loop-manager finish *)"] }
 ```
 
 Under a codex `approval_policy` other than `never`, a command that needs approval is declined. More in
@@ -111,23 +111,23 @@ Under a codex `approval_policy` other than `never`, a command that needs approva
 ## 4. Run it
 
 ```sh
-aae config reload
-aae run start hello summarize --input file=README.md
-aae run watch run_2                   # its events and the session's messages live; ends with the run
-aae run show run_2
+loop-manager config reload
+loop-manager run start hello summarize --input file=README.md
+loop-manager run watch run_2                   # its events and the session's messages live; ends with the run
+loop-manager run show run_2
 ```
 
 An `--input name=value` value is text, read by the type the formula gives the input: `version=1.10` stays the string
 `1.10` for a `string` input, and becomes a number or a boolean only for an `integer` or `boolean` one.
 
-The run goes `queued` → `preparing` → `running` → `finishing` → `passed`. While it runs, `aae instance list` shows the
-harness process serving it. `aae run cancel <run>` stops it.
+The run goes `queued` → `preparing` → `running` → `finishing` → `passed`. While it runs, `loop-manager instance list`
+shows the harness process serving it. `loop-manager run cancel <run>` stops it.
 
-A run that stays `queued` waits for something: `aae run show` names it in `waiting_for`. One wait surprises at first:
-a step that fails with a fault of the rig rather than of the work — a `command` that does not exist (a typo), a
-working directory that cannot be used, `workspace_failure` in `aae events` — closes the rig's gate
+A run that stays `queued` waits for something: `loop-manager run show` names it in `waiting_for`. One wait surprises at
+first: a step that fails with a fault of the rig rather than of the work — a `command` that does not exist (a typo), a
+working directory that cannot be used, `workspace_failure` in `loop-manager events` — closes the rig's gate
 (`rig:<project>/<rig>`), and every later run of the rig waits until you fix the cause and run
-`aae gate open rig:hello/root`. `aae gate list` shows the closed gates and why.
+`loop-manager gate open rig:hello/root`. `loop-manager gate list` shows the closed gates and why.
 
 ## Several steps
 
@@ -155,23 +155,23 @@ agent = "helper"                      # the template it shares with `summarize` 
 [[step]]
 name = "check"
 kind = "exec"
-command = ["test", "-s", "SUMMARY.md"]  # gets AAE_STEP_COUNT_* and AAE_STEP_WRITE_* in its environment
+command = ["test", "-s", "SUMMARY.md"]  # gets LOOP_MANAGER_STEP_COUNT_* and LOOP_MANAGER_STEP_WRITE_* in its environment
 ```
 
 A prompt template reads an earlier step as `{{ steps.<name>.result }}` (`pass` or `fail`), `.summary` and
 `.data.<key>`; an exec step's `data` is `{exit_code, stdout, stderr}`. An exec step gets the same as
-`AAE_STEP_<NAME>_RESULT`, `AAE_STEP_<NAME>_SUMMARY` and `AAE_STEP_<NAME>_DATA` (JSON). Each ai step has a session
-of its own. `aae run show` names the step the run is at, and `run.step_finished` marks each ended step but the
-last.
+`LOOP_MANAGER_STEP_<NAME>_RESULT`, `LOOP_MANAGER_STEP_<NAME>_SUMMARY` and `LOOP_MANAGER_STEP_<NAME>_DATA` (JSON). Each
+ai step has a session of its own. `loop-manager run show` names the step the run is at, and `run.step_finished` marks
+each ended step but the last.
 
 A check can send the work back instead of failing the run: with `back_to = "write"` on the step `check`, a failed
 check starts `write` again, and its prompt can show why with `{{ remarks }}` (empty the first time). `rounds = 2`
-among the formula's own keys, next to its `name` above the steps, caps the rounds; without it the formula takes the `rounds` of `aae.toml`, else of the orchestrator config, else 3, and a check still failing in the last one fails the run with its
+among the formula's own keys, next to its `name` above the steps, caps the rounds; without it the formula takes the `rounds` of `loop-manager.toml`, else of the orchestrator config, else 3, and a check still failing in the last one fails the run with its
 remarks as the reason. `config explain` goes step by step:
 
 ```sh
-aae config reload
-aae config explain --project hello --formula summarize-checked
+loop-manager config reload
+loop-manager config explain --project hello --formula summarize-checked
 # rounds = 2  # formula summarize-checked
 # step `count` of `summarize-checked`: exec `wc -l README.md`
 # step `write` of `summarize-checked` on `root`: agent hello.helper
@@ -182,9 +182,9 @@ aae config explain --project hello --formula summarize-checked
 ## A worktree per run
 
 With `worktree = true` next to `name` in the formula, each run works in its own git worktree of the rig, on the
-branch `aae/<run>`, so runs of one rig do not step on each other. aae makes it before the run starts and removes it
-when the run ends, unless it holds uncommitted changes or commits no ref reaches; the branch goes only once merged.
-The rig must be a git repository. Without the key a run works in the rig itself.
+branch `loop-manager/<run>`, so runs of one rig do not step on each other. loop-manager makes it before the run starts
+and removes it when the run ends, unless it holds uncommitted changes or commits no ref reaches; the branch goes only
+once merged. The rig must be a git repository. Without the key a run works in the rig itself.
 
 ## Runs over a tracker
 
@@ -221,7 +221,7 @@ on_item_failure = "continue"          # a failed bead stops nothing; soft_stop /
 [[step]]
 name = "verify"
 kind = "exec"
-command = ["make", "check"]           # sees AAE_STEP_WORK_DATA: {closed, failed, refused}
+command = ["make", "check"]           # sees LOOP_MANAGER_STEP_WORK_DATA: {closed, failed, refused}
 back_to = "plan"                      # a failure sends the run back to `plan`, whose prompt shows {{ remarks }}
 ```
 
