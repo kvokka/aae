@@ -28,7 +28,8 @@ fn every_demo_has_a_live_run() {
         let number = name.split('-').next().unwrap();
         let title = format!("demo {number}:");
         assert!(
-            ALL.iter().any(|s| matches!(s.launch, Launch::Request) && s.title.starts_with(&title)),
+            ALL.iter()
+                .any(|s| matches!(s.launch, Launch::Request) && s.title.starts_with(&title)),
             "{name} has no live run"
         );
     }
