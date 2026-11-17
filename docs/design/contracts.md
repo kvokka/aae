@@ -486,7 +486,10 @@ claude (`crates/aae-claude`):
   `init` before the prompt deadlocks. The number of turn results is not the number of prompts: a background task
   wakes the session into a turn of its own.
 - Subagents of claude run in the background by default, so a turn's `result` does not end its work: the end is
-  "idle without background" (4.3).
+  "idle without background" (4.3). While a `local_agent` task lives, the state stays `running` after the `result`
+  and the subagent's steps come out of the turn only as its commands end
+  ([experiments](experiments.md#a-background-subagent-after-the-result)); so the adapter reports `State{Idle,
+  background: true}` right after such a `result` (the background budget, 6.1) and no activity outside a turn.
 - When the daemon dies, the turn goes on unobserved; its outcome is learned from the transcript and the state of the
   repository (4.2 `Transcript`, 6.4). A `--resume` reaches `init` in 0.30 s, so a resumed attempt costs little; a
   planned restart drains first ([invariants](invariants.md#recovery)).

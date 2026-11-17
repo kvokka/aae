@@ -27,6 +27,8 @@ pub(crate) struct Stream {
     credits: bool,
     auth_reported: bool,
     background: bool,
+    /// The last `background_tasks_changed` lists a subagent (`local_agent`).
+    agent: bool,
     /// `task_id` of every shell command of the last `background_tasks_changed`: what `stop_task` may stop.
     commands: Vec<String>,
     notified_since_result: bool,
@@ -48,6 +50,7 @@ impl Stream {
             credits: false,
             auth_reported: false,
             background: false,
+            agent: false,
             commands: Vec::new(),
             notified_since_result: false,
             activity: None,
@@ -107,6 +110,7 @@ impl Stream {
             (Some("system"), Some("background_tasks_changed")) => {
                 let tasks = msg["tasks"].as_array().map_or(&[][..], Vec::as_slice);
                 self.background = !tasks.is_empty();
+                self.agent = tasks.iter().any(|t| t["task_type"] == "local_agent");
                 let commands = tasks.iter().filter(|t| t["task_type"] == "local_bash");
                 self.commands = commands
                     .filter_map(|t| t["task_id"].as_str().map(str::to_owned))
@@ -176,6 +180,14 @@ impl Stream {
             }
         };
         out.push(Normalized::TurnEnded { stop_reason });
+        // The state stays `running` after the result while a background subagent lives (docs/design/experiments.md,
+        // "A background subagent after the result"): the session is idle with background from here.
+        if self.agent {
+            out.push(Normalized::State {
+                state: SessionState::Idle,
+                background: true,
+            });
+        }
         self.open = false;
         self.error = None;
         self.status = None;
@@ -244,11 +256,13 @@ impl Stream {
         }]
     }
 
-    /// At most one activity a second, but a change of `tool_running` always goes through.
+    /// At most one activity a second, but a change of `tool_running` always goes through. Out of a turn it is a
+    /// background subagent's step, which is no news: its silence is the background budget's.
     fn activity(&mut self, now: Instant, tool_running: bool) -> Vec<Normalized> {
-        let quiet = self
-            .activity
-            .is_some_and(|(at, was)| was == tool_running && now.duration_since(at) < Duration::from_secs(1));
+        let quiet = !self.open
+            || self
+                .activity
+                .is_some_and(|(at, was)| was == tool_running && now.duration_since(at) < Duration::from_secs(1));
         if quiet {
             return vec![];
         }

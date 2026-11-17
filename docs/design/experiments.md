@@ -146,6 +146,28 @@ is `idle`, (b) the last `background_tasks_changed` had an empty list (or none ar
 
 <!-- MEASURE id=claude-idle-two-signals date=2026-11-12 ver=claude-2.1.322 env=linux-arm64-orbstack src=experiments/02-claude-process/logs/background.ndjson note="n=1; state idle with a live background shell, 0.1 s idle+empty window before a self-started turn" -->
 
+### A background subagent after the result
+
+claude 2.1.326 against a fake Messages API (no model): the main session calls `Agent` with `run_in_background: true`,
+the subagent runs a foreground `Bash` of 20 s (75 s in a third run), then answers. Timeline of one run (s from spawn):
+
+| t | event |
+|---|---|
+| 0.28 | `background_tasks_changed{[local_agent]}`, `task_started{local_agent, is_backgrounded}` |
+| 0.31 | the subagent's `assistant` (`parent_tool_use_id` of the `Agent` call) with its `tool_use` |
+| 0.34 | `result` of the prompt; no `session_state_changed`, the state stays `running` |
+| 3.34 | `task_started{local_bash, owned_by_subagent}` (never in `background_tasks_changed`) |
+| 3.34–20.36 | nothing at all: no `tool_progress`, no `stream_event` |
+| 20.36–20.42 | the command's `task_notification`, the subagent's `user` and `assistant`, the agent's `task_notification`, `background_tasks_changed{[]}` |
+| 20.43–20.44 | self-started turn (`init` … `result{origin.kind: "task-notification"}`), then `session_state_changed{idle}` |
+
+Findings: after the `result` the session is silent for as long as the subagent's command runs, and the state does not
+leave `running` until the self-started turn ends. So the turn-end rule alone keeps the run under the plain `silence`
+budget; the adapter reports idle with background right after a `result` with a live `local_agent`, and the
+subagent's steps out of a turn are no activity.
+
+<!-- MEASURE id=claude-background-subagent date=2026-11-17 ver=claude-2.1.326 env=linux-arm64-orbstack src=.loop/cycles/112/notes/wp99-stand.md note="fake provider, no model; n=2 with a 20 s command, n=1 with 75 s" -->
+
 ## br as an event source (experiment 3)
 
 Code: `experiments/05-br-events` (one scenario, fresh workspace with an isolated `HOME`, the `notify` crate on the

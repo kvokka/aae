@@ -163,9 +163,39 @@ fn a_stopped_task_is_no_wake_up_and_only_commands_are_stopped() {
     assert!(s.commands().is_empty());
 }
 
+/// As claude 2.1.326 runs a background subagent on a fake provider: the state stays `running` after the result, and
+/// the subagent's steps come out of the turn, as far apart as its commands run.
+#[test]
+fn a_background_subagent_keeps_the_session_idle_with_background_until_its_wake_up_ends() {
+    let mut s = stream();
+    let agent = json!({ "type": "system", "subtype": "background_tasks_changed", "tasks": [
+        { "task_id": "a1", "task_type": "local_agent", "is_backgrounded": true }] });
+    let none = json!({ "type": "system", "subtype": "background_tasks_changed", "tasks": [] });
+    let step = json!({ "type": "user", "parent_tool_use_id": "toolu_1", "agent_id": "a1" });
+    let notified = json!({ "type": "system", "subtype": "task_notification", "status": "completed" });
+    let idle = |background| Normalized::State {
+        state: SessionState::Idle,
+        background,
+    };
+    let events = feed(&mut s, &[agent, result(false, json!({}))]);
+    assert_eq!(events.last(), Some(&idle(true)), "{events:?}");
+    let quiet = feed(&mut s, &[step, notified, none]);
+    assert!(quiet.is_empty(), "{quiet:?}");
+    let wake = json!({ "type": "system", "subtype": "init" });
+    let woken = feed(&mut s, &[wake, result(false, json!({})), state("idle")]);
+    assert_eq!(woken.last(), Some(&idle(false)), "{woken:?}");
+    assert!(
+        !woken[..woken.len() - 1]
+            .iter()
+            .any(|e| matches!(e, Normalized::State { .. })),
+        "{woken:?}"
+    );
+}
+
 #[test]
 fn activity_is_coalesced_to_one_a_second() {
     let mut s = stream();
+    s.line(&json!({ "type": "system", "subtype": "init" }), Instant::now());
     let start = Instant::now();
     let tool = json!({ "type": "assistant", "message": { "content": [{ "type": "tool_use" }] } });
     let progress = json!({ "type": "tool_progress" });
