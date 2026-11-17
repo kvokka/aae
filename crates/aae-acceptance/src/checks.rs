@@ -316,16 +316,8 @@ async fn release(env: Arc<Env>, targets: &[&str]) -> String {
         built.push(&host);
     }
     for target in &built {
-        let args = [
-            "zigbuild",
-            "-q",
-            "--release",
-            "--locked",
-            "-p",
-            "aae",
-            "--target",
-            target,
-        ];
+        let mut args: Vec<&str> = "zigbuild -q --release --locked -p aae --target".split(' ').collect();
+        args.push(target);
         command(&env, "cargo", &args).await;
     }
     let binary = env.target.join(&host).join("release/aae");
@@ -351,14 +343,12 @@ async fn tests(env: Arc<Env>, filter: &str, want: u32) -> String {
 
 async fn demos_load(env: Arc<Env>) -> String {
     let aae = env.aae.to_string_lossy().into_owned();
-    for demo in [
-        "1-planner-executor",
-        "2-multirepo-qa",
-        "3-review-gate",
-        "4-context-budget",
-    ] {
-        let config = format!("demos/{demo}/root/config.toml");
-        command(&env, &aae, &["config", "check", "--config", &config]).await;
+    let demos = std::fs::read_dir(root().join("demos")).unwrap();
+    for config in demos
+        .map(|d| d.unwrap().path().join("root/config.toml"))
+        .filter(|c| c.exists())
+    {
+        command(&env, &aae, &["config", "check", "--config", &config.to_string_lossy()]).await;
     }
     "`aae config check` of demos/<demo>/root/config.toml is clean for each demo".into()
 }
