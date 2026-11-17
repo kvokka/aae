@@ -36,10 +36,13 @@ impl Stream {
                 failure.retry_at_ms = self.rejected;
             }
             FailureKind::Unknown => {
+                let status = msg["api_error_status"].as_u64().or(self.status).map(|s| s.to_string());
                 let values = [
                     ("startup_failure_reason", startup),
                     ("terminal_reason", msg["terminal_reason"].as_str()),
                     ("error", self.error.as_deref()),
+                    ("subtype", msg["subtype"].as_str()),
+                    ("api_error_status", status.as_deref()),
                 ];
                 let value = values.iter().find_map(|(k, v)| v.map(|v| format!("{k}={v}")));
                 failure.text = Some(Some(text(msg)).filter(|t| !t.is_empty()).or(value).unwrap_or_default());

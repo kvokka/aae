@@ -193,6 +193,10 @@ fn an_unknown_failure_keeps_the_words_of_claude_or_the_value() {
         text(&[ended("error_during_execution", "a_reason_of_tomorrow")]).as_deref(),
         Some("terminal_reason=a_reason_of_tomorrow")
     );
+    let future = json!({ "type": "result", "subtype": "error_of_tomorrow", "is_error": true, "errors": [] });
+    assert_eq!(text(&[future]).as_deref(), Some("subtype=error_of_tomorrow"));
+    let status = json!({ "type": "result", "is_error": true, "api_error_status": 418 });
+    assert_eq!(text(&[status]).as_deref(), Some("api_error_status=418"));
     let quiet = json!({ "type": "result", "subtype": "error_during_execution", "is_error": true,
         "startup_failure_reason": "a_reason_of_tomorrow" });
     assert_eq!(
@@ -226,4 +230,34 @@ fn a_rejected_limit_is_a_quota_with_its_reset_and_a_401_fails_at_once() {
     let failures = events.iter().filter(|e| matches!(e, Normalized::Failure(_))).count();
     assert_eq!(failures, 1, "{events:?}");
     assert_eq!(failure(&events).kind, FailureKind::AuthRequired);
+}
+
+/// claude retries a logged-out account for about a minute; the first `api_retry` that says so fails the turn.
+#[test]
+fn a_logged_out_retry_fails_at_once_and_an_overload_does_not() {
+    let retry = |status: Value, error: &str| {
+        json!({ "type": "system", "subtype": "api_retry", "attempt": 1, "retry_delay_ms": 567,
+            "error_status": status, "error": error })
+    };
+    let auth = [
+        retry(json!(403), "unknown"),
+        retry(Value::Null, "oauth_org_not_allowed"),
+        retry(Value::Null, "cloud_credential_error"),
+    ];
+    for line in auth {
+        let events = feed(&mut stream(), &[line.clone(), line.clone()]);
+        let failures: Vec<_> = events
+            .iter()
+            .filter_map(|e| match e {
+                Normalized::Failure(f) => Some(f.kind),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(failures, [FailureKind::AuthRequired], "{line}");
+    }
+    let events = feed(&mut stream(), &[retry(json!(529), "overloaded")]);
+    assert!(
+        !events.iter().any(|e| matches!(e, Normalized::Failure(_))),
+        "{events:?}"
+    );
 }
