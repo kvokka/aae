@@ -719,7 +719,7 @@ WP-110); WP-110 → WP-115; остальные — в любом порядке,
 - Готово, когда: `harness-plugin` нигде не упомянут; оба харнесса ставят `operator-plugin` (проверки WP-111 без
   модели); тест `git` + `dir`; `mise run ci` зелёный.
 
-### WP-120 · Плагин `context-budget` · размер M · статус: todo
+### WP-120 · Плагин `context-budget` · размер M · статус: done
 - Документы: решения 144, 123, 141; WP-116 (experiments.md, «Consequences»); contracts 3.2 (решения на
   `run.turn_ended_without_outcome`); `docs/design/tracker-br.md` (метки).
 - Зависит от: WP-116, WP-117, WP-118, WP-119
