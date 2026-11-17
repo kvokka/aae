@@ -9,28 +9,6 @@ use std::{
 };
 use uuid::Uuid;
 
-/// The harness wording of a failed turn → its kind; the first rule with a matching needle wins. Needles are
-/// looked for in `<error> <api_error_status> <subtype> <terminal_reason> <result text>` of the turn.
-const KINDS: &[(&[&str], FailureKind)] = &[
-    (&["You've hit your"], FailureKind::QuotaExhausted),
-    (
-        &["billing_error", "account_on_hold", "credit balance", "credits_required"],
-        FailureKind::Billing,
-    ),
-    (&["rate_limit", " 429 "], FailureKind::RateLimited),
-    (
-        &["overloaded", "server_error", " 529 ", " 500 "],
-        FailureKind::Overloaded,
-    ),
-    (
-        &["authentication_failed", " 401 ", "Not logged in"],
-        FailureKind::AuthRequired,
-    ),
-    (&["prompt_too_long", "prompt is too long"], FailureKind::ContextOverflow),
-    (&["model_not_found", " 404 "], FailureKind::ConfigError),
-    (&["error_max_budget_usd", "error_max_turns"], FailureKind::RunawayTurn),
-];
-
 /// How much of a harness line a failure keeps.
 const RAW_MAX: usize = 4096;
 
@@ -41,9 +19,12 @@ pub(crate) struct Stream {
     /// A prompt was taken or a turn began, and no result closed it yet.
     open: bool,
     /// The `error` and `api_error_status` the assistant reported in this turn.
-    error: String,
+    error: Option<String>,
+    status: Option<u64>,
     /// `resetsAt` of a rejected rate limit in this turn, in ms.
     rejected: Option<i64>,
+    /// A rate limit of this turn said `credits_required`.
+    credits: bool,
     auth_reported: bool,
     background: bool,
     /// `task_id` of every shell command of the last `background_tasks_changed`: what `stop_task` may stop.
@@ -61,8 +42,10 @@ impl Stream {
             model,
             interrupted: false,
             open: false,
-            error: String::new(),
+            error: None,
+            status: None,
             rejected: None,
+            credits: false,
             auth_reported: false,
             background: false,
             commands: Vec::new(),
@@ -142,7 +125,8 @@ impl Stream {
             (Some("result"), _) => self.result(msg),
             (Some("assistant"), _) => {
                 if let Some(error) = msg["error"].as_str() {
-                    self.error = format!("{error} {} ", msg["api_error_status"]);
+                    self.error = Some(error.to_owned());
+                    self.status = msg["api_error_status"].as_u64();
                 }
                 let content = msg["message"]["content"].as_array().into_iter().flatten();
                 let tool = content.clone().any(|c| c["type"] == "tool_use");
@@ -192,8 +176,10 @@ impl Stream {
         };
         out.push(Normalized::TurnEnded { stop_reason });
         self.open = false;
-        self.error.clear();
+        self.error = None;
+        self.status = None;
         self.rejected = None;
+        self.credits = false;
         self.auth_reported = false;
         self.notified_since_result = false;
         self.denied.clear();
@@ -217,31 +203,6 @@ impl Stream {
         })
     }
 
-    fn classify(&self, msg: &Value) -> Failure {
-        let words = format!(
-            "{} {} {} {} {}",
-            self.error, msg["api_error_status"], msg["subtype"], msg["terminal_reason"], msg["result"]
-        );
-        let raw = msg.to_string();
-        if let Some(at) = self.rejected {
-            let mut failure = self.failure(FailureKind::QuotaExhausted, raw);
-            failure.retry_at_ms = Some(at);
-            return failure;
-        }
-        let found = KINDS
-            .iter()
-            .find(|(needles, _)| needles.iter().any(|n| words.contains(n)));
-        let Some((_, kind)) = found else {
-            let mut failure = self.failure(FailureKind::Unknown, raw);
-            failure.text = Some(msg["result"].as_str().unwrap_or_default().to_owned());
-            return failure;
-        };
-        let mut failure = self.failure(*kind, raw);
-        // claude retries 429 and 5xx itself before it gives up (so `retried_by_harness`).
-        failure.retried_by_harness = matches!(kind, FailureKind::RateLimited | FailureKind::Overloaded);
-        failure
-    }
-
     fn retry(&mut self, msg: &Value) -> Vec<Normalized> {
         let mut out = vec![Normalized::Retrying {
             attempt: msg["attempt"]
@@ -252,7 +213,8 @@ impl Stream {
             text: msg["error"].as_str().unwrap_or_default().to_owned(),
         }];
         // claude retries a 401 for about a minute; the account is known to be logged out at the first one.
-        let auth = msg["error_status"] == 401 || msg["error"] == "authentication_failed";
+        let auth = matches!(msg["error_status"].as_u64(), Some(401 | 403))
+            || matches!(msg["error"].as_str(), Some(e) if classify::AUTH.contains(&e));
         if auth && !std::mem::replace(&mut self.auth_reported, true) {
             let mut failure = self.failure(FailureKind::AuthRequired, msg.to_string());
             failure.retried_by_harness = true;
@@ -266,9 +228,7 @@ impl Stream {
         if info["status"] == "rejected" {
             self.rejected = resets_at_ms;
         }
-        if info["errorCode"] == "credits_required" {
-            self.error = "credits_required ".to_owned();
-        }
+        self.credits |= info["errorCode"] == "credits_required";
         let window = info["rateLimitType"].as_str().unwrap_or_default();
         let utilization = info["unifiedWindows"][window]["utilization"]
             .as_f64()
@@ -311,5 +271,6 @@ impl Stream {
     }
 }
 
+mod classify;
 #[cfg(test)]
 mod tests;

@@ -247,6 +247,8 @@ pub(crate) fn env(p: &Value, id: &str, socket: Option<&Path>, host: &Path) -> Ve
     let text = |v: &Value| v.as_str().map(str::to_owned).unwrap_or_else(|| v.to_string());
     env.extend([
         ("CLAUDE_CODE_EMIT_SESSION_STATE_EVENTS".to_owned(), "1".to_owned()),
+        // A claude that cannot start says why in a `result`, not only on stderr.
+        ("CLAUDE_CODE_STARTUP_FAILURE_RESULTS".to_owned(), "1".to_owned()),
         ("AAE_RUN".to_owned(), text(&p["run"])),
         ("AAE_ATTEMPT_TOKEN".to_owned(), text(&p["token"])),
     ]);
