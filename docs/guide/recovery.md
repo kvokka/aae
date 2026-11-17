@@ -19,7 +19,7 @@ codex plugin marketplace add kvokka/aae && codex plugin add aae@aae
 ## See what failed
 
 ```sh
-aae run list --state failed               # newest first; --project, --limit, --parent <run> narrow it
+aae run list --state failed               # newest first; --project, --limit, --parent <run>, --awaiting narrow it
 aae run show <run>                        # or with --json
 ```
 

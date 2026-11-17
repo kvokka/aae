@@ -5,6 +5,7 @@
 mod common;
 
 mod api;
+mod await_step;
 mod bridge;
 mod claude;
 mod cli;

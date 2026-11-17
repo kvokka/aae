@@ -80,7 +80,7 @@ In another:
 aae project list                      # the project with its root and no rigs
 aae formula list                      # the formula with its inputs
 aae run start hello check             # project, formula (no rig: the root); prints the run id, e.g. run_1
-aae run list                          # run_1  passed  hello/root  hello.check  ...
+aae run list                          # run_1  passed  1  hello/root  hello.check  ...
 aae run show run_1                    # the whole run: state, attempts, outcome
 ```
 

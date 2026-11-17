@@ -111,6 +111,8 @@ async fn the_errors_answered_are_declared_with_their_codes() {
     let no_rig = json!({ "project": "shop", "rig": "nope", "formula": "check" });
     let trigger = json!({ "project": "shop", "rig": "web", "trigger": "nope" });
     let cancel_checked = format!("/v1/runs/{checked}/cancel");
+    let resolve_checked = format!("/v1/runs/{checked}/resolve");
+    let outcome = || Some(json!({ "step": "gate", "outcome": { "result": "pass", "summary": "" } }));
     d.until_state(&checked, "passed").await;
     // A request naming a thing there is none of is 404; one the thing that is refuses is 409.
     let cases = [
@@ -129,6 +131,22 @@ async fn the_errors_answered_are_declared_with_their_codes() {
             "/v1/runs/{id}/cancel",
             cancel_checked.as_str(),
             Some(json!({})),
+            None,
+            409,
+        ),
+        (
+            "POST",
+            "/v1/runs/{id}/resolve",
+            "/v1/runs/run_999/resolve",
+            outcome(),
+            None,
+            404,
+        ),
+        (
+            "POST",
+            "/v1/runs/{id}/resolve",
+            resolve_checked.as_str(),
+            outcome(),
             None,
             409,
         ),
