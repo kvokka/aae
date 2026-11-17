@@ -126,7 +126,7 @@ each heading; this file only marks it as decided.
 | 92 | The user gives a formula a task, not a bead: nobody files one in advance. A task that names an existing bead takes it up; otherwise `aae` files the root bead |
 | 96 | A rig's bead carries the rig's prefix: the acronym of its name (`backend` → `b`, `my-project` → `mp`) or the rig's `prefix` key; the root's beads carry no rig prefix |
 
-## Plugins — [plugin guide](../guide/plugin.md), [contracts 3](../design/contracts.md#3-orchestrator-hooks-decisions-and-timeouts)
+## Plugins — [plugin guide](../guide/plugins.md), [writing a plugin](../guide/plugin-development.md), [contracts 3](../design/contracts.md#3-orchestrator-hooks-decisions-and-timeouts)
 
 | № | Decision |
 |---|---|
