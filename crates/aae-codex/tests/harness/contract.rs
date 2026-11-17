@@ -278,5 +278,8 @@ async fn s16_an_mcp_server_of_aae_that_does_not_start_fails_the_session_start() 
     let failure = failed.err().expect("the session does not start");
     assert_eq!(failure.kind, FailureKind::ToolFailure, "{}", failure.raw);
     assert!(failure.raw.contains("tools"), "{}", failure.raw);
+    // `thread/start` refuses it, not a held `startupStatus` that a server without `required` would give.
+    let refused = "required MCP servers failed to initialize";
+    assert!(failure.raw.contains(refused), "{}", failure.raw);
     assert!(provider.requests().is_empty(), "no prompt reached the provider");
 }
