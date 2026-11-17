@@ -17,8 +17,6 @@ const PROJECT: &str = "review-gate";
 const REPOS: [&str; 3] = ["gate-demo", "gate-demo-backend", "gate-demo-frontend"];
 /// The author the demo's `feedback_from` names.
 const ALLOWED: &str = "kvokka-agent";
-/// Long enough for the daemon to act on an event, for the check that it did not.
-const SETTLE: Duration = Duration::from_secs(3);
 
 /// The daemon on a copy of the demo, with the bridge running; `tools` holds the agents' scripts.
 struct Gate {
@@ -333,6 +331,6 @@ async fn a_close_without_a_merge_cancels_the_feature_and_cleans_it_up() {
     fs::write(g.tools.path().join("refuse"), "").unwrap();
     let failed = g.feature(json!({ "task": "Greet the visitor in Latin" })).await;
     g.d.until_state(&failed, "failed").await;
-    tokio::time::sleep(SETTLE).await;
+    // A trigger's run commits with the event it matched (contracts 3.5): none came with `run.failed`.
     assert_eq!(g.runs_of("dev.cleanup").await.len(), 1);
 }
