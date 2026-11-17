@@ -104,3 +104,30 @@ async fn an_outcome_from_the_cli_moves_a_waiting_run_on() {
         (Some(1), json!("not_found"))
     );
 }
+
+#[tokio::test]
+async fn a_fail_from_the_cli_with_data_from_a_file_fails_the_run() {
+    let d = Daemon::start(|dir| {
+        let formula = "name = \"gate\"\n[[step]]\nname = \"gate\"\nkind = \"await\"\n";
+        fs::write(dir.join("config/aae/shop/formulas/gate.toml"), formula).unwrap();
+    })
+    .await;
+    let run = ok(&d, &["run", "start", "shop", "web", "gate"])["run"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+    d.until_state(&run, "running").await;
+    let data = d.dir.path().join("verdict.json");
+    fs::write(&data, r#"{"reason":"no"}"#).unwrap();
+    let file = format!("@{}", data.display());
+    let resolve = ["run", "resolve", &run, "gate", "fail", "--summary", "rejected"];
+    assert_eq!(ok(&d, &[&resolve[..], &["--data", &file]].concat()), Value::Null);
+    d.until_state(&run, "failed").await;
+    let view = ok(&d, &["run", "show", &run]);
+    assert_eq!(view["class"], "agent", "{view}");
+    assert_eq!(
+        view["outcome"],
+        json!({ "result": "fail", "summary": "rejected", "data": { "reason": "no" } }),
+        "{view}"
+    );
+}
