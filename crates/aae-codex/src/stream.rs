@@ -357,3 +357,6 @@ fn activity(thread: &mut Thread, now: Instant, tool_running: bool) -> Vec<Normal
     thread.activity = Some((now, tool_running));
     vec![Normalized::Activity { tool_running }]
 }
+
+#[cfg(test)]
+mod tests;
