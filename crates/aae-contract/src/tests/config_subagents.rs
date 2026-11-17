@@ -170,6 +170,30 @@ fn a_rig_puts_its_variant_in_place_of_a_named_agent() {
     let on = |rig| list(&config, rig).unwrap().0;
     assert_eq!(on(Some("backend")), strings(&["kit.implementer", "qa-low", "qa-opus"]));
     assert_eq!(on(None), strings(&["kit.implementer", "kit.qa", "qa-low"]));
+    // An agent a pattern matches is mapped as well.
+    let me_qa = me("subagents = [\"kit.qa*\"]");
+    let changes = [(ME, me_qa.as_str()), (QA, FIT), ("shop/aae.toml", &shop)];
+    let changes: Vec<(&str, &str)> = changes.into_iter().chain(OTHER).collect();
+    let config = load_with(&changes).unwrap();
+    let on = |rig| list(&config, rig).unwrap().0;
+    assert_eq!(on(Some("backend")), strings(&["kit.implementer", "qa-opus"]));
+    assert_eq!(on(None), strings(&["kit.implementer", "kit.qa"]));
+}
+
+#[test]
+fn a_pattern_skips_an_orchestrator_variant_of_another_project() {
+    let config = base("config.toml").replace("[\"shop\"]", "[\"shop\", \"farm\"]")
+        + "[agents.tester-fast]\nbase = \"lab.tester\"\neffort = \"low\"\n";
+    let me_all = me("subagents = [\"*\"]");
+    let changes = [
+        ("config.toml", config.as_str()),
+        (ME, &me_all),
+        ("farm/aae.toml", "packs = [\"../lab\"]\n"),
+        ("lab/pack.toml", "name = \"lab\"\nversion = \"0.1.0\"\n"),
+        ("lab/agents/tester/agent.toml", FIT),
+    ];
+    let config = load_with(&changes).unwrap();
+    assert_eq!(list(&config, None), Some((strings(&["kit.implementer"]), Layer::Agent)));
 }
 
 #[test]
