@@ -1,6 +1,6 @@
 [package]
 name = "loop-manager"
-description = "Adaptive Agent Executor: an event-driven orchestrator for coding agents"
+description = "An event-driven orchestrator for coding agents and the loops they work in"
 version.workspace = true
 edition.workspace = true
 license.workspace = true

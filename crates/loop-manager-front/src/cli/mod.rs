@@ -53,7 +53,7 @@ pub const OPERATIONS: &[(&str, &str, &str)] = &[
 #[command(
     name = "loop-manager",
     version,
-    about = "Adaptive Agent Executor: an event-driven orchestrator for coding agents"
+    about = "An event-driven orchestrator for coding agents and the loops they work in"
 )]
 pub struct Cli {
     /// The API socket of the daemon (default: the XDG runtime directory).

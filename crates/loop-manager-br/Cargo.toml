@@ -6,7 +6,6 @@ edition.workspace = true
 license.workspace = true
 repository.workspace = true
 rust-version.workspace = true
-publish = false
 
 [lib]
 # With `test = false` a `#[test]` here is silently never run: whoever adds one removes this key first.
