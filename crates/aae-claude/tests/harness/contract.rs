@@ -4,7 +4,7 @@
 
 use aae_claude::Claude;
 use aae_contract::{
-    config::{EffectiveConfig, Layer, Sourced},
+    config::{Layer, Sourced},
     driver::{
         Driver, DriverEvent, Failure, FailureKind, InstanceHandle, Normalized, PromptKey, SessionPlan, SessionRef,
         SessionState, StopReason,
@@ -72,31 +72,12 @@ impl Live {
                 bead: None,
             },
         };
-        let env = [
-            ("ANTHROPIC_BASE_URL", provider.base_url()),
-            ("ANTHROPIC_API_KEY", "fake".to_owned()),
-            ("CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC", "1".to_owned()),
-            ("CLAUDE_CODE_MAX_RETRIES", retries.to_string()),
-        ];
-        let config = EffectiveConfig {
-            services: Default::default(),
-            harness: "claude".into(),
-            harness_from: aae_contract::config::Layer::Agent,
-            scope: Default::default(),
-            description: None,
-            subagents: None,
-            model_given: None,
-            model: Some(sourced("claude-haiku-5-5".to_owned())),
-            effort: None,
-            system_prompt: None,
-            inherit_host: Some(sourced(false)),
-            env: env.into_iter().map(|(k, v)| (k.to_owned(), sourced(v))).collect(),
-            mcp: Default::default(),
-            hooks: Default::default(),
-            skills: Default::default(),
-            plugins: Vec::new(),
-            native: permission.map(|p| sourced(serde_json::json!({ "permission_mode": p }))),
-        };
+        // The config of the claude tests with this many retries and this permission mode.
+        let mut config = super::claude::config(&provider);
+        config
+            .env
+            .insert("CLAUDE_CODE_MAX_RETRIES".into(), sourced(retries.to_string()));
+        config.native = permission.map(|p| sourced(serde_json::json!({ "permission_mode": p })));
         let split = driver.split(&config, &plan).unwrap();
         let (sink, events) = mpsc::unbounded_channel();
         let id = if resume.is_some() { "i2" } else { "i1" };

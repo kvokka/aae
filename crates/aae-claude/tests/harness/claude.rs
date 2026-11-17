@@ -11,7 +11,7 @@ use serde_json::Value;
 use std::{collections::BTreeMap, path::Path, time::Duration};
 use tokio::sync::mpsc;
 
-fn config(provider: &Provider) -> EffectiveConfig {
+pub(super) fn config(provider: &Provider) -> EffectiveConfig {
     let sourced = |v: &str| Sourced {
         value: v.to_owned(),
         from: Layer::Agent,
