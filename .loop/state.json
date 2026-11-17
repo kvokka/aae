@@ -1,12 +1,12 @@
 {
   "max_cycles": 155,
   "status": "running",
-  "cycle": 120,
+  "cycle": 121,
   "phase": null,
   "attempt": 0,
-  "base": "f9e3f363aadc7fa6160e9f491d0f0785b33c49f5",
-  "started": "2026-11-17T19:52:24+0700",
-  "coder_status": "done",
+  "base": "8a380d559e7bb05b17ab10fa64dc4f84f3ad097d",
+  "started": "2026-11-17T20:19:57+0700",
+  "coder_status": "partial",
   "history_round5": [
     {
       "cycle": 96,
@@ -236,6 +236,15 @@
       "score": 6.0,
       "verdict": "continue",
       "ended": "2026-11-17T20:19:53+0700"
+    },
+    {
+      "cycle": 121,
+      "base": "8a380d559e7bb05b17ab10fa64dc4f84f3ad097d",
+      "head": "1ede18602519c1354a4acd0f5a39d8ed1595f0cf",
+      "coder_status": "partial",
+      "score": 6.5,
+      "verdict": "continue",
+      "ended": "2026-11-17T20:34:43+0700"
     }
   ]
 }
