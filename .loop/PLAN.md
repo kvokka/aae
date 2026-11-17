@@ -5,7 +5,8 @@
 
 Открытые пакеты — WP-116…WP-127 (плагины aae и нативные субагенты, последний раздел). WP-87…WP-115 закрыты и
 оставлены ниже для контекста. Пакеты WP-01…WP-86 закрыты, их тексты — в истории git (`git show 6868353:.loop/PLAN.md`,
-`git show 6868353:.loop/PLAN-archive.md`). Новые пакеты пишутся от запроса владельца, номера — с WP-128; формат
+`git show 6868353:.loop/PLAN-archive.md`). WP-128 (plugin → addon, решение 145) — после WP-126. Новые пакеты
+пишутся от запроса владельца, номера — с WP-129; формат
 пакета — в `.claude/agents/coder.md`.
 
 Размеры: S ≈ до 60k рабочего контекста кодера, M ≈ до 150k. L нет. За цикл — один M или два S. Статусы:
@@ -789,7 +790,7 @@ WP-110); WP-110 → WP-115; остальные — в любом порядке,
   читаемо (текст). MCP не растёт (78).
 - Готово, когда: тесты API и CLI; OpenAPI и frontends.md совпадают с кодом; `mise run ci` зелёный.
 
-### WP-125 · Демо 4: `context-budget` · размер M · статус: todo
+### WP-125 · Демо 4: `context-budget` · размер M · статус: done
 - Документы: решения 144, 87, 136; `demos/README.md`, демо 1–3 как образец; WP-120.
 - Зависит от: WP-120
 - Сделать: `demos/4-context-budget/`: проект с двумя агентами — claude и codex, плагин подключён глобально с малым
@@ -798,7 +799,7 @@ WP-110); WP-110 → WP-115; остальные — в любом порядке,
   модельный тест загрузки конфига демо, как у других демо.
 - Готово, когда: тест конфига демо зелёный; README совпадает с конфигом; `mise run ci` зелёный.
 
-### WP-126 · Демо 4: живой прогон · размер S · статус: todo
+### WP-126 · Демо 4: живой прогон · размер S · статус: done
 - Документы: решение 144; WP-110 (как шёл живой прогон демо 3).
 - Зависит от: WP-125
 - Сделать: живой прогон демо 4 (разрешён владельцем; claude `haiku`/`sonnet`, codex `luna`, `astra` никогда):
@@ -817,3 +818,62 @@ WP-110); WP-110 → WP-115; остальные — в любом порядке,
   компакции) — по факту.
 - Готово, когда: каждый ключ и команда руководств есть в коде (тест, как у скиллов `operator-plugin`, если дёшево);
   ссылок на `docs/guide/plugin.md` не осталось; `mise run ci` зелёный.
+
+## Запрос владельца 2026-11-18: plugin → addon
+
+Слово «плагин» значит две разные вещи: единицу расширения aae и нативный плагин Claude Code или Codex. Решение 145:
+единица aae — **addon**, «plugin» остаётся только за нативными плагинами харнессов. Поведение, ключи (кроме имён) и
+интерфейсы не меняются.
+
+### WP-128 · Переименование plugin → addon · размер M · статус: todo
+- Вставлен владельцем 2026-11-18 (журнал того же дня, запись «plugin → addon»). Брать после WP-126, отдельно от
+  других пакетов: пакет трогает почти всё дерево.
+- Документы: решения 140, 145 (и все, где plugin — единица aae: 19, 20, 43, 121, 123, 126, 141, 142, 144);
+  `docs/agents/assumptions.md`; `docs/design/config.md`, `docs/design/contracts.md` (раздел 3), `docs/guide/plugins.md`,
+  `docs/guide/plugin-development.md`.
+- Зависит от: WP-126 (живой прогон демо 4 пишет `-example`; переименование — после него).
+- Сделать: имена по решению 145 везде, где речь о единице aae:
+  - конфиг и формат: `[[plugin]]` → `[[addon]]`, ключ `plugins` → `addons`, `plugin.toml` → `addon.toml`,
+    `crates/aae-contract/src/config/plugin.rs` и тесты `config_plugins.rs`, `plugin_attach.rs` — по смыслу;
+  - окружение: `AAE_PLUGIN_PARAMS`, `AAE_PLUGIN_DATA`, `AAE_PLUGIN_DIR` и прочие `AAE_PLUGIN_*` → `AAE_ADDON_*`;
+  - события и API: `plugin.hook_failed` и поле `plugin` (`crates/aae-contract/src/config/schema.rs`) → `addon.*`;
+    OpenAPI (`docs/api/openapi.json`) и `docs/api/frontends.md` — из кода;
+  - CLI: `aae plugin list` → `aae addon list`; тексты ошибок и справки;
+  - крейт `aae-plugins` → `aae-addons` (`git mv`): `Cargo.toml` workspace и зависимых, `scripts/core-boundary.sh`,
+    `scripts/budget.sh` (часть `plugins` → `addons`, лимит тот же), бюджет в `docs/agents/rules-code.md`,
+    решение 43; «bundled plugins» → «bundled addons»;
+  - каталог `plugins/` → `addons/` (`context-budget`: манифест, хук `hooks/budget`, README);
+  - `operator-plugin/` → `plugin/` (`git mv`): пути в `.claude-plugin/marketplace.json` и
+    `.agents/plugins/marketplace.json`, тест `crates/aae-front/tests/operator_plugin.rs` → `plugin.rs`, ссылки в
+    `docs/architecture.md`, `docs/api/frontends.md`, `docs/guide/recovery.md`;
+  - руководства: `docs/guide/plugins.md` → `addons.md`, `plugin-development.md` → `addon-development.md`; все ссылки и
+    якоря (`config.md#plugin-pluginplugintoml` и т. п.), `docs/README.md`, глоссарий `docs/overview.md`, `README.md`,
+    `docs/roadmap.md`, `docs/acceptance.md`;
+  - демо 4 (`demos/4-context-budget/`: конфиги, `run.sh`, README) — правка `demos/` разрешена этим пакетом;
+    текст `crates/aae-acceptance/src/checks.rs` (крейт вне `default-members`: сборка и тесты с `--workspace`);
+  - `docs/agents/decisions.md` и `docs/agents/assumptions.md`: слово в тексте решений и допущений и заголовки разделов
+    «Plugins» → «Addons» — по решению 145, смысл не меняется. Номера решений и строка решения 145 — как есть.
+- Ловушки:
+  - **Нативные плагины не переименовываются.** Остаются: `plugin/` (бывший `operator-plugin/`), `.claude-plugin/`,
+    `.agents/plugins/` (пути, которые читают сами харнессы), `enabledPlugins` в `.claude/settings.json`, плагин
+    сессии в claude-адаптере (`--plugin-dir`, `file("plugin")`, `.claude-plugin/plugin.json` в
+    `crates/aae-claude/src/part.rs` и тест `no skills, no plugin` в `crates/aae-claude/src/tests/process.rs`), текст о
+    нативных плагинах в `docs/design/adapters.md`, `docs/harness-updates.md`, решении 125. Поле `plugins` в
+    `crates/aae-claude/src/tests.rs`, `crates/aae-codex/src/tests.rs`, `process.rs:46` и комментарий
+    `crates/aae-codex/src/part.rs:32` — это aae, переименовываются. Слепой `sed` по дереву запрещён: каждый файл
+    с нативным смыслом — руками.
+  - **Харнесс не трогать:** `.claude/`, `CLAUDE.md`, `scripts/loop/` — там только нативные плагины, `loopctl` откатит
+    любую правку. Предложение по ним — в журнал.
+  - **Записи не переписываются:** `experiments/`, `tmp/`, `.loop/` (кроме статуса пакета), `.beads/`, сырые логи
+    `-example` живых прогонов в `demos/` (в `RESULT-example.md` — только имена ключей и путей, если они там есть).
+  - Совместимости нет (решение 140): ни алиаса `plugins`, ни записи в `retired.rs` для старых ключей.
+  - Тестов столько же, сколько до пакета (`cargo nextest list --locked --workspace | wc -l` до и после — в отчёт);
+    переименовываются только файлы и имена. Бинарь `operator_plugin` → `plugin`: проверить фильтры
+    `binary(...)` в `crates/aae-acceptance/src/checks.rs` и `.config/nextest.toml`.
+  - `Cargo.lock` меняется сборкой, руками не правится и не читается.
+- Результат: переименованные код, конфиг, тесты, `docs/`, демо 4; отчёт со списком оставшихся вхождений «plugin» и
+  смыслом каждого.
+- Готово, когда: `git grep -n -i plugin -- . ':!experiments' ':!tmp' ':!.loop' ':!.beads' ':!Cargo.lock'` находит
+  только нативные плагины из ловушек выше (список — в отчёте); `git grep -n -i 'operator-plugin\|aae-plugins\|AAE_PLUGIN'`
+  пуст вне тех же исключений; число тестов не изменилось; OpenAPI совпадает с кодом; `mise run ci` зелёный.
+- Не входит: импорт нативных плагинов, маркетплейс, любая смена поведения addon'ов.
