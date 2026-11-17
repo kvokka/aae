@@ -12,7 +12,7 @@
   "paths": {
     "/v1/agents": {
       "get": {
-        "summary": "Lists the agents, as `<pack>.<name>` with the harness they run on in the project, outside any rig and formula;\nnull where the agent's layers do not decide it.",
+        "summary": "Lists the agents, as `<pack>.<name>` with the harness they run on in the project, outside any rig and formula;\nnull where the agent's layers do not decide it. `subagents` and `called_by` are the call graph there: the agents\nand variants it may call and the agents that may call it, the agent itself left out.",
         "operationId": "list_agents",
         "parameters": [
           {
@@ -2340,12 +2340,21 @@
         "type": "object",
         "required": [
           "project",
-          "agent"
+          "agent",
+          "subagents",
+          "called_by"
         ],
         "properties": {
           "agent": {
             "type": "string",
             "description": "`<pack>.<name>`."
+          },
+          "called_by": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "The agents whose `subagents` name it there."
           },
           "harness": {
             "type": [
@@ -2365,6 +2374,13 @@
           },
           "project": {
             "type": "string"
+          },
+          "subagents": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "The agents (`<pack>.<name>`) and variants its session may call as subagents there, sorted."
           }
         }
       },

@@ -60,7 +60,8 @@ pub(crate) async fn list_projects(state: State, Param(Query(query)): Param<Query
 }
 
 /// Lists the agents, as `<pack>.<name>` with the harness they run on in the project, outside any rig and formula;
-/// null where the agent's layers do not decide it.
+/// null where the agent's layers do not decide it. `subagents` and `called_by` are the call graph there: the agents
+/// and variants it may call and the agents that may call it, the agent itself left out.
 #[utoipa::path(get, path = "/v1/agents", params(ProjectQuery),
     responses((status = OK, body = [Agent]),
         (status = BAD_REQUEST, description = BAD_QUERY, body = ErrorReply),
@@ -69,6 +70,7 @@ pub(crate) async fn list_agents(state: State, Param(Query(query)): Param<Query<P
     let config = state.config();
     let mut out = Vec::new();
     for p in projects(&config, &query)? {
+        let mut agents = Vec::new();
         for pack in &p.packs {
             for (name, a) in &pack.agents {
                 let agent = Name {
@@ -76,10 +78,22 @@ pub(crate) async fn list_agents(state: State, Param(Query(query)): Param<Query<P
                     name: name.clone(),
                 };
                 let launch = config.effective(&p.name, None, &agent).ok();
-                out.push(json!({ "project": p.name, "agent": agent.to_string(),
-                    "harness": launch.as_ref().map(|e| &e.harness),
-                    "max_runs": a.max_runs }));
+                let agent = agent.to_string();
+                let calls: Vec<String> = (launch.as_ref().and_then(|e| e.subagents.as_ref()))
+                    .map(|s| s.value.iter().filter(|t| **t != agent).cloned().collect())
+                    .unwrap_or_default();
+                agents.push((agent, launch.map(|e| e.harness), a.max_runs, calls));
             }
+        }
+        for (agent, harness, max_runs, calls) in &agents {
+            let called_by: Vec<&String> = (agents.iter())
+                .filter(|(_, _, _, theirs)| theirs.contains(agent))
+                .map(|(caller, ..)| caller)
+                .collect();
+            out.push(
+                json!({ "project": p.name, "agent": agent, "harness": harness, "max_runs": max_runs,
+                "subagents": calls, "called_by": called_by }),
+            );
         }
     }
     Ok(Json(out.into()))

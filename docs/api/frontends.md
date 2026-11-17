@@ -35,7 +35,9 @@ Code: `crates/aae-front/src/api/`. Reference: `docs/api/openapi.json`.
 
 The surface: projects with their root and rigs (`GET /v1/projects`: `name`, `dir` — the directory of `aae.toml`,
 `root` and `rigs`, each `{name, path, vars}`; the root is not among the rigs); agents (`GET /v1/agents` gives each
-agent's harness in the project outside any rig and formula, `null` when its layers do not set one), formulas, packs,
+agent's harness in the project outside any rig and formula, `null` when its layers do not set one, and the call graph
+there: `subagents`, the agents and variants its session may call, and `called_by`, the agents that may call it, the
+agent itself left out of both; `aae agent list` prints both as lines of names), formulas, packs,
 plugins (list), config check, explain and reload; runs
 (start, list, state, live view, cancel, finish, resolve); triggers (list, enable, disable, fire by hand);
 instances and services (list, stop an idle one); issue gates (list, close, open — orchestrator, project, agent, bead,

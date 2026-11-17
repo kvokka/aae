@@ -308,6 +308,10 @@ pub(crate) struct Agent {
     harness: Option<String>,
     /// Runs of the agent at once in its project; null for no limit but the daemon's.
     max_runs: Option<u32>,
+    /// The agents (`<pack>.<name>`) and variants its session may call as subagents there, sorted.
+    subagents: Vec<String>,
+    /// The agents whose `subagents` name it there.
+    called_by: Vec<String>,
 }
 
 #[derive(ToSchema)]

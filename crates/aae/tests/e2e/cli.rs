@@ -1,7 +1,7 @@
 //! The CLI against a real `aae daemon` (docs/api/frontends.md): a thin client with JSON output.
 
 use crate::common::Daemon;
-use serde_json::Value;
+use serde_json::{Value, json};
 use std::{
     fs,
     process::{Command, Output},
@@ -297,9 +297,12 @@ async fn the_config_from_the_cli_lists_explains_checks_and_reloads() {
         fs::create_dir_all(aae.join("shop/agents/dev")).unwrap();
         fs::write(
             aae.join("shop/agents/dev/agent.toml"),
-            "harness = \"claude\"\neffort = \"high\"\n",
+            "harness = \"claude\"\neffort = \"high\"\nsubagents = [\"qa\"]\n",
         )
         .unwrap();
+        fs::create_dir_all(aae.join("shop/agents/qa")).unwrap();
+        let qa = "harness = \"claude\"\ndescription = \"Checks a change.\"\n";
+        fs::write(aae.join("shop/agents/qa/agent.toml"), qa).unwrap();
         let inner = "name = \"inner\"\ninternal = true\n[[step]]\nkind = \"exec\"\ncommand = [\"true\"]\n";
         fs::write(aae.join("shop/formulas/inner.toml"), inner).unwrap();
     })
@@ -309,6 +312,26 @@ async fn the_config_from_the_cli_lists_explains_checks_and_reloads() {
     assert_eq!(
         (&agent["agent"], &agent["harness"], agent.get("provider")),
         (&"shop.dev".into(), &"claude".into(), None)
+    );
+    // The call graph, the agent itself left out of it.
+    let agents = d.json(&["agent", "list"]);
+    let graph = |a: &Value| (a["agent"].clone(), a["subagents"].clone(), a["called_by"].clone());
+    assert_eq!(
+        agents.as_array().unwrap().iter().map(graph).collect::<Vec<_>>(),
+        [
+            (json!("shop.dev"), json!(["shop.qa"]), json!([])),
+            (json!("shop.qa"), json!([]), json!(["shop.dev"]))
+        ]
+    );
+    let out = d.cli(&["agent", "list"], &[]);
+    let text = String::from_utf8_lossy(&out.stdout);
+    assert!(
+        text.contains("agent: shop.dev\nharness: claude\nproject: shop\nsubagents: shop.qa\n"),
+        "{text}"
+    );
+    assert!(
+        text.contains("agent: shop.qa\ncalled_by: shop.dev\nharness: claude\n"),
+        "{text}"
     );
     // An internal formula (docs/design/config.md): marked in the API, hidden from `aae formula list` unless `--all`.
     let internal = |args: &[&str]| -> Vec<Value> {
