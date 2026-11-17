@@ -1,13 +1,105 @@
 {
   "max_cycles": 155,
-  "status": "done",
-  "cycle": 118,
+  "status": "running",
+  "cycle": 119,
   "phase": null,
   "attempt": 0,
-  "base": "e4227c8877c747bee5576288ea760a92349e3050",
-  "started": "2026-11-17T10:33:23+0700",
+  "base": "6ed968a79790d76eb007a7de56a64cecc0bf9fba",
+  "started": "2026-11-17T19:07:43+0700",
   "coder_status": "done",
-  "history": [
+  "history_round5": [
+    {
+      "cycle": 96,
+      "base": "bb29d5711d557ad0eb66f2958ba26cd5abeb6b73",
+      "head": "1027aadc4d50107cb4232c83c05362874c249d03",
+      "coder_status": "done",
+      "score": 7.0,
+      "verdict": "continue",
+      "ended": "2026-11-16T13:09:41+0700"
+    },
+    {
+      "cycle": 97,
+      "base": "30b4f01ce9bdf51a5fb17f3e17841a6dcbcadf59",
+      "head": "046586f6244f192db0e296970e29fd6dbc194af7",
+      "coder_status": "done",
+      "score": 7.0,
+      "verdict": "continue",
+      "ended": "2026-11-16T13:47:17+0700"
+    },
+    {
+      "cycle": 98,
+      "base": "58f6c6d8c930c40aec464c94585ee83862d67273",
+      "head": "e8b1a15f6a1a7a9172cafa914846b5c8c6da5e3f",
+      "coder_status": "partial",
+      "score": 7.0,
+      "verdict": "continue",
+      "ended": "2026-11-16T14:32:40+0700"
+    },
+    {
+      "cycle": 99,
+      "base": "c36a0f6d5ebaa021e5da242bb1ef2cdf0ed260dd",
+      "head": "b23d281bb135bb73043e315ba6237ca476f74eae",
+      "coder_status": "done",
+      "score": 7.0,
+      "verdict": "continue",
+      "ended": "2026-11-16T15:33:30+0700"
+    },
+    {
+      "cycle": 100,
+      "base": "f01fb8beee34a074979430e5bd6cc71e2340b9db",
+      "head": "13a4433ce0cd5341f5b1305de6648169dec61152",
+      "coder_status": "done",
+      "score": 7.0,
+      "verdict": "continue",
+      "ended": "2026-11-16T16:28:14+0700"
+    },
+    {
+      "cycle": 101,
+      "base": "5ea8078b5818d8a4b35e1882839f28b37b7fd1af",
+      "head": "348a496db11097031c1f9ffee60f11c7905b87e9",
+      "coder_status": "done",
+      "score": 7.0,
+      "verdict": "continue",
+      "ended": "2026-11-16T17:02:03+0700"
+    },
+    {
+      "cycle": 102,
+      "base": "2e6085e7ed4d469d4a84fef4af25126624bcaddf",
+      "head": "cfa2a98e110612a2204fcadf3acd18e27e582105",
+      "coder_status": "done",
+      "score": 8.0,
+      "verdict": "continue",
+      "ended": "2026-11-16T18:02:47+0700"
+    },
+    {
+      "cycle": 103,
+      "base": "0da55a8a7dc51f0d87f051fcfe827da5550c18cf",
+      "head": "6bf047a42ab285b6468c0f2f525f5c6c36704598",
+      "coder_status": "done",
+      "score": 8.7,
+      "verdict": "continue",
+      "ended": "2026-11-16T20:15:39+0700"
+    },
+    {
+      "cycle": 104,
+      "base": "4d5ccf73c042491bd24712050eeb3f2d4d59d883",
+      "head": "6da1e311a489cdbb8b348491ee1ab63b8d395d74",
+      "coder_status": "partial",
+      "score": 8.5,
+      "verdict": "continue",
+      "ended": "2026-11-16T22:16:46+0700"
+    },
+    {
+      "cycle": 105,
+      "base": "d4d24ee1efb8ea93b9ef9a5b7fd150210ea46ea2",
+      "head": "04984d6c4e53d4fe66dfb17d3faec924b9e0291a",
+      "coder_status": "done",
+      "score": 9.0,
+      "verdict": "complete",
+      "ended": "2026-11-16T23:54:57+0700"
+    }
+  ],
+  "history_round6": [
     {
       "cycle": 106,
       "base": "5c7041d00ffd30b940b38ba80b1391b7b4b42ebd",
@@ -126,97 +218,15 @@
       "ended": "2026-11-17T11:13:30+0700"
     }
   ],
-  "history_round5": [
+  "history": [
     {
-      "cycle": 96,
-      "base": "bb29d5711d557ad0eb66f2958ba26cd5abeb6b73",
-      "head": "1027aadc4d50107cb4232c83c05362874c249d03",
+      "cycle": 119,
+      "base": "6ed968a79790d76eb007a7de56a64cecc0bf9fba",
+      "head": "b5c89c5bf657b14f1440c9c9d05a4913812358fa",
       "coder_status": "done",
-      "score": 7.0,
+      "score": 2.0,
       "verdict": "continue",
-      "ended": "2026-11-16T13:09:41+0700"
-    },
-    {
-      "cycle": 97,
-      "base": "30b4f01ce9bdf51a5fb17f3e17841a6dcbcadf59",
-      "head": "046586f6244f192db0e296970e29fd6dbc194af7",
-      "coder_status": "done",
-      "score": 7.0,
-      "verdict": "continue",
-      "ended": "2026-11-16T13:47:17+0700"
-    },
-    {
-      "cycle": 98,
-      "base": "58f6c6d8c930c40aec464c94585ee83862d67273",
-      "head": "e8b1a15f6a1a7a9172cafa914846b5c8c6da5e3f",
-      "coder_status": "partial",
-      "score": 7.0,
-      "verdict": "continue",
-      "ended": "2026-11-16T14:32:40+0700"
-    },
-    {
-      "cycle": 99,
-      "base": "c36a0f6d5ebaa021e5da242bb1ef2cdf0ed260dd",
-      "head": "b23d281bb135bb73043e315ba6237ca476f74eae",
-      "coder_status": "done",
-      "score": 7.0,
-      "verdict": "continue",
-      "ended": "2026-11-16T15:33:30+0700"
-    },
-    {
-      "cycle": 100,
-      "base": "f01fb8beee34a074979430e5bd6cc71e2340b9db",
-      "head": "13a4433ce0cd5341f5b1305de6648169dec61152",
-      "coder_status": "done",
-      "score": 7.0,
-      "verdict": "continue",
-      "ended": "2026-11-16T16:28:14+0700"
-    },
-    {
-      "cycle": 101,
-      "base": "5ea8078b5818d8a4b35e1882839f28b37b7fd1af",
-      "head": "348a496db11097031c1f9ffee60f11c7905b87e9",
-      "coder_status": "done",
-      "score": 7.0,
-      "verdict": "continue",
-      "ended": "2026-11-16T17:02:03+0700"
-    },
-    {
-      "cycle": 102,
-      "base": "2e6085e7ed4d469d4a84fef4af25126624bcaddf",
-      "head": "cfa2a98e110612a2204fcadf3acd18e27e582105",
-      "coder_status": "done",
-      "score": 8.0,
-      "verdict": "continue",
-      "ended": "2026-11-16T18:02:47+0700"
-    },
-    {
-      "cycle": 103,
-      "base": "0da55a8a7dc51f0d87f051fcfe827da5550c18cf",
-      "head": "6bf047a42ab285b6468c0f2f525f5c6c36704598",
-      "coder_status": "done",
-      "score": 8.7,
-      "verdict": "continue",
-      "ended": "2026-11-16T20:15:39+0700"
-    },
-    {
-      "cycle": 104,
-      "base": "4d5ccf73c042491bd24712050eeb3f2d4d59d883",
-      "head": "6da1e311a489cdbb8b348491ee1ab63b8d395d74",
-      "coder_status": "partial",
-      "score": 8.5,
-      "verdict": "continue",
-      "ended": "2026-11-16T22:16:46+0700"
-    },
-    {
-      "cycle": 105,
-      "base": "d4d24ee1efb8ea93b9ef9a5b7fd150210ea46ea2",
-      "head": "04984d6c4e53d4fe66dfb17d3faec924b9e0291a",
-      "coder_status": "done",
-      "score": 9.0,
-      "verdict": "complete",
-      "ended": "2026-11-16T23:54:57+0700"
+      "ended": "2026-11-17T19:52:20+0700"
     }
-  ],
-  "halt_reason": "ревьюер: complete, оценка 9.5/10"
+  ]
 }
