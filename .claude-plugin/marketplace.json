@@ -8,7 +8,7 @@
     {
       "name": "aae",
       "source": "./harness-plugin",
-      "description": "Skills for working with aae from Claude Code or Codex: recover runs that failed for good"
+      "description": "Skills for working with aae from Claude Code or Codex: recover runs that failed for good, decide on runs that wait on an await step"
     }
   ]
 }
