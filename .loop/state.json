@@ -1,11 +1,11 @@
 {
   "max_cycles": 155,
-  "status": "done",
-  "cycle": 122,
+  "status": "running",
+  "cycle": 123,
   "phase": null,
   "attempt": 0,
-  "base": "a2c37369dfca4228f0ba8af7c93e11ec6050cb5e",
-  "started": "2026-11-17T20:34:47+0700",
+  "base": "03f65e6c9392895f0bf615dfc5baceb2eb4914e7",
+  "started": "2026-11-18T00:56:31+0700",
   "coder_status": "done",
   "history_round5": [
     {
@@ -218,7 +218,7 @@
       "ended": "2026-11-17T11:13:30+0700"
     }
   ],
-  "history": [
+  "history_round7": [
     {
       "cycle": 119,
       "base": "6ed968a79790d76eb007a7de56a64cecc0bf9fba",
@@ -256,5 +256,15 @@
       "ended": "2026-11-17T21:11:29+0700"
     }
   ],
-  "halt_reason": "ревьюер: complete, оценка 9.5/10"
+  "history": [
+    {
+      "cycle": 123,
+      "base": "03f65e6c9392895f0bf615dfc5baceb2eb4914e7",
+      "head": "dd557a31c9c743e87e46165f60f203116ba801bd",
+      "coder_status": "done",
+      "score": 3.5,
+      "verdict": "continue",
+      "ended": "2026-11-18T01:27:34+0700"
+    }
+  ]
 }
