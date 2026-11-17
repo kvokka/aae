@@ -234,10 +234,15 @@ impl Loader {
                 harness,
                 model,
                 effort,
+                native,
                 ..
             } => {
                 let launch = super::compose::Launch { harness, model, effort };
-                let settings = self.settings(file, &parent(file), launch.into(), &[]);
+                let settings = Settings {
+                    native,
+                    ..launch.into()
+                };
+                let settings = self.settings(file, &parent(file), settings, &[]);
                 StepKind::Ai {
                     agent: reference(&agent),
                     timeout: self.timeout(file, timeout.as_deref()),

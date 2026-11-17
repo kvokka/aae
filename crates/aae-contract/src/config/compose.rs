@@ -9,7 +9,7 @@ use super::{
 use serde::Deserialize;
 use std::collections::{BTreeMap, BTreeSet};
 
-/// The three launch settings, all that a pack's `[settings]` and an ai step may set.
+/// The three launch settings: all that a pack's `[settings]` may set, and what an ai step sets besides `native`.
 #[derive(Debug, Default, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub(super) struct Launch {

@@ -33,8 +33,8 @@ error in every file.
 
 One table shape for every layer (see "Effective config"): `[settings]` of the orchestrator, a project and a rig;
 the `[agent]` contribution of a plugin; the top level of `agent.toml`; an agent variant `[agents.<name>]`; and the
-edit of an agent `[agents.<agent>]`. A pack's `[settings]` and an ai step take only the three launch settings:
-`harness`, `model`, `effort`. There is no `provider` key: a layer that has one is an unknown field. No neutral key
+edit of an agent `[agents.<agent>]`. A pack's `[settings]` takes only the three launch settings: `harness`, `model`,
+`effort`; an ai step takes them and `native.<harness>`. There is no `provider` key: a layer that has one is an unknown field. No neutral key
 holds a value only one harness understands: the permission mode is claude's `--permission-mode` and codex's approval
 policy, with different values, so it is set in the harness's own block (`[settings.native.codex] approval_policy =
 "never"`), never as a shared `permission_mode`.
@@ -62,7 +62,7 @@ API error or a quota. Its matchers name `Bash`, `apply_patch` (aliases `Edit`, `
 
 A run is unattended: nothing waits for a human, and every permission is decided by the harness from the config set
 before the start, in the `native.<harness>` block of any settings layer (the orchestrator, a project, a rig, an agent
-or its variant). The defaults are permissive: claude runs with `--permission-mode bypassPermissions`, codex with
+or its variant, a formula's ai step). The defaults are permissive: claude runs with `--permission-mode bypassPermissions`, codex with
 `approval_policy = "never"` (beside `sandbox_mode = "danger-full-access"`, "Host inheritance"). What a stricter config
 does not allow is denied at once, and the agent sees the denial; each denial the adapter learns of is journaled as
 `run.permission_denied` ([contracts](contracts.md#13-payloads)).
@@ -173,7 +173,7 @@ layers, weakest first:
 5. the `[agent]` contributions of the plugins attached to the agent, in attachment order;
 6. the agent's own `agent.toml`: the defaults of the role;
 7. `[settings]` of the pack of the run's formula (launch settings only);
-8. the `[[step]]` of the formula the run is at (launch settings only);
+8. the `[[step]]` of the formula the run is at (launch settings and `native.<harness>`);
 9. the agent variant the rig runs in place of the agent (`[agents.<name>]`, see "Agent variants");
 10. `[agents.<agent>]` without `base` (an edit) of the orchestrator, then the project, then the rig: they fix an agent
     of an outside pack without forking the pack. A variant is edited by an `[agents.<variant>]` table of a stronger
@@ -556,6 +556,7 @@ agent = "implementer"
 timeout = "45m"                     # optional
 model = "opus"                      # optional, ai steps only: layer 8, the launch settings `harness`,
                                     # `model`, `effort`
+native.claude = { permission_mode = "dontAsk" }  # optional, ai steps only: layer 8, merged by key
 
 [[step]]
 name = "test"

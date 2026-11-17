@@ -54,6 +54,9 @@ pub(super) enum StepFile {
         harness: Option<String>,
         model: Option<String>,
         effort: Option<String>,
+        /// The native settings of the step's agent, by harness (docs/design/config.md).
+        #[serde(default)]
+        native: BTreeMap<String, serde_json::Value>,
         back_to: Option<String>,
         /// The most times the step runs (docs/design/config.md); default 1.
         max_attempts: Option<NonZeroU32>,
@@ -150,7 +153,7 @@ pub enum StepKind {
     Ai {
         agent: Name,
         timeout: Option<Duration>,
-        /// The launch settings of the step.
+        /// The launch settings and the native blocks of the step.
         settings: Box<Settings>,
     },
     Exec {

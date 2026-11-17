@@ -256,3 +256,43 @@ fn a_retired_key_is_one_line_that_says_where_it_went() {
         assert!(!error.message.contains('\n'), "one line: {}", error.message);
     }
 }
+
+/// A formula step sets the native settings of its agent over the project's; an `[agents]` edit beats the step
+/// (decision 71).
+#[test]
+fn a_formula_step_sets_the_native_settings_of_its_agent() {
+    let project = "packs = [\"../kit\"]\n[settings.native.claude]\npermission_mode = \"default\"\n\
+                   [settings.native.codex]\napproval_policy = \"on-request\"\n[rigs.backend]\npath = \"backend\"\n";
+    let formula = |harness: &str, native: &str| {
+        format!(
+            "name = \"implement\"\n[inputs]\nbead = {{ type = \"task\", required = true }}\n\
+             [[step]]\nkind = \"ai\"\nagent = \"implementer\"\nharness = \"{harness}\"\nnative = {{ {native} }}\n"
+        )
+    };
+    let step = Layer::Formula("kit.implement step 1".into());
+    let claude = formula("claude", "claude = { permission_mode = \"dontAsk\" }");
+    let (_, e) = run(&load(&[("shop/aae.toml", project), ("kit/formulas/implement.toml", &claude)]).unwrap());
+    let native = e.native.unwrap();
+    assert_eq!(native.value["permission_mode"], "dontAsk");
+    assert_eq!(native.from, Layer::Merged(vec![Layer::Project, step.clone()]));
+    let codex = formula("codex", "codex = { approval_policy = \"never\" }");
+    let (_, e) = run(&load(&[("shop/aae.toml", project), ("kit/formulas/implement.toml", &codex)]).unwrap());
+    assert_eq!(e.native.as_ref().unwrap().value["approval_policy"], "never");
+    assert!(
+        e.explain()
+            .contains("native.codex = {\"approval_policy\":\"never\"}  # project + formula kit.implement step 1\n"),
+        "{}",
+        e.explain()
+    );
+
+    let edit =
+        format!("{project}[rigs.backend.agents.implementer]\nnative.claude = {{ permission_mode = \"plan\" }}\n");
+    let (_, e) = run(&load(&[("shop/aae.toml", &edit), ("kit/formulas/implement.toml", &claude)]).unwrap());
+    let native = e.native.unwrap();
+    assert_eq!(native.value["permission_mode"], "plan");
+    assert_eq!(native.from, Layer::Merged(vec![Layer::Project, step, Layer::RigAgent]));
+    rejected(
+        &[("kit/formulas/implement.toml", &formula("claude", "pi = {}"))],
+        "`native.pi`: no harness `pi`",
+    );
+}
