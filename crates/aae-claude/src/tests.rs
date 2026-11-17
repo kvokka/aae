@@ -362,7 +362,11 @@ async fn a_control_request_gets_an_error_at_once() {
     p["files"] = json!(dir.path().join("state/claude/s1"));
     let (sink, mut events) = tokio::sync::mpsc::unbounded_channel();
     driver.start("i1", &p, sink).await.unwrap();
-    let first = events.recv().await.unwrap();
+    // Unanswered, the script waits in `read` for ever.
+    let first = tokio::time::timeout(std::time::Duration::from_secs(10), events.recv())
+        .await
+        .expect("the request got no answer")
+        .unwrap();
     assert!(matches!(first.event, Normalized::Exited { .. }), "{:?}", first.event);
     let answer: Value = serde_json::from_str(&std::fs::read_to_string(dir.path().join("answer")).unwrap()).unwrap();
     assert_eq!(answer["response"]["subtype"], "error");
