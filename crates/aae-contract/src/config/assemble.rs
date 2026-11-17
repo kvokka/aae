@@ -228,9 +228,9 @@ impl EffectiveConfig {
         by_key(&mut self.services, &settings.services, from, |_| true);
     }
 
-    /// What attached plugins add beyond a settings layer (docs/guide/plugin.md): their prompt fragments after the
-    /// system prompt and their `bin/` directories ahead of `PATH` (the daemon's when no layer sets it), in attachment
-    /// order.
+    /// What attached plugins add beyond a settings layer (docs/guide/plugin-development.md): their prompt fragments
+    /// after the system prompt and their `bin/` directories ahead of `PATH` (the daemon's when no layer sets it), in
+    /// attachment order.
     pub(super) fn contribute(&mut self, attached: &[&super::Plugin]) {
         for plugin in attached {
             let Some(fragment) = &plugin.prompt else { continue };

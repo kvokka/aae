@@ -78,7 +78,8 @@ impl Mcp {
     }
 }
 
-/// A hook in the one hook dialect (docs/guide/plugin.md); `enabled = false` alone turns off a lower layer's hook.
+/// A hook in the one hook dialect (docs/guide/plugin-development.md); `enabled = false` alone turns off a lower
+/// layer's hook.
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct Hook {

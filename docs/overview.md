@@ -34,6 +34,7 @@ only; the other three targets are built and trusted to the portability of the la
 | **launch settings** | three scalars: harness, model, effort |
 | **model short name** | a family name (`opus`, `luna`) the adapter expands to the latest model of that family |
 | **agent variant** | a pack's agent under another name and with other settings, declared in the user's config (`claude-coder`, `codex-coder`) |
+| **subagent** | an agent a session may call as a native subagent of its harness (`subagents` in `agent.toml`); not a run |
 | **session reference** | the pair "harness + the harness's session id": all the core knows of a conversation |
 | **formula** | a workflow, the "how": a name, a description, inputs and steps in order. The "what", the task, comes only from the user |
 | **step** | `ai` (an agent's turn), `exec` (a command, no LLM), `drain` (giving beads out to executors), `formula` (another formula) or `await` (an outcome from outside) |
@@ -45,7 +46,7 @@ only; the other three targets are built and trusted to the portability of the la
 | **trigger** | a rule "an event or a schedule → start a formula" |
 | **correlation** | the id of a chain of runs that started one another |
 | **pack** | content fit for any project: agents, formulas, triggers |
-| **plugin** | an extension: what attaches to agents (skills, hooks, MCP, scripts, env), hooks on orchestrator events, services |
+| **plugin** | an extension, a directory with `plugin.toml`: what attaches to agents (skills, hooks, MCP, scripts, env), hooks on orchestrator events, services. Declared once, attached per agent or for all, with parameters ([guide](guide/plugins.md)) |
 | **service** | a long-lived process the orchestrator supervises (a shared MCP server, for one) |
 | **issue gate** | a record "start no run by this key until a time, or until opened by hand" |
 | **tracker** | the task store behind an adapter interface; the first implementation is br |

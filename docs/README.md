@@ -13,7 +13,8 @@ references (`design/contracts.md`, `design/config.md`) are meant to be read by s
 | [guide/first-project.md](guide/first-project.md) | a project, its root and rigs |
 | [guide/first-formula.md](guide/first-formula.md) | a formula with an agent, from the config to a passed run |
 | [guide/recovery.md](guide/recovery.md) | a run that failed for good: what failed, continue the session, a new session with or without a note, abandon |
-| [guide/plugin.md](guide/plugin.md) | writing a plugin: the agent side and the orchestrator side |
+| [guide/plugins.md](guide/plugins.md) | using plugins: declare, attach, parameters; an agent's subagents |
+| [guide/plugin-development.md](guide/plugin-development.md) | writing a plugin: the manifest, the agent side and the orchestrator side, tests |
 | [design/config.md](design/config.md) | every config file and key; layers and "explain config"; packs, agents, formulas, triggers, plugins |
 | [api/frontends.md](api/frontends.md) | the HTTP API and the CLI; what a human sees and does with a run |
 | [api/mcp.md](api/mcp.md), [api/openapi.json](api/openapi.json) | the MCP server; the OpenAPI document |

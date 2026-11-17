@@ -15,6 +15,7 @@ mod context_budget;
 mod doctor;
 mod exec_env;
 mod git_cache;
+mod guides;
 mod mcp;
 mod replies;
 mod review_gate;

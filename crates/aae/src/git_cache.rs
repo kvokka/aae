@@ -1,4 +1,4 @@
-//! Packs and plugins from git (docs/design/config.md, docs/guide/plugin.md): downloaded into the user's cache before
+//! Packs and plugins from git (docs/design/config.md, docs/guide/plugins.md): downloaded into the user's cache before
 //! each load of the config, so the core reads only finished directories (docs/guide/install.md). A commit or a tag in
 //! the cache needs no network; a source without a pin asks the remote for its latest revision at every load.
 //!

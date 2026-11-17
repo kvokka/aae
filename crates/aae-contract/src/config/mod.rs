@@ -1,5 +1,5 @@
 //! Configuration: the files of the orchestrator, projects, packs, agents, formulas, triggers and plugins
-//! (docs/guide/plugin.md; docs/design/config.md), loaded and validated as a whole.
+//! (docs/guide/plugins.md; docs/design/config.md), loaded and validated as a whole.
 
 mod assemble;
 mod check;

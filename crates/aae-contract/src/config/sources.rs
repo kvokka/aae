@@ -1,5 +1,5 @@
-//! Packs and plugins from git (docs/design/config.md, docs/guide/plugin.md). The core never runs git: whoever loads the
-//! config downloads each source first and passes the directory it went to, as [`Checkouts`].
+//! Packs and plugins from git (docs/design/config.md, docs/guide/plugins.md). The core never runs git: whoever loads
+//! the config downloads each source first and passes the directory it went to, as [`Checkouts`].
 
 use super::{
     files::{OrchestratorFile, PluginDecl, ProjectFile, Source},
