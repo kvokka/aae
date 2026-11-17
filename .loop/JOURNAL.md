@@ -702,3 +702,20 @@ WP-100: аудит не нашёл недостающего во фронте и
 `Retrying`, `PermissionDenied`) ставит обычный `silence` — внеходовый `api_retry` субагента сожмёт фоновый бюджет до
 15 min (стенд таких строк не дал). Код стенда WP-99 (`.loop/cycles/112/notes/wp99_stand.py`, `wp99-logs/`) попадёт в
 коммит цикла вопреки «код стенда не коммитить» в WP-99. Подробно — `.loop/cycles/112/review.md`, Жел. 1 и 3.
+
+## 2026-11-17T23:40 · цикл 113 · coder · НАХОДКА
+
+WP-101: Codex 0.168 ставит плагин по файлам Claude (`.claude-plugin/marketplace.json` + `plugin.json`), отдельный
+`.codex-plugin/` не нужен — проверено установкой в изолированных HOME (`.loop/cycles/113/notes/plugin-formats.md`).
+Документация Codex называет такой формат совместимым («legacy»); если Codex его уберёт, понадобится свой манифест.
+Плагин — `harness-plugin/` (не `plugin/`: «plugin» в aae — плагин оркестратора), маркетплейс — корень репозитория.
+Версия плагина привязана тестом к версии workspace: оба харнесса кэшируют плагин по версии.
+Код стенда WP-99 из `.loop/cycles/112/notes/` удалён (`git rm`, Жел. 3 ревью 112); в истории он остаётся.
+
+## 2026-11-17T23:59 · цикл 113 · reviewer · НАХОДКА
+
+Ревью 113: 6.6/10, continue, 1 обязательный пункт. Мутация `!self.open` → `true` в новой ветке адаптера claude
+(`crates/aae-claude/src/stream.rs:146`) выживает. Без охраны retry/rate limit/denial внутри хода при живом
+`local_agent` дают `Idle{background}`, и ядро ставит 120 min вместо 15 (инвариант 15). Нужен шаг теста.
+Вне диффа: `aae-testkit::chaos a_seed_replays_the_same` один раз упал под нагрузкой («the steps differ»,
+`decide run_5@101` против `@131`): повтор сида зависит от времени. Подробно — `.loop/cycles/113/review.md`.
