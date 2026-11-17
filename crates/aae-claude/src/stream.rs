@@ -72,7 +72,7 @@ impl Stream {
     /// One stdout line seen at `now`; the events it yields, in order. Unknown types yield nothing.
     pub(crate) fn line(&mut self, msg: &Value, now: Instant) -> Vec<Normalized> {
         let text = |v: &Value| v.as_str().unwrap_or_default().to_owned();
-        match (msg["type"].as_str(), msg["subtype"].as_str()) {
+        let mut out = match (msg["type"].as_str(), msg["subtype"].as_str()) {
             (Some("command_lifecycle"), _) if msg["state"] == "queued" => {
                 match Uuid::parse_str(msg["command_uuid"].as_str().unwrap_or_default()) {
                     Ok(key) => {
@@ -140,7 +140,16 @@ impl Stream {
             (Some("tool_progress"), _) => self.activity(now, true),
             (Some("user" | "stream_event"), _) | (Some("system"), Some("status")) => self.activity(now, false),
             _ => vec![],
+        };
+        // Out of a turn, a background subagent's retry, rate limit or denial re-arms the core's silence clock: the
+        // session is still idle with background, and its budget is the background one.
+        if !self.open && self.agent && !out.is_empty() && !matches!(out.last(), Some(Normalized::State { .. })) {
+            out.push(Normalized::State {
+                state: SessionState::Idle,
+                background: true,
+            });
         }
+        out
     }
 
     /// stdout closed and the process exited: a turn left open is a crash, whatever the exit code.

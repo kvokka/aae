@@ -489,7 +489,9 @@ claude (`crates/aae-claude`):
   "idle without background" (4.3). While a `local_agent` task lives, the state stays `running` after the `result`
   and the subagent's steps come out of the turn only as its commands end
   ([experiments](experiments.md#a-background-subagent-after-the-result)); so the adapter reports `State{Idle,
-  background: true}` right after such a `result` (the background budget, 6.1) and no activity outside a turn.
+  background: true}` right after such a `result` (the background budget, 6.1) and no activity outside a turn. A retry,
+  rate limit or denial the subagent meets outside a turn is told with `State{Idle, background: true}` after it, so it
+  does not shorten that budget to the silence one.
 - When the daemon dies, the turn goes on unobserved; its outcome is learned from the transcript and the state of the
   repository (4.2 `Transcript`, 6.4). A `--resume` reaches `init` in 0.30 s, so a resumed attempt costs little; a
   planned restart drains first ([invariants](invariants.md#recovery)).

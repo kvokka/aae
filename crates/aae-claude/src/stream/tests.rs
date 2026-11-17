@@ -177,8 +177,26 @@ fn a_background_subagent_keeps_the_session_idle_with_background_until_its_wake_u
         state: SessionState::Idle,
         background,
     };
+    let bash = json!({ "type": "system", "subtype": "background_tasks_changed", "tasks": [
+        { "task_id": "b1", "task_type": "local_bash", "is_backgrounded": true }] });
+    let events = feed(&mut s, &[bash, result(false, json!({}))]);
+    assert!(
+        !events.iter().any(|e| matches!(e, Normalized::State { .. })),
+        "{events:?}"
+    );
+    feed(&mut s, &[json!({ "type": "system", "subtype": "init" })]);
     let events = feed(&mut s, &[agent, result(false, json!({}))]);
     assert_eq!(events.last(), Some(&idle(true)), "{events:?}");
+    // The subagent's own requests out of the turn keep the background budget.
+    for line in [
+        json!({ "type": "system", "subtype": "api_retry", "attempt": 1, "retry_delay_ms": 500, "error": "overloaded" }),
+        json!({ "type": "rate_limit_event", "rate_limit_info": { "status": "allowed" } }),
+        json!({ "type": "system", "subtype": "permission_denied", "tool_name": "Bash", "tool_use_id": "toolu_9" }),
+    ] {
+        let events = s.line(&line, Instant::now());
+        assert_eq!(events.len(), 2, "{events:?}");
+        assert_eq!(events.last(), Some(&idle(true)), "{events:?}");
+    }
     let quiet = feed(&mut s, &[step, notified, none]);
     assert!(quiet.is_empty(), "{quiet:?}");
     let wake = json!({ "type": "system", "subtype": "init" });
