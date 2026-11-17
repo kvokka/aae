@@ -34,11 +34,13 @@ for repo in $repos; do
 done
 
 mkdir -p .aae/bin
-# A step gets a clean environment (PATH, HOME, LANG), which a login of gh held in a variable, a keyring or the config
-# hidden below does not reach: the gh first on the PATH hands every caller the token of the user's login.
-(umask 077 && gh auth token >.aae/gh-token)
-# shellcheck disable=SC2016 # the wrapper reads the token when it runs
-printf '#!/bin/sh\nGH_TOKEN=$(cat "%s") exec "%s" "$@"\n' "$here/.aae/gh-token" "$(command -v gh)" >.aae/bin/gh
+# A step gets a clean environment (PATH, HOME, LANG) and an agent the environment of its config, which a login of gh
+# held in a variable, a keyring or the config hidden below does not reach. gh gets a login of the demo's own, the
+# token of the user's in .aae/gh, which the gh first on the PATH of the steps and the agent `owner` name.
+gh auth token |
+  env -u GH_TOKEN -u GITHUB_TOKEN GH_CONFIG_DIR="$here/.aae/gh" gh auth login --with-token --insecure-storage
+# shellcheck disable=SC2016 # "$@" is the wrapper's
+printf '#!/bin/sh\nGH_CONFIG_DIR="%s" exec "%s" "$@"\n' "$here/.aae/gh" "$(command -v gh)" >.aae/bin/gh
 chmod +x .aae/bin/gh
 PATH="$here/.aae/bin:$PATH"
 export XDG_STATE_HOME="$here/.aae/state" XDG_CONFIG_HOME="$here/.aae/config" XDG_CACHE_HOME="$here/.aae/cache"
@@ -51,7 +53,7 @@ sha=$(git describe --always --dirty 2>/dev/null || echo unknown)
 # The agents and the steps call `aae`: the binary goes first on the PATH the daemon hands them.
 PATH="$(dirname "$aae"):$PATH" "$aae" daemon --config root/config.toml 2>.aae/daemon.log &
 daemon=$!
-trap 'kill $daemon 2>/dev/null; rm -f "$here/.aae/gh-token"' EXIT
+trap 'kill $daemon 2>/dev/null; rm -f "$here/.aae/gh/hosts.yml"' EXIT
 until "$aae" status >/dev/null 2>&1; do
   kill -0 $daemon 2>/dev/null || { cat .aae/daemon.log; exit 1; }
   sleep 0.2
@@ -59,7 +61,7 @@ done
 # The bridge gives the review's outcome from GitHub to the feature that waits on it.
 AAE="$aae" ./bridge.sh review-gate 2>.aae/bridge.log &
 bridge=$!
-trap 'kill $bridge $daemon 2>/dev/null; rm -f "$here/.aae/gh-token"' EXIT
+trap 'kill $bridge $daemon 2>/dev/null; rm -f "$here/.aae/gh/hosts.yml"' EXIT
 
 started=$(date +%s)
 run=$("$aae" run start review-gate dev.feature --input "task=$request")

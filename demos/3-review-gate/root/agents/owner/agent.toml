@@ -3,4 +3,5 @@ scope = "root"                        # it works in the project root
 harness = "codex"
 model = "terra"
 effort = "medium"
-inherit_host = true                   # `gh` reads its login from the user's home, which an isolated session lacks
+inherit_host = true                   # it works as the user does: the user's shell and tools
+env = { GH_CONFIG_DIR = "../.aae/gh" } # the login of `gh` run.sh makes, from the project root
