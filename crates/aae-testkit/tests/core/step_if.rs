@@ -205,3 +205,25 @@ async fn a_repeat_of_a_step_does_not_ask_its_if_again() {
     assert_eq!(w.step_log(), "flaky\nflaky\n");
     assert!(w.all("run.step_skipped").is_empty());
 }
+
+/// A run continues a session in its first step only, so a formula whose first step has an `if` cannot be continued.
+#[tokio::test]
+async fn a_formula_whose_first_step_has_an_if_cannot_be_continued() {
+    let ai = "[[step]]\nname = \"a\"\nkind = \"ai\"\nagent = \"dev\"\nif = { \"inputs.x\" = true }\n\
+              [[step]]\nname = \"b\"\nkind = \"ai\"\nagent = \"dev\"\n";
+    let w = flow("[inputs]\nx = { type = \"boolean\" }\n", &[ai.to_owned()]);
+    let create = Create {
+        project: "shop".into(),
+        rig: Some("web".into()),
+        formula: "flow".into(),
+        inputs: Default::default(),
+        correlation: None,
+        depth: 0,
+        parent_run: None,
+        token: None,
+        continue_from: Some("run_1".into()),
+    };
+    let refused = w.core.send(None, Msg::Create(create)).await.unwrap_err().to_string();
+    assert!(refused.contains("starts with a step with an `if`"), "{refused}");
+    assert!(w.all("run.queued").is_empty());
+}

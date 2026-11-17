@@ -717,8 +717,8 @@ with another step's or an input's is a config error. A skipped step has no outco
 an earlier round: no `steps.<name>`, no `AAE_STEP_<NAME>_*`. So a prompt template or the `inputs` of a `formula` step
 naming `steps.<name>` of a step with an `if` is a config error; an `if` may name it, and does not match while it has
 none. Each ai step has a session of its own; a run that continues a
-session (`continue_from`) continues it in its first step only, so a formula whose first step is not `ai` cannot be
-continued.
+session (`continue_from`) continues it in its first step only, so a formula whose first step is not `ai`, or has an
+`if`, cannot be continued.
 
 An input a start does not give, or gives `null`, takes the value of `[inputs]` of the project's `aae.toml`, else
 that of the orchestrator config: a table of values by input name, for any formula of the project that declares an

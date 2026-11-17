@@ -118,6 +118,12 @@ impl RunHandler {
                 first.kind.name()
             )));
         }
+        // A skipped first step would hand the continued session to a later step (docs/design/config.md).
+        if c.continue_from.is_some() && !first.condition.is_empty() {
+            return Err(rejected(format!(
+                "`{name}` starts with a step with an `if`: it may be skipped, so it cannot continue a session"
+            )));
+        }
         if let Some(extra) = c.inputs.keys().find(|k| !formula.inputs.contains_key(*k)) {
             return Err(rejected(format!("`{name}` has no input `{extra}`")));
         }
