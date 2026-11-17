@@ -57,7 +57,9 @@ each heading; this file only marks it as decided.
 | 90 | There is no neutral `permission_mode`: it is a native setting of a harness and lives in `native.<harness>`. No common section has a key only one harness understands |
 | 91 | All a user says of an agent lives in `[agents.<name>]`: the name of a pack's agent edits it, a new name with `base` is a variant. There is no `[overrides.*]` |
 | 99 | The root of a project has a name (default `root`) and a path (default: the directory of `aae.toml`), both settings. It may be the only repository of the project, or a plain directory without git |
-| 120 | Everything a run needs is decided before its start, through the layers default → orchestrator config → project config → formula; after the start no human decides anything (2026-11-17) |
+| 120 | Everything a run needs is decided before its start, through the layers default → orchestrator config → project config → formula; inside a step no human decides anything. Between steps a formula may wait for an outcome from outside, with an `await` step (decision 126) (revised 2026-11-17) |
+| 129 | `rounds` is layered: orchestrator config → project config → formula, default 3. A return from an `await` step spends a round like any other (2026-11-17) |
+| 130 | An input of a formula takes its default from the orchestrator config and the project config; a value given at the start, by a trigger or by the step of a calling formula beats them (2026-11-17) |
 
 ## Agents, packs, formulas — [config](../design/config.md)
 
@@ -85,6 +87,11 @@ each heading; this file only marks it as decided.
 | 101 | `drain`: `on_item_failure` is `continue` (default), `soft_stop` or `hard_stop` |
 | 102 | A step may be another formula; the parent's inputs are inherited, but only those the child declares; a step may set them explicitly |
 | 103 | The daemon is system-wide, formulas live in the scope of a project: a project sees only the formulas of its packs. The structure is flat. `internal = true` hides a formula from the catalogue and allows it only as a part of another (`--all` shows it, the API marks it) |
+| 126 | A formula step of kind `await` waits for an outcome from outside: it has no process and holds no concurrency slot, and its outcome (`pass` or `fail`, a summary, data) is given through the API and the CLI by a human, a script or a plugin. It is a check like any other: `fail` sends the run back to its `back_to`, and the outcome names no other step. A run does not reach it while a check before it has failed. Entering it is an event, `run.awaiting`. Decision 116 stands: no live session waits for anybody (2026-11-17) |
+| 127 | An `await` step ends by its `timeout`, 7 days by default: with `fail_on_timeout = true`, the default, the run fails with no return to `back_to`; with `false` the step passes (2026-11-17) |
+| 128 | A step may carry `if`: a `where` table (contracts 2.2) over the run context of a prompt template and `back_from`, the names of the checks that sent the run back into the current round. A step whose `if` does not match is skipped. There is no expression language, and `back_to` stays the only jump (2026-11-17) |
+| 134 | Review feedback is worked by an agent of its own on the formula, with its own skills, instructions and permissions, not by the implementer (2026-11-17) |
+| 135 | The working formula of a feature over several repositories has its gate on the epic: an internal `-base` formula plans and gives the beads out, and the formula around it opens the pull requests, waits for the root's to be merged and merges the children's. A variant with a gate per repository is not written (2026-11-17) |
 
 ## Runs — [contracts 6](../design/contracts.md#6-run), [invariants](../design/invariants.md)
 
@@ -131,6 +138,9 @@ each heading; this file only marks it as decided.
 | 49 | `auth_required` and `billing`: repeats with a growing pause up to once an hour, never escalated to a human |
 | 123 | Compaction, metrics, budgets and a notice that a harness is unusable are plugins, not the core; they are on the [roadmap](../roadmap.md), which is a hint, not a work list. A loop without progress is no problem of the core (2026-11-17) |
 | 125 | aae's skills for a user's agent ship as a plugin of the harness's own plugin system, for Claude Code and Codex only (2026-11-17) |
+| 131 | The first bridge from an outside reviewer to an `await` step is GitHub: a process outside the core that polls GitHub, which does not push to a local machine. A merged pull request is `pass`, and nothing else is an acceptance: whoever merged decided. A pull request closed without a merge cancels the run. A comment or a review by an allowed author that no agent has picked up yet is `fail` (2026-11-17) |
+| 132 | Whose comments reach an agent is the formula input `feedback_from`, a list of logins, empty by default: then nobody's do, the author's among them. The comments of anyone else never reach the agent (2026-11-17) |
+| 133 | What a cancelled run left behind is cleaned by a formula that a trigger starts on `run.cancelled`, and on nothing else: a failed run is looked into by a human, not cleaned (2026-11-17) |
 
 ## Frontends — [frontends](../api/frontends.md), [MCP](../api/mcp.md)
 
@@ -176,3 +186,4 @@ each heading; this file only marks it as decided.
 | 105 | `mise run ci` is the gate of every change. Acceptance scenarios, live models and the demos run only on the owner's explicit request, and are a criterion of done only when the owner says so (2026-11-17) |
 | 106 | There is no spec and no readiness file: `docs/` describes the product as it is, `docs/agents/` holds the rules for agents (2026-11-17) |
 | 107 | The chaos stand, with all its 1000 seeds, is an acceptance row, not a part of the gate. Acceptance may be slow: its model-free rows run only in CI, in a workflow started by hand, on the owner's request (2026-11-17) |
+| 136 | Demo 3 shows the `await` step on GitHub and is part of the acceptance of that work: public MIT repositories of the GitHub user `kvokka-agent`, a root and its children, with no `aae` in their names; the models are `luna` and `terra`; an agent plays the reviewer and merges. Agents may create these repositories, recreate them and open new pull requests there (2026-11-17) |
