@@ -34,5 +34,5 @@ Open <http://localhost:3000> in your browser.
 1. Confirm both server commands are still running.
 2. At <http://localhost:3000>, enter a name such as `Ada Lovelace` and select **Say hello**.
 3. Confirm the page displays `Hello, Ada Lovelace!`.
-4. Submit an empty or whitespace-only name and confirm the browser asks for a name without making an API request.
+4. Submit an empty or whitespace-only name and confirm the page asks you to enter a name without making an API request.
 5. Stop the backend with Ctrl+C, submit a name, and confirm the page explains that it could not get the greeting. Restart the backend when done.

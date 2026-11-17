@@ -33,5 +33,19 @@ Expected response:
 {"greeting": "Hello, Ada Lovelace!"}
 ```
 
+An absent or empty `name` returns HTTP 400. For example:
+
+```sh
+curl -i http://localhost:8000/greeting
+curl -i --get --data-urlencode 'name=' http://localhost:8000/greeting
+```
+
 The `name` query parameter is URL decoded as UTF-8. Requests from
-`http://localhost:3000` are allowed by CORS.
+`http://localhost:3000` are allowed by CORS; verify the response header with:
+
+```sh
+curl -i --get --data-urlencode 'name=Ada Lovelace' \
+  -H 'Origin: http://localhost:3000' http://localhost:8000/greeting
+```
+
+The response includes `Access-Control-Allow-Origin: http://localhost:3000`.

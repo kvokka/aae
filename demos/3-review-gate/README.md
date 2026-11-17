@@ -97,8 +97,9 @@ author's run: `gate-demo-example/`, `gate-demo-backend-example/`, `gate-demo-fro
 `RESULT-example.md`, with its date, versions and models. Your result differs: the agents decide anew each time.
 
 The author's run (2026-11-17, in `RESULT-example.md`) passed in two rounds of the review, as the demo means it to:
-`owner` asked to replace the absolute `cd` paths in the README of the frontend, the reviser did, and `owner` merged
-the root's pull request, [gate-demo#2](https://github.com/kvokka-agent/gate-demo/pull/2); the feature merged
-[gate-demo-backend#2](https://github.com/kvokka-agent/gate-demo-backend/pull/2) and
-[gate-demo-frontend#2](https://github.com/kvokka-agent/gate-demo-frontend/pull/2). The pull requests #1 are of a run
-before it, cancelled while it waited on its review and cleared by `cleanup`.
+`owner` asked the backend to answer a name that is not valid UTF-8 with a JSON 400 instead of failing the request,
+the reviser did, and `owner` merged the root's pull request,
+[gate-demo#3](https://github.com/kvokka-agent/gate-demo/pull/3); the feature merged
+[gate-demo-backend#3](https://github.com/kvokka-agent/gate-demo-backend/pull/3) and
+[gate-demo-frontend#3](https://github.com/kvokka-agent/gate-demo-frontend/pull/3), and the step `merge` printed
+`MY_AWESOME_ENV_VAR is something`. The pull requests #1 and #2 are of runs before it.

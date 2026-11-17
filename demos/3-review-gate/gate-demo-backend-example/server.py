@@ -10,17 +10,31 @@ FRONTEND_ORIGIN = "http://localhost:3000"
 
 
 class GreetingHandler(BaseHTTPRequestHandler):
+    def send_api_error(self, status, message):
+        body = json.dumps({"error": message}).encode("utf-8")
+        self.send_response(status)
+        self.send_header("Content-Type", "application/json; charset=utf-8")
+        self.send_header("Content-Length", str(len(body)))
+        self.send_header("Access-Control-Allow-Origin", FRONTEND_ORIGIN)
+        self.send_header("Vary", "Origin")
+        self.end_headers()
+        self.wfile.write(body)
+
     def do_GET(self):
         request = urlsplit(self.path)
         if request.path != "/greeting":
-            self.send_error(404)
+            self.send_api_error(404, "not found")
             return
 
-        name = parse_qs(request.query, encoding="utf-8", errors="strict").get(
-            "name", [""]
-        )[0]
+        try:
+            name = parse_qs(request.query, encoding="utf-8", errors="strict").get(
+                "name", [""]
+            )[0]
+        except UnicodeDecodeError:
+            self.send_api_error(400, "name must be valid UTF-8")
+            return
         if not name:
-            self.send_error(400, "name is required")
+            self.send_api_error(400, "name is required")
             return
 
         body = json.dumps({"greeting": f"Hello, {name}!"}, ensure_ascii=False).encode(
