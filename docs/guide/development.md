@@ -14,7 +14,8 @@ mise is a convenience, not a requirement: install the same tools any way you lik
   `acceptance-release`).
 - br 0.7.6, claude (line `2.1`), codex (line `0`): for the acceptance scenarios that run them; jq 1.8.2 for the
   demos' `run.sh`, which `mise run acceptance` runs; jq and rumdl 0.3.4 also for the model-free scenario of demo 2's
-  format step.
+  format step. Demo 3 also needs gh 2.103.2, logged in, from its own `mise.toml` (`mise install` in
+  `demos/3-review-gate`).
 
 Each task is a list of plain commands in `[tasks.<name>]` of `mise.toml`; run them by hand in that order:
 

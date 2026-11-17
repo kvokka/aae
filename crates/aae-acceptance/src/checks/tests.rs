@@ -15,3 +15,21 @@ fn every_row_of_the_acceptance_table_is_in_the_report() {
     }
     assert!(known.iter().all(|c| ROWS.contains(c)), "{known:?}");
 }
+
+/// Each demo with a `run.sh` has a live run among the scenarios on request (criterion 20).
+#[test]
+fn every_demo_has_a_live_run() {
+    for entry in std::fs::read_dir(root().join("demos")).unwrap() {
+        let dir = entry.unwrap().path();
+        if !dir.join("run.sh").is_file() {
+            continue;
+        }
+        let name = dir.file_name().unwrap().to_string_lossy().into_owned();
+        let number = name.split('-').next().unwrap();
+        let title = format!("demo {number}:");
+        assert!(
+            ALL.iter().any(|s| matches!(s.launch, Launch::Request) && s.title.starts_with(&title)),
+            "{name} has no live run"
+        );
+    }
+}

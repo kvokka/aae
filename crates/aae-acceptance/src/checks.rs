@@ -109,6 +109,13 @@ pub(crate) const ALL: &[Scenario] = &[
         run: |env| Box::pin(demo(env, "2-multirepo-qa", 2)),
     },
     Scenario {
+        criterion: "20",
+        title: "demo 3: demo 1 with pull requests on GitHub, reviewed there by an agent in place of a human, the work \
+            sent back once and the pull requests merged, unattended; needs gh logged in or GITHUB_TOKEN",
+        launch: Launch::Request,
+        run: |env| Box::pin(demo(env, "3-review-gate", 1)),
+    },
+    Scenario {
         criterion: "22",
         title: "line budgets and MEASURE markers (scripts/budget.sh)",
         launch: Launch::Ci,
