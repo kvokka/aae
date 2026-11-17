@@ -36,7 +36,7 @@ impl ScriptedDriver {
         self
     }
 
-    /// Queues the scenario played by the next `send_prompt` or `respond`.
+    /// Queues the scenario played by the next `send_prompt`.
     pub fn script(&self, steps: Vec<Step>) {
         self.lock().scenarios.push_back(steps);
     }

@@ -187,3 +187,32 @@ async fn a_retry_the_harness_announces_adds_its_pause_to_the_silence_limit() {
         (&1.into(), &"1970-01-01T00:01:30.000Z".into(), &"overloaded".into())
     );
 }
+
+/// A denial is activity: in `running` it restarts the silence; in `starting` it is told and the start timeout stands
+/// (contracts 4.3).
+#[tokio::test(start_paused = true)]
+async fn a_denied_permission_is_activity_for_the_watchdog() {
+    let denied = || {
+        Step::Emit(Normalized::PermissionDenied {
+            tool: "Bash".into(),
+            tool_use_id: None,
+            input: Value::Null,
+            reason: None,
+        })
+    };
+    let wait = Step::Wait(Duration::from_secs(50));
+    let running = vec![Step::Emit(Normalized::TurnStarted), wait, denied()];
+    assert_eq!(stall_at(running).await, "1970-01-01T00:01:50.000Z");
+
+    let w = watched(FILES);
+    w.driver
+        .script(vec![Step::NoAck, Step::Wait(Duration::from_secs(20)), denied()]);
+    let run = w.create().await;
+    w.events(&run, Duration::from_secs(10 * MIN)).await;
+    let told = w.ts(&run, "run.permission_denied", |_| true);
+    assert_eq!(told, "1970-01-01T00:00:20.000Z");
+    assert_eq!(
+        w.attempt_failed(&run),
+        ("1970-01-01T00:00:30.000Z".into(), "stall".into())
+    );
+}
