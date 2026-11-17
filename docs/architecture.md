@@ -59,9 +59,10 @@ and an agent attaches it with `plugins = [{ name, params }]`
 [`context-budget`](../plugins/context-budget/README.md), the compaction window of claude and codex sessions and a
 budget of compactions per session.
 
-The skills for a user's agent are a different thing: `operator-plugin/` is a plugin of the operator's harness,
-Claude Code or Codex, with the skills by which the operator drives aae, each harness in its current format. Claude Code reads `.claude-plugin/marketplace.json` and the plugin's `.claude-plugin/plugin.json`;
-Codex reads `.agents/plugins/marketplace.json` and the plugin's root `plugin.json`
+The skills for a user's agent are a different thing: `operator-plugin/` is a plugin of the operator's harness, Claude
+Code or Codex, with the skills by which the operator drives aae, each harness in its current format. Claude Code reads
+`.claude-plugin/marketplace.json` and the plugin's `.claude-plugin/plugin.json`; Codex reads
+`.agents/plugins/marketplace.json` and the plugin's root `plugin.json`
 ([recovery](guide/recovery.md)). A test of `aae-front` checks its manifests and that its skills name only commands
 and flags the CLI has.
 

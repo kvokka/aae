@@ -43,9 +43,9 @@ is:
 path = "~/aae-plugins/review"
 ```
 
-A plugin in a git repository is declared with `git = "<url>"` and `rev = "<tag or full commit id>"` instead of
-`path`, and `dir = "<directory>"` when it is not at the root of the repository; `rev` is required for a plugin. `aae` downloads it into its cache when it loads the config and
-runs it only at that tag or commit; see
+A plugin in a git repository is declared with `git = "<url>"` and `rev = "<tag or full commit id>"` instead of `path`,
+and `dir = "<directory>"` when it is not at the root of the repository; `rev` is required for a plugin. `aae` downloads
+it into its cache when it loads the config and runs it only at that tag or commit; see
 [Packs and plugins from git](../design/config.md#packs-and-plugins-from-git).
 
 Declaring it turns nothing on: both sides work only where the plugin is **attached**. Its agent side reaches the
