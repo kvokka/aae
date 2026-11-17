@@ -322,10 +322,8 @@ async fn a_stdio_server_is_shared_behind_the_bridge_unless_it_is_per_session() {
 #[tokio::test]
 async fn the_servers_of_the_agents_a_session_may_call_are_bound_with_it() {
     let dir = tempfile::tempdir().unwrap();
-    let server = |name: &str| {
-        let log = dir.path().join(format!("{name}.jsonl"));
-        format!("[mcp.{name}]\ncommand = [\"{PROBE}\", \"{}\"]\n", log.display())
-    };
+    let log = |name: &str| dir.path().join(format!("{name}.jsonl")).display().to_string();
+    let server = |name: &str| format!("[mcp.{name}]\ncommand = [\"{PROBE}\", \"{}\"]\n", log(name));
     let dev = format!("harness = \"scripted\"\nsubagents = [\"qa\"]\n{}", server("notes"));
     let qa = format!(
         "harness = \"scripted\"\ndescription = \"Checks.\"\nplugins = [{{ name = \"kit\" }}]\n{}{}",
@@ -335,7 +333,7 @@ async fn the_servers_of_the_agents_a_session_may_call_are_bound_with_it() {
     // A service of the target without an MCP server only gives environment: the session does not start it.
     let kit = format!(
         "name = \"kit\"\nversion = \"0.1.0\"\n[[service]]\nname = \"side\"\ncommand = [\"{PROBE}\", \"{}\"]\n",
-        dir.path().join("side.jsonl").display()
+        log("side")
     );
     let driver = ScriptedDriver::new(1);
     driver.stall_sessions();

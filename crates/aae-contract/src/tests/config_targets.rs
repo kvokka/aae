@@ -2,7 +2,8 @@
 //! "Subagents"), and the clashes of what the session and its targets share.
 
 use super::{
-    config::load_with,
+    config::{load_for_adapters, load_with},
+    config_launch::ADAPTERS,
     config_subagents::{FIT, ME, QA, base, me, one_error},
 };
 use crate::config::{EffectiveConfig, Name};
@@ -93,4 +94,47 @@ fn a_skill_name_has_one_directory_in_a_session() {
     // The same directory is no clash: both attach the plugin `mail`.
     let qa_plugin = format!("{FIT}plugins = [{{ name = \"mail\" }}]\n");
     load_with(&[(ME, &me_list), (QA, &qa_plugin), docs]).unwrap();
+}
+
+#[test]
+fn a_codex_target_has_no_server_or_hook_the_caller_has_not() {
+    let config = format!(
+        "{}[harness.codex]\n[[plugin]]\npath = \"plugins/notes\"\n",
+        base("config.toml")
+    );
+    let notes =
+        "name = \"notes\"\nversion = \"0.1.0\"\n[[service]]\nname = \"notes\"\ncommand = [\"notes\"]\nmcp = true\n";
+    let parts = "[mcp.db]\ncommand = [\"db\"]\n[hooks.log]\nevent = \"Stop\"\ncommand = \"log\"\n";
+    let load = |harness: &str, qa: &str| {
+        let caller = me(&format!("subagents = [\"qa\"]\n{parts}")).replace("claude", harness);
+        let qa = format!("{}{qa}", FIT.replace("claude", harness));
+        let files = [
+            ("config.toml", config.as_str()),
+            ("plugins/notes/plugin.toml", notes),
+            (ME, &caller),
+            (QA, &qa),
+        ];
+        load_for_adapters(&files, ADAPTERS)
+    };
+    // The caller's own servers and hooks are no clash.
+    load("codex", parts).unwrap();
+    let cases = [
+        ("[mcp.mail]\ncommand = [\"mail\"]\n", "its `mcp.mail`"),
+        ("plugins = [{ name = \"notes\" }]\n", "its service `notes`"),
+        ("[hooks.log]\nevent = \"Stop\"\ncommand = \"other\"\n", "its hook `log`"),
+    ];
+    for (qa, why) in cases {
+        let errors = load("codex", qa).expect_err("rejected");
+        let messages: Vec<&str> = errors.iter().map(|e| e.message.as_str()).collect();
+        let tail = "the caller has not, and a codex subagent has the caller's only";
+        assert_eq!(
+            messages,
+            [format!(
+                "agent `kit.implementer` on rig `root`: subagent `kit.qa`: {why} {tail}"
+            )],
+            "{qa}"
+        );
+        // A claude subagent gets its own.
+        load("claude", qa).unwrap();
+    }
 }
