@@ -26,6 +26,7 @@ mod formula_step;
 mod gates;
 mod hooks;
 mod instances;
+mod manual_recovery;
 mod mcp;
 mod model_gate;
 mod old_instances;

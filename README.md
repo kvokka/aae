@@ -12,6 +12,7 @@ finisher and by plugins.
 - [Installing aae](docs/guide/install.md)
 - [Your first project](docs/guide/first-project.md)
 - [Your first formula with an agent](docs/guide/first-formula.md)
+- [Recovering a failed run by hand](docs/guide/recovery.md)
 - [Writing a plugin](docs/guide/plugin.md)
 - [Demos](demos/README.md): a planner agent files a request as beads, and coder agents on claude and codex do them
 - Reference: [configuration files](docs/design/config.md), [contracts](docs/design/contracts.md) (events, hooks,

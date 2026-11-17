@@ -12,6 +12,7 @@ references (`design/contracts.md`, `design/config.md`) are meant to be read by s
 | [guide/install.md](guide/install.md) | installing, what aae runs, the daemon as a service, upgrading |
 | [guide/first-project.md](guide/first-project.md) | a project, its root and rigs |
 | [guide/first-formula.md](guide/first-formula.md) | a formula with an agent, from the config to a passed run |
+| [guide/recovery.md](guide/recovery.md) | a run that failed for good: what failed, continue the session, a new session with or without a note, abandon |
 | [guide/plugin.md](guide/plugin.md) | writing a plugin: the agent side and the orchestrator side |
 | [design/config.md](design/config.md) | every config file and key; layers and "explain config"; packs, agents, formulas, triggers, plugins |
 | [api/frontends.md](api/frontends.md) | the HTTP API and the CLI; what a human sees and does with a run |

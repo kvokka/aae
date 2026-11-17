@@ -106,6 +106,8 @@ so an agent names it in its own config (`[mcp.aae] url = "${AAE_API}/mcp"`, whic
 - The state of a run shows each attempt's `session`: the harness's own session reference (claude
   `{session_id, config_dir, workdir}`, codex `{thread_id, codex_home}`). After the run a human may open that conversation
   with the harness's own tools; aae takes no part in it.
+- A run that failed for good is recovered by hand with these commands: continue its session, start a new one on its
+  bead with or without a note, or abandon the bead ([recovering a failed run](../guide/recovery.md)).
 - Joining a live session and handing control over to a human are not in the first release: it has no operation, no
   state and no stub for them, and the driver interface has none either
   ([contracts](../design/contracts.md#41-shape)).
