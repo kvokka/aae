@@ -13,6 +13,7 @@ pub const ADAPTER: Adapter = Adapter {
     models: MODELS,
     tested: TESTED,
     agent_types: &["default", "explorer", "worker"],
+    subagents_inherit: true,
     new,
     doctor,
 };

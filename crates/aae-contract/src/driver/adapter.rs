@@ -54,6 +54,9 @@ pub struct Adapter {
     pub tested: [(u32, u32, u32); 2],
     /// The agent types the harness has built in: an agent of such a name is no subagent of a session on it.
     pub agent_types: &'static [&'static str],
+    /// A subagent of the harness has the MCP servers and hooks of its session, none of its own: a target with ones
+    /// the session has not is no subagent of it.
+    pub subagents_inherit: bool,
     /// The driver on `setup`; the error names the key of the adapter's settings that is wrong.
     pub new: fn(&Setup) -> Result<Arc<dyn Driver>, String>,
     /// The host checks of `aae doctor` for the harness and its agents: whether a session the daemon starts can log

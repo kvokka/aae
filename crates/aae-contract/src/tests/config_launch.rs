@@ -12,6 +12,7 @@ static CLAUDE: Adapter = Adapter {
     models: &[],
     tested: [(0, 0, 0), (0, 0, 0)],
     agent_types: &["Explore"],
+    subagents_inherit: false,
     new: |_| Err(String::new()),
     doctor: |_| Vec::new(),
 };
@@ -20,6 +21,7 @@ static CODEX: Adapter = Adapter {
     models: &[("luna", "gpt-6-luna")],
     tested: [(0, 0, 0), (0, 0, 0)],
     agent_types: &["worker"],
+    subagents_inherit: true,
     new: |_| Err(String::new()),
     doctor: |_| Vec::new(),
 };

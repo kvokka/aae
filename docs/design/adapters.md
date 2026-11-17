@@ -22,6 +22,7 @@ config ([config](config.md#where-the-bundled-plugins-end-and-the-core-begins)).
        models: &[("<short>", "<full>")], // short model names it expands; any other name goes as it is
        tested: [(1, 2, 0), (1, 4, 3)],   // tested binary versions, inclusive; also Capabilities.versions
        agent_types: &["<type>"],         // agent types built into the harness: no subagent takes such a name
+       subagents_inherit: false,         // true: a subagent has its session's MCP servers and hooks only
        new,                              // fn(&Setup) -> Result<Arc<dyn Driver>, String>
        doctor,                           // fn(DoctorAgents) -> Vec<Check>
    };

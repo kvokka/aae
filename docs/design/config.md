@@ -601,8 +601,9 @@ of another `scope` or `inherit_host`; a target whose `env` has a key the caller'
 whose plugin is not for the harness; a target named like an agent type the harness has built in (claude:
 `general-purpose`, `Explore`, `Plan`, `claude`; codex: `default`, `explorer`, `worker`); a target with no
 `description`; a target's MCP server of a name the caller has, with another definition; a skill of a target of a
-name the session or another target has, in another directory. A pattern that matches a target unfit so is the same
-error.
+name the session or another target has, in another directory; on codex, whose subagent has the MCP servers and hooks
+of its session only, a target's MCP server, service with MCP or hook that the caller has not. A pattern that
+matches a target unfit so is the same error.
 
 ## Agent variants
 

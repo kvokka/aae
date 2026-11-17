@@ -17,6 +17,7 @@ pub const ADAPTER: Adapter = Adapter {
     models: &[],
     tested: TESTED,
     agent_types: &["general-purpose", "Explore", "Plan", "claude"],
+    subagents_inherit: false,
     new,
     doctor,
 };

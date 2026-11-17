@@ -108,9 +108,9 @@ fn glob(pattern: &str, name: &str) -> bool {
 /// target's config is its own alone at the same place.
 pub(super) fn unfit(config: &Config, p: &Project, r: Option<&Rig>, me: &str, c: &EffectiveConfig) -> Vec<String> {
     let Some(list) = &c.subagents else { return Vec::new() };
-    let types = (config.adapters.iter())
-        .find(|a| a.name == c.harness)
-        .map_or(&[][..], |a| a.agent_types);
+    let adapter = config.adapters.iter().find(|a| a.name == c.harness);
+    let types = adapter.map_or(&[][..], |a| a.agent_types);
+    let inherit = adapter.is_some_and(|a| a.subagents_inherit);
     // The skills of the session and of its targets go to one place: a name has one directory.
     let skills = |c: &EffectiveConfig| -> Vec<(String, Option<std::path::PathBuf>)> {
         (c.skills.iter())
@@ -147,6 +147,9 @@ pub(super) fn unfit(config: &Config, p: &Project, r: Option<&Rig>, me: &str, c: 
         if let Some((k, _)) = s.mcp.iter().find(|m| other(*m)) {
             return Some(format!("its `mcp.{k}` is not the caller's"));
         }
+        if inherit && let Some(why) = not_inherited(c, &s) {
+            return Some(why);
+        }
         for (k, path) in skills(&s) {
             if seen.entry(k.clone()).or_insert_with(|| path.clone()) != &path {
                 return Some(format!("its skill `{k}` is not the one of the session"));
@@ -159,6 +162,23 @@ pub(super) fn unfit(config: &Config, p: &Project, r: Option<&Rig>, me: &str, c: 
         .filter(|t| *t != me)
         .filter_map(|t| why(t).map(|why| format!("subagent `{t}`: {why}")))
         .collect()
+}
+
+/// Why target `s` of `c` needs an MCP server, a service with one or a hook the session has not, on a harness whose
+/// subagent has the session's only.
+fn not_inherited(c: &EffectiveConfig, s: &EffectiveConfig) -> Option<String> {
+    let tail = format!("the caller has not, and a {} subagent has the caller's only", c.harness);
+    if let Some(k) = s.mcp.keys().find(|k| !c.mcp.contains_key(*k)) {
+        return Some(format!("its `mcp.{k}` {tail}"));
+    }
+    let theirs = |k: &String, v: &super::Service| c.services.get(k).is_some_and(|w| w.value == *v);
+    let services = s.services.iter().filter(|(_, v)| v.value.mcp.is_some());
+    if let Some((k, _)) = services.into_iter().find(|(k, v)| !theirs(k, &v.value)) {
+        return Some(format!("its service `{k}` {tail}"));
+    }
+    let hooks = s.hooks.iter().filter(|(_, h)| h.value.enabled);
+    let mut own = hooks.filter(|(_, h)| !c.hooks.values().any(|o| o.value == h.value));
+    own.next().map(|(k, _)| format!("its hook `{k}` {tail}"))
 }
 
 /// Every agent and variant of every project, alone on every place: its list resolves and its targets fit. Said once
