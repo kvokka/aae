@@ -1,0 +1,14 @@
+# What the demo needs besides aae; mise is a convenience, any install of these tools does.
+[tools]
+claude = "2.1"
+codex = "0"
+"github:Dicklesworthstone/beads_rust" = "0.7.6"
+jq = "1.8.2"
+
+[tasks.check]
+description = "The pack, the project and the plugin load"
+run = "aae config check --config root/config.toml"
+
+[tasks.demo]
+description = "The demo from the requests to its report; EXAMPLE=1 keeps the result as the *-example"
+run = "./run.sh"

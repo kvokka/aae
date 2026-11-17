@@ -2,7 +2,7 @@
 
 A plugin of aae for claude and codex agents: it sets the context window at which the harness compacts a session,
 counts the compactions of the session, keeps the label `compactions:<n>` on the run's bead and fails the run past
-`max_compactions`.
+`max_compactions`. [Demo 4](../../demos/4-context-budget/README.md) runs it on an agent of each harness.
 
 ```toml
 # the orchestrator's config.toml or a project's aae.toml

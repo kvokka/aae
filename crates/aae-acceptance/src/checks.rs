@@ -116,6 +116,13 @@ pub(crate) const ALL: &[Scenario] = &[
         run: |env| Box::pin(demo(env, "3-review-gate", 1)),
     },
     Scenario {
+        criterion: "20",
+        title: "demo 4: an agent on claude and one on codex read past the window the context-budget plugin gives them, \
+            and the bead of each run carries the label of its compactions, unattended",
+        launch: Launch::Request,
+        run: |env| Box::pin(demo(env, "4-context-budget", 1)),
+    },
+    Scenario {
         criterion: "22",
         title: "line budgets and MEASURE markers (scripts/budget.sh)",
         launch: Launch::Ci,
@@ -344,7 +351,7 @@ async fn tests(env: Arc<Env>, filter: &str, want: u32) -> String {
 
 async fn demos_load(env: Arc<Env>) -> String {
     let aae = env.aae.to_string_lossy().into_owned();
-    for demo in ["1-planner-executor", "2-multirepo-qa", "3-review-gate"] {
+    for demo in ["1-planner-executor", "2-multirepo-qa", "3-review-gate", "4-context-budget"] {
         let config = format!("demos/{demo}/root/config.toml");
         command(&env, &aae, &["config", "check", "--config", &config]).await;
     }

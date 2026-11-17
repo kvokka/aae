@@ -1,0 +1,11 @@
+name = "glossary"
+description = "An agent on claude reads the documents to their end and writes a glossary of them"
+
+[inputs]
+task = { type = "task", required = true }   # the request: its text becomes the root bead
+
+[[step]]
+name = "write"
+kind = "ai"
+agent = "glossarist"
+timeout = "40m"

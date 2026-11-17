@@ -1,0 +1,24 @@
+name = "library"
+packs = ["../pack"]                   # the agents and the formulas; the task comes from the user at the start
+
+# The project has no rigs: its root is the directory the agents read and write in, filled by run.sh. The tracker
+# stays here, next to aae.toml.
+[root]
+path = "../library"
+
+# The user's settings: what the agents of the pack run on here, and how.
+[settings]
+inherit_host = false                  # only what this config sets reaches the agents; the logins come from the host
+# The permission mode is each harness's own setting: the demo runs unattended.
+[settings.native.claude]
+permission_mode = "bypassPermissions" # claude's `--permission-mode`
+[settings.native.codex]
+approval_policy = "never"             # codex's approval policy
+
+[agents.glossarist]                   # the cheapest claude model
+model = "haiku"
+
+# The indexer keeps the plugin of config.toml with a window of its own: codex takes any size, so it compacts sooner,
+# and more often, than claude. `max_compactions` stays 8, from config.toml.
+[agents.indexer]
+plugins = [{ name = "context-budget", params = { window = 50000 } }]

@@ -1,0 +1,8 @@
+# What a run creates: the documents and what the agents wrote, the beads and the daemon's state; the author's run is
+# in *-example.
+/library/*
+!/library/.gitkeep
+/root/.beads/
+/root/.bv/
+/.aae/
+/RESULT.md

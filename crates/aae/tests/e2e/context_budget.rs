@@ -17,10 +17,15 @@ fn plugin() -> std::path::PathBuf {
 
 /// `aae config explain --json` of the agent `kit.<agent>` of the project `shop`, its value without the layers.
 fn explain(dir: &Path, agent: &str) -> Value {
+    explain_in(dir, &dir.join("config.toml"), "shop", &format!("kit.{agent}"))
+}
+
+/// `aae config explain --json` of `agent` of `project` in `config`, with `dir` for the home and state of `aae`.
+fn explain_in(dir: &Path, config: &Path, project: &str, agent: &str) -> Value {
     let out = Command::new(env!("CARGO_BIN_EXE_aae"))
         .args(["--json", "config", "explain", "--config"])
-        .arg(dir.join("config.toml"))
-        .args(["--project", "shop", "--agent", &format!("kit.{agent}")])
+        .arg(config)
+        .args(["--project", project, "--agent", agent])
         .env("HOME", dir)
         .env("XDG_CACHE_HOME", dir.join("cache"))
         .env("XDG_STATE_HOME", dir.join("state"))
@@ -73,6 +78,38 @@ fn the_params_reach_the_compaction_threshold_of_each_harness_and_the_hooks() {
             "{text}"
         );
         assert!(text.contains("\"event\":\"PreToolUse\""), "{text}");
+    }
+}
+
+/// Demo 4 attaches the plugin to every agent in its orchestrator config, and its project gives the codex agent a
+/// window of its own (demos/4-context-budget/README.md).
+#[test]
+fn demo_4_attaches_the_plugin_to_both_agents_and_gives_the_codex_one_its_own_window() {
+    let tmp = tempfile::tempdir().unwrap();
+    let config = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../demos/4-context-budget/root/config.toml");
+    let text = |agent: &str| {
+        explain_in(tmp.path(), &config, "library", agent)["text"]
+            .as_str()
+            .unwrap()
+            .to_owned()
+    };
+    let (claude, codex) = (text("study.glossarist"), text("study.indexer"));
+    assert!(claude.contains("\"autoCompactWindow\":100000"), "{claude}");
+    assert!(
+        claude.contains("plugins.context-budget.params.window = 100000  # orchestrator"),
+        "{claude}"
+    );
+    assert!(codex.contains("\"model_auto_compact_token_limit\":50000"), "{codex}");
+    assert!(
+        codex.contains("plugins.context-budget.params.window = 50000  # project [agents]"),
+        "{codex}"
+    );
+    for text in [&claude, &codex] {
+        assert!(
+            text.contains("plugins.context-budget.params.max_compactions = 8  # orchestrator"),
+            "{text}"
+        );
+        assert!(text.contains("\"event\":\"PostCompact\""), "{text}");
     }
 }
 

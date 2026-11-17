@@ -1,0 +1,13 @@
+# The orchestrator config of this demo, next to the project's aae.toml on purpose: run.sh starts a daemon of the demo's
+# own with `--config` on this file, so the demo neither reads nor changes the user's ~/.config/aae/config.toml.
+# aae.toml beside it is the project: its pack and what the agents run on.
+projects = ["."]
+
+# The plugin of this repository, declared by its directory: relative to this file.
+[[plugin]]
+path = "../../../plugins/context-budget"
+
+# Attached here, it reaches every agent of every project. The window is small, so that reading the documents is
+# enough to compact: claude takes 100000 at the least and compacts at about 67000 tokens of it.
+[settings]
+plugins = [{ name = "context-budget", params = { window = 100000, max_compactions = 8 } }]

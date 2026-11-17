@@ -1,0 +1,11 @@
+name = "index"
+description = "An agent on codex reads the documents to their end and writes an index of their sections"
+
+[inputs]
+task = { type = "task", required = true }   # the request: its text becomes the root bead
+
+[[step]]
+name = "write"
+kind = "ai"
+agent = "indexer"
+timeout = "40m"
