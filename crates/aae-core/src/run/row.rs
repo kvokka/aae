@@ -40,6 +40,9 @@ pub(super) struct Row {
     pub(super) step_kind: String,
     /// The execution of the step within its round, from 1 up to the step's `max_attempts` (docs/design/config.md).
     pub(super) step_attempt: u32,
+    /// The step that ran last, as `step`, `agent`, `step_kind` and `step_attempt`, while the run skips the steps
+    /// after it; only in memory, between leaving that step and the next one that runs.
+    pub(super) ran: Option<(String, String, String, u32)>,
 }
 
 const COLUMNS: &str = "id, project, rig, formula, agent, inputs, correlation, depth, parent_run, workdir, state, \
@@ -80,6 +83,7 @@ impl Row {
                 as_agent: r.get(22)?,
                 step_kind: r.get(23)?,
                 step_attempt: r.get(24)?,
+                ran: None,
             })
         })
         .optional()

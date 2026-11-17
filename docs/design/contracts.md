@@ -67,7 +67,8 @@ Shared objects:
 
 - `RunView`:
   `{id, formula, step, agent, step_kind: "ai"|"exec"|"drain"|"formula"|"await", state, class, attempt, generation, bead, workdir, depth, parent_run, created_at, started_at}`.
-  `step` is the name of the formula step the run is at (6.1); `agent` and `step_kind` are of that step, `agent` is null
+  `step` is the name of the formula step the run is at (6.1), and of an ended run the step that ran last (the steps
+  it skipped after it do not count); `agent` and `step_kind` are of that step, `agent` is null
   for a step other than `ai`, `class` is null until `failed`, `bead` is the bead id or null, `depth` is the chain
   depth of 6.1 (0 for a run started by hand), `parent_run` the run whose event triggered it or whose session started
   it. The read API (`GET /v1/runs/{id}`, `aae run show`) gives the `RunView` with `project`, `rig`, `correlation`,
@@ -696,7 +697,8 @@ so that the state machine has one place where `run.attempt_failed` is decided.
   step in the same transaction, so `run.preparing` is decided for every step that runs and `run.started` comes once.
   A step whose `if` does not match on entry is skipped in that transaction: `run.step_skipped`, no `run.preparing`, no
   attempt, and the run enters the next step or ends. The `pass` of the last step is `passed`, with the outcome of the
-  last step that ran (a run whose every step is skipped is `failed{infrastructure}`, `every step was skipped`); a
+  last step that ran (a run whose every step is skipped is `failed{infrastructure}`, `every step was skipped`; one
+  sent back into a round that skips every step is `failed{infrastructure}`, `every step of round <n> was skipped`); a
   failure of a step fails the run, whose outcome is that of that step, unless the step is a check (`back_to`): then the run goes on to the next check of a row, or back to an earlier step for the
   next round, the same way from `finishing` to `preparing` (config.md, "Formula").
 - An attempt starts a new session or resumes the previous one of its step, and has its own generation. Each prompt

@@ -725,7 +725,9 @@ enters the step â€” at the start, after the step before it, on a return to it â€
 `run.preparing`, no attempt and no outcome; the run goes on to the next step at once. A step that runs only after a
 return names its check: `if = { back_from = "review" }`; `back_to` to a step with an `if` does not undo its `if`, and
 `if` makes no jump. A skipped check sends nothing back; the row of checks is that of the formula's text, whatever is
-skipped. A run whose every step is skipped fails (class `infrastructure`, reason `every step was skipped`).
+skipped. A run whose every step is skipped fails (class `infrastructure`, reason `every step was skipped`), and so
+does one sent back into a round that skips every step (reason `every step of round <n> was skipped`). A run that
+skips its last steps ends at the step that ran last: that is its `step` in `aae run show` and `aae run list`.
 
 Any step but `await` may have `max_attempts` (1 to 20, the ceiling of session attempts; default 1): the step runs at most that
 many times, and one that does not pass runs again until then; past it the step fails. `step_check_script_path` names a script that says

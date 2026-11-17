@@ -172,14 +172,35 @@ impl RunHandler {
                 return self.enter(tx, row, to.clone(), None);
             }
         }
-        match next {
-            Some(next) => self.enter(tx, row, next.clone(), None),
-            // Every step skipped, or the last that ran did not pass: there is no outcome to pass with.
-            None if !Self::outcome(tx, &row)?.is_some_and(|o| o.result == Verdict::Pass) => {
-                self.terminal(tx, row, "failed", Some("infrastructure"), "every step was skipped")
-            }
-            None => self.terminal(tx, row, "passed", None, "pass"),
+        let Some(next) = next else {
+            return self.ended(tx, row);
+        };
+        self.enter(tx, row, next.clone(), None)
+    }
+
+    /// The run is past its last step. It ends at the step that ran last, whatever it skipped after it, and passes
+    /// with that step's outcome; with no `pass` to pass with, it fails.
+    fn ended(&mut self, tx: &mut Tx<'_>, mut row: Row) -> Result<(), Error> {
+        if let Some((step, agent, kind, n)) = row.ran.take() {
+            tx.sql().execute(
+                "UPDATE runs SET step = ?2, agent = ?3, step_kind = ?4, step_attempt = ?5 WHERE id = ?1",
+                params![row.id, step, agent, kind, n],
+            )?;
+            (row.step, row.agent, row.step_kind, row.step_attempt) = (step, agent, kind, n);
         }
+        if Self::outcome(tx, &row)?.is_some_and(|o| o.result == Verdict::Pass) {
+            return self.terminal(tx, row, "passed", None, "pass");
+        }
+        // A step that ran and did not pass sent the run back into a round that skipped every step.
+        let reason = if row.attempt == 0 {
+            "every step was skipped".to_owned()
+        } else {
+            let round: u32 = tx
+                .sql()
+                .query_row("SELECT round FROM runs WHERE id = ?1", [&row.id], |r| r.get(0))?;
+            format!("every step of round {round} was skipped")
+        };
+        self.terminal(tx, row, "failed", Some("infrastructure"), &reason)
     }
 
     /// The `if` of the step the run entered does not hold (docs/design/config.md): no hook is asked, no attempt
@@ -209,6 +230,14 @@ impl RunHandler {
         };
         // A step that ran comes here `finishing`; a skipped one is still `preparing` and finished nothing.
         let ran = row.state != "preparing";
+        if ran {
+            row.ran = Some((
+                row.step.clone(),
+                row.agent.clone(),
+                row.step_kind.clone(),
+                row.step_attempt,
+            ));
+        }
         let outcome = Self::outcome(tx, &row)?;
         self.end_attempt(tx, &row, None)?;
         if ran {

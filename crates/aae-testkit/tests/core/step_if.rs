@@ -56,6 +56,13 @@ impl World {
         panic!("`{run}` did not end");
     }
 
+    /// The step of `run` as its row keeps it.
+    fn run_step(&self, run: &str) -> String {
+        let db = rusqlite::Connection::open(self.dir.path().join("state.db")).unwrap();
+        db.query_row("SELECT step FROM runs WHERE id = ?1", [run], |r| r.get(0))
+            .unwrap()
+    }
+
     fn step_log(&self) -> String {
         std::fs::read_to_string(self.dir.path().join("shop/web/log")).unwrap_or_default()
     }
@@ -164,19 +171,46 @@ async fn a_skipped_check_sends_nothing_back_and_loses_its_old_outcome() {
     );
 }
 
-/// When the last step is skipped, the run's outcome is that of the last step that ran.
+/// When the last steps are skipped, the run ends at the last step that ran, with its outcome.
 #[tokio::test]
 async fn a_skipped_last_step_leaves_the_outcome_of_the_last_step_that_ran() {
     let steps = [
         exec("work", "true", ""),
         exec("note", "true", "if = { \"inputs.deploy\" = true }\n"),
+        exec("tell", "true", "if = { \"inputs.deploy\" = true }\n"),
     ];
     let w = flow("[inputs]\ndeploy = { type = \"boolean\" }\n", &steps);
-    let (_, kind, data) = w.run_to_end(json!({})).await;
+    let (run, kind, data) = w.run_to_end(json!({})).await;
     assert_eq!(kind, "run.passed", "{data}");
     assert_eq!(data["outcome"]["summary"], "exit 0", "{data}");
-    assert_eq!(data["run"]["step"], "note");
+    assert_eq!(
+        (&data["run"]["step"], &data["run"]["step_kind"]),
+        (&json!("work"), &json!("exec"))
+    );
     assert_eq!(data["run"]["attempt"], 1, "no attempt for the skipped step");
+    assert_eq!(w.run_step(&run), "work", "`run show` and `run list` read the step here");
+}
+
+/// A run sent back into a round that skips every step fails, and the reason names that round.
+#[tokio::test]
+async fn a_round_that_skips_every_step_fails_the_run() {
+    let w = flow(
+        "",
+        &[
+            exec("work", "true", "if = { \"run.attempt\" = 0 }\n"),
+            exec("review", "exit 1", "back_to = \"work\"\nif = { \"run.attempt\" = 1 }\n"),
+        ],
+    );
+    let (run, kind, data) = w.run_to_end(json!({})).await;
+    assert_eq!(kind, "run.failed", "{data}");
+    assert_eq!(
+        (&data["class"], &data["reason"]),
+        (&json!("infrastructure"), &json!("every step of round 2 was skipped")),
+        "{data}"
+    );
+    assert_eq!(w.all("run.step_skipped").len(), 2);
+    assert_eq!(data["run"]["step"], "review");
+    assert_eq!(w.run_step(&run), "review");
 }
 
 /// A run whose every step is skipped has no outcome to pass with: it fails.
