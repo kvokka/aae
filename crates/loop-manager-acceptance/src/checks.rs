@@ -13,6 +13,7 @@ const TARGETS: [&str; 4] = [
     "aarch64-apple-darwin",
 ];
 
+const KILLED_IN_A_COMMAND: &str = "-p loop-manager -E test(/killed_in_a_command_is_resumed/)";
 pub(crate) const ALL: &[Scenario] = &[
     Scenario {
         criterion: "1",
@@ -30,13 +31,7 @@ pub(crate) const ALL: &[Scenario] = &[
         criterion: "9",
         title: "kill -9 of claude and of the codex app-server mid-tool is typed, resumed and reaches its outcome",
         launch: Launch::Ci,
-        run: |env| {
-            Box::pin(tests(
-                env,
-                "-p loop-manager -E test(/killed_in_a_command_is_resumed/)",
-                2,
-            ))
-        },
+        run: |env| Box::pin(tests(env, KILLED_IN_A_COMMAND, 2)),
     },
     Scenario {
         criterion: "35",
@@ -322,9 +317,7 @@ async fn release(env: Arc<Env>, targets: &[&str]) -> String {
         built.push(&host);
     }
     for target in &built {
-        let mut args: Vec<&str> = "zigbuild -q --release --locked -p loop-manager --target"
-            .split(' ')
-            .collect();
+        let mut args = Vec::from_iter("zigbuild -q --release --locked -p loop-manager --target".split(' '));
         args.push(target);
         command(&env, "cargo", &args).await;
     }
@@ -350,18 +343,13 @@ async fn tests(env: Arc<Env>, filter: &str, want: u32) -> String {
 }
 
 async fn demos_load(env: Arc<Env>) -> String {
-    let loop_manager = env.loop_manager.to_string_lossy().into_owned();
+    let bin = env.loop_manager.to_string_lossy().into_owned();
     let demos = std::fs::read_dir(root().join("demos")).unwrap();
     for config in demos
         .map(|d| d.unwrap().path().join("root/config.toml"))
         .filter(|c| c.exists())
     {
-        command(
-            &env,
-            &loop_manager,
-            &["config", "check", "--config", &config.to_string_lossy()],
-        )
-        .await;
+        command(&env, &bin, &["config", "check", "--config", &config.to_string_lossy()]).await;
     }
     "`loop-manager config check` of demos/<demo>/root/config.toml is clean for each demo".into()
 }
@@ -370,12 +358,12 @@ async fn demos_load(env: Arc<Env>) -> String {
 /// demo's directory, ignored by git, and each run starts from what `git clean` leaves, as the demo's README says.
 /// What the agents may have left running is neither looked for nor killed.
 async fn demo(env: Arc<Env>, name: &str, times: usize) -> String {
-    let loop_manager = format!("LOOP_MANAGER={}", env.loop_manager.display());
+    let var = format!("LOOP_MANAGER={}", env.loop_manager.display());
     let dir = format!("demos/{name}");
     let mut runs = Vec::new();
     for _ in 0..times {
         command(&env, "git", &["clean", "-ffdXq", "--", &dir]).await;
-        let out = command(&env, "env", &[&loop_manager, &format!("{dir}/run.sh")]).await;
+        let out = command(&env, "env", &[&var, &format!("{dir}/run.sh")]).await;
         runs.push(line_with(&out, name));
     }
     runs.join("; ")

@@ -40,11 +40,11 @@ fn tree(extra: &str) -> tempfile::TempDir {
     dir
 }
 
-fn loop_manager(dir: &Path, args: &[&str]) -> Output {
-    loop_manager_env(dir, args, &[])
+fn lm(dir: &Path, args: &[&str]) -> Output {
+    lm_env(dir, args, &[])
 }
 
-fn loop_manager_env(dir: &Path, args: &[&str], env: &[(&str, &str)]) -> Output {
+fn lm_env(dir: &Path, args: &[&str], env: &[(&str, &str)]) -> Output {
     Command::new(env!("CARGO_BIN_EXE_loop-manager"))
         .args(args)
         .env("HOME", dir)
@@ -68,7 +68,7 @@ fn doctor(dir: &Path) -> (bool, Vec<(String, String, String)>) {
 
 fn doctor_env(dir: &Path, env: &[(&str, &str)]) -> (bool, Vec<(String, String, String)>) {
     let config = dir.join("config/loop-manager/config.toml").display().to_string();
-    findings(&loop_manager_env(dir, &["doctor", "--json", "--config", &config], env))
+    findings(&lm_env(dir, &["doctor", "--json", "--config", &config], env))
 }
 
 /// The output of `loop-manager doctor --json`: whether it passed, and the level and detail of each check by name.
@@ -180,11 +180,10 @@ fn a_harness_with_no_adapter_is_a_config_error_naming_the_known_ones() {
     let (passed, found) = doctor(dir.path());
     let (config, why) = level(&found, "config");
     assert!(!passed && config == "error", "{found:?}");
-    assert!(
-        why.ends_with("`harness.opencode`: loop-manager has no adapter for harness `opencode`; known: claude, codex")
-    );
+    let want = "`harness.opencode`: loop-manager has no adapter for harness `opencode`; known: claude, codex";
+    assert!(why.ends_with(want));
     let config = dir.path().join("config/loop-manager/config.toml");
-    let out = loop_manager(dir.path(), &["config", "check", "--config", config.to_str().unwrap()]);
+    let out = lm(dir.path(), &["config", "check", "--config", config.to_str().unwrap()]);
     assert!(!out.status.success() && String::from_utf8_lossy(&out.stderr).contains("known: claude, codex"));
 }
 
@@ -237,7 +236,7 @@ fn service_files_run_this_binary_with_the_config() {
     let config = dir.path().join("config/loop-manager/config.toml");
     let config = config.to_str().unwrap();
     let exe = env!("CARGO_BIN_EXE_loop-manager");
-    let systemd = loop_manager(dir.path(), &["daemon", "--config", config, "--service", "systemd"]);
+    let systemd = lm(dir.path(), &["daemon", "--config", config, "--service", "systemd"]);
     let unit = String::from_utf8(systemd.stdout).unwrap();
     assert!(systemd.status.success());
     assert!(
@@ -245,16 +244,14 @@ fn service_files_run_this_binary_with_the_config() {
         "{unit}"
     );
     assert!(unit.contains("Environment=\"PATH="), "{unit}");
-    let launchd = loop_manager(dir.path(), &["daemon", "--service", "launchd"]);
+    let launchd = lm(dir.path(), &["daemon", "--service", "launchd"]);
     let plist = String::from_utf8(launchd.stdout).unwrap();
     assert!(
         plist.contains(&format!("<string>{exe}</string>\n    <string>daemon</string>")),
         "{plist}"
     );
-    assert!(
-        !dir.path().join("run/loop-manager/loop-manager.sock").exists(),
-        "no daemon starts"
-    );
+    let socket = dir.path().join("run/loop-manager/loop-manager.sock");
+    assert!(!socket.exists(), "no daemon starts");
 }
 
 #[test]
@@ -341,21 +338,17 @@ async fn the_daemon_answers_the_same_checks_over_the_api() {
         found.map(|f| f["check"].as_str().unwrap().to_owned()).collect()
     };
     let api = d.get("/v1/doctor").await;
-    let config = d
-        .dir
-        .path()
-        .join("config/loop-manager/config.toml")
-        .display()
-        .to_string();
-    let local = loop_manager(d.dir.path(), &["doctor", "--json", "--config", &config]);
+    let config = d.dir.path().join("config/loop-manager/config.toml");
+    let config = config.to_str().unwrap();
+    let local = lm(d.dir.path(), &["doctor", "--json", "--config", config]);
     let local: Value = serde_json::from_slice(&local.stdout).unwrap();
     assert_eq!(names(&api), names(&local), "{api}");
     // Without `--config` the CLI asks the daemon, whatever config file its own environment names.
     let other = [("XDG_CONFIG_HOME", "/nonexistent")];
-    let asked = loop_manager_env(d.dir.path(), &["doctor", "--json"], &other);
+    let asked = lm_env(d.dir.path(), &["doctor", "--json"], &other);
     let asked: Value = serde_json::from_slice(&asked.stdout).unwrap();
     assert_eq!(names(&api), names(&asked), "{asked}");
-    let table = loop_manager_env(d.dir.path(), &["doctor"], &other);
+    let table = lm_env(d.dir.path(), &["doctor"], &other);
     let table = String::from_utf8_lossy(&table.stdout);
     assert!(
         table.starts_with(&format!("ok       config           {config}\n")),
@@ -369,9 +362,8 @@ async fn the_daemon_answers_the_same_checks_over_the_api() {
 /// The daemon with no config file at the default path runs on the defaults and says so.
 #[tokio::test(flavor = "multi_thread")]
 async fn with_no_config_file_the_defaults_are_named() {
-    let d =
-        crate::common::Daemon::start(|dir| fs::remove_file(dir.join("config/loop-manager/config.toml")).unwrap()).await;
-    let (_, found) = findings(&loop_manager(d.dir.path(), &["doctor", "--json"]));
+    let d = crate::common::Daemon::start(|d| fs::remove_file(d.join("config/loop-manager/config.toml")).unwrap()).await;
+    let (_, found) = findings(&lm(d.dir.path(), &["doctor", "--json"]));
     let (config, why) = level(&found, "config");
     assert!(
         config == "ok" && why.starts_with("no config file at ") && why.ends_with(", the defaults"),
@@ -401,11 +393,8 @@ fn a_rig_with_the_prefix_of_the_br_database_is_warned_about() {
     let (_, found) = doctor_env(dir.path(), &[("PATH", &path)]);
     let (level, why) = self::level(&found, "br prefix");
     assert!(level == "warning" && why.contains("`web`") && why.contains("`shop`") && why.contains("`w`"));
-    fs::write(
-        shop.join("loop-manager.toml"),
-        "[rigs.web]\npath = \"web\"\nprefix = \"wb\"\n",
-    )
-    .unwrap();
+    let rigs = "[rigs.web]\npath = \"web\"\nprefix = \"wb\"\n";
+    fs::write(shop.join("loop-manager.toml"), rigs).unwrap();
     let (_, found) = doctor_env(dir.path(), &[("PATH", &path)]);
     assert!(found.iter().all(|f| f.0 != "br prefix"), "{found:?}");
 }

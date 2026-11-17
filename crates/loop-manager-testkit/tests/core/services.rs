@@ -55,10 +55,7 @@ async fn one_service_serves_every_session_and_restarts_on_its_port() {
         w.driver.mcp(&b, 1)["probe"].clone(),
     );
     assert_eq!(sa["url"], sb["url"], "the same server");
-    assert!(
-        !sa["url"].as_str().unwrap().contains("LOOP_MANAGER_SERVICE_PORT"),
-        "{sa}"
-    );
+    assert!(!sa["url"].to_string().contains("LOOP_MANAGER_SERVICE_PORT"), "{sa}");
     assert_eq!(sa["headers"]["X-Loop-Manager-Run"], a.as_str());
     assert_eq!(sb["headers"]["X-Loop-Manager-Run"], b.as_str());
     assert_eq!(sa["headers"]["X-Loop-Manager-Agent"], "shop.dev");
@@ -247,7 +244,7 @@ async fn a_service_without_mcp_reaches_the_session_as_its_url_and_token() {
     w.events(&b, Duration::from_millis(500)).await;
     assert_eq!(w.services(), 1, "one process for both sessions");
     let env = w.driver.sent(&a, 1).0.unwrap();
-    let url = &env["LOOP_MANAGER_SERVICE_MAIL_DB_URL"];
+    let url = env["LOOP_MANAGER_SERVICE_MAIL_DB_URL"].clone();
     let port = url.strip_prefix("http://127.0.0.1:").unwrap();
     // The check `true` may pass before the command ran.
     let start = Instant::now();
@@ -257,10 +254,7 @@ async fn a_service_without_mcp_reaches_the_session_as_its_url_and_token() {
     }
     let token = &env["LOOP_MANAGER_SERVICE_MAIL_DB_TOKEN"];
     assert!(!token.is_empty() && !token.starts_with("${"), "{token}");
-    assert_eq!(
-        w.driver.sent(&b, 1).0.unwrap()["LOOP_MANAGER_SERVICE_MAIL_DB_URL"],
-        *url
-    );
+    assert_eq!(w.driver.sent(&b, 1).0.unwrap()["LOOP_MANAGER_SERVICE_MAIL_DB_URL"], url);
     assert!(w.driver.mcp(&a, 1).get("mail-db").is_none(), "no MCP server");
     // It listens on no port: the launch waited for its check, not for a port.
     let states = w.states(&a).await;
