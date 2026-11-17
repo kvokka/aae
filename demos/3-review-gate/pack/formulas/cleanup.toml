@@ -19,6 +19,7 @@ for repo in $(printf '%s' "$places" | jq -r '.[0] | .rigs[].path, .root.path'); 
   ! git ls-remote -q --exit-code --heads origin "$branch" >/dev/null || git push -q origin --delete "$branch"
   base=$(git rev-parse --abbrev-ref origin/HEAD); base=${base#origin/}
   git switch -q -f "$base"
+  git reset -q --hard "origin/$base"    # a feature cancelled before `pr` left its commits here
   ! git show-ref -q --verify "refs/heads/$branch" || git branch -q -D "$branch"
 done
 cd "$(printf '%s' "$places" | jq -r '.[0].dir')"

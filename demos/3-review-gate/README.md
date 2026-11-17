@@ -32,7 +32,8 @@ KISS".
 
     Each repository keeps the feature on one branch over every round, so `feature` has no `worktree`, which is a branch
     per run. Every script can run again with the same result;
-  - formula `cleanup`: closes the open pull requests of a feature, deletes its branches and closes its bead.
+  - formula `cleanup`: closes the open pull requests of a feature, deletes its branches, takes each repository back to
+    its default branch as the remote has it and closes its bead.
 - `root/` holds the configuration and the tracker of the project; its repository, `[root] path`, is `gate-demo/`.
   `aae.toml` sets the models, `feedback_from` (`kvokka-agent`; put your login there) and two triggers: `cleanup` on
   `run.cancelled` of a `feature` run, and on nothing else (a failed run is left for a human to look into), and
