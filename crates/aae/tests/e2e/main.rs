@@ -10,6 +10,7 @@ mod bridge;
 mod claude;
 mod cli;
 mod codex;
+mod context_budget;
 mod doctor;
 mod exec_env;
 mod git_cache;

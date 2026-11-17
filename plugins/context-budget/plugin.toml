@@ -1,0 +1,19 @@
+name = "context-budget"
+version = "0.1.0"
+harnesses = ["claude", "codex"]
+
+[params]
+window = 200000         # tokens at which the harness compacts the session
+max_compactions = 3     # compactions of a session past which its run fails
+
+[agent]
+native.claude.autoCompactWindow = "${params.window}"
+native.codex.model_auto_compact_token_limit = "${params.window}"
+
+[agent.hooks.context-budget-count]
+event = "PostCompact"
+command = "'${AAE_PLUGIN_DIR}/hooks/budget' compacted '${AAE_PLUGIN_DATA}' ${params.max_compactions}"
+
+[agent.hooks.context-budget-stop]
+event = "PreToolUse"
+command = "'${AAE_PLUGIN_DIR}/hooks/budget' tool '${AAE_PLUGIN_DATA}'"

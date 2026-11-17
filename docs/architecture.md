@@ -55,7 +55,9 @@ its `plugin.toml`, a `README.md`, its own files and its own version — so movin
 changes only its declaration. A config declares a plugin by `[[plugin]]` with a `path`, or with `git` + `rev` + `dir`
 for a directory of a repository ([config: packs and plugins from git](design/config.md#packs-and-plugins-from-git)),
 and an agent attaches it with `plugins = [{ name, params }]`
-([config: plugin](design/config.md#plugin-pluginplugintoml)).
+([config: plugin](design/config.md#plugin-pluginplugintoml)). There is one so far:
+[`context-budget`](../plugins/context-budget/README.md), the compaction window of claude and codex sessions and a
+budget of compactions per session.
 
 The skills for a user's agent are a different thing: `operator-plugin/` is a plugin of the operator's harness,
 Claude Code or Codex, with the skills by which the operator drives aae, each harness in its current format. Claude Code reads `.claude-plugin/marketplace.json` and the plugin's `.claude-plugin/plugin.json`;

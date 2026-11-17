@@ -1,0 +1,34 @@
+#!/bin/sh
+# The harness hooks of the context-budget plugin, for claude and codex (README.md); the hook's input is on stdin.
+#   budget compacted <data dir> <max compactions>   on PostCompact: count, label the bead, stop past the budget
+#   budget tool <data dir>                          on PreToolUse: stop a session past its budget
+set -eu
+input=$(cat)
+session=$(printf '%s' "$input" | jq -r '.session_id')
+stop="$2/$session.stop"
+
+case $1 in
+tool)
+    [ -f "$stop" ] || exit 0
+    jq -nc --rawfile r "$stop" '{continue: false, stopReason: $r, hookSpecificOutput:
+        {hookEventName: "PreToolUse", permissionDecision: "deny", permissionDecisionReason: $r}}'
+    ;;
+compacted)
+    # A subagent's or a child thread's compaction is of its own context, not of the session's.
+    [ -z "$(printf '%s' "$input" | jq -r '.agent_id // empty')" ] || exit 0
+    count="$2/$session.count"
+    n=$(($(cat "$count" 2>/dev/null || echo 0) + 1))
+    echo "$n" >"$count"
+    if [ -n "${AAE_BEAD:-}" ]; then
+        old=$(br label list "$AAE_BEAD" --json | jq -r '[.[] | select(startswith("compactions:"))] | join(",")') &&
+            { [ -z "$old" ] || br label remove "$AAE_BEAD" -l "$old" >/dev/null; } &&
+            br label add "$AAE_BEAD" -l "compactions:$n" >/dev/null ||
+            echo "context-budget: the label compactions:$n is not on $AAE_BEAD" >&2
+    fi
+    [ "$n" -gt "$3" ] || exit 0
+    reason="context budget: $n compactions"
+    printf '%s' "$reason" >"$stop"
+    aae finish fail --summary "$reason" >&2
+    jq -nc --arg r "$reason" '{continue: false, stopReason: $r}'
+    ;;
+esac
