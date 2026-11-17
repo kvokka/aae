@@ -163,7 +163,10 @@ fn past_the_budget_the_hook_fails_the_run_and_stops_the_session_on_the_input_of_
         assert_eq!(denied["hookSpecificOutput"]["permissionDecisionReason"], reason);
     }
     let finished = fs::read_to_string(d.join("bin/finished")).unwrap();
-    assert_eq!(finished, "finish fail --summary context budget: 2 compactions\n".repeat(2));
+    assert_eq!(
+        finished,
+        "finish fail --summary context budget: 2 compactions\n".repeat(2)
+    );
     // Without a bead only the count: the third compaction of a session past a budget of three goes on.
     let input = json!({ "session_id": "s-none", "hook_event_name": "PostCompact" });
     for _ in 0..3 {
