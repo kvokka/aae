@@ -584,3 +584,47 @@ contracts 3.1.
 
 Критерий WP-92 «`aae config explain` показывает 15m / 40m / 120m» невыполним: `[watchdog]` не выводит ни одна
 команда CLI. Неточность в плане, а не в коде. Подробности — `.loop/cycles/108/review.md`.
+
+## 2026-11-17T08:30 · цикл 109 · coder · РЕШЕНИЕ
+
+WP-94: критерий `git grep -nE 'requires_action|human_timeout|run answer'` выполняется с двумя исключениями —
+`docs/agents/decisions.md` (текст решения 116 владельца называет ушедшее) и сырые логи `experiments/*/logs`. Из
+контракта ушёл и `SessionState::RequiresAction` (в пакете не назван: его больше никто не порождает и не читает).
+`demos/1-planner-executor/README.md` правится вместе с `config.toml` (там назван `human_timeout`) — в рамках
+разрешения владельца от 18:30.
+
+## 2026-11-17T08:31 · цикл 109 · coder · РЕШЕНИЕ
+
+WP-94, codex при чужой `approval_policy`: `decline` есть в схеме 0.168.0 только у
+`item/commandExecution/requestApproval` и `item/fileChange/requestApproval`; у `item/permissions/requestApproval`
+поля `decision` нет — на него, как на `item/tool/requestUserInput` и `mcpServer/elicitation/request`, идёт
+JSON-RPC-ошибка. Отступление от буквы пакета («decline на `item/*/requestApproval`»).
+
+## 2026-11-17T08:32 · цикл 109 · coder · ВОПРОС
+
+WP-94: разрешающий дефолт (`bypassPermissions` у claude, `approvalPolicy = "never"` у codex) отменяется только
+конфигом aae (`native.claude.permission_mode` / `permissions.defaultMode`, `native.codex.approval_policy`) на любом
+слое. Настройка хоста при `inherit_host` дефолт не отменяет — в отличие от `sandbox_mode` (решение 38 смотрит и
+хост). Принято так по тексту пакета и решению 120 (слои default → orchestrator → project → formula), до ответа.
+
+## 2026-11-17T08:33 · цикл 109 · coder · НАХОДКА
+
+`aae doctor` не предупреждает о разрешающем дефолте разрешений (о `sandbox_mode` — предупреждает). Не проверено,
+отказывается ли claude под root от `bypassPermissions` без `IS_SANDBOX=1`. Работой цикла не бралось.
+
+## 2026-11-17T09:40 · цикл 109 · coder · НАХОДКА
+
+WP-95: у claude один отказ приходит дважды — `system/permission_denied` (есть `decision_reason_type`, нет
+`tool_input`) и `result.permission_denials[]` (есть `tool_input`, нет причины). Событие одно на `tool_use_id`, и
+пишется по первому источнику: при system-пути `input` = null, при одном result-пути `reason` = null. Слить поля
+можно, только задержав событие до `result`. Формат `system/permission_denied` взят из кода claude 2.1.326, живьём
+не снимался.
+
+## 2026-11-17T07:25 · цикл 109 · reviewer · ВОПРОС
+
+WP-94: claude под root отказывается запускаться с дефолтом решения 117. Проверено без модели:
+`claude -p --permission-mode bypassPermissions` от root → exit 1, «--dangerously-skip-permissions cannot be used
+with root/sudo privileges». aae под root (контейнер, CI) без своего `permission_mode` теряет каждую сессию claude, и
+прогоны падают `infrastructure`. Нужен выбор владельца: `IS_SANDBOX=1`, другой режим под root, `config_error` с
+понятным текстом, предупреждение `doctor`. До ответа требую только описать это в `docs/design/config.md` (Permissions)
+— ревью 109, Обяз. 1.

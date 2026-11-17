@@ -209,7 +209,7 @@ WP-98; WP-99; WP-100 → WP-101.
 - Результат: `machine.rs`, `exec.rs`, тесты в `crates/aae-testkit/tests/core`.
 - Готово, когда: по тесту на каждый дефект (падает до правки, проходит после); `mise run ci` зелёный.
 
-### WP-94 · Разрешения решает харнесс, ничего не ждёт человека · размер M · критичный · статус: todo
+### WP-94 · Разрешения решает харнесс, ничего не ждёт человека · размер M · критичный · статус: done
 - Документы: решения 116, 117, 120, 61, 90, 38, 4; `docs/design/contracts.md` §1.3, §3.3, §4, §6.1;
   `docs/design/invariants.md` (15); `docs/overview.md:70`; `docs/api/frontends.md:102-105`;
   `docs/guide/first-formula.md:20, 101-107`; `docs/guide/plugin.md:102, 118`; `docs/design/config.md:300`;
@@ -249,7 +249,7 @@ WP-98; WP-99; WP-100 → WP-101.
   адаптеров зелёные на фейковом провайдере; тест: неизвестный `control_request` claude получает ответ-ошибку сразу;
   `mise run ci` зелёный.
 
-### WP-95 · Событие `run.permission_denied` · размер S · статус: todo
+### WP-95 · Событие `run.permission_denied` · размер S · статус: done
 - Документы: решения 124 и 61, `docs/design/contracts.md` §1.3 (события), §4.3 (нормализованные события).
 - Зависит от: WP-94
 - Сделать: claude сообщает отказы в `system/permission_denied` (`tool_name`, `decision_reason_type`; best-effort) и в
