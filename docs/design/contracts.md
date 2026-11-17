@@ -474,8 +474,8 @@ claude (`crates/aae-claude`):
   `<state>/claude/<session>/<instance>/`, and are removed when it exits; a resume writes them again. The config
   directory of an isolated session (`<state>/claude/<session>/config/`, its transcript) stays: no driver call says
   that a session will never be resumed, so it is removed by hand.
-- Signals read: `system/api_retry` (`retrying`), `rate_limit_event` with the reset time, the turn `result` with
-  its error flag and `permission_denials`, `system/permission_denied`, `session_state_changed`,
+- Signals read: `system/api_retry` (`retrying`), `rate_limit_event` with the reset time, the assistant message's
+  `error`, the turn `result` with its error flag, failure fields and `permission_denials`, `system/permission_denied`, `session_state_changed`,
   `background_tasks_changed`, `task_notification`, and the `tool_progress` heartbeat of a long tool every 30 s
   ([experiments](experiments.md#heartbeat-of-a-long-tool)).
   No heartbeat comes from inside a subagent; the watchdog's budgets allow for that (invariant 15).
@@ -514,7 +514,8 @@ codex (`crates/aae-codex`):
   not generated from the schema: the adapter reads the fields it uses by hand, and the contract suite
   ([harness updates](../harness-updates.md)) catches a change on every codex update.
 - Signals read: `error` with `willRetry` and `codexErrorInfo`, `turn/completed` with its status,
-  `thread/status/changed`, `account/rateLimits/updated` with the reset time.
+  `thread/status/changed`, `account/rateLimits/updated` with the reset time, `rateLimitReachedType` and
+  `spendControlReached`.
 - Thread status `idle` comes before `turn/completed`, and a command that outlives its turn (`exec_command` yields while
   it runs) runs while the status is `idle`: the turn ends `idle` with `background`, and its late `item/completed` makes
   the thread idle without background (contract scenario 14). While the provider is silent before its response headers
@@ -538,8 +539,29 @@ subagent after 10 min (vendor documentation for 2.1.322, not measured). codex gi
 `stream_idle_timeout_ms` (300 s) only after `stream_max_retries` (5) reconnects, about 30 min in the worst case (an
 estimate).
 
-The failure classification tables (harness wording → kind) are owned by the adapters and pinned by the contract
-tests ([harness updates](../harness-updates.md#how-the-suite-is-built)).
+A failed turn is classified by the structured fields of the harness, the first field that names a kind deciding;
+text is a narrow fallback, and a value no rule knows is never an error: the next field decides, and what none tells
+apart is `unknown` with the harness words (or `field=value`) in `text` and the message in `raw`. A refusal of the
+model by policy and a network break without a status are `unknown` on both harnesses.
+
+- claude, in order: `startup_failure_reason` of a claude that could not start (sessions run with
+  `CLAUDE_CODE_STARTUP_FAILURE_RESULTS=1`, so it comes as a `result` and not only on stderr; a reason that may pass by
+  itself, such as remote settings that did not arrive, is `unknown`); the result's `subtype` and `terminal_reason`
+  (turn, budget and structured-output limits `runaway_turn`, `prompt_too_long` and `blocking_limit`
+  `context_overflow`); the assistant message's `error` of the turn; `api_error_status` (401 and 403
+  `auth_required`, 429 `rate_limited`, 404 `config_error`, 408, 5xx and 529 `overloaded`); then two text rules
+  (`Not logged in` and, for a rate-limited turn, `You've hit your`). A `rate_limit_event` of the turn refines only a
+  rate-limited turn: `credits_required` makes it `billing`, `rejected` `quota_exhausted` with its reset time. The
+  first `api_retry` with 401, 403 or a logged-out `error` (`authentication_failed`, `oauth_org_not_allowed`,
+  `cloud_credential_error`) is `auth_required` at once.
+- codex: the variant of `codexErrorInfo` and its `httpStatusCode` (statuses as for claude; `flexUnavailable` and
+  `policyCapacityUnavailable` `overloaded`, `sandboxError` `config_error`). `usageLimitExceeded` stands for a used-up
+  plan, a missing plan, no credit and a spend cap alike: it is `billing` when the last rate-limit snapshot says
+  `rateLimitReachedType` `workspace_*` or `spendControlReached`, or its message is one of codex's plan and credit
+  messages, and otherwise `quota_exhausted` with the reset of the exhausted window. A retry with 401 or 403 is
+  `auth_required` at once; a JSON-RPC answer `-32001` (the app-server's request queue is full) is `overloaded`.
+
+The tables are owned by the adapters and pinned by the contract tests ([harness updates](../harness-updates.md#how-the-suite-is-built)).
 
 ## 5. Tracker interface
 

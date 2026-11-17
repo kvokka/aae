@@ -69,8 +69,10 @@ the core relies on these, and a driver that misses one fails runs by the watchdo
   best effort: an unknown instance or an error is no failure, and the run then waits for the background budget.
 - **A failure** is `Failure{kind, scope, retry_at_ms, retried_by_harness, raw, account, provider_model}` of the
   kinds in contracts 4.4. `retried_by_harness` is true when the harness already retried a 429 or a 5xx itself:
-  the policy never retries on top of it. Wording → kind tables belong to the adapter. A success that carries an
-  error is a failure; an exit in an open turn is `harness_crash` whatever the exit code.
+  the policy never retries on top of it. The adapter classifies by the harness's structured fields (contracts
+  4.6); text is a narrow fallback, and what no field tells apart is `unknown` with the harness words or the value
+  in `text`. A success that carries an error is a failure; an exit in an open turn is `harness_crash` whatever
+  the exit code.
 - **`Usage`** carries increments, not running totals; `Retrying{delay}` is in real units (the core adds it to the
   silence limit); the events of one instance are sent in `seq` order by one sender at a time (a repeat is dropped, a
   gap is told as `resync.diverged`).

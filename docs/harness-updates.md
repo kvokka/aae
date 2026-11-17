@@ -19,8 +19,8 @@ marked `[experimental]`, and codex released every 2–8 days (observed on 2026-1
 2. Run the contract suite and the daemon tests of that harness:
    - claude: `cargo nextest run -p aae-claude` and `cargo nextest run -p aae -E 'test(/^claude::/)'`;
    - codex: `cargo nextest run -p aae-codex` and `cargo nextest run -p aae -E 'test(/^codex::/)'`.
-3. A red scenario is a change of the harness protocol or of its failure wording. Fix the adapter (the failure
-   classification tables live in `crates/aae-claude/src/stream.rs` and `crates/aae-codex/src/`), never the
+3. A red scenario is a change of the harness protocol or of its failure fields. Fix the adapter (the failure
+   classification lives in `crates/aae-claude/src/stream/classify.rs` and `crates/aae-codex/src/stream.rs`), never the
    scenario's expectation, unless the harness now reports more than before.
 4. When all is green, run one real turn on the cheapest model of the harness: the request row of criterion 2,
    `cargo build -p aae && cargo run -p aae-acceptance -- 2`, does it on both harnesses (it costs model calls and
