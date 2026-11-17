@@ -27,6 +27,7 @@ fn config(provider: &Provider) -> EffectiveConfig {
         scope: Default::default(),
         description: None,
         subagents: None,
+        targets: Default::default(),
         model_given: None,
         model: Some(agent("gpt-fake".into())),
         effort: None,

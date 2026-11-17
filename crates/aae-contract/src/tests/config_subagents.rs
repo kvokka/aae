@@ -7,16 +7,16 @@ use super::{
 };
 use crate::config::{Config, ConfigError, Layer, Name};
 
-const ME: &str = "kit/agents/implementer/agent.toml";
-const QA: &str = "kit/agents/qa/agent.toml";
-const FIT: &str = "harness = \"claude\"\ndescription = \"Checks a change.\"\n";
+pub(super) const ME: &str = "kit/agents/implementer/agent.toml";
+pub(super) const QA: &str = "kit/agents/qa/agent.toml";
+pub(super) const FIT: &str = "harness = \"claude\"\ndescription = \"Checks a change.\"\n";
 
 /// The `agent.toml` of BASE's `implementer` with `extra` after it.
-fn me(extra: &str) -> String {
+pub(super) fn me(extra: &str) -> String {
     format!("harness = \"claude\"\neffort = \"high\"\nplugins = [{{ name = \"mail\" }}]\n{extra}\n")
 }
 
-fn base(path: &str) -> &'static str {
+pub(super) fn base(path: &str) -> &'static str {
     BASE.iter().find(|(p, _)| *p == path).unwrap().1
 }
 
@@ -54,7 +54,7 @@ fn errors(changes: &[(&str, &str)]) -> Vec<ConfigError> {
 }
 
 /// Loading fails with exactly one error that contains `needle`.
-fn one_error(changes: &[(&str, &str)], needle: &str) {
+pub(super) fn one_error(changes: &[(&str, &str)], needle: &str) {
     let errors = errors(changes);
     let found: Vec<_> = errors.iter().filter(|e| e.message.contains(needle)).collect();
     assert_eq!(found.len(), 1, "`{needle}` in {errors:?}");

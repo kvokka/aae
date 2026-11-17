@@ -148,6 +148,10 @@ impl Driver for ScriptedDriver {
         env.extend(actor.clone());
         env.extend(bead.clone().map(|bead| ("AAE_BEAD".to_owned(), bead)));
         let mcp: BTreeMap<_, _> = config.mcp.iter().map(|(n, m)| (n, &m.value)).collect();
+        let servers = |c: &EffectiveConfig| -> BTreeMap<String, Value> {
+            (c.mcp.iter()).map(|(n, m)| (n.clone(), json!(m.value))).collect()
+        };
+        let targets: BTreeMap<_, _> = config.targets.iter().map(|(n, t)| (n, servers(t))).collect();
         let entry = (token.clone(), BTreeMap::new());
         self.lock().tokens.insert((run.clone(), *attempt), entry);
         let process = ProcessPart(json!({ "native": config.native.as_ref().map(|n| &n.value) }));
@@ -155,6 +159,7 @@ impl Driver for ScriptedDriver {
         // The environment and the MCP servers ride with the session: the launch resolves their service ports.
         let session = SessionPart(json!({
             "model": model, "workdir": workdir, "run": run, "attempt": attempt, "env": env, "mcp": mcp,
+            "targets": targets,
         }));
         Ok(Split::new(self.harness(), process, session))
     }

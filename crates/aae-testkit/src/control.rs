@@ -144,6 +144,11 @@ impl ScriptedDriver {
         self.part(run, attempt, "mcp")
     }
 
+    /// The MCP servers of the subagent targets of the session of attempt `attempt` of `run`, by target and name.
+    pub fn targets(&self, run: &str, attempt: u32) -> Value {
+        self.part(run, attempt, "targets")
+    }
+
     /// The working directory the session of attempt `attempt` of `run` starts in.
     pub fn workdir(&self, run: &str, attempt: u32) -> Value {
         self.part(run, attempt, "workdir")

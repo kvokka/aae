@@ -532,6 +532,12 @@ not run again here:
 | claude nesting | Depth 2 by default (the second level has no `Agent`); `CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH` sets it (1, 2, 3, 5 held); the main thread's `Agent` call is asynchronous by default, nested ones synchronous. |
 | codex nesting | The live model took multi-agent v2 (`spawn_agent` + `wait_agent`); `agents.max_depth` has no effect in v2; the ceiling is the thread count (`agents.max_threads`: the default stopped at depth 3 with "agent thread limit reached", 15 reached depth 4); roles of the main thread resolve at every depth; the parent waits for the child. |
 
+<!-- MEASURE id=subagents-definition-shape date=2026-11-18 ver=claude-2.1.326 env=linux-arm64-orbstack src=.loop/cycles/126/notes/wp122-plan.md note="one-off fake Messages API, no model, scripts not kept; n=1" -->
+
+| Question | Answer |
+|---|---|
+| Shape of a claude definition the adapter writes | A type name with a dot (`kit.qa`) or a colon is taken: `init.agents == ["kit.qa"]`, the main thread gets "- kit.qa: <description>", `Agent{subagent_type: "kit.qa"}` runs it with its `prompt`. `mcpServers` is a list of one-server maps (`[{"<name>": {type, command, args, env}}]`); a map fails with "expected array, received object", exit 1. `prompt` is required, an empty string is taken; `description`, `model`, `effort` and `hooks` (the `--settings` shape) together are taken. With `CLAUDE_AGENT_SDK_DISABLE_BUILTIN_AGENTS=1` only the defined types are listed; the native `fork` stays. |
+
 ### Consequences
 
 For the context-budget plugin:

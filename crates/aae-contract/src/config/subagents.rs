@@ -6,7 +6,7 @@ use super::{
     check::resolve as resolve_name,
     load::{Loader, reference},
 };
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 
 /// The agents (`<pack>.<name>`) and variants `list` names for `me`, an agent of pack `own` or a variant of one, at
 /// place `r` of `p`: `me` among them, sorted.
@@ -66,6 +66,32 @@ pub(super) fn resolve(
     Ok(found.into_iter().collect())
 }
 
+/// The targets of a run of `me` with config `c` at `r` of `p`: every agent of its list that has a `description`, by
+/// name; `me` with the run's own config, any other alone at the place. A target that does not assemble is left out:
+/// the load said why.
+pub(super) fn targets(
+    config: &Config,
+    p: &Project,
+    r: Option<&Rig>,
+    me: &str,
+    c: &EffectiveConfig,
+) -> BTreeMap<String, EffectiveConfig> {
+    let alone = [me.to_owned()];
+    let list = c.subagents.as_ref().map_or(&alone[..], |s| &s.value);
+    (list.iter())
+        .filter_map(|t| {
+            let target = if t == me {
+                Some(c.clone())
+            } else {
+                config.named(p, r, t, Vec::new()).ok()
+            };
+            target
+                .filter(|t| t.description.is_some())
+                .map(|target| (t.clone(), target))
+        })
+        .collect()
+}
+
 /// `*` in `pattern` stands for any run of characters, an empty one too.
 fn glob(pattern: &str, name: &str) -> bool {
     match pattern.split_once('*') {
@@ -85,7 +111,15 @@ pub(super) fn unfit(config: &Config, p: &Project, r: Option<&Rig>, me: &str, c: 
     let types = (config.adapters.iter())
         .find(|a| a.name == c.harness)
         .map_or(&[][..], |a| a.agent_types);
-    let why = |t: &str| -> Option<String> {
+    // The skills of the session and of its targets go to one place: a name has one directory.
+    let skills = |c: &EffectiveConfig| -> Vec<(String, Option<std::path::PathBuf>)> {
+        (c.skills.iter())
+            .filter(|(_, s)| s.value.enabled)
+            .map(|(k, s)| (k.clone(), s.value.path.clone()))
+            .collect()
+    };
+    let mut seen: BTreeMap<_, _> = skills(c).into_iter().collect();
+    let mut why = |t: &str| -> Option<String> {
         let bare = t.split_once('.').map_or(t, |(_, n)| n);
         if types.contains(&bare) {
             return Some(format!("`{bare}` is a built-in agent type of harness `{}`", c.harness));
@@ -108,6 +142,15 @@ pub(super) fn unfit(config: &Config, p: &Project, r: Option<&Rig>, me: &str, c: 
         }
         if s.description.is_none() {
             return Some("it has no `description`".to_owned());
+        }
+        let other = |(k, m): (&String, &super::Sourced<super::Mcp>)| c.mcp.get(k).is_some_and(|n| n.value != m.value);
+        if let Some((k, _)) = s.mcp.iter().find(|m| other(*m)) {
+            return Some(format!("its `mcp.{k}` is not the caller's"));
+        }
+        for (k, path) in skills(&s) {
+            if seen.entry(k.clone()).or_insert_with(|| path.clone()) != &path {
+                return Some(format!("its skill `{k}` is not the one of the session"));
+            }
         }
         let differs = |(k, v): (&String, &super::Sourced<String>)| c.env.get(k).is_some_and(|w| w.value != v.value);
         (s.env.iter().find(|e| differs(*e))).map(|(k, _)| format!("its `env.{k}` is not the caller's"))

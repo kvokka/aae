@@ -29,6 +29,7 @@ pub(super) fn config(provider: &Provider) -> EffectiveConfig {
         scope: Default::default(),
         description: None,
         subagents: None,
+        targets: Default::default(),
         model_given: None,
         model: Some(sourced("claude-haiku-5-5")),
         effort: None,
@@ -159,6 +160,56 @@ async fn hooks_skills_and_mcp_servers_reach_the_session() {
     assert!(skills.contains("\"aae:mail\""), "{skills}");
     let servers = init["mcp_servers"].to_string();
     assert!(servers.contains("\"mine\""), "{servers}");
+}
+
+/// A full definition, so that claude checks its whole shape: it gives no `init` for one it rejects.
+#[tokio::test]
+async fn the_main_thread_sees_the_agents_of_the_list_and_no_other() {
+    let dir = tempfile::tempdir().unwrap();
+    let skill = dir.path().join("skills/audit");
+    std::fs::create_dir_all(&skill).unwrap();
+    std::fs::write(
+        skill.join("SKILL.md"),
+        "---\nname: audit\ndescription: Audits.\n---\n\nSay audit.\n",
+    )
+    .unwrap();
+    let (_, _, raw, requests) = turn(vec![Reply::Text("OK".into())], dir.path(), |c| {
+        let mut qa = c.clone();
+        qa.description = Some(sourced("Checks the work.".to_owned()));
+        qa.system_prompt = Some(sourced("You check the work.".to_owned()));
+        let hook = Hook {
+            enabled: true,
+            event: Some("PostToolUse".into()),
+            matcher: Some("Bash".into()),
+            command: Some("true".into()),
+            timeout: Some("10s".into()),
+        };
+        qa.hooks.insert("check".into(), sourced(hook));
+        let server = Mcp {
+            command: Some(vec!["true".into()]),
+            env: BTreeMap::new(),
+            url: None,
+            headers: BTreeMap::new(),
+            scope: None,
+        };
+        qa.mcp.insert("probe".into(), sourced(server));
+        let path = Some(skill.clone());
+        qa.skills.insert("audit".into(), sourced(Skill { enabled: true, path }));
+        c.targets.insert("kit.qa".into(), qa);
+    })
+    .await;
+    let init = raw
+        .iter()
+        .find(|m| m["type"] == "system" && m["subtype"] == "init")
+        .expect("an init message");
+    assert_eq!(init["agents"], serde_json::json!(["kit.qa"]), "no built-in type");
+    let skills = init["skills"].to_string();
+    assert!(skills.contains("\"aae:audit\""), "{skills}");
+    let sent = Value::from(requests).to_string();
+    assert!(
+        sent.contains("- kit.qa: Checks the work."),
+        "the main thread is told the type"
+    );
 }
 
 fn sourced<T>(value: T) -> Sourced<T> {

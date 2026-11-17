@@ -120,6 +120,10 @@ pub struct EffectiveConfig {
     /// sorted; `None` when no layer sets a list: the agent alone.
     #[serde(default)]
     pub subagents: Option<Sourced<Vec<String>>>,
+    /// The configs of the agents of `subagents` that have a `description`, by name, each alone at the run's place:
+    /// what a session of the run may call. Empty outside a run.
+    #[serde(default)]
+    pub targets: BTreeMap<String, EffectiveConfig>,
 }
 
 /// A plugin attached to an agent, with the values of its params in force, each from the layer that gave it.
@@ -154,6 +158,7 @@ impl EffectiveConfig {
             scope: super::Scope::Rig,
             description: None,
             subagents: None,
+            targets: BTreeMap::new(),
         }
     }
 

@@ -88,6 +88,7 @@ impl Live {
             scope: Default::default(),
             description: None,
             subagents: None,
+            targets: Default::default(),
             model_given: None,
             model: Some(sourced("gpt-fake".to_owned())),
             effort: None,

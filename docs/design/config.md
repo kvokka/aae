@@ -580,14 +580,29 @@ list, and with no list it is the only one. The set is one per session: a nested 
 target's own list is not read. The list resolves on every place: on a rig that runs a variant in place of an agent
 (`[rigs.<r>] agents`), a target named as that agent is the variant, as for a step of a formula. A target's config is
 its own, alone, on the caller's place (`Config::effective`): the layers of the caller's pack and step do not reach it.
-`description` says what the agent does; a target needs one, the caller does not.
+`description` says what the agent does; a target needs one, and the caller without one does not call itself.
+
+A run's config carries the configs of the targets that have a `description` (the caller with its run's own config),
+and its session gets them as native definitions of its harness, on every start and resume. The name of a type is the
+entry of the resolved list (`kit.qa`, a variant's name). A definition holds the target's `description`, role prompt
+(with its plugins' fragments), model, effort, and the MCP servers and hooks the session has not: a server of a name
+the session has is the session's, a hook equal to one of the session's runs already (the session's hooks fire inside
+its subagents too). The services of a target with an MCP server are bound with the session's. The targets' skills
+join the session's and are visible to the whole session. A target's `env` and native block do not reach its
+subagent: it lives in the caller's process. claude: the definitions go in `--agents` (a file beside the session's
+settings), and `CLAUDE_AGENT_SDK_DISABLE_BUILTIN_AGENTS=1` removes the built-in agent types (`general-purpose`,
+`Explore`, `Plan`), so with no target only claude's own `fork` is left. Nesting is the harness's: claude goes two
+levels deep unless `CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH` in the agent's `env` says otherwise. codex does not get
+the definitions yet.
 
 Load errors, said of the project file for every agent and variant on every place, and for every ai step of a formula
 whose pack or step layers change the caller: a name that resolves to no agent or variant; a target on another harness,
 of another `scope` or `inherit_host`; a target whose `env` has a key the caller's has, with another value; a target
 whose plugin is not for the harness; a target named like an agent type the harness has built in (claude:
 `general-purpose`, `Explore`, `Plan`, `claude`; codex: `default`, `explorer`, `worker`); a target with no
-`description`. A pattern that matches a target unfit so is the same error.
+`description`; a target's MCP server of a name the caller has, with another definition; a skill of a target of a
+name the session or another target has, in another directory. A pattern that matches a target unfit so is the same
+error.
 
 ## Agent variants
 

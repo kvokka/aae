@@ -2,10 +2,10 @@
 //! credential delivery"). claude runs a process per session, so everything is in the process part.
 
 use aae_contract::{
-    config::EffectiveConfig,
+    config::{EffectiveConfig, Hook, Sourced},
     driver::{Failure, Fingerprint, ProcessPart, SessionPlan, child::config_error},
 };
-use serde_json::{Value, json};
+use serde_json::{Map, Value, json};
 use std::{
     collections::BTreeMap,
     path::{Path, PathBuf},
@@ -13,17 +13,22 @@ use std::{
 use uuid::Uuid;
 
 /// The process part of a session: `{session_id, resume, workdir, config_dir, run, attempt, token, actor, bead, model,
-/// effort, system_prompt, permission_mode, inherit_host, env, settings, mcp, skills}`; `settings` and `mcp` are the
-/// JSON of `--settings` and `--mcp-config`, `skills` the skill directories by name.
+/// effort, system_prompt, permission_mode, inherit_host, env, settings, mcp, agents, skills}`; `settings`, `mcp` and
+/// `agents` are the JSON of `--settings`, `--mcp-config` and `--agents`, `skills` the skill directories by name, the
+/// targets' among them.
 pub(crate) fn process(config: &EffectiveConfig, plan: &SessionPlan, state: &Path) -> Result<Value, Failure> {
     let (settings, permission_mode) = settings(config)?;
     let mcp = mcp(config)?;
-    let skills: BTreeMap<_, _> = config
-        .skills
-        .iter()
-        .filter(|(_, s)| s.value.enabled)
-        .filter_map(|(name, s)| Some((name.clone(), s.value.path.clone()?)))
-        .collect();
+    // The skills of the targets join the session's in its one plugin: the session's first, the same name is the same
+    // directory (a load error otherwise).
+    let mut skills = BTreeMap::new();
+    for c in std::iter::once(config).chain(config.targets.values()) {
+        for (name, s) in c.skills.iter().filter(|(_, s)| s.value.enabled) {
+            if let Some(path) = &s.value.path {
+                skills.entry(name.clone()).or_insert_with(|| path.clone());
+            }
+        }
+    }
     let (session_id, resume, workdir, run, attempt, token, actor, bead) = match plan {
         SessionPlan::New {
             workdir,
@@ -56,7 +61,6 @@ pub(crate) fn process(config: &EffectiveConfig, plan: &SessionPlan, state: &Path
     // state directory (docs/design/config.md).
     let files = state.join("claude").join(&session_id);
     let config_dir = (!inherit).then(|| files.join("config"));
-    let value = |s: &Option<aae_contract::config::Sourced<String>>| s.as_ref().map(|s| s.value.clone());
     let env: BTreeMap<_, _> = config.env.iter().map(|(k, v)| (k.clone(), v.value.clone())).collect();
     Ok(json!({
         "session_id": session_id,
@@ -69,16 +73,21 @@ pub(crate) fn process(config: &EffectiveConfig, plan: &SessionPlan, state: &Path
         "token": token,
         "actor": actor,
         "bead": bead,
-        "model": value(&config.model),
-        "effort": value(&config.effort),
-        "system_prompt": value(&config.system_prompt),
+        "model": text(&config.model),
+        "effort": text(&config.effort),
+        "system_prompt": text(&config.system_prompt),
         "permission_mode": permission_mode,
         "inherit_host": inherit,
         "env": env,
         "settings": settings,
         "mcp": mcp,
+        "agents": agents(config)?,
         "skills": skills,
     }))
+}
+
+fn text(s: &Option<Sourced<String>>) -> Option<String> {
+    s.as_ref().map(|s| s.value.clone())
 }
 
 /// The permission mode of a session whose config names none: the harness decides every permission and nothing waits
@@ -111,39 +120,24 @@ fn settings(config: &EffectiveConfig) -> Result<(Value, Option<String>), Failure
         let excluded = [host.join("CLAUDE.md"), host.join("rules/**")];
         settings["claudeMdExcludes"] = json!(excluded);
     }
-    for (name, hook) in config.hooks.iter().filter(|(_, h)| h.value.enabled) {
-        let hook = &hook.value;
-        let (Some(event), Some(command)) = (&hook.event, &hook.command) else {
-            return Err(config_error(format!("hook `{name}` needs an event and a command")));
-        };
-        let mut entry = json!({ "type": "command", "command": command });
-        if let Some(timeout) = &hook.timeout {
-            let timeout =
-                aae_contract::config::duration(timeout).map_err(|e| config_error(format!("hook `{name}`: {e}")))?;
-            entry["timeout"] = json!(timeout.as_secs().max(1));
-        }
-        let matcher = json!({ "matcher": hook.matcher.clone().unwrap_or_default(), "hooks": [entry] });
-        let shape = || config_error(format!("the claude native `hooks.{event}` must be a list of matchers"));
-        let hooks = &mut settings["hooks"];
-        if hooks.is_null() {
-            *hooks = json!({});
-        }
-        let Value::Object(hooks) = hooks else {
-            return Err(shape());
-        };
-        match hooks.entry(event.clone()).or_insert(Value::Null) {
-            Value::Array(list) => list.push(matcher),
-            slot @ Value::Null => *slot = json!([matcher]),
-            _ => return Err(shape()),
-        }
-    }
+    add_hooks(&mut settings, config.hooks.iter().map(|(name, h)| (name, &h.value)))?;
     let settings = if settings == json!({}) { Value::Null } else { settings };
     Ok((settings, mode))
 }
 
 /// The `--mcp-config` JSON of the session's own servers.
 fn mcp(config: &EffectiveConfig) -> Result<Value, Failure> {
-    let mut servers = serde_json::Map::new();
+    let servers = servers(config)?;
+    Ok(if servers.is_empty() {
+        Value::Null
+    } else {
+        json!({ "mcpServers": servers })
+    })
+}
+
+/// The `--mcp-config` entries of the servers of `config`, by name.
+fn servers(config: &EffectiveConfig) -> Result<Map<String, Value>, Failure> {
+    let mut servers = Map::new();
     for (name, server) in &config.mcp {
         let server = &server.value;
         // A service is a URL by now (the core binds it); a stdio server runs per session whatever its scope.
@@ -156,11 +150,72 @@ fn mcp(config: &EffectiveConfig) -> Result<Value, Failure> {
         };
         servers.insert(name.clone(), entry);
     }
-    Ok(if servers.is_empty() {
+    Ok(servers)
+}
+
+/// The `--agents` JSON: a definition per target, by its name. A target's server of a name the session has, and a
+/// hook equal to one of the session's, are the session's: the subagent sees the server and runs the hook already.
+fn agents(config: &EffectiveConfig) -> Result<Value, Failure> {
+    let mut agents = Map::new();
+    for (name, t) in &config.targets {
+        let mut agent =
+            json!({ "description": text(&t.description), "prompt": text(&t.system_prompt).unwrap_or_default() });
+        for (key, value) in [("model", &t.model), ("effort", &t.effort)] {
+            if let Some(value) = text(value) {
+                agent[key] = json!(value);
+            }
+        }
+        // claude takes the servers of a definition as a list of one-server maps, not as a map.
+        let servers: Vec<_> = servers(t)?
+            .into_iter()
+            .filter(|(k, _)| !config.mcp.contains_key(k))
+            .map(|(k, v)| json!({ k: v }))
+            .collect();
+        if !servers.is_empty() {
+            agent["mcpServers"] = json!(servers);
+        }
+        let own = |h: &Hook| !config.hooks.values().any(|s| s.value == *h);
+        add_hooks(
+            &mut agent,
+            t.hooks.iter().map(|(k, h)| (k, &h.value)).filter(|(_, h)| own(h)),
+        )?;
+        agents.insert(name.clone(), agent);
+    }
+    Ok(if agents.is_empty() {
         Value::Null
     } else {
-        json!({ "mcpServers": servers })
+        Value::Object(agents)
     })
+}
+
+/// Adds the enabled `hooks` to the `hooks` key of `into`, in the shape of `--settings`.
+fn add_hooks<'a>(into: &mut Value, hooks: impl Iterator<Item = (&'a String, &'a Hook)>) -> Result<(), Failure> {
+    for (name, hook) in hooks.filter(|(_, h)| h.enabled) {
+        let (Some(event), Some(command)) = (&hook.event, &hook.command) else {
+            return Err(config_error(format!("hook `{name}` needs an event and a command")));
+        };
+        let mut entry = json!({ "type": "command", "command": command });
+        if let Some(timeout) = &hook.timeout {
+            let timeout =
+                aae_contract::config::duration(timeout).map_err(|e| config_error(format!("hook `{name}`: {e}")))?;
+            entry["timeout"] = json!(timeout.as_secs().max(1));
+        }
+        let matcher = json!({ "matcher": hook.matcher.clone().unwrap_or_default(), "hooks": [entry] });
+        let shape = || config_error(format!("the claude native `hooks.{event}` must be a list of matchers"));
+        let hooks = &mut into["hooks"];
+        if hooks.is_null() {
+            *hooks = json!({});
+        }
+        let Value::Object(hooks) = hooks else {
+            return Err(shape());
+        };
+        match hooks.entry(event.clone()).or_insert(Value::Null) {
+            Value::Array(list) => list.push(matcher),
+            slot @ Value::Null => *slot = json!([matcher]),
+            _ => return Err(shape()),
+        }
+    }
+    Ok(())
 }
 
 /// The arguments of `claude` for the process part `p`.
@@ -198,6 +253,9 @@ pub(crate) fn args(p: &Value) -> Vec<String> {
     if !p["mcp"].is_null() {
         args.extend(["--mcp-config".to_owned(), file("mcp.json")]);
     }
+    if !p["agents"].is_null() {
+        args.extend(["--agents".to_owned(), file("agents.json")]);
+    }
     if p["skills"].as_object().is_some_and(|s| !s.is_empty()) {
         args.extend(["--plugin-dir".to_owned(), file("plugin")]);
     }
@@ -215,13 +273,17 @@ pub(crate) fn args(p: &Value) -> Vec<String> {
     args
 }
 
-/// Writes the files the flags of [`args`] name: settings, MCP config and a plugin holding the skills (as links to
+/// Writes the files the flags of [`args`] name: settings, MCP config, agent definitions and a plugin holding the skills (as links to
 /// their directories). The directory is the owner's alone: the MCP config may carry secrets.
 pub(crate) fn materialize(p: &Value) -> std::io::Result<()> {
     use std::os::unix::fs::{DirBuilderExt, symlink};
     let files = Path::new(p["files"].as_str().unwrap_or_default());
     std::fs::DirBuilder::new().recursive(true).mode(0o700).create(files)?;
-    for (key, name) in [("settings", "settings.json"), ("mcp", "mcp.json")] {
+    for (key, name) in [
+        ("settings", "settings.json"),
+        ("mcp", "mcp.json"),
+        ("agents", "agents.json"),
+    ] {
         if !p[key].is_null() {
             std::fs::write(files.join(name), p[key].to_string())?;
         }
@@ -252,6 +314,8 @@ pub(crate) fn env(p: &Value, id: &str, socket: Option<&Path>, host: &Path) -> Re
         ("CLAUDE_CODE_EMIT_SESSION_STATE_EVENTS".to_owned(), "1".to_owned()),
         // A claude that cannot start says why in a `result`, not only on stderr.
         ("CLAUDE_CODE_STARTUP_FAILURE_RESULTS".to_owned(), "1".to_owned()),
+        // The subagent types are those of the agent's list alone: no built-in one (decision 143).
+        ("CLAUDE_AGENT_SDK_DISABLE_BUILTIN_AGENTS".to_owned(), "1".to_owned()),
         ("AAE_RUN".to_owned(), text(&p["run"])),
         ("AAE_ATTEMPT_TOKEN".to_owned(), text(&p["token"])),
     ]);

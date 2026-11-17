@@ -373,7 +373,7 @@ trait Driver: Send + Sync {
 
 | Type | Content |
 |---|---|
-| `EffectiveConfig` | the merged harness-neutral categories of `config.md` "Settings" (model, effort, env, MCP servers, harness hooks, skills, system prompt, permission mode, plugin parts, host inheritance flag) plus the uninterpreted `native` block of the harness; produced by config assembly with the provenance of every value |
+| `EffectiveConfig` | the merged harness-neutral categories of `config.md` "Settings" (model, effort, env, MCP servers, harness hooks, skills, system prompt, permission mode, plugin parts, host inheritance flag) plus the uninterpreted `native` block of the harness, and in a run `targets`: the configs of the subagents its session may call, by type name; produced by config assembly with the provenance of every value |
 | `SessionPlan` | `New { workdir, run, attempt, token, actor, bead }` or `Resume { session: SessionRef, workdir, run, attempt, token, actor, bead }`; the adapter needs `run`/`attempt` only to name files in the state directory, and `run`, `token`, the tracker `actor` and the run's `bead` (when it has one) to set the attempt environment (4.6) |
 | `Split` | `{ process: ProcessPart, session: SessionPart, fingerprint: Fingerprint }`; the two parts are opaque serializable values of the adapter; `fingerprint` = SHA-256 of the harness name and the canonical JSON of `process` (see 8) |
 | `InstanceHandle` | `{ id, pid, start_time, pgid }`; `start_time` is the kernel start time of `pid` (`/proc/<pid>/stat`), pid + start time identify the process ([event model](event-model.md#state)) |
@@ -481,10 +481,11 @@ claude (`crates/aae-claude`):
 
 - Transport: `claude -p` with stream-json input and output, a given `--session-id`, resume by `--resume`. The
   session config is flags and files in the state directory: setting sources (the host inheritance switch),
-  `--settings` with the hooks, `--mcp-config`, `--plugin-dir`, system prompt, model, effort, permission mode; the
-  model is passed explicitly on resume too
-  ([experiments](experiments.md#config-and-credential-delivery-experiments-4-and-5)). The generated files
-  (`settings.json`, `mcp.json` with the tokens of services, the skills plugin) are a process's own, in
+  `--settings` with the hooks, `--mcp-config`, `--agents` with the definitions of the subagent targets,
+  `--plugin-dir`, system prompt, model, effort, permission mode; the model is passed explicitly on resume too
+  ([experiments](experiments.md#config-and-credential-delivery-experiments-4-and-5)), and so is `--agents`.
+  `CLAUDE_AGENT_SDK_DISABLE_BUILTIN_AGENTS=1` leaves no built-in subagent type. The generated files
+  (`settings.json`, `mcp.json` with the tokens of services, `agents.json`, the skills plugin) are a process's own, in
   `<state>/claude/<session>/<instance>/`, and are removed when it exits; a resume writes them again. The config
   directory of an isolated session (`<state>/claude/<session>/config/`, its transcript) stays: no driver call says
   that a session will never be resumed, so it is removed by hand.
@@ -952,7 +953,8 @@ of their own. The adapter reports the account id (4.5, `Driver::account`).
   name, the key `<scope>#<sha256 of the definition>` (the definition is `command`, `env`, `health`; scope `orchestrator`
   or `project:<p>`), the definition, the port and the token in the process column, the consumer count in `sessions` (an
   attempt's services are in `attempts.services`). The launch transaction acquires them (a new record emits
-  `service.starting` and the `start_service` effect) and rewrites the session's config before the split, with
+  `service.starting` and the `start_service` effect) and rewrites the session's config before the split (the services
+  of the session's subagent targets are bound with it, those with an MCP server only), with
   `${AAE_SERVICE_PORT:<id>}` for the port: the launch waits for the service's own health check and puts in the port it
   passed on. A start finds its port free or fails without a process. Its health check (the port accepting connections,
   an HTTP `GET` or a command) passing gives `service.ready` and `ready: true` in the process column; a process that ends

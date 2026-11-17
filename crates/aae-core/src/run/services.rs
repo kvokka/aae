@@ -31,13 +31,15 @@ impl RunHandler {
     /// The config a session of `row` starts with: every service it uses is acquired (started when none of its
     /// definition runs in its scope) and becomes an MCP server with its URL and token, or `AAE_SERVICE_<NAME>_URL`
     /// and `_TOKEN` in its environment; `${AAE_API}` becomes the daemon's API on TCP with its token; every HTTP
-    /// server gets the identity headers. Its port stays [`super::service_proc::port_of`] until the launch.
+    /// server gets the identity headers; the same for the MCP servers of its targets. Its port stays
+    /// [`super::service_proc::port_of`] until the launch.
     pub(super) fn bind_services(
         tx: &mut Tx<'_>,
         row: &Row,
         mut config: EffectiveConfig,
         daemon: &crate::config::Config,
     ) -> Result<(EffectiveConfig, Vec<Bound>), Error> {
+        let targets = std::mem::take(&mut config.targets);
         // A stdio server shared by its scope runs behind the bridge, as a service with an MCP endpoint.
         for (name, server) in config
             .mcp
@@ -128,6 +130,17 @@ impl RunHandler {
         }
         for name in lost {
             config.mcp.remove(&name);
+        }
+        // The targets the session may call get theirs the same way, each service once for the session.
+        for (name, mut target) in targets {
+            // A service without an MCP server gives environment, and a subagent lives in the session's.
+            target.services.retain(|_, s| s.value.mcp.is_some());
+            let (target, theirs) = Self::bind_services(tx, row, target, daemon)?;
+            let new: Vec<Bound> = (theirs.into_iter())
+                .filter(|(id, _)| !bound.iter().any(|(b, _)| b == id))
+                .collect();
+            bound.extend(new);
+            config.targets.insert(name, target);
         }
         Ok((config, bound))
     }

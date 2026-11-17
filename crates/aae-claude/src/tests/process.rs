@@ -19,6 +19,7 @@ fn hooks_join_the_native_settings_and_mcp_servers_take_claude_form() {
         scope: Default::default(),
         description: None,
         subagents: None,
+        targets: Default::default(),
         model_given: None,
         model: None,
         effort: None,

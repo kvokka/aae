@@ -121,7 +121,8 @@ impl Config {
             None => (agent.clone(), mapped(agent)),
         };
         let name = variant.unwrap_or_else(|| agent.to_string());
-        let config = self.named(p, r, &name, middle)?;
+        let mut config = self.named(p, r, &name, middle)?;
+        config.targets = super::subagents::targets(self, p, r, &name, &config);
         Ok((name, config))
     }
 

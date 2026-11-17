@@ -319,6 +319,38 @@ async fn a_stdio_server_is_shared_behind_the_bridge_unless_it_is_per_session() {
     );
 }
 
+#[tokio::test]
+async fn the_servers_of_the_agents_a_session_may_call_are_bound_with_it() {
+    let dir = tempfile::tempdir().unwrap();
+    let server = |name: &str| {
+        let log = dir.path().join(format!("{name}.jsonl"));
+        format!("[mcp.{name}]\ncommand = [\"{PROBE}\", \"{}\"]\n", log.display())
+    };
+    let dev = format!("harness = \"scripted\"\nsubagents = [\"qa\"]\n{}", server("notes"));
+    let qa = format!(
+        "harness = \"scripted\"\ndescription = \"Checks.\"\n{}{}",
+        server("notes"),
+        server("own")
+    );
+    let driver = ScriptedDriver::new(1);
+    driver.stall_sessions();
+    let files = [
+        ("shop/agents/dev/agent.toml", dev.as_str()),
+        ("shop/agents/qa/agent.toml", qa.as_str()),
+    ];
+    let w = world_driven(&files, driver);
+    let run = w.create().await;
+    w.until_count("service.ready", 2).await;
+    w.events(&run, Duration::from_millis(500)).await;
+    assert_eq!(w.services(), 2, "the shared server once, the target's own");
+    let (session, qa) = (w.driver.mcp(&run, 1), w.driver.targets(&run, 1)["shop.qa"].clone());
+    assert_eq!(qa["notes"]["url"], session["notes"]["url"]);
+    let own = &qa["own"];
+    assert!(own["command"].is_null(), "{own}");
+    assert_eq!(own["headers"]["X-Aae-Run"], run.as_str());
+    assert_eq!(call(own), 200);
+}
+
 /// Two projects with a `[[service]]` and a stdio server behind the bridge, both of `scope`: the services started and
 /// whether the projects share each.
 async fn two_projects(scope: &str) -> (usize, [bool; 2]) {
