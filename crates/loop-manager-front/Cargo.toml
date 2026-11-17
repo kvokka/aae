@@ -8,7 +8,7 @@ repository.workspace = true
 rust-version.workspace = true
 
 [dependencies]
-loop-manager-core = { version = "0.1.0", path = "../loop-manager-core" }
+loop-manager-core = { version = "0.0.1", path = "../loop-manager-core" }
 axum = { version = "0.8.9", default-features = false, features = ["http1", "json", "query", "tokio"] }
 clap = { version = "4.6.7", features = ["derive", "env"] }
 http-body-util = "0.1.5"

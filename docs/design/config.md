@@ -501,7 +501,7 @@ addon from git runs only at the tag or commit its declaration pins.
 name = "kit"
 version = "0.3.0"
 requires_addons = ["mail"]         # must be declared by the orchestrator or the project
-min_loop_manager = "0.1.0"                   # optional
+min_loop_manager = "0.0.1"                   # optional
 
 [settings]                          # layer 7: launch settings of the runs of its formulas
 model = "sonnet"

@@ -53,7 +53,7 @@ inputs = { bead = { next_ready = true, epic = "{{ event.bead.epic }}" } }
         r#"name = "kit"
 version = "0.3.0"
 requires_addons = ["mail"]
-min_loop_manager = "0.1.0"
+min_loop_manager = "0.0.1"
 [[trigger]]
 name = "nightly"
 cron = "0 3 * * *"

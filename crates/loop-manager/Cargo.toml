@@ -11,12 +11,12 @@ rust-version.workspace = true
 workspace = true
 
 [dependencies]
-loop-manager-br = { version = "0.1.0", path = "../loop-manager-br" }
-loop-manager-claude = { version = "0.1.0", path = "../loop-manager-claude" }
-loop-manager-codex = { version = "0.1.0", path = "../loop-manager-codex" }
-loop-manager-core = { version = "0.1.0", path = "../loop-manager-core" }
-loop-manager-front = { version = "0.1.0", path = "../loop-manager-front" }
-loop-manager-addons = { version = "0.1.0", path = "../loop-manager-addons" }
+loop-manager-br = { version = "0.0.1", path = "../loop-manager-br" }
+loop-manager-claude = { version = "0.0.1", path = "../loop-manager-claude" }
+loop-manager-codex = { version = "0.0.1", path = "../loop-manager-codex" }
+loop-manager-core = { version = "0.0.1", path = "../loop-manager-core" }
+loop-manager-front = { version = "0.0.1", path = "../loop-manager-front" }
+loop-manager-addons = { version = "0.0.1", path = "../loop-manager-addons" }
 axum = { version = "0.8.9", default-features = false, features = ["http1", "json", "tokio"] }
 clap = "4.6.7"
 serde_json = "1.0.154"
@@ -24,6 +24,6 @@ tokio = { version = "1.54.1", features = ["rt-multi-thread", "net", "signal", "m
 toml = "1.2.1"
 
 [dev-dependencies]
-loop-manager-testkit = { version = "0.1.0", path = "../loop-manager-testkit" }
+loop-manager-testkit = { version = "0.0.1", path = "../loop-manager-testkit" }
 rusqlite = "0.42.0"
 tempfile = "3.27.0"

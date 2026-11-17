@@ -1,7 +1,7 @@
 {
   "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
   "name": "loop-manager",
-  "version": "0.1.0",
+  "version": "0.0.1",
   "description": "Skills for working with loop-manager from Claude Code or Codex: recover runs that failed for good, decide on runs that wait on an await step",
   "homepage": "https://github.com/kvokka/loop-manager",
   "repository": "https://github.com/kvokka/loop-manager",

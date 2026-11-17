@@ -586,7 +586,7 @@ checksum = "5d15f86d12da44cd8d4ec3c73984537eb7f4cadcb9776a575a0a8a05ca11005c"
 
 [[package]]
 name = "loop-manager"
-version = "0.1.0"
+version = "0.0.1"
 dependencies = [
  "axum",
  "clap",
@@ -606,7 +606,7 @@ dependencies = [
 
 [[package]]
 name = "loop-manager-acceptance"
-version = "0.1.0"
+version = "0.0.1"
 dependencies = [
  "loop-manager-core",
  "loop-manager-front",
@@ -618,7 +618,7 @@ dependencies = [
 
 [[package]]
 name = "loop-manager-addons"
-version = "0.1.0"
+version = "0.0.1"
 dependencies = [
  "loop-manager-contract",
  "rustix",
@@ -629,7 +629,7 @@ dependencies = [
 
 [[package]]
 name = "loop-manager-br"
-version = "0.1.0"
+version = "0.0.1"
 dependencies = [
  "loop-manager-contract",
  "notify",
@@ -641,7 +641,7 @@ dependencies = [
 
 [[package]]
 name = "loop-manager-claude"
-version = "0.1.0"
+version = "0.0.1"
 dependencies = [
  "loop-manager-contract",
  "loop-manager-testkit",
@@ -654,7 +654,7 @@ dependencies = [
 
 [[package]]
 name = "loop-manager-codex"
-version = "0.1.0"
+version = "0.0.1"
 dependencies = [
  "loop-manager-contract",
  "loop-manager-testkit",
@@ -668,7 +668,7 @@ dependencies = [
 
 [[package]]
 name = "loop-manager-contract"
-version = "0.1.0"
+version = "0.0.1"
 dependencies = [
  "jiff",
  "rustix",
@@ -683,7 +683,7 @@ dependencies = [
 
 [[package]]
 name = "loop-manager-core"
-version = "0.1.0"
+version = "0.0.1"
 dependencies = [
  "getrandom",
  "jiff",
@@ -700,7 +700,7 @@ dependencies = [
 
 [[package]]
 name = "loop-manager-front"
-version = "0.1.0"
+version = "0.0.1"
 dependencies = [
  "axum",
  "clap",
@@ -719,7 +719,7 @@ dependencies = [
 
 [[package]]
 name = "loop-manager-testkit"
-version = "0.1.0"
+version = "0.0.1"
 dependencies = [
  "axum",
  "loop-manager-addons",
