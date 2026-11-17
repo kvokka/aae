@@ -19,6 +19,7 @@ A cheap experiment comes before the code that relies on it. The set and where ea
 | 6 | finisher from a session: token in the environment, resume, the codex sandbox | finisher | done except the sandbox: deferred until after the release, on a host with user namespaces or macOS; until then the codex adapter sets `danger-full-access` ([config](config.md)) |
 | 7 | opencode, by the open questions [below](#opencode-experiment-7) | next release | deferred to the next release, with the opencode adapter |
 | 8 | background work after the outcome: what stops a command a session left running, without touching other sessions | criterion 34 | done for codex and claude on fake providers (below) |
+| 9 | compaction on both harnesses (hooks, thresholds, stopping a session), codex roles and skills per thread, claude `--agents` from a file | the context-budget plugin, native subagents | done on fake providers; compaction of a codex multi-agent v2 child not checked (below) |
 
 Not checked by any experiment: a real subscription quota running out and a login expiring in the middle of a session
 (both seen only on fake APIs; the claude half of criterion 10 stays open, and with an API key claude gives no reset
@@ -331,7 +332,7 @@ Open: refresh of a delivered OAuth token after expiry ([config](config.md#host-i
 | Skills: `$CODEX_HOME/skills/<name>/SKILL.md` | process | yes | scope `user` in `skills/list`, named in the provider request |
 | Skills: `skills/extraRoots/set` | process | yes | an extra root outside rig and homes; scope `user` |
 | Skills: `$HOME/.agents/skills` with a separate `CODEX_HOME` | process | **read** | a separate `CODEX_HOME` does not cut the host's `~/.agents/skills`; only another `HOME` does |
-| Skills per thread | — | no | no field in `thread/start`; per thread only via the rig (`.agents/skills` in `cwd`) |
+| Skills per thread | thread | enable and disable only | `thread/start.config.skills.config` turns skills of the process roots on and off for the thread ([experiment 9](#codex-roles-and-skills-per-thread)); a skill outside the roots comes per thread only via the rig (`.agents/skills` in `cwd`) |
 | Rig: `.codex/config.toml`, `AGENTS.md`, `.agents/skills` in `cwd` | thread | yes | all three reached the provider request with a fresh `CODEX_HOME`, with and without a `trust_level = "trusted"` entry for the `cwd` |
 | Hooks: `-c hooks.<Event>=[…]` at spawn | process | yes, with the bypass | fired with `source: sessionFlags` |
 | Hooks: `hooks.json` in `CODEX_HOME` | process | yes, with the bypass | fired with `source: user` |
@@ -350,8 +351,8 @@ Open: refresh of a delivered OAuth token after expiry ([config](config.md#host-i
   servers reach the session as well, as [config](config.md#host-inheritance) intends. Host inheritance off = `--setting-sources project,local` (not
   `""`): the rig's own config keeps working — the rig-config rule of `config.md` holds for claude. With an isolated
   `CLAUDE_CONFIG_DIR` the adapter delivers `CLAUDE_CODE_OAUTH_TOKEN` (or `ANTHROPIC_API_KEY`).
-- codex: MCP, hooks (`config.hooks`), instructions and `bypass_hook_trust` go per thread; skills, the
-  provider key value and the host layer are per process. The instance fingerprint
+- codex: MCP, hooks (`config.hooks`), instructions, `bypass_hook_trust` and which skills are on go per thread; the
+  skill roots, the provider key value and the host layer are per process. The instance fingerprint
   ([contracts](contracts.md#8-instance-and-service-registry)) therefore holds
   `CODEX_HOME`, `HOME`, the skill roots and the provider and its key; MCP and hooks are not in it. Host
   inheritance off = own `CODEX_HOME` **and** own `HOME` (or the host's `~/.agents/skills` leak in); the rig's
@@ -450,6 +451,114 @@ experiment 1b skips a `stopped` notification. Step 2 comes when the session ends
 detached itself holds no step, so the run does not wait for it. With claude it goes with the session's process on
 the orphan sweep by `AAE_INSTANCE`; with codex `close_session` kills every process with the thread's attempt token
 (the app-server does not carry one, the other threads have tokens of their own).
+
+## Compaction and native subagents (experiment 9)
+
+Code: throwaway Python scripts in a temporary directory, not kept: a fake Messages API and a fake Responses API in the
+shape of `aae-testkit`, except that the `usage.input_tokens` a reply reports is set per run (the testkit fakes always
+report 10 tokens, too few for a compaction); a hook script that logs its stdin and prints a prepared answer; an
+app-server client. claude 2.1.326 runs as the adapter starts it (`-p`, stream-json both ways, `--setting-sources
+project,local`, hooks in `--settings <file>`, `--permission-mode bypassPermissions`, model `claude-haiku-5-5`, whose
+window is 1 000 000 by `modelUsage.contextWindow`) with the environment of the adapter tests and its own
+`CLAUDE_CONFIG_DIR`; codex 0.169.0 as in experiment 2, several threads in one app-server, hooks per thread with
+`bypass_hook_trust`. No live model: a reply reporting many input tokens makes the harness compact, and the fakes answer
+the summary request (claude: `CRITICAL: Respond with TEXT ONLY`, codex: `CONTEXT CHECKPOINT` in the input) with a
+fixed summary.
+
+<!-- MEASURE id=compaction-claude-exp9 date=2026-11-18 ver=claude-2.1.326 env=linux-arm64-orbstack src=.loop/cycles/123/notes/wp116.md note="fake Messages API with a set usage, n=1 per case; thresholds bracketed by runs 2000 tokens apart, not bisected further" -->
+<!-- MEASURE id=compaction-codex-exp9 date=2026-11-18 ver=codex-0.169.0 env=linux-arm64-orbstack src=.loop/cycles/123/notes/wp116.md note="fake Responses API with a set usage, unknown model names (fallback metadata, multi-agent v1 by default), n=1 per case" -->
+
+### claude compaction
+
+| Question | Answer |
+|---|---|
+| `PreCompact` and `PostCompact` from `--settings` in `-p` | Both fire, on an automatic compaction (`trigger: "auto"`) and on a `/compact` user message (`"manual"`). `PreCompact` stdin: `session_id`, `prompt_id`, `hook_event_name`, `trigger`, `custom_instructions`; `PostCompact`: the same with `compact_summary`. In a subagent both carry `agent_id` and `agent_type`; in the main thread neither. Next to them fire `SubagentStop` with `agent_type: ""` (the summarizing fork; no `SubagentStart` for it) and `SessionStart` with `source: "compact"`. |
+| Attempt or compaction | A compaction needs at least two message groups. Over the threshold in a session's first exchange, `PreCompact` fires, then `system/status{compact_result:"failed", compact_error:"too_few_groups"}`, no `PostCompact`, and the turn goes on; the attempt repeats before the next model request (a subagent fired `PreCompact` three times for one compaction). `PostCompact` counts compactions, `PreCompact` counts attempts. |
+| What the stream shows | Main thread: `system/status{status:"compacting"}`, `system/status{compact_result:"success"}`, `system/compact_boundary{compact_metadata:{trigger, pre_tokens, post_tokens, …}}`, a user message "This session is being continued…"; the turn continues and ends with its own `result`. A manual `/compact` ends with a `result` of `num_turns: 0`. A subagent's compaction shows none of these, only the hook messages of `SessionStart:compact`. No `hook_started`/`hook_response` messages come for `PreCompact` or `PostCompact`. |
+| Threshold per session | `autoCompactWindow` (tokens, 100000 to 1000000) in `--settings`, at the top level or as `modelSettings.<model>.autoCompactWindow`; the variable `CLAUDE_CODE_AUTO_COMPACT_WINDOW` (the binary says it takes precedence over the setting); `CLAUDE_AUTOCOMPACT_PCT_OVERRIDE` (a percent). A window of 100000 compacted at 68000 input tokens and not at 66000 (the window less ≈ 33k); a percent of 10, 5 and 1 on the 1M window compacted at 99000, 50000 and 11000 and not at 97000, 48000 and 9000; with a window of 100000, a percent of 50 compacted at 45000, not at 30000. Without either: no compaction at 190000. A window of 50000 is ignored without a word. |
+| Threshold per subagent | `autoCompactWindow` in the agent's `--agents` definition: the subagent compacted at 150000, without it not. A window in the session's `modelSettings` applies to subagents that have none of their own. |
+| `--agents` with a file path in `-p` | Works: `--agents /abs/agents.json` and a path relative to the working directory both listed the agent in `init.agents` and ran it. A missing file: exit 1, "Error: --agents file not found: … (a value that is not a JSON object is read as a file path)". |
+
+Stopping from a hook (window 100000, 150000 tokens; a hook answers `{"continue": false, "stopReason": "…"}` or exits 2):
+
+| Hook | Effect | `result` | aae adapter |
+|---|---|---|---|
+| `PreCompact`, `PostCompact`, `SessionStart` (`compact`): `continue:false` | none: the compaction and the turn go on | `subtype:"success"` | `completed` |
+| `PreCompact`: exit 2 | the compaction is skipped (`status:null` without `compact_result`, no `PostCompact`), the turn goes on with the full context | `success` | `completed` |
+| `PreToolUse` of the main thread: `continue:false` | the tool still runs, then the turn ends | `subtype:"success"`, `is_error:false`, `terminal_reason:"hook_stopped"`, `stop_reason:"tool_use"`, `result:""`; the `stopReason` text appears nowhere | `completed` |
+| `UserPromptSubmit`: `continue:false` | no model request | `system/informational{prevent_continuation:true, prompt_submit_outcome:{kind:"stopped_by_hook", reason}}`, then `subtype:"success"`, `num_turns:0`, `result:"Operation stopped by hook: <reason>"` | `completed` |
+| `PreToolUse` in a subagent (stdin with `agent_id`): `continue:false` | only the subagent ends (`task_updated{completed}`); the main thread goes on | `success` | `completed` |
+
+### codex compaction
+
+| Question | Answer |
+|---|---|
+| Threshold per thread | `thread/start.config.model_auto_compact_token_limit` applies to that thread only: with 50000 the thread compacted after a reply of 150000 tokens, a thread of the same process without it did not. The key in the process `config.toml` applies to every thread; a thread's own value wins over it (900000 on the thread: no compaction). No floor: a limit of 2000 compacted after 3003 tokens, 4000 did not. |
+| Where it compacts | In the middle of a turn, after the tool call whose reply crossed the limit: `item/completed{contextCompaction}`, then the turn goes on. `thread/compact/start{threadId}` compacts on request, as a turn of its own. |
+| `PreCompact` and `PostCompact` as thread hooks | Both fire from `config.hooks` with the bypass (`source: sessionFlags`). Stdin: `session_id` (the thread id), `turn_id`, `transcript_path`, `cwd`, `hook_event_name`, `model`, `trigger` (`"auto"` or `"manual"`); `PostCompact` has no summary. |
+| Compaction of a child thread | A multi-agent v1 child inherits its parent's per-thread limit and hooks: it compacted with the parent's 50000, and its hooks came with `session_id` = the **parent** thread, `agent_id` = the child, `agent_type` = the role. `model_auto_compact_token_limit` in the role's `config_file` is ignored (50000 there with none on the parent: no compaction; 900000 there under a process limit of 50000: the child compacted). A v2 child was not checked: its task reaches the provider as `encrypted_content`, which the fake cannot read. |
+| `PreCompact`: `continue:false` | `hook/completed{run:{status:"stopped", entries:[{kind:"stop", text:<stopReason>}]}}`, no compaction, the turn ends `interrupted` with `error: null`; every next turn of the thread ends the same way while it stays over the limit. In a child, only the child's turn ends; the parent goes on. |
+| `PostCompact`: `continue:false` | The compaction is done, the turn ends `interrupted`; the next turn runs. |
+| `PreCompact`: exit 2 | The hook is `failed`, the compaction happens anyway. |
+| Other hooks: `continue:false` | `PreToolUse`: unsupported (`failed`, "PreToolUse hook returned unsupported continue:false"), the command runs. `UserPromptSubmit`: `stopped`, the turn ends `completed` without a model request. |
+| aae adapter | A turn `interrupted` that the adapter did not interrupt maps to `cancelled`, without a failure (`crates/aae-codex/src/stream.rs`). |
+
+### codex roles and skills per thread
+
+The per-thread findings of codex 0.168.0 checked again on 0.169.0 (process `config.toml` disabling skills `sk-a` and
+`sk-b` of `$CODEX_HOME/skills`; roles given per thread as `config.agents.<role> = {description, config_file}`):
+
+| Question | Answer on 0.169.0 |
+|---|---|
+| Allow-list of skills per thread | Works: `config.skills.config = [{name: "sk-a", enabled: true}]` gave that thread `sk-a` only, `[{path: <abs>/sk-b/SKILL.md, enabled: true}]` `sk-b` only, a thread without the key none. |
+| Roles per thread | Visible to that thread only: its `spawn_agent.agent_type` lists the role and the built-ins (`default`, `explorer`, …); a thread with no role at all (none in the process either) gets no `agent_type` parameter, and a spawn naming the role fails with "unknown agent_type 'r'". |
+| Keys of a role file that apply | `model`, `developer_instructions` (they replace the parent's), `model_reasoning_effort` (the child's request had `reasoning.effort: "low"`), `[[skills.config]]` (a skill the role disables is gone in the child). `model_auto_compact_token_limit` does not apply (above). An unknown key such as `bypass_hook_trust` drops the whole role: "Ignoring malformed agent role definition … unknown field `bypass_hook_trust`". |
+| `features.multi_agent_v2` per thread | `config.features.multi_agent_v2 = true` gives that thread the `collaboration` tools (`spawn_agent` requires `task_name` and `message`; also `agent_type`, `fork_turns`, `model`, `reasoning_effort`), the others keep `multi_agent_v1`; a per-thread role applied to the v2 child. `features.multi_agent = false` on a thread leaves it without spawn tools. With the fake's unknown model names v1 is the default. |
+
+### Subagent definitions and nesting
+
+From the owner's research session (claude on a fake provider and on haiku, codex on `gpt-6-luna`; scripts not kept),
+not run again here:
+
+<!-- MEASURE id=subagents-nesting-owner date=2026-11-18 ver=claude-2.1.326,codex-0.169.0 env=linux-arm64-orbstack src=.loop/research/2026-11-18-plugins note="owner's session: claude definitions on a fake provider, nesting live on haiku (8 runs) and gpt-6-luna (11 runs); n=1 per case" -->
+
+| Question | Answer |
+|---|---|
+| claude `--agents` with `--append-system-prompt` | `init.agents` lists the agents; the main thread gets the list as "Available agent types for the Agent tool: …"; its system prompt is the default one plus the appended text. |
+| Fields of a claude agent in `-p` | `prompt` (the subagent's system prompt is the SDK base plus it; the parent's `--append-system-prompt` does not reach it), `model`, `effort`, inline `mcpServers` (started for the subagent only), `hooks` (fire only on its calls; its `Stop` comes as `SubagentStop`), `skills` (preloaded whole; names of `--plugin-dir` skills, with and without the plugin prefix), `maxTurns`. Agents from a plugin's `agents/` lose `hooks` and `mcpServers`. |
+| claude hooks in subagents | Hooks of `--settings` fire inside subagents with `agent_id` and `agent_type`. |
+| Limiting claude agents | `permissions.deny: ["Agent(x)"]` hides the type and blocks the call, inside subagents too; `CLAUDE_AGENT_SDK_DISABLE_BUILTIN_AGENTS=1` leaves only the defined agents. A subagent with the `Agent` tool may call any defined type, itself included; it gets no list of types. A skill per agent: `disallowedTools: ["Skill(x)"]` removes the whole Skill tool; a `PreToolUse` hook on `Skill` in the definition denies one. |
+| claude resume | `--resume` without the same `--agents` fails with "Agent type 'worker' not found". |
+| claude nesting | Depth 2 by default (the second level has no `Agent`); `CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH` sets it (1, 2, 3, 5 held); the main thread's `Agent` call is asynchronous by default, nested ones synchronous. |
+| codex nesting | The live model took multi-agent v2 (`spawn_agent` + `wait_agent`); `agents.max_depth` has no effect in v2; the ceiling is the thread count (`agents.max_threads`: the default stopped at depth 3 with "agent thread limit reached", 15 reached depth 4); roles of the main thread resolve at every depth; the parent waits for the child. |
+
+### Consequences
+
+For the context-budget plugin:
+
+- **Threshold.** claude: `modelSettings.<model>.autoCompactWindow` in the session's `--settings` file (the adapter
+  already writes it per session), and `autoCompactWindow` in each agent of `--agents` — or one value for the session
+  and its subagents through `modelSettings` alone. Its floor is 100000 and a smaller value is dropped silently, so a
+  smaller budget goes through `CLAUDE_AUTOCOMPACT_PCT_OVERRIDE` in the process environment (a process per session) as
+  a percent of the window. codex: `model_auto_compact_token_limit` in `thread/start.config`, any size; children inherit
+  it, a role file cannot change it.
+- **Counting.** `PostCompact` counts compactions on both harnesses (`PreCompact` counts attempts, which repeat on
+  claude). The stdin names the session (`session_id`; on codex the parent's thread for a child) and, inside a
+  subagent or child, `agent_id` and `agent_type`; `trigger` tells automatic from manual. A count on `SubagentStop`
+  would also see the summarizing fork of claude (`agent_type: ""`).
+- **Stopping past `max_compactions`.** No compaction hook stops a claude session (`continue:false` is ignored there);
+  a main-thread `PreToolUse` or `UserPromptSubmit` answering `continue:false` does, and the adapter sees a successful
+  `result` (`terminal_reason: "hook_stopped"` for `PreToolUse`), today a completed turn. On codex `continue:false` from
+  `PostCompact` (or `PreCompact`) ends the turn `interrupted`, today a cancelled turn; in a child it ends only the
+  child. On both, then, the run ends only if aae tells the hook's stop from a normal end: the plugin's hook leaves its
+  verdict where the core reads it (the run's bead or the finisher), or the adapters map `hook_stopped` and an
+  unrequested `interrupted` to a stop of their own.
+
+For codex native subagents: per-thread roles (`config.agents.<role>`) and per-thread skill allow-lists
+(`config.skills.config` over skills of the process roots) work on 0.169.0 as on 0.168.0; a role file carries
+`model`, `developer_instructions`, `model_reasoning_effort` and `[[skills.config]]`, not the compaction limit (nor,
+as seen on 0.168.0, hooks or MCP), and any unknown key drops the role. `features.multi_agent_v2` can be set per thread. The built-in roles stay
+visible; a thread without roles has no `agent_type` to choose.
 
 ## opencode (experiment 7)
 
