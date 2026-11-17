@@ -9,7 +9,7 @@ Terms are listed by the document where they are first defined; a term used acros
 |---|---|---|
 | aae (Adaptive Agent Executor) | An event-driven orchestrator for coding agents: one daemon per user, running formulas on agents through their harnesses | [overview](docs/overview.md) |
 | orchestrator | The `aae` daemon and its machine-level settings | [overview](docs/overview.md#glossary) |
-| project | A directory with `aae.toml`: a root, a set of rigs, packs, plugins and one tracker database | [overview](docs/overview.md#glossary) |
+| project | A directory with `aae.toml`: a root, a set of rigs, packs, addons and one tracker database | [overview](docs/overview.md#glossary) |
 | root (of a project) | The project's root directory, where agents of scope `root` work; named `root` and located at the `aae.toml` directory by default, both settings; need not be git | [overview](docs/overview.md#glossary) |
 | rig | A repository of a project on disk, with its bead prefix and variables such as `test_cmd` and `lint_cmd` | [overview](docs/overview.md#glossary) |
 | harness | A kind of agent CLI (`claude`, `codex`), with one adapter each | [overview](docs/overview.md#glossary) |
@@ -31,7 +31,7 @@ Terms are listed by the document where they are first defined; a term used acros
 | trigger | A rule "an event or a schedule starts a formula" | [overview](docs/overview.md#glossary) |
 | correlation | The id of a chain of runs that started one another | [overview](docs/overview.md#glossary) |
 | pack | Content fit for any project: agents, formulas and triggers | [overview](docs/overview.md#glossary) |
-| plugin | An extension, a directory with `plugin.toml`, attached per agent or for all, with parameters | [overview](docs/overview.md#glossary) |
+| addon | An extension, a directory with `addon.toml`, attached per agent or for all, with parameters | [overview](docs/overview.md#glossary) |
 | service | A long-lived process the orchestrator supervises, such as a shared MCP server | [overview](docs/overview.md#glossary) |
 | issue gate | A record that starts no run by a key until a time or until it is opened by hand | [overview](docs/overview.md#glossary) |
 | tracker | The task store behind an adapter interface; the first implementation is br | [overview](docs/overview.md#glossary) |
@@ -59,8 +59,8 @@ Terms are listed by the document where they are first defined; a term used acros
 | prompt delivery | "At least once, with an idempotent effect" | [invariants](docs/design/invariants.md) |
 | drain (of the daemon) | A planned restart: `POST /v1/daemon/drain`, with a 300 s drain timeout | [invariants](docs/design/invariants.md) |
 | chaos stand | The randomized check of the core over 1000 seeds, with `AAE_CHAOS_SEED` and `AAE_CHAOS_SEEDS` | [development](docs/guide/development.md#the-chaos-stand), [acceptance](docs/acceptance.md) |
-| crate | A Rust crate of the workspace: `aae-contract`, `aae-core`, `aae-claude`, `aae-codex`, `aae-br`, `aae-front`, `aae-plugins`, `aae`, `aae-testkit`, `aae-acceptance` | [architecture](docs/architecture.md) |
-| operator plugin | The plugin of the operator's harness that drives aae, in `operator-plugin/` | [decisions](docs/agents/decisions.md) (142) |
+| crate | A Rust crate of the workspace: `aae-contract`, `aae-core`, `aae-claude`, `aae-codex`, `aae-br`, `aae-front`, `aae-addons`, `aae`, `aae-testkit`, `aae-acceptance` | [architecture](docs/architecture.md) |
+| operator plugin | The plugin of the operator's harness that drives aae, in `plugin/` | [decisions](docs/agents/decisions.md) (142) |
 
 ## Contracts
 
@@ -128,7 +128,7 @@ Terms are listed by the document where they are first defined; a term used acros
 | `under` | The br query for beads under a root (`br ready --unassigned --limit 0 --parent <root> --recursive`) | [tracker-br](docs/design/tracker-br.md) |
 | `agent:` and `harness:` labels | The bead labels naming the agent and the harness that take the bead | [tracker-br](docs/design/tracker-br.md) |
 | rig of a bead | The rig a bead belongs to: the prefix of its id | [tracker-br](docs/design/tracker-br.md), [decisions](docs/agents/decisions.md) (11, 96) |
-| `compactions:<n>` label | The label of the `context-budget` plugin that counts a run's compactions on its bead | [decisions](docs/agents/decisions.md) (144), [acceptance](docs/acceptance.md) |
+| `compactions:<n>` label | The label of the `context-budget` addon that counts a run's compactions on its bead | [decisions](docs/agents/decisions.md) (144), [acceptance](docs/acceptance.md) |
 
 ## Config
 
@@ -137,7 +137,7 @@ Terms are listed by the document where they are first defined; a term used acros
 | settings layers | The layers of config (default, orchestrator, project, rig, formula, agent) assembled before a harness starts | [config](docs/design/config.md), [decisions](docs/agents/decisions.md) (7) |
 | "explain config" | The command showing the layer of every value | [config](docs/design/config.md), [acceptance](docs/acceptance.md) |
 | `[[service]]` | The config table declaring a service | [config](docs/design/config.md) |
-| `[[plugin]]` | The config table declaring a plugin's source (`path`, or `git` with `rev` and `dir`) | [config](docs/design/config.md), [decisions](docs/agents/decisions.md) (141) |
+| `[[addon]]` | The config table declaring an addon's source (`path`, or `git` with `rev` and `dir`) | [config](docs/design/config.md), [decisions](docs/agents/decisions.md) (141) |
 | `[inputs]` | The table of a formula's inputs | [config](docs/design/config.md) |
 | `[exec]` | The table of exec environment settings: `inherit_env`, `env` | [config](docs/design/config.md), [decisions](docs/agents/decisions.md) (137) |
 | `[root]` | The table giving the root's name and path | [config](docs/design/config.md) |
@@ -152,19 +152,19 @@ Terms are listed by the document where they are first defined; a term used acros
 | `AAE_REMARKS` | The environment variable carrying the remarks of a return | [config](docs/design/config.md) |
 | `AAE_RUN`, `AAE_BEAD` | The environment variables naming the run and its bead for an exec step | [decisions](docs/agents/decisions.md) (47) |
 | pack (`pack.toml`) | A directory or git repository of agents and formulas, pinned by sha or tag | [config](docs/design/config.md), [decisions](docs/agents/decisions.md) (70, 85) |
-| plugin (`plugin.toml`) | The plugin manifest: `harnesses`, `prompt`, `[params]`, `[agent]`, `[[hook]]`, `[[service]]` | [config](docs/design/config.md), [plugin-development](docs/guide/plugin-development.md) |
-| plugin params | The plugin's `[params]`: defaults that any attachment layer overrides by key; `${params.<key>}` on the agent side, `AAE_PLUGIN_PARAMS` for hooks | [plugin-development](docs/guide/plugin-development.md), [decisions](docs/agents/decisions.md) (141) |
-| `${AAE_PLUGIN_DIR}`, `${AAE_PLUGIN_DATA}` | The plugin's own directory and its data directory | [plugin-development](docs/guide/plugin-development.md) |
-| `plugins` (attachment) | The key `plugins = [{ name, params, enabled }]` attaching a plugin to agents, a variant or all agents | [plugins](docs/guide/plugins.md), [decisions](docs/agents/decisions.md) (141) |
-| `default-policy` | The built-in plugin of default decisions, with its parameters | [config](docs/design/config.md) |
-| `worktree` | The plugin, and the formula setting `worktree = true`, giving a run its own git worktree on branch `aae/<run>` | [config](docs/design/config.md), [decisions](docs/agents/decisions.md) (21, 48) |
-| `context-budget` | The first plugin of aae: sets the compaction window, counts compactions, ends a run past `max_compactions` | [plugin-development](docs/guide/plugin-development.md), [experiments](docs/design/experiments.md), [decisions](docs/agents/decisions.md) (144) |
+| addon (`addon.toml`) | The addon manifest: `harnesses`, `prompt`, `[params]`, `[agent]`, `[[hook]]`, `[[service]]` | [config](docs/design/config.md), [addon-development](docs/guide/addon-development.md) |
+| addon params | The addon's `[params]`: defaults that any attachment layer overrides by key; `${params.<key>}` on the agent side, `AAE_ADDON_PARAMS` for hooks | [addon-development](docs/guide/addon-development.md), [decisions](docs/agents/decisions.md) (141) |
+| `${AAE_ADDON_DIR}`, `${AAE_ADDON_DATA}` | The addon's own directory and its data directory | [addon-development](docs/guide/addon-development.md) |
+| `addons` (attachment) | The key `addons = [{ name, params, enabled }]` attaching an addon to agents, a variant or all agents | [addons](docs/guide/addons.md), [decisions](docs/agents/decisions.md) (141) |
+| `default-policy` | The built-in addon of default decisions, with its parameters | [config](docs/design/config.md) |
+| `worktree` | The addon, and the formula setting `worktree = true`, giving a run its own git worktree on branch `aae/<run>` | [config](docs/design/config.md), [decisions](docs/agents/decisions.md) (21, 48) |
+| `context-budget` | The first addon of aae: sets the compaction window, counts compactions, ends a run past `max_compactions` | [addon-development](docs/guide/addon-development.md), [experiments](docs/design/experiments.md), [decisions](docs/agents/decisions.md) (144) |
 | agent definition (`agent.toml`) | The file of an agent's launch settings, `subagents` and `description` | [first-formula](docs/guide/first-formula.md), [config](docs/design/config.md) |
 | `prompt.md`, `prompt.template.md` | An agent's role prompt, and its prompt template, both in its directory | [first-formula](docs/guide/first-formula.md), [decisions](docs/agents/decisions.md) (97) |
 | `.aae/agents/<agent>/` | The project's directory of agent files (prompt template, check conditions) in the root | [decisions](docs/agents/decisions.md) (97, 98) |
-| `subagents` | The agent key listing the agents (by name or `*`) it may call as native subagents | [plugins](docs/guide/plugins.md), [decisions](docs/agents/decisions.md) (143) |
-| `description` | The agent key required for a callable agent | [plugins](docs/guide/plugins.md), [decisions](docs/agents/decisions.md) (143) |
-| `called_by` | The field of `aae agent list` naming the callers of an agent | [plugins](docs/guide/plugins.md) |
+| `subagents` | The agent key listing the agents (by name or `*`) it may call as native subagents | [addons](docs/guide/addons.md), [decisions](docs/agents/decisions.md) (143) |
+| `description` | The agent key required for a callable agent | [addons](docs/guide/addons.md), [decisions](docs/agents/decisions.md) (143) |
+| `called_by` | The field of `aae agent list` naming the callers of an agent | [addons](docs/guide/addons.md) |
 | variant | See agent variant | [overview](docs/overview.md#glossary) |
 | `max_attempts` | The step key giving the repeat count of a step (default 1, at most 20) | [config](docs/design/config.md), [decisions](docs/agents/decisions.md) (93, 110) |
 | `step_check_script_path` | The step key naming a script that decides whether the step passed: 0 passed, 75 fatal, else not passed | [first-formula](docs/guide/first-formula.md), [decisions](docs/agents/decisions.md) (93, 111) |

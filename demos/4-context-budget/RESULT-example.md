@@ -56,7 +56,7 @@ state: passed
 summary: INDEX.md maps every docs Markdown document to its sections with a one-line description of each.
 ```
 
-The compactions the plugin counted, per session (`<state>/aae/addons/context-budget/<session>.count`):
+The compactions the addon counted, per session (`<state>/aae/addons/context-budget/<session>.count`):
 
 ```
 01a1eb27-3976-7f42-8c6f-7ce99c619341: 3

@@ -22,7 +22,7 @@
 - **Agents, packs, formulas:** Records assumed behavior for prompts, scopes, steps, checks, and pack loading.
 - **Runs and triggers:** Lists run lifecycle, concurrency, cancellation, correlation, and trigger assumptions.
 - **Tracker:** Describes assumed bead input, ownership, labels, rig prefixes, and failure gates.
-- **Plugins and frontends:** States hook decision and MCP behavior assumptions.
+- **Addons and frontends:** States hook decision and MCP behavior assumptions.
 - **Delivery and process:** Records installation, service, cache, and budget assumptions.
 - **Not verified:** Lists behaviors that still need evidence before relying on them.
 - **Risks the owner accepted:** Pairs accepted product and vendor risks with their mitigations.
@@ -58,7 +58,7 @@
 - **Settings and layers:** Defines precedence and merging across config layers.
 - **Packs, agents, and variants:** Covers reusable project content and effective agent configuration.
 - **Formulas and steps:** Specifies workflow inputs, step kinds, and execution settings.
-- **Triggers and plugins:** Documents event/schedule starts and plugin declaration and attachment.
+- **Triggers and addons:** Documents event/schedule starts and addon declaration and attachment.
 - **Reference and permissions:** Defines template, environment, native harness, and permission settings.
 
 ## `docs/design/contracts.md` — Contracts
@@ -94,6 +94,24 @@
 - **Exit codes:** Explains error handling and retry classification.
 - **Versions:** Describes tested versions and adapter contract tests.
 
+## `docs/guide/addon-development.md` — Writing an addon
+- **The manifest:** Introduces addon files, parameters, and settings.
+- **Values filled in:** Defines addon parameter and directory substitutions.
+- **The agent side:** Describes settings, hooks, services, and prompt additions delivered to sessions.
+- **The orchestrator side:** Specifies hook execution, decisions, ordering, and idempotency guidance.
+- **A worked example: context-budget:** Shows an addon that tracks and limits session compactions.
+- **Testing an addon:** Describes config validation and manually exercising hooks.
+- **Moving it to its own repository:** Explains publishing and pinning an addon from Git.
+
+## `docs/guide/addons.md` — Using addons
+- **Declare it:** Shows local and Git-based addon declarations.
+- **Attach it:** Explains settings-layer attachment, ordering, and disabling.
+- **Parameters:** Describes parameter defaults and overrides.
+- **Harnesses:** Explains compatibility checks for addon target harnesses.
+- **Check what an agent gets:** Uses config check and explain to inspect effective addon settings.
+- **Subagents:** Describes native subagent configuration and inherited settings.
+- **What is left to the harness:** Lists nesting, built-in agent types, and codex-specific controls.
+
 ## `docs/guide/development.md` — Developing aae
 - **Toolchain and tasks:** Lists pinned developer tools and the mise commands for checks and builds.
 - **Where each kind of test runs:** Compares test, CI, acceptance, and release checks with their purpose and costs.
@@ -123,24 +141,6 @@
 - **Directories:** Lists XDG config, state, socket, and cache locations.
 - **Run the daemon:** Explains service manager setup, drain, stop, and restart.
 
-## `docs/guide/plugin-development.md` — Writing a plugin
-- **The manifest:** Introduces plugin files, parameters, and settings.
-- **Values filled in:** Defines plugin parameter and directory substitutions.
-- **The agent side:** Describes settings, hooks, services, and prompt additions delivered to sessions.
-- **The orchestrator side:** Specifies hook execution, decisions, ordering, and idempotency guidance.
-- **A worked example: context-budget:** Shows a plugin that tracks and limits session compactions.
-- **Testing a plugin:** Describes config validation and manually exercising hooks.
-- **Moving it to its own repository:** Explains publishing and pinning a plugin from Git.
-
-## `docs/guide/plugins.md` — Using plugins
-- **Declare it:** Shows local and Git-based plugin declarations.
-- **Attach it:** Explains settings-layer attachment, ordering, and disabling.
-- **Parameters:** Describes parameter defaults and overrides.
-- **Harnesses:** Explains compatibility checks for plugin target harnesses.
-- **Check what an agent gets:** Uses config check and explain to inspect effective plugin settings.
-- **Subagents:** Describes native subagent configuration and inherited settings.
-- **What is left to the harness:** Lists nesting, built-in agent types, and codex-specific controls.
-
 ## `docs/guide/recovery.md` — Recovering a failed run by hand
 - **See what failed:** Shows how to inspect failure class, attempt details, bead, and gate state.
 - **Continue the session:** Starts a new run on the prior harness session.
@@ -161,4 +161,4 @@
 - **What the first release leaves out:** Lists deferred or excluded capabilities and current alternatives.
 
 ## `docs/roadmap.md` — Roadmap
-- **Planned extensions:** Lists possible plugin-based metrics, budgets, compaction, notices, recovery, and permission presets with dependencies and priority.
+- **Planned extensions:** Lists possible addon-based metrics, budgets, compaction, notices, recovery, and permission presets with dependencies and priority.
