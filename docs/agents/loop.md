@@ -47,6 +47,9 @@ to the roles.
 
 The plan is `.loop/PLAN.md`; an expert's plan of a package is an epic in br with a child task per piece.
 
+The owner may add packages to the plan while the loop runs. The review's score then drops, since it measures how
+much of the current plan is done: that is normal and is no stagnation. Compare the work done, not the score alone.
+
 - The working directory is the root of the repository. `.beads/` is committed with the code
   (`br sync --flush-only`, then `git add .beads`).
 - Always machine output: `--json` (or `--format toon`); `RUST_LOG=error br …` for a clean stdout.

@@ -60,6 +60,7 @@ each heading; this file only marks it as decided.
 | 120 | Everything a run needs is decided before its start, through the layers default → orchestrator config → project config → formula; inside a step no human decides anything. Between steps a formula may wait for an outcome from outside, with an `await` step (decision 126) (revised 2026-11-17) |
 | 129 | `rounds` is layered: orchestrator config → project config → formula, default 3. A return from an `await` step spends a round like any other (2026-11-17) |
 | 130 | An input of a formula takes its default from the orchestrator config and the project config; a value given at the start, by a trigger or by the step of a calling formula beats them (2026-11-17) |
+| 137 | An `exec` step (and a check script, which gets its environment) starts with a clean environment by default. The orchestrator config, the project config (`[exec]`) and the step itself take two keys: `inherit_env` (a boolean, the daemon's whole environment) and `env` (a table, merged by key). An `env` value is a literal or names a variable of the daemon's environment as `${NAME}` (`$$` is a literal `$`); this goes for the `env` of agents too. A reference is resolved when the process starts and is never stored resolved: the run's snapshot, the journal and `config explain` show `${NAME}`. A reference to a variable the daemon does not have fails the step as `config_error`, naming the variable (2026-11-17) |
 
 ## Agents, packs, formulas — [config](../design/config.md)
 
@@ -159,6 +160,7 @@ each heading; this file only marks it as decided.
 | 63 | The four targets are built only for a release (`mise run acceptance-release`, the workflow `release` on a `v*` tag): development, the gate and a local acceptance run build the host's target only. No tag is made only to check the build |
 | 66 | `br` is pinned by an exact version, claude and codex by a release line; there is no `mise.lock` |
 | 87 | mise is a convenience, not a requirement, for development and for the demos; a demo's dependencies are in its own `mise.toml` without a lock |
+| 138 | aae follows the current versions of the harnesses and tools it works with: a legacy or compatibility format or method (a manifest layout, a flag, an API a tool marks as legacy) is used only on the owner's explicit request (2026-11-17) |
 
 ## Process — [code rules](rules-code.md), [test rules](rules-tests.md)
 
@@ -187,3 +189,4 @@ each heading; this file only marks it as decided.
 | 106 | There is no spec and no readiness file: `docs/` describes the product as it is, `docs/agents/` holds the rules for agents (2026-11-17) |
 | 107 | The chaos stand, with all its 1000 seeds, is an acceptance row, not a part of the gate. Acceptance may be slow: its model-free rows run only in CI, in a workflow started by hand, on the owner's request (2026-11-17) |
 | 136 | Demo 3 shows the `await` step on GitHub and is part of the acceptance of that work: public MIT repositories of the GitHub user `kvokka-agent`, a root and its children, with no `aae` in their names; the models are `luna` and `terra`; an agent plays the reviewer and merges. Agents may create these repositories, recreate them and open new pull requests there (2026-11-17) |
+| 139 | The live run of demo 3 is part of acceptance criterion 20 and of `mise run acceptance`, next to demos 1 and 2 (2026-11-17) |
