@@ -99,11 +99,12 @@ fn a_skill_name_has_one_directory_in_a_session() {
 #[test]
 fn a_codex_target_has_no_server_or_hook_the_caller_has_not() {
     let config = format!(
-        "{}[harness.codex]\n[[plugin]]\npath = \"plugins/notes\"\n",
+        "{}[harness.codex]\n[[plugin]]\npath = \"plugins/notes\"\n[[plugin]]\npath = \"plugins/jobs\"\n",
         base("config.toml")
     );
     let notes =
         "name = \"notes\"\nversion = \"0.1.0\"\n[[service]]\nname = \"notes\"\ncommand = [\"notes\"]\nmcp = true\n";
+    let jobs = "name = \"jobs\"\nversion = \"0.1.0\"\n[[service]]\nname = \"jobs\"\ncommand = [\"jobs\"]\n";
     let parts = "[mcp.db]\ncommand = [\"db\"]\n[hooks.log]\nevent = \"Stop\"\ncommand = \"log\"\n";
     let load = |harness: &str, qa: &str| {
         let caller = me(&format!("subagents = [\"qa\"]\n{parts}")).replace("claude", harness);
@@ -111,6 +112,7 @@ fn a_codex_target_has_no_server_or_hook_the_caller_has_not() {
         let files = [
             ("config.toml", config.as_str()),
             ("plugins/notes/plugin.toml", notes),
+            ("plugins/jobs/plugin.toml", jobs),
             (ME, &caller),
             (QA, &qa),
         ];
@@ -118,6 +120,13 @@ fn a_codex_target_has_no_server_or_hook_the_caller_has_not() {
     };
     // The caller's own servers and hooks are no clash.
     load("codex", parts).unwrap();
+    // Nor are a service without MCP and a hook that is off.
+    load("codex", "plugins = [{ name = \"jobs\" }]\n").unwrap();
+    load(
+        "codex",
+        "[hooks.log]\nevent = \"Stop\"\ncommand = \"other\"\nenabled = false\n",
+    )
+    .unwrap();
     let cases = [
         ("[mcp.mail]\ncommand = [\"mail\"]\n", "its `mcp.mail`"),
         ("plugins = [{ name = \"notes\" }]\n", "its service `notes`"),

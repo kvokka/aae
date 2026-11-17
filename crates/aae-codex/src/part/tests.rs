@@ -283,7 +283,10 @@ fn a_thread_gets_a_role_per_target_and_the_process_their_skills() {
     let mut bare = config.clone();
     bare.description = Some(agent("Bare.".into()));
     (bare.model, bare.effort, bare.skills) = (None, None, Default::default());
-    config.targets = [("kit.qa".to_owned(), qa), ("bare".to_owned(), bare)].into();
+    let mut empty = bare.clone();
+    empty.system_prompt = Some(agent(String::new()));
+    let targets = [("kit.qa", qa), ("bare", bare), ("empty", empty)];
+    config.targets = targets.map(|(n, t)| (n.to_owned(), t)).into();
     let driver = Codex::new("codex".into(), "/state".into(), None, 8);
     let new = SessionPlan::New {
         workdir: "/w".into(),
@@ -323,6 +326,8 @@ fn a_thread_gets_a_role_per_target_and_the_process_their_skills() {
     let bare = role("bare");
     assert_eq!(bare.keys().collect::<Vec<_>>(), ["skills"]);
     assert_eq!(bare["skills"], off(&["/s/own", "/s/qa"]));
+    // An empty role prompt is none: codex drops a role whose `developer_instructions` is empty.
+    assert_eq!(role("empty"), bare);
     // A resume gives them again.
     let resume = SessionPlan::Resume {
         session: aae_contract::driver::SessionRef(json!({ "thread_id": "t" })),

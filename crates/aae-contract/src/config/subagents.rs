@@ -176,8 +176,10 @@ fn not_inherited(c: &EffectiveConfig, s: &EffectiveConfig) -> Option<String> {
     if let Some((k, _)) = services.into_iter().find(|(k, v)| !theirs(k, &v.value)) {
         return Some(format!("its service `{k}` {tail}"));
     }
-    let hooks = s.hooks.iter().filter(|(_, h)| h.value.enabled);
-    let mut own = hooks.filter(|(_, h)| !c.hooks.values().any(|o| o.value == h.value));
+    let mut own = s
+        .hooks
+        .iter()
+        .filter(|(_, h)| !c.hooks.values().any(|o| o.value == h.value));
     own.next().map(|(k, _)| format!("its hook `{k}` {tail}"))
 }
 

@@ -83,3 +83,51 @@ async fn a_spawn_of_a_target_runs_its_role_in_multi_agent_v1() {
 async fn a_spawn_of_a_target_runs_its_role_in_multi_agent_v2() {
     the_role_reaches_the_child(true).await;
 }
+
+/// A resume writes the role files its targets name: a target changed since the start has a role file the start did
+/// not write, and its spawn runs with the new instructions.
+#[tokio::test]
+async fn a_resume_writes_the_role_files_of_its_targets() {
+    let dir = tempfile::tempdir().unwrap();
+    let spawn = json!({ "agent_type": "kit.qa", "message": "Check it.", "task_name": "qa" });
+    let plan = vec![
+        Reply::Text("STARTED".into()),
+        Reply::Turn(vec![
+            Reply::Call("spawn_agent".into(), spawn),
+            Reply::Text("DONE".into()),
+        ]),
+    ];
+    let provider = Arc::new(Provider::start(plan).await);
+    let role = |prompt: &'static str| {
+        move |c: &mut aae_contract::config::EffectiveConfig| {
+            let mut target = c.clone();
+            target.description = Some(sourced("Checks.".into()));
+            target.system_prompt = Some(sourced(prompt.into()));
+            target.model = Some(sourced("gpt-role".into()));
+            c.targets.insert("kit.qa".into(), target);
+        }
+    };
+    let mut first = Live::open(provider.clone(), dir.path(), 0, "never", None, role("ROLE-OLD-zz"))
+        .await
+        .unwrap();
+    first.ended().await;
+    let session = first.session.clone();
+    first.stop().await;
+    let live = Live::open(provider, dir.path(), 0, "never", Some(session), role("ROLE-NEW-zz"))
+        .await
+        .unwrap();
+    let deadline = tokio::time::Instant::now() + Duration::from_secs(30);
+    let child = loop {
+        let requests = live.provider.requests();
+        if let Some(r) = requests.iter().find(|r| r.body["model"] == "gpt-role") {
+            break r.body.to_string();
+        }
+        assert!(tokio::time::Instant::now() < deadline, "no child: {requests:?}");
+        tokio::time::sleep(Duration::from_millis(50)).await;
+    };
+    assert!(
+        child.contains("ROLE-NEW-zz") && !child.contains("ROLE-OLD-zz"),
+        "{child}"
+    );
+    live.stop().await;
+}
