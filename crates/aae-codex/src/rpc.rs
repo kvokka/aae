@@ -96,12 +96,13 @@ impl Instance {
     }
 }
 
-/// An error answer: a full request queue (`-32001`) is an overload, a second writer or a lost rollout is a
-/// transcript divergence (contracts 4.6), the rest unknown.
+/// An error answer: a full request queue (`-32001`) is an overload, a required MCP server that did not start a tool
+/// failure, a second writer or a lost rollout a transcript divergence (contracts 4.6), the rest unknown.
 pub(crate) fn rpc_failure(method: &str, error: &Value) -> Failure {
     let text = error["message"].as_str().unwrap_or_default();
     let kind = match text {
         _ if error["code"] == -32001 => FailureKind::Overloaded,
+        t if t.contains("required MCP servers failed to initialize") => FailureKind::ToolFailure,
         t if t.contains("already has an active writer") || t.contains("no rollout found") => {
             FailureKind::TranscriptDivergence
         }

@@ -495,6 +495,8 @@ claude (`crates/aae-claude`):
   <!-- MEASURE id=claude-coldstart-init date=2026-11-10 ver=claude-2.1.322 env=linux-arm64-orbstack src=reports/42 note="haiku, n=5–7, medians from spawn; re-measure on the role models" -->
 - `CLAUDE_CODE_RETRY_WATCHDOG=1` is never set in a session's environment: claude then waits out a 429 or 529 in
   silence (one `api_retry{max_retries: 300}` with a pause of an hour), which the core's watchdog reads as a stall.
+- An MCP server that `init` lists as `failed` or `needs-auth` is a `tool_failure` of the session: nobody logs a
+  server in after the start.
 - claude runs with `--permission-prompts none`: whatever would prompt is denied by claude itself and the model sees
   the denial; the permission mode decides the rest. The mode is `bypassPermissions` unless `native.claude` sets
   `permission_mode` or `permissions.defaultMode` ([config](config.md#permissions)); as root claude exits before
@@ -524,6 +526,11 @@ codex (`crates/aae-codex`):
   ([config](config.md#permissions)); under another policy the adapter declines command and file-change approvals
   (`{"decision":"decline"}`, the turn goes on) and answers every other server request with an error; each refused
   request of a thread is a `permission_denied`.
+- Every MCP server aae gives a thread is `required`: one that does not start fails `thread/start` or `thread/resume`
+  (`required MCP servers failed to initialize`), which is a `tool_failure` before the first prompt. A server of the
+  rig or the host that does not start comes as `mcpServer/startupStatus/updated{status: failed}`: a `tool_failure`
+  of the thread, told at once in a turn and otherwise held until the thread is known to the core (the end of
+  `start_session`/`resume_session`, the next `send_prompt` or `turn/started`, whichever comes first).
 - Two `turn/start` on one thread are not queued but merged: the second becomes a steer of the first. The core sends
   a session's next prompt only after its turn ended (6.2), so this never happens.
 - Hooks run with the environment of the app-server process, not of the thread (4.6 table, attempt environment); so

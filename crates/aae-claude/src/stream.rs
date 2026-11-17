@@ -84,7 +84,8 @@ impl Stream {
                 let mut out = vec![Normalized::TurnStarted];
                 let servers = msg["mcp_servers"].as_array().into_iter().flatten();
                 let failed: Vec<String> = servers
-                    .filter(|s| s["status"] == "failed")
+                    // A server that waits for a login is as gone as a failed one: nobody logs it in.
+                    .filter(|s| s["status"] == "failed" || s["status"] == "needs-auth")
                     .map(|s| text(&s["name"]))
                     .collect();
                 if !failed.is_empty() {

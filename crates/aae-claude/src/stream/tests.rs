@@ -204,12 +204,15 @@ fn an_exit_in_an_open_turn_is_a_crash_even_with_code_zero() {
             signal: None
         })
     );
-    let mut s = stream();
-    let events = feed(
-        &mut s,
-        &[json!({ "type": "system", "subtype": "init", "mcp_servers": [{ "name": "x", "status": "failed" }] })],
-    );
-    assert_eq!(failure(&events).kind, FailureKind::ToolFailure);
+    for status in ["failed", "needs-auth"] {
+        let servers = json!([{ "name": "ok", "status": "connected" }, { "name": "x", "status": status }]);
+        let events = feed(
+            &mut stream(),
+            &[json!({ "type": "system", "subtype": "init", "mcp_servers": servers })],
+        );
+        let f = failure(&events);
+        assert_eq!((f.kind, f.raw.as_str()), (FailureKind::ToolFailure, "x"), "{status}");
+    }
 }
 
 /// A denial comes as `system/permission_denied` and again in the turn's `result.permission_denials`: one event each,

@@ -36,6 +36,9 @@ struct Thread {
     error: Option<Value>,
     retries: u32,
     auth_reported: bool,
+    /// An MCP server of the thread that did not start, told while no turn was open: the core may not know the thread
+    /// yet, so it waits for the next prompt or turn (`held`).
+    held: Option<Failure>,
     /// `commandExecution` items started and not completed: work that outlives the turn.
     commands: HashSet<String>,
     activity: Option<(Instant, bool)>,
@@ -65,6 +68,11 @@ impl Stream {
     /// `turn/start` was accepted: the turn is open before its `turn/started` arrives.
     pub(crate) fn accepted(&mut self, thread: &str) {
         self.threads.entry(thread.to_owned()).or_default().open = true;
+    }
+
+    /// The failure of an MCP server of `thread` that waits to be told, taken.
+    pub(crate) fn held(&mut self, thread: &str) -> Option<Failure> {
+        self.threads.get_mut(thread)?.held.take()
     }
 
     /// We interrupt the open turn of `thread`; false when no turn is open and there is nothing to interrupt.
@@ -114,7 +122,17 @@ impl Stream {
         let events = match method {
             "turn/started" => {
                 thread.open = true;
-                vec![Normalized::TurnStarted]
+                let held = thread.held.take().map(Normalized::Failure);
+                [Normalized::TurnStarted].into_iter().chain(held).collect()
+            }
+            // A server of the rig or the host (aae's own are `required` and fail `thread/start` instead).
+            "mcpServer/startupStatus/updated" if params["status"] == "failed" => {
+                let failure = fail(&self.account, &thread.model, FailureKind::ToolFailure, msg.to_string());
+                if !thread.open {
+                    thread.held = Some(failure);
+                    return vec![];
+                }
+                vec![Normalized::Failure(failure)]
             }
             "turn/completed" => return self.completed(&id, &params["turn"]),
             "thread/status/changed" => {

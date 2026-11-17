@@ -214,6 +214,7 @@ impl Driver for Codex {
             let result = known.call("thread/start", session.0.clone(), None).await?;
             let thread = result["thread"]["id"].as_str().ok_or_else(crashed)?;
             self.bind(&known, thread, &result, &session.0);
+            lock(&known.stream).held(thread).map_or(Ok(()), Err)?;
             Ok(rpc::session(thread, &known.home))
         })
     }
@@ -243,7 +244,7 @@ impl Driver for Codex {
             params["excludeTurns"] = json!(true);
             let result = known.call("thread/resume", params, None).await?;
             self.bind(&known, thread_id(session), &result, &part.0);
-            Ok(())
+            lock(&known.stream).held(thread_id(session)).map_or(Ok(()), Err)
         })
     }
 
@@ -257,6 +258,7 @@ impl Driver for Codex {
         Box::pin(async move {
             let known = self.instance(&instance.id)?;
             let thread = thread_id(session).to_owned();
+            lock(&known.stream).held(&thread).map_or(Ok(()), Err)?;
             // The key is the message's `clientUserMessageId`; app-server does not deduplicate it (experiment 2).
             let params = json!({ "threadId": thread, "clientUserMessageId": key.0.to_string(),
                 "input": [{ "type": "text", "text": text, "text_elements": [] }] });

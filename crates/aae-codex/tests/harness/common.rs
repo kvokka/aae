@@ -38,19 +38,20 @@ pub(crate) struct Live {
 impl Live {
     pub(crate) async fn start(plan: Vec<Reply>, dir: &Path, retries: u32, approval: &str) -> Self {
         let provider = Arc::new(Provider::start(plan).await);
-        Self::open(provider, dir, retries, approval, None, Default::default())
+        Self::open(provider, dir, retries, approval, None, |_| {})
             .await
             .unwrap()
     }
 
     /// `resume` binds another live app-server's thread (a second writer): one provider and state, one `CODEX_HOME`.
+    /// `tweak` changes the session's config.
     pub(crate) async fn open(
         provider: Arc<Provider>,
         dir: &Path,
         retries: u32,
         approval: &str,
         resume: Option<SessionRef>,
-        hooks: std::collections::BTreeMap<String, aae_contract::config::Sourced<aae_contract::config::Hook>>,
+        tweak: impl FnOnce(&mut EffectiveConfig),
     ) -> Result<Self, Failure> {
         let id = if resume.is_some() { "i2" } else { "i1" };
         let driver = Codex::new("codex".into(), dir.join("state"), None, 8);
@@ -78,7 +79,7 @@ impl Live {
             "model_providers": {
             "fake": { "name": "fake", "base_url": provider.base_url(), "wire_api": "responses",
             "request_max_retries": retries, "stream_max_retries": retries } } });
-        let config = EffectiveConfig {
+        let mut config = EffectiveConfig {
             services: Default::default(),
             harness: "codex".into(),
             harness_from: aae_contract::config::Layer::Agent,
@@ -90,23 +91,25 @@ impl Live {
             inherit_host: Some(sourced(false)),
             env: Default::default(),
             mcp: Default::default(),
-            hooks,
+            hooks: Default::default(),
             skills: Default::default(),
             plugins: Vec::new(),
             // The host forbids user namespaces, so the codex sandbox cannot run here (docs/design/experiments.md).
             native: Some(sourced(native)),
         };
+        tweak(&mut config);
         let split = driver.split(&config, &plan).unwrap();
         let (sink, events) = mpsc::unbounded_channel();
         let instance = driver.start_instance(id, &split.process, sink).await.unwrap();
         let session = match resume {
-            None => driver.start_session(&instance, &split.session).await.unwrap(),
-            Some(session) => {
-                if let Err(refused) = driver.resume_session(&instance, &session, &split.session).await {
-                    driver.stop_instance(&instance, Duration::from_secs(4)).await;
-                    return Err(refused);
-                }
-                session
+            None => driver.start_session(&instance, &split.session).await,
+            Some(session) => (driver.resume_session(&instance, &session, &split.session).await).map(|()| session),
+        };
+        let session = match session {
+            Ok(session) => session,
+            Err(refused) => {
+                driver.stop_instance(&instance, Duration::from_secs(4)).await;
+                return Err(refused);
             }
         };
         let prompt = if id == "i2" { 2 } else { 1 };

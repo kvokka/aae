@@ -140,19 +140,21 @@ pub(crate) fn session(config: &EffectiveConfig, plan: &SessionPlan) -> Result<Va
     Ok(params)
 }
 
-/// `config.mcp_servers` of the thread.
+/// `config.mcp_servers` of the thread. Each is `required`: a server aae gives that does not start fails
+/// `thread/start` (or `thread/resume`) before the first prompt, instead of a session without its tools.
 fn mcp(config: &EffectiveConfig) -> Result<Map<String, Value>, Failure> {
     let mut servers = Map::new();
     for (name, server) in &config.mcp {
         let server = &server.value;
         // A service is a URL by now (the core binds it); a stdio server runs per session whatever its scope.
-        let entry = match (&server.command, &server.url) {
+        let mut entry = match (&server.command, &server.url) {
             (Some(command), None) if !command.is_empty() => {
                 json!({ "command": command[0], "args": command[1..], "env": server.env })
             }
             (None, Some(url)) => json!({ "url": url, "http_headers": server.headers }),
             _ => return Err(config_error(format!("MCP server `{name}` needs a command or a url"))),
         };
+        entry["required"] = json!(true);
         servers.insert(name.clone(), entry);
     }
     Ok(servers)

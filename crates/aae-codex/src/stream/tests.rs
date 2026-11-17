@@ -319,3 +319,33 @@ fn a_command_that_outlives_its_turn_keeps_the_thread_in_background() {
     let events = play(&mut stream, &[command("item/completed")]);
     assert_eq!(events.last(), Some(&idle(false)), "{events:?}");
 }
+
+#[test]
+fn an_mcp_server_that_did_not_start_is_a_tool_failure_told_once_the_thread_is_known() {
+    let status = |status: &str| {
+        note(
+            "mcpServer/startupStatus/updated",
+            json!({ "threadId": "t", "name": "rig-tools", "status": status, "error": "no such file" }),
+        )
+    };
+    let tool_failure = |e: &Normalized| matches!(e, Normalized::Failure(f) if f.kind == FailureKind::ToolFailure);
+    // Before any turn the failure waits: for the next prompt or the start of a turn.
+    let mut stream = Stream::new(None);
+    assert!(play(&mut stream, &[status("starting"), status("failed")]).is_empty());
+    let held = stream.held("t").expect("held");
+    assert!(held.raw.contains("rig-tools"), "{}", held.raw);
+    assert!(stream.held("t").is_none(), "told once");
+    let started = note("turn/started", json!({ "threadId": "t", "turn": { "id": "u" } }));
+    let events = play(&mut stream, &[status("failed"), started.clone()]);
+    assert!(
+        matches!(events[..], [Normalized::TurnStarted, ref f] if tool_failure(f)),
+        "{events:?}"
+    );
+    // In a turn it is told at once.
+    let mut stream = Stream::new(None);
+    let events = play(&mut stream, &[started, status("ready"), status("failed")]);
+    assert!(
+        matches!(events[..], [Normalized::TurnStarted, ref f] if tool_failure(f)),
+        "{events:?}"
+    );
+}

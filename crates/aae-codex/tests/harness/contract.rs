@@ -1,4 +1,4 @@
-//! The 15 contract scenarios of docs/harness-updates.md for codex: the real `codex app-server` against the fake
+//! The 16 contract scenarios of docs/harness-updates.md for codex: the real `codex app-server` against the fake
 //! Responses API, no model and no account. Each scenario pins what the adapter reports for one harness behaviour; rerun
 //! them on every codex update (docs/harness-updates.md).
 
@@ -202,15 +202,7 @@ async fn s15_a_second_writer_is_refused_as_a_divergence() {
         .await;
     assert!(started.is_some(), "{:?}", first.seen);
     let provider = first.provider.clone();
-    let second = Live::open(
-        provider,
-        dir.path(),
-        0,
-        "never",
-        Some(first.session.clone()),
-        Default::default(),
-    )
-    .await;
+    let second = Live::open(provider, dir.path(), 0, "never", Some(first.session.clone()), |_| {}).await;
     let refused = second.err().expect("the second writer is refused");
     assert_eq!(refused.kind, FailureKind::TranscriptDivergence, "{}", refused.raw);
     assert!(refused.raw.contains("active writer"), "{}", refused.raw);
@@ -251,7 +243,9 @@ async fn a_thread_hook_runs_with_the_attempt_environment() {
         timeout: None,
     };
     let hooks = [("record".to_owned(), crate::common::sourced(hook))].into();
-    let mut live = Live::open(provider, dir.path(), 0, "never", None, hooks).await.unwrap();
+    let mut live = Live::open(provider, dir.path(), 0, "never", None, |c| c.hooks = hooks)
+        .await
+        .unwrap();
     assert_eq!(live.ended().await, StopReason::Completed, "{:?}", live.seen);
     let until = std::time::Instant::now() + Duration::from_secs(5);
     while !out.exists() && std::time::Instant::now() < until {
@@ -263,4 +257,26 @@ async fn a_thread_hook_runs_with_the_attempt_environment() {
         "the Stop hook ran with the attempt's run and token"
     );
     live.stop().await;
+}
+
+/// A server aae gives is `required`: one that does not start fails the thread's start, before any prompt.
+#[tokio::test]
+async fn s16_an_mcp_server_of_aae_that_does_not_start_fails_the_session_start() {
+    let dir = tempfile::tempdir().unwrap();
+    let provider = std::sync::Arc::new(aae_testkit::openai::Provider::start(vec![Reply::Text("OK".into())]).await);
+    let server = aae_contract::config::Mcp {
+        command: Some(vec![dir.path().join("no-such-server").display().to_string()]),
+        env: Default::default(),
+        url: None,
+        headers: Default::default(),
+        scope: None,
+    };
+    let tweak = |c: &mut aae_contract::config::EffectiveConfig| {
+        c.mcp = [("tools".to_owned(), crate::common::sourced(server))].into();
+    };
+    let failed = Live::open(provider.clone(), dir.path(), 0, "never", None, tweak).await;
+    let failure = failed.err().expect("the session does not start");
+    assert_eq!(failure.kind, FailureKind::ToolFailure, "{}", failure.raw);
+    assert!(failure.raw.contains("tools"), "{}", failure.raw);
+    assert!(provider.requests().is_empty(), "no prompt reached the provider");
 }

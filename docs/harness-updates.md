@@ -34,7 +34,8 @@ marked `[experimental]`, and codex released every 2–8 days (observed on 2026-1
 - Every harness adapter has the same 15 scenarios: 429 then success; endless 429; quota with a reset time; quota in
   unknown words; 529/503; 401; `insufficient_quota`; context overflow; unknown model; `kill -9` in a command; EOF on
   stdin in a turn; a silent provider; a request the config does not allow; a background task after the turn; a second
-  writer in the session. The tables below give the expected outcome per harness.
+  writer in the session. The tables below give the expected outcome per harness. codex has a 16th: an MCP server
+  aae gives that does not start.
 - The scenarios run the real binary mise selects against fake provider APIs written in this repository:
   `crates/aae-testkit/src/anthropic.rs` (claude) and `crates/aae-testkit/src/openai.rs` (codex, Responses API).
   They cost no model calls and need no account, so `mise run ci` runs them on every commit (acceptance criterion 11 runs the same tests).
@@ -71,7 +72,7 @@ background command running passes the run only after the command (criterion 4a o
 
 ## What the codex suite covers
 
-`crates/aae-codex/tests/harness/contract.rs`, the same 15 scenarios, where codex differs:
+`crates/aae-codex/tests/harness/contract.rs`, the same 15 scenarios and the 16th, where codex differs:
 
 | # | Scenario | Expected from the adapter |
 |---|---|---|
@@ -82,6 +83,7 @@ background command running passes the run only after the command (criterion 4a o
 | 13 | policy `untrusted` | the adapter declines the approval, the command does not run, the turn completes |
 | 14 | command that outlives its turn | `exec_command` yields while the command runs: the turn ends idle with `background`, idle without background on the command's late `item/completed`, no turn follows |
 | 15 | second writer in the thread | refused ("already has an active writer"): `transcript_divergence` |
+| 16 | an MCP server aae gives that does not start | `start_session` fails with `tool_failure`, no request reaches the provider |
 
 The rest match claude: rate limits, overload, 401, context, unknown model, `kill -9` and silence.
 
