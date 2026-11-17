@@ -273,8 +273,8 @@ pub(crate) fn args(p: &Value) -> Vec<String> {
     args
 }
 
-/// Writes the files the flags of [`args`] name: settings, MCP config, agent definitions and a plugin holding the skills (as links to
-/// their directories). The directory is the owner's alone: the MCP config may carry secrets.
+/// Writes the files the flags of [`args`] name: settings, MCP config, agent definitions and a plugin holding the
+/// skills (as links to their directories). The directory is the owner's alone: the MCP config may carry secrets.
 pub(crate) fn materialize(p: &Value) -> std::io::Result<()> {
     use std::os::unix::fs::{DirBuilderExt, symlink};
     let files = Path::new(p["files"].as_str().unwrap_or_default());

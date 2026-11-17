@@ -328,13 +328,21 @@ async fn the_servers_of_the_agents_a_session_may_call_are_bound_with_it() {
     };
     let dev = format!("harness = \"scripted\"\nsubagents = [\"qa\"]\n{}", server("notes"));
     let qa = format!(
-        "harness = \"scripted\"\ndescription = \"Checks.\"\n{}{}",
+        "harness = \"scripted\"\ndescription = \"Checks.\"\nplugins = [{{ name = \"kit\" }}]\n{}{}",
         server("notes"),
         server("own")
     );
+    // A service of the target without an MCP server only gives environment: the session does not start it.
+    let kit = format!(
+        "name = \"kit\"\nversion = \"0.1.0\"\n[[service]]\nname = \"side\"\ncommand = [\"{PROBE}\", \"{}\"]\n",
+        dir.path().join("side.jsonl").display()
+    );
     let driver = ScriptedDriver::new(1);
     driver.stall_sessions();
+    let config = format!("{}[[plugin]]\npath = \"kit\"\n", common::FILES[0].1);
     let files = [
+        ("config.toml", config.as_str()),
+        ("kit/plugin.toml", kit.as_str()),
         ("shop/agents/dev/agent.toml", dev.as_str()),
         ("shop/agents/qa/agent.toml", qa.as_str()),
     ];
