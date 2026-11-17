@@ -13,6 +13,8 @@ fn config(native: Option<Value>) -> EffectiveConfig {
         harness: "claude".into(),
         harness_from: aae_contract::config::Layer::Agent,
         scope: Default::default(),
+        description: None,
+        subagents: None,
         model_given: None,
         model: None,
         effort: None,

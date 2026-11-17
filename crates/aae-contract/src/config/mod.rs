@@ -17,6 +17,7 @@ mod retired;
 pub(crate) mod schema;
 mod service;
 mod sources;
+mod subagents;
 mod variants;
 
 use crate::template::{Filter, Inputs};

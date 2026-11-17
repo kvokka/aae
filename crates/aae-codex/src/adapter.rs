@@ -12,6 +12,7 @@ pub const ADAPTER: Adapter = Adapter {
     name: "codex",
     models: MODELS,
     tested: TESTED,
+    agent_types: &["default", "explorer", "worker"],
     new,
     doctor,
 };

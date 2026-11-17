@@ -17,6 +17,8 @@ fn hooks_join_the_native_settings_and_mcp_servers_take_claude_form() {
         harness: "claude".into(),
         harness_from: aae_contract::config::Layer::Agent,
         scope: Default::default(),
+        description: None,
+        subagents: None,
         model_given: None,
         model: None,
         effort: None,

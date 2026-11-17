@@ -21,6 +21,7 @@ config ([config](config.md#where-the-bundled-plugins-end-and-the-core-begins)).
        name: "<name>",                   // [harness.<name>] and the binary mise resolves
        models: &[("<short>", "<full>")], // short model names it expands; any other name goes as it is
        tested: [(1, 2, 0), (1, 4, 3)],   // tested binary versions, inclusive; also Capabilities.versions
+       agent_types: &["<type>"],         // agent types built into the harness: no subagent takes such a name
        new,                              // fn(&Setup) -> Result<Arc<dyn Driver>, String>
        doctor,                           // fn(DoctorAgents) -> Vec<Check>
    };

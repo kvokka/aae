@@ -12,6 +12,7 @@ mod config_services;
 mod config_sources;
 mod config_steps;
 mod config_strict;
+mod config_subagents;
 mod config_triggers;
 mod cron;
 mod journal;

@@ -52,6 +52,8 @@ pub struct Adapter {
     pub models: &'static [(&'static str, &'static str)],
     /// The harness versions the adapter was tested on, `[lowest, highest]` as `(major, minor, patch)`, inclusive.
     pub tested: [(u32, u32, u32); 2],
+    /// The agent types the harness has built in: an agent of such a name is no subagent of a session on it.
+    pub agent_types: &'static [&'static str],
     /// The driver on `setup`; the error names the key of the adapter's settings that is wrong.
     pub new: fn(&Setup) -> Result<Arc<dyn Driver>, String>,
     /// The host checks of `aae doctor` for the harness and its agents: whether a session the daemon starts can log

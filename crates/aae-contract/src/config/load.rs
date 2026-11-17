@@ -109,6 +109,7 @@ impl Loader {
             plugin_data: None,
             service_wait: std::time::Duration::from_secs(30),
         };
+        super::subagents::check(&mut self, &config);
         // A harness of the build the steps run on gets its defaults, none without its section.
         for harness in super::compose::check_runs(&mut self, &config) {
             config.harnesses.entry(harness).or_default();

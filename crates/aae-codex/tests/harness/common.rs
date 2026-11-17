@@ -86,6 +86,8 @@ impl Live {
             harness: "codex".into(),
             harness_from: aae_contract::config::Layer::Agent,
             scope: Default::default(),
+            description: None,
+            subagents: None,
             model_given: None,
             model: Some(sourced("gpt-fake".to_owned())),
             effort: None,

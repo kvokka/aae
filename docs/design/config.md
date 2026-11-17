@@ -49,6 +49,7 @@ policy, with different values, so it is set in the harness's own block (`[settin
 | `hooks.<name>` | `{event, matcher, command, timeout}` (harness hooks, Claude dialect) or `{enabled = false}`; `event` must be a hook event of claude 2.1 or one codex adds (`Interrupt`, `PreModelRequest`, `PostModelRequest`) | named list |
 | `skills.<name>` | `{path}` (must exist) or `{enabled = false}` | named list |
 | `plugins` | array of `{name, params = {..}, enabled = true}`: attaches a declared plugin (see "Plugin") | by name: an attachment keeps the place of its first mention, `params` merge by key, the strongest `enabled` decides |
+| `description`, `subagents` | string; array of agent and variant names and patterns: keys of an agent only — `agent.toml`, a variant and an edit take them, any `[settings]` table does not (see "Subagents") | scalar; the list is replaced whole by the strongest layer that sets it |
 | `native.<harness>` | any table, passed to the adapter as is; `native.claude` is a table of claude settings keys, delivered with `--settings` together with the hooks, except `permission_mode`, which goes as `--permission-mode`; `native.codex` is a table of codex `config.toml` keys (`approval_policy` is the thread's approval policy), delivered to the app-server as `-c key=value` flags (so it is part of the process fingerprint) | by key |
 
 A harness hook (`hooks.<name>`) delivered to claude also fires inside every subagent of the session (its input carries
@@ -201,7 +202,8 @@ Layers 7 and 8 belong to a run: the agent alone (`explain` without a formula, `a
 the user says for the agent (9, 10) is stronger than what the pack and the formula say.
 
 A scalar takes the strongest layer's value; a table (`env`, `mcp`, `native`) merges by key, an entry replaced whole;
-a named list (`hooks`, `skills`, `plugins`) is the union, and a stronger layer turns an element off by name. The host
+a named list (`hooks`, `skills`, `plugins`) is the union, and a stronger layer turns an element off by name;
+`subagents` is replaced whole by the strongest layer that sets it. The host
 layer is the exception: the harness merges it itself, aae neither reads nor parses it, and it is turned off only as a
 whole (`inherit_host = false`), never one element by name. The harness config inside the rig (`CLAUDE.md`,
 `.claude/`, `.mcp.json`, `AGENTS.md`) belongs to the repository, not the host: it applies with inheritance off too
@@ -218,7 +220,8 @@ to the agent. Every value keeps its layer; a value several layers make together 
 prompt with plugin fragments, `PATH` with plugin `bin/` directories) names them all in order (`# agent + plugin mail`),
 and a model the adapter expanded keeps the short name it was given
 (`model = "gpt-6-luna"  # rig [agents], given as "luna"`). The new layers print as `pack <name>`,
-`formula <pack>.<name> step <step>` and `variant <name>`. `explain()` prints one line per value with its layer and one
+`formula <pack>.<name> step <step>` and `variant <name>`. `subagents` prints resolved, the agent itself in it
+(`subagents = ["kit.implementer","kit.qa"]  # agent`), and only when a layer sets a list. `explain()` prints one line per value with its layer and one
 line for the host: inherited by the harness and invisible to aae, or off
 (`aae config explain --project <p> --agent <a> [--rig <r>]` and `GET /v1/config/explain`, on the config the daemon
 holds; with `--config <file>`, on that file with no daemon). The pack, formula and variant layers count only for a
@@ -523,7 +526,8 @@ list of names.
 - Pack, agent, formula, trigger, rig and project names are non-empty and have no `.`; agent, formula and trigger
   names are unique within a pack, pack names within a project.
 - A reference is `<name>` or `<pack>.<name>`. A bare name resolves to the referring pack's own item first, then to
-  the only pack that has it; a name that two other packs share must be qualified.
+  the only pack that has it; a name that two other packs share must be qualified. In `subagents` the referring pack
+  is that of the agent with the list (of a variant, its base agent's), and a variant goes by its name.
 
 ## Agent: `agents/<agent>/agent.toml`
 
@@ -536,7 +540,7 @@ rig's layer, so "explain config" of it is the same with a rig or without; `expla
 rig's `agents` that edits it, edits a variant of it or maps it to a variant is a config error, its edits go in the
 project's `[agents]`), `prompt` (role prompt file, default `prompt.md` when it exists; its text is the agent layer's
 `system_prompt`, so an `[agents.<agent>]` edit may still replace it, and setting `system_prompt` in `agent.toml`
-too is an error), `max_runs` (optional positive integer: runs of this agent
+too is an error), `description` and `subagents` (see "Subagents"), `max_runs` (optional positive integer: runs of this agent
 started at once in its project; the orchestrator's `max_runs` still applies; a run whose next step is of an agent
 at its limit parks until a run of that agent ends or leaves its step), then the settings keys above. Its
 `harness`, `model` and `effort` are the defaults of the role: a pack, a formula, a variant or an `[agents]` edit may change
@@ -564,6 +568,26 @@ role does is configuration.
 
 A run counts toward both limits from `preparing` until it is terminal, except while `parked` (no harness process).
 A run over a limit waits in `queued` with `waiting_for = "concurrency"`.
+
+### Subagents
+
+An agent's session may call other agents as native subagents of its harness. A subagent is not a run: it has no
+finisher, gates, `max_runs` or orchestrator hooks. `subagents` lists the agents and variants the session may call:
+`qa`, `kit.qa`, a variant's name, or a pattern where `*` stands for any run of characters, an empty one too (`qa-*`,
+`kit.*`, `*`). A bare pattern matches the agents of every pack of the project and the variants it sees; one with a
+pack matches that pack's agents only; a pattern that matches nothing is no error. The agent itself is always in the
+list, and with no list it is the only one. The set is one per session: a nested subagent calls within it, and a
+target's own list is not read. The list resolves on every place: on a rig that runs a variant in place of an agent
+(`[rigs.<r>] agents`), a target named as that agent is the variant, as for a step of a formula. A target's config is
+its own, alone, on the caller's place (`Config::effective`): the layers of the caller's pack and step do not reach it.
+`description` says what the agent does; a target needs one, the caller does not.
+
+Load errors, said of the project file for every agent and variant on every place, and for every ai step of a formula
+whose pack or step layers change the caller: a name that resolves to no agent or variant; a target on another harness,
+of another `scope` or `inherit_host`; a target whose `env` has a key the caller's has, with another value; a target
+whose plugin is not for the harness; a target named like an agent type the harness has built in (claude:
+`general-purpose`, `Explore`, `Plan`, `claude`; codex: `default`, `explorer`, `worker`); a target with no
+`description`. A pattern that matches a target unfit so is the same error.
 
 ## Agent variants
 

@@ -113,6 +113,13 @@ pub struct EffectiveConfig {
     /// Where the agent works: its session goes to the root for `root` (docs/design/config.md).
     #[serde(default)]
     pub scope: super::Scope,
+    /// What the agent does, for a session that may call it.
+    #[serde(default)]
+    pub description: Option<Sourced<String>>,
+    /// The agents (`<pack>.<name>`) and variants its session may call as subagents, the agent itself among them,
+    /// sorted; `None` when no layer sets a list: the agent alone.
+    #[serde(default)]
+    pub subagents: Option<Sourced<Vec<String>>>,
 }
 
 /// A plugin attached to an agent, with the values of its params in force, each from the layer that gave it.
@@ -145,6 +152,8 @@ impl EffectiveConfig {
             native: None,
             services: BTreeMap::new(),
             scope: super::Scope::Rig,
+            description: None,
+            subagents: None,
         }
     }
 
@@ -166,10 +175,18 @@ impl EffectiveConfig {
             (&mut self.model, &settings.model),
             (&mut self.effort, &settings.effort),
             (&mut self.system_prompt, &settings.system_prompt),
+            (&mut self.description, &settings.description),
         ] {
             if let Some(value) = value {
                 *slot = Some(sourced(value));
             }
+        }
+        // The strongest layer that sets a list replaces it whole.
+        if let Some(list) = &settings.subagents {
+            self.subagents = Some(Sourced {
+                value: list.clone(),
+                from: from.clone(),
+            });
         }
         if let Some(value) = settings.inherit_host {
             self.inherit_host = Some(Sourced {
@@ -257,10 +274,18 @@ impl EffectiveConfig {
         if self.scope == super::Scope::Root {
             line("scope", quoted("root"), &Layer::Agent);
         }
-        for (key, slot) in [("effort", &self.effort), ("system_prompt", &self.system_prompt)] {
+        let scalars = [
+            ("effort", &self.effort),
+            ("system_prompt", &self.system_prompt),
+            ("description", &self.description),
+        ];
+        for (key, slot) in scalars {
             if let Some(s) = slot {
                 line(key, quoted(&s.value), &s.from);
             }
+        }
+        if let Some(s) = &self.subagents {
+            line("subagents", json(&s.value), &s.from);
         }
         if let Some(s) = &self.inherit_host {
             line("inherit_host", s.value.to_string(), &s.from);

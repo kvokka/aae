@@ -59,12 +59,9 @@ impl Loader {
             match value {
                 // Resolved by `check` once the packs are loaded.
                 toml::Value::String(variant) => drop(agents.insert(reference(&agent), variant)),
-                toml::Value::Table(table) => match toml::Value::Table(table).try_into::<Settings>() {
+                toml::Value::Table(table) => match agent_settings(table) {
                     Ok(s) => drop(edits.insert(agent, self.settings(file, dir, s, plugins))),
-                    Err(e) => self.fail(
-                        file,
-                        format!("rig `{rig}`: `agents.{agent}`: {}", retired(e.to_string(), "")),
-                    ),
+                    Err(e) => self.fail(file, format!("rig `{rig}`: `agents.{agent}`: {e}")),
                 },
                 _ => self.fail(
                     file,
@@ -198,8 +195,25 @@ pub(super) fn agent_keys(mut table: toml::Table) -> Result<(Settings, Option<u32
         Some(toml::Value::Integer(n)) if u32::try_from(n).is_ok_and(|n| n > 0) => u32::try_from(n).ok(),
         Some(_) => return Err("`max_runs` must be a positive 32-bit integer".to_owned()),
     };
+    Ok((agent_settings(table)?, max_runs))
+}
+
+/// The settings of an agent's table; `description` and `subagents` are keys of an agent, a variant and an edit only.
+fn agent_settings(mut table: toml::Table) -> Result<Settings, String> {
+    let description = string(&mut table, "description")?;
+    let subagents = match table.remove("subagents") {
+        None => None,
+        Some(list) => Some(
+            list.try_into::<Vec<String>>()
+                .map_err(|_| "`subagents` must be an array of strings")?,
+        ),
+    };
     let settings = toml::Value::Table(table)
         .try_into::<Settings>()
-        .map_err(|e| super::retired::retired(e.to_string(), ""))?;
-    Ok((settings, max_runs))
+        .map_err(|e| retired(e.to_string(), ""))?;
+    Ok(Settings {
+        description,
+        subagents,
+        ..settings
+    })
 }

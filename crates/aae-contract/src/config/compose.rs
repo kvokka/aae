@@ -35,13 +35,42 @@ impl Config {
     /// (docs/design/config.md).
     pub fn effective(&self, project: &str, rig: Option<&str>, agent: &Name) -> Result<EffectiveConfig, String> {
         let (p, r) = self.place(project, rig)?;
-        let a = agent_of(p, agent)?;
-        let own = p.packs.first().map(|pack| pack.name.as_str()).unwrap_or_default();
-        // An edit names its agent as written in the project; one that names an agent of another project or
-        // nobody here does not apply.
-        let has_agent = |pack: &Pack, n: &str| pack.agents.contains_key(n);
-        let named = |key: &String| resolve(&p.packs, own, &reference(key), has_agent, "agent").as_ref() == Ok(agent);
-        self.assemble(p, r, a, Vec::new(), &named)
+        self.named(p, r, &agent.to_string(), Vec::new())
+    }
+
+    /// The config of `name` in `p` at `r` — a variant's by its name, else the pack agent's `<pack>.<name>` — with
+    /// `middle` between the agent and the edits, and its `subagents` resolved.
+    pub(super) fn named(
+        &self,
+        p: &Project,
+        r: Option<&Rig>,
+        name: &str,
+        mut middle: Vec<(Layer, Settings)>,
+    ) -> Result<EffectiveConfig, String> {
+        let mut config = match p.variants.get(name).or_else(|| self.variants.get(name)) {
+            Some(v) => {
+                let agent = super::variants::base(p, v)?;
+                middle.push((Layer::Variant(name.to_owned()), v.settings.clone()));
+                // The edits of a variant are those that name it: the base agent's are for the base agent.
+                let config = self.assemble(p, r, agent_of(p, &agent)?, middle, &|key| key == name)?;
+                (agent, config)
+            }
+            None => {
+                let agent = reference(name);
+                let own = p.packs.first().map(|pack| pack.name.as_str()).unwrap_or_default();
+                // An edit names its agent as written in the project; one that names an agent of another project or
+                // nobody here does not apply.
+                let has_agent = |pack: &Pack, n: &str| pack.agents.contains_key(n);
+                let named =
+                    |key: &String| resolve(&p.packs, own, &reference(key), has_agent, "agent").as_ref() == Ok(&agent);
+                let config = self.assemble(p, r, agent_of(p, &agent)?, middle, &named)?;
+                (agent, config)
+            }
+        };
+        if let Some(list) = &mut config.1.subagents {
+            list.value = super::subagents::resolve(self, p, r, &config.0.pack, name, &list.value)?;
+        }
+        Ok(config.1)
     }
 
     /// The agent step `step` of a run of `formula` on `rig` is of — the rig's variant of the step's agent, else that
@@ -91,19 +120,9 @@ impl Config {
             }
             None => (agent.clone(), mapped(agent)),
         };
-        let Some(variant) = variant else {
-            let a = agent_of(p, &agent)?;
-            let named =
-                |key: &String| resolve(&p.packs, own, &reference(key), has_agent, "agent").as_ref() == Ok(&agent);
-            return Ok((agent.to_string(), self.assemble(p, r, a, middle, &named)?));
-        };
-        let v = (p.variants.get(&variant).or_else(|| self.variants.get(&variant)))
-            .ok_or_else(|| format!("no agent variant `{variant}`"))?;
-        let a = agent_of(p, &super::variants::base(p, v)?)?;
-        middle.push((Layer::Variant(variant.clone()), v.settings.clone()));
-        // The edits of a variant are those that name it: the base agent's are for the base agent.
-        let config = self.assemble(p, r, a, middle, &|key| key == &variant)?;
-        Ok((variant, config))
+        let name = variant.unwrap_or_else(|| agent.to_string());
+        let config = self.named(p, r, &name, middle)?;
+        Ok((name, config))
     }
 
     /// The plugins whose orchestrator hooks an event of `project` gets, by name, with the values of their params in
@@ -313,7 +332,13 @@ pub(super) fn check_runs(loader: &mut Loader, config: &Config) -> BTreeSet<Strin
             let steps = f.steps.iter().filter(|s| matches!(s.kind, StepKind::Ai { .. }));
             for (step, rig) in steps.flat_map(|s| p.places().map(move |(r, _)| (&s.name, r))) {
                 match config.for_run(&p.name, rig, &formula, step) {
-                    Ok((_, e)) => drop(used.insert(e.harness)),
+                    // The layers of the formula's pack and step may set another harness than its targets'.
+                    Ok((agent, e)) => {
+                        for why in super::subagents::unfit(config, p, p.place(rig), &agent, &e) {
+                            loader.fail(&file, format!("formula `{formula}` on rig `{rig}`: {why}"));
+                        }
+                        used.insert(e.harness);
+                    }
                     Err(e) => loader.fail(&file, format!("formula `{formula}` on rig `{rig}`: {e}")),
                 }
             }

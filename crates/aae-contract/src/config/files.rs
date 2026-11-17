@@ -30,6 +30,13 @@ pub struct Settings {
     /// The `[[service]]` tables of the file of this layer: not a key of `[settings]`.
     #[serde(skip)]
     pub services: BTreeMap<String, super::Service>,
+    /// What the agent does, for a session that may call it: a key of an agent, a variant and an edit only.
+    #[serde(skip)]
+    pub description: Option<String>,
+    /// The agents and variants (names and `*` patterns, as written) the agent's session may call as subagents: a key
+    /// of an agent, a variant and an edit only.
+    #[serde(skip)]
+    pub subagents: Option<Vec<String>>,
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq, Serialize)]

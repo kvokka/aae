@@ -16,6 +16,7 @@ pub const ADAPTER: Adapter = Adapter {
     // The CLI itself takes the short names (`fable`, `opus`, `sonnet`, `haiku`) for the latest model of the family.
     models: &[],
     tested: TESTED,
+    agent_types: &["general-purpose", "Explore", "Plan", "claude"],
     new,
     doctor,
 };
