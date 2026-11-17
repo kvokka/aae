@@ -75,6 +75,11 @@ does not allow is denied at once, and the agent sees the denial; each denial the
 - A hook may ask aae or another agent for the decision through the CLI or the MCP of aae: the session environment
   carries `AAE_RUN`, `AAE_ATTEMPT_TOKEN` and `AAE_SOCKET`.
 
+claude refuses `bypassPermissions` when it runs as root (a container, CI): it exits before `init` with
+"--dangerously-skip-permissions cannot be used with root/sudo privileges", and the attempt fails. Under root, either
+tell claude it runs in a sandbox, `env = { IS_SANDBOX = "1" }`, which keeps the default, or name another mode in
+`native.claude.permission_mode` (as `dontAsk` or `acceptEdits`) with the `permissions.allow` rules the agents need.
+
 `aae finish` is a shell call of the agent. The default lets it through; a strict config must allow it explicitly, for
 claude `permissions = { allow = ["Bash(aae finish *)"] }`.
 

@@ -497,7 +497,8 @@ claude (`crates/aae-claude`):
   silence (one `api_retry{max_retries: 300}` with a pause of an hour), which the core's watchdog reads as a stall.
 - claude runs with `--permission-prompts none`: whatever would prompt is denied by claude itself and the model sees
   the denial; the permission mode decides the rest. The mode is `bypassPermissions` unless `native.claude` sets
-  `permission_mode` or `permissions.defaultMode` ([config](config.md#permissions)). Any `control_request` of the CLI
+  `permission_mode` or `permissions.defaultMode` ([config](config.md#permissions)); as root claude exits before
+  `init` under that mode unless the session's `env` sets `IS_SANDBOX=1`. Any `control_request` of the CLI
   gets an error `control_response` at once, so nothing waits. claude prompts for some commands even under
   `bypassPermissions` (seen on 2.1.325: a Bash heredoc into a directory outside the workdir); such a command is denied
   at once.
