@@ -10,7 +10,7 @@ use crate::{
 use rusqlite::params;
 use serde_json::{Value, json};
 use std::{
-    collections::HashMap,
+    collections::{BTreeMap, HashMap},
     path::Path,
     sync::{Arc, Mutex, PoisonError},
     time::Duration,
@@ -39,21 +39,21 @@ impl RunHandler {
         let config: Value = (row.config.as_deref())
             .and_then(|c| serde_json::from_str(c).ok())
             .unwrap_or_default();
-        let mut env: Vec<(String, Value)> = config["env"]
-            .as_object()
-            .into_iter()
-            .flatten()
+        // The `env` values as the config gives them: the runner resolves their references, so no value of the
+        // daemon's environment is ever stored (decision 137). A step of another kind keeps them under `exec`.
+        let exec = config.get("exec").unwrap_or(&config);
+        let env: serde_json::Map<String, Value> = (exec["env"].as_object().into_iter().flatten())
             .map(|(k, v)| (k.clone(), v["value"].clone()))
             .collect();
         // The tracker actor of the attempt (contracts 5.1), as for a session: the tracker attributes the command's
         // writes to the run.
-        if let Some((name, value)) = self.config.actor(&row.project, &row.id, row.attempt) {
-            env.retain(|(k, _)| *k != name);
-            env.push((name, json!(value)));
-        }
+        let mut context: Vec<(String, Value)> = (self.config.actor(&row.project, &row.id, row.attempt))
+            .map(|(name, value)| (name, json!(value)))
+            .into_iter()
+            .collect();
         // The context of the run goes in the environment only, never into the command (decision 47).
         let inputs: serde_json::Map<String, Value> = serde_json::from_str(&row.inputs).unwrap_or_default();
-        let mut context = vec![("AAE_RUN".to_owned(), json!(row.id))];
+        context.push(("AAE_RUN".to_owned(), json!(row.id)));
         context.extend(row.bead.as_ref().map(|bead| ("AAE_BEAD".to_owned(), json!(bead))));
         for (name, value) in inputs {
             let text = value.as_str().map_or_else(|| value.to_string(), str::to_owned);
@@ -73,8 +73,6 @@ impl RunHandler {
         }
         let remarks = super::render::remarks(tx.sql(), &row.id)?;
         context.extend((!remarks.is_empty()).then(|| ("AAE_REMARKS".to_owned(), json!(remarks))));
-        env.retain(|(k, _)| !context.iter().any(|(c, _)| c == k));
-        env.extend(context);
         let timeout_ms = row.timeout_ms.unwrap_or(super::render::STEP_TIMEOUT_MS);
         // Run ids repeat across daemons; the marker that recovery kills the command by must not.
         let Some(token) = super::new_token() else {
@@ -88,7 +86,8 @@ impl RunHandler {
         };
         let payload = json!({
             "op": "exec", "run": row.id, "attempt": row.attempt, "command": command, "check": check,
-            "cwd": row.workdir, "env": env, "timeout_ms": timeout_ms, "marker": format!("x-{}", &token[..16]),
+            "cwd": row.workdir, "env": env, "inherit_env": exec["inherit_env"] == true, "context": context,
+            "timeout_ms": timeout_ms, "marker": format!("x-{}", &token[..16]),
         });
         // Its own key: a `stop_exec` on the run's key must not queue behind the running command.
         let dedupe = if check {
@@ -178,10 +177,26 @@ pub(super) type Running = Arc<Mutex<HashMap<String, Arc<Notify>>>>;
 /// Runs the command of an `exec` effect to its end and tells the core how it ended.
 pub(super) async fn run(running: &Running, payload: &Value, socket: Option<&Path>) -> Msg {
     let command: Vec<String> = serde_json::from_value(payload["command"].clone()).unwrap_or_default();
-    let mut env = process::base_env();
-    let pairs: Vec<(String, String)> = serde_json::from_value(payload["env"].clone()).unwrap_or_default();
-    env.retain(|(k, _)| !pairs.iter().any(|(p, _)| p == k));
-    env.extend(pairs);
+    // The order of decision 137: the base or the daemon's whole environment, `env`, then aae's own variables; a
+    // later pair wins over an earlier of its name.
+    let mut env = if payload["inherit_env"] == true {
+        // shortcut: a variable of the daemon whose name or value is not UTF-8 is not inherited; pass `OsString`s
+        // through `Spec` if one ever matters.
+        std::env::vars_os()
+            .filter_map(|(k, v)| Some((k.into_string().ok()?, v.into_string().ok()?)))
+            .collect()
+    } else {
+        process::base_env()
+    };
+    let given: BTreeMap<String, String> = serde_json::from_value(payload["env"].clone()).unwrap_or_default();
+    for (name, value) in given {
+        match crate::config::env_value(&value, |n| std::env::var(n).ok()) {
+            Ok(value) => env.push((name, value)),
+            Err(e) => return refused(payload, format!("env `{name}`: {e}")),
+        }
+    }
+    let context: Vec<(String, String)> = serde_json::from_value(payload["context"].clone()).unwrap_or_default();
+    env.extend(context);
     let marker = payload["marker"].as_str().unwrap_or_default();
     env.push((crate::orphans::INSTANCE_ENV.to_owned(), marker.to_owned()));
     env.extend(socket.map(|s| ("AAE_SOCKET".to_owned(), s.to_string_lossy().into_owned())));
@@ -201,6 +216,21 @@ pub(super) async fn run(running: &Running, payload: &Value, socket: Option<&Path
     .await;
     lock().remove(&key);
     done(payload, out.exit, &out.stdout, &out.stderr)
+}
+
+/// The message for a command that cannot start because its environment cannot be made: the step's attempt fails as
+/// `config_error`; a check script fails the run as a script that cannot start (docs/design/config.md).
+fn refused(payload: &Value, text: String) -> Msg {
+    if payload["check"] == true {
+        return done(payload, Exit::SpawnFailed(text), b"", b"");
+    }
+    let mut failure = Failure::new(FailureKind::ConfigError, Source::Core);
+    failure.text = Some(text);
+    Msg::AttemptFailed {
+        run: payload["run"].as_str().unwrap_or_default().to_owned(),
+        attempt: super::exec::attempt(payload),
+        failure,
+    }
 }
 
 /// The message that tells the core how the command of an `exec` effect ended.

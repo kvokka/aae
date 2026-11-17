@@ -45,3 +45,27 @@ async fn a_panic_of_the_reader_fails_every_session_of_the_instance_and_kills_it(
     orphans::waited(child.id());
     assert_eq!(status.signal(), Some(Signal::KILL.as_raw()));
 }
+
+#[test]
+fn base_env_resolves_references_and_names_what_is_missing() {
+    let env = serde_json::json!({ "LIT": "plain", "NAME": "${CARGO_PKG_NAME}", "PRICE": "$$5" });
+    let out = base_env(std::iter::empty(), &env, "i1", None).unwrap();
+    for pair in [
+        ("LIT", "plain"),
+        ("NAME", "aae-contract"),
+        ("PRICE", "$5"),
+        (orphans::INSTANCE_ENV, "i1"),
+    ] {
+        assert!(
+            out.contains(&(pair.0.to_owned(), pair.1.to_owned())),
+            "{pair:?} in {out:?}"
+        );
+    }
+    let env = serde_json::json!({ "TOKEN": "secret-${AAE_TEST_NO_SUCH_VARIABLE}" });
+    let failure = base_env(std::iter::empty(), &env, "i1", None).unwrap_err();
+    assert_eq!(failure.kind, FailureKind::ConfigError);
+    assert_eq!(
+        failure.raw,
+        "env `TOKEN`: the daemon has no variable `AAE_TEST_NO_SUCH_VARIABLE`"
+    );
+}

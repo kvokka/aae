@@ -48,13 +48,20 @@ impl RunHandler {
         if row.step_attempt == 1 && !step.condition.matches(&context) {
             return Ok(None);
         }
-        // The tracker by name, as in a session (docs/design/config.md).
-        let env: serde_json::Map<String, Value> = (project.tracker_env(Some(rig)))
+        // The environment of an exec step or a check script (docs/design/config.md): the tracker by name, as in a
+        // session, then `[exec]`, its values as written (decision 137).
+        let exec = match &step.kind {
+            StepKind::Exec { env, .. } => env,
+            _ => &project.exec,
+        };
+        let mut env: serde_json::Map<String, Value> = (project.tracker_env(Some(rig)))
             .map(|(name, value)| (name.clone(), json!({ "value": value })))
             .collect();
+        env.extend((exec.env.iter()).map(|(name, value)| (name.clone(), json!(value))));
+        let inherit_env = exec.inherit_env.as_ref().is_some_and(|i| i.value);
         let timeout = match (&step.kind, row.step_kind.as_str()) {
-            (StepKind::Exec { command, timeout }, "exec") => {
-                let config = json!({ "command": command, "env": env });
+            (StepKind::Exec { command, timeout, .. }, "exec") => {
+                let config = json!({ "command": command, "env": env, "inherit_env": inherit_env });
                 return Ok(Some((None, timeout_ms(timeout, STEP_TIMEOUT_MS), config)));
             }
             // The environment is for the check script of the step (docs/design/config.md).
@@ -68,7 +75,7 @@ impl RunHandler {
                 "drain",
             ) => {
                 let config = json!({ "drain": formula.to_string(), "pool": pool,
-                    "on_item_failure": on_item_failure, "env": env });
+                    "on_item_failure": on_item_failure, "env": env, "inherit_env": inherit_env });
                 return Ok(Some((None, timeout_ms(timeout, DRAIN_TIMEOUT_MS), config)));
             }
             // The inputs of the formula's run: the parent's that it declares, its task among them (the child works on
@@ -90,7 +97,8 @@ impl RunHandler {
                     .resolve_in(&context)
                     .map_err(|e| format!("step `{}`: {e}", row.step))?;
                 given.extend(explicit.as_object().cloned().unwrap_or_default());
-                let config = json!({ "formula": run.to_string(), "inputs": given, "env": env });
+                let config =
+                    json!({ "formula": run.to_string(), "inputs": given, "env": env, "inherit_env": inherit_env });
                 return Ok(Some((None, timeout_ms(timeout, DRAIN_TIMEOUT_MS), config)));
             }
             (
@@ -126,7 +134,10 @@ impl RunHandler {
         if text.trim().is_empty() {
             return Err("prompt: empty after substitution".to_owned());
         }
-        Ok(Some((Some(text), timeout_ms(timeout, STEP_TIMEOUT_MS), json!(config))))
+        // The check script of the step gets the environment of an exec step, not the agent's.
+        let mut config = json!(config);
+        config["exec"] = json!({ "env": env, "inherit_env": inherit_env });
+        Ok(Some((Some(text), timeout_ms(timeout, STEP_TIMEOUT_MS), config)))
     }
 
     /// Where the session of `row`'s step works: the root for an agent of the root (docs/design/config.md), else the

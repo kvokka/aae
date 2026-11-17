@@ -248,7 +248,7 @@ timeout = "30s"
 
 | Event | Allowed decisions | Exit 2 means | Hook failure means |
 |---|---|---|---|
-| `run.preparing` | `{"decision":"proceed","workdir":"/abs/path","env":{"NAME":"value","DROP_ME":null},"prompt_append":"text"}` — every field but `decision` optional; `{"decision":"deny","reason":"…"}` | deny | deny (a veto hook) |
+| `run.preparing` | `{"decision":"proceed","workdir":"/abs/path","env":{"NAME":"value","DROP_ME":null},"prompt_append":"text"}` — every field but `decision` optional; an `env` value is text as it is, a `$` in it no reference (config.md, "Environment values"); `{"decision":"deny","reason":"…"}` | deny | deny (a veto hook) |
 | `run.attempt_failed` | `{"decision":"resume","after":"30s"}`; `{"decision":"new_session","after":"0s"}`; `{"decision":"park","gate":{"key":"…","until":"<time>"\|null,"reason":"…"},"then":"resume"\|"new_session"}`; `{"decision":"fail","reason":"…"}`; `gate` is required on `park` and optional on the other three (the gate is closed in the same transaction) | `fail` with the stderr reason | no decision from this plugin |
 | `run.turn_ended_without_outcome` | `{"decision":"continue","message":"…"}`; `{"decision":"fail","reason":"…"}` | `fail` | no decision from this plugin |
 | `run.finishing` | `{"decision":"accept"}`; `{"decision":"veto","reason":"…"}`; `{"decision":"remark","message":"…"}` | veto | veto with reason `hook_failed:<plugin>` (a veto hook) |
@@ -416,7 +416,7 @@ harness says so).
 | `auth_required` | adapter | account |
 | `billing` | adapter | account |
 | `context_overflow` | adapter | session |
-| `config_error` | adapter | session |
+| `config_error` | adapter; core (an `exec` step's `env` names a variable the daemon does not have) | session |
 | `harness_crash` | adapter | session |
 | `adapter_crash` | adapter (the task reading the harness output panicked: an instance-wide `failure`, then the process group is killed and `exited` follows) | instance |
 | `daemon_crash` | core | run |
@@ -451,7 +451,8 @@ Success traps are the adapter's: claude `subtype:"success"` with `is_error:true`
   ([adapters](adapters.md)); outside it the daemon warns at start, and `aae doctor` does.
 
 `account(process)` returns the account id the gates use (7): a stable hash of the credential source of the
-process part, never the credential itself.
+process part, never the credential itself; an `env` reference counts as written (`${NAME}`), so the id says where
+the key comes from, not what it is.
 
 ### 4.6 Harness specifics the contract relies on
 
@@ -737,7 +738,7 @@ of the parent leaves them alone.
 | `running` | turn ended, idle without background, outcome declared | `finishing` | `run.finishing` hooks |
 | `running` | turn ended, idle with background, outcome declared | `running` | the adapter stops the commands the session left (`stop_background`); `finishing` follows on idle without background |
 | `running` | turn ended, idle without background, no outcome | `running` | `run.turn_ended_without_outcome` hooks; `continue` → next prompt in the same attempt; `fail` or no decision → `failed{hollow_done}` (with the hook reason for `fail`) |
-| `preparing` (exec) | decision `proceed` (or no hooks) | `running` (no session to start: the command is spawned at once) | the command runs in the workdir with `PATH`, `HOME`, `LANG` of the daemon, the `env` of `run.preparing`, `AAE_SOCKET` (the API socket), `AAE_INPUT_<NAME>` per input and, per earlier step, `AAE_STEP_<NAME>_RESULT` (`pass`\|`fail`), `AAE_STEP_<NAME>_SUMMARY` and `AAE_STEP_<NAME>_DATA` (the `data` as JSON, when there is one); `<NAME>` is formed as for inputs (config.md, "Formula") |
+| `preparing` (exec) | decision `proceed` (or no hooks) | `running` (no session to start: the command is spawned at once) | the command runs in the workdir with `PATH`, `HOME`, `LANG` of the daemon (its whole environment with `inherit_env`), the `env` of `[exec]` and of the step with its references resolved (config.md, "Formula"), the `env` of `run.preparing`, `AAE_SOCKET` (the API socket), `AAE_INPUT_<NAME>` per input and, per earlier step, `AAE_STEP_<NAME>_RESULT` (`pass`\|`fail`), `AAE_STEP_<NAME>_SUMMARY` and `AAE_STEP_<NAME>_DATA` (the `data` as JSON, when there is one); `<NAME>` is formed as for inputs (config.md, "Formula") |
 | `running` (exec) | exit 0 / other code or a signal | `finishing` with outcome `pass` / `fail`, `summary` `exit <code>` or `signal <n>`, `data` `{exit_code, stdout, stderr}` (last 4 KiB each) | `run.finishing` hooks |
 | `preparing` (drain) | decision `proceed` (or no hooks) | `running` (an attempt with no process, `harness = drain`) | a read of the tracker; the config snapshot is `{drain: <formula>, pool, on_item_failure}` |
 | `running` (drain) | a read of the tracker (`Ready`) | `running` | while fewer than `pool` children are alive (queued or running) and no bead of this entry failed under `soft_stop`/`hard_stop`, each ready bead under the run's bead, at any depth, not given in this entry of the step (a restart starts a new attempt, not a new entry): the create of the first row with the bead as input, no rig, the run's correlation, `depth + 1`, `parent_run` the run (a refusal leaves the bead without a run); a run in a drain step holds no concurrency slot |
@@ -750,7 +751,7 @@ of the parent leaves them alone.
 | `running` (formula) | the run fails in the step (`runaway_turn` with no retry) | `failed` | the live child is cancelled, reason `parent_failed` |
 | `running` (drain) | a read after a bead of this entry failed under `hard_stop` | `running` | the cancel of each alive child, reason `drain_hard_stop` (its children go with it) |
 | `running` (drain) | a read that gave nothing, with no child alive and no later read queued | `finishing` with outcome `pass`, `summary` `<n> closed, <n> failed, <n> refused`, `data` `{closed, failed, refused: {<bead>: <reason>}}` of this entry's beads; after a stop `fail`, `summary` `stopped on <beads>: <n> closed, <n> failed, <n> not started`, `data` adds `stopped_on` and `not_started` | `run.finishing` hooks |
-| `running` (exec) | exit 75 / timeout / spawn error | `interrupted` with failure `unknown` (`text` `exit 75 (EX_TEMPFAIL)`, scope `run`) / `runaway_turn` / `workspace_failure` | `run.attempt_failed` hooks; every attempt runs the command again |
+| `running` (exec) | exit 75 / timeout / spawn error / an `env` reference to a variable the daemon does not have (the command is not spawned) | `interrupted` with failure `unknown` (`text` `exit 75 (EX_TEMPFAIL)`, scope `run`) / `runaway_turn` / `workspace_failure` / `config_error` (`text` names the key and the variable) | `run.attempt_failed` hooks; every attempt runs the command again |
 | `starting`, `running` | `failure`, `exited`, deadline, exec exit 75 | `interrupted` | stop the session (cancel, then stop the instance if it is the session's own, then sweep descendants); `run.attempt_failed` hooks |
 | `finishing` | accept of a `pass` of a step that is not the last | `preparing` of the next step | `run.step_finished`; the next step's prompt renders (the workdir and the bead claim stay) and its `run.preparing` hooks run |
 | `finishing` | accept / veto / remark | `passed` or `failed{agent}` / `failed{check}` / `running` | bead close or conditional release; on remark the message goes as the next prompt of the same attempt, the declared outcome is cleared, the token stays valid. A remark for a step other than `ai` is not allowed (hook failure) |

@@ -42,22 +42,26 @@ pub fn spawn(command: &mut Command, binary: &Path) -> Result<(Child, i32, u64), 
 }
 
 /// The environment every harness process starts from, nothing else inherited: the daemon's `vars` that are set,
-/// the agent's `env` (a JSON map), the instance id the orphan sweep looks for and the API socket. The adapter adds
-/// its own after these.
+/// the agent's `env` (a JSON map of `env` values, its references resolved here and nowhere earlier), the instance
+/// id the orphan sweep looks for and the API socket. The adapter adds its own after these. A reference to a
+/// variable the daemon lacks is a `config_error`.
 pub fn base_env<'a>(
     vars: impl Iterator<Item = &'a str>,
     env: &Value,
     id: &str,
     socket: Option<&Path>,
-) -> Vec<(String, String)> {
+) -> Result<Vec<(String, String)>, Failure> {
     let mut out: Vec<(String, String)> = vars
         .filter_map(|k| std::env::var(k).ok().map(|v| (k.to_owned(), v)))
         .collect();
     let text = |v: &Value| v.as_str().map(str::to_owned).unwrap_or_else(|| v.to_string());
-    out.extend((env.as_object().into_iter().flatten()).map(|(k, v)| (k.clone(), text(v))));
+    for (k, v) in env.as_object().into_iter().flatten() {
+        let value = crate::config::env_value(&text(v), |n| std::env::var(n).ok());
+        out.push((k.clone(), value.map_err(|e| config_error(format!("env `{k}`: {e}")))?));
+    }
     out.push((orphans::INSTANCE_ENV.to_owned(), id.to_owned()));
     out.extend(socket.map(|s| ("AAE_SOCKET".to_owned(), s.to_string_lossy().into_owned())));
-    out
+    Ok(out)
 }
 
 /// The event sender of one instance; `seq` counts from 1 across every clone.

@@ -41,10 +41,10 @@ impl Project {
     }
 
     /// The tracker's variables of a session or command at `place`: on a rig, its bead prefix too
-    /// (docs/design/config.md).
-    pub fn tracker_env<'a>(&'a self, place: Option<&'a Rig>) -> impl Iterator<Item = (&'a String, &'a String)> {
+    /// (docs/design/config.md), as `env` values: literals.
+    pub fn tracker_env<'a>(&'a self, place: Option<&'a Rig>) -> impl Iterator<Item = (&'a String, String)> {
         let prefix = self.tracker.prefix.as_ref().zip(place.and_then(|r| r.prefix.as_ref()));
-        self.tracker.env.iter().chain(prefix)
+        (self.tracker.env.iter().chain(prefix)).map(|(name, value)| (name, super::env_literal(value)))
     }
 
     /// The root first, then the rigs.

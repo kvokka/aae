@@ -9,7 +9,9 @@ The behaviour itself is described in the document named under each heading; this
 
 ## Waiting for the owner
 
-Nothing at the moment.
+| What | State |
+|---|---|
+| `${NAME}` in the `env` of an MCP server, a `[[service]]` or an orchestrator hook | not resolved: the values are literal ([config](../design/config.md#environment-values)); chosen by the implementer |
 
 ## Product shape — [overview](../overview.md), [event model](../design/event-model.md)
 
@@ -38,6 +40,10 @@ Nothing at the moment.
   inheritance off too.
 - Config is re-read by an explicit command, not by watching files.
 - A harness binary is resolved as: explicit path in the config → `mise which` → `PATH`.
+- An `env` reference has one strict form: `${NAME}` and `$$`; any other `$` is a load error, so a shell-style
+  `$NAME` does not pass silently as text.
+- `${AAE_PLUGIN_DIR}` in an `env` value outside a plugin's `[agent]` is a reference like any other, so it fails the
+  start as `config_error` unless the daemon has that variable.
 - Names the owner did not name: the root's section and its keys, the input type `task`, the `native.<harness>`
   block for the permission mode, the way a template takes an agent's file (`{{ agent.<name> }}`).
 
@@ -57,8 +63,10 @@ Nothing at the moment.
   from git must be pinned.
 - After `soft_stop` or `hard_stop` a `drain` step ends `fail`.
 - A check script runs after the step did; the step's own failure is a failed attempt too; the path is relative to
-  the formula file; the environment is that of an `exec` step; a repeat of an `ai` step continues its session with
-  the script's output as a remark; an infrastructure failure does not spend `max_attempts`.
+  the formula file; the environment is that of an `exec` step (for a step of another kind, the one of `[exec]` of the
+  orchestrator and the project, never the agent's `env`); a reference to a variable the daemon does not have keeps
+  the script from starting and fails the run as `infrastructure`, not as `config_error`; a repeat of an `ai` step
+  continues its session with the script's output as a remark; an infrastructure failure does not spend `max_attempts`.
 - The result of a step is visible to the next steps; a failed step without a return ends the run; checks in a row
   all run and their remarks go back together; the executor of a bead is the formula named in the `drain` step; a
   repeat of a step stays within the round.

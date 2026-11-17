@@ -205,8 +205,9 @@ pub(crate) fn explained(config: &Config, project: &str, of: &Explain, rig: Optio
             for step in &f.steps {
                 let name = &step.name;
                 let agent = match &step.kind {
-                    StepKind::Exec { command, .. } => {
+                    StepKind::Exec { command, env, .. } => {
                         text += &format!("# step `{name}` of `{formula}`: exec `{}`\n", command.join(" "));
+                        text += &env.explain();
                         None
                     }
                     StepKind::Drain {
@@ -254,6 +255,10 @@ pub(crate) fn explained(config: &Config, project: &str, of: &Explain, rig: Optio
                 let repeat: Vec<String> = times.into_iter().chain(check).collect();
                 if !repeat.is_empty() {
                     text += &format!("# {}\n", repeat.join("; "));
+                }
+                // The check script of a step of another kind gets `[exec]` of the orchestrator and the project.
+                if step.check.is_some() && !matches!(step.kind, StepKind::Exec { .. }) {
+                    text += &p.exec.explain();
                 }
                 steps.push(json!({ "step": name, "kind": step.kind.name(), "agent": agent }));
             }

@@ -97,3 +97,55 @@ async fn a_cancel_stops_the_check_script_and_the_session() {
     until("the session was not stopped", closed).await;
     assert_eq!(w.check_calls(), 1);
 }
+
+/// The check script of an ai step gets the environment of an exec step, `[exec]` of the project, not the agent's `env`
+/// (docs/design/config.md).
+#[tokio::test]
+async fn the_check_script_of_an_ai_step_gets_the_exec_environment() {
+    let extra = [
+        (
+            "shop/aae.toml",
+            "[rigs.web]\npath = \"web\"\n[exec]\nenv = { LIT = \"x\" }\n",
+        ),
+        (
+            "shop/agents/dev/agent.toml",
+            "harness = \"scripted\"\nenv = { AGENT_ONLY = \"y\" }\n",
+        ),
+    ];
+    let w = repeating(1, "0", "echo \"$LIT ${AGENT_ONLY-none}\" > \"$0.env\"", "", &extra);
+    let turn = w.repeat_turn();
+    let run = w.create().await;
+    w.repeat_declare(&run, 1, Verdict::Pass, &turn).await;
+    let (kind, data) = w.repeat_end(&run).await;
+    assert_eq!(kind, "run.passed", "{data}");
+    let seen = std::fs::read_to_string(w.dir.path().join("shop/formulas/check.sh.env")).unwrap();
+    assert_eq!(seen, "x none\n");
+    let agent = w.driver.sent(&run, 1).0.unwrap();
+    assert_eq!(
+        (agent.get("AGENT_ONLY").map(String::as_str), agent.get("LIT")),
+        (Some("y"), None),
+        "the session has the agent's env only"
+    );
+}
+
+/// A check script whose `[exec]` names a variable the daemon lacks cannot start: the run fails as `infrastructure`.
+#[tokio::test]
+async fn a_check_script_with_a_missing_variable_fails_the_run_as_infrastructure() {
+    let own = "[rigs.web]\npath = \"web\"\n[exec]\nenv = { GH_TOKEN = \"${AAE_TEST_NO_SUCH_VARIABLE}\" }\n";
+    let w = repeating(1, "0", "", "", &[("shop/aae.toml", own)]);
+    let turn = w.repeat_turn();
+    let run = w.create().await;
+    w.repeat_declare(&run, 1, Verdict::Pass, &turn).await;
+    let (kind, data) = w.repeat_end(&run).await;
+    assert_eq!(
+        (kind.as_str(), &data["class"]),
+        ("run.failed", &json!("infrastructure")),
+        "{data}"
+    );
+    let reason = data["reason"].as_str().unwrap();
+    assert!(
+        reason.starts_with("check script: ") && reason.contains("`AAE_TEST_NO_SUCH_VARIABLE`"),
+        "{reason}"
+    );
+    assert_eq!(w.check_calls(), 0);
+}

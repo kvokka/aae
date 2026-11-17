@@ -98,15 +98,6 @@ impl Loader {
         }
     }
 
-    /// The text of a prompt file: a prompt is never empty (docs/design/config.md).
-    pub(super) fn text(&mut self, file: &Path, path: &Path) -> Option<String> {
-        match fs::read_to_string(path) {
-            Ok(text) if text.trim().is_empty() => self.none(file, format!("`{}` is empty", path.display())),
-            Ok(text) => Some(text),
-            Err(e) => self.none(file, format!("`{}`: {e}", path.display())),
-        }
-    }
-
     pub(super) fn formula(&mut self, file: &Path) -> Option<(String, Formula)> {
         let raw: FormulaFile = self.read(file)?;
         self.name(file, "formula", &raw.name);
@@ -180,7 +171,7 @@ impl Loader {
             let condition = super::prompt::step_if(step.condition(), &raw.inputs, &steps)
                 .map_err(|e| self.fail(file, format!("step `{name}`: {e}")))
                 .ok()?;
-            let kind = self.step(file, step, &raw.inputs, &steps)?;
+            let kind = self.step((file, &raw.name), step, &raw.inputs, &steps)?;
             steps.push(Step {
                 name,
                 kind,
@@ -231,10 +222,10 @@ impl Loader {
         ))
     }
 
-    /// A step of formula `file`.
+    /// A step of formula `of` in `file`.
     fn step(
         &mut self,
-        file: &Path,
+        (file, of): (&Path, &str),
         raw: StepFile,
         own: &BTreeMap<String, super::formula_file::Input>,
         before: &[Step],
@@ -261,13 +252,24 @@ impl Loader {
                     settings: Box::new(settings),
                 }
             }
-            StepFile::Exec { command, timeout, .. } => {
+            StepFile::Exec {
+                command,
+                timeout,
+                inherit_env,
+                env,
+                ..
+            } => {
                 if command.is_empty() {
                     self.fail(file, "`command` is empty");
                 }
+                self.env_values(file, "env", &env);
+                let mut own = super::ExecEnv::default();
+                let layer = super::Layer::Formula(of.to_owned());
+                own.under(&super::env::ExecFile { inherit_env, env }, &layer);
                 StepKind::Exec {
                     command,
                     timeout: self.timeout(file, timeout.as_deref()),
+                    env: own,
                 }
             }
             StepFile::Drain {

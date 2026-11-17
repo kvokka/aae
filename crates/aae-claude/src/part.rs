@@ -242,8 +242,8 @@ pub(crate) fn materialize(p: &Value) -> std::io::Result<()> {
 /// The whole environment of `claude` for the process part `p` of instance `id`; nothing else is inherited.
 /// `host` is the host's claude config directory: an isolated session without a credential of its own gets the
 /// host's login from there (docs/design/config.md).
-pub(crate) fn env(p: &Value, id: &str, socket: Option<&Path>, host: &Path) -> Vec<(String, String)> {
-    let mut env = aae_contract::driver::child::base_env(daemon_vars(p), &p["env"], id, socket);
+pub(crate) fn env(p: &Value, id: &str, socket: Option<&Path>, host: &Path) -> Result<Vec<(String, String)>, Failure> {
+    let mut env = aae_contract::driver::child::base_env(daemon_vars(p), &p["env"], id, socket)?;
     let text = |v: &Value| v.as_str().map(str::to_owned).unwrap_or_else(|| v.to_string());
     env.extend([
         ("CLAUDE_CODE_EMIT_SESSION_STATE_EVENTS".to_owned(), "1".to_owned()),
@@ -263,7 +263,7 @@ pub(crate) fn env(p: &Value, id: &str, socket: Option<&Path>, host: &Path) -> Ve
     if !p["config_dir"].is_null() && !own {
         env.extend(host_token(host).map(|t| ("CLAUDE_CODE_OAUTH_TOKEN".to_owned(), t)));
     }
-    env
+    Ok(env)
 }
 
 /// The daemon's variables `claude` gets; a session inheriting the host also gets the host's config directory and

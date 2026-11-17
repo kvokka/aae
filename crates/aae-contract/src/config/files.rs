@@ -38,7 +38,9 @@ impl Settings {
     pub(super) fn in_plugin(&mut self, dir: &str) {
         let at = |text: &mut String| *text = text.replace(super::load::PLUGIN_DIR, dir);
         self.hooks.values_mut().filter_map(|h| h.command.as_mut()).for_each(at);
-        self.env.values_mut().for_each(at);
+        // In `env` the directory is a literal: a `$` in its path is no reference.
+        let literal = super::env_literal(dir);
+        (self.env.values_mut()).for_each(|text| *text = text.replace(super::load::PLUGIN_DIR, &literal));
         for mcp in self.mcp.values_mut() {
             mcp.command
                 .iter_mut()
@@ -217,6 +219,8 @@ pub(super) struct OrchestratorFile {
     /// `[inputs]`: the value of an input of that name for any formula that declares it and is not given one.
     #[serde(default)]
     pub inputs: Map<String, Value>,
+    #[serde(default)]
+    pub exec: super::env::ExecFile,
 }
 
 /// A harness agents may choose and its defaults (docs/design/config.md).
@@ -278,6 +282,8 @@ pub(super) struct ProjectFile {
     /// `[inputs]`: the value of an input of that name for any formula that declares it and is not given one.
     #[serde(default)]
     pub inputs: Map<String, Value>,
+    #[serde(default)]
+    pub exec: super::env::ExecFile,
 }
 
 /// `[root]`: the project's root, `root` beside `aae.toml` when absent (docs/design/config.md, decision 99).

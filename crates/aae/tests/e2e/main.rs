@@ -11,6 +11,7 @@ mod claude;
 mod cli;
 mod codex;
 mod doctor;
+mod exec_env;
 mod git_cache;
 mod mcp;
 mod replies;

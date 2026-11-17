@@ -67,8 +67,11 @@ rig settings and the agent's own `agent.toml`, so an agent can still override wh
 - **Harness hooks** use the Claude Code dialect (`event`, `matcher`, `command`, `timeout`); claude and codex take
   them in the same form, and for codex aae puts the attempt environment in front of the command. What `remind.sh`
   prints on `UserPromptSubmit` joins the prompt.
-- `${AAE_PLUGIN_DIR}` in a hook, MCP or service `command`, and in a service's `env` and `health.command`, is replaced
-  with the plugin's directory when the config loads, so a command can reach the plugin's own files.
+- `${AAE_PLUGIN_DIR}` in a hook, MCP or service `command`, in an `env` value and in a service's `health.command`, is
+  replaced with the plugin's directory when the config loads, so a command can reach the plugin's own files; in an
+  `env` the directory is literal, even with a `$` in its path. Any other `${NAME}` in the `[agent]` `env` is a
+  variable of the daemon's environment, resolved when the session starts; an MCP or service `env` takes none
+  ([environment values](../design/config.md#environment-values)).
 - **Scripts**: the plugin's `bin/` directory comes first on the `PATH` of the attached agents' sessions.
 - **A prompt fragment**: the top-level key `prompt = "prompt.md"` names a file whose text is appended to the
   attached agents' system prompt.

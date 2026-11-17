@@ -53,7 +53,7 @@ fn hooks_join_the_native_settings_and_mcp_servers_take_claude_form() {
         actor: Some(("BD_ACTOR".into(), "aae:r:1".into())),
     };
     let p = part::process(&config, &plan, Path::new("/state")).unwrap();
-    let env = part::env(&p, "i1", None, Path::new("/state"));
+    let env = part::env(&p, "i1", None, Path::new("/state")).unwrap();
     assert!(
         env.contains(&("BD_ACTOR".to_owned(), "aae:r:1".to_owned())),
         "the attempt's tracker actor, as the core planned it"
@@ -112,7 +112,7 @@ fn an_isolated_session_without_a_credential_gets_the_host_login() {
     let login = json!({ "claudeAiOauth": { "accessToken": "sk-ant-oat-host" } });
     std::fs::write(host.path().join(".credentials.json"), login.to_string()).unwrap();
     let token = |p: &Value| {
-        let env = part::env(p, "i1", None, host.path());
+        let env = part::env(p, "i1", None, host.path()).unwrap();
         env.into_iter()
             .find(|(k, _)| k == "CLAUDE_CODE_OAUTH_TOKEN")
             .map(|(_, v)| v)
@@ -137,7 +137,7 @@ fn an_isolated_session_without_a_credential_gets_the_host_login() {
     p["env"]["ANTHROPIC_API_KEY"] = json!("k");
     assert_eq!(token(&p), None, "its own credential wins");
     assert_ne!(part::account(&p), isolated);
-    let env = part::env(&p, "i1", None, host.path());
+    let env = part::env(&p, "i1", None, host.path()).unwrap();
     assert!(
         !env.iter().any(|(k, _)| k == "BD_ACTOR"),
         "a plan without a tracker actor sets none"
@@ -252,4 +252,33 @@ async fn an_instance_of_a_dead_daemon_is_signalled_at_once() {
     driver.stop_instance(&handle, Duration::from_secs(10)).await;
     assert!(at.elapsed() < Duration::from_secs(2), "{:?}", at.elapsed());
     assert!(!reaper.join().unwrap().unwrap().success());
+}
+
+#[test]
+fn the_process_part_keeps_the_reference_and_the_process_gets_the_value() {
+    let mut config = config(None);
+    let plan = SessionPlan::New {
+        workdir: "/w".into(),
+        run: "r".into(),
+        attempt: 1,
+        token: "t".into(),
+        actor: None,
+    };
+    let key = |config: &mut EffectiveConfig, value: &str| {
+        config.env.insert("ANTHROPIC_API_KEY".into(), agent(value.into()));
+        part::process(config, &plan, Path::new("/state")).unwrap()
+    };
+    let p = key(&mut config, "${CARGO_PKG_NAME}");
+    assert_eq!(
+        p["env"]["ANTHROPIC_API_KEY"], "${CARGO_PKG_NAME}",
+        "the fingerprint and the account too"
+    );
+    let env = part::env(&p, "i1", None, Path::new("/state")).unwrap();
+    assert!(
+        env.contains(&("ANTHROPIC_API_KEY".to_owned(), "aae-claude".to_owned())),
+        "{env:?}"
+    );
+    let p = key(&mut config, "${AAE_TEST_NO_SUCH_VARIABLE}");
+    let failure = part::env(&p, "i1", None, Path::new("/state")).unwrap_err();
+    assert_eq!(failure.kind, FailureKind::ConfigError, "{}", failure.raw);
 }

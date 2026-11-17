@@ -44,7 +44,7 @@ policy, with different values, so it is set in the harness's own block (`[settin
 | `harness` | string: the agent CLI, `claude` or `codex`, or one named in the orchestrator config; see "Harness and model" | scalar |
 | `model`, `effort`, `system_prompt` | string | scalar |
 | `inherit_host` | boolean | scalar |
-| `env` | table of strings | by key |
+| `env` | table of strings, each a literal or a `${NAME}` reference (see "Environment values") | by key |
 | `mcp.<name>` | `{command = [..], env, scope}` (stdio; `scope = "orchestrator" \| "project" \| "session"`, optional) or `{url, headers}` (HTTP), not both (a server the daemon runs is a `[[service]]`, below); a key of the other kind (`headers` with `command`, `env` or `scope` with `url`) is an error | by key, entry replaced whole |
 | `hooks.<name>` | `{event, matcher, command, timeout}` (harness hooks, Claude dialect) or `{enabled = false}`; `event` must be a hook event of claude 2.1 or one codex adds (`Interrupt`, `PreModelRequest`, `PostModelRequest`) | named list |
 | `skills.<name>` | `{path}` (must exist) or `{enabled = false}` | named list |
@@ -57,6 +57,23 @@ differently (by its source at 0.166.0, not exercised here): exit 2 blocks only w
 the hook counts as failed; `permissionDecision: "ask"` is rejected and the call goes through; `updatedInput` works
 only with `allow`; `prompt` and `agent` handlers are skipped; there is no `StopFailure`, so a hook cannot catch an
 API error or a quota. Its matchers name `Bash`, `apply_patch` (aliases `Edit`, `Write`) and `mcp__<server>__<tool>`.
+
+### Environment values
+
+An `env` value of an agent (`[settings]` of any layer, `agent.toml`, a variant, an edit), of `[exec]` (orchestrator
+and project) and of an `exec` step is text in which `${NAME}` stands for the variable `NAME` of the daemon's
+environment (`NAME` is `[A-Za-z_][A-Za-z0-9_]*`) and `$$` for a literal `$`: `GH_TOKEN = "${AAE_GH_TOKEN}"` gives a
+session a key the config file does not hold, under a name of its own. Any other `$` (`$HOME`, `${A:-b}`, an unclosed
+`${`) is a load error naming the file and the key (`` `env.KEY`: a `$` is written `$$`, a variable of the daemon
+`${NAME}` ``); the load checks the form only, not that the variable exists. A reference is resolved when the process
+starts and is never stored resolved: the run's snapshot, the journal, the instance fingerprint, the account id
+(contracts 4.5) and `config explain` keep `${NAME}`. A variable the daemon does not have fails the start as
+`config_error` naming the key and the variable, never quoting the value: an `exec` step's attempt, or the agent's
+session (from the adapter); a check script that cannot start for it fails the run as `infrastructure`. The `env` of an
+MCP server, of a `[[service]]` and of an orchestrator hook takes no references: its values are literal. What aae
+puts into an `env` itself (the tracker's variables, `${AAE_PLUGIN_DIR}` of a plugin, `PATH` with plugin `bin/`
+directories, the `env` of a `run.preparing` decision) is literal too, a `$` in it no reference. Output a command
+prints goes into the step's result in the journal, so a command must not print a secret it was given.
 
 ### Permissions
 
@@ -211,13 +228,16 @@ step one line ``# step `<s>` of `<f>`: exec `<command>` ``, for a drain step
 ``# step `<s>` of `<f>`: drain, a run of `<formula>` per bead, <pool> at a time`` (with ``; on a failed bead:
 <on_item_failure>`` unless it is `continue`), and after a check
 ``# a check: on fail, back to `<step>`, at most <n> rounds``, and for a step with `max_attempts` above 1 or a check
-script ``# runs at most <n> times; passes when <script> exits 0`` (each part when it applies). The API answer then has `agent` null and
-`steps: [{step, kind, agent}]`. The effective config serializes to JSON: a run keeps it as its snapshot, and `env` is
-the whole session environment besides what the adapter adds: a session does not inherit the daemon's environment
-wholesale. The core assembles it when the run prepares, right before the session starts; the adapter materializes it
-into launch flags, session parameters or a generated harness config directory, which lives in the state directory, never
-in the rig or the harness's home directory. The adapter's `split` turns it into a process part, keyed by its fingerprint
-(contracts 8), and a session part.
+script ``# runs at most <n> times; passes when <script> exits 0`` (each part when it applies). The environment an
+exec step or a check script gets follows as `exec.inherit_env = true  # <layer>` (when a layer says so) and one line
+per key, `exec.env.GH_TOKEN = "${AAE_GH_TOKEN}"  # <layer>`: after the header of an exec step, and after the check
+script line of a step of another kind. The API answer then has `agent` null and `steps: [{step, kind, agent}]`. The
+effective config serializes to JSON: a run keeps it as its snapshot, and `env` is the whole session environment
+besides what the adapter adds, its references unresolved (see "Environment values"): a session does not inherit the
+daemon's environment wholesale. The core assembles it when the run prepares, right before the session starts; the
+adapter materializes it into launch flags, session parameters or a generated harness config directory, which lives
+in the state directory, never in the rig or the harness's home directory. The adapter's `split` turns it into a
+process part, keyed by its fingerprint (contracts 8), and a session part.
 
 ## Harness and model
 
@@ -332,6 +352,10 @@ park_timeout = "168h"               # a parked run on a gate without `until`
 [inputs]                            # a value for the input of that name of any formula that declares it (see "Formula")
 focus = "security"
 
+[exec]                              # the environment of exec steps and check scripts (see "Formula")
+inherit_env = false                 # the daemon's whole environment (default false: PATH, HOME, LANG only)
+env = { GH_TOKEN = "${AAE_GH_TOKEN}" }  # merged by key under the project's and the step's
+
 [settings]                          # layer 2
 [agents.implementer]                # layer 10: an edit of an agent of any project (no `base`)
 ```
@@ -362,6 +386,9 @@ focus = "performance"
 
 [[plugin]]
 path = "plugins/aae-plugin-notes"
+
+[exec]                              # over the orchestrator's `[exec]`, under a step's own keys
+env = { TEST_DB = "postgres://localhost/shop" }
 
 [settings]                          # layer 3
 [agents.implementer]                # layer 10: an edit (no `base`)
@@ -573,6 +600,8 @@ native.claude = { permission_mode = "dontAsk" }  # optional, ai steps only: laye
 name = "test"
 kind = "exec"
 command = ["cargo", "test"]
+inherit_env = true                  # optional, exec steps only: over `[exec]` of the project and the orchestrator
+env = { RUST_LOG = "warn" }         # optional, exec steps only: merged by key over theirs
 back_to = "implement"               # optional, ai, exec and await steps: a check; on fail, back to this earlier step
 max_attempts = 2                    # optional, any step but await (default 1): the most times the step runs
 step_check_script_path = "check-test.sh"  # optional, any step but await: passes when it exits 0; from this file's
@@ -613,7 +642,13 @@ bounded tail of its output is kept in the result (contracts 6.2). An `exec` step
 its environment: `AAE_RUN`, `AAE_BEAD` (when the run has a bead), `AAE_SOCKET` (the API socket, so the command can
 call `aae`) and `AAE_INPUT_<NAME>` per input (the name upper-cased, other characters than letters and digits as `_`; a
 string as it is, any other value as JSON). Two inputs that give one variable (`note-text` and `note_text`) are a
-config error.
+config error. The environment is clean by default and built in this order, a later entry winning over an earlier one
+of the same name: `PATH`, `HOME` and `LANG` of the daemon, or its whole environment when `inherit_env` is true (a
+scalar: the step's, else the project's `[exec]`, else the orchestrator's; default false); the tracker's variables
+(`BEADS_DIR`, [tracker](tracker-br.md)); the `env` of the orchestrator's `[exec]`, the project's `[exec]` and the
+step, merged by key (see "Environment values"), and over it the `env` of `run.preparing` hooks; then the variables of
+aae: the tracker actor and the `AAE_*` variables (those above, `AAE_REMARKS` and `AAE_STEP_*` below), so
+an `env` key cannot replace them. A rig has no `[exec]`.
 
 A `drain` step gives every ready bead under the run's bead, at any depth, a run of `formula`, on each read of the
 tracker, until none is left: the same start as `aae run start` with the bead as the formula's input of type `task`, no
@@ -701,8 +736,10 @@ back for it, since an incurable failure is no work for an earlier step. A script
 by a signal or whose answer is lost (the deadline of `finishing`) did not pass; one that cannot start fails the run
 as `infrastructure`. The script runs after the step has run on its own and its hooks accepted
 `pass`; a step that failed on its own (finisher `fail`, a non-zero exit of the command) is a run that did not pass,
-and the script is not started. It gets the environment of an `exec` step plus `AAE_STEP_<NAME>_RESULT`, `_SUMMARY`
-and `_DATA` of its own step, in the run's workdir under the step timeout. A repeat of an `ai` step goes on in its
+and the script is not started. It gets the environment of an `exec` step — its own step's, when that is an `exec`
+step, else the one of the orchestrator's and the project's `[exec]`; never the agent's `env` — plus
+`AAE_STEP_<NAME>_RESULT`, `_SUMMARY` and `_DATA` of its own step, in the run's workdir under the step timeout. A
+reference to a variable the daemon does not have keeps the script from starting. A repeat of an `ai` step goes on in its
 session and gets the script's output as a remark: through `{{ remarks }}`, or appended to the prompt when the
 template has none. A repeat of a `drain` step is a new entry. The count is within a round: a round back to the step
 gives it the full `max_attempts` again. A repeat spends neither the session attempt ceiling (invariant 16,
@@ -816,7 +853,9 @@ and the `[agent]` of a plugin has no `plugins` (a plugin attaches no plugins). A
 source as for packs above) may carry parameters, `[[plugin]] path = ".." config = { .. }`: its orchestrator hooks get
 them in `AAE_PLUGIN_PARAMS` (contracts 3.1). In the `[agent]` contribution, `${AAE_PLUGIN_DIR}` in a harness hook
 `command`, an `env` value, an MCP `command` or `env` value and any string of a `native` table is replaced with the
-plugin's directory at load, so they reach the plugin's own files; skill paths are relative to it. A Claude Code plugin
+plugin's directory at load, so they reach the plugin's own files; skill paths are relative to it. In an `env` value
+the directory is literal (a `$` in its path is no reference); outside a plugin's `[agent]`, `${AAE_PLUGIN_DIR}` in an
+`env` value is a reference to a variable of the daemon like any other. A Claude Code plugin
 directory (`--plugin-dir`) cannot be handed over: the adapter takes that flag for skills, so a plugin gives its skills,
 hooks and MCP servers through `[agent]`. Beyond its `[agent]` layer a plugin gives its attached agents two things, in
 attachment order: the text of its `prompt` file, after the system prompt the layers give (each fragment after a blank

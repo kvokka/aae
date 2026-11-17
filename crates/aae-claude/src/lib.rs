@@ -92,11 +92,12 @@ impl Claude {
         let files = PathBuf::from(p["files"].as_str().unwrap_or_default()).join(id);
         p["files"] = json!(files);
         let p = &p;
+        let env = part::env(p, id, self.socket.as_deref(), &part::host_dir())?;
         let mut command = Command::new(&self.binary);
         command
             .args(part::args(p))
             .env_clear()
-            .envs(part::env(p, id, self.socket.as_deref(), &part::host_dir()))
+            .envs(env)
             .current_dir(p["workdir"].as_str().unwrap_or("."));
         let config_error = |what: &Path, e: std::io::Error| child::config_error(format!("{}: {e}", what.display()));
         part::materialize(p).map_err(|e| config_error(&files, e))?;

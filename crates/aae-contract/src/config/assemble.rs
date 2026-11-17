@@ -221,14 +221,15 @@ impl EffectiveConfig {
         let (path, from) = match self.env.get("PATH") {
             Some(s) => (s.value.clone(), s.from.and(&Layer::Plugin((*first).clone()))),
             None => (
-                std::env::var("PATH").unwrap_or_default(),
+                super::env_literal(&std::env::var("PATH").unwrap_or_default()),
                 Layer::Plugin((*first).clone()),
             ),
         };
         let from = (rest.iter()).fold(from, |from, (name, _)| from.and(&Layer::Plugin((*name).clone())));
+        // `PATH` is an `env` value: the directories are literals, what a layer gave keeps its references.
         let dirs = bins
             .iter()
-            .map(|(_, bin)| (*bin).clone())
+            .map(|(_, bin)| PathBuf::from(super::env_literal(&bin.to_string_lossy())))
             .chain(std::env::split_paths(&path));
         let value = std::env::join_paths(dirs).map_or(path, |p| p.to_string_lossy().into_owned());
         self.env.insert("PATH".to_owned(), Sourced { value, from });

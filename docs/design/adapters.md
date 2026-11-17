@@ -87,11 +87,15 @@ the core relies on these, and a driver that misses one fails runs by the watchdo
   JSON the adapter made of them, so an adapter must not encode or reshape a value it got.
 - **The process** runs in a process group of its own and carries `AAE_INSTANCE` (the orphan sweep finds it by
   that); nothing of the daemon's environment is inherited unless the adapter passes it.
+- **`env` references resolve only at the spawn**: the process part, the fingerprint and the account hash are made of
+  the `${NAME}` form (config.md, "Environment values"), and `base_env` resolves it into the process environment, a
+  variable the daemon does not have failing the start as `config_error` that names the key and the variable.
 - The adapter never retries a turn, parks or decides an outcome: that is policy.
 
 `aae_contract::driver::child` holds what every process-based adapter does the same way: `spawn` (piped stdio, own
-group, pid and start time), `base_env`, the `Events` sender, `health`, the stop ladder `stop`, `watch` (a panic of
-the reader task becomes `adapter_crash`) and `config_error`; `stderr_tail` and `HOST_NETWORK_ENV` sit next to it.
+group, pid and start time), `base_env` (the clean base and the agent's `env`, references resolved), the `Events`
+sender, `health`, the stop ladder `stop`, `watch` (a panic of the reader task becomes `adapter_crash`) and
+`config_error`; `stderr_tail` and `HOST_NETWORK_ENV` sit next to it.
 
 ## Contract suite
 

@@ -1,5 +1,6 @@
 //! What the orchestrator and the project config give every formula of a project: `rounds` for a formula that sets
-//! none, and values of the inputs it declares (docs/design/config.md "Formula", decisions 129, 130).
+//! none, values of the inputs it declares (docs/design/config.md "Formula", decisions 129, 130), and `[exec]` to
+//! its exec steps (decision 137).
 
 use super::{InputType, Layer, Pack, Sourced, load::Loader};
 use serde_json::{Map, Value};
@@ -11,6 +12,7 @@ pub(super) struct Given<'a> {
     pub layer: Layer,
     pub rounds: Option<NonZeroU32>,
     pub inputs: &'a Map<String, Value>,
+    pub exec: &'a super::env::ExecFile,
 }
 
 impl Loader {
@@ -20,6 +22,14 @@ impl Loader {
     pub(super) fn formula_defaults(&mut self, packs: &mut [Pack], layers: [&Given<'_>; 2]) {
         for pack in packs {
             for (name, formula) in &mut pack.formulas {
+                for step in &mut formula.steps {
+                    if let super::StepKind::Exec { env, .. } = &mut step.kind {
+                        // The project's over the orchestrator's: the step's own came first.
+                        for given in layers.iter().rev() {
+                            env.under(given.exec, &given.layer);
+                        }
+                    }
+                }
                 for given in layers {
                     let own = matches!(formula.rounds.from, Layer::Formula(_));
                     if let Some(n) = given.rounds.filter(|_| !own) {

@@ -57,7 +57,9 @@ impl Loader {
             layer: super::Layer::Orchestrator,
             rounds: raw.rounds,
             inputs: &raw.inputs,
+            exec: &raw.exec,
         };
+        self.env_values(file, "exec.env", &raw.exec.env);
         for dir in &raw.projects {
             let Some(project) = self.project(&resolve(&base, dir), &plugins, &bundled, &top) else {
                 continue;
@@ -195,6 +197,7 @@ impl Loader {
 
     /// Checks one layer of settings and makes its paths absolute; `plugins` are the names it may attach.
     pub(super) fn settings(&mut self, file: &Path, base: &Path, mut settings: Settings, plugins: &[&str]) -> Settings {
+        self.env_values(file, "env", &settings.env);
         for (name, mcp) in &settings.mcp {
             if let Some(why) = mcp.malformed() {
                 self.fail(file, format!("mcp `{name}` {why}"));
@@ -303,8 +306,13 @@ impl Loader {
             layer: super::Layer::Project,
             rounds: raw.rounds,
             inputs: &raw.inputs,
+            exec: &raw.exec,
         };
+        self.env_values(&file, "exec.env", &raw.exec.env);
         self.formula_defaults(&mut packs, [top, &own]);
+        let mut exec = super::ExecEnv::default();
+        exec.under(&raw.exec, &super::Layer::Project);
+        exec.under(top.exec, &super::Layer::Orchestrator);
         let bundled = super::check::project_bundled(self, &file, bundled, raw.builtin, &packs);
         Some(Project {
             name,
@@ -319,6 +327,7 @@ impl Loader {
             packs,
             prompts: BTreeMap::new(),
             tracker: super::TrackerLink::default(),
+            exec,
         })
     }
 

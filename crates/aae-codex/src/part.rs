@@ -209,8 +209,8 @@ pub(crate) fn args(p: &Value) -> Vec<String> {
 /// The environment of the app-server: the daemon's `PATH`, `HOME`, `LANG`, `SHELL` (and network settings when it
 /// inherits the host), the agent's variables, the homes, and the instance id the orphan sweep looks for. The attempt
 /// variables go to each thread instead.
-pub(crate) fn env(p: &Value, id: &str, socket: Option<&Path>) -> Vec<(String, String)> {
-    let mut env = aae_contract::driver::child::base_env(daemon_vars(p), &p["env"], id, socket);
+pub(crate) fn env(p: &Value, id: &str, socket: Option<&Path>) -> Result<Vec<(String, String)>, Failure> {
+    let mut env = aae_contract::driver::child::base_env(daemon_vars(p), &p["env"], id, socket)?;
     env.push((
         "CODEX_HOME".to_owned(),
         p["home"].as_str().unwrap_or_default().to_owned(),
@@ -222,7 +222,7 @@ pub(crate) fn env(p: &Value, id: &str, socket: Option<&Path>) -> Vec<(String, St
             .as_str()
             .and_then(|k| Some((k.to_owned(), std::env::var(k).ok()?))),
     );
-    env
+    Ok(env)
 }
 
 /// Creates the homes of an isolated process; without a credential of its own it gets the host's login, linked so

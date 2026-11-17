@@ -45,7 +45,7 @@ fn the_process_gets_the_native_block_and_the_thread_the_rest() {
         Some("responses")
     );
     assert!(p["home"].as_str().unwrap().starts_with("/state/codex/"));
-    let env = part::env(p, "i1", None);
+    let env = part::env(p, "i1", None).unwrap();
     assert!(env.contains(&("OPENAI_API_KEY".to_owned(), "sk-fake".to_owned())));
     assert!(env.iter().any(|(k, v)| k == "HOME" && v.ends_with("/home")));
     let s = &split.session.0;
@@ -91,7 +91,10 @@ fn a_process_without_a_key_of_its_own_logs_in_by_the_host_provider() {
     let login = |isolated: bool| {
         let mut p = json!({ "home": "/h", "env": {}, "overrides": ["model=\"m\""] });
         part::host_provider(&mut p, host.path(), isolated);
-        let keyed = part::env(&p, "i1", None).iter().any(|(k, _)| k == "CARGO_MANIFEST_DIR");
+        let keyed = part::env(&p, "i1", None)
+            .unwrap()
+            .iter()
+            .any(|(k, _)| k == "CARGO_MANIFEST_DIR");
         (keyed, part::args(&p))
     };
     assert!(!login(false).0, "no host config, no key");
@@ -191,7 +194,7 @@ fn a_process_inheriting_the_host_with_skills_gets_a_home_linking_the_hosts() {
         home.join("skills/.system").symlink_metadata().is_err(),
         "codex makes its own"
     );
-    let env = part::env(&p, "i1", None);
+    let env = part::env(&p, "i1", None).unwrap();
     assert!(env.contains(&("CODEX_HOME".to_owned(), home.to_string_lossy().into_owned())));
 }
 
@@ -216,4 +219,33 @@ fn a_thread_read_that_got_no_answer_is_no_missing_transcript() {
         FailureKind::HarnessCrash
     );
     assert_eq!(failed(FailureKind::Unknown).unwrap(), Transcript::Missing);
+}
+
+#[test]
+fn the_process_part_keeps_the_reference_and_the_process_gets_the_value() {
+    let mut config = config();
+    let plan = SessionPlan::New {
+        workdir: "/w".into(),
+        run: "r".into(),
+        attempt: 1,
+        token: "tok".into(),
+        actor: None,
+    };
+    let driver = Codex::new("codex".into(), "/state".into(), None, 8);
+    let mut key = |value: &str| {
+        config.env.insert("OPENAI_API_KEY".into(), agent(value.into()));
+        driver.split(&config, &plan).unwrap().process.0
+    };
+    let p = key("${CARGO_PKG_NAME}");
+    assert_eq!(
+        p["env"]["OPENAI_API_KEY"], "${CARGO_PKG_NAME}",
+        "the fingerprint and the account too"
+    );
+    let env = part::env(&p, "i1", None).unwrap();
+    assert!(
+        env.contains(&("OPENAI_API_KEY".to_owned(), "aae-codex".to_owned())),
+        "{env:?}"
+    );
+    let p = key("${AAE_TEST_NO_SUCH_VARIABLE}");
+    assert_eq!(part::env(&p, "i1", None).unwrap_err().kind, FailureKind::ConfigError);
 }

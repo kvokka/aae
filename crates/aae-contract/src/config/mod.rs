@@ -5,6 +5,7 @@ mod assemble;
 mod check;
 mod compose;
 mod defaults;
+mod env;
 mod files;
 mod formula_file;
 mod items;
@@ -19,6 +20,7 @@ mod variants;
 
 use crate::template::{Filter, Inputs};
 pub use assemble::{EffectiveConfig, Layer, Sourced};
+pub use env::{ExecEnv, env_literal, env_value};
 pub use files::{Harness, Hook, Mcp, McpScope, PluginUse, Settings, Skill};
 pub use formula_file::{Formula, Input, InputType, OnItemFailure, Step, StepKind};
 pub use places::Scope;
@@ -122,6 +124,9 @@ pub struct Project {
     /// The prompt of each agent its formulas' `ai` steps name, by the pack agent the step names.
     pub prompts: BTreeMap<Name, Prompt>,
     pub tracker: TrackerLink,
+    /// `[exec]` of the orchestrator and the project: the environment of a check script of a step that is no exec
+    /// step (an exec step's own is in its kind).
+    pub exec: ExecEnv,
 }
 
 /// How the project's sessions and commands reach its tracker (docs/design/config.md). The core knows no tracker

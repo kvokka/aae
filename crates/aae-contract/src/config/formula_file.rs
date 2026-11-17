@@ -96,6 +96,9 @@ pub(super) enum StepFile {
         condition: serde_json::Map<String, serde_json::Value>,
         command: Vec<String>,
         timeout: Option<String>,
+        inherit_env: Option<bool>,
+        #[serde(default)]
+        env: BTreeMap<String, String>,
         back_to: Option<String>,
         max_attempts: Option<NonZeroU32>,
         step_check_script_path: Option<String>,
@@ -228,6 +231,8 @@ pub enum StepKind {
     Exec {
         command: Vec<String>,
         timeout: Option<Duration>,
+        /// Its environment over aae's base: its own keys, then `[exec]` of the project and the orchestrator.
+        env: super::ExecEnv,
     },
     /// Every ready bead under the run's bead gets a run of `formula` (docs/design/config.md,
     /// docs/design/contracts.md 5).

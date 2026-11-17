@@ -197,7 +197,7 @@ impl Config {
         // still set it.
         for (name, value) in p.tracker_env(r) {
             let value = Sourced {
-                value: value.clone(),
+                value,
                 from: Layer::Project,
             };
             config.env.insert(name.clone(), value);

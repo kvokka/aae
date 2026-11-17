@@ -81,12 +81,10 @@ impl Codex {
     }
 
     async fn start(&self, id: &str, p: &Value, sink: EventSink) -> Result<InstanceHandle, Failure> {
+        let env = part::env(p, id, self.socket.as_deref())?;
         part::materialize(p).map_err(|e| child::config_error(format!("{}: {e}", p["home"])))?;
         let mut command = Command::new(&self.binary);
-        command
-            .args(part::args(p))
-            .env_clear()
-            .envs(part::env(p, id, self.socket.as_deref()));
+        command.args(part::args(p)).env_clear().envs(env);
         let (mut child, pid, start_time) = child::spawn(&mut command, &self.binary)?;
         let instance = Arc::new(Instance {
             home: p["home"].clone(),

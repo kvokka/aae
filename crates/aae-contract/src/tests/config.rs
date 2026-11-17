@@ -167,7 +167,7 @@ fn a_valid_config_loads_with_every_reference_resolved() {
         _ => panic!("implement is an ai step"),
     }
     assert!(
-        matches!(&kit.formulas["audit"].steps[0].kind, StepKind::Exec { command, timeout: None } if command.len() == 3)
+        matches!(&kit.formulas["audit"].steps[0].kind, StepKind::Exec { command, timeout: None, .. } if command.len() == 3)
     );
 }
 

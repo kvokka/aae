@@ -195,3 +195,14 @@ pub(super) fn strangers(steps: &[Step]) -> Vec<String> {
     }
     errors
 }
+
+impl Loader {
+    /// The text of a prompt file: a prompt is never empty (docs/design/config.md).
+    pub(super) fn text(&mut self, file: &Path, path: &Path) -> Option<String> {
+        match fs::read_to_string(path) {
+            Ok(text) if text.trim().is_empty() => self.none(file, format!("`{}` is empty", path.display())),
+            Ok(text) => Some(text),
+            Err(e) => self.none(file, format!("`{}`: {e}", path.display())),
+        }
+    }
+}

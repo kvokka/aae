@@ -196,7 +196,8 @@ pub(super) fn parse(kind: &str, v: &Value, plugin: &str, event: &Value) -> Optio
                 let value = match value {
                     Value::Null => None,
                     value => Some(Sourced {
-                        value: value.as_str()?.to_owned(),
+                        // A hook gives text, not a reference.
+                        value: crate::config::env_literal(value.as_str()?),
                         from: Layer::Plugin(plugin.to_owned()),
                     }),
                 };
