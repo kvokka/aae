@@ -113,7 +113,7 @@ so an agent names it in its own config (`[mcp.aae] url = "${AAE_API}/mcp"`, whic
 - A human sees runs and follows a run's live view through these frontends (`aae run watch` or the API), and gives
   the outcome of an `await` step (`aae run resolve`), by hand or through a bridge from another system (demo 3's
   `demos/3-review-gate/bridge.sh` from GitHub, with an idempotency key per round); the skill `awaiting` of the aae
-  plugin for Claude Code and Codex (`harness-plugin/`) shows a user's agent the runs that wait and passes on the user's
+  plugin for Claude Code and Codex (`operator-plugin/`) shows a user's agent the runs that wait and passes on the user's
   outcome or cancel. A human answers no permission request: the harness decides them from the config
   ([config](../design/config.md#permissions)).
 - The state of a run shows each attempt's `session`: the harness's own session reference (claude

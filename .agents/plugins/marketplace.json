@@ -8,7 +8,7 @@
       "name": "aae",
       "source": {
         "source": "local",
-        "path": "./harness-plugin"
+        "path": "./operator-plugin"
       },
       "policy": {
         "installation": "AVAILABLE",

@@ -50,8 +50,15 @@ These are checked by the build, not kept by agreement.
 | `aae-testkit` | test doubles: the scripted driver, fake providers, a test MCP service. Nothing of it runs in the product | [development](guide/development.md) |
 | `aae-acceptance` | end-to-end scenarios on a real daemon and real binaries, run on request | [acceptance](acceptance.md) |
 
-The skills for a user's agent are not a crate: `harness-plugin/` is a plugin of Claude Code and Codex, each in its
-current format. Claude Code reads `.claude-plugin/marketplace.json` and the plugin's `.claude-plugin/plugin.json`;
+aae's own plugins are not crates either: each lives in `plugins/<name>/` of this repository and is self-contained —
+its `plugin.toml`, a `README.md`, its own files and its own version — so moving one to a repository of its own
+changes only its declaration. A config declares a plugin by `[[plugin]]` with a `path`, or with `git` + `rev` + `dir`
+for a directory of a repository ([config: packs and plugins from git](design/config.md#packs-and-plugins-from-git)),
+and an agent attaches it with `plugins = [{ name, params }]`
+([config: plugin](design/config.md#plugin-pluginplugintoml)).
+
+The skills for a user's agent are a different thing: `operator-plugin/` is a plugin of the operator's harness,
+Claude Code or Codex, with the skills by which the operator drives aae, each harness in its current format. Claude Code reads `.claude-plugin/marketplace.json` and the plugin's `.claude-plugin/plugin.json`;
 Codex reads `.agents/plugins/marketplace.json` and the plugin's root `plugin.json`
 ([recovery](guide/recovery.md)). A test of `aae-front` checks its manifests and that its skills name only commands
 and flags the CLI has.

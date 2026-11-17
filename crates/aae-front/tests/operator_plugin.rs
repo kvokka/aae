@@ -1,4 +1,4 @@
-//! The skills plugin of Claude Code and Codex in `harness-plugin/` (docs/guide/recovery.md): its manifests are the
+//! The skills plugin of Claude Code and Codex in `operator-plugin/` (docs/guide/recovery.md): its manifests are the
 //! shape both harnesses install, and its skills name only commands the CLI has.
 
 use aae_front::cli::Cli;
@@ -104,7 +104,7 @@ fn words(line: &str) -> Vec<String> {
 
 #[test]
 fn every_command_a_skill_names_exists() {
-    let skills = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../harness-plugin/skills");
+    let skills = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../operator-plugin/skills");
     let mut seen = 0;
     for skill in fs::read_dir(&skills).unwrap() {
         let text = fs::read_to_string(skill.unwrap().path().join("SKILL.md")).unwrap();

@@ -1,5 +1,6 @@
-//! Packs from git on local repositories: downloaded into the cache at a tag, a commit or the latest revision, kept
-//! there without the network, removed by `aae cache clear` (docs/design/config.md, docs/guide/plugin.md).
+//! Packs and plugins from git on local repositories: downloaded into the cache at a tag, a commit or the latest
+//! revision, kept there without the network, removed by `aae cache clear` (docs/design/config.md,
+//! docs/guide/plugin.md).
 
 use std::{
     collections::BTreeSet,
@@ -184,4 +185,76 @@ fn cache_clear_needs_no_daemon_and_no_cache() {
     assert!(!d.join("cache/aae/git").exists());
     let (ok, out, _) = aae(d, &["--json", "cache", "clear"]);
     assert!(ok && out.contains("\"cleared\""), "{out}");
+}
+
+/// The plugin `mail` with a param, an env value and a skill.
+const MAIL: &[(&str, &str)] = &[
+    (
+        "plugin.toml",
+        "name = \"mail\"\nversion = \"0.1.0\"\nparams = { mode = \"p\" }\n\
+        [agent.env]\nMAIL = \"${params.mode}\"\nDATA = \"${AAE_PLUGIN_DATA}/box\"\n\
+        [agent.skills.mail]\npath = \"skills/mail\"\n",
+    ),
+    ("skills/mail/SKILL.md", "mail"),
+];
+
+/// `files` written under `root`.
+fn write(root: &Path, files: &[(&str, &str)]) {
+    for (path, text) in files {
+        fs::create_dir_all(root.join(path).parent().unwrap()).unwrap();
+        fs::write(root.join(path), text).unwrap();
+    }
+}
+
+/// `aae config explain --json` of the agent `kit.coder` in the project `shop`, whose orchestrator file declares the
+/// plugin `mail` by `plugin` and attaches it with a param.
+fn explain(dir: &Path, plugin: &str) -> String {
+    let config = dir.join("config/aae");
+    let agent = "harness = \"claude\"\nplugins = [{ name = \"mail\", params = { mode = \"o\" } }]\n";
+    write(
+        &config,
+        &[
+            ("config.toml", &format!("projects = [\"shop\"]\n[[plugin]]\n{plugin}\n")),
+            ("shop/aae.toml", "packs = [\"../kit\"]\n"),
+            ("kit/pack.toml", "name = \"kit\"\nversion = \"0.1.0\"\n"),
+            ("kit/agents/coder/agent.toml", agent),
+            ("kit/agents/coder/prompt.md", "You code."),
+        ],
+    );
+    let file = config.join("config.toml");
+    let args = ["--json", "config", "explain", "--config", file.to_str().unwrap()];
+    let (ok, out, err) = aae(
+        dir,
+        &[&args[..], &["--project", "shop", "--agent", "kit.coder"]].concat(),
+    );
+    assert!(ok, "{plugin}: {out}{err}");
+    out
+}
+
+#[test]
+fn a_plugin_from_a_directory_of_a_repository_is_the_plugin_at_its_path() {
+    let tmp = tempfile::tempdir().unwrap();
+    let d = tmp.path();
+    let local = d.join("config/aae/plugins/mail");
+    write(&local, MAIL);
+    let by_path = explain(d, "path = \"plugins/mail\"");
+
+    let files: Vec<(String, &str)> = MAIL.iter().map(|(p, t)| (format!("sub/mail/{p}"), *t)).collect();
+    let files: Vec<(&str, &str)> = files.iter().map(|(p, t)| (p.as_str(), *t)).collect();
+    let commit = repo(d, "plugins", &files);
+    git(d, &d.join("remote/plugins"), &["tag", "v1"]);
+    let url = d.join("remote/plugins");
+    let by_git = explain(
+        d,
+        &format!("git = \"{}\"\nrev = \"v1\"\ndir = \"sub/mail\"", url.display()),
+    );
+    // Only where the plugin's files are differs: the checkout in the cache instead of the local directory.
+    let repos: Vec<_> = fs::read_dir(d.join("cache/aae/git")).unwrap().flatten().collect();
+    let [cached] = repos.as_slice() else {
+        panic!("one repository in the cache");
+    };
+    let checkout = cached.path().join(commit).join("sub/mail");
+    let (checkout, local) = (checkout.to_str().unwrap(), local.to_str().unwrap());
+    assert!(by_git.contains(checkout) && !by_git.contains(local), "{by_git}");
+    assert_eq!(by_git.replace(checkout, local), by_path);
 }
