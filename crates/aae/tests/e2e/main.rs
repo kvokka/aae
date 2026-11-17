@@ -15,6 +15,7 @@ mod git_cache;
 mod mcp;
 mod replies;
 mod role_prompt;
+mod step_if;
 mod stop;
 mod tracker;
 mod wait;

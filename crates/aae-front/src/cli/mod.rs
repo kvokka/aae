@@ -352,6 +352,7 @@ async fn follow(mut events: Events, json: bool) -> Result<(), ClientError> {
             let inner = &data["data"];
             let mut line = vec![text(&data["seq"]), event.event];
             line.extend(data["run"].as_str().map(str::to_owned));
+            line.extend(inner["step"].as_str().map(|s| format!("step={s}")));
             if let (Some(from), Some(to)) = (inner["from"].as_str(), inner["to"].as_str()) {
                 line.push(format!("{from} -> {to}"));
             }

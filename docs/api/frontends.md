@@ -62,7 +62,9 @@ Code: `crates/aae-front/src/cli/`. The CLI is a thin client of the HTTP API in t
 - `GET /v1/formulas` gives every formula with `internal` (bool): an internal formula only starts as a step of
   another formula, not directly. `aae formula list` leaves the internal ones out; `--all` shows them too.
 - `aae run watch <run>` prints the live view (a line per event, `-  harness  <type>` per session message) and exits
-  0 once the stream ends with the run; `aae run wait` gives the outcome.
+  0 once the stream ends with the run; `aae run wait` gives the outcome. An event line is `<seq>  <type>  <run>`,
+  then `step=<name>` when the event names a step (`run.step_skipped`), `<from> -> <to>` for a state change and
+  `reason=<reason>` when the event has one.
 - `aae run wait <run>... [--timeout <dur>]` waits on the event stream (not by polling) until every named run is
   terminal, then prints for each `id`, `state`, `class`, `reason` and the finisher's `summary` and `data` (with
   `--json` an array of these objects). A run already terminal is answered at once. Exit codes: 0 when all passed,
