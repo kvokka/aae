@@ -14,13 +14,15 @@ repos="gate-demo gate-demo-backend gate-demo-frontend"
 request="Let a visitor of the site type their name and see a greeting the backend makes for it, KISS"
 cd "$here"
 # shellcheck disable=SC2086
-if [ -n "$(ls -A $repos root/.beads root/feedback .aae 2>/dev/null | grep -v -e '^\.gitkeep$' -e ':$' -e '^$')" ]; then
+if [ -n "$(ls -A $repos root/.beads root/feedback .aae 2>/dev/null | grep -v -e '^\.gitkeep$' -e '^\.git$' -e ':$' -e '^$')" ]; then
   echo "$demo: a run is left over; start clean with: git clean -ffdX -- $here"
   exit 1
 fi
 
-# Each repository is a clone of its GitHub repository; git pushes with the login of gh.
+# Each repository is a clone of its GitHub repository; git pushes with the login of gh. The one of a previous run
+# goes: `git clean` leaves a repository in a directory with a tracked file.
 for repo in $repos; do
+  find "$repo/.git" -delete 2>/dev/null || true
   git -C "$repo" init -q
   git -C "$repo" config credential.helper '!gh auth git-credential'
   git -C "$repo" remote add origin "https://github.com/$owner/$repo.git"
