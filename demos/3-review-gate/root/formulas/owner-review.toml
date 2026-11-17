@@ -1,0 +1,11 @@
+name = "owner-review"
+description = "The demo's reviewer looks at the pull requests of a feature that waits for its review"
+
+[inputs]
+feature = { type = "string", required = true }   # the run of the feature
+
+[[step]]
+name = "review"
+kind = "ai"
+agent = "owner"
+timeout = "20m"

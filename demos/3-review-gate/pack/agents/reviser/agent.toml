@@ -1,0 +1,16 @@
+# The defaults of the role; the user's config may run it on another harness, model or effort.
+scope = "root"                        # it works in the project root, over all the rigs
+harness = "codex"
+model = "terra"
+effort = "medium"
+
+# Its own permission: the review reaches it only through the feedback file the step before it writes, never from
+# GitHub, so a shell command that calls `gh` is denied.
+[hooks.no-github]
+event = "PreToolUse"
+matcher = "Bash"
+command = '''
+jq -e '.tool_input.command | tostring | test("(^|[\\s;&|(\"])gh(\\s|$)")' >/dev/null || exit 0
+echo "the reviser works from the feedback file, not from GitHub" >&2
+exit 2
+'''

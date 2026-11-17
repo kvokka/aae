@@ -1,0 +1,6 @@
+# The reviewer of the demo, in place of a human: it acts only through `gh`, as the owner of the repositories would.
+scope = "root"                        # it works in the project root
+harness = "codex"
+model = "terra"
+effort = "medium"
+inherit_host = true                   # `gh` reads its login from the user's home, which an isolated session lacks

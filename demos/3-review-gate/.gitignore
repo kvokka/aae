@@ -1,0 +1,13 @@
+# What a run creates: the clones of the repositories, the beads, the review the reviser gets, the daemon's state and
+# the report; the author's run is in *-example.
+/gate-demo/*
+!/gate-demo/.gitkeep
+/gate-demo-backend/*
+!/gate-demo-backend/.gitkeep
+/gate-demo-frontend/*
+!/gate-demo-frontend/.gitkeep
+/root/.beads/
+/root/.bv/
+/root/feedback/
+/.aae/
+/RESULT.md

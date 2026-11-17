@@ -1,0 +1,5 @@
+# The defaults of the role; the user's config may run it on another harness, model or effort.
+scope = "rig"                         # it works in the directory of the rig of its bead
+harness = "codex"
+model = "terra"
+effort = "medium"

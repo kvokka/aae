@@ -1,0 +1,29 @@
+name = "cleanup"
+description = "Clears what a cancelled feature left: its open pull requests, its branches and its bead"
+
+[inputs]
+bead = { type = "string", required = true }   # the bead of the cancelled feature, which nothing holds any more
+
+[[step]]
+name = "cleanup"
+kind = "exec"
+command = ["sh", "-c", '''
+set -eu
+branch="feature/$AAE_INPUT_BEAD"
+project=$(aae --json run show "$AAE_RUN" | jq -r .project)
+places=$(aae --json project list --project "$project")
+for repo in $(printf '%s' "$places" | jq -r '.[0] | .rigs[].path, .root.path'); do
+  cd "$repo"
+  state=$(gh pr view "$branch" --json state -q .state 2>/dev/null) || state=none
+  [ "$state" != OPEN ] || gh pr close "$branch"
+  ! git ls-remote -q --exit-code --heads origin "$branch" >/dev/null || git push -q origin --delete "$branch"
+  base=$(git rev-parse --abbrev-ref origin/HEAD); base=${base#origin/}
+  git switch -q -f "$base"
+  ! git show-ref -q --verify "refs/heads/$branch" || git branch -q -D "$branch"
+done
+cd "$(printf '%s' "$places" | jq -r '.[0].dir')"
+# The beads under it stay as they are: nothing gives them out once their root is closed.
+[ "$(br show "$AAE_INPUT_BEAD" --json | jq -r '.[0].status')" = closed ] ||
+  br close "$AAE_INPUT_BEAD" --force --reason "the feature was cancelled" --json >/dev/null
+echo "cleanup: $AAE_INPUT_BEAD"
+''']

@@ -1,0 +1,134 @@
+name = "feature"
+description = "A feature over the repositories of the project, gated on the review of its pull requests"
+
+[inputs]
+task = { type = "task", required = true }   # the request: its text becomes the root bead
+feedback_from = { type = "string" }         # whose comments reach the reviser: GitHub logins, comma-separated;
+                                            # none given, nobody's
+
+# Each repository keeps the work of the feature on one branch, `feature/<bead>`, across every round, so the formula
+# has no `worktree`: a worktree is a branch per run. The scripts find the repositories with `aae project list`.
+
+# The request becomes beads, and the coders do them.
+[[step]]
+name = "build"
+kind = "formula"
+formula = "feature-base"
+
+# After the review sent the feature back: the new comments of the allowed authors go into a file for the reviser,
+# and each one taken gets the reaction "eyes" of the account the script runs as, so it is taken once.
+[[step]]
+name = "collect"
+kind = "exec"
+if = { back_from = "review" }
+command = ["sh", "-c", '''
+set -eu
+branch="feature/$AAE_BEAD"
+project=$(aae --json run show "$AAE_RUN" | jq -r .project)
+places=$(aae --json project list --project "$project")
+dir=$(printf '%s' "$places" | jq -r '.[0].dir')
+[ -n "${AAE_INPUT_FEEDBACK_FROM:-}" ] || { echo "collect: no feedback_from, nobody's comments are taken"; exit 0; }
+fields='id url body author { login } reactionGroups { content viewerHasReacted }'
+query="query(\$url: URI!) { resource(url: \$url) { ... on PullRequest {
+  comments(first: 100) { nodes { $fields } }
+  reviews(first: 100) { nodes { $fields comments(first: 100) { nodes { $fields path } } } } } } }"
+taken=$(mktemp)
+for repo in $(printf '%s' "$places" | jq -r '.[0] | .root.path, .rigs[].path'); do
+  url=$(cd "$repo" && gh pr view "$branch" --json url -q .url 2>/dev/null) || continue
+  gh api graphql -f query="$query" -f url="$url" | jq -c --arg who "$AAE_INPUT_FEEDBACK_FROM" '
+    ($who | split(",") | map(gsub("^\\s+|\\s+$"; ""))) as $who
+    | .data.resource | .comments.nodes + [.reviews.nodes[] | ., .comments.nodes[]] | .[]
+    | select(.body != "" and (.author.login as $a | $who | index($a)))
+    | select(any(.reactionGroups[]; .content == "EYES" and .viewerHasReacted) | not)' >>"$taken"
+done
+[ -s "$taken" ] || { echo "collect: no new comment"; exit 0; }
+# A repeat of the step finds no new comment and keeps the file of the one before.
+mkdir -p "$dir/feedback"
+jq -r '"## \(.url)\(if .path then " (`\(.path)`)" else "" end)\n\n\(.body)\n"' "$taken" >"$dir/feedback/$AAE_BEAD.md"
+for id in $(jq -r .id "$taken"); do
+  gh api graphql -f id="$id" \
+    -f query='mutation($id: ID!) { addReaction(input: {subjectId: $id, content: EYES}) { clientMutationId } }' >/dev/null
+done
+echo "collect: $(wc -l <"$taken" | tr -d ' ') comment(s) in $dir/feedback/$AAE_BEAD.md"
+''']
+
+# The reviser works the comments, from the file only.
+[[step]]
+name = "address"
+kind = "ai"
+agent = "reviser"
+timeout = "20m"
+if = { back_from = "review" }
+
+# The work goes on GitHub: each repository with commits of the feature gets its branch pushed and a pull request,
+# the root last, with a page that names the feature and links the others. The last line is the root's pull request.
+[[step]]
+name = "pr"
+kind = "exec"
+command = ["sh", "-c", '''
+set -eu
+branch="feature/$AAE_BEAD"
+project=$(aae --json run show "$AAE_RUN" | jq -r .project)
+places=$(aae --json project list --project "$project")
+title=$(cd "$(printf '%s' "$places" | jq -r '.[0].dir')" && br show "$AAE_BEAD" --json | jq -r '.[0].title')
+page=$(mktemp)
+printf '# %s\n\nThe feature `%s`. Its pull requests in the other repositories:\n\n' "$title" "$AAE_BEAD" >"$page"
+# The work of the repository in $1 on the branch of the feature, pushed, with its pull request; prints its address.
+publish() {
+  cd "$1"
+  base=$(git rev-parse --abbrev-ref origin/HEAD); base=${base#origin/}
+  if [ "$(git branch --show-current)" != "$branch" ]; then
+    git switch -q -C "$branch"
+    git branch -q -f "$base" "origin/$base"    # the work reaches the default branch by a merge only
+  fi
+  git add -A
+  git diff --cached --quiet || git commit -qm "$title"
+  [ "$(git rev-list --count "origin/$base..HEAD")" -gt 0 ] || return 0
+  git push -q origin "HEAD:refs/heads/$branch"
+  gh pr view "$branch" --json url -q .url 2>/dev/null ||
+    gh pr create -H "$branch" -B "$base" -t "$title" -F "$page"
+}
+for repo in $(printf '%s' "$places" | jq -r '.[0].rigs[].path'); do
+  url=$(publish "$repo")
+  [ -z "$url" ] || echo "- $url" >>"$page"
+done
+root=$(printf '%s' "$places" | jq -r '.[0].root.path')
+mkdir -p "$root/features"
+cp "$page" "$root/features/$AAE_BEAD.md"
+url=$(publish "$root")
+cd "$root" && gh pr edit "$url" -F "$page" >/dev/null
+echo "$url"
+''']
+
+# The review: a merge of the root's pull request passes it, a comment of an allowed author sends the feature back
+# to `collect`, a close without a merge cancels the run.
+[[step]]
+name = "review"
+kind = "await"
+back_to = "collect"
+
+# The root's pull request is merged: the others follow. A repeat merges what is still open.
+[[step]]
+name = "merge"
+kind = "exec"
+max_attempts = 3
+command = ["sh", "-c", '''
+set -eu
+branch="feature/$AAE_BEAD"
+project=$(aae --json run show "$AAE_RUN" | jq -r .project)
+places=$(aae --json project list --project "$project")
+failed=0
+for repo in $(printf '%s' "$places" | jq -r '.[0].rigs[].path'); do
+  state=$(cd "$repo" && gh pr view "$branch" --json state -q .state 2>/dev/null) || continue
+  if [ "$state" = OPEN ]; then
+    (cd "$repo" && gh pr merge "$branch" --merge) || { failed=1; continue; }
+  fi
+  echo "merged: $repo"
+done
+# Each repository goes back to its default branch, up to date, for the next feature.
+for repo in $(printf '%s' "$places" | jq -r '.[0] | .root.path, .rigs[].path'); do
+  base=$(git -C "$repo" rev-parse --abbrev-ref origin/HEAD); base=${base#origin/}
+  { git -C "$repo" switch -q "$base" && git -C "$repo" pull -q --ff-only; } || failed=1
+done
+exit $failed
+''']

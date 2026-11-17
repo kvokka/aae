@@ -337,7 +337,7 @@ async fn tests(env: Arc<Env>, filter: &str, want: u32) -> String {
 
 async fn demos_load(env: Arc<Env>) -> String {
     let aae = env.aae.to_string_lossy().into_owned();
-    for demo in ["1-planner-executor", "2-multirepo-qa"] {
+    for demo in ["1-planner-executor", "2-multirepo-qa", "3-review-gate"] {
         let config = format!("demos/{demo}/root/config.toml");
         command(&env, &aae, &["config", "check", "--config", &config]).await;
     }

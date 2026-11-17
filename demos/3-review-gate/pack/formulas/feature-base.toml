@@ -1,0 +1,18 @@
+name = "feature-base"
+description = "The planner files the request as beads per rig, and coders do them"
+internal = true                             # only `feature` runs it, as its first step
+
+[inputs]
+task = { type = "task", required = true }   # the request: its text becomes the root bead
+
+[[step]]
+name = "plan"
+kind = "ai"
+agent = "planner"
+timeout = "20m"
+
+[[step]]
+name = "work"
+kind = "drain"
+formula = "implement"                       # a run per ready bead under the root, on the rig of the prefix of its id
+pool = 2                                    # two beads, two rigs, in work at once

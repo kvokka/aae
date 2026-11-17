@@ -1,0 +1,61 @@
+# Demo 3: a feature gated on the review of its pull requests
+
+A feature over three GitHub repositories, a root and its two children, that waits for its review between the steps:
+the planner and the coders do the work, a script opens a pull request in each repository, and the run stops on an
+`await` step until the review decides. A comment of an allowed author sends the work back to an agent of its own,
+the reviser; the merge of the root's pull request accepts it, and the formula merges the children's.
+
+The request is one sentence: "Let a visitor of the site type their name and see a greeting the backend makes for it,
+KISS".
+
+- `pack/` is the pack `dev`, with not a word about the task:
+  - agents `planner` (files the beads), `coder` (does one bead in its rig and commits it) and `reviser` (works the
+    comments of the review). The reviser reads them only from the file the formula gives it: a `PreToolUse` hook of
+    its own, in its `agent.toml`, denies it every shell command that calls `gh`;
+  - formula `feature-base` (`internal = true`): `plan`, an ai step of `planner`, and `work`, a `drain` step that gives
+    every ready bead a run of `implement`, two at once;
+  - formula `feature`, the one a user starts:
+    1. `build`, a `formula` step that runs `feature-base`;
+    2. `collect`, an exec step with `if = { back_from = "review" }`: after a return from the review, it takes the
+       comments and reviews of the authors in the input `feedback_from` (logins, comma-separated; none given,
+       nobody's) that it has not taken yet, writes them to `root/feedback/<bead>.md` and marks each with the reaction
+       "eyes";
+    3. `address`, an ai step of `reviser` with the same `if`;
+    4. `pr`, an exec step: in each repository with work of the feature it moves that work to the branch
+       `feature/<bead>`, pushes it and opens or updates the pull request; the root's comes last, with a page that
+       links the others, and its address is the last line of the step's output;
+    5. `review`, an `await` step with `back_to = "collect"`: it waits for `aae run resolve <run> review pass|fail`;
+    6. `merge`, an exec step: it merges the children's pull requests still open (`max_attempts = 3`, a repeat merges
+       what is left) and takes each repository back to its default branch.
+
+    Each repository keeps the feature on one branch over every round, so `feature` has no `worktree`, which is a branch
+    per run. Every script can run again with the same result;
+  - formula `cleanup`: closes the open pull requests of a feature, deletes its branches and closes its bead.
+- `root/` holds the configuration and the tracker of the project; its repository, `[root] path`, is `gate-demo/`.
+  `aae.toml` sets the models, `feedback_from` (`kvokka-agent`; put your login there) and two triggers: `cleanup` on
+  `run.cancelled` of a `feature` run, and on nothing else (a failed run is left for a human to look into), and
+  `owner-review` on `run.awaiting` of a `feature` run. `owner-review` is the project's own formula: its agent `owner`,
+  in `root/agents/owner`, stands in for a human reviewer and acts only through `gh`; the first time it leaves one
+  comment that asks for a change, the next time it merges the root's pull request. As the author of the pull requests
+  it can neither approve them nor request changes: GitHub does not let one account do that on its own. It runs with
+  the user's home (`inherit_host = true`), where `gh` keeps its login. `root/config.toml` is the orchestrator config
+  of the demo.
+- `gate-demo/`, `gate-demo-backend/` and `gate-demo-frontend/` are the clones of the GitHub repositories of the same
+  names, made by `run.sh`; empty before a run.
+
+The agents run on codex: `planner` and `owner` on `terra`, `coder` and `reviser` on `luna`.
+
+## Run
+
+You need `aae`, a login of `codex`, `gh` logged in as an account that may push to the repositories, `br` and `jq`.
+`mise install` in this directory installs all but `aae` (mise is a convenience, any install does). The repositories
+`gate-demo`, `gate-demo-backend` and `gate-demo-frontend` must exist under the GitHub account `OWNER`
+(`kvokka-agent` by default), each with a default branch. The run spends real tokens and opens real pull requests.
+
+```sh
+aae config check --config root/config.toml   # the pack and the project load
+OWNER=<your login> ./run.sh                  # or: mise run demo
+```
+
+`run.sh` writes `RESULT.md`: when and on what it ran, the rounds of the review, the root's pull request, the runs and
+the outcome. Everything a run creates is in `.gitignore`; `git clean -ffdX -- .` clears it for the next run.
