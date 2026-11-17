@@ -148,6 +148,50 @@ fn a_drain_step_takes_pool_and_on_item_failure() {
     fails(&[(FLOW, exec)], "unknown field `pool`");
 }
 
+/// An await step waits 7 days unless `timeout` says otherwise and fails the run at the end unless
+/// `fail_on_timeout = false`; it may go back as a check does, and takes none of the keys of a process.
+#[test]
+fn an_await_step_takes_timeout_fail_on_timeout_and_back_to() {
+    use crate::config::StepKind;
+    use std::time::Duration;
+    let flow = |keys: &str| {
+        format!(
+            "name = \"flow\"\n{}[[step]]\nname = \"gate\"\nkind = \"await\"\n{keys}",
+            exec(Some("work"))
+        )
+    };
+    let gate = |keys: &str| {
+        let config = load_with(&[(FLOW, &flow(keys))]).unwrap();
+        let step = config.projects[0].packs[1].formulas["flow"].steps[1].clone();
+        assert_eq!(step.kind.name(), "await");
+        match step.kind {
+            StepKind::Await {
+                timeout,
+                fail_on_timeout,
+            } => (timeout, fail_on_timeout, step.back_to),
+            kind => panic!("{kind:?}"),
+        }
+    };
+    assert_eq!(gate(""), (None, true, None));
+    assert_eq!(
+        gate("timeout = \"2h\"\nfail_on_timeout = false\nback_to = \"work\"\n"),
+        (Some(Duration::from_secs(7200)), false, Some("work".to_owned()))
+    );
+    for key in [
+        "agent = \"worker\"",
+        "command = [\"true\"]",
+        "formula = \"implement\"",
+        "max_attempts = 2",
+        "step_check_script_path = \"check.sh\"",
+    ] {
+        let field = key.split(' ').next().unwrap();
+        fails(
+            &[(FLOW, &flow(&format!("{key}\n")))],
+            &format!("unknown field `{field}`"),
+        );
+    }
+}
+
 /// A check names an earlier step to go back to; the formula bounds the rounds (docs/design/config.md).
 #[test]
 fn a_check_goes_back_to_an_earlier_step() {

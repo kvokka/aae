@@ -16,9 +16,9 @@ pub(crate) struct Run {
     formula: String,
     /// The step of the formula the run is at (docs/design/config.md); `agent` and `step_kind` are of it.
     step: String,
-    /// Absent for an exec or a drain step.
+    /// Absent for a step other than `ai`.
     agent: Option<String>,
-    /// `ai`, `exec` or `drain`.
+    /// `ai`, `exec`, `drain`, `formula` or `await`.
     step_kind: String,
     state: String,
     /// Set once `failed`: `agent`, `check`, `hollow_done` or `infrastructure`.
@@ -50,6 +50,9 @@ pub(crate) struct Run {
     gate: Option<Gate>,
     /// The outcome the current attempt declared; for an exec step `data` is `{exit_code, stdout, stderr}`.
     outcome: Option<Outcome>,
+    /// The outcomes of the other steps the run went through, by step name: the last attempt of each.
+    #[schema(value_type = Object)]
+    steps: Map<String, Value>,
     /// The last 20, newest last.
     attempts: Vec<Attempt>,
     /// The tokens of every attempt of the run.

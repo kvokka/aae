@@ -110,6 +110,7 @@ fn payload(event_type: &str) -> Option<&'static [(&'static str, Shape)]> {
         ],
         "run.parked" => &[("gate", GATE), ("then", Leaf)],
         "run.resumed" => &[("gate_key", Leaf)],
+        "run.awaiting" => &[("run", RUN), ("deadline", Leaf)],
         "run.step_finished" => &[("run", RUN), ("outcome", OUTCOME)],
         "run.passed" => &[("run", RUN), ("outcome", OUTCOME), ("usage", USAGE)],
         "run.failed" => &[

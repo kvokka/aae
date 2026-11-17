@@ -101,6 +101,7 @@ impl RunHandler {
             "exec" => return self.start_exec(tx, row),
             "drain" => return self.start_drain(tx, row),
             "formula" => return self.start_formula(tx, row),
+            "await" => return self.start_await(tx, row),
             _ => {}
         }
         let config = row

@@ -92,6 +92,13 @@ pub(super) enum StepFile {
         max_attempts: Option<NonZeroU32>,
         step_check_script_path: Option<String>,
     },
+    Await {
+        name: Option<String>,
+        timeout: Option<String>,
+        /// What the end of the wait does (docs/design/config.md); default `true`, the run fails.
+        fail_on_timeout: Option<bool>,
+        back_to: Option<String>,
+    },
 }
 
 /// What a drain step does once the run of a bead failed (docs/design/config.md).
@@ -176,6 +183,12 @@ pub enum StepKind {
         inputs: Inputs,
         timeout: Option<Duration>,
     },
+    /// The step waits for an outcome given from outside, through the API or the CLI (docs/design/config.md).
+    Await {
+        timeout: Option<Duration>,
+        /// At the timeout the run fails; `false`: the step passes.
+        fail_on_timeout: bool,
+    },
 }
 
 impl StepKind {
@@ -187,13 +200,14 @@ impl StepKind {
         }
     }
 
-    /// `ai`, `exec`, `drain` or `formula`, as the state and the API name the kind.
+    /// `ai`, `exec`, `drain`, `formula` or `await`, as the state and the API name the kind.
     pub fn name(&self) -> &'static str {
         match self {
             Self::Ai { .. } => "ai",
             Self::Exec { .. } => "exec",
             Self::Drain { .. } => "drain",
             Self::Formula { .. } => "formula",
+            Self::Await { .. } => "await",
         }
     }
 }

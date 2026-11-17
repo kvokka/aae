@@ -29,7 +29,9 @@ impl RunHandler {
                 let (agent, config) = self.config.for_run_as(project, rig, formula, &step.name, as_agent)?;
                 Ok((agent, config.model_key()))
             }
-            StepKind::Exec { .. } | StepKind::Drain { .. } | StepKind::Formula { .. } => Ok((String::new(), None)),
+            StepKind::Exec { .. } | StepKind::Drain { .. } | StepKind::Formula { .. } | StepKind::Await { .. } => {
+                Ok((String::new(), None))
+            }
         }
     }
 
@@ -296,7 +298,7 @@ impl RunHandler {
 
     /// Why a queued or parked run cannot start yet, `None` when it can: the daemon is stopping, a gate of the run is
     /// closed (with the closure), or the orchestrator or its agent has as many started runs as allowed
-    /// (docs/design/contracts.md 6; a parked run, or one in a drain step, has no process and holds no slot).
+    /// (docs/design/contracts.md 6; a parked run, or one in a step with no process, holds no slot).
     fn blocker(&self, tx: &Tx<'_>, row: &Row) -> Result<Option<(&'static str, Value)>, Error> {
         if self.stopping.is_some() {
             return Ok(Some(("daemon_stopping", Value::Null)));
@@ -370,7 +372,7 @@ impl RunHandler {
     }
 }
 
-/// The runs that hold a concurrency slot: a parked run, or one in a drain or formula step, has no process and holds none.
+/// The runs that hold a concurrency slot: a parked run, or one in a drain, formula or await step, has no process and holds none.
 fn started() -> String {
     format!("state NOT IN ('queued', 'parked', 'passed', 'failed', 'cancelled') AND NOT {NO_PROCESS}")
 }

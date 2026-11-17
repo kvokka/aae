@@ -13,6 +13,8 @@ pub(super) const STEP_TIMEOUT_MS: i64 = 45 * 60_000;
 /// The time a drain step has for every bead under the run's bead, and a formula step for its run
 /// (docs/design/config.md).
 pub(super) const DRAIN_TIMEOUT_MS: i64 = 24 * 3_600_000;
+/// The time an await step waits for its outcome (docs/design/config.md).
+pub(super) const AWAIT_TIMEOUT_MS: i64 = 7 * 24 * 3_600_000;
 
 impl RunHandler {
     /// The prompt, the step timeout and the config snapshot of a run, from the config of now: the effective config
@@ -79,6 +81,16 @@ impl RunHandler {
                 given.extend(explicit.as_object().cloned().unwrap_or_default());
                 let config = json!({ "formula": run.to_string(), "inputs": given, "env": env });
                 return Ok((None, timeout_ms(timeout, DRAIN_TIMEOUT_MS), config));
+            }
+            (
+                StepKind::Await {
+                    timeout,
+                    fail_on_timeout,
+                },
+                "await",
+            ) => {
+                let config = json!({ "fail_on_timeout": fail_on_timeout });
+                return Ok((None, timeout_ms(timeout, AWAIT_TIMEOUT_MS), config));
             }
             (StepKind::Ai { timeout, .. }, "ai") => timeout,
             _ => return Err(format!("step `{}` of `{}` changed its kind", row.step, row.formula)),

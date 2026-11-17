@@ -29,22 +29,11 @@ pub(super) async fn finish(
             "AAE_RUN and AAE_ATTEMPT_TOKEN are not set: `aae finish` runs inside an agent session",
         ));
     };
-    let data = match data.map(|d| match d.strip_prefix('@') {
-        Some(file) => std::fs::read_to_string(file).map_err(|e| format!("{file}: {e}")),
-        None => Ok(d),
-    }) {
-        None => Value::Null,
-        Some(Ok(text)) => match serde_json::from_str(&text) {
-            Ok(value) => value,
-            Err(e) => return Ok(fail(json, "usage", &format!("--data: {e}"))),
-        },
-        Some(Err(e)) => return Ok(fail(json, "usage", &e)),
+    let data = match data_arg(data) {
+        Ok(data) => data,
+        Err(e) => return Ok(fail(json, "usage", &e)),
     };
-    let result = match result {
-        Verdict::Pass => "pass",
-        Verdict::Fail => "fail",
-    };
-    let body = json!({ "token": token, "outcome": { "result": result, "summary": summary, "data": data } });
+    let body = json!({ "token": token, "outcome": outcome(result, summary, data) });
     let path = run_path(&run, "/finish");
     // A retry whose first try was committed but not answered gets the first reply. The key is a hash, so the
     // state never sees the token.
@@ -79,4 +68,23 @@ pub(super) async fn finish(
             Err(e) => return Err(e),
         }
     }
+}
+
+/// The `--data` of an outcome: JSON, or `@<file>` holding it; none is `null`.
+pub(super) fn data_arg(data: Option<String>) -> Result<Value, String> {
+    let Some(data) = data else { return Ok(Value::Null) };
+    let text = match data.strip_prefix('@') {
+        Some(file) => std::fs::read_to_string(file).map_err(|e| format!("{file}: {e}"))?,
+        None => data,
+    };
+    serde_json::from_str(&text).map_err(|e| format!("--data: {e}"))
+}
+
+/// An outcome as the API takes it (contracts 1.3 `Outcome`).
+pub(super) fn outcome(result: Verdict, summary: String, data: Value) -> Value {
+    let result = match result {
+        Verdict::Pass => "pass",
+        Verdict::Fail => "fail",
+    };
+    json!({ "result": result, "summary": summary, "data": data })
 }

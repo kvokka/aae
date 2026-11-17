@@ -1,6 +1,7 @@
 //! Runs (docs/design/contracts.md 6): the run state machine inside the single writer, the effects that
 //! drive a harness through its [`Driver`], and the driver events fed back to the writer as messages.
 
+mod await_step;
 mod bead_events;
 mod beads;
 mod decide;
@@ -138,6 +139,7 @@ impl Handler for RunHandler {
                 enabled,
             } => return self.switch(tx, &project, &rig, &trigger, enabled),
             Msg::Cancel { run, reason } => self.cancel(tx, &run, &reason),
+            Msg::Resolve { run, step, outcome } => self.resolve(tx, &run, &step, &outcome),
             Msg::CloseGate(gate) => self.close_gate(tx, &gate, "operator"),
             Msg::OpenGate { key } => self.open_gate(tx, &key, None),
             Msg::Decide { run, seq, decision } => self.decide(tx, &run, seq, decision),

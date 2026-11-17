@@ -1285,6 +1285,15 @@
             }
           },
           {
+            "name": "awaiting",
+            "in": "query",
+            "description": "`true`: only the runs waiting in an `await` step for an outcome; `false`: only the others.",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
             "name": "limit",
             "in": "query",
             "description": "At most this many, newest first (default 100).",
@@ -1824,6 +1833,125 @@
           },
           "500": {
             "description": "`storage` or `journal`: the daemon could not read its state",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorReply"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/runs/{id}/resolve": {
+      "post": {
+        "summary": "Gives the outcome of the `await` step a run waits on (contracts 6.3).",
+        "operationId": "resolve",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResolveRun"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Done; the body is JSON `null`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "default": null
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`bad_request`: a body unreadable or over 2 MiB, malformed JSON, query or path, or a value the operation refuses",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorReply"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthorized`: over TCP, without `Authorization: Bearer <api_token>`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorReply"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`not_found`: no such run",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorReply"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "`rejected`: the run does not wait on that step, or the outcome is over its limits",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorReply"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "`idempotency_key_reused`: the key came with another request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorReply"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "`storage`: the state database failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorReply"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "`stopped`: the core has stopped",
             "content": {
               "application/json": {
                 "schema": {
@@ -2993,6 +3121,23 @@
           }
         }
       },
+      "ResolveRun": {
+        "type": "object",
+        "required": [
+          "step",
+          "outcome"
+        ],
+        "properties": {
+          "outcome": {
+            "type": "object",
+            "description": "`{\"result\": \"pass\"|\"fail\", \"summary\", \"data\"?}`."
+          },
+          "step": {
+            "type": "string",
+            "description": "The `await` step the run waits on."
+          }
+        }
+      },
       "Rig": {
         "type": "object",
         "required": [
@@ -3045,6 +3190,7 @@
           "correlation",
           "created_at",
           "inputs",
+          "steps",
           "attempts",
           "usage"
         ],
@@ -3054,7 +3200,7 @@
               "string",
               "null"
             ],
-            "description": "Absent for an exec or a drain step."
+            "description": "Absent for a step other than `ai`."
           },
           "attempt": {
             "type": "integer",
@@ -3173,7 +3319,11 @@
           },
           "step_kind": {
             "type": "string",
-            "description": "`ai`, `exec` or `drain`."
+            "description": "`ai`, `exec`, `drain`, `formula` or `await`."
+          },
+          "steps": {
+            "type": "object",
+            "description": "The outcomes of the other steps the run went through, by step name: the last attempt of each."
           },
           "usage": {
             "$ref": "#/components/schemas/Usage",

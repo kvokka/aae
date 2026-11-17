@@ -9,6 +9,7 @@ mod agent_prompt;
 mod anthropic;
 mod attempt_edges;
 mod auth;
+mod await_step;
 mod background;
 mod bead_events;
 mod beads;

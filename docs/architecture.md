@@ -62,7 +62,7 @@ and flags the CLI has.
 2. **One writer.** Everything that happens enters the core as a message to the single writer and is handled in one
    SQLite transaction together with the events it emits; effects run after the commit
    ([event model](design/event-model.md)).
-3. **Steps in order.** The run goes through the steps of its formula: `ai`, `exec`, `drain`, `formula`
+3. **Steps in order.** The run goes through the steps of its formula: `ai`, `exec`, `drain`, `formula`, `await`
    ([formula](design/config.md#formula-formulasfiletoml)). For each step the core assembles the effective config from
    its layers ([config](design/config.md#effective-config-and-explain-config)).
 4. **A session.** For an `ai` step the lazy registry gives a harness instance for the step's fingerprint, and the

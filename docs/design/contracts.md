@@ -66,12 +66,13 @@ elsewhere `run` is the envelope's run id. Examples: `bead.labels` and `bead.epic
 Shared objects:
 
 - `RunView`:
-  `{id, formula, step, agent, step_kind: "ai"|"exec"|"drain"|"formula", state, class, attempt, generation, bead, workdir, depth, parent_run, created_at, started_at}`.
+  `{id, formula, step, agent, step_kind: "ai"|"exec"|"drain"|"formula"|"await", state, class, attempt, generation, bead, workdir, depth, parent_run, created_at, started_at}`.
   `step` is the name of the formula step the run is at (6.1); `agent` and `step_kind` are of that step, `agent` is null
-  for `exec` and `drain` steps, `class` is null until `failed`, `bead` is the bead id or null, `depth` is the chain
+  for a step other than `ai`, `class` is null until `failed`, `bead` is the bead id or null, `depth` is the chain
   depth of 6.1 (0 for a run started by hand), `parent_run` the run whose event triggered it or whose session started
   it. The read API (`GET /v1/runs/{id}`, `aae run show`) gives the `RunView` with `project`, `rig`, `correlation`,
-  `inputs`, `waiting_for`, `outcome`, `attempts`, `usage` (`{input_tokens, output_tokens}`, summed over every attempt)
+  `inputs`, `waiting_for`, `outcome`, `steps` (the outcomes of the other steps the run went through, by name: the last
+  attempt of each), `attempts`, `usage` (`{input_tokens, output_tokens}`, summed over every attempt)
   and: `reason` (the veto text, the cancel reason, `pass`, or the failure reason), `gate` (the oldest closure of the
   run's keys while it waits on a gate or is `parked`, else null) and `round` (the round of the formula's checks, 6.1: 1,
   and one more each time a check sends the run back) and `step_attempt` (the execution of the step in the round, an
@@ -101,6 +102,7 @@ Observed events (plugins and clients read them and cannot change what happens):
 | `service.starting`, `service.ready`, `service.stopped`, `service.failed` | same as `instance.*` with `service: {id, name, scope, pid, pgid}` instead of `instance` |
 | `run.queued` | `{run: RunView, waiting_for: "concurrency"\|"gate"\|"daemon_stopping"\|null, gate}`; re-emitted when the reason changes |
 | `run.started` | `{run}`; once per run, when it first leaves `queued` |
+| `run.awaiting` | `{run, deadline}`; the run entered an `await` step and waits for its outcome from outside until `deadline` (6.3) |
 | `run.step_finished` | `{run, outcome: Outcome}`; a step that is not the last passed, `run` is still at that step (6.1) |
 | `run.state_changed` | `{from, to, attempt, generation, reason}` |
 | `run.parked` | `{gate: Gate\|null, then: "resume"\|"new_session"}` (`null`: the daemon is stopping, or the run's agent has as many other started runs as its `max_runs`) |
@@ -654,7 +656,7 @@ the actor of an exec step and hands that of a session to the adapter in the sess
 | `queued` | not started: waits for a concurrency slot or an open gate; the reason is visible (`run.queued`) | `queue_timeout` 7 d | `failed{infrastructure, queue_timeout}` |
 | `preparing` | the bead claim confirmed, `run.preparing` hooks running, workdir and environment being fixed, snapshot of the effective config written | `start_timeout` for the claim, then the hook deadline (see 3.3) | the hooks count as failed → deny → `failed{check, hook_deadline}` |
 | `starting` | an attempt: instance acquired, session started or resumed, first prompt sent, waiting for `prompt.acked` | `start_timeout` 120 s | attempt failure `stall` |
-| `running` | the agent works (or the `exec` command runs, or the `drain` step gives out beads) | step `timeout` of the formula (default 45 m; `drain` and `formula` 24 h) per attempt → `runaway_turn`; silence budgets (an announced `retrying` pause adds to the limit): first event after ack 15 min, model thinking 15 min, tool running 40 min, background work after the turn 120 min → `stall` | attempt failure |
+| `running` | the agent works (or the `exec` command runs, or the `drain` step gives out beads, or the `await` step waits for its outcome) | step `timeout` of the formula (default 45 m; `drain` and `formula` 24 h) per attempt → `runaway_turn` (`await`: 168 h → `failed{check, await_timeout}`, or `pass` with `fail_on_timeout = false`); silence budgets (an announced `retrying` pause adds to the limit): first event after ack 15 min, model thinking 15 min, tool running 40 min, background work after the turn 120 min → `stall` | attempt failure |
 | `finishing` | outcome declared and the session idle without background; `run.finishing` hooks running, then the step check script of `step_check_script_path` if the hooks accepted a `pass` (no decision awaited) | hook deadline; for the script the step `timeout` plus a margin, a lost script counting as not passed | the hooks count as failed → veto → `failed{check, hook_deadline}` (a declared `fail` stays `failed{agent}`); script exit 0 → the next step or `passed`; 75 → `failed{check}` with no repeat and no `back_to` round; any other result is an execution that did not pass: under `max_attempts` the run repeats the step (`run.step_finished` with outcome `fail`, then `preparing` with `step_attempt` + 1), else `failed{check}` (`failed{agent}` if the step said `fail`); a script that cannot start → `failed{infrastructure}` |
 | `interrupted` | the current attempt ended with a failure (or by a daemon restart); `run.attempt_failed` is deciding | hook deadline, then the decision's `after` | no decision → `failed{infrastructure}` |
 | `parked` | a started run waits for a gate or a slot of its agent; no harness process | `park_timeout` 7 d from parking, or the gate's `until` if later (a gate with `until` opens by its timer first) | `failed{infrastructure, park_timeout}` |
@@ -733,6 +735,9 @@ of the parent leaves them alone.
 | `running` (drain) | a read of the tracker (`Ready`) | `running` | while fewer than `pool` children are alive (queued or running) and no bead of this entry failed under `soft_stop`/`hard_stop`, each ready bead under the run's bead, at any depth, not given in this entry of the step (a restart starts a new attempt, not a new entry): the create of the first row with the bead as input, no rig, the run's correlation, `depth + 1`, `parent_run` the run (a refusal leaves the bead without a run); a run in a drain step holds no concurrency slot |
 | `preparing` (formula) | decision `proceed` (or no hooks) | `running` (an attempt with no process, `harness = formula`) | the child run of the step's formula is created, or found if a restart cut the attempt that made it |
 | `running` (formula) | the child cannot start: refused (depth, a bead held by another run) or `next_ready` finds no ready bead (`nothing_ready`) | `failed{infrastructure}`, no attempt left to `max_attempts` | — |
+| `preparing` (await) | decision `proceed` (or no hooks) | `running` (an attempt with no process, `harness = await`) | `run.awaiting {run, deadline}`; the config snapshot is `{fail_on_timeout}`; a run waiting in the step holds no concurrency slot |
+| `running` (await) | an outcome for the step (`POST /v1/runs/{id}/resolve`, `aae run resolve`) | `finishing` with that outcome | `run.finishing` hooks; an outcome for another step or a run not waiting is refused (`rejected`) and changes nothing |
+| `running` (await) | the deadline, no outcome | `failed{check, await_timeout}`, no return to `back_to`; with `fail_on_timeout = false` `finishing` with `pass`, summary `timeout` | — |
 | `running` (formula) | the child ends | `finishing` with the child's outcome (or its reason, without one) | `run.finishing` hooks |
 | `running` (formula) | the run fails in the step (`runaway_turn` with no retry) | `failed` | the live child is cancelled, reason `parent_failed` |
 | `running` (drain) | a read after a bead of this entry failed under `hard_stop` | `running` | the cancel of each alive child, reason `drain_hard_stop` (its children go with it) |
@@ -740,7 +745,7 @@ of the parent leaves them alone.
 | `running` (exec) | exit 75 / timeout / spawn error | `interrupted` with failure `unknown` (`text` `exit 75 (EX_TEMPFAIL)`, scope `run`) / `runaway_turn` / `workspace_failure` | `run.attempt_failed` hooks; every attempt runs the command again |
 | `starting`, `running` | `failure`, `exited`, deadline, exec exit 75 | `interrupted` | stop the session (cancel, then stop the instance if it is the session's own, then sweep descendants); `run.attempt_failed` hooks |
 | `finishing` | accept of a `pass` of a step that is not the last | `preparing` of the next step | `run.step_finished`; the next step's prompt renders (the workdir and the bead claim stay) and its `run.preparing` hooks run |
-| `finishing` | accept / veto / remark | `passed` or `failed{agent}` / `failed{check}` / `running` | bead close or conditional release; on remark the message goes as the next prompt of the same attempt, the declared outcome is cleared, the token stays valid. A remark for an exec or a drain step is not allowed (hook failure) |
+| `finishing` | accept / veto / remark | `passed` or `failed{agent}` / `failed{check}` / `running` | bead close or conditional release; on remark the message goes as the next prompt of the same attempt, the declared outcome is cleared, the token stays valid. A remark for a step other than `ai` is not allowed (hook failure) |
 | `interrupted` | `resume` / `new_session` | `starting` after `after` | new attempt: `generation + 1`, new token; `resume` first checks the transcript (invariant 17), `Missing` → attempt failure `transcript_divergence` |
 | `interrupted` | `park` | `parked` | gate closed in the same transaction |
 | `interrupted` | `fail`, no decision, attempts ceiling | `failed{infrastructure}` | gate closed if the decision carries one |
@@ -796,6 +801,12 @@ How the finisher behaves, on the transitions of 6.2:
 The token belongs to the attempt, not to one call. Returning a remark is the check loop; the number of returns is
 bounded by the core's ceiling (6.1, invariant 16).
 
+The outcome of an `await` step comes from outside, not from a session: `POST /v1/runs/{id}/resolve` (`aae run
+resolve`) with `{step, outcome}` and no token. It is taken while the run waits on that step (`running`, the step
+named), with the finisher's limits (`summary` up to 4 KiB, `data` up to 64 KiB), and goes on as a declared outcome
+(`finishing`, the `run.finishing` hooks); otherwise it is `rejected` and the state does not change. A repeat is
+answered by its `Idempotency-Key`.
+
 Out of the box `pass` is the agent's word. Checking that the work is really done (a commit exists, tests are green)
 is the job of an outer loop of the user and is not bundled: the veto mechanism is there (`run.finishing`), a plugin
 for it is not.
@@ -811,7 +822,8 @@ for it is not.
   (invariants 6, 7); every hook still queued is first killed by its `AAE_INSTANCE` marker, with what it started, so a
   hook the dead daemon left running does not outlive it. A hook process is killed with SIGKILL without waiting for its
   death, so the hook that runs again may start before the old process is gone: hooks must be idempotent (3.1).
-  Runs with a live attempt — `starting`, `running` in a turn — → `interrupted` with `daemon_crash` (a `drain` attempt
+  Runs with a live attempt — `starting`, `running` in a turn — → `interrupted` with `daemon_crash` (not a run waiting
+  in an `await` step: its attempt and deadline stay, and a deadline passed while the daemon was down fires at start) (a `drain` attempt
   too: its next attempt gives no bead its entry of the step gave out), the launches, prompts and deciding hooks they
   still had queued dropped, and the command of an exec step killed by its `AAE_INSTANCE` marker (random per attempt)
   before any later attempt runs it. A run that waits for a decision on a deciding event keeps its

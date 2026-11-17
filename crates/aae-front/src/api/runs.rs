@@ -92,6 +92,8 @@ pub(crate) struct ListQuery {
     state: Option<String>,
     /// The runs whose `parent_run` this is: those its sessions started and those its events triggered.
     parent: Option<String>,
+    /// `true`: only the runs waiting in an `await` step for an outcome; `false`: only the others.
+    awaiting: Option<bool>,
     /// At most this many, newest first (default 100).
     limit: Option<u32>,
 }
@@ -109,6 +111,7 @@ pub(crate) async fn list(state: State, Param(Query(query)): Param<Query<ListQuer
         project: query.project,
         state: query.state,
         parent: query.parent,
+        awaiting: query.awaiting,
         limit: query.limit,
     };
     Ok(Json(state.reader.runs(&filter)?.into()))
@@ -152,6 +155,33 @@ pub(crate) async fn cancel(
             .send_request(key(&headers), Msg::Cancel { run, reason })
             .await?,
     ))
+}
+
+#[derive(Deserialize, ToSchema)]
+pub(crate) struct ResolveRun {
+    /// The `await` step the run waits on.
+    step: String,
+    /// `{"result": "pass"|"fail", "summary", "data"?}`.
+    #[schema(value_type = Object)]
+    outcome: Outcome,
+}
+
+/// Gives the outcome of the `await` step a run waits on (contracts 6.3).
+#[utoipa::path(post, path = "/v1/runs/{id}/resolve", request_body = ResolveRun,
+    params(("id" = String, Path), ("Idempotency-Key" = Option<String>, Header)),
+    responses((status = OK, description = NULL, body = ()),
+        (status = CONFLICT, description = "`rejected`: the run does not wait on that step, or the outcome is over \
+            its limits", body = ErrorReply),
+        (status = NOT_FOUND, description = "`not_found`: no such run", body = ErrorReply),
+        Keyed))]
+pub(crate) async fn resolve(
+    state: State,
+    headers: HeaderMap,
+    Param(Path(run)): Param<Path<String>>,
+    Body(ResolveRun { step, outcome }): Body<ResolveRun>,
+) -> Reply {
+    let msg = Msg::Resolve { run, step, outcome };
+    Ok(Json(state.core.send_request(key(&headers), msg).await?))
 }
 
 #[derive(Deserialize, ToSchema)]

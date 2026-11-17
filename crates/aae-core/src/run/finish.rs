@@ -3,7 +3,7 @@
 
 use super::{Outcome, RunHandler, Verdict, events::attempt_live, row::Row, token_sha256};
 use crate::{
-    config::Step,
+    config::{Step, StepKind},
     driver::{Failure, FailureKind, PromptKey, Source},
     writer::{Error, Tx},
 };
@@ -12,8 +12,8 @@ use serde_json::{Value, json};
 
 /// Ceiling of the core: remarks per attempt, `continue` and `remark` alike (invariant 16).
 pub const MAX_REMARKS: i64 = 10;
-const MAX_SUMMARY: usize = 4 * 1024;
-const MAX_DATA: usize = 64 * 1024;
+pub(super) const MAX_SUMMARY: usize = 4 * 1024;
+pub(super) const MAX_DATA: usize = 64 * 1024;
 
 impl RunHandler {
     pub(super) fn finish(
@@ -133,7 +133,9 @@ impl RunHandler {
         if let Some((class, reason)) = failed.filter(|_| checks.is_empty()) {
             return self.terminal(tx, row, "failed", Some(class), reason);
         }
-        if !checks.is_empty() && next.is_none_or(|n| n.back_to.is_none()) {
+        // An await step closes the row of checks before it: a run reaches it only when they all passed.
+        let row_ends = next.is_none_or(|n| n.back_to.is_none() || matches!(n.kind, StepKind::Await { .. }));
+        if !checks.is_empty() && row_ends {
             let mut sent_back = Vec::new();
             for check in checks.iter().rev() {
                 let outcome: Option<String> = tx

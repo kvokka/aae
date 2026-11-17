@@ -25,8 +25,8 @@ const TITLE_CHARS: usize = 80;
 /// A run in a drain step.
 pub(super) const DRAINING: &str = "(step_kind = 'drain' AND state = 'running')";
 
-/// A run in a drain or a formula step: its attempt has no process, so it holds no concurrency slot.
-pub(super) const NO_PROCESS: &str = "(step_kind IN ('drain', 'formula') AND state = 'running')";
+/// A run in a drain, formula or await step: its attempt has no process, so it holds no concurrency slot.
+pub(super) const NO_PROCESS: &str = "(step_kind IN ('drain', 'formula', 'await') AND state = 'running')";
 
 impl RunHandler {
     /// The attempt of a drain step: the read of the tracker it asks for makes the first pass; its deadline is the

@@ -70,7 +70,9 @@ At daemon start ([contracts](contracts.md) 6.4 has the exact state rules):
    step never runs again, and an exec command the restart killed runs again in a new attempt of its step. The
    attempt of a `drain` step is interrupted as any: its next attempt gives out no bead the entry into the step has
    already given (their runs recover as any run), and none at all once a bead of the entry failed under `soft_stop` or
-   `hard_stop`: the stop follows from the children in the state.
+   `hard_stop`: the stop follows from the children in the state. A run waiting in an `await` step has no live
+   attempt to lose: it keeps waiting with its deadline, and a deadline that passed while the daemon was down fires at
+   start.
 4. The deadlines that wait for an effect's answer (a decision, the claim of a bead) count again from the start;
    the deadlines of real time stay, and the schedules are armed (a missed schedule fires at most once). Resync, the
    process table included: what carries the marker of an instance this state no longer records is swept.

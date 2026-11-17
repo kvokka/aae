@@ -7,6 +7,7 @@ use super::{
     formula_file::{FormulaFile, InputType, StepFile},
     load::{Loader, reference},
     schema::event_path,
+    variants::{agent_keys, string},
 };
 use crate::{
     cron::Cron,
@@ -145,6 +146,7 @@ impl Loader {
                     step_check_script_path: script,
                     ..
                 } => (name.clone(), None, *max_attempts, script.clone()),
+                StepFile::Await { name, back_to, .. } => (name.clone(), back_to.clone(), None, None),
             };
             let name = name.unwrap_or_else(|| (at + 1).to_string());
             if let Some(to) = back_to.as_ref().filter(|to| !steps.iter().any(|s| &s.name == *to)) {
@@ -282,6 +284,14 @@ impl Loader {
                 formula: reference(&formula),
                 timeout: self.timeout(file, timeout.as_deref()),
             },
+            StepFile::Await {
+                timeout,
+                fail_on_timeout,
+                ..
+            } => StepKind::Await {
+                timeout: self.timeout(file, timeout.as_deref()),
+                fail_on_timeout: fail_on_timeout.unwrap_or(true),
+            },
         })
     }
 
@@ -342,28 +352,6 @@ impl Loader {
             rig: raw.rig,
         })
     }
-}
-
-/// Takes the string `key` out of `table`.
-pub(super) fn string(table: &mut toml::Table, key: &str) -> Result<Option<String>, String> {
-    match table.remove(key) {
-        Some(toml::Value::String(s)) => Ok(Some(s)),
-        None => Ok(None),
-        Some(_) => Err(format!("`{key}` must be a string")),
-    }
-}
-
-/// The settings and `max_runs` of an agent's keys, the rest of an `agent.toml` or of an `[agents.<name>]` table.
-pub(super) fn agent_keys(mut table: toml::Table) -> Result<(Settings, Option<u32>), String> {
-    let max_runs = match table.remove("max_runs") {
-        None => None,
-        Some(toml::Value::Integer(n)) if u32::try_from(n).is_ok_and(|n| n > 0) => u32::try_from(n).ok(),
-        Some(_) => return Err("`max_runs` must be a positive 32-bit integer".to_owned()),
-    };
-    let settings = toml::Value::Table(table)
-        .try_into::<Settings>()
-        .map_err(|e| super::files::retired(e.to_string(), ""))?;
-    Ok((settings, max_runs))
 }
 
 /// A regular file (a symlink is followed) with an execute bit.

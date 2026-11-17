@@ -225,6 +225,10 @@ pub(crate) fn explained(config: &Config, project: &str, of: &Explain, rig: Optio
                         text += &format!("# step `{name}` of `{formula}`: a run of `{run}`\n");
                         None
                     }
+                    StepKind::Await { .. } => {
+                        text += &format!("# step `{name}` of `{formula}`: await an outcome from outside\n");
+                        None
+                    }
                     StepKind::Ai { .. } => {
                         let (agent, effective) = config.for_run(project, rig, formula, name)?;
                         text += &format!("# step `{name}` of `{formula}` on `{rig}`: agent {agent}\n");

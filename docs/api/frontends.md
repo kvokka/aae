@@ -37,7 +37,7 @@ The surface: projects with their root and rigs (`GET /v1/projects`: `name`, `dir
 `root` and `rigs`, each `{name, path, vars}`; the root is not among the rigs); agents (`GET /v1/agents` gives each
 agent's harness in the project outside any rig and formula, `null` when its layers do not set one), formulas, packs,
 plugins (list), config check, explain and reload; runs
-(start, list, state, live view, cancel, finish); triggers (list, enable, disable, fire by hand);
+(start, list, state, live view, cancel, finish, resolve); triggers (list, enable, disable, fire by hand);
 instances and services (list, stop an idle one); issue gates (list, close, open — orchestrator, project, agent, bead,
 account); events; daemon status, drain and planned restart.
 
@@ -76,6 +76,13 @@ Code: `crates/aae-front/src/cli/`. The CLI is a thin client of the HTTP API in t
   and `aae run wait` prints nothing until it ends, so a wait longer than `tool_silence` fails the attempt as
   `stall`. Either way, wait in a loop of `aae run wait <runs> --timeout 100s` (exit 124: wait again), or raise
   `tool_silence` above the longest wait. The whole wait still counts against the step's `timeout` (default 45 min).
+- `aae run resolve <run> <step> pass|fail [--summary <text>] [--data <json>|@<file>]` (`POST /v1/runs/{id}/resolve`)
+  gives the outcome of the `await` step a run waits on ([formula](../design/config.md#formula-formulasfiletoml)); a
+  run that does not wait on that step refuses it with `rejected` and nothing changes. `aae run list --awaiting`
+  (`GET /v1/runs?awaiting=true`) lists the runs waiting on an `await` step; the text line of `aae run list` names
+  each run's step, and the state of a run gives the outcomes of the steps it went through as `steps`. A bridge that
+  may send an outcome twice sets `--key`: without a key, a late repeat could resolve the step again after a round
+  brought the run back to it.
 - `aae finish` reads the attempt token from the session environment, retries for 60 s under one idempotency key and
   exits 75 when the daemon stays unreachable (an attempt failure, not a failed run).
 - Without a daemon only `aae daemon`, `aae cache clear`, `aae --version`, and `aae doctor` and
@@ -101,7 +108,8 @@ so an agent names it in its own config (`[mcp.aae] url = "${AAE_API}/mcp"`, whic
 
 ## Humans and runs
 
-- A human sees runs and follows a run's live view through these frontends (`aae run watch` or the API). A human
+- A human sees runs and follows a run's live view through these frontends (`aae run watch` or the API), and gives
+  the outcome of an `await` step (`aae run resolve`). A human
   answers no permission request: the harness decides them from the config ([config](../design/config.md#permissions)).
 - The state of a run shows each attempt's `session`: the harness's own session reference (claude
   `{session_id, config_dir, workdir}`, codex `{thread_id, codex_home}`). After the run a human may open that conversation

@@ -38,6 +38,9 @@ pub enum RunCommand {
         /// Only the runs whose `parent_run` is this one.
         #[arg(long)]
         parent: Option<String>,
+        /// Only the runs waiting in an `await` step for an outcome.
+        #[arg(long)]
+        awaiting: bool,
         #[arg(long)]
         limit: Option<u32>,
     },
@@ -65,6 +68,21 @@ pub enum RunCommand {
         #[arg(long)]
         reason: Option<String>,
         /// The idempotency key: a repeat with the same key changes nothing.
+        #[arg(long = "key")]
+        idempotency: Option<String>,
+    },
+    /// Give the outcome of the `await` step a run waits on. Refused when the run does not wait on that step.
+    Resolve {
+        id: String,
+        step: String,
+        result: super::Verdict,
+        #[arg(long, default_value = "")]
+        summary: String,
+        /// JSON, or `@<file>` holding it.
+        #[arg(long)]
+        data: Option<String>,
+        /// The idempotency key: a repeat with the same key changes nothing. A bridge that may send an outcome twice
+        /// sets it: without one, a late repeat could resolve the step once more after a round back to it.
         #[arg(long = "key")]
         idempotency: Option<String>,
     },
@@ -158,12 +176,14 @@ pub(super) async fn run(client: &Client, json: bool, command: RunCommand) -> Res
             project,
             state,
             parent,
+            awaiting,
             limit,
         } => {
             let query: Vec<String> = [
                 ("project", project),
                 ("state", state),
                 ("parent", parent),
+                ("awaiting", awaiting.then(|| "true".to_owned())),
                 ("limit", limit.map(|l| l.to_string())),
             ]
             .into_iter()
@@ -180,6 +200,7 @@ pub(super) async fn run(client: &Client, json: bool, command: RunCommand) -> Res
                 let line = [
                     text(&run["id"]),
                     text(&run["state"]),
+                    text(&run["step"]),
                     at,
                     text(&run["formula"]),
                     text(&run["created_at"]),
@@ -206,6 +227,23 @@ pub(super) async fn run(client: &Client, json: bool, command: RunCommand) -> Res
                     .request("POST", &path, Some(&body), idempotency.as_deref())
                     .await?,
             );
+        }
+        RunCommand::Resolve {
+            id,
+            step,
+            result,
+            summary,
+            data,
+            idempotency,
+        } => {
+            let data = match super::finish::data_arg(data) {
+                Ok(data) => data,
+                Err(e) => return Ok(super::fail(json, "usage", &e)),
+            };
+            let body = json!({ "step": step, "outcome": super::finish::outcome(result, summary, data) });
+            let path = run_path(&id, "/resolve");
+            let reply = client.request("POST", &path, Some(&body), idempotency.as_deref());
+            print(json, &reply.await?);
         }
     }
     Ok(ExitCode::SUCCESS)

@@ -16,6 +16,8 @@ pub struct RunFilter {
     pub state: Option<String>,
     /// The runs whose `parent_run` this is.
     pub parent: Option<String>,
+    /// `true`: only the runs waiting in an await step for an outcome; `false`: only the others.
+    pub awaiting: Option<bool>,
     pub limit: Option<u32>,
 }
 
@@ -65,6 +67,7 @@ impl Reader {
         view["gate"] = json!(gate);
         view["round"] = json!(round);
         view["attempts"] = json!(row::attempts(&conn, id)?);
+        view["steps"] = json!(super::render::step_results(&conn, id, &row.step)?);
         view["usage"] = row::usage(&conn, id)?;
         Ok(Some(view))
     }
@@ -75,10 +78,17 @@ impl Reader {
             let conn = self.conn();
             let mut stmt = conn.prepare(
                 "SELECT id FROM runs WHERE (?1 IS NULL OR project = ?1) AND (?2 IS NULL OR state = ?2) \
-                 AND (?4 IS NULL OR parent_run = ?4) ORDER BY n DESC LIMIT ?3",
+                 AND (?4 IS NULL OR parent_run = ?4) \
+                 AND (?5 IS NULL OR (step_kind = 'await' AND state = 'running') = ?5) ORDER BY n DESC LIMIT ?3",
             )?;
             let rows = stmt.query_map(
-                params![filter.project, filter.state, filter.limit.unwrap_or(100), filter.parent],
+                params![
+                    filter.project,
+                    filter.state,
+                    filter.limit.unwrap_or(100),
+                    filter.parent,
+                    filter.awaiting
+                ],
                 |r| r.get(0),
             )?;
             rows.collect::<Result<_, _>>()?
@@ -109,7 +119,7 @@ impl Reader {
             conn.query_row("SELECT COUNT(*), MIN(ts_ms) FROM outbox", [], |r| {
                 Ok((r.get(0)?, r.get(1)?))
             })?;
-        // A run in a drain step has no process: a restart costs it an attempt but no work, so a drain does not wait
+        // A run in a step with no process (drain, formula, await) loses no work to a restart, so a drain does not wait
         // for it.
         let active: i64 = conn.query_row(
             &format!(

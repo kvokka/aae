@@ -5,7 +5,6 @@ use super::{
     Name, Pack, Project, Scope, Settings, Variant,
     check::resolve,
     files::retired,
-    items::{agent_keys, string},
     load::{Loader, reference},
 };
 use std::{collections::BTreeMap, path::Path};
@@ -181,4 +180,26 @@ fn clash(loader: &mut Loader, file: &Path, name: &str, packs: &[Pack]) {
             format!("`agents.{name}`: the name is that of agent `{}.{name}`", pack.name),
         );
     }
+}
+
+/// Takes the string `key` out of `table`.
+pub(super) fn string(table: &mut toml::Table, key: &str) -> Result<Option<String>, String> {
+    match table.remove(key) {
+        Some(toml::Value::String(s)) => Ok(Some(s)),
+        None => Ok(None),
+        Some(_) => Err(format!("`{key}` must be a string")),
+    }
+}
+
+/// The settings and `max_runs` of an agent's keys, the rest of an `agent.toml` or of an `[agents.<name>]` table.
+pub(super) fn agent_keys(mut table: toml::Table) -> Result<(Settings, Option<u32>), String> {
+    let max_runs = match table.remove("max_runs") {
+        None => None,
+        Some(toml::Value::Integer(n)) if u32::try_from(n).is_ok_and(|n| n > 0) => u32::try_from(n).ok(),
+        Some(_) => return Err("`max_runs` must be a positive 32-bit integer".to_owned()),
+    };
+    let settings = toml::Value::Table(table)
+        .try_into::<Settings>()
+        .map_err(|e| super::files::retired(e.to_string(), ""))?;
+    Ok((settings, max_runs))
 }

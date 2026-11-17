@@ -64,7 +64,7 @@ pub(super) fn project(loader: &mut Loader, project: &mut Project, variants: &BTr
                             Err(e) => loader.fail(&manifest, format!("{what}: {e}")),
                         }
                     }
-                    StepKind::Exec { .. } => {}
+                    StepKind::Exec { .. } | StepKind::Await { .. } => {}
                 }
             }
         }

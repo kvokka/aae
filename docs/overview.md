@@ -36,7 +36,7 @@ only; the other three targets are built and trusted to the portability of the la
 | **agent variant** | a pack's agent under another name and with other settings, declared in the user's config (`claude-coder`, `codex-coder`) |
 | **session reference** | the pair "harness + the harness's session id": all the core knows of a conversation |
 | **formula** | a workflow, the "how": a name, a description, inputs and steps in order. The "what", the task, comes only from the user |
-| **step** | `ai` (an agent's turn), `exec` (a command, no LLM), `drain` (giving beads out to executors) or `formula` (another formula) |
+| **step** | `ai` (an agent's turn), `exec` (a command, no LLM), `drain` (giving beads out to executors), `formula` (another formula) or `await` (an outcome from outside) |
 | **task** | the text a user gives a formula at start: what to do. It names an existing bead, or becomes a new root bead |
 | **run** | an execution of a formula with concrete inputs; it has attempts and an outcome |
 | **child run** | a run started by a `drain` or `formula` step of another run, or from its agent's session; it inherits that run's correlation |
@@ -67,7 +67,6 @@ only; the other three targets are built and trusted to the portability of the la
 | ACP as the transport "down" | Native protocols; the driver interface follows the semantics of ACP v2, so an ACP driver can be one more implementation |
 | A human joining a live session, handover of control | A later release: no operations, states or stubs for it now. A human sees the session reference in the run's state and opens the conversation with the harness's own tools after the run ([frontends](api/frontends.md)) |
 | An ACP hub "up" for editors | Not planned |
-| A human gate as a formula step | An operator hold does that job |
 | A human answering a permission request | Not planned: the harness decides from the config ([config](design/config.md#permissions)) |
 | A web interface, a dashboard | The task board is `bv`; observation is the CLI and the event stream |
 | Alerting a human about a failure | Only the event journal and the logs; a notice plugin is on the [roadmap](roadmap.md) |

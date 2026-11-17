@@ -17,6 +17,12 @@ pub enum Msg {
         run: String,
         reason: String,
     },
+    /// The outcome of the await step `step` of `run`, given from outside; the reply is `null`.
+    Resolve {
+        run: String,
+        step: String,
+        outcome: Outcome,
+    },
     /// Fires `trigger` (`<pack>.<name>`, or the name of a project trigger) on a rig by hand, as its schedule would;
     /// the reply is `{"run": "<id>"}` or `{"skipped": <reason>, "detail": <text>}`.
     Fire {

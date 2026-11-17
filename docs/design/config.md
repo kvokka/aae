@@ -551,7 +551,7 @@ task = { type = "task", required = true }   # task | string | integer | boolean
 [[step]]
 name = "implement"                  # optional (default: the position, "1", "2", ..)
 kind = "ai"                     # ai: agent (whose prompt.template.md it gets); exec: command;
-                                # drain, formula: formula
+                                # drain, formula: formula; await: none
 agent = "implementer"
 timeout = "45m"                     # optional
 model = "opus"                      # optional, ai steps only: layer 8, the launch settings `harness`,
@@ -562,9 +562,10 @@ native.claude = { permission_mode = "dontAsk" }  # optional, ai steps only: laye
 name = "test"
 kind = "exec"
 command = ["cargo", "test"]
-back_to = "implement"               # optional, ai and exec steps: a check; on fail, back to this earlier step
-max_attempts = 2                    # optional, any step (default 1): the most times the step runs
-step_check_script_path = "check-test.sh"  # optional, any step: passes when it exits 0; from this file's directory
+back_to = "implement"               # optional, ai, exec and await steps: a check; on fail, back to this earlier step
+max_attempts = 2                    # optional, any step but await (default 1): the most times the step runs
+step_check_script_path = "check-test.sh"  # optional, any step but await: passes when it exits 0; from this file's
+                                          # directory
 
 [[step]]
 name = "children"
@@ -580,6 +581,13 @@ kind = "formula"
 formula = "review"                  # a formula of the project, run as a child run
 inputs = { focus = "{{ steps.implement.summary }}" }  # optional: inputs of `formula`, given on top of inherited
 timeout = "24h"                     # optional (default 24h)
+
+[[step]]
+name = "approve"
+kind = "await"                      # an outcome from outside: a human, a script or a plugin
+timeout = "168h"                    # optional (default 168h)
+fail_on_timeout = true              # optional (default true): at the timeout the run fails; false: the step passes
+back_to = "implement"               # optional: a check, as above
 ```
 
 A formula has a name, a description, declared inputs and one or more steps, which a run goes through in order
@@ -635,9 +643,23 @@ required input of its formula (``needs input `goal`, which the step neither give
 input the formula does not declare, a formula that runs itself through its `formula` steps, at any depth, and a
 trigger on an internal formula.
 
+An `await` step waits for an outcome given from outside, by a human, a script or a plugin, through
+`POST /v1/runs/{id}/resolve` or `aae run resolve <run> <step> pass|fail` (contracts 6.3): `pass` or `fail`, a
+summary and data, as the finisher's. Entering the step is the event `run.awaiting` with its deadline. The step has no
+process and holds no concurrency slot; the wait is a state, not a timer of the daemon's: a restart leaves it as it
+is, and its deadline is wall time. An outcome for another step, or for a run that does not wait on this one, is
+refused and changes nothing. The outcome goes the way of any step's (the hooks on `run.finishing`): `pass` moves the
+run on, `fail` with `back_to` is a failed check and `fail` without one fails the run (class `agent`, the summary as
+the reason). At the `timeout` (default 168h) with no outcome the run fails with the reason `await_timeout` (class
+`check`) and no return to `back_to`; with `fail_on_timeout = false` the step passes with the summary `timeout`. The
+`timeout` and `fail_on_timeout` of a waiting step are those it entered with. An `await` step takes neither
+`max_attempts` nor `step_check_script_path` (nor `agent`, `command`, `formula`): either is a load error.
+
 A step with `back_to` is a check. When it fails the run does not fail: the steps after it that are checks too run
 as well, and after the last of them every failed check of the row sends the run back together, to the earliest
-step they name, which starts at once as the next round. Their remarks — per check its name, its summary and, for an
+step they name, which starts at once as the next round. An `await` step ends the row of checks before it: a run
+reaches it only when they all passed, and failed ones send the run back first; the checks after an `await` step
+belong to its row. Their remarks — per check its name, its summary and, for an
 exec check, the output it kept — reach the steps of the new round as `{{ remarks }}` in a prompt template and
 `AAE_REMARKS` in the environment of an exec step (empty and absent in the first round). An ai step of the new
 round that already has a session goes on in it: its first attempt resumes the session and gets the
@@ -645,7 +667,7 @@ rendered prompt with the remarks, not the reconcile prompt of a resumed retry. A
 last of the formula's `rounds` fails the run (class `agent`) with the reason `still failing after <n> rounds:
 <remarks>`. `back_to` must name a step before the check; a `drain` step is no check.
 
-Any step may have `max_attempts` (1 to 20, the ceiling of session attempts; default 1): the step runs at most that
+Any step but `await` may have `max_attempts` (1 to 20, the ceiling of session attempts; default 1): the step runs at most that
 many times, and one that does not pass runs again until then; past it the step fails. `step_check_script_path` names a script that says
 whether the step passed, a path from the directory of the formula file (an absolute one stays; empty is none) that
 must be an executable regular file at load. Its exit code decides: 0 passed, 75 an incurable failure that fails the

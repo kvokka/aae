@@ -61,13 +61,14 @@ impl RunHandler {
         // A run whose turn ended waits for the decision on it (`waiting`) and keeps waiting; one whose turn ended with
         // the outcome declared was only waiting for its background to stop, which the kill above did
         // (docs/design/contracts.md 6); the others had an attempt going, which is lost (a drain step's too: its next
-        // attempt gives no bead its entry has given).
+        // attempt gives no bead its entry has given). A run waiting in an await step has no attempt to lose: it waits on.
         let caught: Vec<(String, bool, bool)> = {
             let mut stmt = tx.sql().prepare(
                 "SELECT r.id, r.state IN ('running', 'finishing') AND r.waiting IS NOT NULL, \
                  r.state = 'running' AND r.waiting IS NULL AND EXISTS (SELECT 1 FROM attempts a \
                  WHERE a.run = r.id AND a.n = r.attempt AND a.outcome IS NOT NULL AND a.turn_ended != 0) FROM runs r \
-                 WHERE r.state IN ('starting', 'running', 'finishing') ORDER BY r.n",
+                 WHERE r.state IN ('starting', 'running', 'finishing') \
+                 AND NOT (r.step_kind = 'await' AND r.state = 'running') ORDER BY r.n",
             )?;
             let rows = stmt.query_map([], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)))?;
             rows.collect::<Result<_, _>>()?

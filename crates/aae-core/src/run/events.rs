@@ -291,6 +291,7 @@ impl RunHandler {
             ("state", "parked") => self.terminal(tx, row, "failed", Some("infrastructure"), "park_timeout"),
             ("state", "preparing") => self.terminal(tx, row, "failed", Some("infrastructure"), "tracker_unavailable"),
             ("state", "starting") | ("silence", "running") => self.attempt_failed(tx, row, stall(FailureKind::Stall)),
+            ("state", "running") if row.step_kind == "await" => self.await_timeout(tx, row),
             ("state", "running") => self.attempt_failed(tx, row, stall(FailureKind::RunawayTurn)),
             // The check script of the step was lost on its way back (docs/design/config.md).
             ("state", "finishing") => {
