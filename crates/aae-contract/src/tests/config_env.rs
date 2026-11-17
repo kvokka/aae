@@ -217,3 +217,61 @@ fn explain_shows_the_reference() {
         "exec.inherit_env = true  # project\nexec.env.T = \"${X}\"  # project\nexec.env.U = \"$$1\"  # orchestrator\n"
     );
 }
+
+#[test]
+fn a_tracker_directory_with_a_dollar_stays_itself_in_env() {
+    let mut config = load(&[]).unwrap();
+    let dir = "/srv/sh$op/.beads".to_owned();
+    (config.projects[0].tracker.env).insert("BEADS_DIR".into(), dir.clone());
+    let implementer = Name {
+        pack: "kit".into(),
+        name: "implementer".into(),
+    };
+    let e = config.effective("shop", None, &implementer).unwrap();
+    assert_eq!(env_value(&e.env["BEADS_DIR"].value, |_| None), Ok(dir.clone()));
+    let (_, exec) = config.projects[0].tracker_env(None).next().unwrap();
+    assert_eq!(env_value(&exec, |_| None), Ok(dir));
+}
+
+/// The `bin/` of a plugin and the daemon's own `PATH`, both with a `$`, reach `PATH` as they are. The daemon's
+/// `PATH` is the test's: the test runs itself again with a `$` in it.
+#[test]
+fn a_dollar_in_a_plugin_bin_and_the_daemons_path_stays_itself() {
+    const CHILD: &str = "AAE_TEST_DOLLAR_PATH";
+    let name = "a_dollar_in_a_plugin_bin_and_the_daemons_path_stays_itself";
+    if std::env::var_os(CHILD).is_none() {
+        let path = format!("/no/su$ch:{}", std::env::var("PATH").unwrap_or_default());
+        let test = format!("{}::{name}", module_path!().split_once("::").unwrap().1);
+        let out = std::process::Command::new(std::env::current_exe().unwrap())
+            .args(["--exact", &test, "--test-threads=1"])
+            .env(CHILD, "1")
+            .env("PATH", path)
+            .output()
+            .unwrap();
+        let stdout = String::from_utf8_lossy(&out.stdout);
+        assert!(
+            stdout.contains("1 passed"),
+            "{stdout}{}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+        return;
+    }
+    let top = BASE[0].1.replace("plugins/mail", "plugins/ma$il");
+    let config = load_with(&[
+        ("config.toml", &top),
+        ("plugins/ma$il/plugin.toml", BASE[1].1),
+        ("plugins/ma$il/skills/mail/SKILL.md", "mail"),
+        ("plugins/ma$il/bin/tool", ""),
+    ])
+    .unwrap();
+    let bin = config.plugins[0].bin.clone().unwrap();
+    let implementer = Name {
+        pack: "kit".into(),
+        name: "implementer".into(),
+    };
+    let e = config.effective("shop", None, &implementer).unwrap();
+    let daemon = std::env::var("PATH").unwrap();
+    assert!(daemon.starts_with("/no/su$ch:"), "{daemon}");
+    let path = env_value(&e.env["PATH"].value, |_| None);
+    assert_eq!(path, Ok(format!("{}:{daemon}", bin.display())));
+}
