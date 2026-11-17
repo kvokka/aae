@@ -327,7 +327,7 @@ WP-98; WP-99; WP-100 → WP-101.
 - Готово, когда: тесты — сервер aae с `required` не стартовал → `tool_failure` до промпта; уведомление `failed` для
   сервера рига → `tool_failure`; claude `needs-auth` → `tool_failure`; `mise run ci` зелёный.
 
-### WP-99 · Фоновый subagent claude после конца хода — под `background_silence` · размер S · статус: todo
+### WP-99 · Фоновый subagent claude после конца хода — под `background_silence` · размер S · статус: done
 - Документы: решение 121, инвариант 15, `docs/design/experiments.md` («Idle without background», эксперимент 1b),
   `docs/design/contracts.md` §6.1.
 - Зависит от: WP-92
@@ -344,7 +344,7 @@ WP-98; WP-99; WP-100 → WP-101.
 - Готово, когда: тест — после `result` при непустом `background_tasks_changed` с `local_agent` ядро взводит
   `background_silence`; замер записан; `mise run ci` зелёный.
 
-### WP-100 · Инструменты ручного восстановления · размер S · статус: todo
+### WP-100 · Инструменты ручного восстановления · размер S · статус: done
 - Документы: решение 122, `docs/api/frontends.md` (команды прогона), `docs/design/contracts.md` §6, решения 17, 18, 92.
 - Зависит от: WP-93
 - Суть: прогон, упавший окончательно, человек или его агент разбирает руками; aae даёт инструменты, а не сценарий.
