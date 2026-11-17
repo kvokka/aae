@@ -10,7 +10,7 @@ effort = "medium"
 event = "PreToolUse"
 matcher = "Bash"
 command = '''
-jq -e '.tool_input.command | tostring | test("(^|[\\s;&|(\"])gh(\\s|$)")' >/dev/null || exit 0
+jq -e '.tool_input.command | tostring | test("(^|[^A-Za-z0-9_.-])gh([^A-Za-z0-9_.-]|$)")' >/dev/null || exit 0
 echo "the reviser works from the feedback file, not from GitHub" >&2
 exit 2
 '''

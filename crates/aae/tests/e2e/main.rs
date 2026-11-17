@@ -14,6 +14,7 @@ mod doctor;
 mod git_cache;
 mod mcp;
 mod replies;
+mod review_gate;
 mod role_prompt;
 mod step_if;
 mod stop;

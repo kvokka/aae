@@ -8,7 +8,7 @@ and spend tokens; CI only checks that each demo's pack and project load.
 |---|---|
 | [`1-planner-executor`](1-planner-executor) | a planner files beads per repository, a `drain` step hands them to coders on claude and codex, a script reports what got done |
 | [`2-multirepo-qa`](2-multirepo-qa) | demo 1 on openai models, then a format check and a qa agent in a browser send the work back to the planner, for at most three rounds |
-| [`3-review-gate`](3-review-gate) | a feature over three GitHub repositories waits on an `await` step for the review of its pull requests: a comment goes to a reviser of its own, the merge of the root's accepts it, a cancel cleans up |
+| [`3-review-gate`](3-review-gate) | a feature over three GitHub repositories waits on an `await` step for the review of its pull requests: a bridge turns GitHub into its outcome: a comment goes to a reviser of its own, the merge of the root's accepts it, a close cancels and cleans up |
 
 A demo is `pack/` (agents and formulas, not a word about the task), `root/` (the orchestrator config of the demo,
 the project and its tracker) and the repositories of the project, empty before a run: `run.sh` makes each a git

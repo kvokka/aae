@@ -2,8 +2,9 @@
 
 A feature over three GitHub repositories, a root and its two children, that waits for its review between the steps:
 the planner and the coders do the work, a script opens a pull request in each repository, and the run stops on an
-`await` step until the review decides. A comment of an allowed author sends the work back to an agent of its own,
-the reviser; the merge of the root's pull request accepts it, and the formula merges the children's.
+`await` step until the review decides. The bridge, a script next to the daemon, gives the review's outcome from
+GitHub: a comment of an allowed author sends the work back to an agent of its own, the reviser; the merge of the
+root's pull request accepts it, and the formula merges the children's; a close without a merge cancels the feature.
 
 The request is one sentence: "Let a visitor of the site type their name and see a greeting the backend makes for it,
 KISS".
@@ -24,7 +25,8 @@ KISS".
     4. `pr`, an exec step: in each repository with work of the feature it moves that work to the branch
        `feature/<bead>`, pushes it and opens or updates the pull request; the root's comes last, with a page that
        links the others, and its address is the last line of the step's output;
-    5. `review`, an `await` step with `back_to = "collect"`: it waits for `aae run resolve <run> review pass|fail`;
+    5. `review`, an `await` step with `back_to = "collect"`: it waits for `aae run resolve <run> review pass|fail`,
+       which the bridge sends;
     6. `merge`, an exec step: it merges the children's pull requests still open (`max_attempts = 3`, a repeat merges
        what is left) and takes each repository back to its default branch.
 
@@ -40,10 +42,33 @@ KISS".
   it can neither approve them nor request changes: GitHub does not let one account do that on its own. It runs with
   the user's home (`inherit_host = true`), where `gh` keeps its login. `root/config.toml` is the orchestrator config
   of the demo.
+- `bridge.sh` is the bridge, below.
 - `gate-demo/`, `gate-demo-backend/` and `gate-demo-frontend/` are the clones of the GitHub repositories of the same
   names, made by `run.sh`; empty before a run.
 
 The agents run on codex: `planner` and `owner` on `terra`, `coder` and `reviser` on `luna`.
+
+## The bridge
+
+`bridge.sh <project>` is a script that `run.sh` starts next to the daemon; it is not a `[[service]]`, which lives only
+while there are sessions and gets no socket of the API. It follows the daemon's events (`aae events`): a
+`run.awaiting` wakes it, and it reads the runs that wait with `aae run list --awaiting`, also once every interval,
+which covers a run that waited before it started. While a run of the project waits on `review`, it looks at the
+feature's pull requests through `gh` every `INTERVAL` seconds (30 by default); with no run waiting, it asks GitHub
+nothing. The root's pull request is the last line of the output of `pr`, the others are those of the branch
+`feature/<bead>` in each repository.
+
+- The root's pull request merged: `aae run resolve <run> review pass`, with `{"merged_by": <login>}` as the data.
+- Closed without a merge: `aae run cancel <run>` with the reason `closed without a merge: <address>`; the trigger
+  `cleanup-cancelled` then clears the feature.
+- A comment or a review on any of the feature's pull requests, by an author in the run's `feedback_from`, that the
+  account of `gh` has not marked with the reaction "eyes": `aae run resolve <run> review fail` with
+  `review: <the comment's address>` as the summary. `collect` marks each comment it takes, so a comment sends the
+  feature back once. The comments of anyone else, and every comment when `feedback_from` is empty, change nothing.
+
+Each outcome goes with the idempotency key `bridge-<run>-<round>`: a repeat of it changes nothing, and it cannot
+reach the next round's `review`. `crates/aae/tests/e2e/review_gate.rs` runs the pack, the scripts and the bridge
+without a model and without GitHub: the real `codex` on fake model APIs, a fake `gh` over local remotes.
 
 ## Run
 
@@ -57,5 +82,8 @@ aae config check --config root/config.toml   # the pack and the project load
 OWNER=<your login> ./run.sh                  # or: mise run demo
 ```
 
-`run.sh` writes `RESULT.md`: when and on what it ran, the rounds of the review, the root's pull request, the runs and
-the outcome. Everything a run creates is in `.gitignore`; `git clean -ffdX -- .` clears it for the next run.
+`run.sh` starts the daemon and the bridge, starts the feature and waits for it: the reviewer `owner` comments once,
+the bridge sends the feature back, the reviser works the comment, `owner` merges the root's pull request and the
+bridge passes the review. Then it writes `RESULT.md`: when and on what it ran, the rounds of the review, the root's
+pull request, the runs and the outcome. Everything a run creates is in `.gitignore`; `git clean -ffdX -- .` clears it
+for the next run.

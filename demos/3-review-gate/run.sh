@@ -1,9 +1,10 @@
 #!/bin/sh
-# Runs the demo from the request to its report on a daemon of the demo's own. The three repositories of the project
-# are clones of the GitHub repositories of OWNER (kvokka-agent by default), in gate-demo/, gate-demo-backend/ and
-# gate-demo-frontend/; the beads are in root/.beads, the review the reviser gets in root/feedback, the daemon's
-# state in .aae/ and the report in RESULT.md, all in .gitignore. EXAMPLE=1 also keeps the result as the author's
-# *-example. AAE names the aae binary. `gh` must be logged in as an account that may push to the repositories.
+# Runs the demo from the request to its report on a daemon of the demo's own, with the bridge that gives the review's
+# outcome from GitHub (bridge.sh). The three repositories of the project are clones of the GitHub repositories of
+# OWNER (kvokka-agent by default), in gate-demo/, gate-demo-backend/ and gate-demo-frontend/; the beads are in
+# root/.beads, the review the reviser gets in root/feedback, the daemon's state and the bridge's log in .aae/ and the
+# report in RESULT.md, all in .gitignore. EXAMPLE=1 also keeps the result as the author's *-example. AAE names the aae
+# binary. `gh` must be logged in as an account that may push to the repositories.
 set -eu
 here=$(cd "$(dirname "$0")" && pwd)
 demo=$(basename "$here")
@@ -18,8 +19,7 @@ if [ -n "$(ls -A $repos root/.beads root/feedback .aae 2>/dev/null | grep -v -e 
   exit 1
 fi
 
-# Each repository is a clone of its GitHub repository; git pushes with the login of gh. This runs before the
-# variables below, which would hide gh's config.
+# Each repository is a clone of its GitHub repository; git pushes with the login of gh.
 for repo in $repos; do
   git -C "$repo" init -q
   git -C "$repo" config credential.helper '!gh auth git-credential'
@@ -32,6 +32,9 @@ for repo in $repos; do
 done
 
 mkdir -p .aae
+# gh keeps its login under the user's config, which the variables below would hide from the steps and the bridge.
+GH_CONFIG_DIR=${GH_CONFIG_DIR:-${XDG_CONFIG_HOME:-$HOME/.config}/gh}
+export GH_CONFIG_DIR
 export XDG_STATE_HOME="$here/.aae/state" XDG_CONFIG_HOME="$here/.aae/config" XDG_CACHE_HOME="$here/.aae/cache"
 # A socket path has a length limit: it goes to a short temporary directory.
 AAE_SOCKET="$(mktemp -d)/aae.sock"
@@ -47,15 +50,20 @@ until "$aae" status >/dev/null 2>&1; do
   kill -0 $daemon 2>/dev/null || { cat .aae/daemon.log; exit 1; }
   sleep 0.2
 done
+# The bridge gives the review's outcome from GitHub to the feature that waits on it.
+AAE="$aae" ./bridge.sh review-gate 2>.aae/bridge.log &
+bridge=$!
+trap 'kill $bridge $daemon 2>/dev/null || true' EXIT
 
 started=$(date +%s)
 run=$("$aae" run start review-gate dev.feature --input "task=$request")
 result=passed
 "$aae" run wait "$run" --timeout 120m >.aae/outcome.txt || result=failed
+kill $bridge
 seconds=$(($(date +%s) - started))
 show=$("$aae" --json run show "$run")
 rounds=$(printf '%s' "$show" | jq -r .round)
-pr=$(printf '%s' "$show" | jq -r '.steps.pr.data.stdout // ""' | tail -1)
+pr=$(printf '%s' "$show" | jq -r '.steps.pr.data.stdout // "" | rtrimstr("\n") | split("\n") | last // ""')
 
 versions="aae-$("$aae" --version | cut -d' ' -f2)@$sha"
 for tool in codex gh; do

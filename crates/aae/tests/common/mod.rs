@@ -122,6 +122,13 @@ pub(crate) fn command(dir: &std::path::Path) -> Command {
         .env("XDG_CACHE_HOME", dir.join("cache"))
         .env("XDG_STATE_HOME", dir.join("state"))
         .env("XDG_RUNTIME_DIR", dir.join("run"));
+    // A test's own tools in `dir/path` go first on the PATH of the daemon and of what it runs.
+    let tools = dir.join("path");
+    if tools.is_dir() {
+        let path = std::env::var_os("PATH").unwrap_or_default();
+        let paths = std::iter::once(tools).chain(std::env::split_paths(&path));
+        command.env("PATH", std::env::join_paths(paths).unwrap());
+    }
     command
 }
 

@@ -16,7 +16,7 @@ model: they run on a developer's machine, on the same request.
 |---|---|---|
 | `cargo build -p aae && cargo run -p aae-acceptance -- --ci 3 19` | the named criteria, model-free rows only | nothing |
 | `mise run acceptance-ci` | every model-free row: a fake provider, the scripted driver, exec steps, the chaos stand; what the workflow `acceptance` runs | nothing |
-| `mise run acceptance` | every row on the release build, the live-model rows and both demos among them | a harness login; it spends real tokens |
+| `mise run acceptance` | every row on the release build, the live-model rows and the live runs of demos 1 and 2 among them | a harness login; it spends real tokens |
 | `mise run acceptance-release` | criterion 1 with the four release targets; the workflow `release` runs it on a `v*` tag | zig, cargo-zigbuild |
 
 A run writes one report, `target/acceptance/report.md`: a line for every row, run or not, with the date, the version
@@ -58,7 +58,7 @@ says otherwise.
 | 17 | Every operation of the HTTP API has a CLI command; the OpenAPI document matches the code; MCP has five tools | model-free; one row with a real claude session is live |
 | 18 | The journal rotates at 10 MB × 5; a reader continues by `seq`; a `seq` rotated away gives an explicit gap | model-free |
 | 19 | Gates closed by the operator (orchestrator, project, agent, bead) stop dispatch, survive a daemon restart and are not opened by automation | model-free |
-| 20 | Demos 1 and 2 ([demos](../demos/README.md)) go from the user's request to the result unattended: in demo 1 every bead under the root bead is closed, in demo 2 the checks are green by the third round at the latest. Demo 2 passes two runs in a row. The pack and `root/config.toml` of each demo load (`aae config check` is clean) | live; the loading and the packs on fake providers are model-free |
+| 20 | Demos 1 and 2 ([demos](../demos/README.md)) go from the user's request to the result unattended: in demo 1 every bead under the root bead is closed, in demo 2 the checks are green by the third round at the latest. Demo 2 passes two runs in a row. The pack and `root/config.toml` of every demo, demo 3 too, load (`aae config check` is clean); demo 3's pack, step scripts and bridge also run without a model and without GitHub in `mise run ci` (`crates/aae/tests/e2e/review_gate.rs`) | live; the loading and the packs on fake providers are model-free |
 | 22 | Non-test, non-generated code is at most 30 000 lines, the core at most 18 000; every `MEASURE` marker has its required fields | model-free |
 | 23 | No stubs and no code "for later": no `todo!` or `unimplemented!`, no unused public items, no states or operations for what the first release leaves out | model-free |
 | 24 | A formula of several steps without a model: the first step files beads under the root bead with rig prefixes and agent and harness labels; `drain` gives each its own run with the agent, rig and harness of the bead; one failed bead does not hinder the rest; the last step sees which beads are closed. `kill -9` of the daemon in every step: the run goes on from the same step, no step and no bead is executed twice | model-free |
