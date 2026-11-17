@@ -34,13 +34,9 @@ impl RunHandler {
         exit: Exit,
         (stdout, stderr): (&str, &str),
     ) -> Result<(), Error> {
-        let waiting: Option<i64> = tx
-            .sql()
-            .query_row("SELECT waiting FROM runs WHERE id = ?1", [&row.id], |r| r.get(0))?;
-        if row.attempt != attempt || row.state != "finishing" || waiting.is_some() {
+        if !Self::checking(tx, &row, attempt)? {
             return Ok(());
         }
-        tx.clear_deadline(&row.deadline("state"))?;
         let (said, code) = match exit {
             Exit::Code(0) => return self.advance(tx, row, None),
             Exit::SpawnFailed(text) => {
@@ -61,6 +57,29 @@ impl RunHandler {
             params![row.id, row.attempt, json!(outcome).to_string()],
         )?;
         self.repeat(tx, row, "check", code == Some(FATAL))
+    }
+
+    /// The check script of the step of `run` was not started for a variable its `env` names and the daemon lacks: the
+    /// run fails as `config_error` at once, with no repeat and no policy (docs/design/config.md).
+    pub(super) fn check_refused(&mut self, tx: &mut Tx<'_>, run: &str, attempt: u32, text: &str) -> Result<(), Error> {
+        let row = Row::load(tx, run)?;
+        if !Self::checking(tx, &row, attempt)? {
+            return Ok(());
+        }
+        let reason = format!("config_error: check script: {text}");
+        self.terminal(tx, row, "failed", Some("infrastructure"), &reason)
+    }
+
+    /// Whether `row` still waits for the check script of `attempt`; if it does, the script's deadline is cleared.
+    fn checking(tx: &mut Tx<'_>, row: &Row, attempt: u32) -> Result<bool, Error> {
+        let waiting: Option<i64> = tx
+            .sql()
+            .query_row("SELECT waiting FROM runs WHERE id = ?1", [&row.id], |r| r.get(0))?;
+        if row.attempt != attempt || row.state != "finishing" || waiting.is_some() {
+            return Ok(false);
+        }
+        tx.clear_deadline(&row.deadline("state"))?;
+        Ok(true)
     }
 
     /// The execution of the step of `row` did not pass: the step runs again, with the remark of this execution,

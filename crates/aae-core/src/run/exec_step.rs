@@ -219,18 +219,16 @@ pub(super) async fn run(running: &Running, payload: &Value, socket: Option<&Path
 }
 
 /// The message for a command that cannot start because its environment cannot be made: the step's attempt fails as
-/// `config_error`; a check script fails the run as a script that cannot start (docs/design/config.md).
+/// `config_error`; a check script fails the run as `config_error` (docs/design/config.md).
 fn refused(payload: &Value, text: String) -> Msg {
+    let run = payload["run"].as_str().unwrap_or_default().to_owned();
+    let attempt = super::exec::attempt(payload);
     if payload["check"] == true {
-        return done(payload, Exit::SpawnFailed(text), b"", b"");
+        return Msg::CheckRefused { run, attempt, text };
     }
     let mut failure = Failure::new(FailureKind::ConfigError, Source::Core);
     failure.text = Some(text);
-    Msg::AttemptFailed {
-        run: payload["run"].as_str().unwrap_or_default().to_owned(),
-        attempt: super::exec::attempt(payload),
-        failure,
-    }
+    Msg::AttemptFailed { run, attempt, failure }
 }
 
 /// The message that tells the core how the command of an `exec` effect ended.

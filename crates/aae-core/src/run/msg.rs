@@ -134,6 +134,13 @@ pub enum Msg {
         stdout: String,
         stderr: String,
     },
+    /// The check script of an attempt was not started: its `env` names a variable the daemon does not have; `text`
+    /// names the key and the variable.
+    CheckRefused {
+        run: String,
+        attempt: u32,
+        text: String,
+    },
     /// A hook on `event` failed: the core reports it as `plugin.hook_failed` with `data` (contracts 1.3).
     HookFailed {
         event: Value,

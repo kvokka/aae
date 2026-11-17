@@ -170,6 +170,7 @@ impl Handler for RunHandler {
                 stdout,
                 stderr,
             } => self.exec_done(tx, &run, (attempt, check), exit, &stdout, &stderr),
+            Msg::CheckRefused { run, attempt, text } => self.check_refused(tx, &run, attempt, &text),
             Msg::HookFailed { event, data } => Self::hook_failed(tx, &event, data),
             Msg::Tracked { payload, result } => self.tracked(tx, &payload, result),
             Msg::Ready {

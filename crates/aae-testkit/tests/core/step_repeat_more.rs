@@ -128,11 +128,12 @@ async fn the_check_script_of_an_ai_step_gets_the_exec_environment() {
     );
 }
 
-/// A check script whose `[exec]` names a variable the daemon lacks cannot start: the run fails as `infrastructure`.
+/// A check script whose `[exec]` names a variable the daemon lacks is not started: the run fails as `config_error`
+/// naming the key and the variable, with no repeat.
 #[tokio::test]
-async fn a_check_script_with_a_missing_variable_fails_the_run_as_infrastructure() {
+async fn a_check_script_with_a_missing_variable_fails_the_run_as_config_error() {
     let own = "[rigs.web]\npath = \"web\"\n[exec]\nenv = { GH_TOKEN = \"${AAE_TEST_NO_SUCH_VARIABLE}\" }\n";
-    let w = repeating(1, "0", "", "", &[("shop/aae.toml", own)]);
+    let w = repeating(2, "0", "", "", &[("shop/aae.toml", own)]);
     let turn = w.repeat_turn();
     let run = w.create().await;
     w.repeat_declare(&run, 1, Verdict::Pass, &turn).await;
@@ -144,7 +145,8 @@ async fn a_check_script_with_a_missing_variable_fails_the_run_as_infrastructure(
     );
     let reason = data["reason"].as_str().unwrap();
     assert!(
-        reason.starts_with("check script: ") && reason.contains("`AAE_TEST_NO_SUCH_VARIABLE`"),
+        reason.starts_with("config_error: check script: env `GH_TOKEN`")
+            && reason.contains("`AAE_TEST_NO_SUCH_VARIABLE`"),
         "{reason}"
     );
     assert_eq!(w.check_calls(), 0);

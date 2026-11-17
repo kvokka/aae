@@ -64,9 +64,8 @@ The behaviour itself is described in the document named under each heading; this
 - After `soft_stop` or `hard_stop` a `drain` step ends `fail`.
 - A check script runs after the step did; the step's own failure is a failed attempt too; the path is relative to
   the formula file; the environment is that of an `exec` step (for a step of another kind, the one of `[exec]` of the
-  orchestrator and the project, never the agent's `env`); a reference to a variable the daemon does not have keeps
-  the script from starting and fails the run as `infrastructure`, not as `config_error`; a repeat of an `ai` step
-  continues its session with the script's output as a remark; an infrastructure failure does not spend `max_attempts`.
+  orchestrator and the project, never the agent's `env`); a repeat of an `ai` step continues
+  its session with the script's output as a remark; an infrastructure failure does not spend `max_attempts`.
 - The result of a step is visible to the next steps; a failed step without a return ends the run; checks in a row
   all run and their remarks go back together; the executor of a bead is the formula named in the `drain` step; a
   repeat of a step stays within the round.

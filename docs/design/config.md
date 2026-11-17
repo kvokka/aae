@@ -69,8 +69,9 @@ session a key the config file does not hold, under a name of its own. Any other 
 starts and is never stored resolved: the run's snapshot, the journal, the instance fingerprint, the account id
 (contracts 4.5) and `config explain` keep `${NAME}`. A variable the daemon does not have fails the start as
 `config_error` naming the key and the variable, never quoting the value: an `exec` step's attempt, or the agent's
-session (from the adapter); a check script that cannot start for it fails the run as `infrastructure`. The `env` of an
-MCP server, of a `[[service]]` and of an orchestrator hook takes no references: its values are literal. What aae
+session (from the adapter); a check script it keeps from starting fails the run at once, with no repeat, as
+`failed{infrastructure}` with reason `config_error: check script: …`. The `env` of an MCP server, of a `[[service]]`
+and of an orchestrator hook takes no references: its values are literal. What aae
 puts into an `env` itself (the tracker's variables, `${AAE_PLUGIN_DIR}` of a plugin, `PATH` with plugin `bin/`
 directories, the `env` of a `run.preparing` decision) is literal too, a `$` in it no reference. Output a command
 prints goes into the step's result in the journal, so a command must not print a secret it was given.
