@@ -49,9 +49,10 @@ several repositories adds a `[rigs.<name>]` with the `path` of each; the root is
 ## 3. A formula without a model
 
 A **formula** says how a run works: the process, never the particular task, which comes in as the run's inputs. It is a
-list of steps, run in order; each is `exec` (a command), `ai` (an agent working through its prompt template) or
-`drain` (a run for every bead under the run's bead, see [Runs over a tracker](first-formula.md#runs-over-a-tracker)).
-This one has a single step.
+list of steps, run in order; each is `exec` (a command), `ai` (an agent working through its prompt template),
+`drain` (a run for every bead under the run's bead, see [Runs over a tracker](first-formula.md#runs-over-a-tracker)),
+`formula` (a child run) or `await` (an outcome from outside); all five are in
+[Formula](../design/config.md#formula-formulasfiletoml). This one has a single step.
 `~/work/hello/formulas/check.toml`:
 
 ```toml

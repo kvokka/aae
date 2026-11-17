@@ -182,4 +182,6 @@ fn event_paths_follow_the_payload_schemas() {
         "the envelope run id"
     );
     assert_eq!(event_path("run.state_changed", "run.formula", false), Some(false));
+    assert_eq!(event_path("run.awaiting", "deadline", true), Some(true));
+    assert_eq!(event_path("run.awaiting", "run.formula", true), Some(true));
 }
