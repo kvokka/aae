@@ -17,7 +17,7 @@ each heading; this file only marks it as decided.
 | 5 | No tmux: a terminal screen is never a control channel |
 | 22 | The event journal is JSONL, rotated at 10 MB × 5 files |
 | 28 | A human joining a live session and handover of control are a later release: no operations, states or stubs now |
-| 43 | `aae-core` names no harness and no br; CI checks it |
+| 43 | The core, `aae-contract` and `aae-core`, names no harness and no br, and the adapters (`aae-claude`, `aae-codex`, `aae-br`, `aae-plugins`) do not depend on `aae-core`; CI checks both |
 | 61 | Everything an adapter reports reaches the policy and the observer; the core drops nothing of it |
 | 62 | Safety timers are allowed; polling as a way to wait for a unit of work is forbidden |
 | 65 | A harness is an abstraction: all knowledge of one lives in its adapter; the root of the build holds the one table of adapters |

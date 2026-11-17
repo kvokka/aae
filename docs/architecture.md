@@ -26,7 +26,8 @@ These are checked by the build, not kept by agreement.
   written against, and `aae-core`, the engine over them. The core depends on no adapter, frontend or plugin, and
   neither crate names a harness or a tracker (`codex`, `br`, `max_sessions`, `BEADS_DIR`, `.beads`): what the core
   needs comes through the driver's capabilities and the tracker interface, and `scripts/core-boundary.sh` checks the
-  sources of both in CI.
+  sources of both in CI, and that the adapters (`aae-claude`, `aae-codex`, `aae-br`, `aae-plugins`) build without
+  `aae-core`.
 - A harness is an abstraction to the core. The root of the build holds the one table of adapters
   (`crates/aae/src/harness.rs`), the only place that names a harness.
 - Adapters and frontends only translate protocols.
