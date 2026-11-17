@@ -1,0 +1,13 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "aae",
+  "version": "0.1.0",
+  "description": "Skills for working with aae from Claude Code or Codex: recover runs that failed for good, decide on runs that wait on an await step",
+  "homepage": "https://github.com/kvokka/aae",
+  "repository": "https://github.com/kvokka/aae",
+  "license": "MIT",
+  "author": {
+    "name": "aae",
+    "url": "https://github.com/kvokka/aae"
+  }
+}

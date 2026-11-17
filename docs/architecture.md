@@ -50,8 +50,9 @@ These are checked by the build, not kept by agreement.
 | `aae-testkit` | test doubles: the scripted driver, fake providers, a test MCP service. Nothing of it runs in the product | [development](guide/development.md) |
 | `aae-acceptance` | end-to-end scenarios on a real daemon and real binaries, run on request | [acceptance](acceptance.md) |
 
-The skills for a user's agent are not a crate: `harness-plugin/` is a plugin of Claude Code and Codex, and
-`.claude-plugin/marketplace.json` makes the repository its marketplace for both
+The skills for a user's agent are not a crate: `harness-plugin/` is a plugin of Claude Code and Codex, each in its
+current format. Claude Code reads `.claude-plugin/marketplace.json` and the plugin's `.claude-plugin/plugin.json`;
+Codex reads `.agents/plugins/marketplace.json` and the plugin's root `plugin.json`
 ([recovery](guide/recovery.md)). A test of `aae-front` checks its manifests and that its skills name only commands
 and flags the CLI has.
 

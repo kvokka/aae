@@ -10,32 +10,61 @@ fn json(path: &Path) -> Value {
     serde_json::from_str(&fs::read_to_string(path).unwrap()).unwrap()
 }
 
-/// The repository is a marketplace of one plugin: both `claude plugin marketplace add` and `codex plugin marketplace
-/// add` read `.claude-plugin/marketplace.json` (Claude Code 2.1, Codex 0.168).
-#[test]
-fn the_manifests_are_what_claude_and_codex_install() {
-    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
-    let market = json(&root.join(".claude-plugin/marketplace.json"));
-    assert!(
-        market["name"].is_string() && market["owner"]["name"].is_string(),
-        "{market}"
-    );
+/// The entry of the one plugin in a marketplace file.
+fn entry(market: &Value) -> &Value {
+    assert!(market["name"].is_string(), "{market}");
     let [entry] = market["plugins"].as_array().unwrap().as_slice() else {
         panic!("one plugin: {market}");
     };
-    let source = entry["source"].as_str().unwrap();
+    entry
+}
+
+/// The repository is a marketplace of one plugin in the current format of each harness: Claude Code reads
+/// `.claude-plugin/marketplace.json` and the plugin's `.claude-plugin/plugin.json`, Codex reads
+/// `.agents/plugins/marketplace.json` and the plugin's root `plugin.json` (Claude Code 2.1, Codex 0.169). Neither
+/// relies on a format the other harness reads only for compatibility.
+#[test]
+fn the_manifests_are_what_claude_and_codex_install() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let claude = json(&root.join(".claude-plugin/marketplace.json"));
+    assert!(claude["owner"]["name"].is_string(), "{claude}");
+    let (claude_entry, codex) = (entry(&claude), json(&root.join(".agents/plugins/marketplace.json")));
+    let codex_entry = entry(&codex);
+    assert_eq!(codex_entry["source"]["source"], "local", "{codex}");
+    for key in ["installation", "authentication"] {
+        assert!(codex_entry["policy"][key].is_string(), "{codex}");
+    }
+    assert!(codex_entry["category"].is_string(), "{codex}");
+    let source = claude_entry["source"].as_str().unwrap();
     assert!(source.starts_with("./") && !source.contains(".."), "{source}");
-    let dir = root.join(source);
-    let plugin = json(&dir.join(".claude-plugin/plugin.json"));
-    let name = plugin["name"].as_str().unwrap();
-    assert!(
-        name.chars()
-            .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-'),
-        "{name}"
+    assert_eq!(
+        codex_entry["source"]["path"], source,
+        "both marketplaces point to one plugin"
     );
-    assert_eq!(entry["name"], name, "the marketplace entry names the plugin");
-    // Both harnesses cache a plugin by its version: a release that changes a skill changes the version.
-    assert_eq!(plugin["version"], env!("CARGO_PKG_VERSION"));
+    let dir = root.join(source);
+    assert!(
+        !dir.join(".codex-plugin").exists(),
+        "no compatibility manifest of Codex"
+    );
+    for manifest in [".claude-plugin/plugin.json", "plugin.json"] {
+        let plugin = json(&dir.join(manifest));
+        let name = plugin["name"].as_str().unwrap();
+        assert!(
+            name.chars()
+                .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-'),
+            "{name}"
+        );
+        assert_eq!(
+            claude_entry["name"], name,
+            "the Claude marketplace entry names the plugin of {manifest}"
+        );
+        assert_eq!(
+            codex_entry["name"], name,
+            "the Codex marketplace entry names the plugin of {manifest}"
+        );
+        // Both harnesses cache a plugin by its version: a release that changes a skill changes the version.
+        assert_eq!(plugin["version"], env!("CARGO_PKG_VERSION"), "{manifest}");
+    }
     for skill in fs::read_dir(dir.join("skills")).unwrap() {
         let skill = skill.unwrap().path();
         let text = fs::read_to_string(skill.join("SKILL.md")).unwrap();
