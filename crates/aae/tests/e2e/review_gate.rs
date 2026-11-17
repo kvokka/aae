@@ -1,6 +1,7 @@
 //! Demo 3 (`demos/3-review-gate`) without a model and without GitHub: its pack, its project, the scripts of its steps
 //! and its bridge against a real `aae daemon`, the real `codex` on fake Responses APIs, and a fake `gh`
-//! (`fake_gh.sh`) over local remotes. The planner files no beads, so the work of a feature is its page in the root.
+//! (`fake_gh.sh`) over local remotes. The planner files one bead for the backend, whose coder adds a file, so a
+//! feature has a pull request in the backend and one in the root.
 
 use crate::common::{Daemon, WAIT};
 use aae_testkit::openai::{Provider, Reply};
@@ -16,8 +17,8 @@ const PROJECT: &str = "review-gate";
 const REPOS: [&str; 3] = ["gate-demo", "gate-demo-backend", "gate-demo-frontend"];
 /// The author the demo's `feedback_from` names.
 const ALLOWED: &str = "kvokka-agent";
-/// The bridge looks at GitHub every second here; three of its looks find nothing to do.
-const LOOKS: Duration = Duration::from_secs(3);
+/// Long enough for the daemon to act on an event, for the check that it did not.
+const SETTLE: Duration = Duration::from_secs(3);
 
 /// The daemon on a copy of the demo, with the bridge running; `tools` holds the agents' scripts.
 struct Gate {
@@ -109,19 +110,24 @@ impl Gate {
     async fn start() -> Self {
         let aae = env!("CARGO_BIN_EXE_aae");
         let tools = tempfile::tempdir().unwrap();
-        // The planner files nothing, and refuses the feature once `refuse` exists.
+        // The planner files a bead for the backend, and refuses the feature once `refuse` exists.
         let refuse = tools.path().join("refuse");
         let plan = format!(
-            "if [ -e {} ]; then {aae} finish fail --summary refused; else {aae} finish pass --summary planned; fi\n",
+            "set -e\nif [ -e {} ]; then {aae} finish fail --summary refused; exit; fi\n\
+             bead=$({aae} --json run show \"$AAE_RUN\" | jq -r .bead)\n\
+             BD_ISSUE_PREFIX=api br create Greet --deps parent-child:$bead -l agent:coder --description Greet --silent\n\
+             {aae} finish pass --summary planned\n",
             refuse.display()
         );
         fs::write(tools.path().join("plan.sh"), plan).unwrap();
         let task = |command: String| Provider::start(vec![Reply::Task(command)]);
         let planner = task(format!("sh {}", tools.path().join("plan.sh").display())).await;
+        let coder = task(format!("echo hello >greet.txt && {aae} finish pass --summary coded")).await;
         let reviser = task(format!("{aae} finish pass --summary addressed")).await;
         let owner = task(format!("{aae} finish pass --summary looked")).await;
         let fakes = [
             ("pack/agents/planner", &planner),
+            ("pack/agents/coder", &coder),
             ("pack/agents/reviser", &reviser),
             ("root/agents/owner", &owner),
         ];
@@ -141,7 +147,7 @@ impl Gate {
             d,
             bridge,
             tools,
-            _fakes: vec![planner, reviser, owner],
+            _fakes: vec![planner, coder, reviser, owner],
         }
     }
 
@@ -172,9 +178,20 @@ impl Gate {
         }
     }
 
-    /// The bridge looks a few times, and `run` still waits in `round`.
+    /// The bridge's looks at the root's pull request so far: each one starts with it.
+    fn looks(&self) -> usize {
+        let calls = fs::read_to_string(self.d.dir.path().join("path/github/calls")).unwrap();
+        calls.lines().filter(|c| c.ends_with("--json state,mergedBy")).count()
+    }
+
+    /// The bridge looks at GitHub once more from start to end, and `run` still waits in `round`.
     async fn still(&self, run: &str, round: u64) {
-        tokio::time::sleep(LOOKS).await;
+        // The second look from now starts after the first one ended, and the first started after the call.
+        let (now, deadline) = (self.looks(), Instant::now() + WAIT);
+        while self.looks() < now + 2 {
+            assert!(Instant::now() < deadline, "the bridge does not look");
+            tokio::time::sleep(Duration::from_millis(50)).await;
+        }
         let view = self.d.get(&format!("/v1/runs/{run}")).await;
         assert_eq!(
             (&view["step"], &view["round"]),
@@ -186,11 +203,27 @@ impl Gate {
 
     /// The fake `gh` as `user`, in the root's repository.
     fn gh(&self, user: &str, args: &[&str]) -> String {
+        self.gh_in("gate-demo", user, args)
+    }
+
+    /// The fake `gh` as `user`, in the repository `repo`.
+    fn gh_in(&self, repo: &str, user: &str, args: &[&str]) -> String {
         let gh = self.d.dir.path().join("path/gh");
         run(Command::new(gh)
             .args(args)
             .env("GH_FAKE_USER", user)
-            .current_dir(self.demo("gate-demo")))
+            .current_dir(self.demo(repo)))
+    }
+
+    /// The backend's pull request of the feature `view`: its address and its state.
+    fn backend_pr(&self, view: &Value) -> (String, String) {
+        let branch = format!("feature/{}", view["bead"].as_str().unwrap());
+        let pr = self.gh_in("gate-demo-backend", "", &["pr", "view", &branch, "--json", "url,state"]);
+        let pr: Value = serde_json::from_str(&pr).unwrap();
+        (
+            pr["url"].as_str().unwrap().to_owned(),
+            pr["state"].as_str().unwrap().to_owned(),
+        )
     }
 
     async fn runs_of(&self, formula: &str) -> Vec<Value> {
@@ -219,6 +252,7 @@ async fn a_merge_of_the_root_pull_request_passes_the_review() {
         "{view}"
     );
     assert_eq!(view["step"], "merge", "{view}");
+    assert_eq!(g.backend_pr(&view).1, "MERGED", "{view}");
     // `merge` took each repository back to its default branch.
     for repo in REPOS {
         assert_eq!(git(&g.demo(repo), &["branch", "--show-current"]), "main\n", "{repo}");
@@ -240,8 +274,17 @@ async fn a_comment_of_an_allowed_author_sends_the_feature_to_the_reviser() {
     let feedback = fs::read_to_string(g.demo(&feedback)).unwrap();
     assert!(feedback.contains("Greet in the README too"), "{feedback}");
     assert!(!feedback.contains("Haskell"), "{feedback}");
-    // `collect` marked the comment as taken, so the bridge does not send the feature back for it again.
+    // `collect` marked the comment as taken, so the bridge does not send the feature back for it again; a review
+    // on the backend's pull request does.
     g.still(&run, 2).await;
+    let (backend, _) = g.backend_pr(&view);
+    g.gh(ALLOWED, &["pr", "review", &backend, "--comment", "--body", "Say hello"]);
+    let view = g.waiting(&run, 3).await;
+    let feedback = format!("root/feedback/{}.md", view["bead"].as_str().unwrap());
+    let feedback = fs::read_to_string(g.demo(&feedback)).unwrap();
+    assert!(feedback.contains("Say hello"), "{feedback}");
+    assert!(!feedback.contains("README"), "{feedback}");
+    g.still(&run, 3).await;
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -271,11 +314,12 @@ async fn a_close_without_a_merge_cancels_the_feature_and_cleans_it_up() {
     let root = g.demo("gate-demo");
     assert_eq!(git(&root, &["ls-remote", "--heads", "origin", &branch]), "");
     assert_eq!(git(&root, &["branch", "--show-current"]), "main\n");
+    assert_eq!(g.backend_pr(&view).1, "CLOSED", "{view}");
 
     // A failed feature is left as it is: no cleanup.
     fs::write(g.tools.path().join("refuse"), "").unwrap();
     let failed = g.feature(json!({ "task": "Greet the visitor in Latin" })).await;
     g.d.until_state(&failed, "failed").await;
-    tokio::time::sleep(LOOKS).await;
+    tokio::time::sleep(SETTLE).await;
     assert_eq!(g.runs_of("dev.cleanup").await.len(), 1);
 }

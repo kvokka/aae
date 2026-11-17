@@ -1,11 +1,13 @@
 #!/bin/sh
 # A fake `gh` for the test of demo 3 (review_gate.rs): the pull requests live in $GH_FAKE (`github` next to this
 # script when unset), one directory per number, with the files `repo` (the top of the git repository it was opened
-# from), `branch`, `state`, `url`, `merged_by` and `comments`, a JSON object per line. The account is $GH_FAKE_USER (`agent` when unset). Only the calls of the demo's
-# scripts and bridge are here; anything else fails.
+# from), `branch`, `state`, `url`, `merged_by`, and `comments` and `reviews`, a JSON object per line; `calls` has every
+# call, a line each. The account is $GH_FAKE_USER (`agent` when unset). Only the calls of the demo's scripts and bridge
+# are here; anything else fails.
 set -eu
 GH_FAKE=${GH_FAKE:-$(dirname "$0")/github}
 mkdir -p "$GH_FAKE"
+printf '%s\n' "$*" >>"$GH_FAKE/calls"
 me=${GH_FAKE_USER:-agent}
 fail() { echo "fake gh: $*" >&2; exit 1; }
 
@@ -64,6 +66,7 @@ case "$1 ${2:-}" in
     echo "https://github.test/$(basename "$top")/pull/$n" >"$pr/url"
     : >"$pr/merged_by"
     : >"$pr/comments"
+    : >"$pr/reviews"
     cat "$pr/url" ;;
   "pr edit") find_pr "$3" >/dev/null ;;
   "pr merge")
@@ -79,19 +82,25 @@ case "$1 ${2:-}" in
     n=$(($(cat "$GH_FAKE"/*/comments | wc -l) + 1))
     jq -nc --arg id "C$n" --arg url "$(cat "$pr/url")#issuecomment-$n" --arg body "$(opt --body "$@")" --arg who "$me" \
       '{id: $id, url: $url, body: $body, author: {login: $who}, eyes: false}' >>"$pr/comments" ;;
+  "pr review")
+    pr=$(find_pr "$3")
+    n=$(($(cat "$GH_FAKE"/*/reviews | wc -l) + 1))
+    jq -nc --arg id "R$n" --arg url "$(cat "$pr/url")#pullrequestreview-$n" --arg body "$(opt --body "$@")" \
+      --arg who "$me" '{id: $id, url: $url, body: $body, author: {login: $who}, eyes: false}' >>"$pr/reviews" ;;
   "api graphql")
     id=$(field id "$@")
     if [ -n "$id" ]; then
-      for comments in "$GH_FAKE"/*/comments; do
+      for comments in "$GH_FAKE"/*/comments "$GH_FAKE"/*/reviews; do
         jq -c --arg id "$id" 'if .id == $id then .eyes = true else . end' "$comments" >"$comments.new"
         mv "$comments.new" "$comments"
       done
       echo '{"data": {"addReaction": {"clientMutationId": null}}}'
     else
       pr=$(find_pr "$(field url "$@")")
-      jq -s '{data: {resource: {reviews: {nodes: []}, comments: {nodes: map(
-        del(.eyes) + {reactionGroups: (if .eyes then [{content: "EYES", viewerHasReacted: true}] else [] end)})}}}}' \
-        "$pr/comments"
+      jq -n --slurpfile comments "$pr/comments" --slurpfile reviews "$pr/reviews" '
+        def node: del(.eyes) + {reactionGroups: (if .eyes then [{content: "EYES", viewerHasReacted: true}] else [] end)};
+        {data: {resource: {comments: {nodes: $comments | map(node)},
+          reviews: {nodes: $reviews | map(node + {comments: {nodes: []}})}}}}'
     fi ;;
   *) fail "not faked: $*" ;;
 esac
