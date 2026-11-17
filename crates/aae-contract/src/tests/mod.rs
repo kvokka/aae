@@ -5,6 +5,7 @@ mod config_env;
 mod config_if;
 mod config_launch;
 mod config_layers;
+mod config_plugins;
 mod config_prompt;
 mod config_root;
 mod config_services;

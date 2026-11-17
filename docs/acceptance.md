@@ -53,7 +53,6 @@ says otherwise.
 | 12 | "Explain config" shows the layer of every value, the host layer as one line. With a stand-in home directory of the harness the same agent works with host inheritance and without it, and the session shows the difference | model-free |
 | 13 | Two agents with different process parts of the codex config get two app-servers, with the same part one; an instance starts lazily and stops after idling | model-free |
 | 14 | One HTTP MCP service serves concurrent claude and codex sessions with identity headers; the number of its processes does not grow with the sessions | model-free |
-| 15 | An external example plugin gives a skill and a harness hook to one of two agents only, and vetoes a `pass`; a crash of its hook does not bring the daemon down | model-free |
 | 16 | A run with a bead: the daemon takes the claim and holds it through the death of a session and its resume; `failed` returns the bead, `passed` closes it; "the next ready in the epic" under 5 concurrent requests gives each bead to exactly one run; after the set number of failures the bead is given out no more; every session has the database path; br holds no bookkeeping records | model-free |
 | 17 | Every operation of the HTTP API has a CLI command; the OpenAPI document matches the code; MCP has five tools | model-free; one row with a real claude session is live |
 | 18 | The journal rotates at 10 MB × 5; a reader continues by `seq`; a `seq` rotated away gives an explicit gap | model-free |

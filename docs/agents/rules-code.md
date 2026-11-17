@@ -74,6 +74,6 @@ In code the same marker stands in the language's comment syntax. `scripts/budget
   `--no-verify`. Temporary logs of the work are not committed.
 - Never `rm -r` or `rm -rf`, in a command or in a script you write: tracked files go by `git rm -r -q <path>`,
   untracked ones by `git clean -fdq -- <path>` or `find <path> -delete`, temporary ones live in `mktemp -d` and stay.
-- Each of `experiments/*`, `demos/*`, `examples/*` has a short README: what is there and why.
+- Each of `experiments/*`, `demos/*` has a short README: what is there and why.
 - An experiment's result goes to [experiments](../design/experiments.md) with `MEASURE` markers, and the code of a
   recorded experiment is deleted. A cheap experiment comes before the code that leans on it.

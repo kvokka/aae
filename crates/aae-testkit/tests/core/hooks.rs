@@ -21,11 +21,11 @@ fn policy(hooks: &[(&str, &str)]) -> World {
 /// A world whose plugin `policy` has the hooks `(event, script, timeout)`, each run as `sh <script>` in the plugin
 /// directory with `AAE_SOCKET` set to `/run/aae.sock` and the parameters `{"level": 2}`.
 fn policy_timed(hooks: &[(&str, &str, &str)]) -> World {
-    let mut toml = "name = \"policy\"\nversion = \"0.1.0\"\n".to_owned();
+    let mut toml = "name = \"policy\"\nversion = \"0.1.0\"\nparams = { level = 2 }\n".to_owned();
     let mut files = vec![(
         "config.toml".to_owned(),
         "projects = [\"shop\"]\nbuiltin = { default-policy = { enabled = false } \
-        }\n[harness.scripted]\n[[plugin]]\npath = \"policy\"\nconfig = { level = 2 }\n"
+        }\n[harness.scripted]\n[[plugin]]\npath = \"policy\"\n"
             .to_owned(),
     )];
     for (n, (on, script, timeout)) in hooks.iter().enumerate() {

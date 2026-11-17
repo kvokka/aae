@@ -21,6 +21,10 @@ use std::{
 const DEFAULT_MAX_RUNS: u32 = 8;
 /// What the harness hooks and MCP commands of a plugin's contribution say for the plugin's directory.
 pub(super) const PLUGIN_DIR: &str = "${AAE_PLUGIN_DIR}";
+/// How a plugin's strings name one of its parameters: `${params.<key>}`.
+pub(super) const PARAMS: &str = "${params.";
+/// How a plugin's strings name the directory the daemon keeps for its data.
+pub(super) const PLUGIN_DATA: &str = "${AAE_PLUGIN_DATA}";
 /// Failed runs of a bead before the core closes its gate (docs/design/config.md).
 const DEFAULT_BEAD_FAILURES: u32 = 3;
 
@@ -45,10 +49,10 @@ impl Loader {
         let built = self.adapters.iter().map(|a| a.name.to_owned());
         self.harnesses = raw.harness.keys().cloned().chain(built).collect();
         let plugins = self.plugins(file, &base, raw.plugin, &[]);
-        let names: Vec<&str> = plugins.iter().map(|p| p.name.as_str()).collect();
-        let mut settings = self.settings(file, &base, raw.settings, &names);
-        settings.services = self.services(file, raw.service, None);
-        let (edits, variants) = self.agents(file, &base, raw.agents, &names);
+        let all: Vec<&Plugin> = plugins.iter().collect();
+        let mut settings = self.settings(file, &base, raw.settings, &all);
+        settings.services = self.services(file, raw.service);
+        let (edits, variants) = self.agents(file, &base, raw.agents, &all);
         let bundled = super::check::bundled(&mut self, file, raw.builtin);
         let watchdog = super::check::watchdog(&mut self, file, raw.watchdog);
         let mut projects: Vec<Project> = Vec::new();
@@ -102,6 +106,7 @@ impl Loader {
             watchdog,
             projects,
             bridge: Vec::new(),
+            plugin_data: None,
             service_wait: std::time::Duration::from_secs(30),
         };
         // A harness of the build the steps run on gets its defaults, none without its section.
@@ -147,8 +152,19 @@ impl Loader {
             let Some(root) = self.plugin_source(file, &decl).and_then(|s| self.root(file, base, &s)) else {
                 continue;
             };
+            let root = match &decl.dir {
+                None => root,
+                Some(dir) if dir.components().all(|c| matches!(c, std::path::Component::Normal(_))) => root.join(dir),
+                Some(dir) => {
+                    self.fail(
+                        file,
+                        format!("`dir = \"{}\"` is not a path inside the repository", dir.display()),
+                    );
+                    continue;
+                }
+            };
             let manifest = root.join("plugin.toml");
-            let Some(mut raw) = self.read::<PluginFile>(&manifest) else {
+            let Some(raw) = self.read::<PluginFile>(&manifest) else {
                 continue;
             };
             self.name(&manifest, "plugin", &raw.name);
@@ -173,30 +189,59 @@ impl Loader {
                     timeout,
                 });
             }
-            if !std::mem::take(&mut raw.agent.plugins).is_empty() {
-                self.fail(&manifest, "a plugin attaches no plugins: no `plugins` in `[agent]`");
+            for (key, value) in &raw.params {
+                if param_type(value).is_none() {
+                    self.fail(
+                        &manifest,
+                        format!("param `{key}`: a default is a string, an integer or a boolean"),
+                    );
+                }
             }
-            let mut agent = self.settings(&manifest, &root, raw.agent, &[]);
+            let mut agent: Settings = raw.agent.into();
+            // `${params.<key>}` in an `env` value is replaced per agent; its form is checked as a variable's.
+            let env = std::mem::take(&mut agent.env);
+            let named = (env.iter()).map(|(k, v)| (k.clone(), v.replace(PARAMS, "${params_")));
+            self.env_values(&manifest, "env", &named.collect());
+            let mut agent = self.settings(&manifest, &root, agent, &[]);
+            agent.env = env;
             let dir = root.to_string_lossy();
-            agent.services = self.services(&manifest, raw.service, Some(&dir));
-            agent.in_plugin(&dir);
+            agent.services = self.services(&manifest, raw.service);
+            agent.substitute(PLUGIN_DIR, &dir);
+            let mut unknown = BTreeSet::new();
+            agent.clone().strings_mut(&mut |text, _| {
+                let refs = text.split(PARAMS).skip(1).filter_map(|rest| rest.split_once('}'));
+                unknown.extend(refs.map(|(k, _)| k.to_owned()).filter(|k| !raw.params.contains_key(k)));
+            });
+            for key in unknown {
+                self.fail(
+                    &manifest,
+                    format!("`${{params.{key}}}`: no param `{key}` in `[params]`"),
+                );
+            }
             let prompt = raw.prompt.and_then(|p| self.text(&manifest, &root.join(p)));
             plugins.push(Plugin {
                 name: raw.name,
                 version: raw.version,
+                harnesses: raw.harnesses,
                 bin: Some(root.join("bin")).filter(|b| b.is_dir()),
                 root,
                 agent,
                 prompt,
                 hooks,
-                params: decl.config,
+                params: raw.params,
             });
         }
         plugins
     }
 
     /// Checks one layer of settings and makes its paths absolute; `plugins` are the names it may attach.
-    pub(super) fn settings(&mut self, file: &Path, base: &Path, mut settings: Settings, plugins: &[&str]) -> Settings {
+    pub(super) fn settings(
+        &mut self,
+        file: &Path,
+        base: &Path,
+        mut settings: Settings,
+        plugins: &[&Plugin],
+    ) -> Settings {
         self.env_values(file, "env", &settings.env);
         for (name, mcp) in &settings.mcp {
             if let Some(why) = mcp.malformed() {
@@ -223,8 +268,17 @@ impl Loader {
             }
         }
         for used in &settings.plugins {
-            if !plugins.contains(&used.name.as_str()) {
+            let Some(plugin) = plugins.iter().find(|p| p.name == used.name) else {
                 self.fail(file, format!("plugin `{}` is not declared", used.name));
+                continue;
+            };
+            for (key, value) in &used.params {
+                let at = format!("plugin `{}`: param `{key}`", used.name);
+                match plugin.params.get(key).and_then(param_type) {
+                    None => self.fail(file, format!("{at} is not in the plugin's `[params]`")),
+                    Some(want) if param_type(value) != Some(want) => self.fail(file, format!("{at} is of type {want}")),
+                    Some(_) => {}
+                }
             }
         }
         if let Some(harness) = settings.harness.as_ref().filter(|h| !self.harnesses.contains(*h)) {
@@ -267,12 +321,12 @@ impl Loader {
         self.name(&file, "project", &name);
         let plugins = self.plugins(&file, dir, raw.plugin, outer);
         let all: Vec<&Plugin> = outer.iter().chain(&plugins).collect();
-        let names: Vec<&str> = all.iter().map(|p| p.name.as_str()).collect();
-        let mut settings = self.settings(&file, dir, raw.settings, &names);
-        settings.services = self.services(&file, raw.service, None);
-        let (edits, variants) = self.agents(&file, dir, raw.agents, &names);
-        let (root, rigs) = self.places(&file, dir, raw.root, raw.rigs, &names);
-        let mut packs = vec![self.pack(dir, &file, name.clone(), raw.trigger, true, &names)];
+        let names = all.as_slice();
+        let mut settings = self.settings(&file, dir, raw.settings, names);
+        settings.services = self.services(&file, raw.service);
+        let (edits, variants) = self.agents(&file, dir, raw.agents, names);
+        let (root, rigs) = self.places(&file, dir, raw.root, raw.rigs, names);
+        let mut packs = vec![self.pack(dir, &file, name.clone(), raw.trigger, true, names)];
         for source in &raw.packs {
             let Some(root) = self.root(&file, dir, source) else {
                 continue;
@@ -282,7 +336,11 @@ impl Loader {
                 continue;
             };
             self.name(&manifest, "pack", &raw.name);
-            for required in raw.requires_plugins.iter().filter(|r| !names.contains(&r.as_str())) {
+            for required in raw
+                .requires_plugins
+                .iter()
+                .filter(|r| !names.iter().any(|p| &p.name == *r))
+            {
                 self.fail(&manifest, format!("required plugin `{required}` is not declared"));
             }
             if let Some(min) = &raw.min_aae
@@ -293,7 +351,7 @@ impl Loader {
                     format!("needs aae {min} or later, this is {}", env!("CARGO_PKG_VERSION")),
                 );
             }
-            let mut pack = self.pack(&root, &manifest, raw.name, raw.trigger, false, &names);
+            let mut pack = self.pack(&root, &manifest, raw.name, raw.trigger, false, names);
             if packs.iter().any(|p| p.name == pack.name) {
                 self.fail(&file, format!("two packs are named `{}`", pack.name));
             }
@@ -339,7 +397,7 @@ impl Loader {
         name: String,
         triggers: Vec<TriggerFile>,
         project: bool,
-        plugins: &[&str],
+        plugins: &[&super::Plugin],
     ) -> Pack {
         let mut agents = BTreeMap::new();
         for dir in self.entries(&root.join("agents")).into_iter().filter(|p| p.is_dir()) {
@@ -385,4 +443,14 @@ pub(super) fn reference(text: &str) -> Name {
 
 fn version(text: &str) -> Option<Vec<u64>> {
     text.split('.').map(|n| n.parse().ok()).collect()
+}
+
+/// The type of a plugin parameter's value, when it is one a parameter may have.
+pub(super) fn param_type(value: &serde_json::Value) -> Option<&'static str> {
+    match value {
+        serde_json::Value::String(_) => Some("string"),
+        serde_json::Value::Bool(_) => Some("boolean"),
+        serde_json::Value::Number(n) if n.is_i64() => Some("integer"),
+        _ => None,
+    }
 }

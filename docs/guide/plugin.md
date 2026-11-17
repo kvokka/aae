@@ -8,14 +8,18 @@ A plugin is a directory with a `plugin.toml`. It has two independent sides:
   happens next (veto a pass, retry a failed attempt, remark on a turn...).
 
 A plugin is not a pack: a pack brings agents and formulas, a plugin extends the agents that attach it and the
-orchestrator. A plugin is a directory, not a library: hooks are any executables, in any language. The complete example
-[`examples/aae-plugin-review`](../../examples/aae-plugin-review) shows both sides; this page walks through it.
+orchestrator. A plugin is a directory, not a library: hooks are any executables, in any language. The full reference
+is [the config reference](../design/config.md#plugin-pluginplugintoml).
 
 ## The manifest
 
 ```toml
 name = "review"
 version = "0.1.0"
+harnesses = ["claude", "codex"]   # optional: the harnesses it is for
+
+[params]                          # optional: defaults, which give the types (string, integer, boolean)
+require = "tested"
 
 [agent]
 skills.review-checklist = { path = "skills/review-checklist" }
@@ -31,35 +35,38 @@ Plugin names are unique across the orchestrator and the project. Unknown keys ar
 
 ## Declare it, then attach it
 
-A plugin is **declared** in the orchestrator config or in a project's `aae.toml`, with its parameters:
+A plugin is **declared** in the orchestrator config or in a project's `aae.toml`; the declaration only says where it
+is:
 
 ```toml
 [[plugin]]
-path = "~/aae-plugins/aae-plugin-review"
-config = { require = "tested" }
+path = "~/aae-plugins/review"
 ```
 
-A plugin in a git repository of its own is declared with `git = "<url>"` and `rev = "<tag or full commit id>"`
-instead of `path`; `rev` is required for a plugin. `aae` downloads it into its cache when it loads the config and
+A plugin in a git repository is declared with `git = "<url>"` and `rev = "<tag or full commit id>"` instead of
+`path`, and `dir = "<directory>"` when it is not at the root of the repository; `rev` is required for a plugin. `aae` downloads it into its cache when it loads the config and
 runs it only at that tag or commit; see
 [Packs and plugins from git](../design/config.md#packs-and-plugins-from-git).
 
-Declaring it turns its orchestrator side on. Its agent side reaches only the agents that **attach** it, in their
-`agent.toml` or in any `[settings]` layer:
+Declaring it turns its orchestrator side on. Its agent side reaches only the agents that **attach** it: in
+`[settings]` of the orchestrator or a project for every agent there, on a rig, or in an `agent.toml`, a variant or an
+edit for one agent. An attachment may give values to the plugin's parameters:
 
 ```toml
-plugins = [{ name = "review" }]
+plugins = [{ name = "review", params = { require = "reviewed" } }]
 ```
 
-A stronger layer can detach it again with `{ name = "review", enabled = false }`, and with it its whole agent-side
+Each parameter takes its default, then the value each layer that attaches the plugin gives, the strongest last. A
+stronger layer can detach the plugin with `{ name = "review", enabled = false }`, and with it its whole agent-side
 contribution. `aae config explain --project <p> --agent <a>` shows which plugin each value came from, and
-`aae plugin list` lists the declared and the bundled plugins.
+`aae plugin list` lists the declared and the bundled plugins; the explanation shows each parameter's value and its
+layer as `plugins.review.params.require`.
 
 ## The agent side
 
-The `[agent]` table takes the same keys as any settings layer (see [the config reference](../design/config.md)):
-`env`, `mcp.<name>`, `hooks.<name>`, `skills.<name>`, `native.<harness>`, `model` and so on. It sits between the
-rig settings and the agent's own `agent.toml`, so an agent can still override what the plugin sets.
+The `[agent]` table takes five keys of a settings layer (see [the config reference](../design/config.md)): `env`,
+`mcp.<name>`, `hooks.<name>`, `skills.<name>` and `native.<harness>`. It sits between the rig settings and the
+agent's own `agent.toml`, so an agent can still override what the plugin sets.
 
 - **Skills**: `skills.<name> = { path = "..." }`, a directory relative to the plugin with a `SKILL.md`.
 - An aae plugin is not handed to claude as a Claude Code plugin directory (`--plugin-dir`): its skills, harness hooks
@@ -67,9 +74,13 @@ rig settings and the agent's own `agent.toml`, so an agent can still override wh
 - **Harness hooks** use the Claude Code dialect (`event`, `matcher`, `command`, `timeout`); claude and codex take
   them in the same form, and for codex aae puts the attempt environment in front of the command. What `remind.sh`
   prints on `UserPromptSubmit` joins the prompt.
+- `${params.<key>}` in a string of `[agent]` or a `[[service]]` is the parameter's value for the agent at hand; a
+  `native` string that is only that reference takes the value with its type, so `window = "${params.window}"` is an
+  integer.
 - `${AAE_PLUGIN_DIR}` in a hook, MCP or service `command`, in an `env` value and in a service's `health.command`, is
-  replaced with the plugin's directory when the config loads, so a command can reach the plugin's own files; in an
-  `env` the directory is literal, even with a `$` in its path. Any other `${NAME}` in the `[agent]` `env` is a
+  replaced with the plugin's directory, so a command can reach the plugin's own files; in an `env` the directory is
+  literal, even with a `$` in its path. `${AAE_PLUGIN_DATA}` is a directory the daemon makes for the plugin,
+  `<state>/plugins/<name>/`, for the files its hooks keep. Any other `${NAME}` in the `[agent]` `env` is a
   variable of the daemon's environment, resolved when the session starts; an MCP or service `env` takes none
   ([environment values](../design/config.md#environment-values)).
 - **Scripts**: the plugin's `bin/` directory comes first on the `PATH` of the attached agents' sessions.
@@ -90,7 +101,7 @@ and an optional `timeout` (default 30 s, at most 300 s). The full contract is in
 - **stdin**: the event as one JSON line (`{"schema", "seq", "ts", "type", "project", "rig", "run", "data", ...}`),
   then EOF.
 - **cwd**: the plugin directory. **Environment**: only `PATH`, `HOME`, `LANG`, `AAE_SOCKET` (the API socket, to
-  call back into aae), `AAE_PLUGIN_DIR`, `AAE_PLUGIN_PARAMS` (the `config` table of the declaration as JSON) and
+  call back into aae), `AAE_PLUGIN_DIR`, `AAE_PLUGIN_PARAMS` (the defaults of `[params]` as JSON) and
   `AAE_INSTANCE` (a marker: after a daemon crash the next daemon kills every process that still carries it).
 - **Result**: exit 0 with empty stdout means no objection; exit 0 with one JSON object on stdout is a decision;
   exit 2 blocks, with stderr as the reason; anything else (another exit code, a timeout, bad JSON) is a hook
@@ -109,9 +120,6 @@ the deciding events may return a decision:
 On `run.preparing` and `run.finishing` a failed hook counts as a veto: a broken check never lets a run through.
 On the others a failure is just "no decision", and the next plugin, then the bundled `default-policy`, decides.
 
-`bin/require-word` is a `run.finishing` veto: it exits 2 when a `pass` summary does not contain the word given in
-the `require` parameter, so the run fails with class `check` and the reason from stderr.
-
 ## Rules worth keeping
 
 - **Be idempotent.** Delivery is at least once: a hook cut by a daemon crash runs again after the restart, with the
@@ -120,7 +128,6 @@ the `require` parameter, so the run fails with class `check` and the reason from
   The copy the dead daemon left running is killed first. After a restart, a `remark` or `continue` cannot reach the
   session that took the turn; the attempt fails as `daemon_crash` and the policy decides.
 - **Be quick.** A deciding hook holds its run until it answers or times out.
-- **Parse JSON properly.** The example uses `sed` to stay dependency-free; a real hook should use `jq` or a real
-  JSON parser.
+- **Parse JSON properly**, with `jq` or a real JSON parser.
 - Several plugins on one event run in declaration order (orchestrator first, then the project); the bundled
   plugins come last, so a declared plugin always decides first.

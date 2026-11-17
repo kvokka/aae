@@ -1,7 +1,7 @@
 //! The effective config of one (project, rig, agent): the layers of docs/design/config.md merged, every value with the
 //! layer it came from, so that "explain config" can show it.
 
-use super::{Hook, Mcp, PluginUse, Service, Settings, Skill};
+use super::{Hook, Mcp, Service, Settings, Skill};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::{collections::BTreeMap, fmt, fmt::Write as _, path::PathBuf};
@@ -103,8 +103,8 @@ pub struct EffectiveConfig {
     pub mcp: BTreeMap<String, Sourced<Mcp>>,
     pub hooks: BTreeMap<String, Sourced<Hook>>,
     pub skills: BTreeMap<String, Sourced<Skill>>,
-    /// Attached plugins in attachment order.
-    pub plugins: Vec<Sourced<PluginUse>>,
+    /// Attached plugins in attachment order; `from` is the layer that attached each last.
+    pub plugins: Vec<Sourced<Attached>>,
     /// The native block of this harness: tables of several layers merged by key.
     pub native: Option<Sourced<Value>>,
     /// The services its session uses; the core binds them to MCP servers or environment before the adapter.
@@ -113,6 +113,14 @@ pub struct EffectiveConfig {
     /// Where the agent works: its session goes to the root for `root` (docs/design/config.md).
     #[serde(default)]
     pub scope: super::Scope,
+}
+
+/// A plugin attached to an agent, with the values of its params in force, each from the layer that gave it.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct Attached {
+    pub name: String,
+    #[serde(default)]
+    pub params: BTreeMap<String, Sourced<Value>>,
 }
 
 fn agent() -> Layer {
@@ -274,6 +282,13 @@ impl EffectiveConfig {
         }
         for s in &self.plugins {
             line(&format!("plugins.{}", s.value.name), "attached".to_owned(), &s.from);
+            for (key, p) in &s.value.params {
+                line(
+                    &format!("plugins.{}.params.{key}", s.value.name),
+                    p.value.to_string(),
+                    &p.from,
+                );
+            }
         }
         if let Some(s) = &self.native {
             line(&format!("native.{}", self.harness), s.value.to_string(), &s.from);

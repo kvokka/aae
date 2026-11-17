@@ -1,7 +1,7 @@
 //! A parse error about a key an earlier config shape had, as the one line that says where it is written now.
 
 /// What an earlier config shape said, and where it is written now: the error then is that one line.
-const RETIRED: [(&str, &str); 5] = [
+const RETIRED: [(&str, &str); 6] = [
     (
         "unknown field `permission_mode`",
         "`permission_mode` is native to a harness: its own key in `[settings.native.<harness>]`",
@@ -11,6 +11,10 @@ const RETIRED: [(&str, &str); 5] = [
         "`[overrides.<agent>]` is `[agents.<agent>]` now",
     ),
     ("unknown variant `prompt`", "step kind `prompt` is `ai` now"),
+    (
+        "unknown field `config`, expected one of `path`",
+        "a `[[plugin]]` has no `config`: its params are given where it is attached, `plugins = [{ name, params }]`",
+    ),
     (
         "unknown field `prompt`",
         "an `ai` step has no `prompt`: its agent's template is `agents/<agent>/prompt.template.md`",
@@ -38,7 +42,7 @@ pub(super) fn retired(message: String, text: &str) -> String {
 
 /// The place of the retired key itself: the parser points an unknown key of a tagged table at the table's header.
 fn key_at(said: &str, at: &str, text: &str) -> Option<String> {
-    let key = said.strip_prefix("unknown field `")?.strip_suffix('`')?;
+    let key = said.strip_prefix("unknown field `")?.split('`').next()?;
     let header: usize = at.strip_prefix("line ")?.split(',').next()?.parse().ok()?;
     let (n, line) = text
         .lines()

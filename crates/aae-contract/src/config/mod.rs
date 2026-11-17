@@ -19,7 +19,7 @@ mod sources;
 mod variants;
 
 use crate::template::{Filter, Inputs};
-pub use assemble::{EffectiveConfig, Layer, Sourced};
+pub use assemble::{Attached, EffectiveConfig, Layer, Sourced};
 pub use env::{ExecEnv, env_literal, env_value};
 pub use files::{Harness, Hook, Mcp, McpScope, PluginUse, Settings, Skill};
 pub use formula_file::{Formula, Input, InputType, OnItemFailure, Step, StepKind};
@@ -62,6 +62,9 @@ pub struct Config {
     /// stdio server not of scope `session` runs behind it as a service. Empty: no bridge, stdio servers stay per
     /// session. [`load`] leaves it empty; the binary sets it.
     pub bridge: Vec<String>,
+    /// Where the daemon keeps the data of plugins: `${AAE_PLUGIN_DATA}` of plugin `p` is `<plugin_data>/p`. `None`:
+    /// [`load`] leaves the reference as it is; the binary sets it.
+    pub plugin_data: Option<PathBuf>,
     /// How long a service may take to pass its health check, and a launch waits for it (docs/design/config.md): 30 s.
     /// Not from a file: [`load`] sets it, a test shortens it.
     pub service_wait: Duration,
@@ -227,6 +230,8 @@ pub enum Source {
 pub struct Plugin {
     pub name: String,
     pub version: String,
+    /// The harnesses it is for; any when `None`.
+    pub harnesses: Option<Vec<String>>,
     pub root: PathBuf,
     /// Layer 5 contribution to the agents that attach the plugin.
     pub agent: Settings,
@@ -235,7 +240,7 @@ pub struct Plugin {
     /// Its `bin/` directory, when it has one: ahead of `PATH` for its attached agents.
     pub bin: Option<PathBuf>,
     pub hooks: Vec<OrchestratorHook>,
-    /// `config` of its declaration: the parameters of its orchestrator hooks.
+    /// `[params]` of `plugin.toml`: each parameter's default, which gives its type.
     pub params: serde_json::Map<String, serde_json::Value>,
 }
 

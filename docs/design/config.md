@@ -19,7 +19,7 @@ error in every file.
   (the daemon's file; `--config <file>` loads a file in the CLI, with no daemon).
 - A retired key is a config error of one line that says where it is written now: `permission_mode` (the native block of
   the harness), `[overrides.<agent>]` (`[agents.<agent>]`), step kind `prompt` (`ai`), input type `bead` (`task`), the
-  `prompt` key of an `ai` step (the agent's `prompt.template.md`).
+  `prompt` key of an `ai` step (the agent's `prompt.template.md`), `config` of a `[[plugin]]` (`params` of an attachment).
 - A reload is taken by new runs and by the schedules (a schedule whose `cron`/`every` changed, and every `cron` when
   `timezone` changed, is set again from the reload; a removed one is dropped); the snapshot is per step: a running
   step keeps the one it prepared with, and the next step of the run prepares with the config of that moment; an idle
@@ -48,7 +48,7 @@ policy, with different values, so it is set in the harness's own block (`[settin
 | `mcp.<name>` | `{command = [..], env, scope}` (stdio; `scope = "orchestrator" \| "project" \| "session"`, optional) or `{url, headers}` (HTTP), not both (a server the daemon runs is a `[[service]]`, below); a key of the other kind (`headers` with `command`, `env` or `scope` with `url`) is an error | by key, entry replaced whole |
 | `hooks.<name>` | `{event, matcher, command, timeout}` (harness hooks, Claude dialect) or `{enabled = false}`; `event` must be a hook event of claude 2.1 or one codex adds (`Interrupt`, `PreModelRequest`, `PostModelRequest`) | named list |
 | `skills.<name>` | `{path}` (must exist) or `{enabled = false}` | named list |
-| `plugins` | array of `{name, enabled = true}`, in attachment order; parameters belong to the `[[plugin]]` declaration | named list |
+| `plugins` | array of `{name, params = {..}, enabled = true}`: attaches a declared plugin (see "Plugin") | by name: an attachment keeps the place of its first mention, `params` merge by key, the strongest `enabled` decides |
 | `native.<harness>` | any table, passed to the adapter as is; `native.claude` is a table of claude settings keys, delivered with `--settings` together with the hooks, except `permission_mode`, which goes as `--permission-mode`; `native.codex` is a table of codex `config.toml` keys (`approval_policy` is the thread's approval policy), delivered to the app-server as `-c key=value` flags (so it is part of the process fingerprint) | by key |
 
 A harness hook (`hooks.<name>`) delivered to claude also fires inside every subagent of the session (its input carries
@@ -212,7 +212,8 @@ orchestrator, project and rig settings, then the contributions of the attached p
 and the `[agents]` edits of the orchestrator, the project and the rig. `Config::for_run(project, rig, formula, step)` is what a
 step of a run gets: the agent the rig runs for that step (a variant by its name), and its config with the pack, step and
 variant layers too; a run keeps the one of its current step. Plugins attach first (the `plugins` key of every layer), so
-a stronger layer can detach a plugin and its whole contribution. An edit applies when its key resolves (see Names)
+a stronger layer can detach a plugin and its whole contribution; an attached plugin prints as `plugins.<name> =
+"attached"`, then each of its params as `plugins.<name>.params.<key> = <value>`, each with its layer. An edit applies when its key resolves (see Names)
 to the agent. Every value keeps its layer; a value several layers make together (`native` tables merged by key, a system
 prompt with plugin fragments, `PATH` with plugin `bin/` directories) names them all in order (`# agent + plugin mail`),
 and a model the adapter expanded keeps the short name it was given
@@ -444,7 +445,9 @@ error. `[root]` takes no `settings`, `agents` or `triggers`: the project's own a
 
 A pack in `packs` and a `[[plugin]]` (in the orchestrator file or a project's) is a local directory, or a git
 repository with `pack.toml` / `plugin.toml` at its root: `{ git = "<url>", rev = "<tag or commit>" }` for a pack,
-`git = ".."` and `rev = ".."` instead of `path` for a plugin (exactly one of `path` and `git`).
+`git = ".."` and `rev = ".."` instead of `path` for a plugin (exactly one of `path` and `git`). A plugin from git
+may live in a directory of the repository: `dir = "plugins/mail"` (relative, inside the repository; `dir` goes with
+`git` only).
 
 - `rev` is a full commit id (40 or 64 lowercase hex digits) or the name of a tag, looked up only as
   `refs/tags/<rev>`: a branch or a short commit id is a config error ("no tag ... in the repository").
@@ -842,32 +845,68 @@ fires neither on its schedule nor on events, only by hand, and stays off across 
 ```toml
 name = "mail"
 version = "0.1.0"
+harnesses = ["claude", "codex"]     # optional: the harnesses it is for; any when absent
 prompt = "prompt.md"                # optional: its text joins the system prompt of the attached agents
 
-[agent]                             # layer 5 contribution to the agents that attach the plugin
+[params]                            # optional: each parameter with its default; the default gives the type
+folder = "inbox"                    # string
+window = 50000                      # integer
+strict = false                      # boolean
+
+[agent]                             # what the attached agents get: only env, mcp, hooks, skills, native
 skills.mail = { path = "skills/mail" }
+env.MAIL_FOLDER = "${params.folder}"
+native.claude.window = "${params.window}"
 
 [[hook]]                            # orchestrator hook (contracts 3)
 on = "run.finishing"
 command = ["bin/check-mail"]
 timeout = "10s"                     # optional
+
+[[service]]                         # as in "MCP servers and services"
+name = "inbox"
+command = ["${AAE_PLUGIN_DIR}/bin/inbox", "--folder", "${params.folder}"]
 ```
 
-Plugin names are unique across the orchestrator and the project; an attachment in `plugins` must name a declared plugin,
-and the `[agent]` of a plugin has no `plugins` (a plugin attaches no plugins). A declaration (a `path`, or a `git`
-source as for packs above) may carry parameters, `[[plugin]] path = ".." config = { .. }`: its orchestrator hooks get
-them in `AAE_PLUGIN_PARAMS` (contracts 3.1). In the `[agent]` contribution, `${AAE_PLUGIN_DIR}` in a harness hook
-`command`, an `env` value, an MCP `command` or `env` value and any string of a `native` table is replaced with the
-plugin's directory at load, so they reach the plugin's own files; skill paths are relative to it. In an `env` value
-the directory is literal (a `$` in its path is no reference); outside a plugin's `[agent]`, `${AAE_PLUGIN_DIR}` in an
-`env` value is a reference to a variable of the daemon like any other. A Claude Code plugin
-directory (`--plugin-dir`) cannot be handed over: the adapter takes that flag for skills, so a plugin gives its skills,
-hooks and MCP servers through `[agent]`. Beyond its `[agent]` layer a plugin gives its attached agents two things, in
-attachment order: the text of its `prompt` file, after the system prompt the layers give (each fragment after a blank
-line); and its `bin/` directory, when it has one, ahead of `PATH` (the `PATH` a layer sets, or else the daemon's). The
-daemon's `PATH` taken this way becomes part of the effective config: it is in the run's snapshot and in the instance
-fingerprint, so after a daemon restart with another `PATH` these agents get new instances. The example
-`examples/aae-plugin-review` shows both sides.
+A declaration only names where a plugin is: `[[plugin]]` with `path`, or `git`, `rev` and an optional `dir` (see
+[above](#packs-and-plugins-from-git)), in the orchestrator file or a project's. Plugin names are unique across the
+orchestrator and the project. Attaching is the one switch: `plugins = [{ name = "mail", params = { folder = "work" }
+}]` in any settings layer. In `[settings]` of the orchestrator or a project it attaches the plugin to every agent there,
+on a rig to the agents of the rig, in `agent.toml`, a variant or an edit to that agent only; `enabled = false` on a
+stronger layer detaches it. An agent has any number of plugins, applied in the order of their first mention: the
+layers are read weakest first (orchestrator, project, rig, agent, variant, edits), and an attachment keeps its
+place when a stronger layer names it again.
+
+A parameter's value is its default from `[params]`, then what each attachment on those layers gives, by key: the
+strongest wins, and `config explain` prints each as `plugins.<name>.params.<key>` with the layer it came from (the
+plugin's own for a default). An attachment with a key not in `[params]`, or a value of another type than the
+default's, is a load error of the file that has it; so is a default that is not a string, an integer or a boolean,
+and a `${params.<key>}` with no such key. A plugin whose `harnesses` lacks the harness of an agent that attaches it
+is a load error.
+
+The `[agent]` table and the `[[service]]` tables of a plugin reach only the agents that attach it, with their strings
+filled in for each agent when its effective config is put together, since each agent has its own values:
+
+- `${params.<key>}` is the value of the parameter in force for that agent. A string of a `native` table that is one
+  such reference and nothing else takes the value with its type (`window = "${params.window}"` is the integer).
+- `${AAE_PLUGIN_DIR}` is the plugin's directory, so the parts reach the plugin's own files; skill paths are relative
+  to it.
+- `${AAE_PLUGIN_DATA}` is `<state>/plugins/<name>/`, a directory the daemon makes for each declared plugin and never
+  reads: the place for the files the plugin's hooks keep.
+
+The strings filled in are the harness hook `command`s, the `env` values (where what is put in is a literal: a `$` in it
+is no reference), MCP servers (`command`, `url`, `env`, `headers`), every string of a `native` table, and a service's
+`command`, health `command` and `env`. Outside a plugin, `${AAE_PLUGIN_DIR}` and `${AAE_PLUGIN_DATA}` in an `env` value
+are references to variables of the daemon like any other. Its orchestrator hooks get the defaults of `[params]` in
+`AAE_PLUGIN_PARAMS` (contracts 3.1).
+
+A Claude Code plugin directory (`--plugin-dir`) cannot be handed over: the adapter takes that flag for skills, so a
+plugin gives its skills, hooks and MCP servers through `[agent]`. Beyond its `[agent]` a plugin gives its attached
+agents two things, in attachment order: the text of its `prompt` file, after the system prompt the layers give (each
+fragment after a blank line); and its `bin/` directory, when it has one, ahead of `PATH` (the `PATH` a layer sets, or
+else the daemon's). The daemon's `PATH` taken this way becomes part of the effective config: it is in the run's
+snapshot and in the instance fingerprint, so after a daemon restart with another `PATH` these agents get new
+instances.
 
 A plugin is the unit of extension: a typical extension (a mail integration, a check, a reaction policy) is a
 plugin, not core code. Its directory holds `plugin.toml` (name, version, parameters, the contribution to agents,

@@ -66,9 +66,13 @@ impl Loader {
             .collect()
     }
 
-    /// Where a declared plugin is: exactly one of `path` and `git`, and `git` with `rev`.
+    /// Where a declared plugin is: exactly one of `path` and `git`, and `git` with `rev` (and `dir`, if any).
     pub(super) fn plugin_source(&mut self, file: &Path, decl: &PluginDecl) -> Option<Source> {
         match (&decl.path, &decl.git, &decl.rev) {
+            (Some(_), None, None) if decl.dir.is_some() => self.none(
+                file,
+                "`dir` is for a plugin from git: a `path` names the plugin's directory itself",
+            ),
             (Some(path), None, None) => Some(Source::Path(path.clone())),
             (None, Some(git), Some(rev)) => Some(Source::Git(GitSource {
                 git: git.clone(),

@@ -52,16 +52,3 @@ fn a_formula_in_a_subdirectory_is_loaded() {
     let shop = config.projects.iter().find(|p| p.name == "shop").unwrap();
     assert!(shop.packs[1].formulas.contains_key("deep"));
 }
-
-#[test]
-fn a_plugin_that_attaches_plugins_is_told_so() {
-    let mail = BASE.iter().find(|(p, _)| *p == "plugins/mail/plugin.toml").unwrap().1;
-    let attaching = mail.replace(
-        "[agent.skills.mail]",
-        "[agent]\nplugins = [{ name = \"mail\" }]\n[agent.skills.mail]",
-    );
-    fails(
-        &[("plugins/mail/plugin.toml", attaching.as_str())],
-        "a plugin attaches no plugins: no `plugins` in `[agent]`",
-    );
-}

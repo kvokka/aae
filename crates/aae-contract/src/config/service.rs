@@ -76,25 +76,16 @@ pub struct Service {
 }
 
 impl Loader {
-    /// The `[[service]]` tables of `file`, by name; `plugin` is the directory `${AAE_PLUGIN_DIR}` stands for.
-    pub(super) fn services(
-        &mut self,
-        file: &Path,
-        raw: Vec<ServiceFile>,
-        plugin: Option<&str>,
-    ) -> BTreeMap<String, Service> {
+    /// The `[[service]]` tables of `file`, by name.
+    pub(super) fn services(&mut self, file: &Path, raw: Vec<ServiceFile>) -> BTreeMap<String, Service> {
         let mut services = BTreeMap::new();
         for s in raw {
             self.name(file, "service", &s.name);
-            let at = |text: String| match plugin {
-                Some(dir) => text.replace(super::load::PLUGIN_DIR, dir),
-                None => text,
-            };
             let health = match s.health {
                 None => Health::Port,
                 Some(HealthFile::Guess(Http::Http)) => Health::Http("/health".to_owned()),
                 Some(HealthFile::Http { http }) => Health::Http(http),
-                Some(HealthFile::Command { command }) => Health::Command(command.into_iter().map(at).collect()),
+                Some(HealthFile::Command { command }) => Health::Command(command),
             };
             let mcp = match s.mcp {
                 None | Some(McpFile::Guess(false)) => None,
@@ -116,8 +107,8 @@ impl Loader {
                 self.fail(file, format!("service `{}`: a command is empty", s.name));
             }
             let service = Service {
-                command: s.command.into_iter().map(at).collect(),
-                env: s.env.into_iter().map(|(k, v)| (k, at(v))).collect(),
+                command: s.command,
+                env: s.env,
                 scope: s.scope,
                 health,
                 mcp,

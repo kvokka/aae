@@ -61,7 +61,7 @@ impl Loader {
         dir: &Path,
         root: RootFile,
         raw: BTreeMap<String, RigFile>,
-        plugins: &[&str],
+        plugins: &[&super::Plugin],
     ) -> ((String, Rig), BTreeMap<String, Rig>) {
         let name = root.name.unwrap_or_else(|| ROOT.to_owned());
         let path = root.path.unwrap_or_default();

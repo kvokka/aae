@@ -3,8 +3,9 @@
 //! expands.
 
 use super::{
-    Agent, Config, EffectiveConfig, Layer, Name, Pack, PluginUse, Project, Rig, Scope, Settings, Sourced, StepKind,
-    check::resolve, load::Loader, load::reference,
+    Agent, Attached, Config, EffectiveConfig, Layer, Name, Pack, Project, Rig, Scope, Settings, Sourced, StepKind,
+    check::resolve,
+    load::{Loader, PARAMS, PLUGIN_DATA, reference},
 };
 use serde::Deserialize;
 use std::collections::{BTreeMap, BTreeSet};
@@ -164,30 +165,59 @@ impl Config {
         stronger.extend(edits(&p.edits).into_iter().map(|s| (Layer::ProjectAgent, s)));
         stronger.extend((r.into_iter().flat_map(|r| edits(&r.edits))).map(|s| (Layer::RigAgent, s)));
 
-        // Plugins attach first: their contributions are a layer between the rig and the agent.
-        let mut plugins: Vec<Sourced<PluginUse>> = Vec::new();
+        // Plugins attach first: their contributions are a layer between the rig and the agent. An attachment keeps
+        // the place of its first mention; each mention gives the values of params by key and says whether it is on.
+        let declared = |name: &str| (self.plugins.iter().chain(&p.plugins)).find(|d| d.name == name);
+        let mut uses: Vec<(Sourced<Attached>, bool)> = Vec::new();
         for (layer, settings) in layers.iter().chain(&stronger) {
             for used in &settings.plugins {
-                let at = plugins.iter().position(|s| s.value.name == used.name);
-                let sourced = || Sourced {
-                    value: used.clone(),
-                    from: layer.clone(),
+                let i = match uses.iter().position(|(s, _)| s.value.name == used.name) {
+                    Some(i) => i,
+                    None => {
+                        let defaults = declared(&used.name).map(|d| d.params.clone()).unwrap_or_default();
+                        let from = Layer::Plugin(used.name.clone());
+                        let params = defaults.into_iter().map(|(k, value)| (k, sourced(value, &from)));
+                        let value = Attached {
+                            name: used.name.clone(),
+                            params: params.collect(),
+                        };
+                        uses.push((sourced(value, layer), false));
+                        uses.len() - 1
+                    }
                 };
-                match (at, used.enabled) {
-                    (Some(i), true) => plugins[i] = sourced(),
-                    (Some(i), false) => drop(plugins.remove(i)),
-                    (None, true) => plugins.push(sourced()),
-                    (None, false) => {}
-                }
+                let (attached, on) = &mut uses[i];
+                (attached.from, *on) = (layer.clone(), used.enabled);
+                let params = (used.params.iter()).map(|(k, v)| (k.clone(), sourced(v.clone(), layer)));
+                attached.value.params.extend(params);
             }
         }
-        let attached: Vec<&super::Plugin> = (plugins.iter())
-            .filter_map(|used| (self.plugins.iter().chain(&p.plugins)).find(|d| d.name == used.value.name))
-            .collect();
-        layers.extend((attached.iter()).map(|d| (Layer::Plugin(d.name.clone()), d.agent.clone())));
+        let plugins: Vec<Sourced<Attached>> = uses.into_iter().filter_map(|(s, on)| on.then_some(s)).collect();
+        let attached: Vec<&super::Plugin> = plugins.iter().filter_map(|used| declared(&used.value.name)).collect();
+        for (d, used) in attached.iter().zip(&plugins) {
+            let mut agent = d.agent.clone();
+            for (key, value) in &used.value.params {
+                let (pattern, text) = (format!("{PARAMS}{key}}}"), value.value.to_string());
+                agent.substitute_whole(&pattern, &value.value);
+                agent.substitute(&pattern, value.value.as_str().unwrap_or(&text));
+            }
+            if let Some(data) = &self.plugin_data {
+                agent.substitute(PLUGIN_DATA, &data.join(&d.name).to_string_lossy());
+            }
+            layers.push((Layer::Plugin(d.name.clone()), agent));
+        }
         layers.extend(stronger);
 
         let (harness, harness_from) = Self::launch(&layers)?;
+        if let Some(d) = attached
+            .iter()
+            .find(|d| d.harnesses.as_ref().is_some_and(|h| !h.contains(&harness)))
+        {
+            let list = d.harnesses.as_deref().unwrap_or_default().join(", ");
+            return Err(format!(
+                "plugin `{}` is for {list}, not for harness `{harness}`",
+                d.name
+            ));
+        }
         let model = (self.harnesses.get(&harness).and_then(|h| h.model.clone())).map(|value| Sourced {
             value,
             from: Layer::Harness,
@@ -254,4 +284,11 @@ pub(super) fn check_runs(loader: &mut Loader, config: &Config) -> BTreeSet<Strin
         }
     }
     used
+}
+
+fn sourced<T>(value: T, from: &Layer) -> Sourced<T> {
+    Sourced {
+        value,
+        from: from.clone(),
+    }
 }

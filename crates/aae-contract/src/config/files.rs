@@ -33,28 +33,61 @@ pub struct Settings {
 }
 
 impl Settings {
-    /// `${AAE_PLUGIN_DIR}` becomes `dir` wherever a plugin's `[agent]` may name its own files: harness hook
-    /// commands, `env`, MCP commands and their `env`, and every string of the `native` tables.
-    pub(super) fn in_plugin(&mut self, dir: &str) {
-        let at = |text: &mut String| *text = text.replace(super::load::PLUGIN_DIR, dir);
-        self.hooks.values_mut().filter_map(|h| h.command.as_mut()).for_each(at);
-        // In `env` the directory is a literal: a `$` in its path is no reference.
-        let literal = super::env_literal(dir);
-        (self.env.values_mut()).for_each(|text| *text = text.replace(super::load::PLUGIN_DIR, &literal));
+    /// Every string of this layer a plugin's text may reach (docs/design/config.md "Plugin"): harness hook commands,
+    /// `env` values (`at` is told so: a value put there is a literal), MCP servers, the `native` tables and the
+    /// services.
+    pub(super) fn strings_mut(&mut self, at: &mut impl FnMut(&mut String, bool)) {
+        (self.hooks.values_mut().filter_map(|h| h.command.as_mut())).for_each(|t| at(t, false));
+        self.env.values_mut().for_each(|t| at(t, true));
         for mcp in self.mcp.values_mut() {
-            mcp.command
-                .iter_mut()
-                .flatten()
+            let (command, url) = (mcp.command.iter_mut().flatten(), mcp.url.iter_mut());
+            let texts = command
+                .chain(url)
                 .chain(mcp.env.values_mut())
-                .for_each(at);
+                .chain(mcp.headers.values_mut());
+            texts.for_each(|t| at(t, false));
         }
-        self.native.values_mut().for_each(|v| strings(v, &at));
+        self.native.values_mut().for_each(|v| strings(v, at));
+        for s in self.services.values_mut() {
+            let health = match &mut s.health {
+                super::Health::Command(command) => Some(command),
+                _ => None,
+            };
+            let texts = s
+                .command
+                .iter_mut()
+                .chain(health.into_iter().flatten())
+                .chain(s.env.values_mut());
+            texts.for_each(|t| at(t, false));
+        }
+    }
+
+    /// A string of a `native` table that is `pattern` and nothing else becomes `value` itself, with its type.
+    pub(super) fn substitute_whole(&mut self, pattern: &str, value: &Value) {
+        fn walk(at: &mut Value, pattern: &str, value: &Value) {
+            match at {
+                Value::String(text) if text == pattern => *at = value.clone(),
+                Value::Array(list) => list.iter_mut().for_each(|v| walk(v, pattern, value)),
+                Value::Object(table) => table.values_mut().for_each(|v| walk(v, pattern, value)),
+                _ => {}
+            }
+        }
+        self.native.values_mut().for_each(|v| walk(v, pattern, value));
+    }
+
+    /// `pattern` becomes `value` in every string of [`Self::strings_mut`]; in an `env` value as a literal, so a `$` in
+    /// `value` is no reference.
+    pub(super) fn substitute(&mut self, pattern: &str, value: &str) {
+        let literal = super::env_literal(value);
+        self.strings_mut(&mut |text, env| {
+            *text = text.replace(pattern, if env { &literal } else { value });
+        });
     }
 }
 
-fn strings(value: &mut Value, at: &impl Fn(&mut String)) {
+fn strings(value: &mut Value, at: &mut impl FnMut(&mut String, bool)) {
     match value {
-        Value::String(text) => at(text),
+        Value::String(text) => at(text, false),
         Value::Array(list) => list.iter_mut().for_each(|v| strings(v, at)),
         Value::Object(table) => table.values_mut().for_each(|v| strings(v, at)),
         _ => {}
@@ -174,11 +207,13 @@ pub struct Skill {
     pub path: Option<PathBuf>,
 }
 
-/// A plugin attached to agents, in attachment order.
+/// A plugin attached to agents, in attachment order, with the values of its parameters this layer gives.
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct PluginUse {
     pub name: String,
+    #[serde(default)]
+    pub params: Map<String, Value>,
     #[serde(default = "yes")]
     pub enabled: bool,
 }
@@ -237,13 +272,12 @@ pub struct Harness {
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub(super) struct PluginDecl {
-    /// Exactly one of `path` and `git`; `rev` goes with `git`.
+    /// Exactly one of `path` and `git`; `rev` and `dir` go with `git`.
     pub path: Option<PathBuf>,
     pub git: Option<String>,
     pub rev: Option<String>,
-    /// The parameters its orchestrator hooks get in `AAE_PLUGIN_PARAMS`.
-    #[serde(default)]
-    pub config: Map<String, Value>,
+    /// The plugin's directory inside the repository.
+    pub dir: Option<PathBuf>,
 }
 
 /// Where a pack or plugin lives: a directory, or a git repository at a tag, a commit or its latest revision.
@@ -346,14 +380,48 @@ pub(super) struct TriggerFile {
 pub(super) struct PluginFile {
     pub name: String,
     pub version: String,
+    /// The harnesses it is for; any when absent.
+    pub harnesses: Option<Vec<String>>,
     /// A file whose text joins the system prompt of the agents that attach the plugin.
     pub prompt: Option<PathBuf>,
+    /// Its parameters with their defaults; a default gives the type.
     #[serde(default)]
-    pub agent: Settings,
+    pub params: Map<String, Value>,
+    #[serde(default)]
+    pub agent: PluginAgent,
     #[serde(default)]
     pub hook: Vec<OrchestratorHookFile>,
     #[serde(default)]
     pub service: Vec<super::service::ServiceFile>,
+}
+
+/// `[agent]` of a plugin: the settings a plugin may give the agents that attach it.
+#[derive(Debug, Default, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(super) struct PluginAgent {
+    #[serde(default)]
+    pub env: BTreeMap<String, String>,
+    #[serde(default)]
+    pub mcp: BTreeMap<String, Mcp>,
+    #[serde(default)]
+    pub hooks: BTreeMap<String, Hook>,
+    #[serde(default)]
+    pub skills: BTreeMap<String, Skill>,
+    #[serde(default)]
+    pub native: BTreeMap<String, Value>,
+}
+
+impl From<PluginAgent> for Settings {
+    fn from(a: PluginAgent) -> Self {
+        Settings {
+            env: a.env,
+            mcp: a.mcp,
+            hooks: a.hooks,
+            skills: a.skills,
+            native: a.native,
+            ..Settings::default()
+        }
+    }
 }
 
 #[derive(Debug, Deserialize)]

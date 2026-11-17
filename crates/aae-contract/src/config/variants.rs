@@ -16,7 +16,7 @@ impl Loader {
         file: &Path,
         base: &Path,
         tables: BTreeMap<String, toml::Table>,
-        plugins: &[&str],
+        plugins: &[&super::Plugin],
     ) -> (BTreeMap<String, Settings>, BTreeMap<String, Variant>) {
         let (mut edits, mut variants) = (BTreeMap::new(), BTreeMap::new());
         for (name, mut table) in tables {
@@ -52,7 +52,7 @@ impl Loader {
         dir: &Path,
         rig: &str,
         tables: BTreeMap<String, toml::Value>,
-        plugins: &[&str],
+        plugins: &[&super::Plugin],
     ) -> (BTreeMap<String, Settings>, BTreeMap<Name, String>) {
         let (mut edits, mut agents) = (BTreeMap::new(), BTreeMap::new());
         for (agent, value) in tables {

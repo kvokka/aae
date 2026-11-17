@@ -90,6 +90,7 @@ pub(crate) fn load(paths: &Paths) -> Result<config::Config, Vec<String>> {
         p.tracker.actor = Some("BD_ACTOR".to_owned());
         p.tracker.prefix = Some("BD_ISSUE_PREFIX".to_owned());
     }
+    config.plugin_data = Some(paths.state.join("plugins"));
     config.bridge = [paths.exe.to_string_lossy().as_ref(), "mcp-bridge", "--"]
         .map(str::to_owned)
         .to_vec();

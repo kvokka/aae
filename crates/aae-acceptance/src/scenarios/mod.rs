@@ -13,7 +13,6 @@ mod c10_quota;
 mod c12_explain;
 mod c13_instances;
 mod c14_shared_mcp;
-mod c15_plugin;
 mod c16_beads;
 mod c17_mcp;
 mod c18_journal;
@@ -136,13 +135,6 @@ pub(crate) const ALL: &[Scenario] = &[
         title: "one HTTP MCP service serves concurrent claude and codex sessions with identity headers in one process",
         launch: Launch::Ci,
         run: |env| Box::pin(c14_shared_mcp::run(env)),
-    },
-    Scenario {
-        criterion: "15",
-        title: "an external plugin gives its skill and hook to one of two agents, vetoes a pass; its failure is \
-        contained",
-        launch: Launch::Ci,
-        run: |env| Box::pin(c15_plugin::run(env)),
     },
     Scenario {
         criterion: "16",

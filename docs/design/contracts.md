@@ -221,8 +221,8 @@ timeout = "30s"
 
 - stdin: the event envelope (see 1.1) as one JSON line, then EOF.
 - cwd: the plugin directory. Environment: `PATH`, `HOME`, `LANG`, plus `AAE_SOCKET` (API socket),
-  `AAE_PLUGIN_DIR` and `AAE_PLUGIN_PARAMS` (the `config` table of the plugin's `[[plugin]]` declaration as a JSON
-  object, `{}` without one), and `AAE_INSTANCE` (a marker random per queued hook effect, kept by its descendants).
+  `AAE_PLUGIN_DIR` and `AAE_PLUGIN_PARAMS` (the defaults of the `[params]` of the plugin's `plugin.toml` as a JSON
+  object, `{}` without them), and `AAE_INSTANCE` (a marker random per queued hook effect, kept by its descendants).
   Nothing else is inherited from the daemon.
 - A program path with a `/` is relative to the plugin directory; a bare name is looked up on `PATH`.
 - Own process group; at the timeout `SIGTERM` to the group, `SIGKILL` 2 s later.

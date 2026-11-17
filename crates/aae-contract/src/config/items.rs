@@ -21,7 +21,7 @@ use std::{
 };
 
 impl Loader {
-    pub(super) fn agent(&mut self, dir: &Path, plugins: &[&str]) -> Option<Agent> {
+    pub(super) fn agent(&mut self, dir: &Path, plugins: &[&super::Plugin]) -> Option<Agent> {
         let file = dir.join("agent.toml");
         let mut table: toml::Table = self.read(&file)?;
         let scope = table
