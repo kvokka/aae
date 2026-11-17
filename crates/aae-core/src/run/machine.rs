@@ -183,7 +183,7 @@ impl RunHandler {
         };
         let (run, attempt, workdir) = (row.id.clone(), row.attempt + 1, self.session_dir(&row, &config));
         let token_sha256 = super::token_sha256(&token);
-        let actor = self.config.actor(&row.project, &run, attempt);
+        let (actor, bead) = (self.config.actor(&row.project, &run, attempt), row.bead.clone());
         let plan = match resume.clone() {
             Some(session) => SessionPlan::Resume {
                 session,
@@ -192,6 +192,7 @@ impl RunHandler {
                 run,
                 attempt,
                 token,
+                bead,
             },
             None => SessionPlan::New {
                 workdir,
@@ -199,6 +200,7 @@ impl RunHandler {
                 run,
                 attempt,
                 token,
+                bead,
             },
         };
         let (config, services) = Self::bind_services(tx, &row, config, &self.config)?;

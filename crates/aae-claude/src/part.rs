@@ -12,9 +12,9 @@ use std::{
 };
 use uuid::Uuid;
 
-/// The process part of a session: `{session_id, resume, workdir, config_dir, run, attempt, token, actor, model, effort,
-/// system_prompt, permission_mode, inherit_host, env, settings, mcp, skills}`; `settings` and `mcp` are the JSON
-/// of `--settings` and `--mcp-config`, `skills` the skill directories by name.
+/// The process part of a session: `{session_id, resume, workdir, config_dir, run, attempt, token, actor, bead, model,
+/// effort, system_prompt, permission_mode, inherit_host, env, settings, mcp, skills}`; `settings` and `mcp` are the
+/// JSON of `--settings` and `--mcp-config`, `skills` the skill directories by name.
 pub(crate) fn process(config: &EffectiveConfig, plan: &SessionPlan, state: &Path) -> Result<Value, Failure> {
     let (settings, permission_mode) = settings(config)?;
     let mcp = mcp(config)?;
@@ -24,17 +24,18 @@ pub(crate) fn process(config: &EffectiveConfig, plan: &SessionPlan, state: &Path
         .filter(|(_, s)| s.value.enabled)
         .filter_map(|(name, s)| Some((name.clone(), s.value.path.clone()?)))
         .collect();
-    let (session_id, resume, workdir, run, attempt, token, actor) = match plan {
+    let (session_id, resume, workdir, run, attempt, token, actor, bead) = match plan {
         SessionPlan::New {
             workdir,
             run,
             attempt,
             token,
             actor,
+            bead,
         } => {
             let name = format!("aae:session:{run}/{attempt}");
             let id = Uuid::new_v5(&Uuid::NAMESPACE_URL, name.as_bytes()).to_string();
-            (id, false, workdir, run, attempt, token, actor)
+            (id, false, workdir, run, attempt, token, actor, bead)
         }
         SessionPlan::Resume {
             session,
@@ -43,9 +44,10 @@ pub(crate) fn process(config: &EffectiveConfig, plan: &SessionPlan, state: &Path
             attempt,
             token,
             actor,
+            bead,
         } => {
             let id = session.0["session_id"].as_str().unwrap_or_default().to_owned();
-            (id, true, workdir, run, attempt, token, actor)
+            (id, true, workdir, run, attempt, token, actor, bead)
         }
     };
     let inherit = config.inherits_host();
@@ -66,6 +68,7 @@ pub(crate) fn process(config: &EffectiveConfig, plan: &SessionPlan, state: &Path
         "attempt": attempt,
         "token": token,
         "actor": actor,
+        "bead": bead,
         "model": value(&config.model),
         "effort": value(&config.effort),
         "system_prompt": value(&config.system_prompt),
@@ -254,6 +257,7 @@ pub(crate) fn env(p: &Value, id: &str, socket: Option<&Path>, host: &Path) -> Re
     ]);
     // The tracker actor of the attempt, as the core planned it (contracts 5.1).
     env.extend(serde_json::from_value::<(String, String)>(p["actor"].clone()).ok());
+    env.extend(p["bead"].as_str().map(|bead| ("AAE_BEAD".to_owned(), bead.to_owned())));
     env.extend(
         p["config_dir"]
             .as_str()

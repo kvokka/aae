@@ -32,68 +32,6 @@ pub struct Settings {
     pub services: BTreeMap<String, super::Service>,
 }
 
-impl Settings {
-    /// Every string of this layer a plugin's text may reach (docs/design/config.md "Plugin"): harness hook commands,
-    /// `env` values (`at` is told so: a value put there is a literal), MCP servers, the `native` tables and the
-    /// services.
-    pub(super) fn strings_mut(&mut self, at: &mut impl FnMut(&mut String, bool)) {
-        (self.hooks.values_mut().filter_map(|h| h.command.as_mut())).for_each(|t| at(t, false));
-        self.env.values_mut().for_each(|t| at(t, true));
-        for mcp in self.mcp.values_mut() {
-            let (command, url) = (mcp.command.iter_mut().flatten(), mcp.url.iter_mut());
-            let texts = command
-                .chain(url)
-                .chain(mcp.env.values_mut())
-                .chain(mcp.headers.values_mut());
-            texts.for_each(|t| at(t, false));
-        }
-        self.native.values_mut().for_each(|v| strings(v, at));
-        for s in self.services.values_mut() {
-            let health = match &mut s.health {
-                super::Health::Command(command) => Some(command),
-                _ => None,
-            };
-            let texts = s
-                .command
-                .iter_mut()
-                .chain(health.into_iter().flatten())
-                .chain(s.env.values_mut());
-            texts.for_each(|t| at(t, false));
-        }
-    }
-
-    /// A string of a `native` table that is `pattern` and nothing else becomes `value` itself, with its type.
-    pub(super) fn substitute_whole(&mut self, pattern: &str, value: &Value) {
-        fn walk(at: &mut Value, pattern: &str, value: &Value) {
-            match at {
-                Value::String(text) if text == pattern => *at = value.clone(),
-                Value::Array(list) => list.iter_mut().for_each(|v| walk(v, pattern, value)),
-                Value::Object(table) => table.values_mut().for_each(|v| walk(v, pattern, value)),
-                _ => {}
-            }
-        }
-        self.native.values_mut().for_each(|v| walk(v, pattern, value));
-    }
-
-    /// `pattern` becomes `value` in every string of [`Self::strings_mut`]; in an `env` value as a literal, so a `$` in
-    /// `value` is no reference.
-    pub(super) fn substitute(&mut self, pattern: &str, value: &str) {
-        let literal = super::env_literal(value);
-        self.strings_mut(&mut |text, env| {
-            *text = text.replace(pattern, if env { &literal } else { value });
-        });
-    }
-}
-
-fn strings(value: &mut Value, at: &mut impl FnMut(&mut String, bool)) {
-    match value {
-        Value::String(text) => at(text, false),
-        Value::Array(list) => list.iter_mut().for_each(|v| strings(v, at)),
-        Value::Object(table) => table.values_mut().for_each(|v| strings(v, at)),
-        _ => {}
-    }
-}
-
 #[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "lowercase")]
 pub enum McpScope {
@@ -388,40 +326,11 @@ pub(super) struct PluginFile {
     #[serde(default)]
     pub params: Map<String, Value>,
     #[serde(default)]
-    pub agent: PluginAgent,
+    pub agent: super::plugin::PluginAgent,
     #[serde(default)]
     pub hook: Vec<OrchestratorHookFile>,
     #[serde(default)]
     pub service: Vec<super::service::ServiceFile>,
-}
-
-/// `[agent]` of a plugin: the settings a plugin may give the agents that attach it.
-#[derive(Debug, Default, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub(super) struct PluginAgent {
-    #[serde(default)]
-    pub env: BTreeMap<String, String>,
-    #[serde(default)]
-    pub mcp: BTreeMap<String, Mcp>,
-    #[serde(default)]
-    pub hooks: BTreeMap<String, Hook>,
-    #[serde(default)]
-    pub skills: BTreeMap<String, Skill>,
-    #[serde(default)]
-    pub native: BTreeMap<String, Value>,
-}
-
-impl From<PluginAgent> for Settings {
-    fn from(a: PluginAgent) -> Self {
-        Settings {
-            env: a.env,
-            mcp: a.mcp,
-            hooks: a.hooks,
-            skills: a.skills,
-            native: a.native,
-            ..Settings::default()
-        }
-    }
 }
 
 #[derive(Debug, Deserialize)]

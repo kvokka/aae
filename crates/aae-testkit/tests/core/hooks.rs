@@ -25,7 +25,7 @@ fn policy_timed(hooks: &[(&str, &str, &str)]) -> World {
     let mut files = vec![(
         "config.toml".to_owned(),
         "projects = [\"shop\"]\nbuiltin = { default-policy = { enabled = false } \
-        }\n[harness.scripted]\n[[plugin]]\npath = \"policy\"\n"
+        }\n[harness.scripted]\n[settings]\nplugins = [{ name = \"policy\" }]\n[[plugin]]\npath = \"policy\"\n"
             .to_owned(),
     )];
     for (n, (on, script, timeout)) in hooks.iter().enumerate() {

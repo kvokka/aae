@@ -20,7 +20,7 @@ const FAILED: &str = "run.attempt_failed";
 fn plugin(on: &[&str], watchdog: &str) -> World {
     let config = format!(
         "projects = [\"shop\"]\nbuiltin = {{ default-policy = {{ enabled = false }} }}\n[harness.scripted]\n\
-         [[plugin]]\npath = \"policy\"\n{watchdog}"
+         [settings]\nplugins = [{{ name = \"policy\" }}]\n[[plugin]]\npath = \"policy\"\n{watchdog}"
     );
     let hooks: String = on
         .iter()

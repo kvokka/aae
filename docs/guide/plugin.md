@@ -48,7 +48,9 @@ A plugin in a git repository is declared with `git = "<url>"` and `rev = "<tag o
 runs it only at that tag or commit; see
 [Packs and plugins from git](../design/config.md#packs-and-plugins-from-git).
 
-Declaring it turns its orchestrator side on. Its agent side reaches only the agents that **attach** it: in
+Declaring it turns nothing on: both sides work only where the plugin is **attached**. Its agent side reaches the
+agents that attach it, and its orchestrator hooks run on the events of their runs; the events of no agent (`bead.*`,
+`service.*`, exec steps) go to the plugins attached in `[settings]` of the orchestrator or the project. Attach it in
 `[settings]` of the orchestrator or a project for every agent there, on a rig, or in an `agent.toml`, a variant or an
 edit for one agent. An attachment may give values to the plugin's parameters:
 
@@ -101,7 +103,7 @@ and an optional `timeout` (default 30 s, at most 300 s). The full contract is in
 - **stdin**: the event as one JSON line (`{"schema", "seq", "ts", "type", "project", "rig", "run", "data", ...}`),
   then EOF.
 - **cwd**: the plugin directory. **Environment**: only `PATH`, `HOME`, `LANG`, `AAE_SOCKET` (the API socket, to
-  call back into aae), `AAE_PLUGIN_DIR`, `AAE_PLUGIN_PARAMS` (the defaults of `[params]` as JSON) and
+  call back into aae), `AAE_PLUGIN_DIR`, `AAE_PLUGIN_PARAMS` (the params in force for the run's agent as JSON) and
   `AAE_INSTANCE` (a marker: after a daemon crash the next daemon kills every process that still carries it).
 - **Result**: exit 0 with empty stdout means no objection; exit 0 with one JSON object on stdout is a decision;
   exit 2 blocks, with stderr as the reason; anything else (another exit code, a timeout, bad JSON) is a hook

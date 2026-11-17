@@ -91,7 +91,7 @@ does not allow is denied at once, and the agent sees the denial; each denial the
 - codex: `native.codex.approval_policy` (its granular form included), `sandbox_mode`, and the `PreToolUse` hook. Under
   a policy other than `never`, a command or file change that needs approval is declined.
 - A hook may ask aae or another agent for the decision through the CLI or the MCP of aae: the session environment
-  carries `AAE_RUN`, `AAE_ATTEMPT_TOKEN` and `AAE_SOCKET`.
+  carries `AAE_RUN`, `AAE_ATTEMPT_TOKEN`, `AAE_SOCKET` and, when the run has a bead, `AAE_BEAD`.
 
 claude refuses `bypassPermissions` when it runs as root (a container, CI): it exits before `init` with
 "--dangerously-skip-permissions cannot be used with root/sudo privileges", and the attempt fails. Under root, either
@@ -484,7 +484,7 @@ helpers) is git's own, and git never asks for a password (`GIT_TERMINAL_PROMPT=0
 30 s, which fails the load that ran it.
 
 A plugin runs any command with the user's rights, so nothing installs or enables one implicitly: its orchestrator
-side runs only once a `[[plugin]]` declares it, its agent side only for the agents that attach it in `plugins`, and a
+side and its agent side run only where it is attached in `plugins`, and a
 plugin from git runs only at the tag or commit its declaration pins.
 
 ## Pack: `<pack>/pack.toml`
@@ -897,8 +897,9 @@ filled in for each agent when its effective config is put together, since each a
 The strings filled in are the harness hook `command`s, the `env` values (where what is put in is a literal: a `$` in it
 is no reference), MCP servers (`command`, `url`, `env`, `headers`), every string of a `native` table, and a service's
 `command`, health `command` and `env`. Outside a plugin, `${AAE_PLUGIN_DIR}` and `${AAE_PLUGIN_DATA}` in an `env` value
-are references to variables of the daemon like any other. Its orchestrator hooks get the defaults of `[params]` in
-`AAE_PLUGIN_PARAMS` (contracts 3.1).
+are references to variables of the daemon like any other. Its orchestrator hooks run on the events of the runs whose
+agent attaches it, and get the params in force for that agent in `AAE_PLUGIN_PARAMS`; the events of no agent go to the
+plugins `[settings]` of the orchestrator and the project attach (contracts 3.1).
 
 A Claude Code plugin directory (`--plugin-dir`) cannot be handed over: the adapter takes that flag for skills, so a
 plugin gives its skills, hooks and MCP servers through `[agent]`. Beyond its `[agent]` a plugin gives its attached

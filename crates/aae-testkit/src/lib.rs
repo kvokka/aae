@@ -131,6 +131,7 @@ impl Driver for ScriptedDriver {
             attempt,
             token,
             actor,
+            ..
         }
         | SessionPlan::Resume {
             workdir,

@@ -9,6 +9,7 @@ use crate::{
     process::{self, Exit, Spec},
     writer::{CoreHandle, Error, Event, Tx},
 };
+use rusqlite::OptionalExtension;
 use serde_json::{Value, json};
 use std::{
     collections::BTreeMap,
@@ -30,17 +31,26 @@ const DECIDING: [&str; 4] = [
 ];
 
 impl RunHandler {
-    /// The hooks on `kind` in connection order (orchestrator plugins, then those of `project`), as the runner
-    /// takes them.
-    pub(super) fn hooks(&self, project: Option<&str>, kind: &str) -> Vec<Value> {
-        let project = self.config.projects.iter().find(|p| Some(p.name.as_str()) == project);
-        let plugins = self
-            .config
-            .plugins
-            .iter()
-            .chain(project.into_iter().flat_map(|p| &p.plugins));
+    /// The hooks on `kind` of an event of `project` and `run`, in declaration order (orchestrator plugins, then
+    /// those of `project`), as the runner takes them: of the plugins attached for the event, with their params.
+    pub(super) fn hooks(
+        &self,
+        tx: &Tx<'_>,
+        project: Option<&str>,
+        run: Option<&str>,
+        kind: &str,
+    ) -> Result<Vec<Value>, Error> {
+        let p = self.config.projects.iter().find(|p| Some(p.name.as_str()) == project);
+        let declared = (self.config.plugins.iter()).chain(p.into_iter().flat_map(|p| &p.plugins));
+        let on: Vec<&crate::config::Plugin> = declared.filter(|d| d.hooks.iter().any(|h| h.on == kind)).collect();
+        let sql = "SELECT config FROM runs WHERE id = ?1";
+        let snapshot: Option<Option<String>> = match (run, on.is_empty()) {
+            (Some(run), false) => tx.sql().query_row(sql, [run], |r| r.get(0)).optional()?,
+            _ => None,
+        };
+        let attached = (!on.is_empty()).then(|| self.config.hook_plugins(project, snapshot.flatten().as_deref()));
         let mut hooks = Vec::new();
-        for plugin in plugins {
+        for (plugin, params) in on.iter().filter_map(|d| Some((d, attached.as_ref()?.get(&d.name)?))) {
             for hook in plugin.hooks.iter().filter(|h| h.on == kind) {
                 let timeout_ms = hook
                     .timeout
@@ -52,19 +62,19 @@ impl RunHandler {
                 }
                 hooks.push(json!({
                     "plugin": plugin.name, "dir": plugin.root, "command": command,
-                    "timeout_ms": timeout_ms.min(HOOK_CEILING_MS), "params": plugin.params,
+                    "timeout_ms": timeout_ms.min(HOOK_CEILING_MS), "params": params,
                 }));
             }
         }
         // The bundled plugins come last: a declared plugin decides before the default policy.
-        let bundled = project.map_or(&self.config.bundled, |p| &p.bundled);
+        let bundled = p.map_or(&self.config.bundled, |p| &p.bundled);
         for bundled in bundled.iter().filter(|b| b.on.contains(&kind)) {
             hooks.push(json!({
                 "plugin": bundled.name, "bundled": bundled.name, "params": bundled.params,
                 "timeout_ms": HOOK_TIMEOUT_MS,
             }));
         }
-        hooks
+        Ok(hooks)
     }
 
     /// Queues the hooks of every emitted event. The effect key serializes the hooks of one run in `seq` order,
@@ -74,7 +84,7 @@ impl RunHandler {
             let (Some(kind), Some(seq)) = (event["type"].as_str(), event["seq"].as_i64()) else {
                 continue;
             };
-            let hooks = self.hooks(event["project"].as_str(), kind);
+            let hooks = self.hooks(tx, event["project"].as_str(), event["run"].as_str(), kind)?;
             if !hooks.is_empty() {
                 let run = event["run"].as_str().unwrap_or("-");
                 let key = if DECIDING.contains(&kind) {

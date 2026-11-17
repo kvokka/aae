@@ -162,7 +162,7 @@ async fn hard_stop_cancels_the_started_beads() {
 
 #[tokio::test(start_paused = true)]
 async fn a_restart_mid_stop_gives_no_new_bead() {
-    let config = "[[plugin]]\npath = \"policy\"\n";
+    let config = "[settings]\nplugins = [{ name = \"policy\" }]\n[[plugin]]\npath = \"policy\"\n";
     let (mut w, run, beads) = start("soft", config, &[POLICY[1]]).await;
     let mut done = BTreeSet::new();
     w.settle(&run, &[beads[0].as_str()], &[beads[1].as_str()], &mut done)

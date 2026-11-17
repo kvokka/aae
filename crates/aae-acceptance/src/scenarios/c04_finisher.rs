@@ -17,7 +17,7 @@ const WITHIN: Duration = Duration::from_secs(60);
 fn hooked(root: &Path, on: &str, script: &str) {
     write(
         root.join("config/aae/config.toml"),
-        "projects = [\"shop\"]\n[harness.claude]\n[[plugin]]\npath = \"hook\"\n",
+        "projects = [\"shop\"]\n[harness.claude]\n[settings]\nplugins = [{ name = \"hook\" }]\n[[plugin]]\npath = \"hook\"\n",
     );
     let script = serde_json::to_string(script).unwrap();
     write(

@@ -80,8 +80,8 @@ the core relies on these, and a driver that misses one fails runs by the watchdo
 - **`Activity`** at most once a second per session; any event moves the silence deadline.
 - **Session events carry the `SessionRef` the adapter returned**, byte for byte: the core finds the attempt by
   the JSON text. Changing the shape of a stored `SessionRef` breaks the attempts in flight across an upgrade.
-- **The attempt environment** — `AAE_RUN`, `AAE_ATTEMPT_TOKEN`, the tracker actor of `SessionPlan`, `AAE_SOCKET`
-  — reaches the session's tools and its harness hooks (contracts 4.6 says how each harness delivers it).
+- **The attempt environment** — `AAE_RUN`, `AAE_ATTEMPT_TOKEN`, the tracker actor of `SessionPlan`, `AAE_BEAD`
+  (when the run has a bead), `AAE_SOCKET` — reaches the session's tools and its harness hooks (contracts 4.6 says how each harness delivers it).
 - **Service URLs and headers stay verbatim in the parts**: until a service is up its port and token are the
   placeholders `${AAE_SERVICE_PORT:<id>}` and `${AAE_SERVICE_TOKEN:<id>}`, which the core replaces as text in the
   JSON the adapter made of them, so an adapter must not encode or reshape a value it got.

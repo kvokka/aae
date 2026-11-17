@@ -30,7 +30,7 @@ impl RunHandler {
     /// the deadline of contracts 3.3 unless a decision comes first.
     pub(super) fn deciding(&mut self, tx: &mut Tx<'_>, row: Row, kind: &str, mut data: Value) -> Result<(), Error> {
         let timeouts: Vec<i64> = self
-            .hooks(Some(&row.project), kind)
+            .hooks(tx, Some(&row.project), Some(&row.id), kind)?
             .iter()
             .filter_map(|h| h["timeout_ms"].as_i64())
             .collect();

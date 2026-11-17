@@ -27,6 +27,7 @@ fn the_process_gets_the_native_block_and_the_thread_the_rest() {
         attempt: 1,
         token: "tok".into(),
         actor: Some(("BD_ACTOR".into(), "aae:r:1".into())),
+        bead: Some("bd-1".into()),
     };
     let driver = Codex::new("codex".into(), "/state".into(), None, 8);
     let split = driver.split(&config, &plan).unwrap();
@@ -56,10 +57,10 @@ fn the_process_gets_the_native_block_and_the_thread_the_rest() {
     );
     assert_eq!(
         s["config"]["shell_environment_policy"]["set"],
-        json!({ "AAE_RUN": "r", "AAE_ATTEMPT_TOKEN": "tok", "BD_ACTOR": "aae:r:1" })
+        json!({ "AAE_RUN": "r", "AAE_ATTEMPT_TOKEN": "tok", "BD_ACTOR": "aae:r:1", "AAE_BEAD": "bd-1" })
     );
     // A hook runs with the process environment: the attempt's goes on its command line.
-    let exports = "export AAE_ATTEMPT_TOKEN='tok' AAE_RUN='r' BD_ACTOR='aae:r:1'; true";
+    let exports = "export AAE_ATTEMPT_TOKEN='tok' AAE_BEAD='bd-1' AAE_RUN='r' BD_ACTOR='aae:r:1'; true";
     assert_eq!(s["config"]["hooks"]["Stop"][0]["hooks"][0]["command"], exports);
     assert_eq!(s["config"]["bypass_hook_trust"], true);
     assert_eq!(s["config"]["model_reasoning_effort"], "low");
@@ -70,8 +71,15 @@ fn the_process_gets_the_native_block_and_the_thread_the_rest() {
         attempt: 2,
         token: "t2".into(),
         actor: None,
+        bead: None,
     };
-    assert_eq!(driver.split(&config, &other).unwrap().fingerprint, split.fingerprint);
+    let other = driver.split(&config, &other).unwrap();
+    assert_eq!(other.fingerprint, split.fingerprint);
+    let set = &other.session.0["config"]["shell_environment_policy"]["set"];
+    assert!(
+        set.get("AAE_BEAD").is_none(),
+        "a run without a bead has no AAE_BEAD: {set}"
+    );
     // A config naming no policy gets the harness-decides default (decision 117); a named one is kept.
     let native = &mut config.native.as_mut().unwrap().value;
     native.as_object_mut().unwrap().remove("approval_policy");
@@ -230,6 +238,7 @@ fn the_process_part_keeps_the_reference_and_the_process_gets_the_value() {
         attempt: 1,
         token: "tok".into(),
         actor: None,
+        bead: None,
     };
     let driver = Codex::new("codex".into(), "/state".into(), None, 8);
     let mut key = |value: &str| {

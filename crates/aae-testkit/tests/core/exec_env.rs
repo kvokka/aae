@@ -170,7 +170,7 @@ async fn the_snapshot_and_the_effect_keep_the_reference() {
 
 #[tokio::test]
 async fn a_dollar_from_a_hook_reaches_the_command_as_it_is() {
-    let plugins = "[[plugin]]\npath = \"policy\"\n";
+    let plugins = "[settings]\nplugins = [{ name = \"policy\" }]\n[[plugin]]\npath = \"policy\"\n";
     let manifest = "name = \"policy\"\nversion = \"0.1.0\"\n[[hook]]\non = \"run.preparing\"\n\
         command = [\"sh\", \"prepare.sh\"]\ntimeout = \"5s\"\n";
     let prepare = r#"echo '{"decision":"proceed","env":{"X":"a$b${Y}"}}'"#;

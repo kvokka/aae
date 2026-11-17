@@ -43,7 +43,7 @@ pub(crate) const POLICY: &[(&str, &str)] = &[
     (
         "config.toml",
         "projects = [\"shop\"]\nbuiltin = { default-policy = { enabled = false } \
-        }\n[harness.scripted]\n[[plugin]]\npath = \"policy\"\n",
+        }\n[harness.scripted]\n[settings]\nplugins = [{ name = \"policy\" }]\n[[plugin]]\npath = \"policy\"\n",
     ),
     (
         "policy/plugin.toml",

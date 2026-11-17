@@ -83,12 +83,13 @@ pub(crate) fn process(config: &EffectiveConfig, state: &Path, host: &Path) -> Re
 
 /// The `thread/start` (and `thread/resume`) parameters of a session.
 pub(crate) fn session(config: &EffectiveConfig, plan: &SessionPlan) -> Result<Value, Failure> {
-    let (workdir, run, token, actor) = match plan {
+    let (workdir, run, token, actor, bead) = match plan {
         SessionPlan::New {
             workdir,
             run,
             token,
             actor,
+            bead,
             ..
         }
         | SessionPlan::Resume {
@@ -96,8 +97,9 @@ pub(crate) fn session(config: &EffectiveConfig, plan: &SessionPlan) -> Result<Va
             run,
             token,
             actor,
+            bead,
             ..
-        } => (workdir, run, token, actor),
+        } => (workdir, run, token, actor, bead),
     };
     let value = |s: &Option<aae_contract::config::Sourced<String>>| s.as_ref().map(|s| s.value.clone());
     // The attempt environment and the tracker actor of the attempt, as the core planned it (contracts 5.1); the
@@ -107,6 +109,7 @@ pub(crate) fn session(config: &EffectiveConfig, plan: &SessionPlan) -> Result<Va
         ("AAE_ATTEMPT_TOKEN".to_owned(), json!(token)),
     ]);
     attempt.extend(actor.iter().map(|(name, actor)| (name.clone(), json!(actor))));
+    attempt.extend(bead.iter().map(|bead| ("AAE_BEAD".to_owned(), json!(bead))));
     let mut thread_config = json!({ "shell_environment_policy": { "set": attempt } });
     if let Some(effort) = value(&config.effort) {
         thread_config["model_reasoning_effort"] = json!(effort);

@@ -2,12 +2,12 @@
 //! `check`.
 
 use super::{
-    Config, ConfigError, Name, OrchestratorHook, Pack, Plugin, Project, Settings, Trigger,
+    Config, ConfigError, Name, Pack, Plugin, Project, Settings, Trigger,
     defaults::Given,
     duration,
-    files::{OrchestratorFile, PackFile, PluginDecl, PluginFile, ProjectFile, TriggerFile},
+    files::{OrchestratorFile, PackFile, ProjectFile, TriggerFile},
     items::{parent, resolve},
-    schema::event_path,
+    plugin::param_type,
 };
 use serde::de::DeserializeOwned;
 use std::{
@@ -143,95 +143,6 @@ impl Loader {
         if name.is_empty() || name.contains('.') {
             self.fail(file, format!("{what} name `{name}` must be non-empty and have no `.`"));
         }
-    }
-
-    /// Plugins declared by one file; `outer` are the plugins already declared above it.
-    fn plugins(&mut self, file: &Path, base: &Path, decls: Vec<PluginDecl>, outer: &[Plugin]) -> Vec<Plugin> {
-        let mut plugins: Vec<Plugin> = Vec::new();
-        for decl in decls {
-            let Some(root) = self.plugin_source(file, &decl).and_then(|s| self.root(file, base, &s)) else {
-                continue;
-            };
-            let root = match &decl.dir {
-                None => root,
-                Some(dir) if dir.components().all(|c| matches!(c, std::path::Component::Normal(_))) => root.join(dir),
-                Some(dir) => {
-                    self.fail(
-                        file,
-                        format!("`dir = \"{}\"` is not a path inside the repository", dir.display()),
-                    );
-                    continue;
-                }
-            };
-            let manifest = root.join("plugin.toml");
-            let Some(raw) = self.read::<PluginFile>(&manifest) else {
-                continue;
-            };
-            self.name(&manifest, "plugin", &raw.name);
-            if outer.iter().chain(&plugins).any(|p| p.name == raw.name) {
-                self.fail(file, format!("plugin `{}` is declared twice", raw.name));
-            }
-            let mut hooks = Vec::new();
-            for hook in raw.hook {
-                if event_path(&hook.on, "seq", false).is_none() {
-                    self.fail(&manifest, format!("hook on unknown event type `{}`", hook.on));
-                }
-                if hook.command.is_empty() {
-                    self.fail(&manifest, format!("hook on `{}` has an empty command", hook.on));
-                }
-                let timeout = self.timeout(&manifest, hook.timeout.as_deref());
-                if timeout.is_some_and(|t| t.as_secs_f64() > 300.0) {
-                    self.fail(&manifest, format!("hook on `{}`: the timeout ceiling is 300s", hook.on));
-                }
-                hooks.push(OrchestratorHook {
-                    on: hook.on,
-                    command: hook.command,
-                    timeout,
-                });
-            }
-            for (key, value) in &raw.params {
-                if param_type(value).is_none() {
-                    self.fail(
-                        &manifest,
-                        format!("param `{key}`: a default is a string, an integer or a boolean"),
-                    );
-                }
-            }
-            let mut agent: Settings = raw.agent.into();
-            // `${params.<key>}` in an `env` value is replaced per agent; its form is checked as a variable's.
-            let env = std::mem::take(&mut agent.env);
-            let named = (env.iter()).map(|(k, v)| (k.clone(), v.replace(PARAMS, "${params_")));
-            self.env_values(&manifest, "env", &named.collect());
-            let mut agent = self.settings(&manifest, &root, agent, &[]);
-            agent.env = env;
-            let dir = root.to_string_lossy();
-            agent.services = self.services(&manifest, raw.service);
-            agent.substitute(PLUGIN_DIR, &dir);
-            let mut unknown = BTreeSet::new();
-            agent.clone().strings_mut(&mut |text, _| {
-                let refs = text.split(PARAMS).skip(1).filter_map(|rest| rest.split_once('}'));
-                unknown.extend(refs.map(|(k, _)| k.to_owned()).filter(|k| !raw.params.contains_key(k)));
-            });
-            for key in unknown {
-                self.fail(
-                    &manifest,
-                    format!("`${{params.{key}}}`: no param `{key}` in `[params]`"),
-                );
-            }
-            let prompt = raw.prompt.and_then(|p| self.text(&manifest, &root.join(p)));
-            plugins.push(Plugin {
-                name: raw.name,
-                version: raw.version,
-                harnesses: raw.harnesses,
-                bin: Some(root.join("bin")).filter(|b| b.is_dir()),
-                root,
-                agent,
-                prompt,
-                hooks,
-                params: raw.params,
-            });
-        }
-        plugins
     }
 
     /// Checks one layer of settings and makes its paths absolute; `plugins` are the names it may attach.
@@ -443,14 +354,4 @@ pub(super) fn reference(text: &str) -> Name {
 
 fn version(text: &str) -> Option<Vec<u64>> {
     text.split('.').map(|n| n.parse().ok()).collect()
-}
-
-/// The type of a plugin parameter's value, when it is one a parameter may have.
-pub(super) fn param_type(value: &serde_json::Value) -> Option<&'static str> {
-    match value {
-        serde_json::Value::String(_) => Some("string"),
-        serde_json::Value::Bool(_) => Some("boolean"),
-        serde_json::Value::Number(n) if n.is_i64() => Some("integer"),
-        _ => None,
-    }
 }

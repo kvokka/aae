@@ -11,6 +11,7 @@ mod formula_file;
 mod items;
 mod load;
 mod places;
+mod plugin;
 mod prompt;
 mod retired;
 pub(crate) mod schema;

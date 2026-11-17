@@ -219,10 +219,15 @@ command = ["bin/check", "--strict"]   # relative to the plugin directory
 timeout = "30s"
 ```
 
+- Which plugins: a hook runs only for a plugin that is attached (docs/design/config.md "Plugin"). An event of a run
+  whose step has an agent goes to the plugins that agent attaches, by the run's config snapshot, with that agent's
+  params. Any other event (no run, as `bead.*` and `service.*`, or a step of no agent, or a run before its first
+  agent step prepares) goes to the plugins `[settings]` of the orchestrator and of the event's project attach, with
+  the params those two layers give.
 - stdin: the event envelope (see 1.1) as one JSON line, then EOF.
 - cwd: the plugin directory. Environment: `PATH`, `HOME`, `LANG`, plus `AAE_SOCKET` (API socket),
-  `AAE_PLUGIN_DIR` and `AAE_PLUGIN_PARAMS` (the defaults of the `[params]` of the plugin's `plugin.toml` as a JSON
-  object, `{}` without them), and `AAE_INSTANCE` (a marker random per queued hook effect, kept by its descendants).
+  `AAE_PLUGIN_DIR` and `AAE_PLUGIN_PARAMS` (the values of the plugin's params in force where it is attached, as a
+  JSON object, `{}` without params), and `AAE_INSTANCE` (a marker random per queued hook effect, kept by its descendants).
   Nothing else is inherited from the daemon.
 - A program path with a `/` is relative to the plugin directory; a bare name is looked up on `PATH`.
 - Own process group; at the timeout `SIGTERM` to the group, `SIGKILL` 2 s later.
@@ -258,8 +263,8 @@ Hooks on observed events may only exit 0 or fail; their failures are reported an
 
 ### 3.3 Several plugins on one event
 
-Plugins are ordered by connection order (orchestrator level first, then project level, each in declaration
-order); the bundled plugins come after all of them (docs/design/config.md, `[builtin.<name>]`).
+The plugins an event goes to (3.1) are ordered by declaration (orchestrator level first, then project level, each
+in declaration order); the bundled plugins come after all of them (docs/design/config.md, `[builtin.<name>]`).
 
 - `run.preparing`: hooks run one after another; each receives the event with the earlier modifications applied
   (`workdir`, `env_keys`, `prompt_append`). `env` entries merge by name, `null` removes; `prompt_append` texts are
@@ -369,7 +374,7 @@ trait Driver: Send + Sync {
 | Type | Content |
 |---|---|
 | `EffectiveConfig` | the merged harness-neutral categories of `config.md` "Settings" (model, effort, env, MCP servers, harness hooks, skills, system prompt, permission mode, plugin parts, host inheritance flag) plus the uninterpreted `native` block of the harness; produced by config assembly with the provenance of every value |
-| `SessionPlan` | `New { workdir, run, attempt, token, actor }` or `Resume { session: SessionRef, workdir, run, attempt, token, actor }`; the adapter needs `run`/`attempt` only to name files in the state directory, and `run`, `token` and the tracker `actor` to set the attempt environment (4.6) |
+| `SessionPlan` | `New { workdir, run, attempt, token, actor, bead }` or `Resume { session: SessionRef, workdir, run, attempt, token, actor, bead }`; the adapter needs `run`/`attempt` only to name files in the state directory, and `run`, `token`, the tracker `actor` and the run's `bead` (when it has one) to set the attempt environment (4.6) |
 | `Split` | `{ process: ProcessPart, session: SessionPart, fingerprint: Fingerprint }`; the two parts are opaque serializable values of the adapter; `fingerprint` = SHA-256 of the harness name and the canonical JSON of `process` (see 8) |
 | `InstanceHandle` | `{ id, pid, start_time, pgid }`; `start_time` is the kernel start time of `pid` (`/proc/<pid>/stat`), pid + start time identify the process ([event model](event-model.md#state)) |
 | `SessionRef` | opaque JSON the adapter fills with everything resume needs; the core stores and returns it. claude: `{session_id, config_dir, workdir}` (`config_dir` null: the session inherits the host, and its transcript is under the daemon's `CLAUDE_CONFIG_DIR`, else `~/.claude`); codex: `{thread_id, codex_home}` (the transcript lives in `CODEX_HOME`; `codex_home` is not read yet: a resume takes the home of the process part) |
@@ -780,8 +785,8 @@ of a run whose gate the operator closed parks it instead (invariant 18).
   generation)`; the token itself reaches the adapter through `SessionPlan` and lives only in the attempt's launch
   effect until it runs. The token is valid while its attempt is the run's current one and the run is not
   terminal.
-- The session environment carries `AAE_RUN`, `AAE_ATTEMPT_TOKEN` and `AAE_SOCKET` (see 4.6 for how each harness
-  gets it).
+- The session environment carries `AAE_RUN`, `AAE_ATTEMPT_TOKEN`, `AAE_SOCKET` and, when the run has a bead,
+  `AAE_BEAD`, as an exec step's does (see 4.6 for how each harness gets it).
 - CLI: `aae finish pass|fail --summary <text> [--data <json>|@<file>]` → `POST` of the outcome to the API with the
   token. Answers: accepted; `stale_attempt` (an older or ended attempt — nothing changes); `run_terminal`; `invalid`
   (unknown token or run, `summary` over 4 KiB, `data` over 64 KiB, a call while the run is `finishing`: the declared
