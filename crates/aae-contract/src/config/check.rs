@@ -86,7 +86,7 @@ pub(super) fn project(loader: &mut Loader, project: &mut Project, variants: &BTr
                     for (input, _) in formula
                         .inputs
                         .iter()
-                        .filter(|(k, i)| i.required && !given.contains(&k.as_str()))
+                        .filter(|(k, _)| formula.needs(k) && !given.contains(&k.as_str()))
                     {
                         loader.fail(
                             &manifest,
@@ -215,7 +215,7 @@ fn executor(formula: &super::Formula) -> Result<(), String> {
     match formula
         .inputs
         .iter()
-        .find(|(_, i)| i.required && i.kind != super::InputType::Task)
+        .find(|(k, i)| formula.needs(k) && i.kind != super::InputType::Task)
     {
         Some((input, _)) => Err(format!("requires input `{input}` that a drain step does not give")),
         None => Ok(()),
@@ -332,8 +332,8 @@ fn step_inputs(child: &super::Formula, parent: &BTreeMap<String, super::Input>, 
     let unknown = (given.iter()).filter(|k| !child.inputs.contains_key(**k));
     let mut errors: Vec<String> = unknown.map(|k| format!("has no input `{k}`")).collect();
     let inherited = |k: &str| parent.get(k).is_some_and(|i| i.required);
-    for (k, i) in &child.inputs {
-        if i.required && !given.contains(&k.as_str()) && !inherited(k) {
+    for k in child.inputs.keys() {
+        if child.needs(k) && !given.contains(&k.as_str()) && !inherited(k) {
             errors.push(format!("needs input `{k}`, which the step neither gives nor inherits"));
         }
     }

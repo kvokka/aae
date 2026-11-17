@@ -2,7 +2,9 @@
 //! `check`.
 
 use super::{
-    Config, ConfigError, Name, OrchestratorHook, Pack, Plugin, Project, Settings, Trigger, duration,
+    Config, ConfigError, Name, OrchestratorHook, Pack, Plugin, Project, Settings, Trigger,
+    defaults::Given,
+    duration,
     files::{OrchestratorFile, PackFile, PluginDecl, PluginFile, ProjectFile, TriggerFile},
     items::{parent, resolve},
     schema::event_path,
@@ -50,8 +52,14 @@ impl Loader {
         let bundled = super::check::bundled(&mut self, file, raw.builtin);
         let watchdog = super::check::watchdog(&mut self, file, raw.watchdog);
         let mut projects: Vec<Project> = Vec::new();
+        let top = Given {
+            file,
+            layer: super::Layer::Orchestrator,
+            rounds: raw.rounds,
+            inputs: &raw.inputs,
+        };
         for dir in &raw.projects {
-            let Some(project) = self.project(&resolve(&base, dir), &plugins, &bundled) else {
+            let Some(project) = self.project(&resolve(&base, dir), &plugins, &bundled, &top) else {
                 continue;
             };
             if projects.iter().any(|p| p.name == project.name) {
@@ -120,7 +128,7 @@ impl Loader {
     pub(super) fn read<T: DeserializeOwned>(&mut self, file: &Path) -> Option<T> {
         let parsed = fs::read_to_string(file)
             .map_err(|e| e.to_string())
-            .and_then(|text| toml::from_str(&text).map_err(|e| super::files::retired(e.to_string(), &text)));
+            .and_then(|text| toml::from_str(&text).map_err(|e| super::retired::retired(e.to_string(), &text)));
         parsed.map_err(|e| self.fail(file, e)).ok()
     }
 
@@ -241,7 +249,13 @@ impl Loader {
         text.and_then(|t| duration(t).map_err(|e| self.fail(file, e)).ok())
     }
 
-    fn project(&mut self, dir: &Path, outer: &[Plugin], bundled: &[super::Bundled]) -> Option<Project> {
+    fn project(
+        &mut self,
+        dir: &Path,
+        outer: &[Plugin],
+        bundled: &[super::Bundled],
+        top: &Given<'_>,
+    ) -> Option<Project> {
         let file = dir.join("aae.toml");
         let raw: ProjectFile = self.read(&file)?;
         let name = raw
@@ -284,6 +298,13 @@ impl Loader {
             pack.settings = self.settings(&manifest, &root, raw.settings.into(), &[]);
             packs.push(pack);
         }
+        let own = Given {
+            file: &file,
+            layer: super::Layer::Project,
+            rounds: raw.rounds,
+            inputs: &raw.inputs,
+        };
+        self.formula_defaults(&mut packs, [top, &own]);
         let bundled = super::check::project_bundled(self, &file, bundled, raw.builtin, &packs);
         Some(Project {
             name,

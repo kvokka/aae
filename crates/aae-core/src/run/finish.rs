@@ -161,7 +161,7 @@ impl RunHandler {
                 let round: u32 = tx
                     .sql()
                     .query_row("SELECT round FROM runs WHERE id = ?1", [&row.id], |r| r.get(0))?;
-                if round >= f.rounds {
+                if round >= f.rounds.value {
                     let reason = format!("still failing after {round} rounds: {remarks}");
                     return self.terminal(tx, row, "failed", Some("agent"), &reason);
                 }

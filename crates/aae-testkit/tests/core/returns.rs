@@ -137,6 +137,21 @@ async fn a_check_that_keeps_failing_fails_the_run_after_the_last_round() {
     assert_eq!(w.return_log(), "plan\ncheck\nplan\ncheck\n");
 }
 
+/// A formula that sets no `rounds` takes the project's (docs/design/config.md "Formula", decision 129).
+#[tokio::test]
+async fn a_formula_without_rounds_takes_those_of_the_project() {
+    let steps = [
+        exec("plan", "echo plan >> log", None),
+        exec("check", &failing("check", 99, "still red"), Some("plan")),
+    ];
+    let project = ("shop/aae.toml", "rounds = 1\n[rigs.web]\npath = \"web\"\n");
+    let w = flow("", &steps, &[project]);
+    let run = w.start_returns().await;
+    let (kind, data) = w.returns_end(&run, &[], &[]).await;
+    assert_eq!(kind, "run.failed", "{data}");
+    assert_eq!(data["reason"], "still failing after 1 rounds: check: exit 1\nstill red");
+}
+
 /// The step the run went back to continues its session (docs/design/contracts.md 6), and its prompt shows the remarks;
 /// the first round shows none.
 #[tokio::test]

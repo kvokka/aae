@@ -207,10 +207,10 @@ fn a_check_goes_back_to_an_earlier_step() {
     let text = (WORKER_TEMPLATE, "Remarks: {{ remarks }}");
     let config = load_with(&[(FLOW, &flow("", "plan")), WORKER, text]).unwrap();
     let formula = &config.projects[0].packs[1].formulas["flow"];
-    assert_eq!(formula.rounds, 3, "the default");
+    assert_eq!(formula.rounds.value, 3, "the default");
     assert_eq!(formula.steps[2].back_to.as_deref(), Some("plan"));
     let config = load_with(&[(FLOW, &flow("rounds = 5\n", "work")), WORKER, text]).unwrap();
-    assert_eq!(config.projects[0].packs[1].formulas["flow"].rounds, 5);
+    assert_eq!(config.projects[0].packs[1].formulas["flow"].rounds.value, 5);
     for (to, rounds, error) in [
         (
             "post",

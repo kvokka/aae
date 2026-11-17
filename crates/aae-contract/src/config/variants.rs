@@ -4,8 +4,8 @@
 use super::{
     Name, Pack, Project, Scope, Settings, Variant,
     check::resolve,
-    files::retired,
     load::{Loader, reference},
+    retired::retired,
 };
 use std::{collections::BTreeMap, path::Path};
 
@@ -200,6 +200,6 @@ pub(super) fn agent_keys(mut table: toml::Table) -> Result<(Settings, Option<u32
     };
     let settings = toml::Value::Table(table)
         .try_into::<Settings>()
-        .map_err(|e| super::files::retired(e.to_string(), ""))?;
+        .map_err(|e| super::retired::retired(e.to_string(), ""))?;
     Ok((settings, max_runs))
 }

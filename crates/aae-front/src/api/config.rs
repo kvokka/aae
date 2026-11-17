@@ -198,6 +198,10 @@ pub(crate) fn explained(config: &Config, project: &str, of: &Explain, rig: Optio
             let rig = rig.unwrap_or(&p.root.0);
             let (_, f) = p.formula(formula)?;
             let (mut text, mut steps, mut host) = (String::new(), Vec::new(), false);
+            text += &format!("rounds = {}  # {}\n", f.rounds.value, f.rounds.from);
+            for (input, given) in &f.defaults {
+                text += &format!("inputs.{input} = {}  # {}\n", given.value, given.from);
+            }
             for step in &f.steps {
                 let name = &step.name;
                 let agent = match &step.kind {
@@ -240,7 +244,10 @@ pub(crate) fn explained(config: &Config, project: &str, of: &Explain, rig: Optio
                     }
                 };
                 if let Some(to) = &step.back_to {
-                    text += &format!("# a check: on fail, back to `{to}`, at most {} rounds\n", f.rounds);
+                    text += &format!(
+                        "# a check: on fail, back to `{to}`, at most {} rounds\n",
+                        f.rounds.value
+                    );
                 }
                 let times = (step.max_attempts > 1).then(|| format!("runs at most {} times", step.max_attempts));
                 let check = (step.check.as_ref()).map(|c| format!("passes when {} exits 0", c.display()));

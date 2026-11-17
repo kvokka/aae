@@ -4,12 +4,14 @@
 mod assemble;
 mod check;
 mod compose;
+mod defaults;
 mod files;
 mod formula_file;
 mod items;
 mod load;
 mod places;
 mod prompt;
+mod retired;
 pub(crate) mod schema;
 mod service;
 mod sources;

@@ -1,9 +1,10 @@
 //! A formula: the TOML shape of its file (docs/design/config.md "Formula"; unknown keys are errors) and the checked
 //! formula the core runs (docs/design/config.md).
 
-use super::{Name, Settings};
+use super::{Name, Settings, Sourced};
 use crate::template::{Filter, Inputs};
 use serde::Deserialize;
+use serde_json::Value;
 use std::{collections::BTreeMap, num::NonZeroU32, path::PathBuf, time::Duration};
 
 #[derive(Debug, Deserialize)]
@@ -32,6 +33,28 @@ pub enum InputType {
     String,
     Integer,
     Boolean,
+}
+
+impl InputType {
+    /// `value` as an input of this type: the text of an integer or a boolean is one, as the CLI and templates give
+    /// text. `Err` names what it must be (docs/design/config.md "Formula").
+    pub fn take(self, value: &Value) -> Result<Value, &'static str> {
+        let text = value.as_str();
+        match self {
+            Self::Integer if value.is_i64() || value.is_u64() => Ok(value.clone()),
+            Self::Integer => text
+                .and_then(|t| t.parse::<i64>().ok())
+                .map(Value::from)
+                .ok_or("an integer"),
+            Self::Boolean if value.is_boolean() => Ok(value.clone()),
+            Self::Boolean => text
+                .and_then(|t| t.parse::<bool>().ok())
+                .map(Value::from)
+                .ok_or("a boolean"),
+            Self::String if !value.is_string() => Err("a string"),
+            Self::String | Self::Task => Ok(value.clone()),
+        }
+    }
 }
 
 /// A declared formula input (docs/design/config.md).
@@ -150,13 +173,22 @@ pub struct Formula {
     pub worktree: bool,
     /// `internal = true`: started only by a `formula` or `drain` step, hidden from the catalog (docs/design/config.md).
     pub internal: bool,
-    /// The most rounds of a run: a failed check with `back_to` starts the next one, past the last the run fails.
-    pub rounds: u32,
+    /// The most rounds of a run: a failed check with `back_to` starts the next one, past the last the run fails. The
+    /// formula's own, else the project's, else the orchestrator's, else 3 (docs/design/config.md "Formula").
+    pub rounds: Sourced<u32>,
+    /// The values of its inputs the project and the orchestrator config give, the project's first; a start fills an
+    /// input it is not given from here (docs/design/config.md "Formula").
+    pub defaults: BTreeMap<String, Sourced<Value>>,
     /// At least one; a run goes through them in order (docs/design/config.md).
     pub steps: Vec<Step>,
 }
 
 impl Formula {
+    /// Whether a start must give input `name`: it is required and the config gives it no value.
+    pub fn needs(&self, name: &str) -> bool {
+        self.inputs.get(name).is_some_and(|i| i.required) && !self.defaults.contains_key(name)
+    }
+
     /// The step named `name`.
     pub fn step(&self, name: &str) -> Option<&Step> {
         self.steps.iter().find(|s| s.name == name)

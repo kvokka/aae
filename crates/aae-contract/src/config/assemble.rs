@@ -11,6 +11,8 @@ use std::{collections::BTreeMap, fmt, fmt::Write as _, path::PathBuf};
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "layer", content = "name", rename_all = "snake_case")]
 pub enum Layer {
+    /// No layer gives the value: aae's own default.
+    Default,
     /// `[harness.<name>]` of the orchestrator: the default model of the harness.
     Harness,
     Orchestrator,
@@ -53,6 +55,7 @@ impl Layer {
 impl fmt::Display for Layer {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            Self::Default => f.write_str("default"),
             Self::Harness => f.write_str("orchestrator, harness default"),
             Self::Orchestrator => f.write_str("orchestrator"),
             Self::Project => f.write_str("project"),

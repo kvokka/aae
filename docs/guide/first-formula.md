@@ -166,12 +166,13 @@ last.
 
 A check can send the work back instead of failing the run: with `back_to = "write"` on the step `check`, a failed
 check starts `write` again, and its prompt can show why with `{{ remarks }}` (empty the first time). `rounds = 2`
-among the formula's own keys, next to its `name` above the steps, caps the rounds; the default is 3, and a check still failing in the last one fails the run with its
+among the formula's own keys, next to its `name` above the steps, caps the rounds; without it the formula takes the `rounds` of `aae.toml`, else of the orchestrator config, else 3, and a check still failing in the last one fails the run with its
 remarks as the reason. `config explain` goes step by step:
 
 ```sh
 aae config reload
 aae config explain --project hello --formula summarize-checked
+# rounds = 2  # formula summarize-checked
 # step `count` of `summarize-checked`: exec `wc -l README.md`
 # step `write` of `summarize-checked` on `root`: agent hello.helper
 # ...one line per value with its layer, e.g. model = "haiku"  # project [agents]

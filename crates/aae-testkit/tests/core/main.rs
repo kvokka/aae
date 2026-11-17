@@ -14,6 +14,7 @@ mod background;
 mod bead_events;
 mod beads;
 mod children;
+mod config_inputs;
 mod deciding;
 mod drain;
 mod drain_pool;

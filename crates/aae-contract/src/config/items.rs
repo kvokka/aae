@@ -215,6 +215,8 @@ impl Loader {
                 }
             }
         }
+        let own = raw.rounds.map(|n| (n.get(), super::Layer::Formula(raw.name.clone())));
+        let (value, from) = own.unwrap_or((3, super::Layer::Default));
         Some((
             raw.name,
             Formula {
@@ -222,7 +224,8 @@ impl Loader {
                 inputs: raw.inputs,
                 worktree: raw.worktree,
                 internal: raw.internal,
-                rounds: raw.rounds.map_or(3, std::num::NonZeroU32::get),
+                rounds: super::Sourced { value, from },
+                defaults: BTreeMap::new(),
                 steps,
             },
         ))
