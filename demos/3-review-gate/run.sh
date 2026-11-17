@@ -31,10 +31,14 @@ for repo in $repos; do
   echo .gitkeep >>"$repo/.git/info/exclude"
 done
 
-mkdir -p .aae
-# gh keeps its login under the user's config, which the variables below would hide from the steps and the bridge.
-GH_CONFIG_DIR=${GH_CONFIG_DIR:-${XDG_CONFIG_HOME:-$HOME/.config}/gh}
-export GH_CONFIG_DIR
+mkdir -p .aae/bin
+# A step gets a clean environment (PATH, HOME, LANG), which a login of gh held in a variable, a keyring or the config
+# hidden below does not reach: the gh first on the PATH hands every caller the token of the user's login.
+(umask 077 && gh auth token >.aae/gh-token)
+# shellcheck disable=SC2016 # the wrapper reads the token when it runs
+printf '#!/bin/sh\nGH_TOKEN=$(cat "%s") exec "%s" "$@"\n' "$here/.aae/gh-token" "$(command -v gh)" >.aae/bin/gh
+chmod +x .aae/bin/gh
+PATH="$here/.aae/bin:$PATH"
 export XDG_STATE_HOME="$here/.aae/state" XDG_CONFIG_HOME="$here/.aae/config" XDG_CACHE_HOME="$here/.aae/cache"
 # A socket path has a length limit: it goes to a short temporary directory.
 AAE_SOCKET="$(mktemp -d)/aae.sock"
@@ -45,7 +49,7 @@ sha=$(git describe --always --dirty 2>/dev/null || echo unknown)
 # The agents and the steps call `aae`: the binary goes first on the PATH the daemon hands them.
 PATH="$(dirname "$aae"):$PATH" "$aae" daemon --config root/config.toml 2>.aae/daemon.log &
 daemon=$!
-trap 'kill $daemon 2>/dev/null || true' EXIT
+trap 'kill $daemon 2>/dev/null; rm -f "$here/.aae/gh-token"' EXIT
 until "$aae" status >/dev/null 2>&1; do
   kill -0 $daemon 2>/dev/null || { cat .aae/daemon.log; exit 1; }
   sleep 0.2
@@ -53,7 +57,7 @@ done
 # The bridge gives the review's outcome from GitHub to the feature that waits on it.
 AAE="$aae" ./bridge.sh review-gate 2>.aae/bridge.log &
 bridge=$!
-trap 'kill $bridge $daemon 2>/dev/null || true' EXIT
+trap 'kill $bridge $daemon 2>/dev/null; rm -f "$here/.aae/gh-token"' EXIT
 
 started=$(date +%s)
 run=$("$aae" run start review-gate dev.feature --input "task=$request")
