@@ -490,7 +490,7 @@ WP-98; WP-99; WP-100 → WP-101.
 - Готово, когда: `aae config check --config demos/3-review-gate/root/config.toml` чист; демо не запускалось;
   `mise run ci` зелёный.
 
-### WP-106 · Мост GitHub и тест без модели · размер M · статус: todo
+### WP-106 · Мост GitHub и тест без модели · размер M · статус: done
 - Документы: решения 131–133, 62, 115; `docs/design/config.md` «MCP servers and services»; `docs/api/frontends.md`.
 - Зависит от: WP-105
 - Сделать:
