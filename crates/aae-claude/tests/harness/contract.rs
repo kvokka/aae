@@ -340,6 +340,15 @@ async fn s13_a_request_the_config_does_not_allow_is_denied_by_the_harness_and_th
     assert_eq!(live.ended().await, StopReason::Completed, "{:?}", live.seen);
     assert!(live.failures().is_empty(), "{:?}", live.seen);
     assert!(!live.rig.join("denied").exists());
+    let denied: Vec<_> = live
+        .seen
+        .iter()
+        .filter_map(|e| match e {
+            Normalized::PermissionDenied { tool, tool_use_id, .. } => Some((tool.as_str(), tool_use_id.is_some())),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(denied, [("Bash", true)], "{:?}", live.seen);
     live.stop().await;
 }
 
