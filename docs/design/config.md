@@ -64,7 +64,8 @@ A run is unattended: nothing waits for a human, and every permission is decided 
 before the start, in the `native.<harness>` block of any settings layer (the orchestrator, a project, a rig, an agent
 or its variant). The defaults are permissive: claude runs with `--permission-mode bypassPermissions`, codex with
 `approval_policy = "never"` (beside `sandbox_mode = "danger-full-access"`, "Host inheritance"). What a stricter config
-does not allow is denied at once, and the agent sees the denial.
+does not allow is denied at once, and the agent sees the denial; each denial the adapter learns of is journaled as
+`run.permission_denied` ([contracts](contracts.md#13-payloads)).
 
 - claude: `native.claude.permission_mode` (or `permissions.defaultMode`), the rules `permissions.allow`, `deny` and
   `ask` (an `ask` rule is a denial here: claude runs with `--permission-prompts none`), and the harness hooks

@@ -109,6 +109,7 @@ Observed events (plugins and clients read them and cannot change what happens):
 | `run.failed` | `{run, class: "agent"\|"check"\|"hollow_done"\|"infrastructure", reason, outcome, usage}`; `outcome` null unless the agent declared one |
 | `run.cancelled` | `{run, reason, usage}` |
 | `run.retrying` | `{run, retry, next_retry_at, text}`; the harness retries by itself (`retry` is its own number, 4.3) |
+| `run.permission_denied` | `{run, tool, tool_use_id, input, reason}`; the harness or the adapter denied the agent a tool (4.3) and nothing waits on it: `tool` and `tool_use_id` are the harness's (codex: the server request's method and `itemId`), `input` the tool input (null when the harness does not tell it; codex: the request's `params`), `reason` its reason or null |
 | `trigger.fired` | `{trigger, cause_seq, new_run, inputs}`; `cause_seq` null for schedules |
 | `trigger.skipped` | `{trigger, cause_seq, reason: "overlap"\|"input_unresolved"\|"depth"\|"nothing_ready"\|"rejected", detail}` |
 | `trigger.switched` | `{trigger, enabled}`; the operator switched a trigger on a rig off or back on (`POST /v1/triggers/disable`, `/enable`): off, neither its schedule nor its events fire it, a hand firing still does, and the switch outlives restarts and reloads |
@@ -379,7 +380,7 @@ numbering. The core takes an instance's events in `seq` order: one with `seq` â‰
 taken is dropped with no effect, and one that is not last + 1 (a repeat or a gap) is told with `resync.diverged`.
 They are input messages of the core, not journal events; the core turns some of them into the run events of 1.3.
 Nothing a driver reports is dropped: a retry of the harness, a degraded instance, token usage, an account limit and
-the stop reason of a turn reach the policy and the observers through those events.
+the stop reason of a turn and a denied permission reach the policy and the observers through those events.
 
 | Event | Fields | Core use |
 |---|---|---|
@@ -389,6 +390,7 @@ the stop reason of a turn reach the policy and the observers through those event
 | `state` | `state: running \| idle`, `background: bool` | "idle without background" = `idle` and `background == false`; the adapter applies the harness rule. `idle` with `background` after the turn ended and with the outcome declared makes the core call `stop_background` (6.3) |
 | `usage` | `input_tokens, output_tokens, rate_limit: {utilization, resets_at} \| null` | the core adds the tokens (increments) to the attempt; keeps the last `rate_limit` per account key (`account:<harness>/<id>`, one row, replaced by each report); still activity for the watchdog |
 | `retrying` | `attempt, delay, text` | in `running`: journals `run.retrying` (`next_retry_at` = now + `delay`) and sets the silence deadline to silence + `delay` (an announced pause is not silence) |
+| `permission_denied` | `tool, tool_use_id, input, reason` | in every live state: journals `run.permission_denied`; still activity for the watchdog in `running` |
 | `activity` | `tool_running: bool` | watchdog only: moves the silence deadline, kept in memory, no transaction; the adapter coalesces it to at most one per second per session |
 | `failure` | `Failure` (see 1.3) | ends the attempt with `run.attempt_failed`; a failed single tool call is never sent (the harness hands it back to the model), `tool_failure` means a tool is gone for the whole session (4.4) |
 | `exited` | `code, signal` | the instance process is gone: every session on it gets `harness_crash` unless a failure was already reported |
@@ -473,8 +475,9 @@ claude (`crates/aae-claude`):
   directory of an isolated session (`<state>/claude/<session>/config/`, its transcript) stays: no driver call says
   that a session will never be resumed, so it is removed by hand.
 - Signals read: `system/api_retry` (`retrying`), `rate_limit_event` with the reset time, the turn `result` with
-  its error flag, `session_state_changed`, `background_tasks_changed`, `task_notification`, and the
-  `tool_progress` heartbeat of a long tool every 30 s ([experiments](experiments.md#heartbeat-of-a-long-tool)).
+  its error flag and `permission_denials`, `system/permission_denied`, `session_state_changed`,
+  `background_tasks_changed`, `task_notification`, and the `tool_progress` heartbeat of a long tool every 30 s
+  ([experiments](experiments.md#heartbeat-of-a-long-tool)).
   No heartbeat comes from inside a subagent; the watchdog's budgets allow for that (invariant 15).
 - The reset time of a limit comes only with a subscription login; with an API key a limit is a plain `rate_limit`
   without it. The shape of the event when a real quota runs out has not been seen live (the claude half of
@@ -498,6 +501,11 @@ claude (`crates/aae-claude`):
   gets an error `control_response` at once, so nothing waits. claude prompts for some commands even under
   `bypassPermissions` (seen on 2.1.325: a Bash heredoc into a directory outside the workdir); such a command is denied
   at once.
+- A denial comes as `system/permission_denied` (`tool_name`, `tool_use_id`, `decision_reason_type`, no tool input)
+  and again in the `permission_denials` (`tool_name`, `tool_use_id`, `tool_input`) of the turn's `result`; the adapter
+  sends one `permission_denied` per `tool_use_id` in a turn, from whichever comes first (`reason` is
+  `decision_reason_type`, `input` only from the `result`). A denial without `tool_use_id` is sent as it is. The
+  `result` list was seen live (2.1.322); the shape of `system/permission_denied` is read from the code of 2.1.326.
 
 codex (`crates/aae-codex`):
 
@@ -512,7 +520,8 @@ codex (`crates/aae-codex`):
   there is no notification at all and codex has no timeout of its own: the core's watchdog owns it.
 - The thread starts with `approvalPolicy = "never"` unless `native.codex.approval_policy` sets another
   ([config](config.md#permissions)); under another policy the adapter declines command and file-change approvals
-  (`{"decision":"decline"}`, the turn goes on) and answers every other server request with an error.
+  (`{"decision":"decline"}`, the turn goes on) and answers every other server request with an error; each refused
+  request of a thread is a `permission_denied`.
 - Two `turn/start` on one thread are not queued but merged: the second becomes a steer of the first. The core sends
   a session's next prompt only after its turn ended (6.2), so this never happens.
 - Hooks run with the environment of the app-server process, not of the thread (4.6 table, attempt environment); so

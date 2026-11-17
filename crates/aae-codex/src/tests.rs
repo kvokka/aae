@@ -296,7 +296,7 @@ fn an_exit_crashes_open_turns() {
 }
 
 /// Nothing waits for a person: an approval with a `decline` is declined and the turn goes on, any other server
-/// request gets an error at once (decision 117).
+/// request gets an error at once (decision 117); each refusal is told as a denial (decision 124).
 #[test]
 fn every_server_request_is_refused_at_once() {
     let request = |method: &str| json!({ "id": 7, "method": method, "params": { "threadId": "t" } });
@@ -324,6 +324,18 @@ fn every_server_request_is_refused_at_once() {
         );
         assert!(answer.get("result").is_none());
     }
+    // Each refusal is a denial of the thread.
+    let approval = json!({ "id": 8, "method": "item/commandExecution/requestApproval",
+        "params": { "threadId": "t", "itemId": "call_1", "command": "rm a", "reason": "outside the sandbox" } });
+    assert_eq!(
+        play(&mut Stream::new(None), std::slice::from_ref(&approval)),
+        [Normalized::PermissionDenied {
+            tool: "item/commandExecution/requestApproval".into(),
+            tool_use_id: Some("call_1".into()),
+            input: approval["params"].clone(),
+            reason: Some("outside the sandbox".into()),
+        }]
+    );
 }
 
 /// A command that outlives its turn (docs/design/contracts.md 4.6): the turn ends idle with background, and the thread

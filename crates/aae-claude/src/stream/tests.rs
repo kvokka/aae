@@ -307,3 +307,43 @@ fn an_exit_in_an_open_turn_is_a_crash_even_with_code_zero() {
     );
     assert_eq!(failure(&events).kind, FailureKind::ToolFailure);
 }
+
+/// A denial comes as `system/permission_denied` and again in the turn's `result.permission_denials`: one event each,
+/// keyed by `tool_use_id`; the next turn starts with nothing told.
+#[test]
+fn a_denial_is_told_once_from_either_source() {
+    let mut s = stream();
+    let denied = |id: &str| {
+        json!({ "type": "system", "subtype": "permission_denied", "tool_name": "Bash", "tool_use_id": id,
+            "decision_reason_type": "mode", "message": "denied" })
+    };
+    let listed = |ids: &[&str]| {
+        let list: Vec<Value> = ids
+            .iter()
+            .map(|id| json!({ "tool_name": "Bash", "tool_use_id": id, "tool_input": { "command": "touch a" } }))
+            .collect();
+        result(false, json!({ "permission_denials": list }))
+    };
+    let denials = |events: Vec<Normalized>| -> Vec<Normalized> {
+        events
+            .into_iter()
+            .filter(|e| matches!(e, Normalized::PermissionDenied { .. }))
+            .collect()
+    };
+    let first = denials(feed(&mut s, &[denied("toolu_1"), listed(&["toolu_1", "toolu_2"])]));
+    let told = |id: &str, input: Value, reason: Option<&str>| Normalized::PermissionDenied {
+        tool: "Bash".into(),
+        tool_use_id: Some(id.into()),
+        input,
+        reason: reason.map(str::to_owned),
+    };
+    assert_eq!(
+        first,
+        [
+            told("toolu_1", Value::Null, Some("mode")),
+            told("toolu_2", json!({ "command": "touch a" }), None),
+        ]
+    );
+    let next = denials(feed(&mut s, &[listed(&["toolu_1"])]));
+    assert_eq!(next, [told("toolu_1", json!({ "command": "touch a" }), None)]);
+}

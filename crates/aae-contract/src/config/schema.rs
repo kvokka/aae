@@ -120,6 +120,13 @@ fn payload(event_type: &str) -> Option<&'static [(&'static str, Shape)]> {
             ("usage", USAGE),
         ],
         "run.retrying" => &[("run", RUN), ("retry", Leaf), ("next_retry_at", Leaf), ("text", Leaf)],
+        "run.permission_denied" => &[
+            ("run", RUN),
+            ("tool", Leaf),
+            ("tool_use_id", Leaf),
+            ("input", Any),
+            ("reason", Leaf),
+        ],
         "run.cancelled" => &[("run", RUN), ("reason", Leaf), ("usage", USAGE)],
         "trigger.fired" => &[
             ("trigger", Leaf),

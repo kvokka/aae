@@ -172,6 +172,21 @@ impl RunHandler {
             Normalized::Exited { .. } => {
                 self.attempt_failed(tx, row, Failure::new(FailureKind::HarnessCrash, Source::Adapter))
             }
+            // Told in every live state: nothing the adapter reports is dropped (contracts 4.3).
+            Normalized::PermissionDenied {
+                tool,
+                tool_use_id,
+                input,
+                reason,
+            } => {
+                let data = json!({ "run": row.view(), "tool": tool, "tool_use_id": tool_use_id, "input": input,
+                    "reason": reason });
+                row.emit(tx, "run.permission_denied", data)?;
+                match row.state.as_str() {
+                    "running" => silence(tx, &row, w.silence_ms),
+                    _ => Ok(()),
+                }
+            }
             _ if row.state != "running" => Ok(()),
             Normalized::Activity { tool_running: true } => silence(tx, &row, w.tool_silence_ms),
             // The harness retries a request by itself: its announced pause is not silence (docs/design/adapters.md).

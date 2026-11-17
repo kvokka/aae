@@ -117,6 +117,18 @@ impl Stream {
         if id.is_empty() {
             return vec![];
         }
+        if msg.get("id").is_some() {
+            // A server request: the adapter refuses every one (`rpc::refusal`), so each is a denial of the thread.
+            return vec![(
+                Some(id),
+                Normalized::PermissionDenied {
+                    tool: method.to_owned(),
+                    tool_use_id: params["itemId"].as_str().map(str::to_owned),
+                    input: params.clone(),
+                    reason: params["reason"].as_str().map(str::to_owned),
+                },
+            )];
+        }
         let thread = self.threads.entry(id.clone()).or_default();
         let events = match method {
             "turn/started" => {

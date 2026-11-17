@@ -194,6 +194,14 @@ pub enum Normalized {
     Activity {
         tool_running: bool,
     },
+    /// The harness or the adapter denied the session a tool (nothing waits on it): one event per denial, with what
+    /// the harness tells of it.
+    PermissionDenied {
+        tool: String,
+        tool_use_id: Option<String>,
+        input: Value,
+        reason: Option<String>,
+    },
     Failure(Failure),
     /// The instance process is gone.
     Exited {

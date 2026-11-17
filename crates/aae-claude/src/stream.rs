@@ -3,7 +3,10 @@
 
 use aae_contract::driver::{Failure, FailureKind, Normalized, PromptKey, RateLimit, SessionState, Source, StopReason};
 use serde_json::Value;
-use std::time::{Duration, Instant};
+use std::{
+    collections::HashSet,
+    time::{Duration, Instant},
+};
 use uuid::Uuid;
 
 /// The harness wording of a failed turn → its kind; the first rule with a matching needle wins. Needles are
@@ -47,6 +50,8 @@ pub(crate) struct Stream {
     commands: Vec<String>,
     notified_since_result: bool,
     activity: Option<(Instant, bool)>,
+    /// `tool_use_id` of every denial already told in this turn: the turn's `result` lists them again.
+    denied: HashSet<String>,
 }
 
 impl Stream {
@@ -63,6 +68,7 @@ impl Stream {
             commands: Vec::new(),
             notified_since_result: false,
             activity: None,
+            denied: HashSet::new(),
         }
     }
 
@@ -129,6 +135,9 @@ impl Stream {
                 vec![]
             }
             (Some("system"), Some("api_retry")) => self.retry(msg),
+            (Some("system"), Some("permission_denied")) => {
+                self.denial(msg, &msg["decision_reason_type"]).into_iter().collect()
+            }
             (Some("rate_limit_event"), _) => self.rate_limit(&msg["rate_limit_info"]),
             (Some("result"), _) => self.result(msg),
             (Some("assistant"), _) => {
@@ -170,6 +179,8 @@ impl Stream {
             output_tokens: usage["output_tokens"].as_u64().unwrap_or_default(),
             rate_limit: None,
         }];
+        let denials = msg["permission_denials"].as_array().into_iter().flatten();
+        out.extend(denials.filter_map(|d| self.denial(d, &Value::Null)));
         let failed = msg["is_error"].as_bool().unwrap_or(true) || msg["subtype"] != "success";
         let stop_reason = match (failed, std::mem::take(&mut self.interrupted)) {
             (false, _) => StopReason::Completed,
@@ -185,7 +196,25 @@ impl Stream {
         self.rejected = None;
         self.auth_reported = false;
         self.notified_since_result = false;
+        self.denied.clear();
         out
+    }
+
+    /// One denial of `system/permission_denied` or of `result.permission_denials`, unless its `tool_use_id` was told
+    /// already in this turn. A denial without a `tool_use_id` (not seen from claude) is told as it is.
+    fn denial(&mut self, msg: &Value, reason: &Value) -> Option<Normalized> {
+        let tool_use_id = msg["tool_use_id"].as_str().map(str::to_owned);
+        if let Some(id) = &tool_use_id
+            && !self.denied.insert(id.clone())
+        {
+            return None;
+        }
+        Some(Normalized::PermissionDenied {
+            tool: msg["tool_name"].as_str().unwrap_or_default().to_owned(),
+            tool_use_id,
+            input: msg["tool_input"].clone(),
+            reason: reason.as_str().map(str::to_owned),
+        })
     }
 
     fn classify(&self, msg: &Value) -> Failure {

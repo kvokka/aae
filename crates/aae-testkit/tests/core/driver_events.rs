@@ -156,3 +156,33 @@ async fn a_failure_before_the_ack_ends_the_attempt_at_once() {
         "quota_exhausted"
     );
 }
+
+/// A denial is told as `run.permission_denied` with what the adapter reported, and nothing waits on it: the turn goes
+/// on to its end (decision 124).
+#[tokio::test(start_paused = true)]
+async fn a_denied_permission_is_told_and_the_turn_goes_on() {
+    let w = world(&[]);
+    let mut steps = hollow_turn();
+    let denied = Normalized::PermissionDenied {
+        tool: "Bash".into(),
+        tool_use_id: Some("toolu_1".into()),
+        input: json!({ "command": "touch a" }),
+        reason: Some("mode".into()),
+    };
+    steps.insert(1, Step::Emit(denied));
+    w.driver.script(steps);
+    let run = w.create().await;
+    let events = w.events(&run, Duration::from_millis(200)).await;
+    let told = last(&events, "run.permission_denied");
+    assert_eq!(
+        (&told["tool"], &told["tool_use_id"], &told["input"], &told["reason"]),
+        (
+            &json!("Bash"),
+            &json!("toolu_1"),
+            &json!({ "command": "touch a" }),
+            &json!("mode")
+        )
+    );
+    assert_eq!(told["run"]["id"], run.as_str());
+    assert_eq!(last(&events, "run.failed")["class"], "hollow_done");
+}
