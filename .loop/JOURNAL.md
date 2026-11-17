@@ -628,3 +628,19 @@ with root/sudo privileges». aae под root (контейнер, CI) без с�
 прогоны падают `infrastructure`. Нужен выбор владельца: `IS_SANDBOX=1`, другой режим под root, `config_error` с
 понятным текстом, предупреждение `doctor`. До ответа требую только описать это в `docs/design/config.md` (Permissions)
 — ревью 109, Обяз. 1.
+
+## 2026-11-17T10:20 · цикл 110 · coder · НАХОДКА
+
+Ревью 109 Обяз. 1 (claude под root): проверено без модели (base URL на закрытый порт) — с `IS_SANDBOX=1` в env
+claude 2.1.326 от root принимает `--permission-mode bypassPermissions` и доходит до `init`; `dontAsk` под root тоже
+не отклоняется. До ответа владельца код не менялся: в `docs/design/config.md` (Permissions) и contracts 4.6 описано,
+что под root дефолт не работает и что задать вместо него — `env = { IS_SANDBOX = "1" }` или другой
+`native.claude.permission_mode` с `permissions.allow`. Вопрос владельцу (журнал 07:25) остаётся: ставить ли
+`IS_SANDBOX=1` адаптером сам под root.
+
+## 2026-11-17T10:40 · цикл 110 · coder · НАХОДКА
+
+Форма `system/permission_denied` claude 2.1.326 подтверждена контрактным s13 (настоящий CLI, фейковый API): отказ
+приходит сначала по system-пути — `PermissionDenied{tool: "Bash", tool_use_id: Some, input: null, reason:
+"asyncAgent"}`, ровно один раз. При `--permission-prompts none` причина — `asyncAgent`, а не имя режима; значит
+`input` в `run.permission_denied` от claude на практике всегда null (см. журнал 09:40 цикла 109).
