@@ -5,6 +5,7 @@
 
 mod adapter;
 mod part;
+mod roles;
 mod rpc;
 mod stream;
 
@@ -171,7 +172,7 @@ impl Driver for Codex {
 
     fn split(&self, config: &EffectiveConfig, plan: &SessionPlan) -> Result<Split, Failure> {
         let process = part::process(config, &self.state, &part::host_home())?;
-        let session = part::session(config, plan)?;
+        let session = part::session(config, plan, &self.state)?;
         Ok(Split::new("codex", ProcessPart(process), SessionPart(session)))
     }
 
@@ -209,7 +210,11 @@ impl Driver for Codex {
     ) -> BoxFuture<'a, Result<SessionRef, Failure>> {
         Box::pin(async move {
             let known = self.instance(&instance.id)?;
-            let result = known.call("thread/start", session.0.clone(), None).await?;
+            let params = {
+                let _one = lock(&self.instances);
+                roles::write(&session.0)?
+            };
+            let result = known.call("thread/start", params, None).await?;
             let thread = result["thread"]["id"].as_str().ok_or_else(crashed)?;
             self.bind(&known, thread, &result, &session.0);
             lock(&known.stream).held(thread).map_or(Ok(()), Err)?;
@@ -237,7 +242,10 @@ impl Driver for Codex {
                 }
                 tokio::time::sleep(Duration::from_millis(20)).await;
             }
-            let mut params = part.0.clone();
+            let mut params = {
+                let _one = lock(&self.instances);
+                roles::write(&part.0)?
+            };
             params["threadId"] = json!(thread_id(session));
             params["excludeTurns"] = json!(true);
             let result = known.call("thread/resume", params, None).await?;

@@ -464,7 +464,7 @@ the key comes from, not what it is.
 
 | Concern | claude | codex |
 |---|---|---|
-| Process and session | process per session; everything is in `ProcessPart`, so the fingerprint is unique per session; `start_session` and `resume_session` only bind the reference (the `--session-id`/`--resume` flag is part of the spawn) | one app-server per fingerprint over stdio; `ProcessPart` = `CODEX_HOME`, `HOME`, skills (links in its own `CODEX_HOME/skills`; with host inheritance that home links the host's `auth.json` and `config.toml`), the default `sandbox_mode`, provider and key variable, process environment; `SessionPart` = cwd, model, effort, instructions, MCP, hooks with `bypass_hook_trust`, command environment ([experiments](experiments.md#config-and-credential-delivery-experiments-4-and-5)) |
+| Process and session | process per session; everything is in `ProcessPart`, so the fingerprint is unique per session; `start_session` and `resume_session` only bind the reference (the `--session-id`/`--resume` flag is part of the spawn) | one app-server per fingerprint over stdio; `ProcessPart` = `CODEX_HOME`, `HOME`, skills (the session's and its subagent targets', links in its own `CODEX_HOME/skills`; with host inheritance that home links the host's `auth.json` and `config.toml`), the default `sandbox_mode`, provider and key variable, process environment; `SessionPart` = cwd, model, effort, instructions, MCP, hooks with `bypass_hook_trust`, the agent roles of the subagent targets, command environment ([experiments](experiments.md#config-and-credential-delivery-experiments-4-and-5)) |
 | Prompt key | user message `uuid` | `clientUserMessageId` |
 | `prompt.acked` | `command_lifecycle{queued}` with our uuid | `turn/start` response with a turn id |
 | Turn end | `result` of a turn, then "idle without background" by the three-condition rule ([experiments](experiments.md#idle-without-background-both-signals-in-one-run)) | `turn/completed` only; thread status `idle` does not end a turn (below) |
@@ -555,6 +555,14 @@ codex (`crates/aae-codex`):
   a session's next prompt only after its turn ended (6.2), so this never happens.
 - Hooks run with the environment of the app-server process, not of the thread (4.6 table, attempt environment); so
   the attempt token stands in the `export` of the hook command and is visible in its argv, which is accepted.
+- Subagent targets are agent roles of the thread: `config.agents.<type> = {description, config_file}`, over the
+  `agents` table of the native block, which a thread's `agents` would replace. codex takes a role only from a
+  file, so the adapter writes each (`developer_instructions`, `model`, `model_reasoning_effort`,
+  `[[skills.config]]` turning off the process's skills the target has not; any other key drops the role) as
+  `<state>/codex/roles/<hash of its content>.toml` before `thread/start` and `thread/resume`. Roles are not in
+  the fingerprint: sessions with different targets share an app-server. The multi-agent version is codex's
+  choice by the model. A child thread's notifications carry its own thread id and belong to no session
+  ([experiments](experiments.md#codex-subagent-roles-experiment-10)).
 - app-server syncs its plugins over the network by itself (a `git fetch` of the vendor's plugins repository, seen
   on 0.168), as a child that carries the instance marker. It outlives a killed daemon until a restarted one sweeps it,
   and through it a session without a model still touches the network.

@@ -496,7 +496,7 @@ Stopping from a hook (window 100000, 150000 tokens; a hook answers `{"continue":
 | Threshold per thread | `thread/start.config.model_auto_compact_token_limit` applies to that thread only: with 50000 the thread compacted after a reply of 150000 tokens, a thread of the same process without it did not. The key in the process `config.toml` applies to every thread; a thread's own value wins over it (900000 on the thread: no compaction). No floor: a limit of 2000 compacted after 3003 tokens, 4000 did not. |
 | Where it compacts | In the middle of a turn, after the tool call whose reply crossed the limit: `item/completed{contextCompaction}`, then the turn goes on. `thread/compact/start{threadId}` compacts on request, as a turn of its own. |
 | `PreCompact` and `PostCompact` as thread hooks | Both fire from `config.hooks` with the bypass (`source: sessionFlags`). Stdin: `session_id` (the thread id), `turn_id`, `transcript_path`, `cwd`, `hook_event_name`, `model`, `trigger` (`"auto"` or `"manual"`); `PostCompact` has no summary. |
-| Compaction of a child thread | A multi-agent v1 child inherits its parent's per-thread limit and hooks: it compacted with the parent's 50000, and its hooks came with `session_id` = the **parent** thread, `agent_id` = the child, `agent_type` = the role. `model_auto_compact_token_limit` in the role's `config_file` is ignored (50000 there with none on the parent: no compaction; 900000 there under a process limit of 50000: the child compacted). A v2 child was not checked: its task reaches the provider as `encrypted_content`, which the fake cannot read. |
+| Compaction of a child thread | A multi-agent v1 child inherits its parent's per-thread limit and hooks: it compacted with the parent's 50000, and its hooks came with `session_id` = the **parent** thread, `agent_id` = the child, `agent_type` = the role. `model_auto_compact_token_limit` in the role's `config_file` is ignored (50000 there with none on the parent: no compaction; 900000 there under a process limit of 50000: the child compacted). A v2 child was not checked. |
 | `PreCompact`: `continue:false` | `hook/completed{run:{status:"stopped", entries:[{kind:"stop", text:<stopReason>}]}}`, no compaction, the turn ends `interrupted` with `error: null`; every next turn of the thread ends the same way while it stays over the limit. In a child, only the child's turn ends; the parent goes on. |
 | `PostCompact`: `continue:false` | The compaction is done, the turn ends `interrupted`; the next turn runs. |
 | `PreCompact`: exit 2 | The hook is `failed`, the compaction happens anyway. |
@@ -514,6 +514,26 @@ The per-thread findings of codex 0.168.0 checked again on 0.169.0 (process `conf
 | Roles per thread | Visible to that thread only: its `spawn_agent.agent_type` lists the role and the built-ins (`default`, `explorer`, …); a thread with no role at all (none in the process either) gets no `agent_type` parameter, and a spawn naming the role fails with "unknown agent_type 'r'". |
 | Keys of a role file that apply | `model`, `developer_instructions` (they replace the parent's), `model_reasoning_effort` (the child's request had `reasoning.effort: "low"`), `[[skills.config]]` (a skill the role disables is gone in the child). `model_auto_compact_token_limit` does not apply (above). An unknown key such as `bypass_hook_trust` drops the whole role: "Ignoring malformed agent role definition … unknown field `bypass_hook_trust`". |
 | `features.multi_agent_v2` per thread | `config.features.multi_agent_v2 = true` gives that thread the `collaboration` tools (`spawn_agent` requires `task_name` and `message`; also `agent_type`, `fork_turns`, `model`, `reasoning_effort`), the others keep `multi_agent_v1`; a per-thread role applied to the v2 child. `features.multi_agent = false` on a thread leaves it without spawn tools. With the fake's unknown model names v1 is the default. |
+
+### codex subagent roles (experiment 10)
+
+Code: throwaway Python scripts in a temporary directory, not kept: a fake Responses API that logs every request and
+answers a `CALL <tool> <json>` in the last user message with that tool call, and an app-server client (several
+threads in one process, roles per thread as in experiment 9, three skills linked into `CODEX_HOME/skills`).
+
+<!-- MEASURE id=codex-subagent-roles-exp10 date=2026-11-18 ver=codex-0.169.0 env=linux-arm64-orbstack src=.loop/cycles/127/notes/wp123-plan.md note="fake Responses API, unknown model names (fallback metadata), n=1 per case; nesting in v2 and the live models' default version not checked" -->
+
+| Question | Answer |
+|---|---|
+| Selectors of `skills.config` | `name` is the `name` of the skill's front matter, not the name of its directory or link. `path` is the `SKILL.md` file: the link under `CODEX_HOME/skills`, the link's target and a path through another symlink and `..` all matched; the directory alone did not. |
+| Disabling a skill per thread | `config.skills.config = [{path, enabled: false}]` hides it in that thread only, and in its children. |
+| `[[skills.config]]` of a role file | `enabled = false` hides the skill in the child. `enabled = true` brings nothing back: not a skill the parent thread disabled, nor one the process disabled (`config.toml` or a `-c` flag), nor one the role of the calling child disabled. A child called by a child saw only what neither role disabled. |
+| The role file | Only a file carries a role's settings: `developer_instructions` given in `config.agents.<role>` itself is ignored without a warning, and a role with an empty file or no `config_file` is the parent's copy under another name. An absolute path outside `CODEX_HOME` works. The file is read at `thread/start`, at `thread/resume` and for every child; a missing one drops the role with a warning ("Ignoring malformed agent role definition: agents.<role>.config_file must point to an existing file") and the thread starts. A file in `CODEX_HOME/agents/` is also read as a role of its own and warns "must define a non-empty `name`". `developer_instructions = ""` drops the role ("cannot be blank"). A role name with a dot (`kit.qa`) works. |
+| Resume | `thread/resume` with the same `config.agents` gives the roles again; without it a spawn fails with "unknown agent_type". |
+| `agents` of the process and of the thread | A thread's `config.agents` object replaces the `agents` table given by `-c` flags (`agents.max_depth`, `agents.max_threads` were lost) and merges with the one of `config.toml`; limits repeated inside the thread's object apply. |
+| Multi-agent v1 (an unknown model's default) | Tools in the namespace `multi_agent_v1`; `spawn_agent{agent_type, message}` (it takes `task_name` and `fork_turns` too) returns `{agent_id, nickname}` at once. The child starts without history: its developer message begins with the role's `developer_instructions` in place of the parent's, the task is its user message. A child has no spawn tools unless `agents.max_depth` is over 1. Six children stayed open, the seventh was refused: "agent thread limit reached". |
+| Multi-agent v2 (`features.multi_agent_v2 = true` on the thread or as a `-c` flag) | Tools in the namespace `collaboration`; `spawn_agent{task_name, message, agent_type, fork_turns}` returns `{task_name: "/root/<name>"}`. With `fork_turns` unset the child's request is the parent's history, then developer messages: "You are now a newly spawned child agent…", the role's `developer_instructions` alone, the team text, the child's own skill list; with `"none"` it is as in v1. The task is an `agent_message` item whose `encrypted_content` a fake provider gets as plain text. The role's model and effort apply. The child had no `collaboration` tools, with `agents.max_depth = 3` too. `codex features list`: `multi_agent_v2` stable and off by default, `multi_agent` deprecated and on. |
+| Notifications of a child thread | They come on the same connection with the child's thread id (`turn/started`, `item/*`, `turn/completed`, `warning`); the end of a child started no turn of the parent. |
 
 ### Subagent definitions and nesting
 
@@ -564,7 +584,8 @@ For codex native subagents: per-thread roles (`config.agents.<role>`) and per-th
 (`config.skills.config` over skills of the process roots) work on 0.169.0 as on 0.168.0; a role file carries
 `model`, `developer_instructions`, `model_reasoning_effort` and `[[skills.config]]`, not the compaction limit (nor,
 as seen on 0.168.0, hooks or MCP), and any unknown key drops the role. `features.multi_agent_v2` can be set per thread. The built-in roles stay
-visible; a thread without roles has no `agent_type` to choose.
+visible; a thread without roles has no `agent_type` to choose. A role's `[[skills.config]]` only disables: nothing
+a thread, the process or a calling role disabled comes back, so a per-thread allow-list would also bind the children.
 
 ## opencode (experiment 7)
 

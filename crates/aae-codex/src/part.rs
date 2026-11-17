@@ -1,7 +1,7 @@
 //! The effective config of a session split into the app-server process and the thread (docs/design/contracts.md
 //! 4.6, docs/design/experiments.md "Config and credential delivery"): `CODEX_HOME`, `HOME`, the provider and the
-//! process environment are the process's; cwd, model, instructions, MCP, hooks and the command environment are the
-//! thread's.
+//! process environment are the process's; cwd, model, instructions, MCP, hooks, the agent roles of the subagent
+//! targets and the command environment are the thread's. The skills of the targets are the process's.
 
 use aae_contract::{
     config::EffectiveConfig,
@@ -53,10 +53,7 @@ pub(crate) fn process(config: &EffectiveConfig, state: &Path, host: &Path) -> Re
     let own = CREDENTIALS.iter().any(|k| env.contains_key(*k));
     let mut part = json!({ "env": env, "overrides": overrides });
     // Skills are the process's: codex reads them from `CODEX_HOME/skills`, with no thread field for them.
-    let skills: BTreeMap<_, _> = (config.skills.iter())
-        .filter(|(_, s)| s.value.enabled)
-        .filter_map(|(name, s)| Some((name.clone(), s.value.path.clone()?)))
-        .collect();
+    let skills = skills(config);
     if !skills.is_empty() {
         part["skills"] = json!(skills);
     }
@@ -81,8 +78,23 @@ pub(crate) fn process(config: &EffectiveConfig, state: &Path, host: &Path) -> Re
     Ok(part)
 }
 
-/// The `thread/start` (and `thread/resume`) parameters of a session.
-pub(crate) fn session(config: &EffectiveConfig, plan: &SessionPlan) -> Result<Value, Failure> {
+/// The enabled skills of the session and of its subagent targets, by name: the session's first, the same name is the
+/// same directory (a load error otherwise).
+pub(crate) fn skills(config: &EffectiveConfig) -> BTreeMap<String, PathBuf> {
+    let mut skills = BTreeMap::new();
+    for c in std::iter::once(config).chain(config.targets.values()) {
+        for (name, s) in c.skills.iter().filter(|(_, s)| s.value.enabled) {
+            if let Some(path) = &s.value.path {
+                skills.entry(name.clone()).or_insert_with(|| path.clone());
+            }
+        }
+    }
+    skills
+}
+
+/// The `thread/start` (and `thread/resume`) parameters of a session, with its role files under `state` as `roles`:
+/// no parameter of the app-server, [`crate::roles::write`] takes it off.
+pub(crate) fn session(config: &EffectiveConfig, plan: &SessionPlan, state: &Path) -> Result<Value, Failure> {
     let (workdir, run, token, actor, bead) = match plan {
         SessionPlan::New {
             workdir,
@@ -124,7 +136,14 @@ pub(crate) fn session(config: &EffectiveConfig, plan: &SessionPlan) -> Result<Va
         thread_config["hooks"] = Value::Object(hooks);
         thread_config["bypass_hook_trust"] = json!(true);
     }
+    let (agents, roles) = crate::roles::of(config, state)?;
+    if !agents.is_empty() {
+        thread_config["agents"] = Value::Object(agents);
+    }
     let mut params = json!({ "cwd": workdir, "config": thread_config });
+    if !roles.is_empty() {
+        params["roles"] = Value::Object(roles);
+    }
     let fields = [
         ("model", value(&config.model)),
         ("developerInstructions", value(&config.system_prompt)),

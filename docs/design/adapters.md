@@ -125,7 +125,8 @@ Made for the two harnesses there are; none is changed before a harness needs it.
   not the thread's); a harness without command hooks can only refuse an agent that has any, as a `config_error` at the
   start of a run.
 - `EffectiveConfig.targets` (the subagents a session may call) is delivered as the harness's own subagent
-  definitions: claude takes them by `--agents`; the codex adapter does not deliver them yet.
+  definitions: claude takes them by `--agents`, codex as agent roles of the thread
+  (`config.agents`, a generated role file per target).
 - `capabilities(&ProcessPart)` takes a process part although the tested versions do not depend on it; the root
   reads them from `Adapter.tested` instead.
 - `InstanceHandle{pid, start_time, pgid}`: an instance is a local child process of the daemon.

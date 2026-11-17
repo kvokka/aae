@@ -31,6 +31,9 @@ pub enum Reply {
     /// A call without arguments of the request's function tool whose name ends with this (an MCP tool); a text
     /// answer if the request has no such tool.
     Mcp(String),
+    /// A call with these arguments of the request's function tool whose name ends with this (`spawn_agent`, in its
+    /// namespace if it has one); a text answer if the request has no such tool.
+    Call(String, Value),
     /// One turn: the reply at the number of tool outputs in the request's input, the last one repeating — the same
     /// plan serves any number of threads at once.
     Turn(Vec<Reply>),
@@ -153,7 +156,8 @@ async fn answer(n: usize, reply: Reply, body: &Value) -> Response {
                 "call_id": format!("call_fake_{n}"), "name": "exec_command", "arguments": arguments });
             stream(n, model, item, None)
         }
-        Reply::Mcp(suffix) => {
+        Reply::Mcp(suffix) => Box::pin(answer(n, Reply::Call(suffix, json!({})), body)).await,
+        Reply::Call(suffix, arguments) => {
             // codex puts the tools of MCP server `s` in a namespace `mcp__s`: a call names both.
             let tools = body["tools"].as_array().into_iter().flatten();
             let named = |t: &Value| t["name"].as_str().is_some_and(|name| name.ends_with(&suffix));
@@ -166,7 +170,7 @@ async fn answer(n: usize, reply: Reply, body: &Value) -> Response {
             };
             let item = json!({ "type": "function_call", "id": format!("fc_fake_{n}"), "status": "completed",
                 "call_id": format!("call_fake_{n}"), "name": tool["name"], "namespace": namespace,
-                "arguments": "{}" });
+                "arguments": arguments.to_string() });
             stream(n, model, item, None)
         }
         Reply::Turn(replies) => {

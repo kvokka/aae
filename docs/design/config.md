@@ -288,10 +288,10 @@ What inheritance costs, and what the user should know:
 An inheriting process gets the daemon's proxy and certificate variables (`HTTPS_PROXY`, `HTTP_PROXY`, `ALL_PROXY`,
 `NO_PROXY` in either case, `SSL_CERT_FILE`, `SSL_CERT_DIR`, `NODE_EXTRA_CA_CERTS`) and, for claude,
 `CLAUDE_CONFIG_DIR`; an isolated one gets none of them (set them in `env` if it needs them). A codex agent with
-skills that inherits the host gets a `CODEX_HOME` of its own in the state directory (codex reads skills only from
-`CODEX_HOME/skills`): it links the host's `auth.json`, `config.toml`, `AGENTS.md` and every skill of
-`~/.codex/skills` beside the agent's own (an agent's skill of the same name wins); nothing else in `~/.codex` reaches
-such an agent, and `HOME` stays the operator's.
+skills (its own or its subagent targets') that inherits the host gets a `CODEX_HOME` of its own in the state
+directory (codex reads skills only from `CODEX_HOME/skills`): it links the host's `auth.json`, `config.toml`,
+`AGENTS.md` and every skill of `~/.codex/skills` beside the agent's own (an agent's skill of the same name wins);
+nothing else in `~/.codex` reaches such an agent, and `HOME` stays the operator's.
 
 codex runs with `sandbox_mode = "danger-full-access"` unless the native block, or the host's `config.toml` of an
 inheriting process, sets `sandbox_mode`: the codex sandbox needs unprivileged user namespaces,
@@ -592,8 +592,15 @@ join the session's and are visible to the whole session. A target's `env` and na
 subagent: it lives in the caller's process. claude: the definitions go in `--agents` (a file beside the session's
 settings), and `CLAUDE_AGENT_SDK_DISABLE_BUILTIN_AGENTS=1` removes the built-in agent types (`general-purpose`,
 `Explore`, `Plan`), so with no target only claude's own `fork` is left. Nesting is the harness's: claude goes two
-levels deep unless `CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH` in the agent's `env` says otherwise. codex does not get
-the definitions yet.
+levels deep unless `CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH` in the agent's `env` says otherwise. codex: each target is
+an agent role of the thread (`config.agents.<type>`: the `description` and a generated role file with the role
+prompt as `developer_instructions`, the model and the effort), given again on every resume. A target with no role
+prompt keeps the session's instructions. The targets' skills are linked into the process's `CODEX_HOME/skills`
+beside the session's, so the session sees them all; a role turns off the ones its target has not, so a subagent sees
+its target's skills only, and one called by another subagent the skills both targets have. codex's built-in types
+(`default`, `explorer`, `worker`) stay. codex picks its multi-agent version by the model; `features.multi_agent_v2 =
+true` in `native.codex` forces the newer one. The limits are codex's, set in `native.codex`: `agents.max_threads`
+(six open subagents by default) and, in the older version, `agents.max_depth` (one level by default).
 
 Load errors, said of the project file for every agent and variant on every place, and for every ai step of a formula
 whose pack or step layers change the caller: a name that resolves to no agent or variant; a target on another harness,

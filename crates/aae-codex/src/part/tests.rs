@@ -64,6 +64,10 @@ fn the_process_gets_the_native_block_and_the_thread_the_rest() {
     assert_eq!(s["config"]["hooks"]["Stop"][0]["hooks"][0]["command"], exports);
     assert_eq!(s["config"]["bypass_hook_trust"], true);
     assert_eq!(s["config"]["model_reasoning_effort"], "low");
+    assert!(
+        s["config"]["agents"].is_null() && s["roles"].is_null(),
+        "no target, no role"
+    );
     // The session part is not in the fingerprint: two runs of one agent share a process.
     let other = SessionPlan::New {
         workdir: "/v".into(),
@@ -257,4 +261,78 @@ fn the_process_part_keeps_the_reference_and_the_process_gets_the_value() {
     );
     let p = key("${AAE_TEST_NO_SUCH_VARIABLE}");
     assert_eq!(part::env(&p, "i1", None).unwrap_err().kind, FailureKind::ConfigError);
+}
+
+#[test]
+fn a_thread_gets_a_role_per_target_and_the_process_their_skills() {
+    let skill = |path: &str| {
+        agent(aae_contract::config::Skill {
+            enabled: true,
+            path: Some(path.into()),
+        })
+    };
+    let mut config = config();
+    config.skills.insert("own".into(), skill("/s/own"));
+    config.native.as_mut().unwrap().value["agents"] = json!({ "max_threads": 15 });
+    let mut qa = config.clone();
+    qa.description = Some(agent("Checks.".into()));
+    qa.system_prompt = Some(agent("Check.".into()));
+    qa.model = Some(agent("gpt-role".into()));
+    qa.effort = Some(agent("high".into()));
+    qa.skills = [("qa".to_owned(), skill("/s/qa"))].into();
+    let mut bare = config.clone();
+    bare.description = Some(agent("Bare.".into()));
+    (bare.model, bare.effort, bare.skills) = (None, None, Default::default());
+    config.targets = [("kit.qa".to_owned(), qa), ("bare".to_owned(), bare)].into();
+    let driver = Codex::new("codex".into(), "/state".into(), None, 8);
+    let new = SessionPlan::New {
+        workdir: "/w".into(),
+        run: "r".into(),
+        attempt: 1,
+        token: "tok".into(),
+        actor: None,
+        bead: None,
+    };
+    let split = driver.split(&config, &new).unwrap();
+    assert_eq!(split.process.0["skills"], json!({ "own": "/s/own", "qa": "/s/qa" }));
+    let s = &split.session.0;
+    let agents = &s["config"]["agents"];
+    assert_eq!(agents["max_threads"], 15, "the native table stays: {agents}");
+    assert_eq!(agents["kit.qa"]["description"], "Checks.");
+    let role = |name: &str| -> toml::Table {
+        let file = agents[name]["config_file"].as_str().unwrap();
+        assert!(
+            file.starts_with("/state/codex/roles/") && file.ends_with(".toml"),
+            "{file}"
+        );
+        toml::from_str(s["roles"][file].as_str().unwrap()).unwrap()
+    };
+    let off = |paths: &[&str]| {
+        let entries: Vec<_> = (paths.iter())
+            .map(|p| toml::toml! { path = (format!("{p}/SKILL.md")) enabled = false })
+            .map(toml::Value::Table)
+            .collect();
+        toml::Value::Table(toml::Table::from_iter([("config".to_owned(), entries.into())]))
+    };
+    let qa = role("kit.qa");
+    assert_eq!(qa["developer_instructions"].as_str(), Some("Check."));
+    assert_eq!(qa["model"].as_str(), Some("gpt-role"));
+    assert_eq!(qa["model_reasoning_effort"].as_str(), Some("high"));
+    assert_eq!(qa["skills"], off(&["/s/own"]));
+    // No role prompt: the session's instructions stay; every skill of the process is off.
+    let bare = role("bare");
+    assert_eq!(bare.keys().collect::<Vec<_>>(), ["skills"]);
+    assert_eq!(bare["skills"], off(&["/s/own", "/s/qa"]));
+    // A resume gives them again.
+    let resume = SessionPlan::Resume {
+        session: aae_contract::driver::SessionRef(json!({ "thread_id": "t" })),
+        workdir: "/w".into(),
+        run: "r".into(),
+        attempt: 2,
+        token: "t2".into(),
+        actor: None,
+        bead: None,
+    };
+    let again = driver.split(&config, &resume).unwrap().session.0;
+    assert_eq!((&again["config"]["agents"], &again["roles"]), (agents, &s["roles"]));
 }

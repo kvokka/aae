@@ -5,3 +5,4 @@ mod codex;
 mod common;
 mod contract;
 mod models;
+mod subagents;
