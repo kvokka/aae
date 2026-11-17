@@ -56,10 +56,11 @@ if ((${#exp[@]})); then
   ((n <= 5000)) || err "experiments exceed 5000 lines (docs/design/experiments.md)"
 fi
 
-# Every MEASURE marker carries non-empty id, date, ver and env. `id=<...>` is the format template, not a marker.
+# Every MEASURE marker carries non-empty id, date, ver and env. `id=<...>` is the format template, not a marker; what
+# the agents of a demo wrote (`demos/*/*-example/`) holds no markers of this repository.
 rc=0
 markers=$(git -c submodule.recurse=false grep -nE --untracked '(<!--|//|#) MEASURE id=' -- . \
-  ':!.loop' ':!.claude' ':!scripts/budget.sh' ':!scripts/budget-selftest.sh') || rc=$?
+  ':!.loop' ':!.claude' ':!scripts/budget.sh' ':!scripts/budget-selftest.sh' ':!demos/*-example/*') || rc=$?
 ((rc <= 1)) || err "git grep failed with code $rc"
 while IFS= read -r line; do
   [[ -z "$line" || "$line" =~ MEASURE\ id=\< ]] && continue
