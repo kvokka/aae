@@ -390,7 +390,7 @@ WP-98; WP-99; WP-100 → WP-101.
 
 Порядок — после WP-97…WP-101: WP-102 → WP-103 → WP-104 → WP-105 → WP-106 → WP-107; WP-108 — после WP-101 и WP-102.
 
-### WP-102 · Шаг `await`: исход приходит снаружи · размер M · критичный · статус: todo
+### WP-102 · Шаг `await`: исход приходит снаружи · размер M · критичный · статус: done
 - Документы: решения 126, 127, 120, 116, 62, 88; `docs/design/contracts.md` §1.3, §6.1–§6.3;
   `docs/design/config.md` «Formula»; `docs/design/invariants.md`; `docs/overview.md` (строка «A human gate as a
   formula step»); `docs/api/frontends.md`. Образец шага без процесса — `crates/aae-core/src/run/formula_step.rs` и
