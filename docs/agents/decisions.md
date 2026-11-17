@@ -17,7 +17,7 @@ each heading; this file only marks it as decided.
 | 5 | No tmux: a terminal screen is never a control channel |
 | 22 | The event journal is JSONL, rotated at 10 MB × 5 files |
 | 28 | A human joining a live session and handover of control are a later release: no operations, states or stubs now |
-| 43 | The core, `aae-contract` and `aae-core`, names no harness and no br, and the adapters (`aae-claude`, `aae-codex`, `aae-br`, `aae-plugins`) do not depend on `aae-core`; CI checks both |
+| 43 | The core, `aae-contract` and `aae-core`, names no harness and no br, and the adapters (`aae-claude`, `aae-codex`, `aae-br`, `aae-addons`) do not depend on `aae-core`; CI checks both |
 | 61 | Everything an adapter reports reaches the policy and the observer; the core drops nothing of it |
 | 62 | Safety timers are allowed; polling as a way to wait for a unit of work is forbidden |
 | 65 | A harness is an abstraction: all knowledge of one lives in its adapter; the root of the build holds the one table of adapters |
@@ -67,7 +67,7 @@ each heading; this file only marks it as decided.
 | № | Decision |
 |---|---|
 | 13 | A formula is a name, a description, inputs and steps in order; a step is an agent's turn (`ai`), an exec command, a `drain` or another formula |
-| 19 | A pack and a plugin are two different things |
+| 19 | A pack and an addon are two different things |
 | 60 | A prompt is required: a run without one does not start; an empty role file or template is a config error |
 | 68 | An agent is a general role with default launch settings; it knows nothing of a concrete task |
 | 69 | A formula answers "how"; the "what" comes only from the user's input |
@@ -88,7 +88,7 @@ each heading; this file only marks it as decided.
 | 101 | `drain`: `on_item_failure` is `continue` (default), `soft_stop` or `hard_stop` |
 | 102 | A step may be another formula; the parent's inputs are inherited, but only those the child declares; a step may set them explicitly |
 | 103 | The daemon is system-wide, formulas live in the scope of a project: a project sees only the formulas of its packs. The structure is flat. `internal = true` hides a formula from the catalogue and allows it only as a part of another (`--all` shows it, the API marks it) |
-| 126 | A formula step of kind `await` waits for an outcome from outside: it has no process and holds no concurrency slot, and its outcome (`pass` or `fail`, a summary, data) is given through the API and the CLI by a human, a script or a plugin. It is a check like any other: `fail` sends the run back to its `back_to`, and the outcome names no other step. A run does not reach it while a check before it has failed. Entering it is an event, `run.awaiting`. Decision 116 stands: no live session waits for anybody (2026-11-17) |
+| 126 | A formula step of kind `await` waits for an outcome from outside: it has no process and holds no concurrency slot, and its outcome (`pass` or `fail`, a summary, data) is given through the API and the CLI by a human, a script or an addon. It is a check like any other: `fail` sends the run back to its `back_to`, and the outcome names no other step. A run does not reach it while a check before it has failed. Entering it is an event, `run.awaiting`. Decision 116 stands: no live session waits for anybody (2026-11-17) |
 | 127 | An `await` step ends by its `timeout`, 7 days by default: with `fail_on_timeout = true`, the default, the run fails with no return to `back_to`; with `false` the step passes (2026-11-17) |
 | 128 | A step may carry `if`: a `where` table (contracts 2.2) over the run context of a prompt template and `back_from`, the names of the checks that sent the run back into the current round. A step whose `if` does not match is skipped. There is no expression language, and `back_to` stays the only jump (2026-11-17) |
 | 134 | Review feedback is worked by an agent of its own on the formula, with its own skills, instructions and permissions, not by the implementer (2026-11-17) |
@@ -110,7 +110,7 @@ each heading; this file only marks it as decided.
 | 77 | `aae run wait` waits for the terminal state of runs by events, not by polling |
 | 104 | Once the outcome is declared and the turn has ended, background processes the agent left do not hold the run: the daemon stops them |
 | 108 | The core does not hold a workdir. A run is bound to a directory, but aae neither locks it nor queues runs by it; keeping parallel writers apart in one rig (worktrees, limits, any other coordination) is the user's business (2026-11-17) |
-| 121 | The watchdog's defaults are `silence` 15 min, `tool_silence` 40 min, `background_silence` 120 min. Its keys are cut-offs only: observing and monitoring runs are plugins (2026-11-17) |
+| 121 | The watchdog's defaults are `silence` 15 min, `tool_silence` 40 min, `background_silence` 120 min. Its keys are cut-offs only: observing and monitoring runs are addons (2026-11-17) |
 | 122 | Inside a live run the default policy recovers by itself (`resume`, `new_session`). A run that failed for good is recovered by hand: no recovery scenario is predictable, so aae gives tools, not a scenario. A user sees which runs and sessions failed and with what failure kinds, and decides: continue a session, a new session on the same task with or without a note, or abandon it. A skill helps the user's agent sort out the aftermath. Formulas that recover by themselves are a low-priority [roadmap](../roadmap.md) item (revised 2026-11-17) |
 
 ## Tracker — [tracker](../design/tracker-br.md)
@@ -126,26 +126,26 @@ each heading; this file only marks it as decided.
 | 92 | The user gives a formula a task, not a bead: nobody files one in advance. A task that names an existing bead takes it up; otherwise `aae` files the root bead |
 | 96 | A rig's bead carries the rig's prefix: the acronym of its name (`backend` → `b`, `my-project` → `mp`) or the rig's `prefix` key; the root's beads carry no rig prefix |
 
-## Plugins — [plugin guide](../guide/plugins.md), [writing a plugin](../guide/plugin-development.md), [contracts 3](../design/contracts.md#3-orchestrator-hooks-decisions-and-timeouts)
+## Addons — [addon guide](../guide/addons.md), [writing an addon](../guide/addon-development.md), [contracts 3](../design/contracts.md#3-orchestrator-hooks-decisions-and-timeouts)
 
 | № | Decision |
 |---|---|
-| 20 | A plugin's logic on the orchestrator side is exec hooks on core events and supervised services |
+| 20 | An addon's logic on the orchestrator side is exec hooks on core events and supervised services |
 | 21 | A worktree is an optional part of a run |
 | 24 | A shared MCP server is one per scope, shared by sessions, not started per session |
 | 41 | The stdio→HTTP bridge is in the first release |
 | 42 | A service is any long-lived supervised process; MCP is optional for it |
 | 48 | A worktree is switched on by the formula setting `worktree = true`; there are no central lists and no agent-level switch |
 | 49 | `auth_required` and `billing`: repeats with a growing pause up to once an hour, never escalated to a human |
-| 123 | Compaction, metrics, budgets and a notice that a harness is unusable are plugins, not the core; they are on the [roadmap](../roadmap.md), which is a hint, not a work list. A loop without progress is no problem of the core (2026-11-17) |
+| 123 | Compaction, metrics, budgets and a notice that a harness is unusable are addons, not the core; they are on the [roadmap](../roadmap.md), which is a hint, not a work list. A loop without progress is no problem of the core (2026-11-17) |
 | 125 | aae's skills for a user's agent ship as a plugin of the harness's own plugin system, for Claude Code and Codex only (2026-11-17) |
 | 131 | The first bridge from an outside reviewer to an `await` step is GitHub: a process outside the core that polls GitHub, which does not push to a local machine. A merged pull request is `pass`, and nothing else is an acceptance: whoever merged decided. A pull request closed without a merge cancels the run. A comment or a review by an allowed author that no agent has picked up yet is `fail` (2026-11-17) |
 | 132 | Whose comments reach an agent is the formula input `feedback_from`, a list of logins, empty by default: then nobody's do, the author's among them. The comments of anyone else never reach the agent (2026-11-17) |
 | 133 | What a cancelled run left behind is cleaned by a formula that a trigger starts on `run.cancelled`, and on nothing else: a failed run is looked into by a human, not cleaned (2026-11-17) |
-| 141 | A plugin is aae's own format (importing the native plugins of Claude Code or Codex is a later question). A `[[plugin]]` declaration only names its source: a `path`, or `git` with `rev` and an optional `dir`. Attaching it is the one switch: `plugins = [{ name, params }]` in `[settings]` of the orchestrator or a project gives it to every agent, on an agent, a variant or an edit to that agent only; an agent has 0..N plugins, applied in the order of their first mention. A plugin's `[params]` carry defaults (the default gives the type); any layer of an attachment overrides them by key, and an unknown key or a wrong type is a load error. Params reach the agent side as `${params.<key>}` in its strings and the orchestrator hooks as `AAE_PLUGIN_PARAMS`, the values in force for the run's agent; an orchestrator hook runs for the runs whose agent attaches the plugin. `harnesses` in `plugin.toml` may restrict a plugin to some harnesses. A marketplace and installing from the CLI come later: the config is edited by hand (2026-11-18) |
-| 142 | aae's own plugins live in `plugins/<name>/` of this repository, each self-contained, so moving one to a repository of its own changes only its declaration. `examples/` is gone. The plugin of the operator's harness that drives aae (decision 125) is a different thing and lives in `operator-plugin/` (2026-11-18) |
+| 141 | An addon is aae's own format (importing the native plugins of Claude Code or Codex is a later question). An `[[addon]]` declaration only names its source: a `path`, or `git` with `rev` and an optional `dir`. Attaching it is the one switch: `addons = [{ name, params }]` in `[settings]` of the orchestrator or a project gives it to every agent, on an agent, a variant or an edit to that agent only; an agent has 0..N addons, applied in the order of their first mention. An addon's `[params]` carry defaults (the default gives the type); any layer of an attachment overrides them by key, and an unknown key or a wrong type is a load error. Params reach the agent side as `${params.<key>}` in its strings and the orchestrator hooks as `AAE_ADDON_PARAMS`, the values in force for the run's agent; an orchestrator hook runs for the runs whose agent attaches the addon. `harnesses` in `addon.toml` may restrict an addon to some harnesses. A marketplace and installing from the CLI come later: the config is edited by hand (2026-11-18) |
+| 142 | aae's own addons live in `addons/<name>/` of this repository, each self-contained, so moving one to a repository of its own changes only its declaration. `examples/` is gone. The plugin of the operator's harness that drives aae (decision 125) is a different thing and lives in `plugin/` (2026-11-18) |
 | 143 | An agent may call native subagents of its harness: `subagents` in the agent lists the agents (and variants) it may call, by name or with `*` (`qa-*`); by default only itself. The list is per task: the session gets the definitions of its agent's list, and a nested subagent calls within the same set. A callable agent needs a `description`. The role prompt is appended to the harness's system prompt and never replaces it; the prompt template stays the user prompt of a run; a subagent gets its role prompt as its native prompt. A native subagent is not a run: no finisher, gates, `max_runs` or orchestrator hooks. aae does not limit nesting: the harness's own limits apply (claude: depth 2, `CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH`; codex: its thread limit), and codex's built-in agent types stay visible; the docs say so and leave both to the user. The frontends show the call graph (2026-11-18) |
-| 144 | The first plugin of aae is `context-budget`, for claude and codex: it sets the context window at which the harness compacts a session, counts the compactions, keeps the label `compactions:<n>` on the run's bead, and ends the run past `max_compactions`. A demo of its own shows a small budget, the plugin's config and its work (2026-11-18) |
+| 144 | The first addon of aae is `context-budget`, for claude and codex: it sets the context window at which the harness compacts a session, counts the compactions, keeps the label `compactions:<n>` on the run's bead, and ends the run past `max_compactions`. A demo of its own shows a small budget, the addon's config and its work (2026-11-18) |
 | 145 | aae's unit of extension is an **addon**; the word plugin means only a native plugin of a harness (Claude Code, Codex). The names follow: `addon.toml`, `[[addon]]`, `addons = [{ name, params, enabled }]`, `aae addon list`, `AAE_ADDON_*`, the events `addon.*`, `addons/<name>/` of this repository, the bundled addons and their crate `aae-addons`. aae's skills plugin for the operator's harness (decision 125) moves from `operator-plugin/` to `plugin/`. Every decision and assumption that says plugin of aae's own unit reads addon, its sense unchanged; the rename edits their wording. Nothing of the old names is kept (decision 140) (2026-11-18) |
 
 ## Frontends — [frontends](../api/frontends.md), [MCP](../api/mcp.md)
@@ -195,4 +195,4 @@ each heading; this file only marks it as decided.
 | 107 | The chaos stand, with all its 1000 seeds, is an acceptance row, not a part of the gate. Acceptance may be slow: its model-free rows run only in CI, in a workflow started by hand, on the owner's request (2026-11-17) |
 | 136 | Demo 3 shows the `await` step on GitHub and is part of the acceptance of that work: public MIT repositories of the GitHub user `kvokka-agent`, a root and its children, with no `aae` in their names; the models are `luna` and `terra`; an agent plays the reviewer and merges. Agents may create these repositories, recreate them and open new pull requests there (2026-11-17) |
 | 139 | The live run of demo 3 is part of acceptance criterion 20 and of `mise run acceptance`, next to demos 1 and 2 (2026-11-17) |
-| 140 | No users and no first release: nothing is kept for compatibility. A design that turns out to be a placeholder (the plugin model first) is replaced whole, its code and docs cut in the same change, with no transition layer (2026-11-18) |
+| 140 | No users and no first release: nothing is kept for compatibility. A design that turns out to be a placeholder (the addon model first) is replaced whole, its code and docs cut in the same change, with no transition layer (2026-11-18) |

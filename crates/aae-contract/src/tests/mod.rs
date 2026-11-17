@@ -1,11 +1,11 @@
 mod config;
+mod config_addons;
 mod config_builtin;
 mod config_defaults;
 mod config_env;
 mod config_if;
 mod config_launch;
 mod config_layers;
-mod config_plugins;
 mod config_prompt;
 mod config_root;
 mod config_services;

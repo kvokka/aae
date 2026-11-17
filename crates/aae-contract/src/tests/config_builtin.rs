@@ -13,13 +13,13 @@ fn no_orchestrator_file_is_an_empty_config() {
 }
 
 #[test]
-fn builtin_tables_turn_bundled_plugins_on_and_off() {
+fn builtin_tables_turn_bundled_addons_on_and_off() {
     let config = |text: &str| load_with(&[("config.toml", text)]);
     let off = config("[builtin.default-policy]\nenabled = false\n").unwrap();
     assert!(off.bundled.is_empty());
     fails(
         &[("config.toml", "[builtin.policy]\n")],
-        "`policy` is not a bundled plugin",
+        "`policy` is not a bundled addon",
     );
     fails(
         &[("config.toml", "[builtin.default-policy]\nenabled = 1\n")],

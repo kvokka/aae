@@ -117,7 +117,7 @@ pub(crate) const ALL: &[Scenario] = &[
     },
     Scenario {
         criterion: "20",
-        title: "demo 4: an agent on claude and one on codex read past the window the context-budget plugin gives them, \
+        title: "demo 4: an agent on claude and one on codex read past the window the context-budget addon gives them, \
             and the bead of each run carries the label of its compactions, unattended",
         launch: Launch::Request,
         run: |env| Box::pin(demo(env, "4-context-budget", 1)),

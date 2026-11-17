@@ -1,4 +1,4 @@
-//! The plugins bundled with aae (docs/design/config.md): in-process executors of the orchestrator hook contract
+//! The addons bundled with aae (docs/design/config.md): in-process executors of the orchestrator hook contract
 //! (docs/design/contracts.md 3.1). The core runs them as hooks of their events (`aae_contract::config::BUNDLED`) with
 //! their `[builtin.<name>]` table as parameters (`worktree`: the loader's); the daemon checks those at start.
 
@@ -10,23 +10,23 @@ mod worktree;
 use serde::de::DeserializeOwned;
 use serde_json::Value;
 
-/// The hook of bundled plugin `name` on `event`: its decision, `None` for no decision, or why it failed.
+/// The hook of bundled addon `name` on `event`: its decision, `None` for no decision, or why it failed.
 pub fn run(name: &str, event: &Value, params: &Value) -> Result<Option<Value>, String> {
     match name {
         "default-policy" => Ok(policy::decide(event, &parse(name, params)?)),
         "worktree" => worktree::hook(event, &parse(name, params)?),
-        _ => Err(format!("`{name}` is not a bundled plugin")),
+        _ => Err(format!("`{name}` is not a bundled addon")),
     }
 }
 
-/// Checks the parameters of bundled plugin `name`.
+/// Checks the parameters of bundled addon `name`.
 pub fn check(name: &str, params: &Value) -> Result<(), String> {
     match name {
         "default-policy" => parse::<policy::Params>(name, params)
             .and_then(|p| p.check().map_err(|e| format!("[builtin.{name}]: {e}")))
             .map(drop),
         "worktree" => parse::<worktree::Params>(name, params).map(drop),
-        _ => Err(format!("`{name}` is not a bundled plugin")),
+        _ => Err(format!("`{name}` is not a bundled addon")),
     }
 }
 

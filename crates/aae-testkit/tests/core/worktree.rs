@@ -1,4 +1,4 @@
-//! The bundled `worktree` plugin on the run machine, with real git (docs/design/config.md).
+//! The bundled `worktree` addon on the run machine, with real git (docs/design/config.md).
 
 use crate::common;
 
@@ -36,11 +36,11 @@ const BUILD: (&str, &str) = (
     "name = \"build\"\nworktree = true\n[[step]]\nkind = \"ai\"\nagent = \"dev\"\n",
 );
 
-/// The world with `files` over the common ones and the bundled plugins, its rig a plain directory.
+/// The world with `files` over the common ones and the bundled addons, its rig a plain directory.
 fn plain(files: &[(&str, &str)]) -> World {
     let hooks = ExecHooks {
         socket: None,
-        bundled: Some(aae_plugins::run),
+        bundled: Some(aae_addons::run),
     };
     world_on(files, Arc::new(hooks), ScriptedDriver::new(2))
 }

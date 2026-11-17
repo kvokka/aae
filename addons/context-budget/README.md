@@ -1,16 +1,16 @@
 # context-budget
 
-A plugin of aae for claude and codex agents: it sets the context window at which the harness compacts a session,
+An addon of aae for claude and codex agents: it sets the context window at which the harness compacts a session,
 counts the compactions of the session, keeps the label `compactions:<n>` on the run's bead and fails the run past
 `max_compactions`. [Demo 4](../../demos/4-context-budget/README.md) runs it on an agent of each harness.
 
 ```toml
 # the orchestrator's config.toml or a project's aae.toml
-[[plugin]]
-path = "<this directory>"            # or git = "<this repository>", rev = "<tag>", dir = "plugins/context-budget"
+[[addon]]
+path = "<this directory>"            # or git = "<this repository>", rev = "<tag>", dir = "addons/context-budget"
 
 # any settings layer: [settings], a rig, agent.toml, a variant
-plugins = [{ name = "context-budget", params = { window = 150000, max_compactions = 2 } }]
+addons = [{ name = "context-budget", params = { window = 150000, max_compactions = 2 } }]
 ```
 
 ## Params
@@ -27,7 +27,7 @@ less 33k tokens; codex takes any size and compacts after the tool call whose rep
 
 The hook `hooks/budget` runs in the agent's session, on two harness hooks:
 
-- `PostCompact`: the count of the session (by its `session_id`) goes up by one in `<state>/plugins/context-budget/`.
+- `PostCompact`: the count of the session (by its `session_id`) goes up by one in `<state>/addons/context-budget/`.
   When the run has a bead (`AAE_BEAD`), the bead's `compactions:*` label is replaced by `compactions:<n>`, written as
   the session's tracker actor. Past `max_compactions` the hook declares the outcome `fail` with the summary
   `context budget: <n> compactions` (`aae finish`) and answers `{"continue": false}`: codex ends the turn there.
@@ -37,7 +37,7 @@ The hook `hooks/budget` runs in the agent's session, on two harness hooks:
 
 The turn over, the run fails with the declared outcome. An outcome the finisher does not get accepted — a daemon out
 of reach, a remark of a `run.finishing` hook — fails the hook, and the session goes on: the next compaction tries
-again. The files of the count, `<session>.count` and `<session>.stop`, stay in the plugin's data directory. A compaction inside a claude subagent or a codex child thread
+again. The files of the count, `<session>.count` and `<session>.stop`, stay in the addon's data directory. A compaction inside a claude subagent or a codex child thread
 (its input has `agent_id`) is of that agent's own context and does not count. The count is per session: a new
 session of the run, after an attempt failed, starts from zero.
 

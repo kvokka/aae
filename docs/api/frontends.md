@@ -38,7 +38,7 @@ The surface: projects with their root and rigs (`GET /v1/projects`: `name`, `dir
 agent's harness in the project outside any rig and formula, `null` when its layers do not set one, and the call graph
 there: `subagents`, the agents and variants its session may call, and `called_by`, the agents that may call it, the
 agent itself left out of both; `aae agent list` prints both as lines of names), formulas, packs,
-plugins (list), config check, explain and reload; runs
+addons (list), config check, explain and reload; runs
 (start, list, state, live view, cancel, finish, resolve); triggers (list, enable, disable, fire by hand);
 instances and services (list, stop an idle one); issue gates (list, close, open — orchestrator, project, agent, bead,
 account); events; daemon status, drain and planned restart.
@@ -90,7 +90,7 @@ Code: `crates/aae-front/src/cli/`. The CLI is a thin client of the HTTP API in t
 - `aae finish` reads the attempt token from the session environment, retries for 60 s under one idempotency key and
   exits 75 when the daemon stays unreachable (an attempt failure, not a failed run).
 - Without a daemon only `aae daemon`, `aae cache clear`, `aae --version`, and `aae doctor` and
-  `aae config check|explain` with `--config <file>` work; `aae cache clear` removes the packs and plugins downloaded
+  `aae config check|explain` with `--config <file>` work; `aae cache clear` removes the packs and addons downloaded
   from git, and the next load of the config downloads them again; any other command says that no daemon listens on
   the socket and how to start one, and for `doctor` and `config check|explain` that `--config <file>` checks a file
   without one.
@@ -115,7 +115,7 @@ so an agent names it in its own config (`[mcp.aae] url = "${AAE_API}/mcp"`, whic
 - A human sees runs and follows a run's live view through these frontends (`aae run watch` or the API), and gives
   the outcome of an `await` step (`aae run resolve`), by hand or through a bridge from another system (demo 3's
   `demos/3-review-gate/bridge.sh` from GitHub, with an idempotency key per round); the skill `awaiting` of the aae
-  plugin for Claude Code and Codex (`operator-plugin/`) shows a user's agent the runs that wait and passes on the user's
+  plugin for Claude Code and Codex (`plugin/`) shows a user's agent the runs that wait and passes on the user's
   outcome or cancel. A human answers no permission request: the harness decides them from the config
   ([config](../design/config.md#permissions)).
 - The state of a run shows each attempt's `session`: the harness's own session reference (claude

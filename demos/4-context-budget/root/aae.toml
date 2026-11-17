@@ -18,7 +18,7 @@ approval_policy = "never"             # codex's approval policy
 [agents.glossarist]                   # the cheapest claude model
 model = "haiku"
 
-# The indexer keeps the plugin of config.toml with a window of its own: codex takes any size, claude 100000 at the
+# The indexer keeps the addon of config.toml with a window of its own: codex takes any size, claude 100000 at the
 # least. `max_compactions` stays 8, from config.toml.
 [agents.indexer]
-plugins = [{ name = "context-budget", params = { window = 50000 } }]
+addons = [{ name = "context-budget", params = { window = 50000 } }]

@@ -142,10 +142,10 @@ async fn a_turn_past_the_step_timeout_is_a_runaway() {
 
 #[tokio::test(start_paused = true)]
 async fn the_step_timeout_pauses_between_turns() {
-    let plugin = POLICY[1]
+    let addon = POLICY[1]
         .1
         .replace("run.attempt_failed", "run.turn_ended_without_outcome");
-    let w = world(&[POLICY[0], ("policy/plugin.toml", &plugin)]);
+    let w = world(&[POLICY[0], ("policy/addon.toml", &addon)]);
     let mut first = vec![Step::Emit(Normalized::TurnStarted)];
     first.extend(busy(36));
     first.extend(hollow_turn().into_iter().skip(1));

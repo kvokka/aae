@@ -369,7 +369,7 @@ fn a_formula_step_names_a_formula_whose_inputs_it_has() {
     );
     let trigger = (
         "kit/pack.toml",
-        "name = \"kit\"\nversion = \"0.3.0\"\nrequires_plugins = [\"mail\"]\n[[trigger]]\nname = \"nightly\"\n\
+        "name = \"kit\"\nversion = \"0.3.0\"\nrequires_addons = [\"mail\"]\n[[trigger]]\nname = \"nightly\"\n\
          cron = \"0 3 * * *\"\nrun = \"sub\"\ninputs = { goal = \"g\" }\n",
     );
     fails(

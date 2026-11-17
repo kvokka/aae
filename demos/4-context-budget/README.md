@@ -1,8 +1,8 @@
 # Demo 4: a context budget for every agent
 
-What the plugin [`context-budget`](../../plugins/context-budget/README.md) does on both harnesses: an agent on claude
-and an agent on codex each read about 100000 tokens of documents, more than the window the plugin gives them, so
-each session compacts its context; the plugin counts the compactions and keeps the label `compactions:<n>` on the
+What the addon [`context-budget`](../../addons/context-budget/README.md) does on both harnesses: an agent on claude
+and an agent on codex each read about 100000 tokens of documents, more than the window the addon gives them, so
+each session compacts its context; the addon counts the compactions and keeps the label `compactions:<n>` on the
 bead of the run.
 
 There are two requests, one per agent, run side by side:
@@ -13,7 +13,7 @@ There are two requests, one per agent, run side by side:
 
 The documents are the `docs/` of this checkout of aae, copied by `run.sh`.
 
-- `pack/` is the pack `study`, with not a word about the plugin. Agent `glossarist` runs on claude, agent `indexer`
+- `pack/` is the pack `study`, with not a word about the addon. Agent `glossarist` runs on claude, agent `indexer`
   on codex; each has the prompt its step gets, `agents/<agent>/prompt.template.md`: read every document to its end,
   write the one file the request asks for. Formula `glossary` is one ai step of `glossarist`, formula `index` one of
   `indexer`.
@@ -25,31 +25,31 @@ The documents are the `docs/` of this checkout of aae, copied by `run.sh`.
 ## Run
 
 You need `aae`, logins of `claude` and `codex`, `br` and `jq`; `mise install` in this directory installs all but
-`aae`. The plugin's hook calls `jq`, `br` and `aae` too. The run spends real tokens on the cheapest models: claude
+`aae`. The addon's hook calls `jq`, `br` and `aae` too. The run spends real tokens on the cheapest models: claude
 `haiku` and codex `luna`.
 
 ```sh
-aae config check --config root/config.toml   # the pack, the project and the plugin load
+aae config check --config root/config.toml   # the pack, the project and the addon load
 ./run.sh                                     # or: mise run demo
 ```
 
-`run.sh` writes `RESULT.md`: when and on what it ran, and for each agent what it ran on with the plugin's params,
+`run.sh` writes `RESULT.md`: when and on what it ran, and for each agent what it ran on with the addon's params,
 the labels of its bead, the outcome of its run, and the count of each session. The demo passes when both runs pass
 and both beads carry a `compactions:<n>` label. Everything a run creates is in `.gitignore`;
 `git clean -ffdX -- .` clears it for the next run. Compare with the author's run: `library-example/` (what the
 agents wrote) and `RESULT-example.md`.
 
-## How the plugin is set up
+## How the addon is set up
 
-`root/config.toml` declares the plugin by its directory in this repository and attaches it in `[settings]`, so it
+`root/config.toml` declares the addon by its directory in this repository and attaches it in `[settings]`, so it
 reaches every agent of every project of the daemon:
 
 ```toml
-[[plugin]]
-path = "../../../plugins/context-budget"
+[[addon]]
+path = "../../../addons/context-budget"
 
 [settings]
-plugins = [{ name = "context-budget", params = { window = 100000, max_compactions = 8 } }]
+addons = [{ name = "context-budget", params = { window = 100000, max_compactions = 8 } }]
 ```
 
 claude takes a window of 100000 at the least and compacts at about 67000 tokens of it. codex takes any size, so the
@@ -58,7 +58,7 @@ project gives `indexer` a smaller window of its own in `root/aae.toml`; `max_com
 
 ```toml
 [agents.indexer]
-plugins = [{ name = "context-budget", params = { window = 50000 } }]
+addons = [{ name = "context-budget", params = { window = 50000 } }]
 ```
 
 `aae config explain --config root/config.toml --project library --agent study.indexer` shows each param with the
@@ -70,4 +70,4 @@ that.
 
 - `br label list <bead>` in `root/` (the beads are in `RESULT.md`): `compactions:<n>`, one label, the count of the
   session's compactions.
-- `.aae/state/aae/plugins/context-budget/`: a `<session>.count` per session that compacted.
+- `.aae/state/aae/addons/context-budget/`: a `<session>.count` per session that compacted.

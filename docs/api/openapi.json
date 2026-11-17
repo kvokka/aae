@@ -10,6 +10,67 @@
     "version": "0.1.0"
   },
   "paths": {
+    "/v1/addons": {
+      "get": {
+        "summary": "Lists the declared addons and the enabled bundled ones: of the orchestrator (`project` null) and of every\nproject (those on for its runs), or of the project `project` only.",
+        "operationId": "list_addons",
+        "parameters": [
+          {
+            "name": "project",
+            "in": "query",
+            "description": "Only this project.",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Addon"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`bad_request`: the query is malformed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorReply"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthorized`: over TCP, without `Authorization: Bearer <api_token>`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorReply"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`not_found`: no such project",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorReply"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/agents": {
       "get": {
         "summary": "Lists the agents, as `<pack>.<name>` with the harness they run on in the project, outside any rig and formula;\nnull where the agent's layers do not decide it. `subagents` and `called_by` are the call graph there: the agents\nand variants it may call and the agents that may call it, the agent itself left out.",
@@ -1093,67 +1154,6 @@
                   "type": "array",
                   "items": {
                     "$ref": "#/components/schemas/Pack"
-                  }
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "`bad_request`: the query is malformed",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorReply"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "`unauthorized`: over TCP, without `Authorization: Bearer <api_token>`",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorReply"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "`not_found`: no such project",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorReply"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/v1/plugins": {
-      "get": {
-        "summary": "Lists the declared plugins and the enabled bundled ones: of the orchestrator (`project` null) and of every\nproject (those on for its runs), or of the project `project` only.",
-        "operationId": "list_plugins",
-        "parameters": [
-          {
-            "name": "project",
-            "in": "query",
-            "description": "Only this project.",
-            "required": false,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/Plugin"
                   }
                 }
               }
@@ -2336,6 +2336,49 @@
   },
   "components": {
     "schemas": {
+      "Addon": {
+        "type": "object",
+        "description": "A declared addon, or an enabled bundled one (no version nor root).",
+        "required": [
+          "name",
+          "on",
+          "bundled"
+        ],
+        "properties": {
+          "bundled": {
+            "type": "boolean"
+          },
+          "name": {
+            "type": "string"
+          },
+          "on": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "The events its hooks run on."
+          },
+          "project": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "The project whose runs it is on; null for the orchestrator's."
+          },
+          "root": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "version": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
       "Agent": {
         "type": "object",
         "required": [
@@ -3003,7 +3046,7 @@
           "project",
           "name",
           "root",
-          "requires_plugins"
+          "requires_addons"
         ],
         "properties": {
           "name": {
@@ -3012,7 +3055,7 @@
           "project": {
             "type": "string"
           },
-          "requires_plugins": {
+          "requires_addons": {
             "type": "array",
             "items": {
               "type": "string"
@@ -3042,49 +3085,6 @@
           "token": {
             "type": "string",
             "description": "The attempt token of the session; a stale one is rejected."
-          }
-        }
-      },
-      "Plugin": {
-        "type": "object",
-        "description": "A declared plugin, or an enabled bundled one (no version nor root).",
-        "required": [
-          "name",
-          "on",
-          "bundled"
-        ],
-        "properties": {
-          "bundled": {
-            "type": "boolean"
-          },
-          "name": {
-            "type": "string"
-          },
-          "on": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            },
-            "description": "The events its hooks run on."
-          },
-          "project": {
-            "type": [
-              "string",
-              "null"
-            ],
-            "description": "The project whose runs it is on; null for the orchestrator's."
-          },
-          "root": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "version": {
-            "type": [
-              "string",
-              "null"
-            ]
           }
         }
       },
@@ -3303,7 +3303,7 @@
               "string",
               "null"
             ],
-            "description": "Set once the run ended: why it failed (a plugin's veto, a failure kind) or was cancelled; `pass` for a\npass."
+            "description": "Set once the run ended: why it failed (an addon's veto, a failure kind) or was cancelled; `pass` for a\npass."
           },
           "rig": {
             "type": "string"

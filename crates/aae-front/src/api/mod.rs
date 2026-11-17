@@ -102,7 +102,7 @@ fn router() -> OpenApiRouter<Arc<Api>> {
         .routes(routes!(config::list_agents))
         .routes(routes!(config::list_formulas))
         .routes(routes!(config::list_packs))
-        .routes(routes!(config::list_plugins))
+        .routes(routes!(config::list_addons))
         .routes(routes!(config::explain))
         .routes(routes!(config::check))
         .routes(routes!(config::reload))

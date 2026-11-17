@@ -141,7 +141,7 @@ pub enum Msg {
         attempt: u32,
         text: String,
     },
-    /// A hook on `event` failed: the core reports it as `plugin.hook_failed` with `data` (contracts 1.3).
+    /// A hook on `event` failed: the core reports it as `addon.hook_failed` with `data` (contracts 1.3).
     HookFailed {
         event: Value,
         data: Value,
@@ -218,7 +218,7 @@ pub struct Create {
 /// The decisions of contracts 3.2 the run machine applies.
 #[derive(Clone, Debug, PartialEq)]
 pub enum Decision {
-    /// Every hook on the event finished without a decision: the "no plugin decision" outcome, at once (3.3).
+    /// Every hook on the event finished without a decision: the "no addon decision" outcome, at once (3.3).
     Abstain,
     /// On `run.preparing`: the session starts in `workdir`, with `env` changed (`None` removes a variable) and
     /// `prompt_append` after the prompt.

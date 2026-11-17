@@ -4,6 +4,7 @@
 #[path = "../common/mod.rs"]
 mod common;
 
+mod addon_attach;
 mod agent_limit;
 mod agent_prompt;
 mod anthropic;
@@ -34,7 +35,6 @@ mod mcp;
 mod model_gate;
 mod old_instances;
 mod openai;
-mod plugin_attach;
 mod recovery;
 mod restart_decisions;
 mod returns;

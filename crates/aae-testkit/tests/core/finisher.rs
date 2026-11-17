@@ -11,14 +11,14 @@ use common::{Hanging, Lost, POLICY, World, hollow_turn, last, world, world_with}
 use serde_json::{Value, json};
 use std::{sync::Arc, time::Duration};
 
-/// A world whose plugin has one hook on `on`: decisions on it wait for the test.
+/// A world whose addon has one hook on `on`: decisions on it wait for the test.
 fn hooked(on: &str) -> World {
     hooked_with(on, Arc::new(Lost))
 }
 
 fn hooked_with(on: &str, hooks: Arc<dyn HookRunner>) -> World {
-    let plugin = POLICY[1].1.replace("run.attempt_failed", on);
-    world_with(&[POLICY[0], ("policy/plugin.toml", &plugin)], hooks)
+    let addon = POLICY[1].1.replace("run.attempt_failed", on);
+    world_with(&[POLICY[0], ("policy/addon.toml", &addon)], hooks)
 }
 
 /// A turn that ends 10 s after the prompt: time for the finisher.

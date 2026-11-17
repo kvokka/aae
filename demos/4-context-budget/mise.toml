@@ -6,7 +6,7 @@ codex = "0"
 jq = "1.8.2"
 
 [tasks.check]
-description = "The pack, the project and the plugin load"
+description = "The pack, the project and the addon load"
 run = "aae config check --config root/config.toml"
 
 [tasks.demo]

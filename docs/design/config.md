@@ -9,8 +9,8 @@ error in every file.
 ## Loading
 
 - The daemon loads everything at once from the orchestrator file: the projects it lists, their packs, agents,
-  formulas, triggers and the plugins they declare. A missing orchestrator file is an empty config. Before reading,
-  `aae` downloads the packs and plugins from git into its cache (see [below](#packs-and-plugins-from-git)), as do
+  formulas, triggers and the addons they declare. A missing orchestrator file is an empty config. Before reading,
+  `aae` downloads the packs and addons from git into its cache (see [below](#packs-and-addons-from-git)), as do
   `POST /v1/config/check` and `aae config check|explain` and `aae doctor` with `--config <file>`; the latest
   revision of an unpinned pack is asked for at every load.
 - Load is all or nothing: every error found is reported with its file, and an invalid config is never applied.
@@ -19,7 +19,7 @@ error in every file.
   (the daemon's file; `--config <file>` loads a file in the CLI, with no daemon).
 - A retired key is a config error of one line that says where it is written now: `permission_mode` (the native block of
   the harness), `[overrides.<agent>]` (`[agents.<agent>]`), step kind `prompt` (`ai`), input type `bead` (`task`), the
-  `prompt` key of an `ai` step (the agent's `prompt.template.md`), `config` of a `[[plugin]]` (`params` of an attachment).
+  `prompt` key of an `ai` step (the agent's `prompt.template.md`), `config` of an `[[addon]]` (`params` of an attachment).
 - A reload is taken by new runs and by the schedules (a schedule whose `cron`/`every` changed, and every `cron` when
   `timezone` changed, is set again from the reload; a removed one is dropped); the snapshot is per step: a running
   step keeps the one it prepared with, and the next step of the run prepares with the config of that moment; an idle
@@ -32,7 +32,7 @@ error in every file.
 ## Settings (any layer)
 
 One table shape for every layer (see "Effective config"): `[settings]` of the orchestrator, a project and a rig;
-the `[agent]` contribution of a plugin; the top level of `agent.toml`; an agent variant `[agents.<name>]`; and the
+the `[agent]` contribution of an addon; the top level of `agent.toml`; an agent variant `[agents.<name>]`; and the
 edit of an agent `[agents.<agent>]`. A pack's `[settings]` takes only the three launch settings: `harness`, `model`,
 `effort`; an ai step takes them and `native.<harness>`. There is no `provider` key: a layer that has one is an unknown field. No neutral key
 holds a value only one harness understands: the permission mode is claude's `--permission-mode` and codex's approval
@@ -48,7 +48,7 @@ policy, with different values, so it is set in the harness's own block (`[settin
 | `mcp.<name>` | `{command = [..], env, scope}` (stdio; `scope = "orchestrator" \| "project" \| "session"`, optional) or `{url, headers}` (HTTP), not both (a server the daemon runs is a `[[service]]`, below); a key of the other kind (`headers` with `command`, `env` or `scope` with `url`) is an error | by key, entry replaced whole |
 | `hooks.<name>` | `{event, matcher, command, timeout}` (harness hooks, Claude dialect) or `{enabled = false}`; `event` must be a hook event of claude 2.1 or one codex adds (`Interrupt`, `PreModelRequest`, `PostModelRequest`) | named list |
 | `skills.<name>` | `{path}` (must exist) or `{enabled = false}` | named list |
-| `plugins` | array of `{name, params = {..}, enabled = true}`: attaches a declared plugin (see "Plugin") | by name: an attachment keeps the place of its first mention, `params` merge by key, the strongest `enabled` decides |
+| `addons` | array of `{name, params = {..}, enabled = true}`: attaches a declared addon (see "Addon") | by name: an attachment keeps the place of its first mention, `params` merge by key, the strongest `enabled` decides |
 | `description`, `subagents` | string; array of agent and variant names and patterns: keys of an agent only — `agent.toml`, a variant and an edit take them, any `[settings]` table does not (see "Subagents") | scalar; the list is replaced whole by the strongest layer that sets it |
 | `native.<harness>` | any table, passed to the adapter as is; `native.claude` is a table of claude settings keys, delivered with `--settings` together with the hooks, except `permission_mode`, which goes as `--permission-mode`; `native.codex` is a table of codex `config.toml` keys (`approval_policy` is the thread's approval policy), delivered to the app-server as `-c key=value` flags (so it is part of the process fingerprint) | by key |
 
@@ -73,7 +73,7 @@ starts and is never stored resolved: the run's snapshot, the journal, the instan
 session (from the adapter); a check script it keeps from starting fails the run at once, with no repeat, as
 `failed{infrastructure}` with reason `config_error: check script: …`. The `env` of an MCP server, of a `[[service]]`
 and of an orchestrator hook takes no references: its values are literal. What aae
-puts into an `env` itself (the tracker's variables, `${AAE_PLUGIN_DIR}` of a plugin, `PATH` with plugin `bin/`
+puts into an `env` itself (the tracker's variables, `${AAE_ADDON_DIR}` of an addon, `PATH` with addon `bin/`
 directories, the `env` of a `run.preparing` decision) is literal too, a `$` in it no reference. Output a command
 prints goes into the step's result in the journal, so a command must not print a secret it was given.
 
@@ -127,7 +127,7 @@ claude `permissions = { allow = ["Bash(aae finish *)"] }`.
   A failed MCP server is a failed tool, not a failed run.
 
 A **service** is a `[[service]]` table at the top level of the orchestrator config, a project's `aae.toml` or a
-`plugin.toml` (not of `[settings]`): a long-lived process the daemon supervises, with MCP optional.
+`addon.toml` (not of `[settings]`): a long-lived process the daemon supervises, with MCP optional.
 
 ```toml
 [[service]]
@@ -140,8 +140,8 @@ mcp = { url = "/mcp" }                         # | true (= /mcp); none: no MCP e
 ```
 
 - Layers: services merge by name like `mcp` entries; a stronger layer replaces a service whole. An orchestrator or
-  project service is used by every session of its level; a plugin's by the sessions of the agents that attach the
-  plugin. `${AAE_PLUGIN_DIR}` in a plugin's service `command`, `env` and `health.command` is the plugin directory.
+  project service is used by every session of its level; an addon's by the sessions of the agents that attach the
+  addon. `${AAE_ADDON_DIR}` in an addon's service `command`, `env` and `health.command` is the addon directory.
   `explain` prints `service.<name>` with its layer.
 - The daemon runs `command` once per scope (`orchestrator`, the default, or `project`), lazily, when the first
   session that uses it starts, and stops it 5 minutes after its last session ended. The process starts in `/` with a
@@ -180,7 +180,7 @@ mcp = { url = "/mcp" }                         # | true (= /mcp); none: no MCP e
 ## Effective config and "explain config"
 
 Settings live on three levels: the orchestrator (`~/.config/aae/config.toml`: the harnesses with the default model of
-each, shared MCP, hooks, skills, env, plugins), the project (`aae.toml`: rigs, packs, project plugins, `[agents]` edits) and
+each, shared MCP, hooks, skills, env, addons), the project (`aae.toml`: rigs, packs, project addons, `[agents]` edits) and
 the rig (a section of `aae.toml`: repository path, variables, `[agents]` edits). An agent is not a level but a consumer: its
 `agent.toml` gives the defaults of the role, and every setting, the harness and the model too, comes from the
 layers, weakest first:
@@ -189,7 +189,7 @@ layers, weakest first:
 2. the orchestrator's `[settings]`, over the default model of the harness;
 3. the project's `[settings]`;
 4. the rig's `[settings]`;
-5. the `[agent]` contributions of the plugins attached to the agent, in attachment order;
+5. the `[agent]` contributions of the addons attached to the agent, in attachment order;
 6. the agent's own `agent.toml`: the defaults of the role;
 7. `[settings]` of the pack of the run's formula (launch settings only);
 8. the `[[step]]` of the formula the run is at (launch settings and `native.<harness>`);
@@ -202,7 +202,7 @@ Layers 7 and 8 belong to a run: the agent alone (`explain` without a formula, `a
 the user says for the agent (9, 10) is stronger than what the pack and the formula say.
 
 A scalar takes the strongest layer's value; a table (`env`, `mcp`, `native`) merges by key, an entry replaced whole;
-a named list (`hooks`, `skills`, `plugins`) is the union, and a stronger layer turns an element off by name;
+a named list (`hooks`, `skills`, `addons`) is the union, and a stronger layer turns an element off by name;
 `subagents` is replaced whole by the strongest layer that sets it. The host
 layer is the exception: the harness merges it itself, aae neither reads nor parses it, and it is turned off only as a
 whole (`inherit_host = false`), never one element by name. The harness config inside the rig (`CLAUDE.md`,
@@ -210,14 +210,14 @@ whole (`inherit_host = false`), never one element by name. The harness config in
 (see "Host inheritance").
 
 `Config::effective(project, rig, agent)` merges the layers above for one agent alone: the harness default model,
-orchestrator, project and rig settings, then the contributions of the attached plugins in attachment order, the agent,
+orchestrator, project and rig settings, then the contributions of the attached addons in attachment order, the agent,
 and the `[agents]` edits of the orchestrator, the project and the rig. `Config::for_run(project, rig, formula, step)` is what a
 step of a run gets: the agent the rig runs for that step (a variant by its name), and its config with the pack, step and
-variant layers too; a run keeps the one of its current step. Plugins attach first (the `plugins` key of every layer), so
-a stronger layer can detach a plugin and its whole contribution; an attached plugin prints as `plugins.<name> =
-"attached"`, then each of its params as `plugins.<name>.params.<key> = <value>`, each with its layer. An edit applies when its key resolves (see Names)
+variant layers too; a run keeps the one of its current step. Addons attach first (the `addons` key of every layer), so
+a stronger layer can detach an addon and its whole contribution; an attached addon prints as `addons.<name> =
+"attached"`, then each of its params as `addons.<name>.params.<key> = <value>`, each with its layer. An edit applies when its key resolves (see Names)
 to the agent. Every value keeps its layer; a value several layers make together (`native` tables merged by key, a system
-prompt with plugin fragments, `PATH` with plugin `bin/` directories) names them all in order (`# agent + plugin mail`),
+prompt with addon fragments, `PATH` with addon `bin/` directories) names them all in order (`# agent + addon mail`),
 and a model the adapter expanded keeps the short name it was given
 (`model = "gpt-6-luna"  # rig [agents], given as "luna"`). The new layers print as `pack <name>`,
 `formula <pack>.<name> step <step>` and `variant <name>`. `subagents` prints resolved, the agent itself in it
@@ -279,7 +279,7 @@ What inheritance costs, and what the user should know:
   MCP (one process for many sessions) covers only the servers declared in the `aae` config; `aae doctor` warns
   when it sees stdio MCP servers in the host settings (`crates/aae/src/doctor.rs`);
   <!-- MEASURE id=stdio-mcp-per-session date=2026-11-10 ver=prior-a86d05bd7 env=linux-arm64-orbstack src=reports/02,reports/18 note="deja server, PSS 42-62 MB per session; deja version not recorded; depends on the operator's MCP set" -->
-- the operator's own hooks and plugins run in agent sessions;
+- the operator's own hooks and addons run in agent sessions;
 - codex runs every command through the login shell named by `SHELL` (`$SHELL -lc '<command>'`) and snapshots that
   shell's environment on the first turn, so the operator's shell rc files shape every command of the agent;
 - codex rewrites `~/.codex/config.toml` itself (hook trust hashes); the adapters add no writes of their own to
@@ -341,10 +341,10 @@ binary = "/opt/claude/bin/claude"   # optional explicit path; otherwise mise, th
 max_sessions = 8                    # codex: threads per app-server before a second one starts (default 8)
 instance_idle_s = 60                # codex: seconds an app-server without threads lives on (default 60; 0 stops it at once)
 
-[[plugin]]                          # an installed plugin; its orchestrator side is enabled
-path = "~/aae-plugins/aae-plugin-mail"
+[[addon]]                          # an installed addon; its orchestrator side is enabled
+path = "~/aae-addons/aae-addon-mail"
 
-[builtin.default-policy]            # a bundled plugin (see below); on with no table
+[builtin.default-policy]            # a bundled addon (see below); on with no table
 backoff_cap_s = 300
 
 [watchdog]                          # thresholds of invariant 15 (contracts 6.1); every key optional
@@ -390,8 +390,8 @@ rounds = 2                          # over the orchestrator's `rounds`, under a 
 [inputs]                            # over the orchestrator's `[inputs]`, value by value
 focus = "performance"
 
-[[plugin]]
-path = "plugins/aae-plugin-notes"
+[[addon]]
+path = "addons/aae-addon-notes"
 
 [exec]                              # over the orchestrator's `[exec]`, under a step's own keys
 env = { TEST_DB = "postgres://localhost/shop" }
@@ -444,18 +444,18 @@ fails that run (`deny`, naming the directory). A rig at the root's path or under
 error. `[root]` takes no `settings`, `agents` or `triggers`: the project's own are the root's, and a project
 `[[trigger]]` that names no `rig` fires in the root.
 
-### Packs and plugins from git
+### Packs and addons from git
 
-A pack in `packs` and a `[[plugin]]` (in the orchestrator file or a project's) is a local directory, or a git
-repository with `pack.toml` / `plugin.toml` at its root: `{ git = "<url>", rev = "<tag or commit>" }` for a pack,
-`git = ".."` and `rev = ".."` instead of `path` for a plugin (exactly one of `path` and `git`). A plugin from git
-may live in a directory of the repository: `dir = "plugins/mail"` (relative, inside the repository; `dir` goes with
+A pack in `packs` and an `[[addon]]` (in the orchestrator file or a project's) is a local directory, or a git
+repository with `pack.toml` / `addon.toml` at its root: `{ git = "<url>", rev = "<tag or commit>" }` for a pack,
+`git = ".."` and `rev = ".."` instead of `path` for an addon (exactly one of `path` and `git`). An addon from git
+may live in a directory of the repository: `dir = "addons/mail"` (relative, inside the repository; `dir` goes with
 `git` only).
 
 - `rev` is a full commit id (40 or 64 lowercase hex digits) or the name of a tag, looked up only as
   `refs/tags/<rev>`: a branch or a short commit id is a config error ("no tag ... in the repository").
 - A pack without `rev` follows the latest revision: the remote's `HEAD`, the tip of its default branch, asked for at
-  every load of the config. A plugin must be pinned: a `[[plugin]]` from git without `rev` is a config error.
+  every load of the config. An addon must be pinned: an `[[addon]]` from git without `rev` is a config error.
 
 Whoever loads the config downloads first: the daemon at start, at `aae config reload`, `POST /v1/config/check` and
 `GET /v1/doctor`, and the CLI at `aae config check|explain` and `aae doctor` with `--config <file>`. The core reads
@@ -486,16 +486,16 @@ of a checkout in the cache are not detected. git must be in `PATH`; access to th
 helpers) is git's own, and git never asks for a password (`GIT_TERMINAL_PROMPT=0`). Each git command is killed after
 30 s, which fails the load that ran it.
 
-A plugin runs any command with the user's rights, so nothing installs or enables one implicitly: its orchestrator
-side and its agent side run only where it is attached in `plugins`, and a
-plugin from git runs only at the tag or commit its declaration pins.
+An addon runs any command with the user's rights, so nothing installs or enables one implicitly: its orchestrator
+side and its agent side run only where it is attached in `addons`, and a
+addon from git runs only at the tag or commit its declaration pins.
 
 ## Pack: `<pack>/pack.toml`
 
 ```toml
 name = "kit"
 version = "0.3.0"
-requires_plugins = ["mail"]         # must be declared by the orchestrator or the project
+requires_addons = ["mail"]         # must be declared by the orchestrator or the project
 min_aae = "0.1.0"                   # optional
 
 [settings]                          # layer 7: launch settings of the runs of its formulas
@@ -512,7 +512,7 @@ inputs = { bead = { next_ready = true, epic = "{{ event.bead.epic }}" } }
 Content: `agents/<agent>/agent.toml` (plus `prompt.md`, `prompt.template.md` and any other files of the agent, see
 "Agent") and
 `formulas/**/*.toml`: every `.toml` file under `formulas/`, in subdirectories too, is a formula. A pack
-is the unit of content: agents, formulas and triggers. It may require plugins but never contains one; a plugin is
+is the unit of content: agents, formulas and triggers. It may require addons but never contains one; an addon is
 declared by the orchestrator or the project. A pack holds no word of a user's task: what to do comes only from the
 inputs of a run.
 
@@ -585,7 +585,7 @@ its own, alone, on the caller's place (`Config::effective`): the layers of the c
 A run's config carries the configs of the targets that have a `description` (the caller with its run's own config),
 and its session gets them as native definitions of its harness, on every start and resume. The name of a type is the
 entry of the resolved list (`kit.qa`, a variant's name). A definition holds the target's `description`, role prompt
-(with its plugins' fragments), model, effort, and the MCP servers and hooks the session has not: a server of a name
+(with its addons' fragments), model, effort, and the MCP servers and hooks the session has not: a server of a name
 the session has is the session's, a hook equal to one of the session's runs already (the session's hooks fire inside
 its subagents too). The services of a target with an MCP server are bound with the session's. The targets' skills
 join the session's and are visible to the whole session. A target's `env` and native block do not reach its
@@ -605,7 +605,7 @@ true` in `native.codex` forces the newer one. The limits are codex's, set in `na
 Load errors, said of the project file for every agent and variant on every place, and for every ai step of a formula
 whose pack or step layers change the caller: a name that resolves to no agent or variant; a target on another harness,
 of another `scope` or `inherit_host`; a target whose `env` has a key the caller's has, with another value; a target
-whose plugin is not for the harness; a target named like an agent type the harness has built in (claude:
+whose addon is not for the harness; a target named like an agent type the harness has built in (claude:
 `general-purpose`, `Explore`, `Plan`, `claude`; codex: `default`, `explorer`, `worker`); a target with no
 `description`; a target's MCP server of a name the caller has, with another definition; a skill of a target of a
 name the session or another target has, in another directory; on codex, whose subagent has the MCP servers and hooks
@@ -677,7 +677,7 @@ timeout = "24h"                     # optional (default 24h)
 
 [[step]]
 name = "approve"
-kind = "await"                      # an outcome from outside: a human, a script or a plugin
+kind = "await"                      # an outcome from outside: a human, a script or an addon
 timeout = "168h"                    # optional (default 168h)
 fail_on_timeout = true              # optional (default true): at the timeout the run fails; false: the step passes
 back_to = "implement"               # optional: a check, as above
@@ -742,7 +742,7 @@ required input of its formula (``needs input `goal`, which the step neither give
 input the formula does not declare, a formula that runs itself through its `formula` steps, at any depth, and a
 trigger on an internal formula.
 
-An `await` step waits for an outcome given from outside, by a human, a script or a plugin, through
+An `await` step waits for an outcome given from outside, by a human, a script or an addon, through
 `POST /v1/runs/{id}/resolve` or `aae run resolve <run> <step> pass|fail` (contracts 6.3): `pass` or `fail`, a
 summary and data, as the finisher's. Entering the step is the event `run.awaiting` with its deadline. The step has no
 process and holds no concurrency slot; the wait is a state, not a timer of the daemon's: a restart leaves it as it
@@ -887,7 +887,7 @@ fires neither on its schedule nor on events, only by hand, and stays off across 
 - The event schema and its version, the `where` and `inputs` language, hook decisions and timeouts and the outbox
   lifetime are fixed in `docs/design/contracts.md`.
 
-## Plugin: `<plugin>/plugin.toml`
+## Addon: `<addon>/addon.toml`
 
 ```toml
 name = "mail"
@@ -912,65 +912,65 @@ timeout = "10s"                     # optional
 
 [[service]]                         # as in "MCP servers and services"
 name = "inbox"
-command = ["${AAE_PLUGIN_DIR}/bin/inbox", "--folder", "${params.folder}"]
+command = ["${AAE_ADDON_DIR}/bin/inbox", "--folder", "${params.folder}"]
 ```
 
-A declaration only names where a plugin is: `[[plugin]]` with `path`, or `git`, `rev` and an optional `dir` (see
-[above](#packs-and-plugins-from-git)), in the orchestrator file or a project's. Plugin names are unique across the
-orchestrator and the project. Attaching is the one switch: `plugins = [{ name = "mail", params = { folder = "work" }
-}]` in any settings layer. In `[settings]` of the orchestrator or a project it attaches the plugin to every agent there,
+A declaration only names where an addon is: `[[addon]]` with `path`, or `git`, `rev` and an optional `dir` (see
+[above](#packs-and-addons-from-git)), in the orchestrator file or a project's. Addon names are unique across the
+orchestrator and the project. Attaching is the one switch: `addons = [{ name = "mail", params = { folder = "work" }
+}]` in any settings layer. In `[settings]` of the orchestrator or a project it attaches the addon to every agent there,
 on a rig to the agents of the rig, in `agent.toml`, a variant or an edit to that agent only; `enabled = false` on a
-stronger layer detaches it. An agent has any number of plugins, applied in the order of their first mention: the
+stronger layer detaches it. An agent has any number of addons, applied in the order of their first mention: the
 layers are read weakest first (orchestrator, project, rig, agent, variant, edits), and an attachment keeps its
 place when a stronger layer names it again.
 
 A parameter's value is its default from `[params]`, then what each attachment on those layers gives, by key: the
-strongest wins, and `config explain` prints each as `plugins.<name>.params.<key>` with the layer it came from (the
-plugin's own for a default). An attachment with a key not in `[params]`, or a value of another type than the
+strongest wins, and `config explain` prints each as `addons.<name>.params.<key>` with the layer it came from (the
+addon's own for a default). An attachment with a key not in `[params]`, or a value of another type than the
 default's, is a load error of the file that has it; so is a default that is not a string, an integer or a boolean,
-and a `${params.<key>}` with no such key. A plugin whose `harnesses` lacks the harness of an agent that attaches it
+and a `${params.<key>}` with no such key. An addon whose `harnesses` lacks the harness of an agent that attaches it
 is a load error.
 
-The `[agent]` table and the `[[service]]` tables of a plugin reach only the agents that attach it, with their strings
+The `[agent]` table and the `[[service]]` tables of an addon reach only the agents that attach it, with their strings
 filled in for each agent when its effective config is put together, since each agent has its own values:
 
 - `${params.<key>}` is the value of the parameter in force for that agent. A string of a `native` table that is one
   such reference and nothing else takes the value with its type (`window = "${params.window}"` is the integer).
-- `${AAE_PLUGIN_DIR}` is the plugin's directory, so the parts reach the plugin's own files; skill paths are relative
+- `${AAE_ADDON_DIR}` is the addon's directory, so the parts reach the addon's own files; skill paths are relative
   to it.
-- `${AAE_PLUGIN_DATA}` is `<state>/plugins/<name>/`, a directory the daemon makes for each declared plugin and never
-  reads: the place for the files the plugin's hooks keep.
+- `${AAE_ADDON_DATA}` is `<state>/addons/<name>/`, a directory the daemon makes for each declared addon and never
+  reads: the place for the files the addon's hooks keep.
 
 The strings filled in are the harness hook `command`s, the `env` values (where what is put in is a literal: a `$` in it
 is no reference), MCP servers (`command`, `url`, `env`, `headers`), every string of a `native` table, and a service's
-`command`, health `command` and `env`. Outside a plugin, `${AAE_PLUGIN_DIR}` and `${AAE_PLUGIN_DATA}` in an `env` value
+`command`, health `command` and `env`. Outside an addon, `${AAE_ADDON_DIR}` and `${AAE_ADDON_DATA}` in an `env` value
 are references to variables of the daemon like any other. Its orchestrator hooks run on the events of the runs whose
-agent attaches it, and get the params in force for that agent in `AAE_PLUGIN_PARAMS`; the events of no agent go to the
-plugins `[settings]` of the orchestrator and the project attach (contracts 3.1).
+agent attaches it, and get the params in force for that agent in `AAE_ADDON_PARAMS`; the events of no agent go to the
+addons `[settings]` of the orchestrator and the project attach (contracts 3.1).
 
-A Claude Code plugin directory (`--plugin-dir`) cannot be handed over: the adapter takes that flag for skills, so a
-plugin gives its skills, hooks and MCP servers through `[agent]`. Beyond its `[agent]` a plugin gives its attached
+A Claude Code plugin directory (`--plugin-dir`) cannot be handed over: the adapter takes that flag for skills, so an
+addon gives its skills, hooks and MCP servers through `[agent]`. Beyond its `[agent]` an addon gives its attached
 agents two things, in attachment order: the text of its `prompt` file, after the system prompt the layers give (each
 fragment after a blank line); and its `bin/` directory, when it has one, ahead of `PATH` (the `PATH` a layer sets, or
 else the daemon's). The daemon's `PATH` taken this way becomes part of the effective config: it is in the run's
 snapshot and in the instance fingerprint, so after a daemon restart with another `PATH` these agents get new
 instances.
 
-A plugin is the unit of extension: a typical extension (a mail integration, a check, a reaction policy) is a
-plugin, not core code. Its directory holds `plugin.toml` (name, version, parameters, the contribution to agents,
+An addon is the unit of extension: a typical extension (a mail integration, a check, a reaction policy) is a
+addon, not core code. Its directory holds `addon.toml` (name, version, parameters, the contribution to agents,
 orchestrator hooks, services) and what its parts need (`skills/`, `hooks/`, `bin/`, ...). Its agent side reaches
 only the agents that attach it, native parts of a harness included (`native.<harness>`); a contribution that changes
 the process part of a harness config gives those agents instances of their own, by the fingerprint (contracts 8).
 Its orchestrator hooks keep no state: an event carries the attempt counters, times and gate states a policy needs,
-and the core has no storage for plugins.
+and the core has no storage for addons.
 
-## Bundled plugins: `[builtin.<name>]`
+## Bundled addons: `[builtin.<name>]`
 
-The plugins bundled with aae run in process as hooks of the contract of contracts 3, after every
-declared plugin, so a declared plugin decides first. `enabled` (boolean) turns one on or off; every other key is a
-parameter, checked when the daemon starts. A table with parameters and no `enabled` turns the plugin on. A
+The addons bundled with aae run in process as hooks of the contract of contracts 3, after every
+declared addon, so a declared addon decides first. `enabled` (boolean) turns one on or off; every other key is a
+parameter, checked when the daemon starts. A table with parameters and no `enabled` turns the addon on. A
 project's `aae.toml` may have `[builtin.<name>]` tables too: for the runs of that project such a table replaces the
-orchestrator's table of that plugin whole, since the orchestrator side of a plugin is turned on for the orchestrator
+orchestrator's table of that addon whole, since the orchestrator side of an addon is turned on for the orchestrator
 or for a project.
 
 - `default-policy` (on unless `enabled = false`) decides on `run.attempt_failed` and `run.turn_ended_without_outcome` as
@@ -984,24 +984,24 @@ or for a project.
 - `worktree` has no table: it is on for the runs of the formulas with `worktree = true` (a formula setting; there is no central
   list and no agent-level switch), and a `[builtin.worktree]` table is a config error saying so. Each such run gets a git worktree of its
   rig on the branch `aae/<run>`, in `<git common dir>/aae/worktrees/<run>`, as its workdir. When the run ends the
-  worktree is removed unless it has uncommitted changes or a HEAD no ref reaches (then `plugin.hook_failed` says why);
+  worktree is removed unless it has uncommitted changes or a HEAD no ref reaches (then `addon.hook_failed` says why);
   the branch is deleted only when it is merged. A run with `continue_from` starts in the workdir of the run it continues
-  (a session resumes where it ran); when that is a worktree of this plugin, it is brought back on its branch if it was
+  (a session resumes where it ran); when that is a worktree of this addon, it is brought back on its branch if it was
   removed, whatever the run's formula says. A reload that leaves a project no formula with `worktree = true` turns the
-  plugin off there: the worktrees of its runs still going are left in place, as are their branches. Runs of one
+  addon off there: the worktrees of its runs still going are left in place, as are their branches. Runs of one
   repository that start or end at once make and remove their worktrees one at a time, under an OS lock on the git
   common dir: two `git worktree add` at once can race on the repository config. Its hook has the 30 s timeout of a
   hook, the wait for that lock included; a `git` still running at that timeout is killed with its process group and
   the hook fails.
 
-### Where the bundled plugins end and the core begins
+### Where the bundled addons end and the core begins
 
 The mechanisms live in the core: resuming an attempt, a new session that keeps ownership, issue gates, the counters
 the policy reads, the ceiling of 20 failed attempts per run (waits on an account gate not counted), the watchdog and
-every deadline. The bundled plugins only choose a reaction and its thresholds; they never change a harness. With
-`default-policy` off, the "no plugin decision" column of [contracts 1.3](contracts.md#13-payloads) applies: a failed
-attempt ends the run `failed` with class `infrastructure`. The bundled plugins are compiled into the same binary, need
-no external runtime, and are counted on their own budget line (`plugins` in `scripts/budget.sh`, 1500 lines) inside the
+every deadline. The bundled addons only choose a reaction and its thresholds; they never change a harness. With
+`default-policy` off, the "no addon decision" column of [contracts 1.3](contracts.md#13-payloads) applies: a failed
+attempt ends the run `failed` with class `infrastructure`. The bundled addons are compiled into the same binary, need
+no external runtime, and are counted on their own budget line (`addons` in `scripts/budget.sh`, 1500 lines) inside the
 release total.
 
 An `auth_required` or `billing` failure may be a passing error of a proxy or WAF (a 403 that goes away by itself)

@@ -21,9 +21,9 @@ fn world_of(top: &str, own: &str, step: &str, script: &str) -> World {
     world_hooked(top, own, step, script, "", &[])
 }
 
-/// [`world_of`] with `plugins` in the orchestrator's config and the files `extra`; hooks run as commands.
-fn world_hooked(top: &str, own: &str, step: &str, script: &str, plugins: &str, extra: &[(&str, &str)]) -> World {
-    let config = format!("{ORCHESTRATOR}{plugins}[exec]\n{top}\n");
+/// [`world_of`] with `addons` in the orchestrator's config and the files `extra`; hooks run as commands.
+fn world_hooked(top: &str, own: &str, step: &str, script: &str, addons: &str, extra: &[(&str, &str)]) -> World {
+    let config = format!("{ORCHESTRATOR}{addons}[exec]\n{top}\n");
     let project = format!("[rigs.web]\npath = \"web\"\n[exec]\n{own}\n");
     let formula = format!(
         "name = \"check\"\n[[step]]\nkind = \"exec\"\ncommand = [\"sh\", \"-c\", {}]\ntimeout = \"5s\"\n{step}\n",
@@ -170,11 +170,11 @@ async fn the_snapshot_and_the_effect_keep_the_reference() {
 
 #[tokio::test]
 async fn a_dollar_from_a_hook_reaches_the_command_as_it_is() {
-    let plugins = "[settings]\nplugins = [{ name = \"policy\" }]\n[[plugin]]\npath = \"policy\"\n";
+    let addons = "[settings]\naddons = [{ name = \"policy\" }]\n[[addon]]\npath = \"policy\"\n";
     let manifest = "name = \"policy\"\nversion = \"0.1.0\"\n[[hook]]\non = \"run.preparing\"\n\
         command = [\"sh\", \"prepare.sh\"]\ntimeout = \"5s\"\n";
     let prepare = r#"echo '{"decision":"proceed","env":{"X":"a$b${Y}"}}'"#;
-    let extra = [("policy/plugin.toml", manifest), ("policy/prepare.sh", prepare)];
-    let w = world_hooked("", "", "", r#"printf %s "$X""#, plugins, &extra);
+    let extra = [("policy/addon.toml", manifest), ("policy/prepare.sh", prepare)];
+    let w = world_hooked("", "", "", r#"printf %s "$X""#, addons, &extra);
     assert_eq!(w.stdout().await.1, "a$b${Y}");
 }

@@ -80,25 +80,25 @@ fn the_tracker_variables_come_under_every_layer() {
 }
 
 #[test]
-fn an_attached_plugin_contributes_and_a_stronger_layer_can_switch_it_off() {
+fn an_attached_addon_contributes_and_a_stronger_layer_can_switch_it_off() {
     let config = load_with(&[]).unwrap();
     let e = effective(&config, None);
-    assert_eq!(e.plugins[0].from, Layer::Agent);
-    assert_eq!(e.skills["mail"].from, Layer::Plugin("mail".into()));
+    assert_eq!(e.addons[0].from, Layer::Agent);
+    assert_eq!(e.skills["mail"].from, Layer::Addon("mail".into()));
 
     let config = with_lines(&[("shop/aae.toml", "[agents.implementer.skills.mail]\nenabled = false")]);
     let e = effective(&config, None);
     assert!(e.skills.is_empty(), "a skill switched off by name is gone");
-    assert_eq!(e.plugins.len(), 1);
+    assert_eq!(e.addons.len(), 1);
 
     let config = with_lines(&[(
         "shop/aae.toml",
-        "[agents.implementer]\nplugins = [{ name = \"mail\", enabled = false }]",
+        "[agents.implementer]\naddons = [{ name = \"mail\", enabled = false }]",
     )]);
     let e = effective(&config, None);
     assert!(
-        e.plugins.is_empty() && e.skills.is_empty(),
-        "a detached plugin contributes nothing"
+        e.addons.is_empty() && e.skills.is_empty(),
+        "a detached addon contributes nothing"
     );
 }
 
@@ -146,7 +146,7 @@ fn the_effective_config_serializes_as_the_run_snapshot() {
     );
     assert_eq!(
         snapshot["skills"]["mail"]["from"],
-        json!({ "layer": "plugin", "name": "mail" })
+        json!({ "layer": "addon", "name": "mail" })
     );
 }
 
@@ -162,28 +162,28 @@ fn a_fingerprint_depends_on_the_process_part_not_on_key_order() {
 }
 
 #[test]
-fn an_attached_plugin_puts_its_bin_ahead_of_path_and_its_prompt_after_the_system_prompt() {
-    let mail = "plugins/mail/plugin.toml";
+fn an_attached_addon_puts_its_bin_ahead_of_path_and_its_prompt_after_the_system_prompt() {
+    let mail = "addons/mail/addon.toml";
     let manifest = "name = \"mail\"\nversion = \"0.1.0\"\nprompt = \"prompt.md\"\n";
     let two = BASE[0]
         .1
-        .replace("[settings]", "[[plugin]]\npath = \"plugins/post\"\n[settings]");
+        .replace("[settings]", "[[addon]]\npath = \"addons/post\"\n[settings]");
     let config = load_with(&[
         ("config.toml", two.as_str()),
         (mail, manifest),
-        ("plugins/mail/prompt.md", "Check the mail first.\n"),
-        ("plugins/mail/bin/mail-send", ""),
-        ("plugins/post/plugin.toml", "name = \"post\"\nversion = \"0.1.0\"\n"),
-        ("plugins/post/bin/post-send", ""),
+        ("addons/mail/prompt.md", "Check the mail first.\n"),
+        ("addons/mail/bin/mail-send", ""),
+        ("addons/post/addon.toml", "name = \"post\"\nversion = \"0.1.0\"\n"),
+        ("addons/post/bin/post-send", ""),
         (
             "kit/agents/implementer/agent.toml",
             "harness = \"claude\"\nenv = { PATH = \"/usr/bin\" }\n\
-             plugins = [{ name = \"mail\" }, { name = \"post\" }]\n",
+             addons = [{ name = \"mail\" }, { name = \"post\" }]\n",
         ),
     ])
     .unwrap();
     let e = effective(&config, None);
-    let both = Layer::Merged(vec![Layer::Agent, Layer::Plugin("mail".into())]);
+    let both = Layer::Merged(vec![Layer::Agent, Layer::Addon("mail".into())]);
     let prompt = e.system_prompt.as_ref().unwrap();
     assert_eq!(
         (prompt.value.as_str(), &prompt.from),
@@ -191,14 +191,14 @@ fn an_attached_plugin_puts_its_bin_ahead_of_path_and_its_prompt_after_the_system
     );
     let path = &e.env["PATH"];
     let bin = |name: &str| {
-        let plugin = config.plugins.iter().find(|p| p.name == name).unwrap();
-        plugin.root.join("bin").display().to_string()
+        let addon = config.addons.iter().find(|p| p.name == name).unwrap();
+        addon.root.join("bin").display().to_string()
     };
     assert_eq!(path.value, format!("{}:{}:/usr/bin", bin("mail"), bin("post")));
-    let three = [Layer::Agent, Layer::Plugin("mail".into()), Layer::Plugin("post".into())];
+    let three = [Layer::Agent, Layer::Addon("mail".into()), Layer::Addon("post".into())];
     assert_eq!(path.from, Layer::Merged(three.to_vec()));
     assert!(
-        e.explain().contains("first.\"  # agent + plugin mail\n"),
+        e.explain().contains("first.\"  # agent + addon mail\n"),
         "{}",
         e.explain()
     );

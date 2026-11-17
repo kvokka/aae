@@ -2,12 +2,12 @@
 //! `check`.
 
 use super::{
-    Config, ConfigError, Name, Pack, Plugin, Project, Settings, Trigger,
+    Addon, Config, ConfigError, Name, Pack, Project, Settings, Trigger,
+    addon::param_type,
     defaults::Given,
     duration,
     files::{OrchestratorFile, PackFile, ProjectFile, TriggerFile},
     items::{parent, resolve},
-    plugin::param_type,
 };
 use serde::de::DeserializeOwned;
 use std::{
@@ -19,12 +19,12 @@ use std::{
 
 /// Runs started at once when the orchestrator config does not say (docs/design/contracts.md 6).
 const DEFAULT_MAX_RUNS: u32 = 8;
-/// What the harness hooks and MCP commands of a plugin's contribution say for the plugin's directory.
-pub(super) const PLUGIN_DIR: &str = "${AAE_PLUGIN_DIR}";
-/// How a plugin's strings name one of its parameters: `${params.<key>}`.
+/// What the harness hooks and MCP commands of an addon's contribution say for the addon's directory.
+pub(super) const ADDON_DIR: &str = "${AAE_ADDON_DIR}";
+/// How an addon's strings name one of its parameters: `${params.<key>}`.
 pub(super) const PARAMS: &str = "${params.";
-/// How a plugin's strings name the directory the daemon keeps for its data.
-pub(super) const PLUGIN_DATA: &str = "${AAE_PLUGIN_DATA}";
+/// How an addon's strings name the directory the daemon keeps for its data.
+pub(super) const ADDON_DATA: &str = "${AAE_ADDON_DATA}";
 /// Failed runs of a bead before the core closes its gate (docs/design/config.md).
 const DEFAULT_BEAD_FAILURES: u32 = 3;
 
@@ -48,8 +48,8 @@ impl Loader {
         // the scripted harness of the tests.
         let built = self.adapters.iter().map(|a| a.name.to_owned());
         self.harnesses = raw.harness.keys().cloned().chain(built).collect();
-        let plugins = self.plugins(file, &base, raw.plugin, &[]);
-        let all: Vec<&Plugin> = plugins.iter().collect();
+        let addons = self.addons(file, &base, raw.addon, &[]);
+        let all: Vec<&Addon> = addons.iter().collect();
         let mut settings = self.settings(file, &base, raw.settings, &all);
         settings.services = self.services(file, raw.service);
         let (edits, variants) = self.agents(file, &base, raw.agents, &all);
@@ -65,7 +65,7 @@ impl Loader {
         };
         self.env_values(file, "exec.env", &raw.exec.env);
         for dir in &raw.projects {
-            let Some(project) = self.project(&resolve(&base, dir), &plugins, &bundled, &top) else {
+            let Some(project) = self.project(&resolve(&base, dir), &addons, &bundled, &top) else {
                 continue;
             };
             if projects.iter().any(|p| p.name == project.name) {
@@ -101,12 +101,12 @@ impl Loader {
             edits,
             variants,
             adapters: self.adapters,
-            plugins,
+            addons,
             bundled,
             watchdog,
             projects,
             bridge: Vec::new(),
-            plugin_data: None,
+            addon_data: None,
             service_wait: std::time::Duration::from_secs(30),
         };
         super::subagents::check(&mut self, &config);
@@ -146,14 +146,8 @@ impl Loader {
         }
     }
 
-    /// Checks one layer of settings and makes its paths absolute; `plugins` are the names it may attach.
-    pub(super) fn settings(
-        &mut self,
-        file: &Path,
-        base: &Path,
-        mut settings: Settings,
-        plugins: &[&Plugin],
-    ) -> Settings {
+    /// Checks one layer of settings and makes its paths absolute; `addons` are the names it may attach.
+    pub(super) fn settings(&mut self, file: &Path, base: &Path, mut settings: Settings, addons: &[&Addon]) -> Settings {
         self.env_values(file, "env", &settings.env);
         for (name, mcp) in &settings.mcp {
             if let Some(why) = mcp.malformed() {
@@ -179,15 +173,15 @@ impl Loader {
                 (None, false) => {}
             }
         }
-        for used in &settings.plugins {
-            let Some(plugin) = plugins.iter().find(|p| p.name == used.name) else {
-                self.fail(file, format!("plugin `{}` is not declared", used.name));
+        for used in &settings.addons {
+            let Some(addon) = addons.iter().find(|p| p.name == used.name) else {
+                self.fail(file, format!("addon `{}` is not declared", used.name));
                 continue;
             };
             for (key, value) in &used.params {
-                let at = format!("plugin `{}`: param `{key}`", used.name);
-                match plugin.params.get(key).and_then(param_type) {
-                    None => self.fail(file, format!("{at} is not in the plugin's `[params]`")),
+                let at = format!("addon `{}`: param `{key}`", used.name);
+                match addon.params.get(key).and_then(param_type) {
+                    None => self.fail(file, format!("{at} is not in the addon's `[params]`")),
                     Some(want) if param_type(value) != Some(want) => self.fail(file, format!("{at} is of type {want}")),
                     Some(_) => {}
                 }
@@ -218,21 +212,15 @@ impl Loader {
         text.and_then(|t| duration(t).map_err(|e| self.fail(file, e)).ok())
     }
 
-    fn project(
-        &mut self,
-        dir: &Path,
-        outer: &[Plugin],
-        bundled: &[super::Bundled],
-        top: &Given<'_>,
-    ) -> Option<Project> {
+    fn project(&mut self, dir: &Path, outer: &[Addon], bundled: &[super::Bundled], top: &Given<'_>) -> Option<Project> {
         let file = dir.join("aae.toml");
         let raw: ProjectFile = self.read(&file)?;
         let name = raw
             .name
             .unwrap_or_else(|| dir.file_name().unwrap_or_default().to_string_lossy().into_owned());
         self.name(&file, "project", &name);
-        let plugins = self.plugins(&file, dir, raw.plugin, outer);
-        let all: Vec<&Plugin> = outer.iter().chain(&plugins).collect();
+        let addons = self.addons(&file, dir, raw.addon, outer);
+        let all: Vec<&Addon> = outer.iter().chain(&addons).collect();
         let names = all.as_slice();
         let mut settings = self.settings(&file, dir, raw.settings, names);
         settings.services = self.services(&file, raw.service);
@@ -249,11 +237,11 @@ impl Loader {
             };
             self.name(&manifest, "pack", &raw.name);
             for required in raw
-                .requires_plugins
+                .requires_addons
                 .iter()
                 .filter(|r| !names.iter().any(|p| &p.name == *r))
             {
-                self.fail(&manifest, format!("required plugin `{required}` is not declared"));
+                self.fail(&manifest, format!("required addon `{required}` is not declared"));
             }
             if let Some(min) = &raw.min_aae
                 && version(min).is_none_or(|min| version(env!("CARGO_PKG_VERSION")) < Some(min))
@@ -267,7 +255,7 @@ impl Loader {
             if packs.iter().any(|p| p.name == pack.name) {
                 self.fail(&file, format!("two packs are named `{}`", pack.name));
             }
-            (pack.version, pack.requires_plugins) = (Some(raw.version), raw.requires_plugins);
+            (pack.version, pack.requires_addons) = (Some(raw.version), raw.requires_addons);
             pack.settings = self.settings(&manifest, &root, raw.settings.into(), &[]);
             packs.push(pack);
         }
@@ -291,7 +279,7 @@ impl Loader {
             settings,
             edits,
             variants,
-            plugins,
+            addons,
             bundled,
             rigs,
             packs,
@@ -309,12 +297,12 @@ impl Loader {
         name: String,
         triggers: Vec<TriggerFile>,
         project: bool,
-        plugins: &[&super::Plugin],
+        addons: &[&super::Addon],
     ) -> Pack {
         let mut agents = BTreeMap::new();
         for dir in self.entries(&root.join("agents")).into_iter().filter(|p| p.is_dir()) {
             let agent = dir.file_name().unwrap_or_default().to_string_lossy().into_owned();
-            if let Some(a) = self.agent(&dir, plugins) {
+            if let Some(a) = self.agent(&dir, addons) {
                 self.name(&dir.join("agent.toml"), "agent", &agent);
                 agents.insert(agent, a);
             }
@@ -335,7 +323,7 @@ impl Loader {
             name,
             root,
             version: None,
-            requires_plugins: Vec::new(),
+            requires_addons: Vec::new(),
             agents,
             formulas,
             triggers: loaded,

@@ -21,7 +21,7 @@ use std::{
 };
 
 impl Loader {
-    pub(super) fn agent(&mut self, dir: &Path, plugins: &[&super::Plugin]) -> Option<Agent> {
+    pub(super) fn agent(&mut self, dir: &Path, addons: &[&super::Addon]) -> Option<Agent> {
         let file = dir.join("agent.toml");
         let mut table: toml::Table = self.read(&file)?;
         let scope = table
@@ -46,7 +46,7 @@ impl Loader {
             None if !dir.join("prompt.md").exists() => None,
             None => self.text(&file, &dir.join("prompt.md")),
         };
-        let mut settings = self.settings(&file, dir, settings, plugins);
+        let mut settings = self.settings(&file, dir, settings, addons);
         // The role prompt is the agent layer's system prompt (docs/design/config.md): one value, so not both.
         if prompt.is_some() && settings.system_prompt.is_some() {
             self.fail(&file, "`system_prompt` and a role prompt file are both set; keep one");

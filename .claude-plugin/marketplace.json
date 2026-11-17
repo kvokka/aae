@@ -7,7 +7,7 @@
   "plugins": [
     {
       "name": "aae",
-      "source": "./operator-plugin",
+      "source": "./plugin",
       "description": "Skills for working with aae from Claude Code or Codex: recover runs that failed for good, decide on runs that wait on an await step"
     }
   ]

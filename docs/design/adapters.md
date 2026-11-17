@@ -8,8 +8,8 @@ binary, not processes of their own: there is no adapter protocol between process
 harness later is a generic ACP v2 driver.
 
 Where adapters stand among the other parts, and the boundaries the build checks, is in the
-[architecture](../architecture.md). The adapter never decides policy: retry, park and refuse live in plugins and
-config ([config](config.md#where-the-bundled-plugins-end-and-the-core-begins)).
+[architecture](../architecture.md). The adapter never decides policy: retry, park and refuse live in addons and
+config ([config](config.md#where-the-bundled-addons-end-and-the-core-begins)).
 
 ## Adding a harness
 

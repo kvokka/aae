@@ -1,45 +1,45 @@
-# Using plugins
+# Using addons
 
-A plugin is a directory with a `plugin.toml`. It gives the agents that attach it settings (skills, harness hooks,
+An addon is a directory with an `addon.toml`. It gives the agents that attach it settings (skills, harness hooks,
 MCP servers, services, environment variables, native harness keys, a prompt fragment) and gives the orchestrator hooks
-on the events of their runs. A plugin is used in two steps: it is **declared** once, then **attached** where it
-should work. This guide uses [`plugins/context-budget`](../../plugins/context-budget/README.md) of this repository,
-which bounds how often a session may compact its context. To write a plugin, see
-[writing a plugin](plugin-development.md); the full rules are in
-[the config reference](../design/config.md#plugin-pluginplugintoml).
+on the events of their runs. An addon is used in two steps: it is **declared** once, then **attached** where it
+should work. This guide uses [`addons/context-budget`](../../addons/context-budget/README.md) of this repository,
+which bounds how often a session may compact its context. To write an addon, see
+[writing an addon](addon-development.md); the full rules are in
+[the config reference](../design/config.md#addon-addonaddontoml).
 
 ## Declare it
 
-A declaration only says where the plugin is. It goes in the orchestrator config or in a project's `aae.toml`:
+A declaration only says where the addon is. It goes in the orchestrator config or in a project's `aae.toml`:
 
 ```toml
 # ~/.config/aae/config.toml
 projects = ["~/src/shop"]
 
-[[plugin]]
-path = "~/aae-plugins/context-budget"
+[[addon]]
+path = "~/aae-addons/context-budget"
 
 [settings]
-plugins = [{ name = "context-budget" }]
+addons = [{ name = "context-budget" }]
 ```
 
-A plugin in a git repository is declared with `git` and `rev` instead of `path`, and with `dir` when it is not at the
+An addon in a git repository is declared with `git` and `rev` instead of `path`, and with `dir` when it is not at the
 root of the repository:
 
 ```toml
-[[plugin]]
+[[addon]]
 git = "https://github.com/acme/aae"
-rev = "v1.4.0"                      # a tag or a full commit id; required for a plugin
-dir = "plugins/context-budget"
+rev = "v1.4.0"                      # a tag or a full commit id; required for an addon
+dir = "addons/context-budget"
 ```
 
 `aae` downloads it into its cache when it loads the config and runs it only at that tag or commit
-([packs and plugins from git](../design/config.md#packs-and-plugins-from-git)). Plugin names are unique across the
-orchestrator and the project. `aae plugin list` lists the declared plugins and the bundled ones.
+([packs and addons from git](../design/config.md#packs-and-addons-from-git)). Addon names are unique across the
+orchestrator and the project. `aae addon list` lists the declared addons and the bundled ones.
 
 ## Attach it
 
-Declaring turns nothing on: a plugin works only where `plugins` attaches it. `plugins` is a key of every settings
+Declaring turns nothing on: an addon works only where `addons` attaches it. `addons` is a key of every settings
 layer, an array of `{ name, params, enabled }`:
 
 | Where | Reaches |
@@ -54,26 +54,26 @@ The config above attaches `context-budget` to every agent. An agent attaches one
 # ~/src/shop/agents/dev/agent.toml
 harness = "claude"
 subagents = ["qa"]
-plugins = [{ name = "context-budget", params = { window = 150000 } }]
+addons = [{ name = "context-budget", params = { window = 150000 } }]
 ```
 
-An agent has any number of plugins. They apply in the order of their first mention, the layers read weakest first
-(orchestrator, project, rig, agent, variant, edits); a stronger layer that names a plugin again keeps its place. A
-stronger layer detaches a plugin with `{ name = "context-budget", enabled = false }`, and with it the plugin's whole
-contribution to that agent. A plugin's agent side sits between the rig settings and the agent's own `agent.toml`, so
-an agent can still override what a plugin sets.
+An agent has any number of addons. They apply in the order of their first mention, the layers read weakest first
+(orchestrator, project, rig, agent, variant, edits); a stronger layer that names an addon again keeps its place. A
+stronger layer detaches an addon with `{ name = "context-budget", enabled = false }`, and with it the addon's whole
+contribution to that agent. An addon's agent side sits between the rig settings and the agent's own `agent.toml`, so
+an agent can still override what an addon sets.
 
 ### Parameters
 
-A parameter takes its default from the plugin's `[params]`, then the value each layer that attaches the plugin gives,
+A parameter takes its default from the addon's `[params]`, then the value each layer that attaches the addon gives,
 key by key, the strongest last. In the example `dev` gets `window = 150000` from its own attachment and
-`max_compactions = 3` from the plugin. A key the plugin does not declare, or a value of another type than its
+`max_compactions = 3` from the addon. A key the addon does not declare, or a value of another type than its
 default's, is a load error of the file that has it.
 
 ### Harnesses
 
-A plugin may name the harnesses it is for (`harnesses = ["claude", "codex"]`). An agent on another harness that
-attaches it is a load error; so is a subagent target whose plugin is not for the caller's harness.
+An addon may name the harnesses it is for (`harnesses = ["claude", "codex"]`). An agent on another harness that
+attaches it is a load error; so is a subagent target whose addon is not for the caller's harness.
 
 ### Check what an agent gets
 
@@ -82,8 +82,8 @@ aae config check
 aae config explain --project shop --agent dev
 ```
 
-`explain` prints each value with the layer it came from: what a plugin adds is marked `# plugin <name>`, and each
-parameter is a line `plugins.<name>.params.<key>` with the layer that set it. Both commands take `--config <file>` to
+`explain` prints each value with the layer it came from: what an addon adds is marked `# addon <name>`, and each
+parameter is a line `addons.<name>.params.<key>` with the layer that set it. Both commands take `--config <file>` to
 load a config without a daemon.
 
 ## Subagents
@@ -102,7 +102,7 @@ harness = "claude"
 description = "Checks a change: runs the tests and reads the diff."
 ```
 
-A target's subagent gets the target's own config: its role prompt (with its plugins' fragments), model, effort,
+A target's subagent gets the target's own config: its role prompt (with its addons' fragments), model, effort,
 skills, and on claude the MCP servers and hooks the session has not (a codex subagent has the session's only, so a
 codex target with others is a load error). Its `env` and native block do not reach it, since it lives in the
 caller's process. A target must be on the caller's harness and fit it in other ways; what does not fit is a

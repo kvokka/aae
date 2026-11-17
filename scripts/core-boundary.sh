@@ -28,7 +28,7 @@ if [[ -n $found ]]; then
   exit 1
 fi
 # The adapters build without the engine: what they share with it is `aae-contract`. Their tests may use it.
-for crate in aae-claude aae-codex aae-br aae-plugins; do
+for crate in aae-claude aae-codex aae-br aae-addons; do
   if cargo tree -q -e normal,build --prefix none -p "$crate" | grep -q '^aae-core '; then
     echo "$crate depends on aae-core (decision 43): $(cargo tree -q -e normal,build -i aae-core -p "$crate" | paste -sd ' ')"
     exit 1

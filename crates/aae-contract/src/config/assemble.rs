@@ -18,8 +18,8 @@ pub enum Layer {
     Orchestrator,
     Project,
     Rig,
-    /// The contribution of an attached plugin.
-    Plugin(String),
+    /// The contribution of an attached addon.
+    Addon(String),
     Agent,
     /// `[settings]` of the pack of the run's formula.
     Pack(String),
@@ -60,7 +60,7 @@ impl fmt::Display for Layer {
             Self::Orchestrator => f.write_str("orchestrator"),
             Self::Project => f.write_str("project"),
             Self::Rig => f.write_str("rig"),
-            Self::Plugin(name) => write!(f, "plugin {name}"),
+            Self::Addon(name) => write!(f, "addon {name}"),
             Self::Agent => f.write_str("agent"),
             Self::Pack(name) => write!(f, "pack {name}"),
             Self::Formula(name) => write!(f, "formula {name}"),
@@ -103,8 +103,8 @@ pub struct EffectiveConfig {
     pub mcp: BTreeMap<String, Sourced<Mcp>>,
     pub hooks: BTreeMap<String, Sourced<Hook>>,
     pub skills: BTreeMap<String, Sourced<Skill>>,
-    /// Attached plugins in attachment order; `from` is the layer that attached each last.
-    pub plugins: Vec<Sourced<Attached>>,
+    /// Attached addons in attachment order; `from` is the layer that attached each last.
+    pub addons: Vec<Sourced<Attached>>,
     /// The native block of this harness: tables of several layers merged by key.
     pub native: Option<Sourced<Value>>,
     /// The services its session uses; the core binds them to MCP servers or environment before the adapter.
@@ -126,7 +126,7 @@ pub struct EffectiveConfig {
     pub targets: BTreeMap<String, EffectiveConfig>,
 }
 
-/// A plugin attached to an agent, with the values of its params in force, each from the layer that gave it.
+/// An addon attached to an agent, with the values of its params in force, each from the layer that gave it.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Attached {
     pub name: String,
@@ -152,7 +152,7 @@ impl EffectiveConfig {
             mcp: BTreeMap::new(),
             hooks: BTreeMap::new(),
             skills: BTreeMap::new(),
-            plugins: Vec::new(),
+            addons: Vec::new(),
             native: None,
             services: BTreeMap::new(),
             scope: super::Scope::Rig,
@@ -228,19 +228,19 @@ impl EffectiveConfig {
         by_key(&mut self.services, &settings.services, from, |_| true);
     }
 
-    /// What attached plugins add beyond a settings layer (docs/guide/plugin-development.md): their prompt fragments
+    /// What attached addons add beyond a settings layer (docs/guide/addon-development.md): their prompt fragments
     /// after the system prompt and their `bin/` directories ahead of `PATH` (the daemon's when no layer sets it), in
     /// attachment order.
-    pub(super) fn contribute(&mut self, attached: &[&super::Plugin]) {
-        for plugin in attached {
-            let Some(fragment) = &plugin.prompt else { continue };
+    pub(super) fn contribute(&mut self, attached: &[&super::Addon]) {
+        for addon in attached {
+            let Some(fragment) = &addon.prompt else { continue };
             let prompt = self.system_prompt.get_or_insert_with(|| Sourced {
                 value: String::new(),
-                from: Layer::Plugin(plugin.name.clone()),
+                from: Layer::Addon(addon.name.clone()),
             });
             let gap = if prompt.value.is_empty() { "" } else { "\n\n" };
             prompt.value = format!("{}{gap}{}", prompt.value, fragment.trim_end());
-            prompt.from = prompt.from.and(&Layer::Plugin(plugin.name.clone()));
+            prompt.from = prompt.from.and(&Layer::Addon(addon.name.clone()));
         }
         let bins: Vec<(&String, &PathBuf)> = (attached.iter())
             .filter_map(|p| Some((&p.name, p.bin.as_ref()?)))
@@ -249,13 +249,13 @@ impl EffectiveConfig {
             return;
         };
         let (path, from) = match self.env.get("PATH") {
-            Some(s) => (s.value.clone(), s.from.and(&Layer::Plugin((*first).clone()))),
+            Some(s) => (s.value.clone(), s.from.and(&Layer::Addon((*first).clone()))),
             None => (
                 super::env_literal(&std::env::var("PATH").unwrap_or_default()),
-                Layer::Plugin((*first).clone()),
+                Layer::Addon((*first).clone()),
             ),
         };
-        let from = (rest.iter()).fold(from, |from, (name, _)| from.and(&Layer::Plugin((*name).clone())));
+        let from = (rest.iter()).fold(from, |from, (name, _)| from.and(&Layer::Addon((*name).clone())));
         // `PATH` is an `env` value: the directories are literals, what a layer gave keeps its references.
         let dirs = bins
             .iter()
@@ -310,11 +310,11 @@ impl EffectiveConfig {
         for (name, s) in &self.skills {
             line(&format!("skills.{name}"), json(&s.value), &s.from);
         }
-        for s in &self.plugins {
-            line(&format!("plugins.{}", s.value.name), "attached".to_owned(), &s.from);
+        for s in &self.addons {
+            line(&format!("addons.{}", s.value.name), "attached".to_owned(), &s.from);
             for (key, p) in &s.value.params {
                 line(
-                    &format!("plugins.{}.params.{key}", s.value.name),
+                    &format!("addons.{}.params.{key}", s.value.name),
                     p.value.to_string(),
                     &p.from,
                 );

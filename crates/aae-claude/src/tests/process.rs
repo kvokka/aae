@@ -43,7 +43,7 @@ fn hooks_join_the_native_settings_and_mcp_servers_take_claude_form() {
         ]
         .into(),
         skills: Default::default(),
-        plugins: Vec::new(),
+        addons: Vec::new(),
         native: Some(agent(
             json!({ "hooks": { "Stop": [{ "hooks": [] }] }, "env": { "X": "1" } }),
         )),

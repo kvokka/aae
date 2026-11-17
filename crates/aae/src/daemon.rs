@@ -35,7 +35,7 @@ pub(crate) struct Paths {
     pub(crate) config: PathBuf,
     pub(crate) state: PathBuf,
     pub(crate) socket: PathBuf,
-    /// The packs and plugins downloaded from git.
+    /// The packs and addons downloaded from git.
     pub(crate) cache: PathBuf,
     /// This binary, taken at start: once it is replaced on disk, Linux names the running one `<path> (deleted)`.
     pub(crate) exe: PathBuf,
@@ -67,13 +67,13 @@ impl Paths {
     }
 }
 
-/// The directory of each declared plugin's data, `${AAE_PLUGIN_DATA}` (docs/design/config.md): made, never read.
-fn plugin_data(config: &aae_core::config::Config) -> Result<(), String> {
-    let Some(data) = &config.plugin_data else {
+/// The directory of each declared addon's data, `${AAE_ADDON_DATA}` (docs/design/config.md): made, never read.
+fn addon_data(config: &aae_core::config::Config) -> Result<(), String> {
+    let Some(data) = &config.addon_data else {
         return Ok(());
     };
-    for plugin in (config.plugins.iter()).chain(config.projects.iter().flat_map(|p| &p.plugins)) {
-        let dir = data.join(&plugin.name);
+    for addon in (config.addons.iter()).chain(config.projects.iter().flat_map(|p| &p.addons)) {
+        let dir = data.join(&addon.name);
         std::fs::create_dir_all(&dir).map_err(|e| format!("{}: {e}", dir.display()))?;
     }
     Ok(())
@@ -84,7 +84,7 @@ fn plugin_data(config: &aae_core::config::Config) -> Result<(), String> {
 pub(crate) async fn run(paths: Paths) -> Result<bool, String> {
     let mut config = load(&paths).map_err(|errors| format!("the config has errors:\n{}", errors.join("\n")))?;
     private_dir(&paths.state)?;
-    plugin_data(&config)?;
+    addon_data(&config)?;
     // Held until the daemon exits: one writer per state directory (docs/design/event-model.md), whatever socket it
     // serves.
     let _lock = lock(&paths.state)?;
@@ -163,7 +163,7 @@ pub(crate) async fn run(paths: Paths) -> Result<bool, String> {
         trackers,
         Arc::new(ExecHooks {
             socket: Some(paths.socket.clone()),
-            bundled: Some(aae_plugins::run),
+            bundled: Some(aae_addons::run),
         }),
         journal,
     );
@@ -218,7 +218,7 @@ pub(crate) async fn run(paths: Paths) -> Result<bool, String> {
                 if let Ok(config) = &mut loaded {
                     config.api_token.clone_from(&token);
                 }
-                if let Ok(Err(e)) = loaded.as_ref().map(plugin_data) {
+                if let Ok(Err(e)) = loaded.as_ref().map(addon_data) {
                     loaded = Err(vec![e]);
                 }
                 loaded

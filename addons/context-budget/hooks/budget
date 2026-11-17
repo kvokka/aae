@@ -1,5 +1,5 @@
 #!/bin/sh
-# The harness hooks of the context-budget plugin, for claude and codex (README.md); the hook's input is on stdin.
+# The harness hooks of the context-budget addon, for claude and codex (README.md); the hook's input is on stdin.
 #   budget compacted <data dir> <max compactions>   on PostCompact: count, label the bead, stop past the budget
 #   budget tool <data dir>                          on PreToolUse: stop a session past its budget
 set -eu

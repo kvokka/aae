@@ -26,7 +26,7 @@ pub(super) fn queued() -> String {
 }
 
 impl RunHandler {
-    /// Emits a deciding event; with no hook on its type the "no plugin decision" outcome applies at once, else at
+    /// Emits a deciding event; with no hook on its type the "no addon decision" outcome applies at once, else at
     /// the deadline of contracts 3.3 unless a decision comes first.
     pub(super) fn deciding(&mut self, tx: &mut Tx<'_>, row: Row, kind: &str, mut data: Value) -> Result<(), Error> {
         let timeouts: Vec<i64> = self
@@ -77,7 +77,7 @@ impl RunHandler {
     }
 
     /// The deadline of a deciding event passed with no word from the hook runner: its hooks count as failed, which
-    /// blocks on the veto events and is "no plugin decision" on the others (contracts 3.3).
+    /// blocks on the veto events and is "no addon decision" on the others (contracts 3.3).
     pub(super) fn decide_deadline(&mut self, tx: &mut Tx<'_>, row: Row) -> Result<(), Error> {
         match row.state.as_str() {
             "preparing" => self.terminal(tx, row, "failed", Some("check"), "hook_deadline"),
@@ -86,7 +86,7 @@ impl RunHandler {
         }
     }
 
-    /// Applies a decision, `None` being "no plugin decision", to the deciding event the run's state waits on.
+    /// Applies a decision, `None` being "no addon decision", to the deciding event the run's state waits on.
     pub(super) fn apply(&mut self, tx: &mut Tx<'_>, row: Row, decision: Option<Decision>) -> Result<(), Error> {
         tx.sql()
             .execute("UPDATE runs SET waiting = NULL WHERE id = ?1", [&row.id])?;
@@ -176,7 +176,7 @@ impl RunHandler {
 }
 
 /// A hook's JSON decision on `kind`; `None` when it is not allowed for the event (contracts 3.2).
-pub(super) fn parse(kind: &str, v: &Value, plugin: &str, event: &Value) -> Option<Decision> {
+pub(super) fn parse(kind: &str, v: &Value, addon: &str, event: &Value) -> Option<Decision> {
     let text = |key: &str| v[key].as_str().map(str::to_owned);
     let after = || match &v["after"] {
         Value::Null => Some(Duration::ZERO),
@@ -198,7 +198,7 @@ pub(super) fn parse(kind: &str, v: &Value, plugin: &str, event: &Value) -> Optio
                     value => Some(Sourced {
                         // A hook gives text, not a reference.
                         value: crate::config::env_literal(value.as_str()?),
-                        from: Layer::Plugin(plugin.to_owned()),
+                        from: Layer::Addon(addon.to_owned()),
                     }),
                 };
                 env.insert(name.clone(), value);

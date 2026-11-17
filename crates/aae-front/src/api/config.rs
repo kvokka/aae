@@ -1,9 +1,9 @@
 //! The config through the API (docs/api/frontends.md, docs/design/config.md): projects and rigs, agents, formulas,
-//! packs, plugins, the effective config of an agent with the layer of every value, a check of the file and its reload.
+//! packs, addons, the effective config of an agent with the layer of every value, a check of the file and its reload.
 
 use super::{
     ApiError, ErrorReply, Param, Reply, State, key,
-    replies::{Agent, Checked, Explained, Formula, Keyed, Pack, Plugin, Project as ProjectReply, Reloaded},
+    replies::{Addon, Agent, Checked, Explained, Formula, Keyed, Pack, Project as ProjectReply, Reloaded},
     runs::{BAD_QUERY, REJECTED},
 };
 use aae_core::{
@@ -122,27 +122,27 @@ pub(crate) async fn list_packs(state: State, Param(Query(query)): Param<Query<Pr
         for pack in &p.packs {
             out.push(
                 json!({ "project": p.name, "name": pack.name, "version": pack.version, "root": pack.root,
-                "requires_plugins": pack.requires_plugins }),
+                "requires_addons": pack.requires_addons }),
             );
         }
     }
     Ok(Json(out.into()))
 }
 
-/// Lists the declared plugins and the enabled bundled ones: of the orchestrator (`project` null) and of every
+/// Lists the declared addons and the enabled bundled ones: of the orchestrator (`project` null) and of every
 /// project (those on for its runs), or of the project `project` only.
-#[utoipa::path(get, path = "/v1/plugins", params(ProjectQuery),
-    responses((status = OK, body = [Plugin]),
+#[utoipa::path(get, path = "/v1/addons", params(ProjectQuery),
+    responses((status = OK, body = [Addon]),
         (status = BAD_REQUEST, description = BAD_QUERY, body = ErrorReply),
         (status = NOT_FOUND, description = NO_PROJECT, body = ErrorReply)))]
-pub(crate) async fn list_plugins(state: State, Param(Query(query)): Param<Query<ProjectQuery>>) -> Reply {
+pub(crate) async fn list_addons(state: State, Param(Query(query)): Param<Query<ProjectQuery>>) -> Reply {
     let config = state.config();
     let mut lists = vec![];
     if query.project.is_none() {
-        lists.push((None, &config.plugins, &config.bundled));
+        lists.push((None, &config.addons, &config.bundled));
     }
     for p in projects(&config, &query)? {
-        lists.push((Some(&p.name), &p.plugins, &p.bundled));
+        lists.push((Some(&p.name), &p.addons, &p.bundled));
     }
     let mut out: Vec<Value> = Vec::new();
     for (project, declared, bundled) in lists {

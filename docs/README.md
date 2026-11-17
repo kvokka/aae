@@ -8,14 +8,14 @@ references (`design/contracts.md`, `design/config.md`) are meant to be read by s
 | Document | What is in it |
 |---|---|
 | [overview.md](overview.md) | what aae is, the glossary, what the first release leaves out |
-| [roadmap.md](roadmap.md) | what lies ahead as plugins; a hint, not a work list |
+| [roadmap.md](roadmap.md) | what lies ahead as addons; a hint, not a work list |
 | [guide/install.md](guide/install.md) | installing, what aae runs, the daemon as a service, upgrading |
 | [guide/first-project.md](guide/first-project.md) | a project, its root and rigs |
 | [guide/first-formula.md](guide/first-formula.md) | a formula with an agent, from the config to a passed run |
 | [guide/recovery.md](guide/recovery.md) | a run that failed for good: what failed, continue the session, a new session with or without a note, abandon |
-| [guide/plugins.md](guide/plugins.md) | using plugins: declare, attach, parameters; an agent's subagents |
-| [guide/plugin-development.md](guide/plugin-development.md) | writing a plugin: the manifest, the agent side and the orchestrator side, tests |
-| [design/config.md](design/config.md) | every config file and key; layers and "explain config"; packs, agents, formulas, triggers, plugins |
+| [guide/addons.md](guide/addons.md) | using addons: declare, attach, parameters; an agent's subagents |
+| [guide/addon-development.md](guide/addon-development.md) | writing an addon: the manifest, the agent side and the orchestrator side, tests |
+| [design/config.md](design/config.md) | every config file and key; layers and "explain config"; packs, agents, formulas, triggers, addons |
 | [api/frontends.md](api/frontends.md) | the HTTP API and the CLI; what a human sees and does with a run |
 | [api/mcp.md](api/mcp.md), [api/openapi.json](api/openapi.json) | the MCP server; the OpenAPI document |
 | [../demos/README.md](../demos/README.md) | two live examples |

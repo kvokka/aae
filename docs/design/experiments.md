@@ -19,7 +19,7 @@ A cheap experiment comes before the code that relies on it. The set and where ea
 | 6 | finisher from a session: token in the environment, resume, the codex sandbox | finisher | done except the sandbox: deferred until after the release, on a host with user namespaces or macOS; until then the codex adapter sets `danger-full-access` ([config](config.md)) |
 | 7 | opencode, by the open questions [below](#opencode-experiment-7) | next release | deferred to the next release, with the opencode adapter |
 | 8 | background work after the outcome: what stops a command a session left running, without touching other sessions | criterion 34 | done for codex and claude on fake providers (below) |
-| 9 | compaction on both harnesses (hooks, thresholds, stopping a session), codex roles and skills per thread, claude `--agents` from a file | the context-budget plugin, native subagents | done on fake providers; compaction of a codex multi-agent v2 child not checked (below) |
+| 9 | compaction on both harnesses (hooks, thresholds, stopping a session), codex roles and skills per thread, claude `--agents` from a file | the context-budget addon, native subagents | done on fake providers; compaction of a codex multi-agent v2 child not checked (below) |
 
 Not checked by any experiment: a real subscription quota running out and a login expiring in the middle of a session
 (both seen only on fake APIs; the claude half of criterion 10 stays open, and with an API key claude gives no reset
@@ -560,7 +560,7 @@ not run again here:
 
 ### Consequences
 
-For the context-budget plugin:
+For the context-budget addon:
 
 - **Threshold.** claude: `modelSettings.<model>.autoCompactWindow` in the session's `--settings` file (the adapter
   already writes it per session), and `autoCompactWindow` in each agent of `--agents` — or one value for the session
@@ -576,7 +576,7 @@ For the context-budget plugin:
   a main-thread `PreToolUse` or `UserPromptSubmit` answering `continue:false` does, and the adapter sees a successful
   `result` (`terminal_reason: "hook_stopped"` for `PreToolUse`), today a completed turn. On codex `continue:false` from
   `PostCompact` (or `PreCompact`) ends the turn `interrupted`, today a cancelled turn; in a child it ends only the
-  child. On both, then, the run ends only if aae tells the hook's stop from a normal end: the plugin's hook leaves its
+  child. On both, then, the run ends only if aae tells the hook's stop from a normal end: the addon's hook leaves its
   verdict where the core reads it (the run's bead or the finisher), or the adapters map `hook_stopped` and an
   unrequested `interrupted` to a stop of their own.
 

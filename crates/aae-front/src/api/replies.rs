@@ -23,7 +23,7 @@ pub(crate) struct Run {
     state: String,
     /// Set once `failed`: `agent`, `check`, `hollow_done` or `infrastructure`.
     class: Option<String>,
-    /// Set once the run ended: why it failed (a plugin's veto, a failure kind) or was cancelled; `pass` for a
+    /// Set once the run ended: why it failed (an addon's veto, a failure kind) or was cancelled; `pass` for a
     /// pass.
     reason: Option<String>,
     attempt: u32,
@@ -340,12 +340,12 @@ pub(crate) struct Pack {
     name: String,
     version: Option<String>,
     root: String,
-    requires_plugins: Vec<String>,
+    requires_addons: Vec<String>,
 }
 
-/// A declared plugin, or an enabled bundled one (no version nor root).
+/// A declared addon, or an enabled bundled one (no version nor root).
 #[derive(ToSchema)]
-pub(crate) struct Plugin {
+pub(crate) struct Addon {
     /// The project whose runs it is on; null for the orchestrator's.
     project: Option<String>,
     name: String,

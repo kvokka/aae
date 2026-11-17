@@ -1,7 +1,7 @@
 use crate::config::{Config, ConfigError, Name, Source, StepKind};
 use std::{fs, time::Duration};
 
-/// A valid config: an orchestrator with a plugin, a project with a rig and a project trigger, and one pack.
+/// A valid config: an orchestrator with an addon, a project with a rig and a project trigger, and one pack.
 /// The prompt template of the `implementer` of `BASE`.
 pub(super) const TEMPLATE: &str = "kit/agents/implementer/prompt.template.md";
 
@@ -11,14 +11,14 @@ pub(super) const BASE: &[(&str, &str)] = &[
         r#"projects = ["shop"]
 [harness.claude]
 model = "sonnet"
-[[plugin]]
-path = "plugins/mail"
+[[addon]]
+path = "addons/mail"
 [settings]
 env = { LANG = "C" }
 "#,
     ),
     (
-        "plugins/mail/plugin.toml",
+        "addons/mail/addon.toml",
         r#"name = "mail"
 version = "0.1.0"
 [agent.skills.mail]
@@ -29,7 +29,7 @@ command = ["bin/check"]
 timeout = "10s"
 "#,
     ),
-    ("plugins/mail/skills/mail/SKILL.md", "mail"),
+    ("addons/mail/skills/mail/SKILL.md", "mail"),
     (
         "shop/aae.toml",
         r#"packs = ["../kit"]
@@ -52,7 +52,7 @@ inputs = { bead = { next_ready = true, epic = "{{ event.bead.epic }}" } }
         "kit/pack.toml",
         r#"name = "kit"
 version = "0.3.0"
-requires_plugins = ["mail"]
+requires_addons = ["mail"]
 min_aae = "0.1.0"
 [[trigger]]
 name = "nightly"
@@ -64,7 +64,7 @@ run = "audit"
         "kit/agents/implementer/agent.toml",
         r#"harness = "claude"
 effort = "high"
-plugins = [{ name = "mail" }]
+addons = [{ name = "mail" }]
 "#,
     ),
     ("kit/agents/implementer/prompt.md", "You implement."),
@@ -137,7 +137,7 @@ fn a_valid_config_loads_with_every_reference_resolved() {
     let config = load_with(&[]).unwrap();
     assert_eq!(config.harnesses["claude"].model.as_deref(), Some("sonnet"));
     assert_eq!(config.settings.env["LANG"], "C");
-    let mail = &config.plugins[0];
+    let mail = &config.addons[0];
     assert_eq!(mail.hooks[0].timeout, Some(Duration::from_secs(10)));
     assert!(mail.agent.skills["mail"].path.as_ref().unwrap().is_absolute());
     let shop = &config.projects[0];
@@ -266,8 +266,8 @@ fn files_reject_unknown_keys_and_undeclared_names() {
         "`max_runs` must be a positive",
     );
     fails(
-        &[(agent, "harness = \"claude\"\nplugins = [{ name = \"chat\" }]\n")],
-        "plugin `chat` is not declared",
+        &[(agent, "harness = \"claude\"\naddons = [{ name = \"chat\" }]\n")],
+        "addon `chat` is not declared",
     );
     fails(
         &[(agent, "harness = \"claude\"\n[native.codex]\nx = 1\n")],
@@ -307,11 +307,11 @@ fn files_reject_unknown_keys_and_undeclared_names() {
         "prompt.md",
     );
     let slow_hook = BASE[1].1.replace("\"10s\"", "\"6m\"");
-    fails(&[("plugins/mail/plugin.toml", slow_hook.as_str())], "ceiling is 300s");
+    fails(&[("addons/mail/addon.toml", slow_hook.as_str())], "ceiling is 300s");
     let pack = "kit/pack.toml";
     fails(
-        &[(pack, "name = \"kit\"\nversion = \"1\"\nrequires_plugins = [\"chat\"]\n")],
-        "required plugin `chat`",
+        &[(pack, "name = \"kit\"\nversion = \"1\"\nrequires_addons = [\"chat\"]\n")],
+        "required addon `chat`",
     );
     fails(
         &[(pack, "name = \"kit\"\nversion = \"1\"\nmin_aae = \"99.0.0\"\n")],

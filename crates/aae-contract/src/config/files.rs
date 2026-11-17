@@ -23,7 +23,7 @@ pub struct Settings {
     #[serde(default)]
     pub skills: BTreeMap<String, Skill>,
     #[serde(default)]
-    pub plugins: Vec<PluginUse>,
+    pub addons: Vec<AddonUse>,
     /// Harness-native blocks, by harness name; the core passes them to the adapter as they are.
     #[serde(default)]
     pub native: BTreeMap<String, Value>,
@@ -78,7 +78,7 @@ impl Mcp {
     }
 }
 
-/// A hook in the one hook dialect (docs/guide/plugin-development.md); `enabled = false` alone turns off a lower
+/// A hook in the one hook dialect (docs/guide/addon-development.md); `enabled = false` alone turns off a lower
 /// layer's hook.
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
@@ -153,10 +153,10 @@ pub struct Skill {
     pub path: Option<PathBuf>,
 }
 
-/// A plugin attached to agents, in attachment order, with the values of its parameters this layer gives.
+/// An addon attached to agents, in attachment order, with the values of its parameters this layer gives.
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
-pub struct PluginUse {
+pub struct AddonUse {
     pub name: String,
     #[serde(default)]
     pub params: Map<String, Value>,
@@ -181,8 +181,8 @@ pub(super) struct OrchestratorFile {
     #[serde(default)]
     pub harness: BTreeMap<String, Harness>,
     #[serde(default)]
-    pub plugin: Vec<PluginDecl>,
-    /// `[builtin.<name>]`: `enabled` and the parameters of a bundled plugin.
+    pub addon: Vec<AddonDecl>,
+    /// `[builtin.<name>]`: `enabled` and the parameters of a bundled addon.
     #[serde(default)]
     pub builtin: BTreeMap<String, Map<String, Value>>,
     #[serde(default)]
@@ -217,16 +217,16 @@ pub struct Harness {
 
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
-pub(super) struct PluginDecl {
+pub(super) struct AddonDecl {
     /// Exactly one of `path` and `git`; `rev` and `dir` go with `git`.
     pub path: Option<PathBuf>,
     pub git: Option<String>,
     pub rev: Option<String>,
-    /// The plugin's directory inside the repository.
+    /// The addon's directory inside the repository.
     pub dir: Option<PathBuf>,
 }
 
-/// Where a pack or plugin lives: a directory, or a git repository at a tag, a commit or its latest revision.
+/// Where a pack or addon lives: a directory, or a git repository at a tag, a commit or its latest revision.
 #[derive(Debug, Deserialize)]
 #[serde(untagged, expecting = "a pack is a path or `{ git, rev }`")]
 pub(super) enum Source {
@@ -241,7 +241,7 @@ pub(super) struct ProjectFile {
     #[serde(default)]
     pub packs: Vec<Source>,
     #[serde(default)]
-    pub plugin: Vec<PluginDecl>,
+    pub addon: Vec<AddonDecl>,
     /// `[builtin.<name>]` for the runs of this project: a table here replaces the orchestrator's whole.
     #[serde(default)]
     pub builtin: BTreeMap<String, Map<String, Value>>,
@@ -298,7 +298,7 @@ pub(super) struct PackFile {
     pub name: String,
     pub version: String,
     #[serde(default)]
-    pub requires_plugins: Vec<String>,
+    pub requires_addons: Vec<String>,
     pub min_aae: Option<String>,
     #[serde(default)]
     pub trigger: Vec<TriggerFile>,
@@ -323,18 +323,18 @@ pub(super) struct TriggerFile {
 
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
-pub(super) struct PluginFile {
+pub(super) struct AddonFile {
     pub name: String,
     pub version: String,
     /// The harnesses it is for; any when absent.
     pub harnesses: Option<Vec<String>>,
-    /// A file whose text joins the system prompt of the agents that attach the plugin.
+    /// A file whose text joins the system prompt of the agents that attach the addon.
     pub prompt: Option<PathBuf>,
     /// Its parameters with their defaults; a default gives the type.
     #[serde(default)]
     pub params: Map<String, Value>,
     #[serde(default)]
-    pub agent: super::plugin::PluginAgent,
+    pub agent: super::addon::AddonAgent,
     #[serde(default)]
     pub hook: Vec<OrchestratorHookFile>,
     #[serde(default)]

@@ -3,7 +3,7 @@
 aae (Adaptive Agent Executor) is an event-driven orchestrator for coding agents. One daemon runs formulas — an
 agent with a prompt, or a command — as runs on your projects, through the agents' own harnesses (Claude Code,
 Codex), started by hand, by events, by a schedule or by a task tracker, and decides each run's end by an explicit
-finisher and by plugins.
+finisher and by addons.
 
 ## Documentation
 
@@ -13,8 +13,8 @@ finisher and by plugins.
 - [Your first project](docs/guide/first-project.md)
 - [Your first formula with an agent](docs/guide/first-formula.md)
 - [Recovering a failed run by hand](docs/guide/recovery.md)
-- [Using plugins](docs/guide/plugins.md)
-- [Writing a plugin](docs/guide/plugin-development.md)
+- [Using addons](docs/guide/addons.md)
+- [Writing an addon](docs/guide/addon-development.md)
 - [Demos](demos/README.md): a planner agent files a request as beads, and coder agents on claude and codex do them
 - Reference: [configuration files](docs/design/config.md), [contracts](docs/design/contracts.md) (events, hooks,
   run states), [HTTP API](docs/api/openapi.json)
@@ -31,7 +31,7 @@ mise is a convenience, not a requirement: install these binaries any way you lik
   and its license, the mode of the state and socket directories, the state and its outbox. It asks the running
   daemon; before the first start, `aae doctor --config <file>` checks a file with no daemon. It exits non-zero on an
   error; warnings (an untested version, no login file) do not fail it. `--json` prints the checks as JSON.
-- Packs and plugins from git, at a tag, a commit or (a pack only) the latest revision, are downloaded by `aae` into
+- Packs and addons from git, at a tag, a commit or (a pack only) the latest revision, are downloaded by `aae` into
   `~/.cache/aae/git` when it loads the config; `aae cache clear` empties that cache (docs/design/config.md).
 - `aae daemon --service systemd` prints a systemd user unit, `aae daemon --service launchd` a launchd agent, both
   running this binary with the given `--config` and the `PATH` of the shell that printed them. Install the file

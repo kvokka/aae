@@ -98,7 +98,7 @@ impl Live {
             mcp: Default::default(),
             hooks: Default::default(),
             skills: Default::default(),
-            plugins: Vec::new(),
+            addons: Vec::new(),
             // The host forbids user namespaces, so the codex sandbox cannot run here (docs/design/experiments.md).
             native: Some(sourced(native)),
         };

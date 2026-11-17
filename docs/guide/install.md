@@ -1,6 +1,6 @@
 # Installing aae
 
-aae is one binary: the daemon, the CLI and the bundled plugins. It runs on Linux (x86_64, arm64; statically
+aae is one binary: the daemon, the CLI and the bundled addons. It runs on Linux (x86_64, arm64; statically
 linked with musl) and macOS (x86_64, arm64). It is checked on Linux arm64 only: the other targets are built and not
 exercised ([what the first release leaves out](../overview.md#what-the-first-release-leaves-out)).
 
@@ -83,7 +83,7 @@ aae follows XDG:
 | config | `$XDG_CONFIG_HOME/aae/config.toml` (`~/.config/aae/config.toml`) |
 | state (database, journal) | `$XDG_STATE_HOME/aae` (`~/.local/state/aae`) |
 | API socket | `$XDG_RUNTIME_DIR/aae/aae.sock` |
-| packs and plugins from git | `$XDG_CACHE_HOME/aae/git` (`~/.cache/aae/git`); emptied by `aae cache clear` |
+| packs and addons from git | `$XDG_CACHE_HOME/aae/git` (`~/.cache/aae/git`); emptied by `aae cache clear` |
 
 ## Run the daemon
 

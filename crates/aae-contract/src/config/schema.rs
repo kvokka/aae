@@ -149,8 +149,8 @@ fn payload(event_type: &str) -> Option<&'static [(&'static str, Shape)]> {
             &[("bead", BEAD), ("actor", Leaf), ("changed", Leaf)]
         }
         "tracker.sync_failed" => &[("op", Leaf), ("bead", Leaf), ("error", Leaf), ("next_retry_at", Leaf)],
-        "plugin.hook_failed" => &[
-            ("plugin", Leaf),
+        "addon.hook_failed" => &[
+            ("addon", Leaf),
             ("hook_type", Leaf),
             ("event_seq", Leaf),
             ("error", Leaf),

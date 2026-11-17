@@ -17,7 +17,7 @@ pub fn state() -> Result<PathBuf, String> {
     Ok(xdg("XDG_STATE_HOME", ".local/state")?.join("aae"))
 }
 
-/// The packs and plugins downloaded from git.
+/// The packs and addons downloaded from git.
 pub fn cache() -> Result<PathBuf, String> {
     Ok(xdg("XDG_CACHE_HOME", ".cache")?.join("aae/git"))
 }

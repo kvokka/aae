@@ -250,4 +250,4 @@ formula = "review"                    # with `internal = true` in review.toml it
 inputs = { focus = "{{ steps.write.summary }}" }
 ```
 
-Next: [using plugins](plugins.md) and [writing a plugin](plugin-development.md).
+Next: [using addons](addons.md) and [writing an addon](addon-development.md).

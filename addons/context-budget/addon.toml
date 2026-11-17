@@ -12,8 +12,8 @@ native.codex.model_auto_compact_token_limit = "${params.window}"
 
 [agent.hooks.context-budget-count]
 event = "PostCompact"
-command = "'${AAE_PLUGIN_DIR}/hooks/budget' compacted '${AAE_PLUGIN_DATA}' ${params.max_compactions}"
+command = "'${AAE_ADDON_DIR}/hooks/budget' compacted '${AAE_ADDON_DATA}' ${params.max_compactions}"
 
 [agent.hooks.context-budget-stop]
 event = "PreToolUse"
-command = "'${AAE_PLUGIN_DIR}/hooks/budget' tool '${AAE_PLUGIN_DATA}'"
+command = "'${AAE_ADDON_DIR}/hooks/budget' tool '${AAE_ADDON_DATA}'"

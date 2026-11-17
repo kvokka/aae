@@ -1,6 +1,6 @@
-//! The plugin `plugins/context-budget` of this repository: its params reach the native compaction thresholds of
+//! The addon `addons/context-budget` of this repository: its params reach the native compaction thresholds of
 //! claude and codex, and its hook counts the compactions of a session, keeps their label on the bead and fails the
-//! run past the budget, on the hook inputs of both harnesses (plugins/context-budget/README.md).
+//! run past the budget, on the hook inputs of both harnesses (addons/context-budget/README.md).
 
 use serde_json::{Value, json};
 use std::{
@@ -11,8 +11,8 @@ use std::{
     process::{Command, Stdio},
 };
 
-fn plugin() -> std::path::PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../plugins/context-budget")
+fn addon() -> std::path::PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../addons/context-budget")
 }
 
 /// `aae config explain --json` of the agent `kit.<agent>` of the project `shop`, its value without the layers.
@@ -44,16 +44,16 @@ fn the_params_reach_the_compaction_threshold_of_each_harness_and_the_hooks() {
         (
             "config.toml".to_owned(),
             format!(
-                "projects = [\"shop\"]\n[[plugin]]\npath = \"{}\"\n[settings]\nplugins = [{{ name = \"context-budget\", \
+                "projects = [\"shop\"]\n[[addon]]\npath = \"{}\"\n[settings]\naddons = [{{ name = \"context-budget\", \
                  params = {{ max_compactions = 1 }} }}]\n",
-                plugin().display()
+                addon().display()
             ),
         ),
         ("shop/aae.toml".into(), "packs = [\"../kit\"]\n".into()),
         ("kit/pack.toml".into(), "name = \"kit\"\nversion = \"0.1.0\"\n".into()),
         (
             "kit/agents/claude/agent.toml".into(),
-            "harness = \"claude\"\nplugins = [{ name = \"context-budget\", params = { window = 150000 } }]\n".into(),
+            "harness = \"claude\"\naddons = [{ name = \"context-budget\", params = { window = 150000 } }]\n".into(),
         ),
         ("kit/agents/codex/agent.toml".into(), "harness = \"codex\"\n".into()),
     ];
@@ -65,12 +65,12 @@ fn the_params_reach_the_compaction_threshold_of_each_harness_and_the_hooks() {
     let (claude, codex) = (claude["text"].as_str().unwrap(), codex["text"].as_str().unwrap());
     // The integer itself, not a string: the harnesses take a number.
     assert!(
-        claude.contains("native.claude = {\"autoCompactWindow\":150000}  # plugin context-budget"),
+        claude.contains("native.claude = {\"autoCompactWindow\":150000}  # addon context-budget"),
         "{claude}"
     );
-    let limit = "native.codex = {\"model_auto_compact_token_limit\":200000}  # plugin context-budget";
+    let limit = "native.codex = {\"model_auto_compact_token_limit\":200000}  # addon context-budget";
     assert!(codex.contains(limit), "{codex}");
-    let data = d.join("state/aae/plugins/context-budget");
+    let data = d.join("state/aae/addons/context-budget");
     let count = format!("hooks/budget' compacted '{}' 1", data.display());
     for text in [claude, codex] {
         assert!(
@@ -81,10 +81,10 @@ fn the_params_reach_the_compaction_threshold_of_each_harness_and_the_hooks() {
     }
 }
 
-/// Demo 4 attaches the plugin to every agent in its orchestrator config, and its project gives the codex agent a
+/// Demo 4 attaches the addon to every agent in its orchestrator config, and its project gives the codex agent a
 /// window of its own (demos/4-context-budget/README.md).
 #[test]
-fn demo_4_attaches_the_plugin_to_both_agents_and_gives_the_codex_one_its_own_window() {
+fn demo_4_attaches_the_addon_to_both_agents_and_gives_the_codex_one_its_own_window() {
     let tmp = tempfile::tempdir().unwrap();
     let config = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../demos/4-context-budget/root/config.toml");
     let text = |agent: &str| {
@@ -96,17 +96,17 @@ fn demo_4_attaches_the_plugin_to_both_agents_and_gives_the_codex_one_its_own_win
     let (claude, codex) = (text("study.glossarist"), text("study.indexer"));
     assert!(claude.contains("\"autoCompactWindow\":100000"), "{claude}");
     assert!(
-        claude.contains("plugins.context-budget.params.window = 100000  # orchestrator"),
+        claude.contains("addons.context-budget.params.window = 100000  # orchestrator"),
         "{claude}"
     );
     assert!(codex.contains("\"model_auto_compact_token_limit\":50000"), "{codex}");
     assert!(
-        codex.contains("plugins.context-budget.params.window = 50000  # project [agents]"),
+        codex.contains("addons.context-budget.params.window = 50000  # project [agents]"),
         "{codex}"
     );
     for text in [&claude, &codex] {
         assert!(
-            text.contains("plugins.context-budget.params.max_compactions = 8  # orchestrator"),
+            text.contains("addons.context-budget.params.max_compactions = 8  # orchestrator"),
             "{text}"
         );
         assert!(text.contains("\"event\":\"PostCompact\""), "{text}");
@@ -122,7 +122,7 @@ fn hook(dir: &Path, bead: Option<&str>, args: &[&str], input: &Value) -> String 
 }
 
 fn run_hook(dir: &Path, bead: Option<&str>, args: &[&str], input: &Value) -> std::process::Output {
-    let mut command = Command::new(plugin().join("hooks/budget"));
+    let mut command = Command::new(addon().join("hooks/budget"));
     command
         .args(args)
         .current_dir(dir)

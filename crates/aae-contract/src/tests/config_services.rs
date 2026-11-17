@@ -1,4 +1,4 @@
-//! `[[service]]` in the orchestrator config, a project and a plugin (docs/design/config.md).
+//! `[[service]]` in the orchestrator config, a project and an addon (docs/design/config.md).
 
 use super::config::{BASE, fails, load_with};
 use crate::config::{Config, Health, Layer, Name, Service, ServiceScope};
@@ -37,10 +37,10 @@ fn services_layer_like_settings_and_guess_their_paths() {
              health = { command = [\"probe\"] }",
         ),
         (
-            "plugins/mail/plugin.toml",
-            "[[service]]\nname = \"inbox\"\ncommand = [\"${AAE_PLUGIN_DIR}/bin/inbox\"]\nhealth = { http = \"/up\" }\n\
-             [[service]]\nname = \"sorter\"\ncommand = [\"sorter\"]\nenv = { RULES = \"${AAE_PLUGIN_DIR}/rules\" }\n\
-             health = { command = [\"${AAE_PLUGIN_DIR}/bin/ok\"] }",
+            "addons/mail/addon.toml",
+            "[[service]]\nname = \"inbox\"\ncommand = [\"${AAE_ADDON_DIR}/bin/inbox\"]\nhealth = { http = \"/up\" }\n\
+             [[service]]\nname = \"sorter\"\ncommand = [\"sorter\"]\nenv = { RULES = \"${AAE_ADDON_DIR}/rules\" }\n\
+             health = { command = [\"${AAE_ADDON_DIR}/bin/ok\"] }",
         ),
     ])
     .unwrap();
@@ -60,20 +60,20 @@ fn services_layer_like_settings_and_guess_their_paths() {
         (&Health::Port, &None, ServiceScope::Orchestrator)
     );
     let inbox = &e.services["inbox"];
-    assert_eq!(inbox.from, Layer::Plugin("mail".into()));
+    assert_eq!(inbox.from, Layer::Addon("mail".into()));
     assert!(
-        inbox.value.command[0].ends_with("plugins/mail/bin/inbox"),
+        inbox.value.command[0].ends_with("addons/mail/bin/inbox"),
         "{:?}",
         inbox.value.command
     );
     assert_eq!(inbox.value.health, Health::Http("/up".into()));
     // Its health check and environment reach its files too.
     let sorter = &e.services["sorter"].value;
-    assert!(sorter.env["RULES"].ends_with("plugins/mail/rules"), "{sorter:?}");
+    assert!(sorter.env["RULES"].ends_with("addons/mail/rules"), "{sorter:?}");
     let Health::Command(check) = &sorter.health else {
         panic!("{sorter:?}")
     };
-    assert!(check[0].ends_with("plugins/mail/bin/ok"), "{check:?}");
+    assert!(check[0].ends_with("addons/mail/bin/ok"), "{check:?}");
     assert!(e.explain().contains("service.inbox = "), "{}", e.explain());
 
     // The orchestrator's own: the guessed paths.
@@ -123,18 +123,18 @@ fn a_bad_service_is_a_config_error() {
 }
 
 #[test]
-fn a_plugin_names_its_own_files_in_every_value_of_its_agent_layer() {
+fn a_addon_names_its_own_files_in_every_value_of_its_agent_layer() {
     let config = with(&[(
-        "plugins/mail/plugin.toml",
-        "[agent.env]\nMAIL_HOME = \"${AAE_PLUGIN_DIR}/data\"\n\
-         [agent.mcp.m]\ncommand = [\"${AAE_PLUGIN_DIR}/bin/m\"]\nenv = { X = \"${AAE_PLUGIN_DIR}/x\" }\n\
-         [agent.hooks.h]\nevent = \"Stop\"\ncommand = \"${AAE_PLUGIN_DIR}/bin/h\"\n\
-         [agent.native.claude]\nstatusLine = { command = \"${AAE_PLUGIN_DIR}/bin/s\" }",
+        "addons/mail/addon.toml",
+        "[agent.env]\nMAIL_HOME = \"${AAE_ADDON_DIR}/data\"\n\
+         [agent.mcp.m]\ncommand = [\"${AAE_ADDON_DIR}/bin/m\"]\nenv = { X = \"${AAE_ADDON_DIR}/x\" }\n\
+         [agent.hooks.h]\nevent = \"Stop\"\ncommand = \"${AAE_ADDON_DIR}/bin/h\"\n\
+         [agent.native.claude]\nstatusLine = { command = \"${AAE_ADDON_DIR}/bin/s\" }",
     )])
     .unwrap();
     let e = config.effective("shop", None, &agent("implementer")).unwrap();
     let dir = config
-        .plugins
+        .addons
         .iter()
         .find(|p| p.name == "mail")
         .unwrap()

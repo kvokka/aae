@@ -1,4 +1,4 @@
-//! Packs and plugins from git (docs/design/config.md, docs/guide/plugins.md): downloaded into the user's cache before
+//! Packs and addons from git (docs/design/config.md, docs/guide/addons.md): downloaded into the user's cache before
 //! each load of the config, so the core reads only finished directories (docs/guide/install.md). A commit or a tag in
 //! the cache needs no network; a source without a pin asks the remote for its latest revision at every load.
 //!
@@ -203,7 +203,7 @@ fn key(text: &str) -> String {
         .collect()
 }
 
-/// `aae cache clear`: removes every downloaded pack and plugin; none there is cleared too.
+/// `aae cache clear`: removes every downloaded pack and addon; none there is cleared too.
 pub(crate) fn clear(cache: &Path, json: bool) -> ExitCode {
     match fs::remove_dir_all(cache) {
         Ok(()) => {}

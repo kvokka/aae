@@ -16,7 +16,7 @@ aae-claude = { version = "0.1.0", path = "../aae-claude" }
 aae-codex = { version = "0.1.0", path = "../aae-codex" }
 aae-core = { version = "0.1.0", path = "../aae-core" }
 aae-front = { version = "0.1.0", path = "../aae-front" }
-aae-plugins = { version = "0.1.0", path = "../aae-plugins" }
+aae-addons = { version = "0.1.0", path = "../aae-addons" }
 axum = { version = "0.8.9", default-features = false, features = ["http1", "json", "tokio"] }
 clap = "4.6.7"
 serde_json = "1.0.154"

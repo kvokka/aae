@@ -144,11 +144,11 @@ async fn a_new_session_after_a_daemon_crash_gets_the_step_prompt_once() {
 /// A `continue` the daemon died under follows the step's prompt into the new session that replaces the old one.
 #[tokio::test(start_paused = true)]
 async fn a_new_session_after_a_daemon_crash_gets_the_pending_continue() {
-    let plugin = format!(
+    let addon = format!(
         "{}[[hook]]\non = \"run.turn_ended_without_outcome\"\ncommand = [\"true\"]\ntimeout = \"10s\"\n",
         POLICY[1].1
     );
-    let mut w = world_with(&[POLICY[0], ("policy/plugin.toml", &plugin)], Arc::new(common::Lost));
+    let mut w = world_with(&[POLICY[0], ("policy/addon.toml", &addon)], Arc::new(common::Lost));
     w.driver.script(hollow_turn());
     let run = w.create().await;
     w.until(Some(&run), "run.turn_ended_without_outcome", 0).await;
@@ -252,11 +252,11 @@ impl HookRunner for Failer {
 /// Whether the decision on a failed attempt whose process outlives the stop grace comes from its hook, the daemon
 /// restarting (`restart`) while the hook waits for that process.
 async fn a_stopped_process_leaves_the_decision_to_the_hook(restart: bool) {
-    let plugin = POLICY[1].1.replace("10s", "1s");
+    let addon = POLICY[1].1.replace("10s", "1s");
     let driver = ScriptedDriver::new(1);
     // Past the stop grace: the hooks start on a live process.
     driver.real_processes(Duration::from_secs(20));
-    let mut w = world_on(&[POLICY[0], ("policy/plugin.toml", &plugin)], Arc::new(Failer), driver);
+    let mut w = world_on(&[POLICY[0], ("policy/addon.toml", &addon)], Arc::new(Failer), driver);
     let overloaded = Failure::new(FailureKind::Overloaded, Source::Adapter);
     w.driver.script(vec![Step::Emit(Normalized::Failure(overloaded))]);
     let run = w.create().await;

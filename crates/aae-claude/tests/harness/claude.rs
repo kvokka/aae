@@ -42,7 +42,7 @@ pub(super) fn config(provider: &Provider) -> EffectiveConfig {
         mcp: BTreeMap::new(),
         hooks: BTreeMap::new(),
         skills: BTreeMap::new(),
-        plugins: Vec::new(),
+        addons: Vec::new(),
         native: None,
     }
 }

@@ -155,8 +155,8 @@ async fn without_a_decision_the_policy_deadline_fails_the_run() {
 
 #[tokio::test(start_paused = true)]
 async fn a_veto_event_blocks_at_its_deadline_and_proceeds_on_abstain() {
-    let plugin = POLICY[1].1.replace("run.attempt_failed", "run.preparing");
-    let w = world(&[POLICY[0], ("policy/plugin.toml", &plugin)]);
+    let addon = POLICY[1].1.replace("run.attempt_failed", "run.preparing");
+    let w = world(&[POLICY[0], ("policy/addon.toml", &addon)]);
     let run = w.create().await;
     let events = w.events(&run, Duration::from_secs(16)).await;
     let failed = last(&events, "run.failed");

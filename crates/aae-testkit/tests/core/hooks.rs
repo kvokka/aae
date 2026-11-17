@@ -12,27 +12,27 @@ use std::{
 };
 use tokio::sync::Notify;
 
-/// A world whose plugin `policy` has the hooks `(event, script)` with a timeout of 1 s.
+/// A world whose addon `policy` has the hooks `(event, script)` with a timeout of 1 s.
 fn policy(hooks: &[(&str, &str)]) -> World {
     let hooks: Vec<_> = hooks.iter().map(|&(on, script)| (on, script, "1s")).collect();
     policy_timed(&hooks)
 }
 
-/// A world whose plugin `policy` has the hooks `(event, script, timeout)`, each run as `sh <script>` in the plugin
+/// A world whose addon `policy` has the hooks `(event, script, timeout)`, each run as `sh <script>` in the addon
 /// directory with `AAE_SOCKET` set to `/run/aae.sock` and the parameters `{"level": 2}`.
 fn policy_timed(hooks: &[(&str, &str, &str)]) -> World {
     let mut toml = "name = \"policy\"\nversion = \"0.1.0\"\nparams = { level = 2 }\n".to_owned();
     let mut files = vec![(
         "config.toml".to_owned(),
         "projects = [\"shop\"]\nbuiltin = { default-policy = { enabled = false } \
-        }\n[harness.scripted]\n[settings]\nplugins = [{ name = \"policy\" }]\n[[plugin]]\npath = \"policy\"\n"
+        }\n[harness.scripted]\n[settings]\naddons = [{ name = \"policy\" }]\n[[addon]]\npath = \"policy\"\n"
             .to_owned(),
     )];
     for (n, (on, script, timeout)) in hooks.iter().enumerate() {
         toml += &format!("[[hook]]\non = \"{on}\"\ncommand = [\"sh\", \"{n}.sh\"]\ntimeout = \"{timeout}\"\n");
         files.push((format!("policy/{n}.sh"), (*script).to_owned()));
     }
-    files.push(("policy/plugin.toml".to_owned(), toml));
+    files.push(("policy/addon.toml".to_owned(), toml));
     let files: Vec<(&str, &str)> = files.iter().map(|(p, t)| (p.as_str(), t.as_str())).collect();
     let hooks = ExecHooks {
         socket: Some("/run/aae.sock".into()),
@@ -84,7 +84,7 @@ async fn preparing_hooks_chain_their_changes() {
 case "$e" in *'"prompt_append":"one"'*) ;; *) exit 1 ;; esac
 case "$e" in *'"X"'*) ;; *) exit 1 ;; esac
 case "$e" in *'"workdir":"/tmp"'*) ;; *) exit 1 ;; esac
-[ "$AAE_PLUGIN_PARAMS" = '{"level":2}' ] || exit 1
+[ "$AAE_ADDON_PARAMS" = '{"level":2}' ] || exit 1
 echo '{"decision":"proceed","prompt_append":"two"}'"#;
     let w = policy(&[("run.preparing", one), ("run.preparing", two)]);
     w.driver.script(hollow_turn());
@@ -164,10 +164,10 @@ async fn a_failing_hook_is_reported_and_counts_as_no_decision() {
     let failed = w.until(Some(&run), "run.failed", 0).await;
     assert_eq!(failed["reason"], "no_decision");
     assert!(started.elapsed() < Duration::from_secs(5), "not at the deadline");
-    let report = w.until(Some(&run), "plugin.hook_failed", 0).await;
+    let report = w.until(Some(&run), "addon.hook_failed", 0).await;
     assert_eq!(
         report,
-        json!({ "plugin": "policy", "hook_type": "run.attempt_failed", "event_seq": report["event_seq"],
+        json!({ "addon": "policy", "hook_type": "run.attempt_failed", "event_seq": report["event_seq"],
             "error": "exit", "exit_code": 7, "stderr_tail": "broken" })
     );
 }
@@ -181,7 +181,7 @@ async fn a_veto_hook_that_times_out_blocks_the_start() {
         (&failed["class"], &failed["reason"]),
         (&json!("check"), &json!("hook_failed:policy"))
     );
-    assert_eq!(w.until(Some(&run), "plugin.hook_failed", 0).await["error"], "timeout");
+    assert_eq!(w.until(Some(&run), "addon.hook_failed", 0).await["error"], "timeout");
 }
 
 #[tokio::test]
@@ -245,7 +245,7 @@ async fn the_bundled_default_policy_resumes_a_crash_and_reminds_once() {
     let config = ("config.toml", "projects = [\"shop\"]\n[harness.scripted]\n");
     let hooks = ExecHooks {
         socket: None,
-        bundled: Some(aae_plugins::run),
+        bundled: Some(aae_addons::run),
     };
     let w = world_with(&[config], Arc::new(hooks));
     w.driver.script(vec![Step::Exit {

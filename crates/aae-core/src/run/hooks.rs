@@ -1,5 +1,5 @@
 //! Orchestrator hooks (docs/design/contracts.md 3): the dispatcher queues the hooks of an event as an
-//! effect that commits with the event; the runner executes them after commit, one after another in plugin order,
+//! effect that commits with the event; the runner executes them after commit, one after another in addon order,
 //! and sends the combined decision of a deciding event back to the core.
 
 use super::{Decision, Msg, RunHandler, decide::parse};
@@ -31,8 +31,8 @@ const DECIDING: [&str; 4] = [
 ];
 
 impl RunHandler {
-    /// The hooks on `kind` of an event of `project` and `run`, in declaration order (orchestrator plugins, then
-    /// those of `project`), as the runner takes them: of the plugins attached for the event, with their params.
+    /// The hooks on `kind` of an event of `project` and `run`, in declaration order (orchestrator addons, then
+    /// those of `project`), as the runner takes them: of the addons attached for the event, with their params.
     pub(super) fn hooks(
         &self,
         tx: &Tx<'_>,
@@ -41,36 +41,36 @@ impl RunHandler {
         kind: &str,
     ) -> Result<Vec<Value>, Error> {
         let p = self.config.projects.iter().find(|p| Some(p.name.as_str()) == project);
-        let declared = (self.config.plugins.iter()).chain(p.into_iter().flat_map(|p| &p.plugins));
-        let on: Vec<&crate::config::Plugin> = declared.filter(|d| d.hooks.iter().any(|h| h.on == kind)).collect();
+        let declared = (self.config.addons.iter()).chain(p.into_iter().flat_map(|p| &p.addons));
+        let on: Vec<&crate::config::Addon> = declared.filter(|d| d.hooks.iter().any(|h| h.on == kind)).collect();
         let sql = "SELECT config FROM runs WHERE id = ?1";
         let snapshot: Option<Option<String>> = match (run, on.is_empty()) {
             (Some(run), false) => tx.sql().query_row(sql, [run], |r| r.get(0)).optional()?,
             _ => None,
         };
-        let attached = (!on.is_empty()).then(|| self.config.hook_plugins(project, snapshot.flatten().as_deref()));
+        let attached = (!on.is_empty()).then(|| self.config.hook_addons(project, snapshot.flatten().as_deref()));
         let mut hooks = Vec::new();
-        for (plugin, params) in on.iter().filter_map(|d| Some((d, attached.as_ref()?.get(&d.name)?))) {
-            for hook in plugin.hooks.iter().filter(|h| h.on == kind) {
+        for (addon, params) in on.iter().filter_map(|d| Some((d, attached.as_ref()?.get(&d.name)?))) {
+            for hook in addon.hooks.iter().filter(|h| h.on == kind) {
                 let timeout_ms = hook
                     .timeout
                     .map_or(HOOK_TIMEOUT_MS, |t| i64::try_from(t.as_millis()).unwrap_or(i64::MAX));
                 let mut command = hook.command.clone();
-                // A program path is relative to the plugin directory; a bare name is looked up on `PATH`.
+                // A program path is relative to the addon directory; a bare name is looked up on `PATH`.
                 if let Some(program) = command.first_mut().filter(|p| p.contains('/')) {
-                    *program = plugin.root.join(&*program).to_string_lossy().into_owned();
+                    *program = addon.root.join(&*program).to_string_lossy().into_owned();
                 }
                 hooks.push(json!({
-                    "plugin": plugin.name, "dir": plugin.root, "command": command,
+                    "addon": addon.name, "dir": addon.root, "command": command,
                     "timeout_ms": timeout_ms.min(HOOK_CEILING_MS), "params": params,
                 }));
             }
         }
-        // The bundled plugins come last: a declared plugin decides before the default policy.
+        // The bundled addons come last: a declared addon decides before the default policy.
         let bundled = p.map_or(&self.config.bundled, |p| &p.bundled);
         for bundled in bundled.iter().filter(|b| b.on.contains(&kind)) {
             hooks.push(json!({
-                "plugin": bundled.name, "bundled": bundled.name, "params": bundled.params,
+                "addon": bundled.name, "bundled": bundled.name, "params": bundled.params,
                 "timeout_ms": HOOK_TIMEOUT_MS,
             }));
         }
@@ -109,7 +109,7 @@ impl RunHandler {
     pub(super) fn hook_failed(tx: &mut Tx<'_>, event: &Value, data: Value) -> Result<(), Error> {
         let text = |key: &str| event[key].as_str().map(str::to_owned);
         let event = Event {
-            kind: "plugin.hook_failed".to_owned(),
+            kind: "addon.hook_failed".to_owned(),
             project: text("project"),
             rig: text("rig"),
             run: text("run"),
@@ -136,11 +136,11 @@ pub trait HookRunner: Send + Sync + 'static {
     }
 }
 
-/// A bundled plugin's hook: `(plugin, event, params)` to its decision, `None` for none, or why it failed.
+/// A bundled addon's hook: `(addon, event, params)` to its decision, `None` for none, or why it failed.
 pub type BundledHook = fn(&str, &Value, &Value) -> Result<Option<Value>, String>;
 
-/// The hooks as commands of their plugins; `socket` is the API socket a hook gets in `AAE_SOCKET`; `bundled` runs
-/// the hooks of the bundled plugins in process (the daemon passes `aae_plugins::run`).
+/// The hooks as commands of their addons; `socket` is the API socket a hook gets in `AAE_SOCKET`; `bundled` runs
+/// the hooks of the bundled addons in process (the daemon passes `aae_addons::run`).
 #[derive(Default)]
 pub struct ExecHooks {
     pub socket: Option<PathBuf>,
@@ -164,7 +164,7 @@ enum Said {
     Blocked(String),
 }
 
-/// A hook failure as `plugin.hook_failed` reports it.
+/// A hook failure as `addon.hook_failed` reports it.
 struct Failed {
     error: &'static str,
     exit_code: Option<i32>,
@@ -179,7 +179,7 @@ async fn run(core: &CoreHandle<Msg>, payload: &Value, hooks: &ExecHooks) {
     let mut prepared = Prepared::default();
     let (mut first, mut veto, mut remarks) = (None, None, Vec::new());
     for hook in payload["hooks"].as_array().into_iter().flatten() {
-        let plugin = hook["plugin"].as_str().unwrap_or_default();
+        let addon = hook["addon"].as_str().unwrap_or_default();
         // Hooks on observed events may only exit 0 or fail (contracts 3.2).
         let said = match hook["bundled"].as_str() {
             Some(name) => bundled(hooks.bundled, name, hook, &event).await,
@@ -192,16 +192,16 @@ async fn run(core: &CoreHandle<Msg>, payload: &Value, hooks: &ExecHooks) {
                 stderr,
             }),
             Said::Decided(_) if !deciding => Ok(None),
-            said => decision(&kind, said, plugin, &event),
+            said => decision(&kind, said, addon, &event),
         });
         let decision = match said {
             Ok(decision) => decision,
             Err(failed) => {
                 // A failing hook on the report of a hook failure is not reported again: no loop.
-                if kind != "plugin.hook_failed" {
-                    report(core, &event, plugin, &kind, failed).await;
+                if kind != "addon.hook_failed" {
+                    report(core, &event, addon, &kind, failed).await;
                 }
-                let reason = format!("hook_failed:{plugin}");
+                let reason = format!("hook_failed:{addon}");
                 match kind.as_str() {
                     "run.preparing" => Some(Decision::Deny { reason }),
                     "run.finishing" => Some(Decision::Veto { reason }),
@@ -295,7 +295,7 @@ impl Prepared {
     }
 }
 
-/// Runs a bundled plugin's hook off the async threads (it may call git) within the hook timeout. A timeout ends
+/// Runs a bundled addon's hook off the async threads (it may call git) within the hook timeout. A timeout ends
 /// the wait; the bundled `worktree` kills the `git` it still runs at that timeout too.
 async fn bundled(run: Option<BundledHook>, name: &str, hook: &Value, event: &Value) -> Result<Said, Failed> {
     let failed = |error, stderr: String| Failed {
@@ -320,9 +320,9 @@ async fn invoke(hook: &Value, event: &Value, socket: Option<&Path>, marker: Opti
     let command: Vec<String> = serde_json::from_value(hook["command"].clone()).unwrap_or_default();
     let dir = PathBuf::from(hook["dir"].as_str().unwrap_or("/"));
     let mut env = process::base_env();
-    env.push(("AAE_PLUGIN_DIR".to_owned(), dir.to_string_lossy().into_owned()));
+    env.push(("AAE_ADDON_DIR".to_owned(), dir.to_string_lossy().into_owned()));
     let params = hook.get("params").filter(|p| p.is_object());
-    env.extend(params.map(|p| ("AAE_PLUGIN_PARAMS".to_owned(), p.to_string())));
+    env.extend(params.map(|p| ("AAE_ADDON_PARAMS".to_owned(), p.to_string())));
     env.extend(socket.map(|s| ("AAE_SOCKET".to_owned(), s.to_string_lossy().into_owned())));
     env.extend(marker.map(|m| (crate::orphans::INSTANCE_ENV.to_owned(), m.to_owned())));
     let stdin = format!("{event}\n");
@@ -364,7 +364,7 @@ async fn invoke(hook: &Value, event: &Value, socket: Option<&Path>, marker: Opti
 }
 
 /// The decision of one hook on a deciding event; a decision not allowed for the event is a failure (3.2).
-fn decision(kind: &str, said: Said, plugin: &str, event: &Value) -> Result<Option<Decision>, Failed> {
+fn decision(kind: &str, said: Said, addon: &str, event: &Value) -> Result<Option<Decision>, Failed> {
     let value = match said {
         Said::Nothing => return Ok(None),
         Said::Blocked(reason) => {
@@ -376,16 +376,16 @@ fn decision(kind: &str, said: Said, plugin: &str, event: &Value) -> Result<Optio
         }
         Said::Decided(value) => value,
     };
-    parse(kind, &value, plugin, event).map(Some).ok_or(Failed {
+    parse(kind, &value, addon, event).map(Some).ok_or(Failed {
         error: "output",
         exit_code: Some(0),
         stderr: format!("decision not allowed on `{kind}`: {value}"),
     })
 }
 
-async fn report(core: &CoreHandle<Msg>, event: &Value, plugin: &str, kind: &str, failed: Failed) {
+async fn report(core: &CoreHandle<Msg>, event: &Value, addon: &str, kind: &str, failed: Failed) {
     let data = json!({
-        "plugin": plugin, "hook_type": kind, "event_seq": event["seq"], "error": failed.error,
+        "addon": addon, "hook_type": kind, "event_seq": event["seq"], "error": failed.error,
         "exit_code": failed.exit_code, "stderr_tail": failed.stderr,
     });
     let _ = core

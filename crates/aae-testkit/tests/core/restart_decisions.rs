@@ -16,14 +16,14 @@ use std::{sync::Arc, time::Duration};
 /// Longer than any hook here (10 s) with its slack (5 s): a deadline counted from before the restart has passed.
 const IDLE: Duration = Duration::from_secs(60);
 
-/// A world whose plugin has one hook on `on`, 10 s long.
+/// A world whose addon has one hook on `on`, 10 s long.
 fn hooked(on: &str, hooks: Arc<dyn HookRunner>) -> World {
     hooked_in(on, hooks, &[])
 }
 
 fn hooked_in(on: &str, hooks: Arc<dyn HookRunner>, extra: &[(&str, &str)]) -> World {
-    let plugin = POLICY[1].1.replace("run.attempt_failed", on);
-    let mut files = vec![POLICY[0], ("policy/plugin.toml", plugin.as_str())];
+    let addon = POLICY[1].1.replace("run.attempt_failed", on);
+    let mut files = vec![POLICY[0], ("policy/addon.toml", addon.as_str())];
     files.extend_from_slice(extra);
     world_with(&files, hooks)
 }
@@ -263,11 +263,11 @@ async fn a_drain_waits_for_the_decision_on_a_failed_attempt() {
 /// the next daemon resumes the session with the remark.
 #[tokio::test(start_paused = true)]
 async fn a_remark_during_a_drain_waits_for_the_next_daemon() {
-    let plugin = format!(
+    let addon = format!(
         "{}[[hook]]\non = \"run.finishing\"\ncommand = [\"true\"]\ntimeout = \"10s\"\n",
         POLICY[1].1
     );
-    let mut w = world_with(&[POLICY[0], ("policy/plugin.toml", &plugin)], Arc::new(Lost));
+    let mut w = world_with(&[POLICY[0], ("policy/addon.toml", &addon)], Arc::new(Lost));
     let mut steps = hollow_turn();
     steps.insert(1, Step::Wait(Duration::from_secs(1)));
     w.driver.script(steps);

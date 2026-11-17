@@ -30,7 +30,7 @@ pub(super) static ADAPTERS: &[&Adapter] = &[&CLAUDE, &CODEX];
 const AGENT: &str = "kit/agents/implementer/agent.toml";
 pub(super) const HARNESSES: (&str, &str) = (
     "config.toml",
-    "projects = [\"shop\"]\n[harness.claude]\nmodel = \"sonnet\"\n[[plugin]]\npath = \"plugins/mail\"\n",
+    "projects = [\"shop\"]\n[harness.claude]\nmodel = \"sonnet\"\n[[addon]]\npath = \"addons/mail\"\n",
 );
 
 fn load(changes: &[(&str, &str)]) -> Result<Config, Vec<ConfigError>> {
@@ -98,7 +98,7 @@ fn a_harness_no_layer_names_is_an_error_of_the_formula() {
 
 #[test]
 fn the_pack_and_the_formula_step_are_layers() {
-    let pack = "name = \"kit\"\nversion = \"0.3.0\"\nrequires_plugins = [\"mail\"]\n\
+    let pack = "name = \"kit\"\nversion = \"0.3.0\"\nrequires_addons = [\"mail\"]\n\
                 [[trigger]]\nname = \"nightly\"\ncron = \"0 3 * * *\"\nrun = \"audit\"\n[settings]\nmodel = \"haiku\"\neffort = \"low\"\n";
     let formula = "name = \"implement\"\n[inputs]\nbead = { type = \"task\", required = true }\n\
                    [[step]]\nkind = \"ai\"\nagent = \"implementer\"\neffort = \"max\"\n";

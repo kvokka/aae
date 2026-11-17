@@ -5,7 +5,7 @@
 use super::{
     Agent, Attached, Config, EffectiveConfig, Layer, Name, Pack, Project, Rig, Scope, Settings, Sourced, StepKind,
     check::resolve,
-    load::{Loader, PARAMS, PLUGIN_DATA, reference},
+    load::{ADDON_DATA, Loader, PARAMS, reference},
 };
 use serde::Deserialize;
 use std::collections::{BTreeMap, BTreeSet};
@@ -126,28 +126,28 @@ impl Config {
         Ok((name, config))
     }
 
-    /// The plugins whose orchestrator hooks an event of `project` gets, by name, with the values of their params in
+    /// The addons whose orchestrator hooks an event of `project` gets, by name, with the values of their params in
     /// force (docs/design/contracts.md 3.1): those the agent of `snapshot`, a run's config snapshot, attaches; with no
     /// agent, those `[settings]` of the orchestrator and of `project` attach.
-    pub fn hook_plugins(&self, project: Option<&str>, snapshot: Option<&str>) -> BTreeMap<String, serde_json::Value> {
+    pub fn hook_addons(&self, project: Option<&str>, snapshot: Option<&str>) -> BTreeMap<String, serde_json::Value> {
         let agent = (snapshot.and_then(|s| serde_json::from_str::<serde_json::Value>(s).ok()))
             .filter(|c| c.get("harness").is_some());
-        let plugins: Vec<Sourced<Attached>> = match agent {
-            Some(mut c) => serde_json::from_value(c["plugins"].take()).unwrap_or_default(),
-            None => self.settings_plugins(project),
+        let addons: Vec<Sourced<Attached>> = match agent {
+            Some(mut c) => serde_json::from_value(c["addons"].take()).unwrap_or_default(),
+            None => self.settings_addons(project),
         };
         let values = |p: Attached| {
             let params = p.params.into_iter().map(|(k, s)| (k, s.value));
             (p.name, serde_json::Value::Object(params.collect()))
         };
-        plugins.into_iter().map(|p| values(p.value)).collect()
+        addons.into_iter().map(|p| values(p.value)).collect()
     }
 
-    /// The plugins `[settings]` of the orchestrator and of `project` attach, with their params.
-    fn settings_plugins(&self, project: Option<&str>) -> Vec<Sourced<Attached>> {
+    /// The addons `[settings]` of the orchestrator and of `project` attach, with their params.
+    fn settings_addons(&self, project: Option<&str>) -> Vec<Sourced<Attached>> {
         let p = self.projects.iter().find(|p| Some(p.name.as_str()) == project);
-        let declared: Vec<&super::Plugin> = (self.plugins.iter())
-            .chain(p.into_iter().flat_map(|p| &p.plugins))
+        let declared: Vec<&super::Addon> = (self.addons.iter())
+            .chain(p.into_iter().flat_map(|p| &p.addons))
             .collect();
         let mut layers = vec![(Layer::Orchestrator, self.settings.clone())];
         layers.extend(p.map(|p| (Layer::Project, p.settings.clone())));
@@ -213,8 +213,8 @@ impl Config {
         stronger.extend(edits(&p.edits).into_iter().map(|s| (Layer::ProjectAgent, s)));
         stronger.extend((r.into_iter().flat_map(|r| edits(&r.edits))).map(|s| (Layer::RigAgent, s)));
 
-        // Plugins attach first: their contributions are a layer between the rig and the agent.
-        let declared: Vec<&super::Plugin> = self.plugins.iter().chain(&p.plugins).collect();
+        // Addons attach first: their contributions are a layer between the rig and the agent.
+        let declared: Vec<&super::Addon> = self.addons.iter().chain(&p.addons).collect();
         let attached = attach(&declared, layers.iter().chain(&stronger));
         for (d, used) in &attached {
             let mut agent = d.agent.clone();
@@ -223,21 +223,18 @@ impl Config {
                 agent.substitute_whole(&pattern, &value.value);
                 agent.substitute(&pattern, value.value.as_str().unwrap_or(&text));
             }
-            if let Some(data) = &self.plugin_data {
-                agent.substitute(PLUGIN_DATA, &data.join(&d.name).to_string_lossy());
+            if let Some(data) = &self.addon_data {
+                agent.substitute(ADDON_DATA, &data.join(&d.name).to_string_lossy());
             }
-            layers.push((Layer::Plugin(d.name.clone()), agent));
+            layers.push((Layer::Addon(d.name.clone()), agent));
         }
         layers.extend(stronger);
 
         let (harness, harness_from) = Self::launch(&layers)?;
-        let other = |d: &super::Plugin| d.harnesses.as_ref().is_some_and(|h| !h.contains(&harness));
+        let other = |d: &super::Addon| d.harnesses.as_ref().is_some_and(|h| !h.contains(&harness));
         if let Some((d, _)) = attached.iter().find(|(d, _)| other(d)) {
             let list = d.harnesses.as_deref().unwrap_or_default().join(", ");
-            return Err(format!(
-                "plugin `{}` is for {list}, not for harness `{harness}`",
-                d.name
-            ));
+            return Err(format!("addon `{}` is for {list}, not for harness `{harness}`", d.name));
         }
         let model = (self.harnesses.get(&harness).and_then(|h| h.model.clone())).map(|value| Sourced {
             value,
@@ -253,7 +250,7 @@ impl Config {
             };
             config.env.insert(name.clone(), value);
         }
-        config.plugins = attached.iter().map(|(_, used)| used.clone()).collect();
+        config.addons = attached.iter().map(|(_, used)| used.clone()).collect();
         for (layer, settings) in &layers {
             config.apply(settings, layer);
         }
@@ -277,22 +274,22 @@ impl Config {
     }
 }
 
-/// The plugins `layers` attach, weakest layer first, with the values of their params (docs/design/config.md "Plugin"):
+/// The addons `layers` attach, weakest layer first, with the values of their params (docs/design/config.md "Addon"):
 /// an attachment keeps the place of its first mention, and each mention gives params by key and says whether it is on.
 fn attach<'a, 'b>(
-    declared: &[&'a super::Plugin],
+    declared: &[&'a super::Addon],
     layers: impl Iterator<Item = &'b (Layer, Settings)>,
-) -> Vec<(&'a super::Plugin, Sourced<Attached>)> {
-    let mut uses: Vec<(&super::Plugin, Sourced<Attached>, bool)> = Vec::new();
+) -> Vec<(&'a super::Addon, Sourced<Attached>)> {
+    let mut uses: Vec<(&super::Addon, Sourced<Attached>, bool)> = Vec::new();
     for (layer, settings) in layers {
-        for used in &settings.plugins {
+        for used in &settings.addons {
             let i = match uses.iter().position(|(d, ..)| d.name == used.name) {
                 Some(i) => i,
-                // Loading refuses an attachment of no declared plugin.
+                // Loading refuses an attachment of no declared addon.
                 None => match declared.iter().find(|d| d.name == used.name) {
                     None => continue,
                     Some(d) => {
-                        let from = Layer::Plugin(d.name.clone());
+                        let from = Layer::Addon(d.name.clone());
                         let params = (d.params.iter()).map(|(k, value)| (k.clone(), sourced(value.clone(), &from)));
                         let value = Attached {
                             name: d.name.clone(),

@@ -127,7 +127,7 @@ async fn a_drain_at_the_depth_limit_gives_no_bead_a_run() {
 #[tokio::test(start_paused = true)]
 async fn a_restart_mid_drain_fails_the_attempt_and_gives_no_bead_twice() {
     let config = format!(
-        "{}[settings]\nplugins = [{{ name = \"policy\" }}]\n[[plugin]]\npath = \"policy\"\n",
+        "{}[settings]\naddons = [{{ name = \"policy\" }}]\n[[addon]]\npath = \"policy\"\n",
         SWEEP[0].1
     );
     let mut files = vec![("config.toml", config.as_str()), POLICY[1]];

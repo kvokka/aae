@@ -194,7 +194,7 @@ impl Daemon {
 
 impl Drop for Daemon {
     /// No later daemon sweeps this tree's instances, so the scenario ends what its daemon left: codex's own
-    /// children (a plugin sync) outlive a killed daemon otherwise.
+    /// children (an addon sync) outlive a killed daemon otherwise.
     fn drop(&mut self) {
         let _ = self.child.kill();
         let _ = self.child.wait();

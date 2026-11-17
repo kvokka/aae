@@ -13,7 +13,7 @@ pub(super) const FIT: &str = "harness = \"claude\"\ndescription = \"Checks a cha
 
 /// The `agent.toml` of BASE's `implementer` with `extra` after it.
 pub(super) fn me(extra: &str) -> String {
-    format!("harness = \"claude\"\neffort = \"high\"\nplugins = [{{ name = \"mail\" }}]\n{extra}\n")
+    format!("harness = \"claude\"\neffort = \"high\"\naddons = [{{ name = \"mail\" }}]\n{extra}\n")
 }
 
 pub(super) fn base(path: &str) -> &'static str {
@@ -298,18 +298,18 @@ fn an_env_key_with_two_values_is_an_error() {
 }
 
 #[test]
-fn a_target_plugin_for_another_harness_is_an_error() {
-    let mail = base("plugins/mail/plugin.toml")
-        .replace("version = \"0.1.0\"", "version = \"0.1.0\"\nharnesses = [\"claude\"]");
+fn a_target_addon_for_another_harness_is_an_error() {
+    let mail =
+        base("addons/mail/addon.toml").replace("version = \"0.1.0\"", "version = \"0.1.0\"\nharnesses = [\"claude\"]");
     let codex_mail = mail.replace("[\"claude\"]", "[\"codex\"]");
     // The caller drops `mail`; its target attaches it, and `mail` is not for claude.
     let caller = "harness = \"claude\"\nsubagents = [\"qa\"]\n";
-    let qa = format!("{FIT}plugins = [{{ name = \"mail\" }}]\n");
+    let qa = format!("{FIT}addons = [{{ name = \"mail\" }}]\n");
     one_error(
-        &[(ME, caller), (QA, &qa), ("plugins/mail/plugin.toml", &codex_mail)],
-        "subagent `kit.qa`: plugin `mail` is for codex, not for harness `claude`",
+        &[(ME, caller), (QA, &qa), ("addons/mail/addon.toml", &codex_mail)],
+        "subagent `kit.qa`: addon `mail` is for codex, not for harness `claude`",
     );
-    load_with(&[(ME, caller), (QA, &qa), ("plugins/mail/plugin.toml", &mail)]).unwrap();
+    load_with(&[(ME, caller), (QA, &qa), ("addons/mail/addon.toml", &mail)]).unwrap();
 }
 
 #[test]

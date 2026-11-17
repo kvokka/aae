@@ -219,13 +219,13 @@ async fn the_config_from_the_cli_lists_explains_checks_and_reloads() {
     assert_eq!(internal(&["formula", "list", "--all"]), vec![Value::Bool(true)]);
     assert_eq!(d.json(&["formula", "list"]).as_array().unwrap().len(), 2);
     assert_eq!(d.json(&["pack", "list"])[0]["name"], "shop");
-    let plugins = d.json(&["plugin", "list"]);
+    let addons = d.json(&["addon", "list"]);
     assert_eq!(
-        (&plugins[0]["project"], &plugins[0]["name"]),
+        (&addons[0]["project"], &addons[0]["name"]),
         (&Value::Null, &"default-policy".into())
     );
-    let shop = (plugins.as_array().unwrap().iter()).any(|p| p["project"] == "shop" && p["name"] == "default-policy");
-    assert!(shop, "every project's plugins without --project: {plugins}");
+    let shop = (addons.as_array().unwrap().iter()).any(|p| p["project"] == "shop" && p["name"] == "default-policy");
+    assert!(shop, "every project's addons without --project: {addons}");
     assert!(!d.cli(&["agent", "list", "--project", "nope"], &[]).status.success());
     // Asked from another environment, whose own config file is not the daemon's, the daemon answers by its config.
     let other = [("XDG_CONFIG_HOME", "/nonexistent")];

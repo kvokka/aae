@@ -11,7 +11,7 @@ default-members = [
   "crates/aae-contract",
   "crates/aae-core",
   "crates/aae-front",
-  "crates/aae-plugins",
+  "crates/aae-addons",
   "crates/aae-testkit",
 ]
 

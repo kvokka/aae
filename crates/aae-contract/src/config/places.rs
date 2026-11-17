@@ -61,7 +61,7 @@ impl Loader {
         dir: &Path,
         root: RootFile,
         raw: BTreeMap<String, RigFile>,
-        plugins: &[&super::Plugin],
+        addons: &[&super::Addon],
     ) -> ((String, Rig), BTreeMap<String, Rig>) {
         let name = root.name.unwrap_or_else(|| ROOT.to_owned());
         let path = root.path.unwrap_or_default();
@@ -110,8 +110,8 @@ impl Loader {
                 );
             }
             place.triggers = r.triggers.iter().map(|t| super::load::reference(t)).collect();
-            place.settings = self.settings(file, dir, r.settings, plugins);
-            (place.edits, place.agents) = self.rig_agents(file, dir, &rig, r.agents, plugins);
+            place.settings = self.settings(file, dir, r.settings, addons);
+            (place.edits, place.agents) = self.rig_agents(file, dir, &rig, r.agents, addons);
             rigs.insert(rig, place);
         }
         (root, rigs)

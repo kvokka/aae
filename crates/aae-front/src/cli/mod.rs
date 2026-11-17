@@ -36,7 +36,7 @@ pub const OPERATIONS: &[(&str, &str, &str)] = &[
     ("agent list", "GET", "/v1/agents"),
     ("formula list", "GET", "/v1/formulas"),
     ("pack list", "GET", "/v1/packs"),
-    ("plugin list", "GET", "/v1/plugins"),
+    ("addon list", "GET", "/v1/addons"),
     ("config explain", "GET", "/v1/config/explain"),
     ("config check", "POST", "/v1/config/check"),
     ("config reload", "POST", "/v1/config/reload"),
@@ -68,7 +68,7 @@ pub struct Cli {
 
 #[derive(Subcommand)]
 pub enum CacheCommand {
-    /// Remove every downloaded pack and plugin; the next load of the config downloads them again.
+    /// Remove every downloaded pack and addon; the next load of the config downloads them again.
     Clear,
 }
 
@@ -89,7 +89,7 @@ pub enum Command {
         #[arg(long)]
         config: Option<PathBuf>,
     },
-    /// The cache of packs and plugins downloaded from git.
+    /// The cache of packs and addons downloaded from git.
     #[command(subcommand)]
     Cache(CacheCommand),
     /// Runs of formulas.
@@ -116,9 +116,9 @@ pub enum Command {
     /// Packs.
     #[command(subcommand)]
     Pack(ListCommand),
-    /// Plugins: declared and bundled.
+    /// Addons: declared and bundled.
     #[command(subcommand)]
-    Plugin(ListCommand),
+    Addon(ListCommand),
     /// The config: check, explain, reload.
     #[command(subcommand)]
     Config(ConfigCommand),
@@ -253,7 +253,7 @@ async fn execute(client: &Client, cli: Cli) -> Result<ExitCode, ClientError> {
         Command::Agent(command) => config::list(client, json, "agents", command).await?,
         Command::Formula(command) => config::formulas(client, json, command).await?,
         Command::Pack(command) => config::list(client, json, "packs", command).await?,
-        Command::Plugin(command) => config::list(client, json, "plugins", command).await?,
+        Command::Addon(command) => config::list(client, json, "addons", command).await?,
         Command::Events { from } => follow(client.events(from).await?, json).await?,
         Command::Finish { result, summary, data } => return finish(client, json, result, summary, data).await,
         Command::Status => print(json, &client.request("GET", "/v1/daemon", None, None).await?),

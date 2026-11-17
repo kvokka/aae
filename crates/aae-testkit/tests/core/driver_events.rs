@@ -24,7 +24,7 @@ fn with_policy() -> World {
     let agent = "harness = \"scripted\"\n[native.scripted]\naccount = \"a\"\n";
     let hooks = ExecHooks {
         socket: None,
-        bundled: Some(aae_plugins::run),
+        bundled: Some(aae_addons::run),
     };
     world_with(
         &[("config.toml", config), ("shop/agents/dev/agent.toml", agent)],

@@ -1,6 +1,6 @@
 //! Criterion 4, on the real `claude` against a fake Anthropic API: a turn that ends without the finisher does not
 //! pass; the finisher of a stale attempt is rejected; a remark of a `run.finishing` hook sends the agent back, and
-//! the run passes on its second go in the same attempt. Each part has its own daemon, so their plugins do not meet.
+//! the run passes on its second go in the same attempt. Each part has its own daemon, so their addons do not meet.
 
 use super::claude_agent;
 use crate::{
@@ -13,15 +13,15 @@ use std::{path::Path, sync::Arc, time::Duration};
 
 const WITHIN: Duration = Duration::from_secs(60);
 
-/// Project `shop` with harness claude and plugin `hook`: one hook on `on` running `script` with `sh -c`.
+/// Project `shop` with harness claude and addon `hook`: one hook on `on` running `script` with `sh -c`.
 fn hooked(root: &Path, on: &str, script: &str) {
     write(
         root.join("config/aae/config.toml"),
-        "projects = [\"shop\"]\n[harness.claude]\n[settings]\nplugins = [{ name = \"hook\" }]\n[[plugin]]\npath = \"hook\"\n",
+        "projects = [\"shop\"]\n[harness.claude]\n[settings]\naddons = [{ name = \"hook\" }]\n[[addon]]\npath = \"hook\"\n",
     );
     let script = serde_json::to_string(script).unwrap();
     write(
-        root.join("config/aae/hook/plugin.toml"),
+        root.join("config/aae/hook/addon.toml"),
         format!(
             "name = \"hook\"\nversion = \"0.1.0\"\n[[hook]]\non = \"{on}\"\ncommand = [\"sh\", \"-c\", {script}]\n\
              timeout = \"10s\"\n"

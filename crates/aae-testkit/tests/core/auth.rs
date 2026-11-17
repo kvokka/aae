@@ -23,7 +23,7 @@ fn world(params: &str) -> World {
     let agent = "harness = \"scripted\"\n[native.scripted]\naccount = \"a\"\n";
     let hooks = ExecHooks {
         socket: None,
-        bundled: Some(aae_plugins::run),
+        bundled: Some(aae_addons::run),
     };
     let files = [("config.toml", config.as_str()), ("shop/agents/dev/agent.toml", agent)];
     world_with(&files, Arc::new(hooks))

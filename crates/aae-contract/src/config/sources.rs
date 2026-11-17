@@ -1,8 +1,8 @@
-//! Packs and plugins from git (docs/design/config.md, docs/guide/plugins.md). The core never runs git: whoever loads
+//! Packs and addons from git (docs/design/config.md, docs/guide/addons.md). The core never runs git: whoever loads
 //! the config downloads each source first and passes the directory it went to, as [`Checkouts`].
 
 use super::{
-    files::{OrchestratorFile, PluginDecl, ProjectFile, Source},
+    files::{AddonDecl, OrchestratorFile, ProjectFile, Source},
     items::{parent, resolve},
     load::Loader,
 };
@@ -38,13 +38,13 @@ pub fn git_sources(orchestrator_file: &Path) -> BTreeSet<GitSource> {
         true => loader.read::<OrchestratorFile>(orchestrator_file).unwrap_or_default(),
         false => OrchestratorFile::default(),
     };
-    let mut found = loader.git(orchestrator_file, &raw.plugin);
+    let mut found = loader.git(orchestrator_file, &raw.addon);
     for dir in raw.projects.iter().map(|d| resolve(&base, d)) {
         let file = dir.join("aae.toml");
         let Some(project) = loader.read::<ProjectFile>(&file) else {
             continue;
         };
-        found.extend(loader.git(&file, &project.plugin));
+        found.extend(loader.git(&file, &project.addon));
         found.extend(project.packs.into_iter().filter_map(|s| match s {
             Source::Git(git) => Some(git),
             Source::Path(_) => None,
@@ -54,9 +54,9 @@ pub fn git_sources(orchestrator_file: &Path) -> BTreeSet<GitSource> {
 }
 
 impl Loader {
-    /// The git sources among the plugins `file` declares.
-    fn git(&mut self, file: &Path, decls: &[PluginDecl]) -> BTreeSet<GitSource> {
-        let sources: Vec<Source> = decls.iter().filter_map(|d| self.plugin_source(file, d)).collect();
+    /// The git sources among the addons `file` declares.
+    fn git(&mut self, file: &Path, decls: &[AddonDecl]) -> BTreeSet<GitSource> {
+        let sources: Vec<Source> = decls.iter().filter_map(|d| self.addon_source(file, d)).collect();
         sources
             .into_iter()
             .filter_map(|s| match s {
@@ -66,12 +66,12 @@ impl Loader {
             .collect()
     }
 
-    /// Where a declared plugin is: exactly one of `path` and `git`, and `git` with `rev` (and `dir`, if any).
-    pub(super) fn plugin_source(&mut self, file: &Path, decl: &PluginDecl) -> Option<Source> {
+    /// Where a declared addon is: exactly one of `path` and `git`, and `git` with `rev` (and `dir`, if any).
+    pub(super) fn addon_source(&mut self, file: &Path, decl: &AddonDecl) -> Option<Source> {
         match (&decl.path, &decl.git, &decl.rev) {
             (Some(_), None, None) if decl.dir.is_some() => self.none(
                 file,
-                "`dir` is for a plugin from git: a `path` names the plugin's directory itself",
+                "`dir` is for an addon from git: a `path` names the addon's directory itself",
             ),
             (Some(path), None, None) => Some(Source::Path(path.clone())),
             (None, Some(git), Some(rev)) => Some(Source::Git(GitSource {
@@ -80,13 +80,13 @@ impl Loader {
             })),
             (None, Some(_), None) => self.none(
                 file,
-                "a plugin from git needs `rev`, a tag or a full commit id: only a pack may follow the latest revision",
+                "an addon from git needs `rev`, a tag or a full commit id: only a pack may follow the latest revision",
             ),
-            _ => self.none(file, "a plugin has either `path`, or `git` with `rev`"),
+            _ => self.none(file, "an addon has either `path`, or `git` with `rev`"),
         }
     }
 
-    /// The directory of a pack or plugin that `file` in `base` declares: a path as is, a git source where it was
+    /// The directory of a pack or addon that `file` in `base` declares: a path as is, a git source where it was
     /// downloaded to.
     pub(super) fn root(&mut self, file: &Path, base: &Path, source: &Source) -> Option<PathBuf> {
         let git = match source {

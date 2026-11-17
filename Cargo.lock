@@ -6,12 +6,12 @@ version = 4
 name = "aae"
 version = "0.1.0"
 dependencies = [
+ "aae-addons",
  "aae-br",
  "aae-claude",
  "aae-codex",
  "aae-core",
  "aae-front",
- "aae-plugins",
  "aae-testkit",
  "axum",
  "clap",
@@ -32,6 +32,17 @@ dependencies = [
  "serde_json",
  "tempfile",
  "tokio",
+]
+
+[[package]]
+name = "aae-addons"
+version = "0.1.0"
+dependencies = [
+ "aae-contract",
+ "rustix",
+ "serde",
+ "serde_json",
+ "tempfile",
 ]
 
 [[package]]
@@ -125,23 +136,12 @@ dependencies = [
 ]
 
 [[package]]
-name = "aae-plugins"
-version = "0.1.0"
-dependencies = [
- "aae-contract",
- "rustix",
- "serde",
- "serde_json",
- "tempfile",
-]
-
-[[package]]
 name = "aae-testkit"
 version = "0.1.0"
 dependencies = [
+ "aae-addons",
  "aae-contract",
  "aae-core",
- "aae-plugins",
  "axum",
  "rusqlite",
  "serde_json",

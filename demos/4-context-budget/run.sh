@@ -24,7 +24,7 @@ export AAE_SOCKET
 # What the agents read: the documentation of aae as this checkout has it, about 100000 tokens.
 cp -R ../../docs library/docs
 sha=$(git describe --always --dirty 2>/dev/null || echo unknown)
-# The agents and the plugin's hook call `aae`: the binary goes first on the PATH the daemon hands them.
+# The agents and the addon's hook call `aae`: the binary goes first on the PATH the daemon hands them.
 PATH="$(dirname "$aae"):$PATH" "$aae" daemon --config root/config.toml 2>.aae/daemon.log &
 daemon=$!
 trap 'kill $daemon 2>/dev/null || true' EXIT
@@ -42,7 +42,7 @@ for agent in glossarist indexer; do
   "$aae" run wait "$(cat .aae/$agent.run)" --timeout 60m >".aae/$agent.txt" || result=failed
 done
 seconds=$(($(date +%s) - started))
-# The demo shows a compaction of each agent: a bead without the plugin's label fails it.
+# The demo shows a compaction of each agent: a bead without the addon's label fails it.
 for agent in glossarist indexer; do
   "$aae" --json run show "$(cat .aae/$agent.run)" | jq -r .bead >".aae/$agent.bead"
   (cd root && br label list "$(cat ../.aae/$agent.bead)") >".aae/$agent.labels"
@@ -66,7 +66,7 @@ done
     echo "## $agent"
     echo
     "$aae" config explain --config root/config.toml --project library --agent "study.$agent" |
-      grep -e '^harness =' -e '^model =' -e '^native\.' -e '^plugins\.context-budget\.params\.' | sed 's/^/    /'
+      grep -e '^harness =' -e '^model =' -e '^native\.' -e '^addons\.context-budget\.params\.' | sed 's/^/    /'
     echo
     echo "The request: \"$(if [ $agent = glossarist ]; then echo "$glossary"; else echo "$index"; fi)\"."
     echo
@@ -83,10 +83,10 @@ done
     echo '```'
   done
   echo
-  echo "The compactions the plugin counted, per session (\`<state>/aae/plugins/context-budget/<session>.count\`):"
+  echo "The compactions the addon counted, per session (\`<state>/aae/addons/context-budget/<session>.count\`):"
   echo
   echo '```'
-  for count in "$XDG_STATE_HOME"/aae/plugins/context-budget/*.count; do
+  for count in "$XDG_STATE_HOME"/aae/addons/context-budget/*.count; do
     if [ -e "$count" ]; then echo "$(basename "$count" .count): $(cat "$count")"; fi
   done
   echo '```'

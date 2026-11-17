@@ -14,7 +14,7 @@ all of them share.
   deadlines to set or clear (`Tx::emit`, `Tx::effect`, `Tx::set_deadline`, `Tx::clear_deadline`). Nothing outside
   the state happens before commit (invariant 9: intent before effect).
 - Consumers of committed events: the JSONL journal writer (the one durable outbox consumer), trigger matching and
-  plugin exec hooks (both tied to the transaction that commits the event), and API event streams (which read the
+  addon exec hooks (both tied to the transaction that commits the event), and API event streams (which read the
   journal from a `seq`). See [contracts.md 3.5](contracts.md#35-outbox-lifetime).
 - The journal writer appends each drain as one batch with one `sync_data` at its end (and one before a file is
   rotated away), and acknowledges the batch in the outbox only after that sync: an unsynced line is never acked, so
@@ -24,7 +24,7 @@ all of them share.
 
 - One SQLite database, `$XDG_STATE_HOME/aae/state.db`, in WAL mode; SQLite is linked statically (rusqlite
   `bundled`). The daemon is its only writer (`crates/aae-core/src/store.rs` opens it, the writer changes it). The CLI,
-  plugins and agents change the state only through the API. A lock held by another connection is waited out for
+  addons and agents change the state only through the API. A lock held by another connection is waited out for
   5 s (`BUSY` in `store.rs`). Every transaction of the daemon's connection takes the write lock at `BEGIN`
   (`IMMEDIATE`; the creation of the schema at the first open too), so the wait covers it whatever its first statement.
   The writer calls SQLite synchronously, so while it waits it holds one runtime worker thread; the API's reads go
@@ -39,7 +39,7 @@ all of them share.
   pid, start time, pgid), bead ownership with its generation and failure count, ready sets and tracker cursors,
   deadlines (timers and schedules), gates (operator holds among them), idempotency keys, the outbox and the effects
   queue.
-- Definitions (projects, rigs, agents, formulas, triggers, plugins) live in config files. A run keeps only the
+- Definitions (projects, rigs, agents, formulas, triggers, addons) live in config files. A run keeps only the
   snapshot of its effective config (`runs.config`, the serialized `EffectiveConfig` of the step it is at), so it answers
   "what did this run with" and is reproducible. The repeat of a step lives in `runs.step_attempt` (from 1) and
   `runs.step_remarks` (the remark of the last execution, shown as `{{ remarks }}`).

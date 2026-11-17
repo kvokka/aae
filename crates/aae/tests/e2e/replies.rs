@@ -83,7 +83,7 @@ async fn the_replies_fit_their_schemas() {
         "/v1/agents",
         "/v1/formulas",
         "/v1/packs",
-        "/v1/plugins",
+        "/v1/addons",
     ] {
         check("get", path, &d.get(path).await);
     }

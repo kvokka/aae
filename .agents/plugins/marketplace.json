@@ -8,7 +8,7 @@
       "name": "aae",
       "source": {
         "source": "local",
-        "path": "./operator-plugin"
+        "path": "./plugin"
       },
       "policy": {
         "installation": "AVAILABLE",

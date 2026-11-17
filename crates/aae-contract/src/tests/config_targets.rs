@@ -68,7 +68,7 @@ fn a_target_mcp_server_of_the_callers_name_is_the_callers() {
 
 #[test]
 fn a_skill_name_has_one_directory_in_a_session() {
-    // The caller has `mail` of the plugin `mail`; a target with a `mail` of its own clashes.
+    // The caller has `mail` of the addon `mail`; a target with a `mail` of its own clashes.
     let me_list = me("subagents = [\"qa\", \"docs\"]");
     let skill = |name: &str| format!("{FIT}[skills.{name}]\npath = \"{name}\"\n");
     let qa_mail = skill("mail");
@@ -91,15 +91,15 @@ fn a_skill_name_has_one_directory_in_a_session() {
         &files,
         "subagent `kit.qa`: its skill `notes` is not the one of the session",
     );
-    // The same directory is no clash: both attach the plugin `mail`.
-    let qa_plugin = format!("{FIT}plugins = [{{ name = \"mail\" }}]\n");
-    load_with(&[(ME, &me_list), (QA, &qa_plugin), docs]).unwrap();
+    // The same directory is no clash: both attach the addon `mail`.
+    let qa_addon = format!("{FIT}addons = [{{ name = \"mail\" }}]\n");
+    load_with(&[(ME, &me_list), (QA, &qa_addon), docs]).unwrap();
 }
 
 #[test]
 fn a_codex_target_has_no_server_or_hook_the_caller_has_not() {
     let config = format!(
-        "{}[harness.codex]\n[[plugin]]\npath = \"plugins/notes\"\n[[plugin]]\npath = \"plugins/jobs\"\n",
+        "{}[harness.codex]\n[[addon]]\npath = \"addons/notes\"\n[[addon]]\npath = \"addons/jobs\"\n",
         base("config.toml")
     );
     let notes =
@@ -111,8 +111,8 @@ fn a_codex_target_has_no_server_or_hook_the_caller_has_not() {
         let qa = format!("{}{qa}", FIT.replace("claude", harness));
         let files = [
             ("config.toml", config.as_str()),
-            ("plugins/notes/plugin.toml", notes),
-            ("plugins/jobs/plugin.toml", jobs),
+            ("addons/notes/addon.toml", notes),
+            ("addons/jobs/addon.toml", jobs),
             (ME, &caller),
             (QA, &qa),
         ];
@@ -121,7 +121,7 @@ fn a_codex_target_has_no_server_or_hook_the_caller_has_not() {
     // The caller's own servers and hooks are no clash.
     load("codex", parts).unwrap();
     // Nor are a service without MCP and a hook that is off.
-    load("codex", "plugins = [{ name = \"jobs\" }]\n").unwrap();
+    load("codex", "addons = [{ name = \"jobs\" }]\n").unwrap();
     load(
         "codex",
         "[hooks.log]\nevent = \"Stop\"\ncommand = \"other\"\nenabled = false\n",
@@ -129,7 +129,7 @@ fn a_codex_target_has_no_server_or_hook_the_caller_has_not() {
     .unwrap();
     let cases = [
         ("[mcp.mail]\ncommand = [\"mail\"]\n", "its `mcp.mail`"),
-        ("plugins = [{ name = \"notes\" }]\n", "its service `notes`"),
+        ("addons = [{ name = \"notes\" }]\n", "its service `notes`"),
         ("[hooks.log]\nevent = \"Stop\"\ncommand = \"other\"\n", "its hook `log`"),
     ];
     for (qa, why) in cases {

@@ -1,6 +1,6 @@
 [package]
-name = "aae-plugins"
-description = "The plugins bundled with aae: default-policy and worktree"
+name = "aae-addons"
+description = "The addons bundled with aae: default-policy and worktree"
 version.workspace = true
 edition.workspace = true
 license.workspace = true

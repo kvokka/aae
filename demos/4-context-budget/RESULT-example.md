@@ -8,9 +8,9 @@ Run on 2026-11-17 with aae-0.1.0@54c37ca-dirty,claude-2.1.326,codex-0.169.0 (`Li
 
     model = "haiku"  # project [agents]
     harness = "claude"  # agent
-    plugins.context-budget.params.max_compactions = 8  # orchestrator
-    plugins.context-budget.params.window = 100000  # orchestrator
-    native.claude = {"autoCompactWindow":100000,"permission_mode":"bypassPermissions"}  # project + plugin context-budget
+    addons.context-budget.params.max_compactions = 8  # orchestrator
+    addons.context-budget.params.window = 100000  # orchestrator
+    native.claude = {"autoCompactWindow":100000,"permission_mode":"bypassPermissions"}  # project + addon context-budget
 
 The request: "List every term the documents in docs/ define, each with a one-line definition and the document that defines it, in GLOSSARY.md".
 
@@ -34,9 +34,9 @@ summary: GLOSSARY.md: every term the docs/ Markdown files define, in four tables
 
     model = "gpt-6-luna"  # agent, given as "luna"
     harness = "codex"  # agent
-    plugins.context-budget.params.max_compactions = 8  # orchestrator
-    plugins.context-budget.params.window = 50000  # project [agents]
-    native.codex = {"approval_policy":"never","model_auto_compact_token_limit":50000}  # project + plugin context-budget
+    addons.context-budget.params.max_compactions = 8  # orchestrator
+    addons.context-budget.params.window = 50000  # project [agents]
+    native.codex = {"approval_policy":"never","model_auto_compact_token_limit":50000}  # project + addon context-budget
 
 The request: "Write INDEX.md: for each document in docs/, its sections, each with one line on what it says".
 
@@ -56,7 +56,7 @@ state: passed
 summary: INDEX.md maps every docs Markdown document to its sections with a one-line description of each.
 ```
 
-The compactions the plugin counted, per session (`<state>/aae/plugins/context-budget/<session>.count`):
+The compactions the plugin counted, per session (`<state>/aae/addons/context-budget/<session>.count`):
 
 ```
 01a1eb27-3976-7f42-8c6f-7ce99c619341: 3

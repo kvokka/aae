@@ -1,6 +1,7 @@
-//! Configuration: the files of the orchestrator, projects, packs, agents, formulas, triggers and plugins
-//! (docs/guide/plugins.md; docs/design/config.md), loaded and validated as a whole.
+//! Configuration: the files of the orchestrator, projects, packs, agents, formulas, triggers and addons
+//! (docs/guide/addons.md; docs/design/config.md), loaded and validated as a whole.
 
+mod addon;
 mod assemble;
 mod check;
 mod compose;
@@ -11,7 +12,6 @@ mod formula_file;
 mod items;
 mod load;
 mod places;
-mod plugin;
 mod prompt;
 mod retired;
 pub(crate) mod schema;
@@ -23,7 +23,7 @@ mod variants;
 use crate::template::{Filter, Inputs};
 pub use assemble::{Attached, EffectiveConfig, Layer, Sourced};
 pub use env::{ExecEnv, env_literal, env_value};
-pub use files::{Harness, Hook, Mcp, McpScope, PluginUse, Settings, Skill};
+pub use files::{AddonUse, Harness, Hook, Mcp, McpScope, Settings, Skill};
 pub use formula_file::{Formula, Input, InputType, OnItemFailure, Step, StepKind};
 pub use places::Scope;
 pub use prompt::{Prompt, TEMPLATE};
@@ -54,8 +54,8 @@ pub struct Config {
     pub variants: BTreeMap<String, Variant>,
     /// The adapters of the build: the short model names of each harness. The harnesses they name are the root's.
     pub adapters: &'static [&'static crate::driver::Adapter],
-    pub plugins: Vec<Plugin>,
-    /// The enabled bundled plugins with their parameters, run after every declared plugin.
+    pub addons: Vec<Addon>,
+    /// The enabled bundled addons with their parameters, run after every declared addon.
     pub bundled: Vec<Bundled>,
     /// The thresholds of the watchdog (invariant 15): a reload applies to deadlines set from then on.
     pub watchdog: Watchdog,
@@ -64,9 +64,9 @@ pub struct Config {
     /// stdio server not of scope `session` runs behind it as a service. Empty: no bridge, stdio servers stay per
     /// session. [`load`] leaves it empty; the binary sets it.
     pub bridge: Vec<String>,
-    /// Where the daemon keeps the data of plugins: `${AAE_PLUGIN_DATA}` of plugin `p` is `<plugin_data>/p`. `None`:
+    /// Where the daemon keeps the data of addons: `${AAE_ADDON_DATA}` of addon `p` is `<addon_data>/p`. `None`:
     /// [`load`] leaves the reference as it is; the binary sets it.
-    pub plugin_data: Option<PathBuf>,
+    pub addon_data: Option<PathBuf>,
     /// How long a service may take to pass its health check, and a launch waits for it (docs/design/config.md): 30 s.
     /// Not from a file: [`load`] sets it, a test shortens it.
     pub service_wait: Duration,
@@ -86,7 +86,7 @@ pub struct Watchdog {
 /// Ceiling of the core: attempts per run, not counting those that parked on an account gate (invariant 16).
 pub const MAX_ATTEMPTS: u32 = 20;
 
-/// The plugins bundled with aae (docs/design/config.md): name, the events they hook, and whether they are on with no
+/// The addons bundled with aae (docs/design/config.md): name, the events they hook, and whether they are on with no
 /// `[builtin.<name>]` table. `worktree` has no table: it is on in a project with a formula of `worktree = true`.
 pub const BUNDLED: [(&str, &[&str], bool); 2] = [
     (
@@ -101,7 +101,7 @@ pub const BUNDLED: [(&str, &[&str], bool); 2] = [
     ),
 ];
 
-/// An enabled bundled plugin; `params` is its `[builtin.<name>]` table without `enabled`.
+/// An enabled bundled addon; `params` is its `[builtin.<name>]` table without `enabled`.
 #[derive(Clone, Debug)]
 pub struct Bundled {
     pub name: &'static str,
@@ -120,8 +120,8 @@ pub struct Project {
     pub settings: Settings,
     pub edits: BTreeMap<String, Settings>,
     pub variants: BTreeMap<String, Variant>,
-    pub plugins: Vec<Plugin>,
-    /// The bundled plugins on for its runs: the orchestrator's, with the project's `[builtin.<name>]` tables.
+    pub addons: Vec<Addon>,
+    /// The bundled addons on for its runs: the orchestrator's, with the project's `[builtin.<name>]` tables.
     pub bundled: Vec<Bundled>,
     pub rigs: BTreeMap<String, Rig>,
     /// The project root pack (named after the project, holding the project triggers) first.
@@ -173,7 +173,7 @@ pub struct Pack {
     pub root: PathBuf,
     /// `None` for the project root pack.
     pub version: Option<String>,
-    pub requires_plugins: Vec<String>,
+    pub requires_addons: Vec<String>,
     pub agents: BTreeMap<String, Agent>,
     pub formulas: BTreeMap<String, Formula>,
     pub triggers: Vec<Trigger>,
@@ -229,20 +229,20 @@ pub enum Source {
 }
 
 #[derive(Clone, Debug)]
-pub struct Plugin {
+pub struct Addon {
     pub name: String,
     pub version: String,
     /// The harnesses it is for; any when `None`.
     pub harnesses: Option<Vec<String>>,
     pub root: PathBuf,
-    /// Layer 5 contribution to the agents that attach the plugin.
+    /// Layer 5 contribution to the agents that attach the addon.
     pub agent: Settings,
     /// The text its attached agents get after their system prompt.
     pub prompt: Option<String>,
     /// Its `bin/` directory, when it has one: ahead of `PATH` for its attached agents.
     pub bin: Option<PathBuf>,
     pub hooks: Vec<OrchestratorHook>,
-    /// `[params]` of `plugin.toml`: each parameter's default, which gives its type.
+    /// `[params]` of `addon.toml`: each parameter's default, which gives its type.
     pub params: serde_json::Map<String, serde_json::Value>,
 }
 

@@ -13,7 +13,7 @@ const RETIRED: [(&str, &str); 6] = [
     ("unknown variant `prompt`", "step kind `prompt` is `ai` now"),
     (
         "unknown field `config`, expected one of `path`",
-        "a `[[plugin]]` has no `config`: its params are given where it is attached, `plugins = [{ name, params }]`",
+        "a `[[addon]]` has no `config`: its params are given where it is attached, `addons = [{ name, params }]`",
     ),
     (
         "unknown field `prompt`",

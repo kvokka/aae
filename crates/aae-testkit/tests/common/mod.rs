@@ -38,15 +38,15 @@ pub(crate) const FILES: &[(&str, &str)] = &[
     ("shop/agents/dev/prompt.template.md", "Build {{ rig.name }}."),
 ];
 
-/// A plugin with a hook on `run.attempt_failed`: decisions on it wait for its deadline instead of applying at once.
+/// An addon with a hook on `run.attempt_failed`: decisions on it wait for its deadline instead of applying at once.
 pub(crate) const POLICY: &[(&str, &str)] = &[
     (
         "config.toml",
         "projects = [\"shop\"]\nbuiltin = { default-policy = { enabled = false } \
-        }\n[harness.scripted]\n[settings]\nplugins = [{ name = \"policy\" }]\n[[plugin]]\npath = \"policy\"\n",
+        }\n[harness.scripted]\n[settings]\naddons = [{ name = \"policy\" }]\n[[addon]]\npath = \"policy\"\n",
     ),
     (
-        "policy/plugin.toml",
+        "policy/addon.toml",
         "name = \"policy\"\nversion = \"0.1.0\"\n[[hook]]\non = \"run.attempt_failed\"\ncommand = [\"true\"]\ntimeout \
         = \"10s\"\n",
     ),

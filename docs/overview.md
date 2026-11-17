@@ -8,7 +8,7 @@ restarts.
 ## What shapes it
 
 1. **A very light core.** The core holds only what a run needs to start, be observed and end correctly. Everything
-   else is an adapter (harness, tracker, frontend) or a plugin.
+   else is an adapter (harness, tracker, frontend) or an addon.
 2. **Events, not ticks.** No unit of work waits for a polling timer: the delay from a cause to the reaction depends
    on no interval. Safety timers (the orphan sweep, an instance health check, resync) exist and advance nothing in
    normal work.
@@ -24,7 +24,7 @@ only; the other three targets are built and trusted to the portability of the la
 | Term | Meaning in aae |
 |---|---|
 | **orchestrator** | the `aae` daemon and its machine-level settings |
-| **project** | a directory with `aae.toml`: a root, a set of rigs, packs, plugins and one tracker database |
+| **project** | a directory with `aae.toml`: a root, a set of rigs, packs, addons and one tracker database |
 | **root** | the root directory of a project: where agents of scope `root` work, and in a one-repository project the executors too. By default the directory of `aae.toml`, named `root`; both are settings. It need not be a git repository |
 | **rig** | a repository of a project on disk, with its bead prefix and variables (`test_cmd`, `lint_cmd`, …) |
 | **harness** | a kind of agent CLI: `claude`, `codex`. One adapter each |
@@ -46,7 +46,7 @@ only; the other three targets are built and trusted to the portability of the la
 | **trigger** | a rule "an event or a schedule → start a formula" |
 | **correlation** | the id of a chain of runs that started one another |
 | **pack** | content fit for any project: agents, formulas, triggers |
-| **plugin** | an extension, a directory with `plugin.toml`: what attaches to agents (skills, hooks, MCP, scripts, env), hooks on orchestrator events, services. Declared once, attached per agent or for all, with parameters ([guide](guide/plugins.md)) |
+| **addon** | an extension, a directory with `addon.toml`: what attaches to agents (skills, hooks, MCP, scripts, env), hooks on orchestrator events, services. Declared once, attached per agent or for all, with parameters ([guide](guide/addons.md)) |
 | **service** | a long-lived process the orchestrator supervises (a shared MCP server, for one) |
 | **issue gate** | a record "start no run by this key until a time, or until opened by hand" |
 | **tracker** | the task store behind an adapter interface; the first implementation is br |
@@ -61,7 +61,7 @@ only; the other three targets are built and trusted to the portability of the la
 | Molecules, wisps, convoys, control beads | Chains are built from formula steps, event subscriptions and child runs |
 | An arbitrary step graph inside a formula: branches, nested steps, parallel branches | A formula is a linear list of steps with a bounded return to an earlier step; a step may be skipped by its `if`. A planner agent splits the work: it files beads, and a `drain` step gives them to executors |
 | Agents that live permanently | A session per run |
-| Mail and nudges between agents | A separate plugin, later |
+| Mail and nudges between agents | A separate addon, later |
 | Storage of sessions and transcripts | The harness's job; the core keeps the reference "harness + id" |
 | opencode | The next release, after a spike ([experiments](design/experiments.md)) |
 | pi and other harnesses | Not planned |
@@ -70,7 +70,7 @@ only; the other three targets are built and trusted to the portability of the la
 | An ACP hub "up" for editors | Not planned |
 | A human answering a permission request | Not planned: the harness decides from the config ([config](design/config.md#permissions)) |
 | A web interface, a dashboard | The task board is `bv`; observation is the CLI and the event stream |
-| Alerting a human about a failure | Only the event journal and the logs; a notice plugin is on the [roadmap](roadmap.md) |
+| Alerting a human about a failure | Only the event journal and the logs; a notice addon is on the [roadmap](roadmap.md) |
 | Windows, several machines, several users | A local daemon of one user |
 | Checks on macOS and on x86_64 | Checked on Linux arm64 only; the other targets are built |
 | A bundled check "the work is really done" | A check is a formula step, a script or an agent, written by the author of the pack or the project |

@@ -1,4 +1,4 @@
-//! The bundled `worktree` plugin on real git.
+//! The bundled `worktree` addon on real git.
 
 use crate::run;
 use serde_json::json;

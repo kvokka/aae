@@ -91,7 +91,7 @@ Shared objects:
   the tokens are the sums of the attempt's `usage` events.
 - `Outcome`: `{result: "pass"|"fail", summary, data}`; `summary` ≤ 4 KiB, `data` any JSON ≤ 64 KiB.
 
-Observed events (plugins and clients read them and cannot change what happens):
+Observed events (addons and clients read them and cannot change what happens):
 
 | Type | `data` |
 |---|---|
@@ -121,20 +121,20 @@ Observed events (plugins and clients read them and cannot change what happens):
 | `gate.opened` | `{key, by: "timer"\|"operator"\|"policy"}` |
 | `bead.created`, `bead.updated`, `bead.closed`, `bead.ready` | `{bead: Bead, actor, changed: [field]}`; `changed` empty except `updated` |
 | `tracker.sync_failed` | `{op, bead, error, next_retry_at}` |
-| `plugin.hook_failed` | `{plugin, hook_type, event_seq, error: "spawn"\|"timeout"\|"exit"\|"output", exit_code, stderr_tail}` |
+| `addon.hook_failed` | `{addon, hook_type, event_seq, error: "spawn"\|"timeout"\|"exit"\|"output", exit_code, stderr_tail}` |
 | `resync.diverged` | `{subject: "process"\|"instance"\|"run"\|"bead"\|"gate", id, expected, observed}` (no automatic effect follows, invariant 20); `instance` also tells an event `seq` that is not the last + 1 (4.3) |
 
-Deciding events (an exec hook of a plugin may change what happens; decisions: see 3). The last column is what the
-core does when no plugin decides, `default-policy` switched off included:
+Deciding events (an exec hook of an addon may change what happens; decisions: see 3). The last column is what the
+core does when no addon decides, `default-policy` switched off included:
 
-| Type | What a hook may do | No plugin decision |
+| Type | What a hook may do | No addon decision |
 |---|---|---|
 | `run.preparing` | change the workdir and the env, add to the prompt, deny the start | start as is |
 | `run.attempt_failed` | choose the reaction to the typed failure: resume, new session, park on a gate until a time, fail | `failed{infrastructure}`, reason `no_decision` |
 | `run.turn_ended_without_outcome` | return a remark to the agent and go on, or fail | `failed{hollow_done}`, reason `no_decision` |
 | `run.finishing` | veto a `pass` with a reason, or return a remark to the agent | the outcome is taken as declared |
 
-Each of them carries `deadline`, the time after which the core applies the "no plugin decision" column (see 3.3):
+Each of them carries `deadline`, the time after which the core applies the "no addon decision" column (see 3.3):
 
 | Type | `data` |
 |---|---|
@@ -209,32 +209,32 @@ A task input is a string — the id of a bead the run takes up, or the text of a
 
 ### 3.1 Invocation
 
-Built-in plugins (`default-policy`, `worktree`) are in-process executors of the same contract: same input value,
-same decision value, same timeouts. External hooks are declared in `plugin.toml`:
+Built-in addons (`default-policy`, `worktree`) are in-process executors of the same contract: same input value,
+same decision value, same timeouts. External hooks are declared in `addon.toml`:
 
 ```toml
 [[hook]]
 on = "run.finishing"           # one event type, observed or deciding
-command = ["bin/check", "--strict"]   # relative to the plugin directory
+command = ["bin/check", "--strict"]   # relative to the addon directory
 timeout = "30s"
 ```
 
-- Which plugins: a hook runs only for a plugin that is attached (docs/design/config.md "Plugin"). An event of a run
-  whose step has an agent goes to the plugins that agent attaches, by the run's config snapshot, with that agent's
+- Which addons: a hook runs only for an addon that is attached (docs/design/config.md "Addon"). An event of a run
+  whose step has an agent goes to the addons that agent attaches, by the run's config snapshot, with that agent's
   params. Any other event (no run, as `bead.*` and `service.*`, or a step of no agent, or a run before its first
-  agent step prepares) goes to the plugins `[settings]` of the orchestrator and of the event's project attach, with
+  agent step prepares) goes to the addons `[settings]` of the orchestrator and of the event's project attach, with
   the params those two layers give.
 - stdin: the event envelope (see 1.1) as one JSON line, then EOF.
-- cwd: the plugin directory. Environment: `PATH`, `HOME`, `LANG`, plus `AAE_SOCKET` (API socket),
-  `AAE_PLUGIN_DIR` and `AAE_PLUGIN_PARAMS` (the values of the plugin's params in force where it is attached, as a
+- cwd: the addon directory. Environment: `PATH`, `HOME`, `LANG`, plus `AAE_SOCKET` (API socket),
+  `AAE_ADDON_DIR` and `AAE_ADDON_PARAMS` (the values of the addon's params in force where it is attached, as a
   JSON object, `{}` without params), and `AAE_INSTANCE` (a marker random per queued hook effect, kept by its descendants).
   Nothing else is inherited from the daemon.
-- A program path with a `/` is relative to the plugin directory; a bare name is looked up on `PATH`.
+- A program path with a `/` is relative to the addon directory; a bare name is looked up on `PATH`.
 - Own process group; at the timeout `SIGTERM` to the group, `SIGKILL` 2 s later.
 - stdout is read up to 64 KiB (more is an `output` failure); the last 4 KiB of stderr are kept.
 - Result: exit 0 with empty stdout — no objection and no decision; exit 0 with one JSON object on stdout — the
   decision; exit 2 — block with the reason taken from stderr; any other exit, a signal, a timeout, invalid JSON or
-  a decision not allowed for the event — a hook failure, reported as `plugin.hook_failed`.
+  a decision not allowed for the event — a hook failure, reported as `addon.hook_failed`.
 - Timeout: default 30 s, ceiling 300 s per invocation.
 - Hooks run after commit, outside the core loop; the result enters the core as a message. Hooks of different
   events run concurrently; the hooks of one run are serialized in `seq` order on two queues: deciding events on
@@ -245,7 +245,7 @@ timeout = "30s"
 - Delivery is at least once: a hook cut by a daemon crash runs again after restart if its run is still in the state
   that emitted the event (see 3.4); observed hooks always run again. Hooks must be idempotent; `seq` identifies the
   event.
-- A hook keeps no state of its own, and the core has no storage for plugins: a deciding event carries what a policy
+- A hook keeps no state of its own, and the core has no storage for addons: a deciding event carries what a policy
   needs — the attempts with their times, the gates and the run's keys (1.3).
 
 ### 3.2 Decisions
@@ -255,32 +255,32 @@ timeout = "30s"
 | Event | Allowed decisions | Exit 2 means | Hook failure means |
 |---|---|---|---|
 | `run.preparing` | `{"decision":"proceed","workdir":"/abs/path","env":{"NAME":"value","DROP_ME":null},"prompt_append":"text"}` — every field but `decision` optional; an `env` value is text as it is, a `$` in it no reference (config.md, "Environment values"); `{"decision":"deny","reason":"…"}` | deny | deny (a veto hook) |
-| `run.attempt_failed` | `{"decision":"resume","after":"30s"}`; `{"decision":"new_session","after":"0s"}`; `{"decision":"park","gate":{"key":"…","until":"<time>"\|null,"reason":"…"},"then":"resume"\|"new_session"}`; `{"decision":"fail","reason":"…"}`; `gate` is required on `park` and optional on the other three (the gate is closed in the same transaction) | `fail` with the stderr reason | no decision from this plugin |
-| `run.turn_ended_without_outcome` | `{"decision":"continue","message":"…"}`; `{"decision":"fail","reason":"…"}` | `fail` | no decision from this plugin |
-| `run.finishing` | `{"decision":"accept"}`; `{"decision":"veto","reason":"…"}`; `{"decision":"remark","message":"…"}` | veto | veto with reason `hook_failed:<plugin>` (a veto hook) |
+| `run.attempt_failed` | `{"decision":"resume","after":"30s"}`; `{"decision":"new_session","after":"0s"}`; `{"decision":"park","gate":{"key":"…","until":"<time>"\|null,"reason":"…"},"then":"resume"\|"new_session"}`; `{"decision":"fail","reason":"…"}`; `gate` is required on `park` and optional on the other three (the gate is closed in the same transaction) | `fail` with the stderr reason | no decision from this addon |
+| `run.turn_ended_without_outcome` | `{"decision":"continue","message":"…"}`; `{"decision":"fail","reason":"…"}` | `fail` | no decision from this addon |
+| `run.finishing` | `{"decision":"accept"}`; `{"decision":"veto","reason":"…"}`; `{"decision":"remark","message":"…"}` | veto | veto with reason `hook_failed:<addon>` (a veto hook) |
 
 Hooks on observed events may only exit 0 or fail; their failures are reported and otherwise ignored.
 
-### 3.3 Several plugins on one event
+### 3.3 Several addons on one event
 
-The plugins an event goes to (3.1) are ordered by declaration (orchestrator level first, then project level, each
-in declaration order); the bundled plugins come after all of them (docs/design/config.md, `[builtin.<name>]`).
+The addons an event goes to (3.1) are ordered by declaration (orchestrator level first, then project level, each
+in declaration order); the bundled addons come after all of them (docs/design/config.md, `[builtin.<name>]`).
 
 - `run.preparing`: hooks run one after another; each receives the event with the earlier modifications applied
   (`workdir`, `env_keys`, `prompt_append`). `env` entries merge by name, `null` removes; `prompt_append` texts are
   concatenated with a blank line. The first `deny` stops the chain and fails the run with class `check`.
 - `run.finishing`: every hook runs. Any `veto` → `failed{check}` with the first veto reason; otherwise any
-  `remark` → one remark, messages joined with a blank line in plugin order; otherwise accept. A `veto` on a declared
+  `remark` → one remark, messages joined with a blank line in addon order; otherwise accept. A `veto` on a declared
   `fail` changes nothing: the run fails with class `agent`.
-- `run.attempt_failed`, `run.turn_ended_without_outcome`: the first decision in plugin order wins; later hooks are
+- `run.attempt_failed`, `run.turn_ended_without_outcome`: the first decision in addon order wins; later hooks are
   not started once a decision exists.
-- Every hook done and no decision: the hook runner sends an explicit "no decision" message, and the "no plugin decision"
+- Every hook done and no decision: the hook runner sends an explicit "no decision" message, and the "no addon decision"
   column of the table in 1.3 applies at once — start as is; `failed{class: infrastructure}`;
   `failed{class: hollow_done}`; accept. A hook that timed out is a hook failure (3.2), not "no decision": on
   `run.preparing` and `run.finishing` it blocks.
 - The `deadline` reached with no message from the runner: the hooks count as failed. On the veto events
   (`run.preparing`, `run.finishing`) that blocks — `failed{check}` with reason `hook_deadline`; on the other deciding
-  events a hook failure is "no decision from this plugin", so the "no plugin decision" column applies.
+  events a hook failure is "no decision from this addon", so the "no addon decision" column applies.
 
 `deadline` of a deciding event = commit time + the sum of the timeouts of its hooks + 5 s (one hook can never hold a run
 longer than its own timeout; the runner reports before it unless it is lost). The hooks of a `run.attempt_failed` whose
@@ -338,7 +338,7 @@ The core owns one driver per harness, behind one object-safe trait; the binary l
 no harness by name ([adapters](adapters.md)), tests wire the scripted driver in (`crates/aae-testkit`). Futures are
 boxed; events go to the core through a sink handed to `start_instance`. The adapter translates and executes; it never
 retries a turn, parks or decides an outcome (adapter duties in 4.4–4.6 and
-[adapters](adapters.md#what-the-core-expects-of-a-driver)): decisions are policy, which lives in plugins and config. Its
+[adapters](adapters.md#what-the-core-expects-of-a-driver)): decisions are policy, which lives in addons and config. Its
 semantics follow ACP v2: a session is `running` or `idle` (4.3), and a turn fails with a typed failure (4.4). The
 interface has no steer in the middle of a turn, no model change inside a live session and no way for a human to join a
 live session ([frontends](../api/frontends.md#humans-and-runs)).
@@ -373,7 +373,7 @@ trait Driver: Send + Sync {
 
 | Type | Content |
 |---|---|
-| `EffectiveConfig` | the merged harness-neutral categories of `config.md` "Settings" (model, effort, env, MCP servers, harness hooks, skills, system prompt, permission mode, plugin parts, host inheritance flag) plus the uninterpreted `native` block of the harness, and in a run `targets`: the configs of the subagents its session may call, by type name; produced by config assembly with the provenance of every value |
+| `EffectiveConfig` | the merged harness-neutral categories of `config.md` "Settings" (model, effort, env, MCP servers, harness hooks, skills, system prompt, permission mode, addon parts, host inheritance flag) plus the uninterpreted `native` block of the harness, and in a run `targets`: the configs of the subagents its session may call, by type name; produced by config assembly with the provenance of every value |
 | `SessionPlan` | `New { workdir, run, attempt, token, actor, bead }` or `Resume { session: SessionRef, workdir, run, attempt, token, actor, bead }`; the adapter needs `run`/`attempt` only to name files in the state directory, and `run`, `token`, the tracker `actor` and the run's `bead` (when it has one) to set the attempt environment (4.6) |
 | `Split` | `{ process: ProcessPart, session: SessionPart, fingerprint: Fingerprint }`; the two parts are opaque serializable values of the adapter; `fingerprint` = SHA-256 of the harness name and the canonical JSON of `process` (see 8) |
 | `InstanceHandle` | `{ id, pid, start_time, pgid }`; `start_time` is the kernel start time of `pid` (`/proc/<pid>/stat`), pid + start time identify the process ([event model](event-model.md#state)) |
@@ -689,7 +689,7 @@ are the `[watchdog]` table of the orchestrator config, with these defaults (conf
 `interrupted` is every attempt failure waiting for its decision, a daemon restart among them,
 so that the state machine has one place where `run.attempt_failed` is decided.
 
-- The class of `failed` tells the cause: `agent` (the finisher said `fail`), `check` (a plugin's veto or deny, or a step check script that refused),
+- The class of `failed` tells the cause: `agent` (the finisher said `fail`), `check` (an addon's veto or deny, or a step check script that refused),
   `hollow_done` (the turn ended without an outcome), `infrastructure` (attempts ran out or the policy ended the run).
 - `queued` has not started: it waits for a concurrency slot or an open gate. `parked` has started and
   waits for a gate or a slot of its agent with no harness process.
@@ -813,11 +813,11 @@ How the finisher behaves, on the transitions of 6.2:
 |---|---|
 | finisher called while the turn still runs | the declared outcome is stored in the state; the run stays `running` |
 | finisher called again in the same attempt | the last call wins |
-| turn ended, no background work, outcome declared | `finishing`: `run.finishing` is raised, check plugins may veto |
+| turn ended, no background work, outcome declared | `finishing`: `run.finishing` is raised, check addons may veto |
 | turn ended, outcome declared, commands left running | the daemon has the adapter stop them (`stop_background`, 4.1); the session comes to idle without background, then `finishing`; the session stays for a veto remark |
 | turn ended, background the daemon does not stop (a subagent), or no outcome | the run stays `running` until idle without background; the wait has a deadline (background silence budget, 6.1) |
 | finisher called after the turn ended, while background runs | the outcome is stored and the commands left are stopped, as above |
-| turn ended, no background work, no outcome | `run.turn_ended_without_outcome`; with no plugin decision `failed{hollow_done}` |
+| turn ended, no background work, no outcome | `run.turn_ended_without_outcome`; with no addon decision `failed{hollow_done}` |
 | a `run.finishing` hook returned a remark | the remark goes to the agent as the next prompt in the same session and attempt; the declared outcome is cleared; the token stays valid |
 | a `run.finishing` hook vetoed | `failed{check}` with the hook's reason |
 | finisher with the token of a stale attempt | refused with an explicit error (`stale_attempt`); the state does not change |
@@ -833,7 +833,7 @@ named), with the finisher's limits (`summary` up to 4 KiB, `data` up to 64 KiB),
 answered by its `Idempotency-Key`.
 
 Out of the box `pass` is the agent's word. Checking that the work is really done (a commit exists, tests are green)
-is the job of an outer loop of the user and is not bundled: the veto mechanism is there (`run.finishing`), a plugin
+is the job of an outer loop of the user and is not bundled: the veto mechanism is there (`run.finishing`), an addon
 for it is not.
 
 ### 6.4 Prompt delivery and recovery
@@ -918,8 +918,8 @@ of their own. The adapter reports the account id (4.5, `Driver::account`).
 - Fingerprint = SHA-256 of the harness name and the canonical JSON (sorted keys) of the `ProcessPart`; two agents
   with equal process parts share an instance (criterion 13). The adapter decides what is the process part (4.6):
   claude puts everything in it, so every session has its own process (no shared server, no memory saved); codex
-  shares one app-server per fingerprint. So a plugin whose agent side changes the process part gives another
-  fingerprint and another instance by itself, and a plugin that works only on the orchestrator side adds no instance.
+  shares one app-server per fingerprint. So an addon whose agent side changes the process part gives another
+  fingerprint and another instance by itself, and an addon that works only on the orchestrator side adds no instance.
 - An instance that holds many sessions has a session cap (`sessions_per_instance`, 4.5): its crash takes all its
   sessions down at once. Past the cap a second instance with the same fingerprint starts (acquire, below).
 - Record: `{id, kind: "instance"|"service", harness or service name, fingerprint or scope key, pid, start_time, pgid,
@@ -990,7 +990,7 @@ Thresholds are its config parameters (docs/design/config.md); "consecutive" coun
 event, times from its `ts`, and the gate keys come from its `keys`. A `park` on a key the run does not have (an exec run
 has no agent key, a run whose harness reported no account has no account key) becomes a `resume` after the same wait,
 except a `park` with no `until` (a lasting `auth_required`, `billing`), which becomes `fail`; a `fail` names no gate
-then. Implemented in `crates/aae-plugins`.
+then. Implemented in `crates/aae-addons`.
 
 The thresholds below are uncalibrated defaults, not measurements: the 30 s rapid crash, five in a row before a 5 min
 pause and three failed resumes before a new session come from the code of an earlier orchestrator, the

@@ -1,11 +1,11 @@
-//! A plugin's parameters, its attachment on every layer and its declaration (docs/design/config.md "Plugin").
+//! An addon's parameters, its attachment on every layer and its declaration (docs/design/config.md "Addon").
 
 use super::config::{BASE, fails, load_with};
 use crate::config::{Checkouts, Config, GitSource, Layer, Name, load_for};
 use serde_json::json;
 use std::fs;
 
-const MAIL: &str = "plugins/mail/plugin.toml";
+const MAIL: &str = "addons/mail/addon.toml";
 
 /// `BASE` with `text` appended to each of the given files.
 fn with(lines: &[(&str, &str)]) -> Vec<(&'static str, String)> {
@@ -29,9 +29,9 @@ fn implementer() -> Name {
     }
 }
 
-/// The plugin `mail` with four params and the agent side that names them.
+/// The addon `mail` with four params and the agent side that names them.
 const PARAMS: &str = "params = { level = 1, mode = \"p\", strict = false, keep = \"k\" }\n\
-    [agent.env]\nMAIL = \"${params.mode}-${params.level}\"\nDATA = \"${AAE_PLUGIN_DATA}/box\"\n\
+    [agent.env]\nMAIL = \"${params.mode}-${params.level}\"\nDATA = \"${AAE_ADDON_DATA}/box\"\n\
     [agent.native.claude]\nwindow = \"${params.level}\"\nnote = \"level ${params.level}\"\n\
     [[service]]\nname = \"inbox\"\ncommand = [\"inbox\", \"--strict=${params.strict}\"]";
 
@@ -40,15 +40,15 @@ fn layered() -> Config {
     let mut changed = with(&[
         (
             "config.toml",
-            "plugins = [{ name = \"mail\", params = { level = 2, mode = \"o\" } }]",
+            "addons = [{ name = \"mail\", params = { level = 2, mode = \"o\" } }]",
         ),
         (
             "shop/aae.toml",
-            "[settings]\nplugins = [{ name = \"mail\", params = { level = 3 } }]\n\
-            [rigs.backend.settings]\nplugins = [{ name = \"mail\", params = { mode = \"r\" } }]",
+            "[settings]\naddons = [{ name = \"mail\", params = { level = 3 } }]\n\
+            [rigs.backend.settings]\naddons = [{ name = \"mail\", params = { mode = \"r\" } }]",
         ),
     ]);
-    let edit = "[agents.implementer]\nplugins = [{ name = \"mail\", params = { level = 6 } }]\n";
+    let edit = "[agents.implementer]\naddons = [{ name = \"mail\", params = { level = 6 } }]\n";
     changed[0].1 += edit;
     let mail = BASE.iter().find(|(p, _)| *p == MAIL).unwrap().1;
     // `params` is a top-level key: it goes before the first table.
@@ -70,16 +70,16 @@ fn each_param_comes_from_the_strongest_layer_that_gives_it() {
     let mut config = layered();
     let on = |rig| {
         let e = config.effective("shop", rig, &implementer()).unwrap();
-        let params = &e.plugins[0].value.params;
+        let params = &e.addons[0].value.params;
         (params.iter())
             .map(|(k, s)| (k.clone(), s.value.clone(), s.from.clone()))
             .collect::<Vec<_>>()
     };
-    let plugin = Layer::Plugin("mail".into());
+    let addon = Layer::Addon("mail".into());
     assert_eq!(
         on(Some("backend")),
         vec![
-            ("keep".into(), json!("k"), plugin.clone()),
+            ("keep".into(), json!("k"), addon.clone()),
             ("level".into(), json!(6), Layer::OrchestratorAgent),
             ("mode".into(), json!("r"), Layer::Rig),
             ("strict".into(), json!(true), Layer::Agent),
@@ -88,19 +88,19 @@ fn each_param_comes_from_the_strongest_layer_that_gives_it() {
     assert_eq!(on(None)[2], ("mode".into(), json!("o"), Layer::Orchestrator));
 
     // The values reach every string of the agent side, a `native` string that is one reference with its type.
-    config.plugin_data = Some("/state/plugins".into());
+    config.addon_data = Some("/state/addons".into());
     let e = config.effective("shop", Some("backend"), &implementer()).unwrap();
     assert_eq!(e.env["MAIL"].value, "r-6");
-    assert_eq!(e.env["DATA"].value, "/state/plugins/mail/box");
+    assert_eq!(e.env["DATA"].value, "/state/addons/mail/box");
     let native = &e.native.as_ref().unwrap().value;
     assert_eq!((&native["window"], &native["note"]), (&json!(6), &json!("level 6")));
     assert_eq!(e.services["inbox"].value.command, ["inbox", "--strict=true"]);
 
     let explain = e.explain();
     for line in [
-        "plugins.mail.params.level = 6  # orchestrator [agents]",
-        "plugins.mail.params.mode = \"r\"  # rig",
-        "plugins.mail.params.keep = \"k\"  # plugin mail",
+        "addons.mail.params.level = 6  # orchestrator [agents]",
+        "addons.mail.params.mode = \"r\"  # rig",
+        "addons.mail.params.keep = \"k\"  # addon mail",
     ] {
         assert!(explain.contains(line), "no `{line}` in:\n{explain}");
     }
@@ -112,18 +112,18 @@ fn an_attachment_keeps_the_place_of_its_first_mention() {
     let mut changed = with(&[
         (
             "config.toml",
-            "plugins = [{ name = \"news\" }]\n[[plugin]]\npath = \"plugins/news\"",
+            "addons = [{ name = \"news\" }]\n[[addon]]\npath = \"addons/news\"",
         ),
         (
             "shop/aae.toml",
-            "[settings]\nplugins = [{ name = \"mail\" }, { name = \"news\", enabled = false }]",
+            "[settings]\naddons = [{ name = \"mail\" }, { name = \"news\", enabled = false }]",
         ),
     ]);
-    changed.push(("plugins/news/plugin.toml", news.to_owned()));
+    changed.push(("addons/news/addon.toml", news.to_owned()));
     let config = load(&changed);
     let names = |c: &Config| {
         let e = c.effective("shop", None, &implementer()).unwrap();
-        e.plugins.iter().map(|p| p.value.name.clone()).collect::<Vec<_>>()
+        e.addons.iter().map(|p| p.value.name.clone()).collect::<Vec<_>>()
     };
     // `news` is off from the project on; the agent attaches `mail` again.
     assert_eq!(names(&config), ["mail"]);
@@ -156,11 +156,11 @@ fn a_param_is_declared_with_its_type() {
     for (params, error) in [
         (
             "{ nope = 1 }",
-            "plugin `mail`: param `nope` is not in the plugin's `[params]`",
+            "addon `mail`: param `nope` is not in the addon's `[params]`",
         ),
-        ("{ level = \"x\" }", "plugin `mail`: param `level` is of type integer"),
-        ("{ level = true }", "plugin `mail`: param `level` is of type integer"),
-        ("{ level = 1.5 }", "plugin `mail`: param `level` is of type integer"),
+        ("{ level = \"x\" }", "addon `mail`: param `level` is of type integer"),
+        ("{ level = true }", "addon `mail`: param `level` is of type integer"),
+        ("{ level = 1.5 }", "addon `mail`: param `level` is of type integer"),
     ] {
         fails(&[(MAIL, level.as_str()), (at, agent(params).as_str())], error);
     }
@@ -179,12 +179,12 @@ fn a_param_is_declared_with_its_type() {
 }
 
 #[test]
-fn a_plugin_gives_its_agents_only_env_mcp_hooks_skills_and_native() {
+fn a_addon_gives_its_agents_only_env_mcp_hooks_skills_and_native() {
     let mail = BASE.iter().find(|(p, _)| *p == MAIL).unwrap().1;
     for key in [
         "model = \"opus\"",
         "harness = \"claude\"",
-        "plugins = []",
+        "addons = []",
         "system_prompt = \"x\"",
     ] {
         let text = mail.replace("[agent.skills.mail]", &format!("[agent]\n{key}\n[agent.skills.mail]"));
@@ -194,12 +194,12 @@ fn a_plugin_gives_its_agents_only_env_mcp_hooks_skills_and_native() {
 }
 
 #[test]
-fn a_plugin_for_other_harnesses_is_refused() {
+fn a_addon_for_other_harnesses_is_refused() {
     let mail = BASE.iter().find(|(p, _)| *p == MAIL).unwrap().1;
     let codex = mail.replace("version = \"0.1.0\"", "version = \"0.1.0\"\nharnesses = [\"codex\"]");
     fails(
         &[(MAIL, codex.as_str())],
-        "plugin `mail` is for codex, not for harness `claude`",
+        "addon `mail` is for codex, not for harness `claude`",
     );
     let both = mail.replace(
         "version = \"0.1.0\"",
@@ -211,26 +211,25 @@ fn a_plugin_for_other_harnesses_is_refused() {
 #[test]
 fn a_declaration_names_only_a_source() {
     let config = BASE.iter().find(|(p, _)| *p == "config.toml").unwrap().1;
-    let declared =
-        |extra: &str| config.replace("path = \"plugins/mail\"", &format!("path = \"plugins/mail\"\n{extra}"));
+    let declared = |extra: &str| config.replace("path = \"addons/mail\"", &format!("path = \"addons/mail\"\n{extra}"));
     let retired = declared("config = { level = 2 }");
     fails(
         &[("config.toml", retired.as_str())],
-        "line 6, column 1: a `[[plugin]]` has no `config`: its params are given where it is attached",
+        "line 6, column 1: a `[[addon]]` has no `config`: its params are given where it is attached",
     );
     let dir = declared("dir = \"mail\"");
-    fails(&[("config.toml", dir.as_str())], "`dir` is for a plugin from git");
+    fails(&[("config.toml", dir.as_str())], "`dir` is for an addon from git");
 }
 
 #[test]
-fn a_plugin_from_git_may_live_in_a_directory_of_the_repository() {
+fn a_addon_from_git_may_live_in_a_directory_of_the_repository() {
     let dir = tempfile::tempdir().unwrap();
     let d = dir.path();
-    let git = "https://example.com/plugins.git";
+    let git = "https://example.com/addons.git";
     let declare = |sub: &str| format!("git = \"{git}\"\nrev = \"v1\"\ndir = \"{sub}\"");
     for (path, text) in BASE {
         let path = path
-            .strip_prefix("plugins/")
+            .strip_prefix("addons/")
             .map_or_else(|| path.to_string(), |p| format!("dl/{p}"));
         let path = d.join(path);
         fs::create_dir_all(path.parent().unwrap()).unwrap();
@@ -249,9 +248,9 @@ fn a_plugin_from_git_may_live_in_a_directory_of_the_repository() {
         ("mail", None),
         ("../dl/mail", Some("is not a path inside the repository")),
     ] {
-        fs::write(&file, config.replace("path = \"plugins/mail\"", &declare(sub))).unwrap();
+        fs::write(&file, config.replace("path = \"addons/mail\"", &declare(sub))).unwrap();
         match (load_for(&file, &[], checkouts()), error) {
-            (Ok(c), None) => assert_eq!(c.plugins[0].root, d.join("dl/mail")),
+            (Ok(c), None) => assert_eq!(c.addons[0].root, d.join("dl/mail")),
             (Err(e), Some(error)) => assert!(e.iter().any(|e| e.message.contains(error)), "{e:?}"),
             (got, _) => panic!("dir `{sub}`: {got:?}"),
         }

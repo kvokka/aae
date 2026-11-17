@@ -37,7 +37,7 @@ fn config(provider: &Provider) -> EffectiveConfig {
         mcp: Default::default(),
         hooks: Default::default(),
         skills: Default::default(),
-        plugins: Vec::new(),
+        addons: Vec::new(),
         // The host forbids user namespaces, so the codex sandbox cannot run here (docs/design/experiments.md).
         native: Some(agent(
             json!({ "model_provider": "fake", "sandbox_mode": "danger-full-access", "approval_policy": "never",

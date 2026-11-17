@@ -25,7 +25,7 @@ pub(crate) fn config() -> EffectiveConfig {
         mcp: Default::default(),
         hooks: Default::default(),
         skills: Default::default(),
-        plugins: Vec::new(),
+        addons: Vec::new(),
         native: Some(agent(
             json!({ "sandbox_mode": "danger-full-access", "approval_policy": "never",
             "model_providers": { "fake": { "base_url": "http://127.0.0.1:1/v1", "wire_api": "responses" } } }),

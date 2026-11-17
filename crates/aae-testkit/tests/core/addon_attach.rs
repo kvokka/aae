@@ -1,4 +1,4 @@
-//! A plugin's orchestrator hooks go only to the runs whose agent attaches it, with the params in force for that agent
+//! An addon's orchestrator hooks go only to the runs whose agent attaches it, with the params in force for that agent
 //! (docs/design/contracts.md 3.1).
 
 use crate::common::{hollow_turn, world_with};
@@ -24,16 +24,16 @@ const FILES: &[(&str, &str)] = &[
     (
         "config.toml",
         "projects = [\"shop\"]\nbuiltin = { default-policy = { enabled = false } }\n[harness.scripted]\n\
-         [[plugin]]\npath = \"policy\"\n",
+         [[addon]]\npath = \"policy\"\n",
     ),
     (
-        "policy/plugin.toml",
+        "policy/addon.toml",
         "name = \"policy\"\nversion = \"0.1.0\"\nparams = { level = 1, mode = \"a\" }\n\
          [[hook]]\non = \"run.state_changed\"\ncommand = [\"true\"]\n",
     ),
     (
         "shop/agents/qa/agent.toml",
-        "harness = \"scripted\"\nplugins = [{ name = \"policy\", params = { level = 3 } }]\n",
+        "harness = \"scripted\"\naddons = [{ name = \"policy\", params = { level = 3 } }]\n",
     ),
     ("shop/agents/qa/prompt.template.md", "Review {{ rig.name }}."),
     (
@@ -43,7 +43,7 @@ const FILES: &[(&str, &str)] = &[
 ];
 
 #[tokio::test(start_paused = true)]
-async fn a_hook_goes_only_to_the_runs_of_an_agent_that_attaches_its_plugin() {
+async fn a_hook_goes_only_to_the_runs_of_an_agent_that_attaches_its_addon() {
     let seen = Arc::new(Seen::default());
     let w = world_with(FILES, seen.clone());
     w.driver.script(hollow_turn());
@@ -70,7 +70,7 @@ async fn a_hook_goes_only_to_the_runs_of_an_agent_that_attaches_its_plugin() {
     let of = |run: &str| -> Vec<&Value> { seen.iter().filter(|p| p["event"]["run"] == run).collect() };
     assert!(
         of(&build).is_empty(),
-        "the agent of `build` attaches no plugin: {:?}",
+        "the agent of `build` attaches no addon: {:?}",
         of(&build)
     );
     let states: Vec<&Value> = of(&review).iter().map(|p| &p["event"]["data"]["to"]).collect();

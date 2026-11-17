@@ -1,5 +1,5 @@
 //! References between files: names resolved to their packs (docs/design/config.md), trigger inputs against their
-//! formula, rigs and agent edits against what the project has; the tables of the bundled plugins; the watchdog table.
+//! formula, rigs and agent edits against what the project has; the tables of the bundled addons; the watchdog table.
 
 use super::{BUNDLED, Bundled, Name, Pack, Project, StepKind, Variant, Watchdog, load::Loader};
 use crate::template::Inputs;
@@ -222,7 +222,7 @@ fn executor(formula: &super::Formula) -> Result<(), String> {
     }
 }
 
-/// The bundled plugins `[builtin.<name>]` leaves on, in the order of `BUNDLED`.
+/// The bundled addons `[builtin.<name>]` leaves on, in the order of `BUNDLED`.
 pub(super) fn bundled(
     loader: &mut Loader,
     file: &Path,
@@ -254,12 +254,12 @@ pub(super) fn bundled(
         }
     }
     for name in tables.keys() {
-        loader.fail(file, format!("`{name}` is not a bundled plugin"));
+        loader.fail(file, format!("`{name}` is not a bundled addon"));
     }
     on
 }
 
-/// The bundled plugins on for a project: the orchestrator's `on`, except those the project's `tables` decide, and
+/// The bundled addons on for a project: the orchestrator's `on`, except those the project's `tables` decide, and
 /// `worktree` for the formulas of its `packs` with `worktree = true`, named in its parameters.
 pub(super) fn project_bundled(
     loader: &mut Loader,

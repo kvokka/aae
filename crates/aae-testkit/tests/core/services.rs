@@ -326,7 +326,7 @@ async fn the_servers_of_the_agents_a_session_may_call_are_bound_with_it() {
     let server = |name: &str| format!("[mcp.{name}]\ncommand = [\"{PROBE}\", \"{}\"]\n", log(name));
     let dev = format!("harness = \"scripted\"\nsubagents = [\"qa\"]\n{}", server("notes"));
     let qa = format!(
-        "harness = \"scripted\"\ndescription = \"Checks.\"\nplugins = [{{ name = \"kit\" }}]\n{}{}",
+        "harness = \"scripted\"\ndescription = \"Checks.\"\naddons = [{{ name = \"kit\" }}]\n{}{}",
         server("notes"),
         server("own")
     );
@@ -337,10 +337,10 @@ async fn the_servers_of_the_agents_a_session_may_call_are_bound_with_it() {
     );
     let driver = ScriptedDriver::new(1);
     driver.stall_sessions();
-    let config = format!("{}[[plugin]]\npath = \"kit\"\n", common::FILES[0].1);
+    let config = format!("{}[[addon]]\npath = \"kit\"\n", common::FILES[0].1);
     let files = [
         ("config.toml", config.as_str()),
-        ("kit/plugin.toml", kit.as_str()),
+        ("kit/addon.toml", kit.as_str()),
         ("shop/agents/dev/agent.toml", dev.as_str()),
         ("shop/agents/qa/agent.toml", qa.as_str()),
     ];

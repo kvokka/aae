@@ -29,7 +29,7 @@ const APPROVAL: &str = "approval_policy";
 /// threads survive a daemon restart; a process inheriting the host with skills gets its own `CODEX_HOME` there that
 /// links the host's (`host`); `overrides` are the `-c key=value` flags of the native block.
 pub(crate) fn process(config: &EffectiveConfig, state: &Path, host: &Path) -> Result<Value, Failure> {
-    // The contributions of attached plugins are already merged into the config (layer 5 of docs/design/config.md).
+    // The contributions of attached addons are already merged into the config (layer 5 of docs/design/config.md).
     let mut overrides: Vec<String> = match config.native.as_ref().map(|n| &n.value) {
         None => Vec::new(),
         // The approval policy is the thread's (`session`), not the process's.

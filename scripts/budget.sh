@@ -12,7 +12,7 @@ mapfile -t files < <(git ls-files -co --exclude-standard -- 'crates/*/src/*' \
   | grep -Ev '^crates/aae-(testkit|acceptance)/|(^|/)tests(\.rs$|/)|/generated/' || true)
 
 # Code lines (no blanks, no comments) per budget part, counted by tokei.
-declare -A limit=([core]=18000 [claude]=3500 [codex]=3500 [tracker]=1200 [frontends]=4000 [plugins]=1500 [reserve]=4300)
+declare -A limit=([core]=18000 [claude]=3500 [codex]=3500 [tracker]=1200 [frontends]=4000 [addons]=1500 [reserve]=4300)
 declare -A used=()
 total=0
 if ((${#files[@]})); then
@@ -23,7 +23,7 @@ if ((${#files[@]})); then
       crates/aae-codex/*) part=codex ;;
       crates/aae-br/*) part=tracker ;;
       crates/aae-front/*) part=frontends ;;
-      crates/aae-plugins/*) part=plugins ;;
+      crates/aae-addons/*) part=addons ;;
       crates/aae/*) part=reserve ;;
       *) err "$path belongs to no budget part (docs/agents/rules-code.md)"; continue ;;
     esac
@@ -40,7 +40,7 @@ while IFS= read -r f; do
   ((n <= 400)) || err "$f has $n lines, the limit is 400"
 done < <(git ls-files -co --exclude-standard -- 'crates/*.rs' | grep -v '/generated/' || true)
 
-for part in core claude codex tracker frontends plugins reserve; do
+for part in core claude codex tracker frontends addons reserve; do
   printf 'budget: %-9s %6d / %d\n' "$part" "${used[$part]:-0}" "${limit[$part]}"
   ((${used[$part]:-0} <= limit[$part])) || err "$part exceeds its limit"
 done

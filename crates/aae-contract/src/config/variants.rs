@@ -16,7 +16,7 @@ impl Loader {
         file: &Path,
         base: &Path,
         tables: BTreeMap<String, toml::Table>,
-        plugins: &[&super::Plugin],
+        addons: &[&super::Addon],
     ) -> (BTreeMap<String, Settings>, BTreeMap<String, Variant>) {
         let (mut edits, mut variants) = (BTreeMap::new(), BTreeMap::new());
         for (name, mut table) in tables {
@@ -28,13 +28,13 @@ impl Loader {
                     format!("`{what}`: `max_runs` is the agent's own; a variant (with `base`) may set its own"),
                 ),
                 Ok((None, (settings, None))) => {
-                    edits.insert(name, self.settings(file, base, settings, plugins));
+                    edits.insert(name, self.settings(file, base, settings, addons));
                 }
                 Ok((Some(agent), (settings, max_runs))) => {
                     self.name(file, "agent variant", &name);
                     let variant = Variant {
                         base: reference(&agent),
-                        settings: self.settings(file, base, settings, plugins),
+                        settings: self.settings(file, base, settings, addons),
                         max_runs,
                     };
                     variants.insert(name, variant);
@@ -52,7 +52,7 @@ impl Loader {
         dir: &Path,
         rig: &str,
         tables: BTreeMap<String, toml::Value>,
-        plugins: &[&super::Plugin],
+        addons: &[&super::Addon],
     ) -> (BTreeMap<String, Settings>, BTreeMap<Name, String>) {
         let (mut edits, mut agents) = (BTreeMap::new(), BTreeMap::new());
         for (agent, value) in tables {
@@ -60,7 +60,7 @@ impl Loader {
                 // Resolved by `check` once the packs are loaded.
                 toml::Value::String(variant) => drop(agents.insert(reference(&agent), variant)),
                 toml::Value::Table(table) => match agent_settings(table) {
-                    Ok(s) => drop(edits.insert(agent, self.settings(file, dir, s, plugins))),
+                    Ok(s) => drop(edits.insert(agent, self.settings(file, dir, s, addons))),
                     Err(e) => self.fail(file, format!("rig `{rig}`: `agents.{agent}`: {e}")),
                 },
                 _ => self.fail(

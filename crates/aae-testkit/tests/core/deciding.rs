@@ -16,11 +16,11 @@ use std::{sync::Arc, time::Duration};
 const HOLLOW: &str = "run.turn_ended_without_outcome";
 const FAILED: &str = "run.attempt_failed";
 
-/// A plugin with a 30 s hook on each of `on`.
-fn plugin(on: &[&str], watchdog: &str) -> World {
+/// An addon with a 30 s hook on each of `on`.
+fn addon(on: &[&str], watchdog: &str) -> World {
     let config = format!(
         "projects = [\"shop\"]\nbuiltin = {{ default-policy = {{ enabled = false }} }}\n[harness.scripted]\n\
-         [settings]\nplugins = [{{ name = \"policy\" }}]\n[[plugin]]\npath = \"policy\"\n{watchdog}"
+         [settings]\naddons = [{{ name = \"policy\" }}]\n[[addon]]\npath = \"policy\"\n{watchdog}"
     );
     let hooks: String = on
         .iter()
@@ -29,7 +29,7 @@ fn plugin(on: &[&str], watchdog: &str) -> World {
     let manifest = format!("name = \"policy\"\nversion = \"0.1.0\"\n{hooks}");
     let files = [
         ("config.toml", config.as_str()),
-        ("policy/plugin.toml", manifest.as_str()),
+        ("policy/addon.toml", manifest.as_str()),
     ];
     world_with(&files, Arc::new(Slow))
 }
@@ -60,7 +60,7 @@ impl HookRunner for Slow {
 
 #[tokio::test(start_paused = true)]
 async fn a_deciding_event_waits_for_the_slow_hook_of_the_run_queued_ahead() {
-    let w = plugin(&[HOLLOW, FAILED], "");
+    let w = addon(&[HOLLOW, FAILED], "");
     // The process dies while the hook on the hollow turn still runs: the failed attempt's hook waits behind it.
     let mut turn = hollow_turn();
     turn.push(Step::Wait(Duration::from_secs(1)));
@@ -76,7 +76,7 @@ async fn a_deciding_event_waits_for_the_slow_hook_of_the_run_queued_ahead() {
 
 #[tokio::test(start_paused = true)]
 async fn late_session_events_do_not_stall_a_run_waiting_for_a_decision() {
-    let w = plugin(&[HOLLOW], "[watchdog]\nsilence = \"5s\"\n");
+    let w = addon(&[HOLLOW], "[watchdog]\nsilence = \"5s\"\n");
     let mut turn = hollow_turn();
     turn.push(Step::Wait(Duration::from_secs(1)));
     turn.push(Step::Emit(Normalized::Activity { tool_running: false }));

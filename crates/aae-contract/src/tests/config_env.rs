@@ -175,18 +175,18 @@ fn a_malformed_env_value_is_a_load_error_of_its_file_and_key() {
 }
 
 #[test]
-fn the_directory_of_a_plugin_with_a_dollar_stays_itself_in_env() {
-    let plugin = "name = \"mail\"\nversion = \"0.1.0\"\n[agent]\nenv = { D = \"${AAE_PLUGIN_DIR}/x\" }\n\
+fn the_directory_of_a_addon_with_a_dollar_stays_itself_in_env() {
+    let addon = "name = \"mail\"\nversion = \"0.1.0\"\n[agent]\nenv = { D = \"${AAE_ADDON_DIR}/x\" }\n\
         [agent.skills.mail]\npath = \"skills/mail\"\n[agent.hooks.h]\nevent = \"Stop\"\n\
-        command = \"${AAE_PLUGIN_DIR}/h\"\n";
-    let top = BASE[0].1.replace("plugins/mail", "plugins/ma$il");
+        command = \"${AAE_ADDON_DIR}/h\"\n";
+    let top = BASE[0].1.replace("addons/mail", "addons/ma$il");
     let config = load_with(&[
         ("config.toml", &top),
-        ("plugins/ma$il/plugin.toml", plugin),
-        ("plugins/ma$il/skills/mail/SKILL.md", "mail"),
+        ("addons/ma$il/addon.toml", addon),
+        ("addons/ma$il/skills/mail/SKILL.md", "mail"),
     ])
     .unwrap();
-    let dir = config.plugins[0].root.to_string_lossy().into_owned();
+    let dir = config.addons[0].root.to_string_lossy().into_owned();
     assert!(dir.ends_with("ma$il"), "{dir}");
     let implementer = Name {
         pack: "kit".into(),
@@ -233,12 +233,12 @@ fn a_tracker_directory_with_a_dollar_stays_itself_in_env() {
     assert_eq!(env_value(&exec, |_| None), Ok(dir));
 }
 
-/// The `bin/` of a plugin and the daemon's own `PATH`, both with a `$`, reach `PATH` as they are. The daemon's
+/// The `bin/` of an addon and the daemon's own `PATH`, both with a `$`, reach `PATH` as they are. The daemon's
 /// `PATH` is the test's: the test runs itself again with a `$` in it.
 #[test]
-fn a_dollar_in_a_plugin_bin_and_the_daemons_path_stays_itself() {
+fn a_dollar_in_a_addon_bin_and_the_daemons_path_stays_itself() {
     const CHILD: &str = "AAE_TEST_DOLLAR_PATH";
-    let name = "a_dollar_in_a_plugin_bin_and_the_daemons_path_stays_itself";
+    let name = "a_dollar_in_a_addon_bin_and_the_daemons_path_stays_itself";
     if std::env::var_os(CHILD).is_none() {
         let path = format!("/no/su$ch:{}", std::env::var("PATH").unwrap_or_default());
         let test = format!("{}::{name}", module_path!().split_once("::").unwrap().1);
@@ -257,15 +257,15 @@ fn a_dollar_in_a_plugin_bin_and_the_daemons_path_stays_itself() {
         );
         return;
     }
-    let top = BASE[0].1.replace("plugins/mail", "plugins/ma$il");
+    let top = BASE[0].1.replace("addons/mail", "addons/ma$il");
     let config = load_with(&[
         ("config.toml", &top),
-        ("plugins/ma$il/plugin.toml", BASE[1].1),
-        ("plugins/ma$il/skills/mail/SKILL.md", "mail"),
-        ("plugins/ma$il/bin/tool", ""),
+        ("addons/ma$il/addon.toml", BASE[1].1),
+        ("addons/ma$il/skills/mail/SKILL.md", "mail"),
+        ("addons/ma$il/bin/tool", ""),
     ])
     .unwrap();
-    let bin = config.plugins[0].bin.clone().unwrap();
+    let bin = config.addons[0].bin.clone().unwrap();
     let implementer = Name {
         pack: "kit".into(),
         name: "implementer".into(),

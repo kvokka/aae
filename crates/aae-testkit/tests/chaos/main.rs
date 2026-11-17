@@ -37,10 +37,10 @@ const POLICY: &[(&str, &str)] = &[
     (
         "config.toml",
         "projects = [\"shop\"]\nbuiltin = { default-policy = { enabled = false } }\n[harness.scripted]\n\
-         [settings]\nplugins = [{ name = \"policy\" }]\n[[plugin]]\npath = \"policy\"\n",
+         [settings]\naddons = [{ name = \"policy\" }]\n[[addon]]\npath = \"policy\"\n",
     ),
     (
-        "policy/plugin.toml",
+        "policy/addon.toml",
         "name = \"policy\"\nversion = \"0.1.0\"\n\
          [[hook]]\non = \"run.attempt_failed\"\ncommand = [\"true\"]\ntimeout = \"300s\"\n\
          [[hook]]\non = \"run.turn_ended_without_outcome\"\ncommand = [\"true\"]\ntimeout = \"300s\"\n\

@@ -25,7 +25,7 @@ fn config(native: Option<Value>) -> EffectiveConfig {
         mcp: Default::default(),
         hooks: Default::default(),
         skills: Default::default(),
-        plugins: Vec::new(),
+        addons: Vec::new(),
         native: native.map(agent),
     }
 }

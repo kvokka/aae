@@ -42,7 +42,7 @@ The behaviour itself is described in the document named under each heading; this
 - A harness binary is resolved as: explicit path in the config → `mise which` → `PATH`.
 - An `env` reference has one strict form: `${NAME}` and `$$`; any other `$` is a load error, so a shell-style
   `$NAME` does not pass silently as text.
-- `${AAE_PLUGIN_DIR}` in an `env` value outside a plugin's `[agent]` is a reference like any other, so it fails the
+- `${AAE_ADDON_DIR}` in an `env` value outside an addon's `[agent]` is a reference like any other, so it fails the
   start as `config_error` unless the daemon has that variable.
 - Names the owner did not name: the root's section and its keys, the input type `task`, the `native.<harness>`
   block for the permission mode, the way a template takes an agent's file (`{{ agent.<name> }}`).
@@ -59,7 +59,7 @@ The behaviour itself is described in the document named under each heading; this
 - The default `scope` is `rig`.
 - The root of a project is an implicit local pack; names are unique within a pack, `<pack>.<name>` across packs.
 - Packs from git: "the latest revision" is the tip of the default branch, found when the config loads; offline, the
-  cached revision with a warning; one XDG cache per user; no lock file; a running run keeps its snapshot. A plugin
+  cached revision with a warning; one XDG cache per user; no lock file; a running run keeps its snapshot. An addon
   from git must be pinned.
 - After `soft_stop` or `hard_stop` a `drain` step ends `fail`.
 - A check script runs after the step did; the step's own failure is a failed attempt too; the path is relative to
@@ -103,20 +103,20 @@ The behaviour itself is described in the document named under each heading; this
   is not given out, and the reason is visible.
 - After a set number of failed runs over a bead (default 3) the core closes that bead's gate until a human opens it.
 
-## Plugins and frontends — [contracts 3](../design/contracts.md#3-orchestrator-hooks-decisions-and-timeouts), [MCP](../api/mcp.md)
+## Addons and frontends — [contracts 3](../design/contracts.md#3-orchestrator-hooks-decisions-and-timeouts), [MCP](../api/mcp.md)
 
 - A failed veto hook blocks the run; a failed observing hook is ignored.
-- Several plugins on one event: one block is enough for a veto; for the reaction to a failure the first decision in
+- Several addons on one event: one block is enough for a veto; for the reaction to a failure the first decision in
   attachment order wins.
-- The bundled plugins are outside the core's budget, on a line of their own.
+- The bundled addons are outside the core's budget, on a line of their own.
 - MCP has five tools, and the server is attached to an agent only when the agent's config says so.
 
 ## Delivery and process — [install](../guide/install.md), [code rules](rules-code.md)
 
 - Directories follow XDG; the daemon runs in the foreground; a command generates service files; the CLI never
-  starts a daemon by itself. Packs and plugins from git are downloaded by `aae` outside the core; mise does not
+  starts a daemon by itself. Packs and addons from git are downloaded by `aae` outside the core; mise does not
   touch them.
-- The budget limits of the parts (adapters, tracker, frontends, plugins, the rest) are estimates; the release limit
+- The budget limits of the parts (adapters, tracker, frontends, addons, the rest) are estimates; the release limit
   and the hard stop the owner confirmed.
 - If the budget does not fit, the first to go are: continuing another run's session, the `bv` workspace file.
 - The numeric thresholds of the [acceptance criteria](../acceptance.md) were proposed by their author.

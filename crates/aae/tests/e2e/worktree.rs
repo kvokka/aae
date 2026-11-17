@@ -1,4 +1,4 @@
-//! The bundled `worktree` plugin through a real `aae daemon` and the real `claude` on the fake Anthropic API
+//! The bundled `worktree` addon through a real `aae daemon` and the real `claude` on the fake Anthropic API
 //! (docs/design/config.md): the session of a formula with `worktree = true` works in its own git worktree, which goes
 //! once the run passes.
 

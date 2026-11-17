@@ -60,7 +60,7 @@ pub(crate) fn hook(event: &Value, p: &Params) -> Result<Option<Value>, String> {
     }
 }
 
-/// The git common dir and the run of a worktree this plugin made: `<common>/aae/worktrees/<run>`.
+/// The git common dir and the run of a worktree this addon made: `<common>/aae/worktrees/<run>`.
 fn worktree(workdir: &Path) -> Option<(PathBuf, &str)> {
     let of = workdir.file_name()?.to_str()?;
     let dir = workdir.parent()?;

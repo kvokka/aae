@@ -1,5 +1,5 @@
-//! The plugin guides (docs/guide/plugins.md, docs/guide/plugin-development.md): the files their examples show load as
-//! the config they describe, and the hooks of the example plugin answer as the guide says.
+//! The addon guides (docs/guide/addons.md, docs/guide/addon-development.md): the files their examples show load as
+//! the config they describe, and the hooks of the example addon answer as the guide says.
 
 use std::{fs, os::unix::fs::PermissionsExt, path::Path, process::Command};
 
@@ -67,11 +67,11 @@ fn run(script: &Path, args: &[&str], env: &[(&str, &str)], stdin: &str) -> Strin
 }
 
 #[test]
-fn the_examples_of_the_plugin_guides_load_and_their_hooks_answer() {
+fn the_examples_of_the_addon_guides_load_and_their_hooks_answer() {
     let tmp = tempfile::tempdir().unwrap();
     let home = tmp.path();
-    let mut all = blocks("plugins.md");
-    all.extend(blocks("plugin-development.md"));
+    let mut all = blocks("addons.md");
+    all.extend(blocks("addon-development.md"));
     for (lang, path, text) in &all {
         if lang == "toml" {
             text.parse::<toml::Table>()
@@ -88,33 +88,30 @@ fn the_examples_of_the_plugin_guides_load_and_their_hooks_answer() {
             assert_eq!(text.split_once('\n').unwrap().1, file, "{path}");
         }
     }
-    // What the guides show only in a tree: the project file, the review plugin's prompt and skill; then the review
-    // plugin is declared and attached to `qa`.
+    // What the guides show only in a tree: the project file, the review addon's prompt and skill; then the review
+    // addon is declared and attached to `qa`.
     fs::write(home.join("src/shop/aae.toml"), "").unwrap();
-    let review = home.join("aae-plugins/review");
+    let review = home.join("aae-addons/review");
     fs::write(review.join("prompt.md"), "Review.\n").unwrap();
     fs::create_dir_all(review.join("skills/review-checklist")).unwrap();
     fs::write(review.join("skills/review-checklist/SKILL.md"), "Check.\n").unwrap();
     std::os::unix::fs::symlink(
-        repo().join("plugins/context-budget"),
-        home.join("aae-plugins/context-budget"),
+        repo().join("addons/context-budget"),
+        home.join("aae-addons/context-budget"),
     )
     .unwrap();
     let append = |path: &str, text: &str| {
         let file = home.join(path);
         fs::write(&file, fs::read_to_string(&file).unwrap() + text).unwrap();
     };
-    append(
-        ".config/aae/config.toml",
-        "[[plugin]]\npath = \"~/aae-plugins/review\"\n",
-    );
-    append("src/shop/agents/qa/agent.toml", "plugins = [{ name = \"review\" }]\n");
+    append(".config/aae/config.toml", "[[addon]]\npath = \"~/aae-addons/review\"\n");
+    append("src/shop/agents/qa/agent.toml", "addons = [{ name = \"review\" }]\n");
 
     assert!(aae(home, &["--json", "config", "check"]).contains("\"ok\":true"));
     let dev = aae(home, &["config", "explain", "--project", "shop", "--agent", "dev"]);
-    assert!(dev.contains("plugins.context-budget.params.window = 150000"), "{dev}");
+    assert!(dev.contains("addons.context-budget.params.window = 150000"), "{dev}");
     assert!(
-        dev.contains("{\"autoCompactWindow\":150000}  # plugin context-budget"),
+        dev.contains("{\"autoCompactWindow\":150000}  # addon context-budget"),
         "{dev}"
     );
     let qa = aae(home, &["config", "explain", "--project", "shop", "--agent", "qa"]);
@@ -131,7 +128,7 @@ fn the_examples_of_the_plugin_guides_load_and_their_hooks_answer() {
         run(
             &review.join("hooks/check"),
             &[],
-            &[("AAE_PLUGIN_PARAMS", r#"{"word":"tested"}"#)],
+            &[("AAE_ADDON_PARAMS", r#"{"word":"tested"}"#)],
             &event.to_string(),
         )
     };

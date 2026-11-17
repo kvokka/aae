@@ -1,4 +1,4 @@
-//! The config commands: the lists of projects, agents, formulas, packs and plugins, and `aae config`.
+//! The config commands: the lists of projects, agents, formulas, packs and addons, and `aae config`.
 
 use super::{encode, fail, print};
 use crate::{

@@ -286,7 +286,7 @@ async fn a_resumed_step_never_takes_the_session_of_an_earlier_step() {
 /// The ceiling counts failed attempts only (invariant 16): a passed step does not use it up for the later ones.
 #[tokio::test]
 async fn the_attempts_ceiling_counts_no_passed_step() {
-    let plugin = r#"name = "policy"
+    let addon = r#"name = "policy"
 version = "0.1.0"
 [[hook]]
 on = "run.attempt_failed"
@@ -304,7 +304,7 @@ timeout = "10s"
     ];
     let w = flow(
         &steps,
-        &[POLICY[0], ("policy/plugin.toml", plugin)],
+        &[POLICY[0], ("policy/addon.toml", addon)],
         Arc::new(ExecHooks::default()),
     );
     let run = w.start_flow().await;
@@ -317,14 +317,10 @@ timeout = "10s"
 #[cfg(target_os = "linux")]
 #[tokio::test]
 async fn a_remark_on_an_exec_step_is_refused() {
-    let plugin = "name = \"policy\"\nversion = \"0.1.0\"\n\
+    let addon = "name = \"policy\"\nversion = \"0.1.0\"\n\
         [[hook]]\non = \"run.finishing\"\ncommand = [\"true\"]\ntimeout = \"10s\"\n";
     let hooks = Arc::new(Hanging::default());
-    let w = flow(
-        &[exec("a", "true")],
-        &[POLICY[0], ("policy/plugin.toml", plugin)],
-        hooks,
-    );
+    let w = flow(&[exec("a", "true")], &[POLICY[0], ("policy/addon.toml", addon)], hooks);
     let run = w.start_flow().await;
     w.until(Some(&run), "run.finishing", 0).await;
     let seq = w.seq_of(&run, "run.finishing", 0).await;
@@ -351,7 +347,7 @@ async fn a_remark_on_an_exec_step_is_refused() {
 #[cfg(target_os = "linux")]
 #[tokio::test]
 async fn a_kill_at_every_step_boundary_keeps_the_step() {
-    let plugin = "name = \"policy\"\nversion = \"0.1.0\"\n\
+    let addon = "name = \"policy\"\nversion = \"0.1.0\"\n\
         [[hook]]\non = \"run.preparing\"\ncommand = [\"true\"]\ntimeout = \"10s\"\n\
         [[hook]]\non = \"run.finishing\"\ncommand = [\"true\"]\ntimeout = \"10s\"\n\
         [[hook]]\non = \"run.attempt_failed\"\ncommand = [\"true\"]\ntimeout = \"10s\"\n";
@@ -361,7 +357,7 @@ async fn a_kill_at_every_step_boundary_keeps_the_step() {
         exec("c", "sleep 1; echo c >> log"),
     ];
     let hooks = Arc::new(Hanging::default());
-    let mut w = flow(&steps, &[POLICY[0], ("policy/plugin.toml", plugin)], hooks);
+    let mut w = flow(&steps, &[POLICY[0], ("policy/addon.toml", addon)], hooks);
     let run = w.start_flow().await;
     let latest = |w: &World, kind: &str| w.all(kind).len() - 1;
     for (n, step) in ["a", "b", "c"].into_iter().enumerate() {

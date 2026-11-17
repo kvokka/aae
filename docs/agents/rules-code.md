@@ -11,7 +11,7 @@
 - The first release is not out, so there is no compatibility with an old config: a retired key is a config error in
   one line that says where it is written now. No transition layers.
 - The core knows no harness, no role and no br: those come through the driver and tracker interfaces
-  (`scripts/core-boundary.sh`). Policy lives in plugins and config, not in the core
+  (`scripts/core-boundary.sh`). Policy lives in addons and config, not in the core
   ([architecture](../architecture.md#boundaries)).
 - `tokio::select!` in the core (`aae-contract`, `aae-core`) is written only with `biased;` and a comment on why the
   branches stand in that order (`scripts/select-biased.sh`): a random choice between ready branches breaks the replay
@@ -30,7 +30,7 @@ Lines of code without blanks and comments, counted by `tokei`; tests and generat
 | a harness adapter, each | 3 500 |
 | the tracker adapter | 1 200 |
 | the three frontends together | 4 000 |
-| the bundled plugins together | 1 500 |
+| the bundled addons together | 1 500 |
 | the rest: `doctor`, service files, pack loading, the MCP bridge | 4 300 |
 | experiments (`experiments/`), outside the limits above | 5 000 |
 
@@ -52,8 +52,10 @@ it, in one format for the whole project:
 <!-- MEASURE id=<slug> date=<YYYY-MM-DD> ver=<version or sha> env=<OS and stand> src=<where from> note="<conditions; what to measure again>" -->
 ```
 
-In code the same marker stands in the language's comment syntax. `scripts/budget.sh` checks that every marker has
-`id`, `date`, `ver` and `env`; a measurement with no marker at all is for the review to catch.
+In code the same marker stands in the language's comment syntax. `scripts/budget.sh` checks that every marker of the
+repository (outside `.loop/` and `.claude/`) has `id`, `date`, `ver` and `env`; what the agents of a demo wrote
+(`demos/*/*-example/`) is no measurement of this repository and is not checked. A measurement with no marker at all
+is for the review to catch.
 
 ## Dependencies and tools
 

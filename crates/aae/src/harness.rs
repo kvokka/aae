@@ -75,7 +75,7 @@ fn harness_error(name: &str, harness: &config::Harness, paths: &Paths) -> Option
     (adapter.new)(&setup(binary, harness, paths)).err()
 }
 
-/// The config of `paths` with the parameters of the bundled plugins checked, or every error in it.
+/// The config of `paths` with the parameters of the bundled addons checked, or every error in it.
 pub(crate) fn load(paths: &Paths) -> Result<config::Config, Vec<String>> {
     let file = &paths.config;
     let checkouts = crate::git_cache::checkouts(&paths.cache, file);
@@ -90,7 +90,7 @@ pub(crate) fn load(paths: &Paths) -> Result<config::Config, Vec<String>> {
         p.tracker.actor = Some("BD_ACTOR".to_owned());
         p.tracker.prefix = Some("BD_ISSUE_PREFIX".to_owned());
     }
-    config.plugin_data = Some(paths.state.join("plugins"));
+    config.addon_data = Some(paths.state.join("addons"));
     config.bridge = [paths.exe.to_string_lossy().as_ref(), "mcp-bridge", "--"]
         .map(str::to_owned)
         .to_vec();
@@ -103,7 +103,7 @@ pub(crate) fn load(paths: &Paths) -> Result<config::Config, Vec<String>> {
         .chain(config.projects.iter().flat_map(|p| &p.bundled));
     // A project inherits the orchestrator's tables, so the same error is said once.
     let errors: Vec<String> = all
-        .filter_map(|b| aae_plugins::check(b.name, &b.params).err())
+        .filter_map(|b| aae_addons::check(b.name, &b.params).err())
         .map(|e| e.to_string())
         .chain(harnesses)
         .collect::<std::collections::BTreeSet<_>>()

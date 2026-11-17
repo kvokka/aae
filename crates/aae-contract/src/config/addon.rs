@@ -1,10 +1,10 @@
-//! A plugin (docs/design/config.md "Plugin"): its manifest as loaded, what its `[agent]` may give, and the strings of
-//! its parts that `${AAE_PLUGIN_DIR}`, `${AAE_PLUGIN_DATA}` and `${params.<key>}` are filled in.
+//! An addon (docs/design/config.md "Addon"): its manifest as loaded, what its `[agent]` may give, and the strings of
+//! its parts that `${AAE_ADDON_DIR}`, `${AAE_ADDON_DATA}` and `${params.<key>}` are filled in.
 
 use super::{
-    Hook, Mcp, OrchestratorHook, Plugin, Settings, Skill,
-    files::{PluginDecl, PluginFile},
-    load::{Loader, PARAMS, PLUGIN_DIR},
+    Addon, Hook, Mcp, OrchestratorHook, Settings, Skill,
+    files::{AddonDecl, AddonFile},
+    load::{ADDON_DIR, Loader, PARAMS},
     schema::event_path,
 };
 use serde::Deserialize;
@@ -14,10 +14,10 @@ use std::{
     path::Path,
 };
 
-/// `[agent]` of a plugin: the settings a plugin may give the agents that attach it.
+/// `[agent]` of an addon: the settings an addon may give the agents that attach it.
 #[derive(Debug, Default, Deserialize)]
 #[serde(deny_unknown_fields)]
-pub(super) struct PluginAgent {
+pub(super) struct AddonAgent {
     #[serde(default)]
     pub env: BTreeMap<String, String>,
     #[serde(default)]
@@ -30,8 +30,8 @@ pub(super) struct PluginAgent {
     pub native: BTreeMap<String, Value>,
 }
 
-impl From<PluginAgent> for Settings {
-    fn from(a: PluginAgent) -> Self {
+impl From<AddonAgent> for Settings {
+    fn from(a: AddonAgent) -> Self {
         Settings {
             env: a.env,
             mcp: a.mcp,
@@ -44,7 +44,7 @@ impl From<PluginAgent> for Settings {
 }
 
 impl Settings {
-    /// Every string of this layer a plugin's text may reach (docs/design/config.md "Plugin"): harness hook commands,
+    /// Every string of this layer an addon's text may reach (docs/design/config.md "Addon"): harness hook commands,
     /// `env` values (`at` is told so: a value put there is a literal), MCP servers, the `native` tables and the
     /// services.
     pub(super) fn strings_mut(&mut self, at: &mut impl FnMut(&mut String, bool)) {
@@ -106,17 +106,11 @@ fn strings(value: &mut Value, at: &mut impl FnMut(&mut String, bool)) {
 }
 
 impl Loader {
-    /// Plugins declared by one file; `outer` are the plugins already declared above it.
-    pub(super) fn plugins(
-        &mut self,
-        file: &Path,
-        base: &Path,
-        decls: Vec<PluginDecl>,
-        outer: &[Plugin],
-    ) -> Vec<Plugin> {
-        let mut plugins: Vec<Plugin> = Vec::new();
+    /// Addons declared by one file; `outer` are the addons already declared above it.
+    pub(super) fn addons(&mut self, file: &Path, base: &Path, decls: Vec<AddonDecl>, outer: &[Addon]) -> Vec<Addon> {
+        let mut addons: Vec<Addon> = Vec::new();
         for decl in decls {
-            let Some(root) = self.plugin_source(file, &decl).and_then(|s| self.root(file, base, &s)) else {
+            let Some(root) = self.addon_source(file, &decl).and_then(|s| self.root(file, base, &s)) else {
                 continue;
             };
             let root = match &decl.dir {
@@ -130,13 +124,13 @@ impl Loader {
                     continue;
                 }
             };
-            let manifest = root.join("plugin.toml");
-            let Some(raw) = self.read::<PluginFile>(&manifest) else {
+            let manifest = root.join("addon.toml");
+            let Some(raw) = self.read::<AddonFile>(&manifest) else {
                 continue;
             };
-            self.name(&manifest, "plugin", &raw.name);
-            if outer.iter().chain(&plugins).any(|p| p.name == raw.name) {
-                self.fail(file, format!("plugin `{}` is declared twice", raw.name));
+            self.name(&manifest, "addon", &raw.name);
+            if outer.iter().chain(&addons).any(|p| p.name == raw.name) {
+                self.fail(file, format!("addon `{}` is declared twice", raw.name));
             }
             let mut hooks = Vec::new();
             for hook in raw.hook {
@@ -173,7 +167,7 @@ impl Loader {
             agent.env = env;
             let dir = root.to_string_lossy();
             agent.services = self.services(&manifest, raw.service);
-            agent.substitute(PLUGIN_DIR, &dir);
+            agent.substitute(ADDON_DIR, &dir);
             let mut unknown = BTreeSet::new();
             agent.clone().strings_mut(&mut |text, _| {
                 let refs = text.split(PARAMS).skip(1).filter_map(|rest| rest.split_once('}'));
@@ -186,7 +180,7 @@ impl Loader {
                 );
             }
             let prompt = raw.prompt.and_then(|p| self.text(&manifest, &root.join(p)));
-            plugins.push(Plugin {
+            addons.push(Addon {
                 name: raw.name,
                 version: raw.version,
                 harnesses: raw.harnesses,
@@ -198,11 +192,11 @@ impl Loader {
                 params: raw.params,
             });
         }
-        plugins
+        addons
     }
 }
 
-/// The type of a plugin parameter's value, when it is one a parameter may have.
+/// The type of an addon parameter's value, when it is one a parameter may have.
 pub(super) fn param_type(value: &serde_json::Value) -> Option<&'static str> {
     match value {
         serde_json::Value::String(_) => Some("string"),
