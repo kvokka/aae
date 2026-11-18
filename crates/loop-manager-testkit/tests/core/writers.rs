@@ -3,9 +3,10 @@
 
 use crate::common;
 
-use common::{POLICY, World, drain::SWEEP, last, world};
-use loop_manager_core::run::{Create, Decision, GateSpec, Msg};
+use common::{POLICY, World, beads::FIX, drain::SWEEP, last, world, world_with};
+use loop_manager_core::run::{Create, Decision, ExecHooks, GateSpec, Msg};
 use loop_manager_testkit::Step;
+use serde_json::json;
 use std::{collections::BTreeSet, sync::Arc, time::Duration};
 
 /// `web` lets one run work in its directory at once; `api` has no limit.
@@ -72,6 +73,24 @@ impl World {
             .to_owned()
     }
 
+    /// Writes `files` and removes the files and directories `gone` in the world, then reloads its config.
+    async fn reload_with(&self, files: &[(&str, &str)], gone: &[&str]) {
+        for (path, text) in files {
+            std::fs::write(self.dir.path().join(path), text).unwrap();
+        }
+        for path in gone {
+            let path = self.dir.path().join(path);
+            let removed = if path.is_dir() {
+                std::fs::remove_dir_all(path)
+            } else {
+                std::fs::remove_file(path)
+            };
+            removed.unwrap();
+        }
+        let config = loop_manager_core::config::load(&self.dir.path().join("config.toml")).unwrap();
+        self.core.send(None, Msg::Reload(Arc::new(config))).await.unwrap();
+    }
+
     async fn cancel_run(&self, run: &str) {
         let cancel = Msg::Cancel {
             run: run.into(),
@@ -97,6 +116,13 @@ async fn a_rig_at_its_max_writers_queues_the_next_run_until_one_ends() {
     assert_eq!(w.states(&more).await, STARTED, "another rig has no limit");
     w.cancel_run(&first).await;
     assert_eq!(w.states(&second).await, STARTED);
+    let reader = loop_manager_core::run::Reader::open(&w.dir.path().join("state.db")).unwrap();
+    let view = reader.run(&second).unwrap().unwrap();
+    assert_eq!(
+        view["waiting_for"],
+        serde_json::Value::Null,
+        "a started run waits for nothing"
+    );
 }
 
 #[tokio::test(start_paused = true)]
@@ -226,8 +252,57 @@ async fn a_reload_that_lifts_the_limit_starts_the_waiting_run() {
     assert_eq!(w.states(&first).await, STARTED);
     let second = w.create().await;
     assert_eq!(w.waiting_for(&second).await, "writers");
-    std::fs::write(w.dir.path().join(RIGS[0].0), "[rigs.web]\npath = \"web\"\n").unwrap();
-    let config = loop_manager_core::config::load(&w.dir.path().join("config.toml")).unwrap();
-    w.core.send(None, Msg::Reload(Arc::new(config))).await.unwrap();
+    w.reload_with(&[(RIGS[0].0, "[rigs.web]\npath = \"web\"\n")], &[]).await;
     assert_eq!(w.states(&second).await, STARTED);
+}
+
+/// An exec step runs in the rig's directory: a real command, so real time.
+#[tokio::test]
+async fn a_run_of_an_exec_step_takes_a_place() {
+    let check = (
+        "shop/formulas/check.toml",
+        "name = \"check\"\n[[step]]\nkind = \"exec\"\ncommand = [\"sleep\", \"60\"]\ntimeout = \"120s\"\n",
+    );
+    let w = world_with(&[RIGS, &[check]].concat(), Arc::new(ExecHooks::default()));
+    let first = w.start_on_web("check").await;
+    assert_eq!(w.states(&first).await.last().unwrap(), "running");
+    let second = w.create().await;
+    assert_eq!(w.waiting_for(&second).await, "writers");
+    w.cancel_run(&first).await;
+    assert_eq!(w.states(&second).await, STARTED);
+}
+
+#[tokio::test(start_paused = true)]
+async fn an_interrupted_run_keeps_its_place() {
+    let mut w = world(&[POLICY, RIGS].concat());
+    let first = w.create().await;
+    assert_eq!(w.states(&first).await, STARTED);
+    w.restart().await;
+    assert_eq!(w.states(&first).await.last().unwrap(), "interrupted");
+    let second = w.create().await;
+    assert_eq!(w.waiting_for(&second).await, "writers");
+}
+
+/// A reload can take away the formula of a live run: the run still works in the rig's directory.
+#[tokio::test(start_paused = true)]
+async fn a_run_whose_formula_is_gone_keeps_its_place() {
+    let w = world(&[RIGS, OPS].concat());
+    let first = w.start_on_web("deploy").await;
+    assert_eq!(w.states(&first).await, STARTED);
+    w.reload_with(&[], &[OPS[2].0]).await;
+    let second = w.create().await;
+    assert_eq!(w.waiting_for(&second).await, "writers");
+}
+
+/// A reload can take away the agent a bead's `agent:` label gave a live run.
+#[tokio::test(start_paused = true)]
+async fn a_run_whose_agent_is_gone_keeps_its_place() {
+    let w = world(&[RIGS, OPS, FIX].concat());
+    let bead = w.tracker.add(&["agent:ops"], None);
+    w.changed().await;
+    let first = w.run_on(json!(bead)).await;
+    assert_eq!(w.states(&first).await, STARTED);
+    w.reload_with(&[], &["shop/agents/ops", OPS[2].0]).await;
+    let second = w.create().await;
+    assert_eq!(w.waiting_for(&second).await, "writers");
 }
