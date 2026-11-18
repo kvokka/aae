@@ -1,0 +1,6 @@
+# The defaults of the role; loop-manager.toml may change them in `[agents.reviewer]`. It calls no subagents.
+harness = "claude"
+model = "opus"
+effort = "high"
+# As the coder's: a review of each round goes on in one session.
+addons = [{ name = "context-budget", params = { window = 300000, max_compactions = 4 } }]

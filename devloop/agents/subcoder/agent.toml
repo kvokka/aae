@@ -1,0 +1,5 @@
+# A subagent of the coder: no step of a formula names it, so it has a role prompt and no prompt template.
+description = "A second coder for a separate piece of the implementation, on files the coder itself does not touch, in parallel with it. Does not commit."
+harness = "claude"
+model = "opus"
+effort = "high"

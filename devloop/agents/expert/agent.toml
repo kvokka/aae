@@ -1,0 +1,5 @@
+# A subagent of the coder: no step of a formula names it, so it has a role prompt and no prompt template.
+description = "The expert of loop-manager: the plan or the design of a critical part (the core, the invariants, recovery, the harness protocols), a disputed design choice, a bug the coder failed to fix twice. Writes a document, changes no code."
+harness = "claude"
+model = "fable"
+effort = "high"

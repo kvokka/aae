@@ -1,0 +1,2 @@
+# What the daemon writes next to the orchestrator config: the bv workspace of the project (docs/design/tracker-br.md).
+/.bv/

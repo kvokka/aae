@@ -1,0 +1,4 @@
+# The orchestrator config of the loop that develops loop-manager with loop-manager (README.md beside it): the daemon
+# of the loop starts with `loop-manager daemon --config devloop/config.toml`, so it neither reads nor changes the
+# user's ~/.config/loop-manager/config.toml. loop-manager.toml beside it is the project.
+projects = ["."]

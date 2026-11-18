@@ -34,6 +34,10 @@ run = [
   "! git grep -nE '/(home|Users)/[A-Za-z]' -- . ':!.loop'",
   # Tests may run inside a loop-manager session: they start the binary only through `common` (docs/agents/rules-tests.md).
   "! git grep -n 'CARGO_BIN_EXE_loop-manager' -- crates ':!crates/loop-manager/tests/common'",
+  # The pack that develops loop-manager with loop-manager (devloop/README.md): its scripts on sample files, and its
+  # config loads.
+  "devloop/scripts/selftest.sh",
+  "cargo run -q --locked -p loop-manager -- config check --config devloop/config.toml",
 ]
 
 [tasks.build-all]

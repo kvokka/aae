@@ -1,0 +1,5 @@
+# A subagent of the coder: no step of a formula names it, so it has a role prompt and no prompt template.
+description = "A fast helper of the coder: a small edit by an exact description, a build, test or clippy run with a digest of the errors, a search over the code and the documents, a summary of a long file."
+harness = "claude"
+model = "sonnet"
+effort = "medium"

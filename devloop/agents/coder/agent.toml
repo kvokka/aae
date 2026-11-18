@@ -1,0 +1,9 @@
+# The defaults of the role; loop-manager.toml may change them in `[agents.coder]`.
+harness = "claude"
+model = "opus"
+effort = "high"
+# The agents its session may call as native subagents; each has a `description` in its own agent.toml.
+subagents = ["helper", "subcoder", "expert"]
+# The session is compacted at about 267k tokens (claude compacts some 33k under the window), and the run fails at the
+# fifth compaction: a session of four rounds has room for one compaction a round.
+addons = [{ name = "context-budget", params = { window = 300000, max_compactions = 4 } }]
