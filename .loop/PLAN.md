@@ -3,11 +3,11 @@
 > **Сначала прочитай `docs/agents/loop.md`** (правила цикла: гейт, эксперт, beads) и остальное в `docs/agents/` по
 > указателю из `CLAUDE.md`.
 
-Открытые пакеты — WP-116…WP-127 (плагины aae и нативные субагенты, последний раздел). WP-87…WP-115 закрыты и
-оставлены ниже для контекста. Пакеты WP-01…WP-86 закрыты, их тексты — в истории git (`git show 6868353:.loop/PLAN.md`,
-`git show 6868353:.loop/PLAN-archive.md`). WP-128 (plugin → addon, решение 145) — после WP-126. Новые пакеты
-пишутся от запроса владельца, номера — с WP-129; формат
-пакета — в `.claude/agents/coder.md`.
+Открытые пакеты — WP-129…WP-134 (подготовка к переезду разработки на loop-manager, последний раздел). WP-87…WP-128
+закрыты и оставлены ниже для контекста. Пакеты WP-01…WP-86 закрыты, их тексты — в истории git
+(`git show 6868353:.loop/PLAN.md`, `git show 6868353:.loop/PLAN-archive.md`). Продукт переименован `aae` →
+`loop-manager` (журнал 2026-11-18T12:00): пути и имена в старых пакетах читать с этой поправкой. Новые пакеты пишутся
+от запроса владельца, номера — с WP-135; формат пакета — в `.claude/agents/coder.md`.
 
 Размеры: S ≈ до 60k рабочего контекста кодера, M ≈ до 150k. L нет. За цикл — один M или два S. Статусы:
 todo | doing | done | blocked | split (разбит, работа — в дочерних пакетах). Пакет с пометкой «критичный» начинается
@@ -877,3 +877,177 @@ WP-110); WP-110 → WP-115; остальные — в любом порядке,
   только нативные плагины из ловушек выше (список — в отчёте); `git grep -n -i 'operator-plugin\|aae-plugins\|AAE_PLUGIN'`
   пуст вне тех же исключений; число тестов не изменилось; OpenAPI совпадает с кодом; `mise run ci` зелёный.
 - Не входит: импорт нативных плагинов, маркетплейс, любая смена поведения addon'ов.
+
+## Запрос владельца 2026-11-18: подготовка к переезду разработки на loop-manager
+
+Разработка loop-manager переезжает со своего лупа на Claude Code (`.claude/agents`, `loop_guard.py`,
+`scripts/loop/`) на сам loop-manager. Сам переезд (установка, удаление старого лупа, правка `CLAUDE.md` и
+`docs/agents/loop.md`) делает владелец; эти пакеты готовят всё остальное, чтобы переезд свёлся к паре команд.
+Разбор — журнал 2026-11-18T07:05. Всё в продукте и в паке — на английском. Живые модели — только там, где пакет
+их прямо называет.
+
+Порядок: WP-129 первым (без него `mise run ci` под loop-manager красный), затем WP-130, WP-131, WP-132, WP-133;
+WP-134 — последним.
+
+### WP-129 · Тесты не видят окружение внешнего loop-manager · размер M · статус: todo
+- Документы: `docs/agents/rules-tests.md` («How tests are written»), `docs/guide/development.md` («Where each kind
+  of test runs»), `docs/api/frontends.md` (сессионное окружение CLI).
+- Зависит от: —
+- Проблема: сессия и exec-шаг loop-manager несут `LOOP_MANAGER_SOCKET`, `LOOP_MANAGER_RUN`,
+  `LOOP_MANAGER_ATTEMPT_TOKEN`, `LOOP_MANAGER_BEAD`, `LOOP_MANAGER_INSTANCE`, `LOOP_MANAGER_REMARKS`,
+  `LOOP_MANAGER_STEP_*`, `LOOP_MANAGER_INPUT_*`, `BEADS_DIR`, `BD_ACTOR`. Если в такой сессии идёт `mise run ci`:
+  - `LOOP_MANAGER_SOCKET` задаёт и сокет, который **слушает** демон (`crates/loop-manager/src/main.rs:54` →
+    `daemon::Paths::resolve(config, cli.socket)`), а `crates/loop-manager/tests/common/mod.rs:110-135` (`command`,
+    каждый e2e-демон) его не убирает: тестовый демон упирается в «another daemon is listening»
+    (`daemon.rs:295-297`) и через 60 с «did not come up» — почти все e2e красные; если внешний сокет мёртв,
+    тестовый демон его забирает;
+  - CLI-тесты, которые задают сокет, но не убирают `RUN`/`ATTEMPT_TOKEN` (`e2e/cli.rs:13-19`, `exec_env.rs:73`,
+    `step_if.rs:23`, `await_step.rs:12`, `tracker.rs:108`, `claude.rs:124`, `guides.rs:36`, `cli_local.rs:33`), шлют
+    чужого родителя в `run start` (`cli/commands.rs:157`) и чужой токен в `finish` (`cli.rs:114-121` ждёт ошибку
+    `usage`, а получит POST);
+  - без переопределения сокета ходят во внешний демон: `doctor.rs:48`/`:348`, `git_cache.rs:13`,
+    `context_budget.rs:25`, `cli_local.rs:99,120`;
+  - раннер acceptance (`crates/loop-manager-acceptance/src/daemon.rs:236-245`, им же и CLI `Daemon::cli`, `:109`)
+    сокет не задаёт вовсе; сценарии демо (`scenarios/c20_demo1.rs:66`, `c20_demo2.rs:75`, `review_gate.rs:86`)
+    наследуют `BEADS_DIR`.
+  Сейчас переменные убирает только `e2e/wait.rs:24-26`.
+- Сделать:
+  - в `crates/loop-manager-testkit` (std only) одна функция, которая убирает из `Command` все унаследованные
+    `LOOP_MANAGER_*` (по `std::env::vars_os()`), кроме `LOOP_MANAGER_INSTANCE` (внутренний демон его не читает, а
+    внешний отлов по нему подчищает забытые тестовые демоны), и `BEADS_DIR`, `BD_ACTOR`, `BD_ISSUE_PREFIX`;
+    вызывается до собственных `.env(...)` теста;
+  - один конструктор команды бинаря в `crates/loop-manager/tests/common` поверх неё; им заменить `command()` и все
+    `Command::new(env!("CARGO_BIN_EXE_loop-manager"))` в тестах; убрать ручные `env_remove` из `wait.rs`;
+  - раннер acceptance: та же функция в `daemon.rs` `command()` и в местах `Command::new(args[0])` сценариев демо;
+  - сторож в `mise run ci` по образцу строки `git grep` про домашние пути: голый `CARGO_BIN_EXE_loop-manager` в
+    тестах вне `common` — ошибка;
+  - регрессионный тест: перезапуск собственного тестового бинаря (образец — `crates/loop-manager-br/tests/contract.rs:280-288`)
+    с `--exact` двух тестов из `e2e/cli.rs` (`run start` и finisher) под `LOOP_MANAGER_SOCKET` на сокете, который
+    держит живой `UnixListener` родителя, `LOOP_MANAGER_RUN=run_outer`, `LOOP_MANAGER_ATTEMPT_TOKEN=bogus`,
+    `BEADS_DIR=/nonexistent`; оба зелёные. До правки он красный — проверить и написать в отчёт.
+  - Правило в `docs/agents/rules-tests.md` и строка в `docs/guide/development.md`: каждый запуск бинаря в тестах — через
+    общий конструктор, потому что тесты могут идти внутри сессии loop-manager.
+- Не делать: `[env]` в `mise.toml` или `.cargo/config.toml` — они ломают `loop-manager finish` в сессиях и не умеют
+  убирать переменные; правка продукта ради тестов.
+- Готово, когда: регрессионный тест красный до и зелёный после; `mise run ci` зелёный; руками: `mise run ci` под
+  `LOOP_MANAGER_SOCKET`, указывающим на живой посторонний сокет, и с фальшивыми `RUN`/`ATTEMPT_TOKEN` — зелёный
+  (команда и итог — в отчёт); число тестов +1.
+
+### WP-130 · Таймаут ai-шага по умолчанию · размер S · статус: todo
+- Документы: `docs/design/contracts.md` (6.1, «step `timeout` … default 45 m»), `docs/design/config.md` («Formula»,
+  пример `timeout = "45m"`).
+- Зависит от: —
+- Сейчас: одна константа `STEP_TIMEOUT_MS = 45 * 60_000` для ai и exec (`crates/loop-manager-core/src/run/render.rs:12`,
+  используется в `render.rs:65,140`, `exec_step.rs:80`, `events.rs:166`). Это не решение и не допущение. Сессия
+  кодера этого репозитория с субагентами и сборками идёт дольше 45 минут; зависание ai-шага ловит watchdog
+  (`silence`, `tool_silence`), таймаут — только потолок.
+- Сделать: развести умолчания — ai-шаг 4 h, exec-шаг остаётся 45 m. Код, тесты, на которые это влияет, и оба
+  документа (умолчание каждого вида шага написать явно). Новых ключей конфига нет.
+- Готово, когда: тест на умолчание ai-шага и exec-шага; документы совпадают с кодом; `mise run ci` зелёный.
+
+### WP-131 · claude 2.1.327 в проверенный диапазон · размер S · статус: todo
+- Документы: `docs/harness-updates.md` («Updating a harness» — процесс целиком), `docs/guide/install.md` (диапазон).
+- Зависит от: —
+- Вышел claude 2.1.327 (`npm view @anthropic-ai/claude-code version`), установлен 2.1.326, адаптер проверен на
+  2.1.322…2.1.325 (`crates/loop-manager-claude/src/lib.rs:38`), вне диапазона демон и `doctor` предупреждают. Новый луп
+  пойдёт на 2.1.327.
+- Сделать: процесс `harness-updates.md` по шагам на 2.1.327: `mise upgrade claude`, контрактный набор и тесты демона
+  claude, починка адаптера при красном (не ожиданий сценария), расширение диапазона до 2.1.327 в коде и в
+  `install.md`. Шаг 4 процесса — один реальный ход на самой дешёвой модели (строка критерия 2 acceptance) — входит в
+  пакет по запросу владельца, только claude, модель `haiku`; codex не трогать.
+- Готово, когда: `mise exec -- claude --version` = 2.1.327; контрактный набор и тесты демона claude зелёные; живой ход
+  критерия 2 на claude прошёл (итог и время — в отчёт); диапазон в коде и в документах — до 2.1.327; `mise run ci`
+  зелёный.
+
+### WP-132 · Документация: метка `CLAUDE_CODE_ENTRYPOINT`, agent mail в roadmap, PreCompact · размер S · статус: todo
+- Документы: `docs/guide/install.md` (абзац «Running a harness headless spends the limits of your subscription…»),
+  `docs/agents/assumptions.md` (принятый риск про headless и подписку), `docs/roadmap.md`,
+  `docs/design/experiments.md` (замер PreCompact, строка `claude compaction`).
+- Зависит от: —
+- Факты (разбор 2026-11-18, бинарь claude 2.1.326, anthropics/claude-code#97074):
+  - метка уходит в каждый запрос в блоке `x-anthropic-billing-header: cc_version=…; cc_entrypoint=<метка>` и в
+    User-Agent; без переменной у `-p` метка `sdk-cli`, у TUI `cli`; `cli` в неинтерактивном режиме claude
+    принудительно переписывает в `sdk-cli`, любое другое значение (например `loop-manager`) проходит как есть;
+  - в #97074 несколько независимых A/B (ABBA) сообщества: `sdk-cli` расходует 5-часовое окно подписки в 1,8–2,5 раза
+    быстрее своей метки при той же работе; на кэшированной нагрузке с инструментами разницу видел не каждый;
+    официального ответа Anthropic нет; один из комментаторов считает смену метки возможным нарушением условий;
+  - loop-manager метку не ставит (адаптер делает `env_clear()`); задать её можно уже сейчас через `env` агента —
+    адаптер её не перетирает.
+- Сделать:
+  - короткая заметка (3–6 строк) прямо после абзаца про headless в `install.md`: что за метка, ссылка на #97074, что
+    замер сообщества, а не официальный, как задать в `env` агента, что `cli` не работает, что соблюдение условий
+    вендора — на пользователе; ссылка на неё из допущения в `assumptions.md`;
+  - строка `docs/roadmap.md`, приоритет низкий: аддон для mcp_agent_mail (https://github.com/Dicklesworthstone/mcp_agent_mail_rust)
+    — координация нескольких агентов, работающих в одной ветке одного рига (почта, резервирование файлов), как
+    альтернатива worktree; жизнеспособность не проверена;
+  - PreCompact: проверить, что `experiments.md` и `docs/guide/addon-development.md` (раздел про сжатия субагентов)
+    говорят одно: в субагенте `PreCompact`/`PostCompact` несут `agent_id` (замер на 2.1.326, `experiments.md:475`);
+    расхождение — исправить. Старый комментарий в `.claude/hooks/loop_guard.py` (2.1.322, «без `agent_id`») — харнесс,
+    не трогать: уйдёт при переезде.
+- Готово, когда: заметка и строка roadmap есть; ссылки живые; `mise run ci` зелёный (rumdl).
+
+### WP-133 · Выпуск релиза: GitHub Release и crates.io · размер M · статус: todo
+- Документы: `.github/workflows/release.yml`, `mise.toml` (`build-all`, `acceptance-release`),
+  `docs/guide/development.md`, `docs/guide/install.md`, `README.md`.
+- Зависит от: —
+- Сейчас: тег `v0.0.1` есть, workflow `release` на тег прошёл, но только собирает четыре цели и гоняет критерий 1
+  (`permissions: contents: read`) — ничего не выкладывает; GitHub Releases пуст; крейты 0.0.1 на crates.io
+  опубликованы вручную; секрет `CARGO_REGISTRY_TOKEN` в репозитории есть (с 2026-11-17); процесс выпуска нигде не
+  описан; `install.md` знает только сборку из исходников; `loop-manager-acceptance` — `publish = false`.
+- Сделать:
+  - `release.yml` на тег `v*`: как сейчас сборка и критерий 1, затем задание с `contents: write`, которое создаёт GitHub
+    Release тега и кладёт туда четыре статических бинаря (`tar.gz` на цель + `sha256`), имена с целью в имени, чтобы
+    их узнавал бэкенд mise `github:` (`mise use -g github:kvokka/loop-manager`) и `cargo binstall`; задание
+    `cargo publish --workspace --locked` с `CARGO_REGISTRY_TOKEN` (порядок крейтов cargo выводит сам; повторный прогон
+    тега не должен падать на уже опубликованной версии);
+  - раздел «Releasing» в `docs/guide/development.md`: поднять `version` в `[workspace.package]` и в зависимостях
+    между крейтами, коммит, тег `vX.Y.Z`, push тега; что делает CI; что публикация в crates.io необратима;
+  - `README.md` — коротко, как поставить: `mise use -g github:kvokka/loop-manager`, `cargo install loop-manager
+    --locked`, сборка из исходников — ссылкой на `install.md`; `install.md` — то же подробно.
+- Не делать: не ставить тег и не пушить его — выпуск делает владелец.
+- Готово, когда: `cargo publish --workspace --dry-run --locked` зелёный (вывод — в отчёт); workflow проходит
+  `actionlint`, если он есть, иначе разбор глазами в отчёте; имена артефактов проверены против правил выбора
+  ассета в mise `github:` (ссылка на документацию mise в отчёте); документы совпадают с workflow; `mise run ci` зелёный.
+
+### WP-134 · Стартовый пак: разработка loop-manager через loop-manager · размер M · критичный · статус: todo
+- Документы: `docs/design/config.md` («Project», «Formula», «Agent», «Subagents», «Addon», «Trigger», «Permissions»),
+  `docs/design/contracts.md` 6.1–6.3 (раунды, finisher, `run.finishing`), `docs/guide/first-project.md`,
+  `docs/guide/first-formula.md`, `addons/context-budget/README.md`, демо `demos/2-multirepo-qa` (проверки с `back_to`) и
+  `demos/3-review-gate` (exec `git push`, `if = { back_from = … }`) как образцы, текущие роли `.claude/agents/*.md` и
+  `docs/agents/loop.md` (что переносится).
+- Зависит от: WP-129, WP-130, WP-132.
+- Начать с плана expert (раскладка, формула, тексты ролей). Всё на английском.
+- Раскладка (без правок кода): каталог `devloop/` в корне репозитория — проект loop-manager: `loop-manager.toml`,
+  собственный пак (`agents/`, `formulas/`), `config.toml` оркестратора для `daemon --config`, `README.md`; root
+  проекта — `devloop/` (по умолчанию), риг — корень репозитория (`path = ".."`; риг на пути root запрещён,
+  `places.rs:103-111`); трекер br в `devloop/.beads` (инициализировать, коммитится с кодом). Acceptance сканирует только
+  `demos/*/root/config.toml` (`crates/loop-manager-acceptance/src/checks.rs:345-354`), `devloop/` в него не попадает.
+- Что переносится:
+  - агенты `coder`, `reviewer`, `expert`, `helper`, `subcoder` — роли из `.claude/agents/*.md` по смыслу, на
+    английском, без всего про `loopctl`, `state.json`, `handoffs`, цикл и попытки: этим теперь ведает формула. Модели:
+    coder, subcoder, reviewer — `opus`, effort high; expert — `fable`, high; helper — `sonnet`, medium. Субагенты: у
+    coder — helper, subcoder, expert; у остальных — нет. `env`: `CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH = "2"`,
+    `CLAUDE_CODE_ENTRYPOINT = "loop-manager"` (WP-132). `inherit_host` по умолчанию: плагины хоста (rust-analyzer-lsp,
+    ponytail) приходят так;
+  - аддон `context-budget` у coder и reviewer вместо порогов 300k/420k (окно и `max_compactions` — предложить в плане
+    expert);
+  - формула на одну задачу (вход `task` — bead владельца): `code` (ai coder, check-скрипт: отчёт с `STATUS:`) →
+    `ci` (exec `mise run ci`, `back_to = "code"`) → `review` (ai reviewer, всегда `pass`, check-скрипт: ревью с
+    `SCORE:`/`VERDICT:`) → `gate` (exec, `back_to = "code"`: `SCORE ≥ 9` и `complete` — pass, иначе fail с замечанием;
+    коммит `.loop/` и `git push` — внутри скрипта при любом итоге, потому что шаг-не-проверка после упавшей проверки в
+    этом раунде не выполняется). `rounds` — предложить в плане expert. Застой и лимит циклов старого лупа не
+    переносятся;
+  - отчёты и ревью — в `.loop/runs/<run id>/`, журнал — `.loop/JOURNAL.md` как сейчас;
+  - триггер `bead.ready` на эту формулу; `max_runs` в `config.toml` оркестратора — с комментарием, что одновременные
+    прогоны в одном checkout разводит владелец (решение 108);
+  - exec-шаги с `git push`: окружение для ключа (`env = { SSH_AUTH_SOCK = "${SSH_AUTH_SOCK}" }` или `inherit_env`) —
+    выбрать и описать в README (демо 3 дважды падало на этом).
+- Скрипты пака (check и gate) — с самопроверкой на образцах файлов (тест в `mise run ci` или `bats`-free shell-тест).
+- `devloop/README.md`: как поднять демон, завести задачу, смотреть (`run list`, `run watch`, `events`), что сделать при
+  переезде (снести `.claude/agents`, `.claude/hooks`, хуки в `.claude/settings.json`, `scripts/loop/`, поправить
+  `CLAUDE.md` и `docs/agents/loop.md`) — это делает владелец, пакет только описывает.
+- Не делать: не запускать пак вживую; не трогать `.claude/`, `scripts/loop/`, `CLAUDE.md`, `docs/agents/loop.md`;
+  новых ключей конфига и кода продукта не добавлять — если без них нельзя, это запись в журнал и `blocked`.
+- Готово, когда: `cargo run -q -p loop-manager -- config check --config devloop/config.toml` зелёный (строкой в
+  `mise run ci`); `config explain` для coder показывает модель, субагентов, аддон и `env` (вывод — в отчёт);
+  самопроверка скриптов зелёная; `mise run ci` зелёный.
