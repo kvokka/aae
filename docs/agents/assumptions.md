@@ -148,7 +148,7 @@ Open questions the code must not lean on without an experiment
 |---|---|
 | Agents commit faster than a human checks | the budgets and the "no code for later" rule, checked by `mise run ci`; the review |
 | Vendor protocols drift: codex app-server is experimental, harnesses ship weekly | release lines in `mise.toml`, the tested version range of each adapter, contract tests, a narrow subset of the protocol |
-| Subscription policy: headless use spends subscription limits, and vendor terms limit commercial and hosted use | API keys are supported; the install guide says keeping to the vendor's terms is the user's responsibility |
+| Subscription policy: headless use spends subscription limits, and vendor terms limit commercial and hosted use | API keys are supported; the install guide says keeping to the vendor's terms is the user's responsibility and [what claude's entrypoint label does](../guide/install.md#what-loop-manager-runs) |
 | br in a public project: one author, no outside PRs, a license with a rider | br is installed apart; the license warning in the README, the install guide and `doctor`; a narrow tracker interface |
 | A daemon's death cuts claude sessions | `--resume`, a drain on a planned restart |
 | Vendors close the niche | the rule "check the vendor first" and the stop conditions of the [code rules](rules-code.md#budgets) |
