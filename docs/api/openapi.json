@@ -2615,7 +2615,7 @@
           "journal_seq": {
             "type": "integer",
             "format": "int64",
-            "description": "The last `seq` the journal wrote."
+            "description": "The last `seq` the journal wrote and synced. A stream may already carry later ones: it reads the journal\nfiles, which show a batch while it is being synced."
           },
           "outbox_depth": {
             "type": "integer",

@@ -41,14 +41,14 @@ async fn a_run_started_over_the_api_passes_and_its_events_stream_from_a_seq() {
     );
     assert_eq!(d.get("/v1/runs?state=passed&project=shop").await[0]["id"], run.as_str());
     // The live view of an ended run from after its end has nothing to send and closes by itself.
-    let after = d.get("/v1/daemon").await["journal_seq"].as_i64().unwrap() + 1;
     let mut live = d
         .client
-        .stream(&format!("/v1/runs/{run}/live?from={after}"))
+        .stream(&format!("/v1/runs/{run}/live?from={}", passed + 1))
         .await
         .unwrap();
     let end = tokio::time::timeout(WAIT, live.next()).await;
-    assert!(end.expect("the view closes").unwrap().is_none());
+    let end = end.expect("the view closes").unwrap();
+    assert!(end.is_none(), "{end:?}");
 }
 
 #[tokio::test]

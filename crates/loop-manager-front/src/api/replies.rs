@@ -207,7 +207,8 @@ pub(crate) struct Daemon {
     pid: u32,
     socket: String,
     started_at: String,
-    /// The last `seq` the journal wrote.
+    /// The last `seq` the journal wrote and synced. A stream may already carry later ones: it reads the journal
+    /// files, which show a batch while it is being synced.
     journal_seq: i64,
     journal: JournalHealth,
     /// Outbox rows the journal has not acknowledged, and the age of the oldest one.
