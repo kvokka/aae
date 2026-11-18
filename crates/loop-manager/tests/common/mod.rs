@@ -29,6 +29,22 @@ pub(crate) const FILES: &[(&str, &str)] = &[
     ),
 ];
 
+/// The built `loop-manager`. Tests name it only through here and start it only through [`program`]: they may run
+/// inside a session of an outer loop-manager (docs/agents/rules-tests.md).
+pub(crate) const EXE: &str = env!("CARGO_BIN_EXE_loop-manager");
+
+/// `program` without the environment of an outer loop-manager session the tests may run in.
+pub(crate) fn program(program: impl AsRef<std::ffi::OsStr>) -> Command {
+    let mut command = Command::new(program);
+    loop_manager_testkit::without_outer_session(&mut command);
+    command
+}
+
+/// The built `loop-manager`, through [`program`].
+pub(crate) fn loop_manager() -> Command {
+    program(EXE)
+}
+
 /// The upper bound of every wait on the daemon: generous, so that a loaded machine is slow rather than failing.
 pub(crate) const WAIT: Duration = Duration::from_secs(60);
 
@@ -111,12 +127,7 @@ pub(crate) fn spawn(dir: &std::path::Path) -> Child {
 /// `loop-manager daemon` in the XDG tree under `dir`: the binary `dir/bin/loop-manager` if a test put one there, else the built one.
 pub(crate) fn command(dir: &std::path::Path) -> Command {
     let own = dir.join("bin/loop-manager");
-    let exe = if own.exists() {
-        own
-    } else {
-        env!("CARGO_BIN_EXE_loop-manager").into()
-    };
-    let mut command = Command::new(exe);
+    let mut command = program(if own.exists() { own } else { EXE.into() });
     command
         .arg("daemon")
         .env("HOME", dir)

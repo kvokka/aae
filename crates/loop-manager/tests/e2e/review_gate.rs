@@ -3,7 +3,7 @@
 //! (`fake_gh.sh`) over local remotes. The planner files one bead for the backend, whose coder adds a file, so a
 //! feature has a pull request in the backend and one in the root.
 
-use crate::common::{Daemon, WAIT};
+use crate::common::{self, Daemon, WAIT};
 use loop_manager_testkit::openai::{Provider, Reply};
 use serde_json::{Value, json};
 use std::{
@@ -82,13 +82,10 @@ fn lay_out(dir: &Path, fakes: &[(&str, &Provider)]) {
     fs::write(dir.join("config/loop-manager/config.toml"), config).unwrap();
     let daemon = dir.join("bin/loop-manager");
     fs::create_dir_all(dir.join("bin")).unwrap();
-    let wrapper = format!(
-        "#!/bin/sh\nGITHUB_TOKEN=gate-token exec {} \"$@\"\n",
-        env!("CARGO_BIN_EXE_loop-manager")
-    );
+    let wrapper = format!("#!/bin/sh\nGITHUB_TOKEN=gate-token exec {} \"$@\"\n", common::EXE);
     fs::write(&daemon, wrapper).unwrap();
     run(Command::new("chmod").arg("+x").arg(&daemon));
-    run(Command::new("br").args(["init", "-q"]).current_dir(&root));
+    run(common::program("br").args(["init", "-q"]).current_dir(&root));
     for repo in REPOS {
         let (remote, clone) = (dir.join("remotes").join(format!("{repo}.git")), demo.join(repo));
         run(Command::new("git")
@@ -106,7 +103,7 @@ fn lay_out(dir: &Path, fakes: &[(&str, &Provider)]) {
     fs::create_dir_all(&tools).unwrap();
     fs::write(tools.join("gh"), include_str!("fake_gh.sh")).unwrap();
     run(Command::new("chmod").arg("+x").arg(tools.join("gh")));
-    std::os::unix::fs::symlink(env!("CARGO_BIN_EXE_loop-manager"), tools.join("loop-manager")).unwrap();
+    std::os::unix::fs::symlink(common::EXE, tools.join("loop-manager")).unwrap();
 }
 
 /// The PATH of the daemon (`common::command`): the test's tools first.
@@ -117,7 +114,7 @@ fn path(dir: &Path) -> std::ffi::OsString {
 
 impl Gate {
     async fn start() -> Self {
-        let loop_manager = env!("CARGO_BIN_EXE_loop-manager");
+        let loop_manager = common::EXE;
         let tools = tempfile::tempdir().unwrap();
         // The planner files a bead for the backend, and refuses the feature once `refuse` exists.
         let refuse = tools.path().join("refuse");

@@ -2,13 +2,12 @@
 //! docs/acceptance.md criteria 2 and 9): the session calls the finisher with its Bash tool, the run passes. No model,
 //! no account.
 
-use crate::common::Daemon;
+use crate::common::{self, Daemon};
 use loop_manager_testkit::anthropic::{Provider, Reply};
 use serde_json::{Value, json};
 use std::{
     fs,
     path::Path,
-    process::Command,
     time::{Duration, Instant},
 };
 
@@ -61,7 +60,7 @@ async fn daemon_with(provider: &Provider, orchestrator: &str, agent: &str) -> Da
 
 #[tokio::test(flavor = "multi_thread")]
 async fn a_claude_session_that_calls_the_finisher_passes_its_run() {
-    let finish = format!("{} finish pass --summary built", env!("CARGO_BIN_EXE_loop-manager"));
+    let finish = format!("{} finish pass --summary built", common::EXE);
     let provider = Provider::start(vec![Reply::Bash(finish), Reply::Text("Done.".into())]).await;
     let d = daemon(&provider).await;
     let run = d.create("build", None).await;
@@ -76,10 +75,7 @@ async fn a_claude_session_that_calls_the_finisher_passes_its_run() {
 #[tokio::test(flavor = "multi_thread")]
 async fn the_live_view_of_a_run_relays_its_session_and_ends_with_the_run() {
     // The command sleeps first, so the view taps the session before the tool result comes back.
-    let finish = format!(
-        "sleep 1 && {} finish pass --summary built",
-        env!("CARGO_BIN_EXE_loop-manager")
-    );
+    let finish = format!("sleep 1 && {} finish pass --summary built", common::EXE);
     let provider = Provider::start(vec![Reply::Bash(finish), Reply::Text("Done.".into())]).await;
     let d = daemon(&provider).await;
     let run = d.create("build", None).await;
@@ -109,10 +105,7 @@ async fn the_live_view_of_a_run_relays_its_session_and_ends_with_the_run() {
 #[tokio::test(flavor = "multi_thread")]
 async fn run_watch_on_a_going_run_prints_its_session_and_exits_with_the_run() {
     // The command sleeps first, so `run watch` attaches while the turn is still going.
-    let finish = format!(
-        "sleep 2 && {} finish pass --summary built",
-        env!("CARGO_BIN_EXE_loop-manager")
-    );
+    let finish = format!("sleep 2 && {} finish pass --summary built", common::EXE);
     let provider = Provider::start(vec![Reply::Bash(finish), Reply::Text("Done.".into())]).await;
     let d = daemon(&provider).await;
     let run = d.create("build", None).await;
@@ -121,7 +114,7 @@ async fn run_watch_on_a_going_run_prints_its_session_and_exits_with_the_run() {
         assert!(Instant::now() < deadline, "the session did not start");
         tokio::time::sleep(Duration::from_millis(20)).await;
     }
-    let mut watch = Command::new(env!("CARGO_BIN_EXE_loop-manager"))
+    let mut watch = common::loop_manager()
         .args(["run", "watch", &run])
         .env("LOOP_MANAGER_SOCKET", d.socket())
         .stdout(std::process::Stdio::piped())
@@ -152,7 +145,7 @@ async fn a_session_calls_the_mcp_of_the_daemon_over_tcp_with_its_token() {
         .local_addr()
         .unwrap()
         .port();
-    let finish = format!("{} finish pass --summary built", env!("CARGO_BIN_EXE_loop-manager"));
+    let finish = format!("{} finish pass --summary built", common::EXE);
     let replies = vec![
         Reply::Mcp("list_formulas".into()),
         Reply::Bash(finish),
@@ -205,7 +198,7 @@ fn br(project: &Path, args: &[&str]) -> String {
 
 /// br by hand, filing new beads with the id prefix `prefix` (a rig's) if any.
 fn br_in(project: &Path, prefix: Option<&str>, args: &[&str]) -> String {
-    let mut br = Command::new("br");
+    let mut br = common::program("br");
     if let Some(prefix) = prefix {
         br.env("BD_ISSUE_PREFIX", prefix);
     }
@@ -265,7 +258,7 @@ fn of_run(run: &str, dir: &Path) -> Vec<(i32, String)> {
 /// and the resumed session closes it; the session has the path of the tracker's database.
 #[tokio::test(flavor = "multi_thread")]
 async fn a_claude_killed_in_a_command_is_resumed_and_its_run_passes() {
-    let finish = format!("{} finish pass --summary built", env!("CARGO_BIN_EXE_loop-manager"));
+    let finish = format!("{} finish pass --summary built", common::EXE);
     // The resumed session sleeps a while first: time to look at the claim between the death and the outcome.
     let plan = vec![
         Reply::Bash("printf %s \"$BEADS_DIR\" > beads-dir; sleep 20".into()),
@@ -329,7 +322,7 @@ async fn a_claude_killed_in_a_command_is_resumed_and_its_run_passes() {
 /// declared and the turn has ended, so the command is stopped and the run passes without waiting for it.
 #[tokio::test(flavor = "multi_thread")]
 async fn a_finisher_called_with_a_background_command_running_stops_it() {
-    let finish = format!("{} finish pass --summary built", env!("CARGO_BIN_EXE_loop-manager"));
+    let finish = format!("{} finish pass --summary built", common::EXE);
     let plan = vec![
         Reply::Background("sleep 3 && touch background-done".into()),
         Reply::Bash(finish),

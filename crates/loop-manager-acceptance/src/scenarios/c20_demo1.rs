@@ -7,7 +7,7 @@ use crate::{
     checks::root,
     daemon::{Daemon, tree, write},
 };
-use loop_manager_testkit::{anthropic, openai};
+use loop_manager_testkit::{anthropic, openai, without_outer_session};
 use serde_json::{Value, json};
 use std::{fs, path::Path, process::Command, sync::Arc, time::Duration};
 
@@ -63,7 +63,10 @@ fn demo(root: &Path, claude: [(&str, String); 2], codex: String) {
         (demo.clone(), ["git", "init", "-q"]),
         (demo.join("root"), ["br", "init", "-q"]),
     ] {
-        let status = Command::new(args[0]).args(&args[1..]).current_dir(dir).status();
+        let status = without_outer_session(&mut Command::new(args[0]))
+            .args(&args[1..])
+            .current_dir(dir)
+            .status();
         assert!(status.is_ok_and(|s| s.success()), "{args:?}");
     }
 }

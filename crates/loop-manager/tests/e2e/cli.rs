@@ -1,6 +1,6 @@
 //! The CLI against a real `loop-manager daemon` (docs/api/frontends.md): a thin client with JSON output.
 
-use crate::common::Daemon;
+use crate::common::{self, Daemon};
 use serde_json::{Value, json};
 use std::{
     fs,
@@ -10,7 +10,7 @@ use std::{
 impl Daemon {
     /// `loop-manager <args>` on this daemon's socket and its config directory.
     fn cli(&self, args: &[&str], env: &[(&str, &str)]) -> Output {
-        let mut command = Command::new(env!("CARGO_BIN_EXE_loop-manager"));
+        let mut command = common::loop_manager();
         command
             .args(args)
             .env("LOOP_MANAGER_SOCKET", self.socket())
@@ -165,6 +165,30 @@ async fn the_finisher_gives_up_on_an_unreachable_daemon_with_tempfail() {
     let out = d.cli(&["finish", "pass", "--summary", "done"], &env);
     assert_eq!(out.status.code(), Some(75));
     assert!(String::from_utf8_lossy(&out.stderr).contains("unreachable for 1 s"));
+}
+
+/// The tests may run inside a session of an outer loop-manager (docs/agents/rules-tests.md): its socket, held here by a
+/// live listener, and its run, token and tracker reach neither the daemon under test nor its CLI.
+#[test]
+fn the_cli_tests_pass_inside_a_session_of_an_outer_loop_manager() {
+    let dir = tempfile::tempdir().unwrap();
+    let socket = dir.path().join("outer.sock");
+    let _outer = std::os::unix::net::UnixListener::bind(&socket).unwrap();
+    let tests = [
+        "cli::runs_and_gates_by_hand_from_the_cli",
+        "cli::the_finisher_reports_the_answer_and_needs_the_session_environment",
+    ];
+    let out = Command::new(std::env::current_exe().unwrap())
+        .args(tests)
+        .args(["--exact", "--quiet"])
+        .env("LOOP_MANAGER_SOCKET", &socket)
+        .env("LOOP_MANAGER_RUN", "run_outer")
+        .env("LOOP_MANAGER_ATTEMPT_TOKEN", "bogus")
+        .env("BEADS_DIR", "/nonexistent")
+        .output()
+        .unwrap();
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(out.status.success() && stdout.contains(" 2 passed"), "{stdout}");
 }
 
 /// The config by hand (docs/api/frontends.md): lists, the effective config of an agent with the layer of every value, a

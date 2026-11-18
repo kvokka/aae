@@ -1,6 +1,6 @@
 //! The br tracker of a project on a real `loop-manager daemon` and the pinned br (docs/design/tracker-br.md; criteria 11, 16).
 
-use crate::common::Daemon;
+use crate::common::{self, Daemon};
 use serde_json::{Value, json};
 use std::{path::Path, process::Command, time::Duration};
 
@@ -11,7 +11,7 @@ fn br(project: &Path, args: &[&str]) -> String {
 
 /// br by hand, filing new beads with the id prefix `prefix` (a rig's) if any.
 fn br_in(project: &Path, prefix: Option<&str>, args: &[&str]) -> String {
-    let mut br = Command::new("br");
+    let mut br = common::program("br");
     if let Some(prefix) = prefix {
         br.env("BD_ISSUE_PREFIX", prefix);
     }
@@ -105,7 +105,7 @@ async fn a_bead_written_by_hand_is_seen_and_a_run_on_it_claims_and_closes_it_in_
         (&json!("closed"), &json!(format!("loop-manager:{run}")))
     );
     // Nothing is ready now: the CLI says so and exits 3.
-    let out = Command::new(env!("CARGO_BIN_EXE_loop-manager"))
+    let out = common::loop_manager()
         .args([
             "run",
             "start",

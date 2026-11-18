@@ -1,7 +1,7 @@
 //! `loop-manager run wait` and `loop-manager run start` from a session against a real `loop-manager daemon` (docs/api/frontends.md): the outcomes
 //! on the event stream, the exit codes, a restart of the daemon in between; the session's attempt token checked.
 
-use crate::common::{Daemon, WAIT};
+use crate::common::{self, Daemon, WAIT};
 use serde_json::Value;
 use std::{
     fs,
@@ -18,12 +18,8 @@ fn formulas(dir: &std::path::Path) {
 }
 
 fn loop_manager(d: &Daemon, args: &[&str]) -> Command {
-    let mut command = Command::new(env!("CARGO_BIN_EXE_loop-manager"));
-    command
-        .args(args)
-        .env("LOOP_MANAGER_SOCKET", d.socket())
-        .env_remove("LOOP_MANAGER_RUN")
-        .env_remove("LOOP_MANAGER_ATTEMPT_TOKEN");
+    let mut command = common::loop_manager();
+    command.args(args).env("LOOP_MANAGER_SOCKET", d.socket());
     command
 }
 

@@ -1,14 +1,9 @@
 //! `loop-manager doctor` and the service files on fake harness, mise and br binaries (docs/design/config.md,
 //! docs/guide/install.md).
 
-use crate::common::FILES;
+use crate::common::{self, FILES};
 use serde_json::Value;
-use std::{
-    fs,
-    os::unix::fs::PermissionsExt,
-    path::Path,
-    process::{Command, Output},
-};
+use std::{fs, os::unix::fs::PermissionsExt, path::Path, process::Output};
 
 /// An executable script at `path`.
 fn script(path: &Path, body: &str) {
@@ -45,7 +40,7 @@ fn lm(dir: &Path, args: &[&str]) -> Output {
 }
 
 fn lm_env(dir: &Path, args: &[&str], env: &[(&str, &str)]) -> Output {
-    Command::new(env!("CARGO_BIN_EXE_loop-manager"))
+    common::loop_manager()
         .args(args)
         .env("HOME", dir)
         .env("XDG_CONFIG_HOME", dir.join("config"))
@@ -235,7 +230,7 @@ fn service_files_run_this_binary_with_the_config() {
     let dir = tree("");
     let config = dir.path().join("config/loop-manager/config.toml");
     let config = config.to_str().unwrap();
-    let exe = env!("CARGO_BIN_EXE_loop-manager");
+    let exe = common::EXE;
     let systemd = lm(dir.path(), &["daemon", "--config", config, "--service", "systemd"]);
     let unit = String::from_utf8(systemd.stdout).unwrap();
     assert!(systemd.status.success());
@@ -375,7 +370,7 @@ async fn with_no_config_file_the_defaults_are_named() {
 fn a_rig_with_the_prefix_of_the_br_database_is_warned_about() {
     let dir = tree("");
     let shop = dir.path().join("config/loop-manager/shop");
-    let init = Command::new("br")
+    let init = common::program("br")
         .args(["init", "--prefix", "w", "-q"])
         .env("BEADS_DIR", shop.join(".beads"))
         .env("RUST_LOG", "error")

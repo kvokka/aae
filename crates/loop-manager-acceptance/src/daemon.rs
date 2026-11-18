@@ -232,10 +232,11 @@ fn spawn(env: &Env, dir: &Path, home: &Path) -> Child {
         .unwrap()
 }
 
-/// `loop-manager` with the XDG directories in `dir`.
+/// `loop-manager` with the XDG directories in `dir`, without the environment of an outer loop-manager session the
+/// runner may run in.
 fn command(env: &Env, dir: &Path, home: &Path) -> Command {
     let mut command = Command::new(&env.loop_manager);
-    command
+    loop_manager_testkit::without_outer_session(&mut command)
         .env("HOME", home)
         .env("XDG_CONFIG_HOME", dir.join("config"))
         .env("XDG_CACHE_HOME", dir.join("cache"))

@@ -1,7 +1,8 @@
 //! The CLI without a daemon (docs/api/frontends.md): `config check` and `config explain` of a file.
 
+use crate::common;
 use serde_json::Value;
-use std::{fs, process::Command};
+use std::fs;
 
 /// `config check` and `config explain` of a file named with `--config` load it as the daemon would, so they need none
 /// (docs/design/config.md).
@@ -30,7 +31,8 @@ fn the_config_is_checked_and_explained_without_a_daemon() {
     fs::write(&broken, "projects = [\"shop\"\n").unwrap();
     let broken = broken.to_str().unwrap();
     let loop_manager = |args: &[&str]| {
-        (Command::new(env!("CARGO_BIN_EXE_loop-manager")).args(args))
+        common::loop_manager()
+            .args(args)
             .env("LOOP_MANAGER_SOCKET", "/nonexistent/loop-manager.sock")
             .env("HOME", dir.path())
             .env("XDG_CONFIG_HOME", dir.path().join("config"))
@@ -96,7 +98,7 @@ fn the_config_is_checked_and_explained_without_a_daemon() {
         !out.status.success() && text.contains("/nonexistent/config.toml"),
         "{text}"
     );
-    let out = (Command::new(env!("CARGO_BIN_EXE_loop-manager")))
+    let out = common::loop_manager()
         .args([
             "config",
             "explain",
@@ -117,7 +119,7 @@ fn the_config_is_checked_and_explained_without_a_daemon() {
     // A reader that went away (`loop-manager config explain | head -1`): a quiet SIGPIPE exit, not a panic.
     let (reader, writer) = std::io::pipe().unwrap();
     drop(reader);
-    let out = (Command::new(env!("CARGO_BIN_EXE_loop-manager")))
+    let out = common::loop_manager()
         .args(["config", "explain", "--project", "shop", "--agent", "dev"])
         .args(["--config", &config])
         .stdout(writer)

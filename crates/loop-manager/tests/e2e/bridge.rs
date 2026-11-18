@@ -1,6 +1,7 @@
 //! `loop-manager mcp-bridge` (docs/design/config.md) as the daemon runs it: the real binary in front of the stdio server of
 //! `loop_manager_testkit::mcp`, which `cargo nextest run` builds as the `mcp-probe` binary next to `loop-manager`.
 
+use crate::common;
 use serde_json::{Value, json};
 use std::{
     io::{Read, Write},
@@ -36,7 +37,7 @@ fn start(command: Option<&[&str]>) -> Bridge {
 fn start_with(options: &[&str], command: Option<&[&str]>) -> Bridge {
     let dir = tempfile::tempdir().unwrap();
     let log = dir.path().join("log");
-    let probe = Path::new(env!("CARGO_BIN_EXE_loop-manager")).with_file_name("mcp-probe");
+    let probe = Path::new(common::EXE).with_file_name("mcp-probe");
     assert!(
         probe.exists(),
         "no {}: build it with `cargo build -p loop-manager-testkit`",
@@ -44,7 +45,7 @@ fn start_with(options: &[&str], command: Option<&[&str]>) -> Bridge {
     );
     let own = [probe.to_str().unwrap(), "--stdio", log.to_str().unwrap()];
     let port = TcpListener::bind("127.0.0.1:0").unwrap().local_addr().unwrap().port();
-    let child = Command::new(env!("CARGO_BIN_EXE_loop-manager"))
+    let child = common::loop_manager()
         .arg("mcp-bridge")
         .args(options)
         .arg("--")

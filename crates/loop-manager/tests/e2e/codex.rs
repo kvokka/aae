@@ -2,7 +2,7 @@
 //! (docs/harness-updates.md, criteria 2 and 9): the thread calls the finisher with `exec_command`, the run passes. No
 //! model, no account.
 
-use crate::common::{Daemon, schema::check};
+use crate::common::{self, Daemon, schema::check};
 use loop_manager_testkit::openai::{Provider, Reply};
 use serde_json::Value;
 use std::{
@@ -61,7 +61,7 @@ async fn a_codex_thread_calls_the_mcp_of_the_daemon_over_tcp() {
         .local_addr()
         .unwrap()
         .port();
-    let finish = format!("{} finish pass --summary built", env!("CARGO_BIN_EXE_loop-manager"));
+    let finish = format!("{} finish pass --summary built", common::EXE);
     let replies = vec![
         Reply::Mcp("list_formulas".into()),
         Reply::Command(finish),
@@ -88,7 +88,7 @@ async fn a_codex_thread_calls_the_mcp_of_the_daemon_over_tcp() {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn a_codex_thread_that_calls_the_finisher_passes_its_run() {
-    let finish = format!("{} finish pass --summary built", env!("CARGO_BIN_EXE_loop-manager"));
+    let finish = format!("{} finish pass --summary built", common::EXE);
     let provider = Provider::start(vec![Reply::Command(finish), Reply::Text("Done.".into())]).await;
     let d = daemon(&provider).await;
     let run = d.create("build", None).await;
@@ -107,7 +107,7 @@ async fn a_codex_thread_that_calls_the_finisher_passes_its_run() {
 /// the turn.
 #[tokio::test(flavor = "multi_thread")]
 async fn a_codex_agent_with_a_skill_inheriting_the_host_sees_the_hosts_files() {
-    let finish = format!("{} finish pass --summary built", env!("CARGO_BIN_EXE_loop-manager"));
+    let finish = format!("{} finish pass --summary built", common::EXE);
     let provider = Provider::start(vec![Reply::Command(finish), Reply::Text("Done.".into())]).await;
     let skill = tempfile::tempdir().unwrap();
     let text = "---\nname: mail\ndescription: Sends the zq7-mail marker.\n---\nSend it.\n";
@@ -151,7 +151,7 @@ fn processes(dir: &Path, needle: &str) -> Vec<i32> {
 /// resumed in a new app-server and the run reaches its outcome.
 #[tokio::test(flavor = "multi_thread")]
 async fn a_codex_killed_in_a_command_is_resumed_and_its_run_passes() {
-    let finish = format!("{} finish pass --summary built", env!("CARGO_BIN_EXE_loop-manager"));
+    let finish = format!("{} finish pass --summary built", common::EXE);
     let plan = vec![Reply::Command("sleep 20".into()), Reply::Task(finish)];
     let provider = Provider::start(plan).await;
     let d = daemon(&provider).await;
@@ -198,7 +198,7 @@ async fn a_codex_killed_in_a_command_is_resumed_and_its_run_passes() {
 /// app-server, finds the prompt delivered by its `clientId` and reconciles; the run passes.
 #[tokio::test(flavor = "multi_thread")]
 async fn a_codex_thread_is_resumed_after_a_daemon_restart_and_its_run_passes() {
-    let finish = format!("{} finish pass --summary built", env!("CARGO_BIN_EXE_loop-manager"));
+    let finish = format!("{} finish pass --summary built", common::EXE);
     let plan = vec![Reply::Command("sleep 20".into()), Reply::Task(finish)];
     let provider = Provider::start(plan).await;
     let mut d = daemon(&provider).await;

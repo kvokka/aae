@@ -1,8 +1,8 @@
 //! The `if` of a step against a real `loop-manager daemon` (docs/design/config.md, docs/api/frontends.md): a step whose `if`
 //! does not hold is skipped, and `loop-manager run watch` names it.
 
-use crate::common::{Daemon, WAIT};
-use std::{fs, process::Command};
+use crate::common::{self, Daemon, WAIT};
+use std::fs;
 
 #[tokio::test]
 async fn a_skipped_step_shows_in_run_watch() {
@@ -18,9 +18,9 @@ async fn a_skipped_step_shows_in_run_watch() {
     assert!(view["steps"].get("notify").is_none(), "{view}");
     assert_eq!(view["outcome"]["summary"], "exit 0", "{view}");
     // The run is over, so the stream ends with its history.
-    let out = Command::new("timeout")
+    let out = common::program("timeout")
         .arg(WAIT.as_secs().to_string())
-        .arg(env!("CARGO_BIN_EXE_loop-manager"))
+        .arg(common::EXE)
         .args(["run", "watch", &run])
         .env("LOOP_MANAGER_SOCKET", d.socket())
         .env("HOME", d.dir.path())

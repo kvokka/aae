@@ -1,6 +1,7 @@
 //! The addon guides (docs/guide/addons.md, docs/guide/addon-development.md): the files their examples show load as
 //! the config they describe, and the hooks of the example addon answer as the guide says.
 
+use crate::common;
 use std::{fs, os::unix::fs::PermissionsExt, path::Path, process::Command};
 
 fn repo() -> &'static Path {
@@ -33,7 +34,7 @@ fn blocks(guide: &str) -> Vec<(String, String, String)> {
 
 fn loop_manager(home: &Path, args: &[&str]) -> String {
     let config = home.join(".config/loop-manager/config.toml");
-    let out = Command::new(env!("CARGO_BIN_EXE_loop-manager"))
+    let out = common::loop_manager()
         .args(args)
         .arg("--config")
         .arg(config)

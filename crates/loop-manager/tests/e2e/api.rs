@@ -1,6 +1,6 @@
 //! The HTTP API on a real `loop-manager daemon` (docs/api/frontends.md, docs/guide/install.md).
 
-use crate::common::{Daemon, WAIT, command, spawn};
+use crate::common::{self, Daemon, WAIT, command, spawn};
 use loop_manager_front::client::{ClientError, SseEvent};
 use serde_json::{Value, json};
 use std::os::unix::fs::PermissionsExt;
@@ -310,7 +310,7 @@ async fn a_restart_starts_the_daemon_again_in_the_same_process() {
     let d = Daemon::start(|dir| {
         // A binary of its own, to replace on disk before the restart, as an upgrade does.
         fs::create_dir_all(dir.join("bin")).unwrap();
-        fs::copy(env!("CARGO_BIN_EXE_loop-manager"), dir.join("bin/loop-manager")).unwrap();
+        fs::copy(common::EXE, dir.join("bin/loop-manager")).unwrap();
         let brief = "name = \"brief\"\n[[step]]\nkind = \"exec\"\ncommand = [\"sleep\", \"1\"]\ntimeout = \"10s\"\n";
         fs::write(dir.join("config/loop-manager/shop/formulas/brief.toml"), brief).unwrap();
     })
@@ -328,7 +328,7 @@ async fn a_restart_starts_the_daemon_again_in_the_same_process() {
     let brief = d.create("brief", None).await;
     d.until_state(&brief, "running").await;
     let bin = d.dir.path().join("bin");
-    fs::copy(env!("CARGO_BIN_EXE_loop-manager"), bin.join("loop-manager.new")).unwrap();
+    fs::copy(common::EXE, bin.join("loop-manager.new")).unwrap();
     fs::rename(bin.join("loop-manager.new"), bin.join("loop-manager")).unwrap();
     d.post("/v1/daemon/restart?timeout_s=30", json!(null), None)
         .await

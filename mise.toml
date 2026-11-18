@@ -32,6 +32,8 @@ run = [
   "scripts/budget.sh",
   # The repository is public: no absolute home paths of the machine the demos or tests ran on.
   "! git grep -nE '/(home|Users)/[A-Za-z]' -- . ':!.loop'",
+  # Tests may run inside a loop-manager session: they start the binary only through `common` (docs/agents/rules-tests.md).
+  "! git grep -n 'CARGO_BIN_EXE_loop-manager' -- crates ':!crates/loop-manager/tests/common'",
 ]
 
 [tasks.build-all]

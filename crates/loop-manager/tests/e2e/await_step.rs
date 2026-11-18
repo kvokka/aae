@@ -1,15 +1,12 @@
 //! An `await` step from the CLI against a real `loop-manager daemon` (docs/design/config.md, docs/api/frontends.md): the run
 //! waits until an outcome is given from outside.
 
-use crate::common::Daemon;
+use crate::common::{self, Daemon};
 use serde_json::{Value, json};
-use std::{
-    fs,
-    process::{Command, Output},
-};
+use std::{fs, process::Output};
 
 fn cli(d: &Daemon, args: &[&str]) -> Output {
-    Command::new(env!("CARGO_BIN_EXE_loop-manager"))
+    common::loop_manager()
         .args(args)
         .env("LOOP_MANAGER_SOCKET", d.socket())
         .env("HOME", d.dir.path())

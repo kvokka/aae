@@ -2,7 +2,7 @@
 //! (docs/design/config.md): the session of a formula with `worktree = true` works in its own git worktree, which goes
 //! once the run passes.
 
-use crate::common::Daemon;
+use crate::common::{self, Daemon};
 use loop_manager_testkit::anthropic::{Provider, Reply};
 use std::{
     fs,
@@ -33,11 +33,7 @@ fn git(dir: &Path, args: &[&str]) -> String {
 async fn a_claude_session_of_a_worktree_formula_works_in_its_worktree() {
     let out = tempfile::tempdir().unwrap();
     let cwd = out.path().join("cwd");
-    let finish = format!(
-        "pwd > {} && {} finish pass --summary built",
-        cwd.display(),
-        env!("CARGO_BIN_EXE_loop-manager")
-    );
+    let finish = format!("pwd > {} && {} finish pass --summary built", cwd.display(), common::EXE);
     let provider = Provider::start(vec![Reply::Bash(finish), Reply::Text("Done.".into())]).await;
     let base_url = provider.base_url();
     let d = Daemon::start(|dir| {

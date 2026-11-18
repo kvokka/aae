@@ -2,14 +2,9 @@
 //! claude and codex, and its hook counts the compactions of a session, keeps their label on the bead and fails the
 //! run past the budget, on the hook inputs of both harnesses (addons/context-budget/README.md).
 
+use crate::common;
 use serde_json::{Value, json};
-use std::{
-    fs,
-    io::Write,
-    os::unix::fs::PermissionsExt,
-    path::Path,
-    process::{Command, Stdio},
-};
+use std::{fs, io::Write, os::unix::fs::PermissionsExt, path::Path, process::Stdio};
 
 fn addon() -> std::path::PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../../addons/context-budget")
@@ -22,7 +17,7 @@ fn explain(dir: &Path, agent: &str) -> Value {
 
 /// `loop-manager config explain --json` of `agent` of `project` in `config`, with `dir` for the home and state of `loop-manager`.
 fn explain_in(dir: &Path, config: &Path, project: &str, agent: &str) -> Value {
-    let out = Command::new(env!("CARGO_BIN_EXE_loop-manager"))
+    let out = common::loop_manager()
         .args(["--json", "config", "explain", "--config"])
         .arg(config)
         .args(["--project", project, "--agent", agent])
@@ -122,14 +117,14 @@ fn hook(dir: &Path, bead: Option<&str>, args: &[&str], input: &Value) -> String 
 }
 
 fn run_hook(dir: &Path, bead: Option<&str>, args: &[&str], input: &Value) -> std::process::Output {
-    let mut command = Command::new(addon().join("hooks/budget"));
+    let mut command = common::program(addon().join("hooks/budget"));
     command
         .args(args)
         .current_dir(dir)
         .env("BEADS_DIR", dir.join(".beads"))
         .env("RUST_LOG", "error");
     let path = format!("{}:{}", dir.join("bin").display(), std::env::var("PATH").unwrap());
-    command.env("PATH", path).env_remove("LOOP_MANAGER_BEAD");
+    command.env("PATH", path);
     if let Some(bead) = bead {
         command.env("LOOP_MANAGER_BEAD", bead);
     }
@@ -153,7 +148,7 @@ fn finisher(dir: &Path, answer: &str) {
 }
 
 fn labels(dir: &Path, bead: &str) -> Value {
-    let out = Command::new("br")
+    let out = common::program("br")
         .args(["label", "list", bead, "--json"])
         .current_dir(dir)
         .env("BEADS_DIR", dir.join(".beads"))
@@ -167,7 +162,7 @@ fn past_the_budget_the_hook_fails_the_run_and_stops_the_session_on_the_input_of_
     let tmp = tempfile::tempdir().unwrap();
     let d = tmp.path();
     let br = |args: &[&str]| {
-        let out = Command::new("br")
+        let out = common::program("br")
             .args(args)
             .current_dir(d)
             .env("RUST_LOG", "error")

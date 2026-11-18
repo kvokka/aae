@@ -9,7 +9,10 @@ use crate::{
     checks::root,
     daemon::{Daemon, tree, write},
 };
-use loop_manager_testkit::openai::{Provider, Reply};
+use loop_manager_testkit::{
+    openai::{Provider, Reply},
+    without_outer_session,
+};
 use serde_json::{Value, json};
 use std::{fs, path::Path, process::Command, sync::Arc, time::Duration};
 
@@ -72,7 +75,10 @@ fn demo(root: &Path, fakes: [(&str, &Provider); 3]) {
         (demo.clone(), ["git", "init", "-q"]),
         (demo.join("root"), ["br", "init", "-q"]),
     ] {
-        let status = Command::new(args[0]).args(&args[1..]).current_dir(dir).status();
+        let status = without_outer_session(&mut Command::new(args[0]))
+            .args(&args[1..])
+            .current_dir(dir)
+            .status();
         assert!(status.is_ok_and(|s| s.success()), "{args:?}");
     }
 }

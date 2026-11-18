@@ -1,11 +1,11 @@
 //! A secret given by reference (docs/design/config.md, "Environment values"): the daemon resolves `${NAME}` when the
 //! process starts and keeps it nowhere.
 
-use crate::common::{Daemon, WAIT, lock_once_journalled};
+use crate::common::{self, Daemon, WAIT, lock_once_journalled};
 use std::{
     fs,
     path::Path,
-    process::{Command, Stdio},
+    process::Stdio,
     time::{Duration, Instant},
 };
 
@@ -70,7 +70,7 @@ async fn a_secret_reaches_the_step_and_is_stored_nowhere() {
     assert_eq!(fs::read_to_string(&out).unwrap(), MARKER, "the step got the secret");
     fs::remove_file(&out).unwrap();
     let cli = |args: &[&str]| {
-        let out = Command::new(env!("CARGO_BIN_EXE_loop-manager"))
+        let out = common::loop_manager()
             .args(args)
             .env("LOOP_MANAGER_SOCKET", d.socket())
             .env("HOME", d.dir.path())

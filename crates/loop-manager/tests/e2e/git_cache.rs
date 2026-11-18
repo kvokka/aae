@@ -2,6 +2,7 @@
 //! revision, kept there without the network, removed by `loop-manager cache clear` (docs/design/config.md,
 //! docs/guide/addons.md).
 
+use crate::common;
 use std::{
     collections::BTreeSet,
     fs,
@@ -59,7 +60,7 @@ fn commit(dir: &Path, repo: &Path, files: &[(&str, &str)]) -> String {
 
 /// `loop-manager` with `args`: whether it succeeded, its stdout and its stderr.
 fn loop_manager(dir: &Path, args: &[&str]) -> (bool, String, String) {
-    let mut command = Command::new(env!("CARGO_BIN_EXE_loop-manager"));
+    let mut command = common::loop_manager();
     command.args(args);
     let out = isolated(command, dir);
     let text = |b: &[u8]| String::from_utf8_lossy(b).into_owned();
