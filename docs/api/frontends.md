@@ -80,7 +80,7 @@ Code: `crates/loop-manager-front/src/cli/`. The CLI is a thin client of the HTTP
   budget, and `loop-manager run wait` prints nothing until it ends, so a wait longer than `tool_silence` fails the
   attempt as `stall`. Either way, wait in a loop of `loop-manager run wait <runs> --timeout 100s` (exit 124: wait
   again), or raise `tool_silence` above the longest wait. The whole wait still counts against the step's `timeout`
-  (default 45 min).
+  (default 4 h for an `ai` step).
 - `loop-manager run resolve <run> <step> pass|fail [--summary <text>] [--data <json>|@<file>]`
   (`POST /v1/runs/{id}/resolve`) gives the outcome of the `await` step a run waits on
   ([formula](../design/config.md#formula-formulasfiletoml)); a run that does not wait on that step refuses it with

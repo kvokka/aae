@@ -648,7 +648,7 @@ name = "implement"                  # optional (default: the position, "1", "2",
 kind = "ai"                     # ai: agent (whose prompt.template.md it gets); exec: command;
                                 # drain, formula: formula; await: none
 agent = "implementer"
-timeout = "45m"                     # optional
+timeout = "4h"                      # optional (default 4h)
 model = "opus"                      # optional, ai steps only: layer 8, the launch settings `harness`,
                                     # `model`, `effort`
 native.claude = { permission_mode = "dontAsk" }  # optional, ai steps only: layer 8, merged by key
@@ -657,6 +657,7 @@ native.claude = { permission_mode = "dontAsk" }  # optional, ai steps only: laye
 name = "test"
 kind = "exec"
 command = ["cargo", "test"]
+timeout = "45m"                     # optional (default 45m)
 inherit_env = true                  # optional, exec steps only: over `[exec]` of the project and the orchestrator
 env = { RUST_LOG = "warn" }         # optional, exec steps only: merged by key over theirs
 back_to = "implement"               # optional, ai, exec and await steps: a check; on fail, back to this earlier step

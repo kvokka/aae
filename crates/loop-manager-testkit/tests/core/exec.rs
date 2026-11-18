@@ -20,14 +20,14 @@ fn check(script: &str) -> (World, Create) {
 
 /// [`check`] with the `[inputs]` table `inputs`, run by `hooks`.
 fn check_with(inputs: &str, script: &str, hooks: ExecHooks) -> (World, Create) {
-    check_within("2s", inputs, script, hooks)
+    check_within(Some("2s"), inputs, script, hooks)
 }
 
-/// [`check_with`] with the step timeout `timeout`.
-fn check_within(timeout: &str, inputs: &str, script: &str, hooks: ExecHooks) -> (World, Create) {
+/// [`check_with`] with the step timeout `timeout`, or none.
+fn check_within(timeout: Option<&str>, inputs: &str, script: &str, hooks: ExecHooks) -> (World, Create) {
+    let timeout = timeout.map(|t| format!("timeout = \"{t}\"\n")).unwrap_or_default();
     let formula = format!(
-        "name = \"check\"\n[inputs]\n{inputs}[[step]]\nkind = \"exec\"\ncommand = [\"sh\", \"-c\", {}]\n\
-         timeout = \"{timeout}\"\n",
+        "name = \"check\"\n[inputs]\n{inputs}[[step]]\nkind = \"exec\"\ncommand = [\"sh\", \"-c\", {}]\n{timeout}",
         json!(script)
     );
     let w = world_with(&[("shop/formulas/check.toml", &formula)], Arc::new(hooks));
@@ -189,10 +189,23 @@ async fn a_command_past_its_timeout_is_a_runaway() {
     assert_eq!(failed["failure"]["kind"], "runaway_turn");
 }
 
+/// An exec step without a `timeout` has 45 minutes (docs/design/contracts.md 6.1), not the 4 hours of an `ai` step.
+#[tokio::test]
+async fn an_exec_step_without_a_timeout_has_45_minutes() {
+    let (w, create) = check_within(None, "", "true", ExecHooks::default());
+    let run = w.start_run(create).await;
+    assert_eq!(w.run_end(&run).await.0, "run.passed");
+    let db = rusqlite::Connection::open(w.dir.path().join("state.db")).unwrap();
+    let timeout: i64 = db
+        .query_row("SELECT timeout_ms FROM runs WHERE id = ?1", [&run], |r| r.get(0))
+        .unwrap();
+    assert_eq!(timeout, 45 * 60_000);
+}
+
 #[tokio::test]
 async fn cancelling_the_run_stops_the_command() {
     // Far past the wait below: the command's own timeout must not stand in for the stop.
-    let (w, create) = check_within("60s", "", "echo $$ > pid; exec sleep 30", ExecHooks::default());
+    let (w, create) = check_within(Some("60s"), "", "echo $$ > pid; exec sleep 30", ExecHooks::default());
     let pid_file = w.journal.parent().unwrap().join("shop/web/pid");
     let run = w.start_run(create).await;
     let started = Instant::now();

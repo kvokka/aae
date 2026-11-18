@@ -9,7 +9,10 @@ use rusqlite::Connection;
 use serde_json::{Map, Value, json};
 use std::path::PathBuf;
 
-pub(super) const STEP_TIMEOUT_MS: i64 = 45 * 60_000;
+/// The time an `ai` step has by default: a ceiling, a hung session is the watchdog's (docs/design/contracts.md 6.1).
+pub(super) const AI_STEP_TIMEOUT_MS: i64 = 4 * 3_600_000;
+/// The time an `exec` step has by default.
+pub(super) const EXEC_STEP_TIMEOUT_MS: i64 = 45 * 60_000;
 /// The time a drain step has for every bead under the run's bead, and a formula step for its run
 /// (docs/design/config.md).
 pub(super) const DRAIN_TIMEOUT_MS: i64 = 24 * 3_600_000;
@@ -62,7 +65,7 @@ impl RunHandler {
         let timeout = match (&step.kind, row.step_kind.as_str()) {
             (StepKind::Exec { command, timeout, .. }, "exec") => {
                 let config = json!({ "command": command, "env": env, "inherit_env": inherit_env });
-                return Ok(Some((None, timeout_ms(timeout, STEP_TIMEOUT_MS), config)));
+                return Ok(Some((None, timeout_ms(timeout, EXEC_STEP_TIMEOUT_MS), config)));
             }
             // The environment is for the check script of the step (docs/design/config.md).
             (
@@ -137,7 +140,7 @@ impl RunHandler {
         // The check script of the step gets the environment of an exec step, not the agent's.
         let mut config = json!(config);
         config["exec"] = json!({ "env": env, "inherit_env": inherit_env });
-        Ok(Some((Some(text), timeout_ms(timeout, STEP_TIMEOUT_MS), config)))
+        Ok(Some((Some(text), timeout_ms(timeout, AI_STEP_TIMEOUT_MS), config)))
     }
 
     /// Where the session of `row`'s step works: the root for an agent of the root (docs/design/config.md), else the

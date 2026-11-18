@@ -126,17 +126,18 @@ async fn every_deadline_comes_from_the_config() {
     assert_eq!(failed - parked, 7 * 60_000);
 }
 
+/// An `ai` step without a `timeout` has 4 hours.
 #[tokio::test(start_paused = true)]
 async fn a_turn_past_the_step_timeout_is_a_runaway() {
     let w = world(&[]);
     let mut turn = vec![Step::Emit(Normalized::TurnStarted)];
-    turn.extend(busy(54));
+    turn.extend(busy(252));
     w.driver.script(turn);
     let run = w.create().await;
-    w.events(&run, Duration::from_secs(46 * MIN)).await;
+    w.events(&run, Duration::from_secs(241 * MIN)).await;
     assert_eq!(
         w.attempt_failed(&run),
-        ("1970-01-01T00:45:00.000Z".into(), "runaway_turn".into())
+        ("1970-01-01T04:00:00.000Z".into(), "runaway_turn".into())
     );
 }
 
@@ -145,7 +146,12 @@ async fn the_step_timeout_pauses_between_turns() {
     let addon = POLICY[1]
         .1
         .replace("run.attempt_failed", "run.turn_ended_without_outcome");
-    let w = world(&[POLICY[0], ("policy/addon.toml", &addon)]);
+    let build = "name = \"build\"\n[[step]]\nkind = \"ai\"\nagent = \"dev\"\ntimeout = \"45m\"\n";
+    let w = world(&[
+        POLICY[0],
+        ("policy/addon.toml", &addon),
+        ("shop/formulas/build.toml", build),
+    ]);
     let mut first = vec![Step::Emit(Normalized::TurnStarted)];
     first.extend(busy(36));
     first.extend(hollow_turn().into_iter().skip(1));

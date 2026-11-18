@@ -77,7 +77,7 @@ impl RunHandler {
         }
         let remarks = super::render::remarks(tx.sql(), &row.id)?;
         context.extend((!remarks.is_empty()).then(|| ("LOOP_MANAGER_REMARKS".to_owned(), json!(remarks))));
-        let timeout_ms = row.timeout_ms.unwrap_or(super::render::STEP_TIMEOUT_MS);
+        let timeout_ms = row.timeout_ms.unwrap_or(super::render::EXEC_STEP_TIMEOUT_MS);
         // Run ids repeat across daemons; the marker that recovery kills the command by must not.
         let Some(token) = super::new_token() else {
             return self.terminal(
