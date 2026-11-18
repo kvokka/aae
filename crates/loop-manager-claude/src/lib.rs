@@ -35,7 +35,7 @@ use tokio::{
 use uuid::Uuid;
 
 /// The versions the contract tests and experiments ran on, inclusive.
-const TESTED: [(u32, u32, u32); 2] = [(2, 1, 322), (2, 1, 325)];
+const TESTED: [(u32, u32, u32); 2] = [(2, 1, 322), (2, 1, 327)];
 
 /// The claude driver; `state` holds the config directories of isolated sessions, `socket` is the API socket a
 /// session gets in `LOOP_MANAGER_SOCKET`.

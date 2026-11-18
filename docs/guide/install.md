@@ -52,7 +52,7 @@ codex = "0"
 
 These ranges are what to install (the repository's `mise.toml` takes br at an exact version and claude and codex
 by release line). This release is tested against
-claude 2.1.322 to 2.1.325 and codex 0.167.2 to 0.168.0; outside these, `loop-manager doctor` and the daemon print a
+claude 2.1.322 to 2.1.327 and codex 0.167.2 to 0.168.0; outside these, `loop-manager doctor` and the daemon print a
 warning and still run the harness. The daemon resolves each
 binary in this order: `binary` in the config (`[harness.claude] binary = "/path/to/claude"`; harnesses only, br has
 no such key), then `mise which <name>`, then `PATH`. A daemon under systemd or launchd has no mise shims on its
