@@ -357,7 +357,11 @@ impl RunHandler {
             let row = Row::load(tx, &id)?;
             // A nested schedule (a terminal state during preparation, a park) may have moved the run meanwhile.
             match (row.state.as_str(), self.blocker(tx, &row)?) {
-                ("queued", None) => self.prepare(tx, row)?,
+                ("queued", None) => {
+                    // What it waited for is past: only a queued or parked run waits.
+                    (tx.sql()).execute("UPDATE runs SET waiting_for = NULL WHERE id = ?1", [&row.id])?;
+                    self.prepare(tx, row)?;
+                }
                 ("queued", waiting) => Self::queued(tx, &row, waiting, false)?,
                 ("parked", None) => self.unpark(tx, row)?,
                 _ => {}

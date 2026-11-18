@@ -231,7 +231,8 @@ line for the host: inherited by the harness and invisible to loop-manager, or of
 daemon holds; with `--config <file>`, on that file with no daemon). The pack, formula and variant layers count only for
 a run, so they show with `--formula <f> --rig <r>` in place of `--agent`. The formula's `rounds` comes first with its
 layer (`rounds = 2  # project`; `formula <f>` when the formula sets it, `default` when no layer does), then
-`max_writers` of the rig when it sets one (`max_writers = 1  # rig`), then one line per input value the config gives (`inputs.focus = "security"  # orchestrator`), then the steps one by one: for an ai step a header
+`max_writers` of the rig when it sets one (`max_writers = 1  # rig`), then one line per input value the config gives
+(`inputs.focus = "security"  # orchestrator`), then the steps one by one: for an ai step a header
 ``# step `<s>` of `<f>` on `<r>`: agent <a>`` (the rig's variant if it maps one) and its effective config, for an exec
 step one line ``# step `<s>` of `<f>`: exec `<command>` ``, for a drain step
 ``# step `<s>` of `<f>`: drain, a run of `<formula>` per bead, <pool> at a time`` (with ``; on a failed bead:
@@ -419,7 +420,7 @@ prefix = "be"                       # optional: the id prefix of the rig's beads
 vars = { test_cmd = "cargo test" }   # `{{ rig.test_cmd }}` in a prompt; `name` and `path` are taken by the rig
 triggers = ["nightly-audit"]        # pack triggers that run on this rig (a pack does not know rig names)
 agents = { implementer = "codex-implementer" }  # on this rig the variant runs where a formula names `implementer`
-max_writers = 1                     # optional positive integer: runs that work in the rig's directory at once (default: no limit)
+max_writers = 1                     # optional positive integer: runs in the rig's directory at once (default: none)
 [rigs.backend.settings]             # layer 4
 [rigs.backend.agents.implementer]    # a table: settings of the agent on this rig (layer 10)
 
@@ -444,8 +445,10 @@ terminal state, `parked` and `interrupted` included: unlike a slot of `max_runs`
 left the directory half done. A run in a `drain` or `formula` step lends its place to the runs that step started, and
 to theirs down such a chain: against them it does not count, against any other run it does. A run a session starts
 (`loop-manager run start` from an agent) is not such a child: its parent works in the directory, so under a limit of 1
-it waits for the parent to end; give its formula `worktree = true` or raise the limit. A reload that changes the limit
-ends no run; the queue takes the new limit at once.
+it waits for the parent to end; give its formula `worktree = true` or raise the limit. A run that continues the
+session of a run in a worktree (`continue_from`) counts by its own formula all the same. A reload that changes the
+limit ends no run; the queue takes the new limit at once. Two drains of formulas that count, both alive when a reload
+lowers the limit to 1, hold back each other's beads until one is cancelled or the limit is raised again.
 
 The project root is itself a pack named after the project: `agents/` and `formulas/` next to `loop-manager.toml` belong
 to it, and its triggers are the `[[trigger]]` of `loop-manager.toml`.
