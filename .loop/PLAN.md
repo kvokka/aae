@@ -1028,7 +1028,7 @@ WP-135; WP-134 — последним.
   `actionlint`, если он есть, иначе разбор глазами в отчёте; имена артефактов проверены против правил выбора
   ассета в mise `github:` (ссылка на документацию mise в отчёте); документы совпадают с workflow; `mise run ci` зелёный.
 
-### WP-134 · Стартовый пак: разработка loop-manager через loop-manager · размер M · критичный · статус: todo
+### WP-134 · Стартовый пак: разработка loop-manager через loop-manager · размер M · критичный · статус: done
 - Документы: `docs/design/config.md` («Project», «Formula», «Agent», «Subagents», «Addon», «Trigger», «Permissions»),
   `docs/design/contracts.md` 6.1–6.3 (раунды, finisher, `run.finishing`), `docs/guide/first-project.md`,
   `docs/guide/first-formula.md`, `addons/context-budget/README.md`, демо `demos/2-multirepo-qa` (проверки с `back_to`) и
