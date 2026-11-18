@@ -280,7 +280,10 @@ async fn a_claude_killed_in_a_command_is_resumed_and_its_run_passes() {
     let claude = loop {
         let procs = of_run(&run, d.dir.path());
         let claude = procs.iter().find(|(_, cmd)| cmd.contains("--session-id"));
-        if let Some((pid, _)) = claude.filter(|_| procs.iter().any(|(_, cmd)| cmd.contains("sleep 20"))) {
+        // The shell's own command line names `sleep 20` from its start: the file tells the `printf` is done.
+        let in_command =
+            project.join("web/beads-dir").exists() && procs.iter().any(|(_, cmd)| cmd.contains("sleep 20"));
+        if let Some((pid, _)) = claude.filter(|_| in_command) {
             break *pid;
         }
         assert!(
