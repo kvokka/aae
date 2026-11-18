@@ -889,7 +889,7 @@ WP-110); WP-110 → WP-115; остальные — в любом порядке,
 Порядок: WP-129 первым (без него `mise run ci` под loop-manager красный), затем WP-130, WP-131, WP-132, WP-133,
 WP-135; WP-134 — последним.
 
-### WP-129 · Тесты не видят окружение внешнего loop-manager · размер M · статус: todo
+### WP-129 · Тесты не видят окружение внешнего loop-manager · размер M · статус: done
 - Документы: `docs/agents/rules-tests.md` («How tests are written»), `docs/guide/development.md` («Where each kind
   of test runs»), `docs/api/frontends.md` (сессионное окружение CLI).
 - Зависит от: —
@@ -933,7 +933,7 @@ WP-135; WP-134 — последним.
   `LOOP_MANAGER_SOCKET`, указывающим на живой посторонний сокет, и с фальшивыми `RUN`/`ATTEMPT_TOKEN` — зелёный
   (команда и итог — в отчёт); число тестов +1.
 
-### WP-130 · Таймаут ai-шага по умолчанию · размер S · статус: todo
+### WP-130 · Таймаут ai-шага по умолчанию · размер S · статус: done
 - Документы: `docs/design/contracts.md` (6.1, «step `timeout` … default 45 m»), `docs/design/config.md` («Formula»,
   пример `timeout = "45m"`).
 - Зависит от: —
@@ -945,7 +945,7 @@ WP-135; WP-134 — последним.
   документа (умолчание каждого вида шага написать явно). Новых ключей конфига нет.
 - Готово, когда: тест на умолчание ai-шага и exec-шага; документы совпадают с кодом; `mise run ci` зелёный.
 
-### WP-131 · claude 2.1.327 в проверенный диапазон · размер S · статус: todo
+### WP-131 · claude 2.1.327 в проверенный диапазон · размер S · статус: done
 - Документы: `docs/harness-updates.md` («Updating a harness» — процесс целиком), `docs/guide/install.md` (диапазон).
 - Зависит от: —
 - Вышел claude 2.1.327 (`npm view @anthropic-ai/claude-code version`), установлен 2.1.326, адаптер проверен на
@@ -959,7 +959,7 @@ WP-135; WP-134 — последним.
   критерия 2 на claude прошёл (итог и время — в отчёт); диапазон в коде и в документах — до 2.1.327; `mise run ci`
   зелёный.
 
-### WP-132 · Документация: метка `CLAUDE_CODE_ENTRYPOINT`, agent mail в roadmap, PreCompact · размер S · статус: todo
+### WP-132 · Документация: метка `CLAUDE_CODE_ENTRYPOINT`, agent mail в roadmap, PreCompact · размер S · статус: done
 - Документы: `docs/guide/install.md` (абзац «Running a harness headless spends the limits of your subscription…»),
   `docs/agents/assumptions.md` (принятый риск про headless и подписку), `docs/roadmap.md`,
   `docs/design/experiments.md` (замер PreCompact, строка `claude compaction`).
