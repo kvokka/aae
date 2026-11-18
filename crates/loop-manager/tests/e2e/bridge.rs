@@ -120,6 +120,23 @@ impl Bridge {
         text.lines().map(|line| serde_json::from_str(line).unwrap()).collect()
     }
 
+    /// Whether the bridge itself listens on its port. A connect to the port would also reach another process that took
+    /// the port after [`start`] let it go.
+    fn listens(&self) -> bool {
+        let fds = std::fs::read_dir(format!("/proc/{}/fd", self.child.id())).unwrap();
+        let own: Vec<String> = fds
+            .filter_map(|fd| std::fs::read_link(fd.ok()?.path()).ok())
+            .map(|to| to.to_string_lossy().into_owned())
+            .collect();
+        let local = format!(":{:04X}", self.port);
+        // `sl local_address rem_address st ... inode`; `0A` is LISTEN.
+        let tcp = std::fs::read_to_string(format!("/proc/{}/net/tcp", self.child.id())).unwrap();
+        tcp.lines().skip(1).any(|line| {
+            let field: Vec<&str> = line.split_whitespace().collect();
+            field[1].ends_with(&local) && field[3] == "0A" && own.contains(&format!("socket:[{}]", field[9]))
+        })
+    }
+
     fn exited(&mut self) -> bool {
         self.child.try_wait().unwrap().is_some()
     }
@@ -136,15 +153,13 @@ fn the_port_opens_only_once_the_server_answered_initialize() {
     let mut silent = start(Some(&["cat"]));
     let deadline = Instant::now() + Duration::from_secs(1);
     while Instant::now() < deadline {
-        assert!(
-            !accepts(silent.port),
-            "the port opened before `initialize` was answered"
-        );
+        assert!(!silent.listens(), "the port opened before `initialize` was answered");
         std::thread::sleep(Duration::from_millis(50));
     }
     assert!(!silent.exited());
 
     let bridge = start(None).ready();
+    assert!(bridge.listens());
     let methods: Vec<Value> = bridge.log().iter().map(|line| line["method"].clone()).collect();
     assert_eq!(methods[..2], [json!("initialize"), json!("notifications/initialized")]);
     let ping = json!({ "jsonrpc": "2.0", "id": 1, "method": "ping" }).to_string();
