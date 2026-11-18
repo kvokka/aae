@@ -8,7 +8,9 @@ answer back; the core's state and journal are the truth (docs/design/event-model
 
 Code: `crates/loop-manager-front/src/api/`. Reference: `docs/api/openapi.json`.
 
-- **Transport.** A unix socket by default (`LOOP_MANAGER_SOCKET` names it for clients). TCP only when the orchestrator
+- **Transport.** A unix socket by default. `LOOP_MANAGER_SOCKET` names it for clients and for `loop-manager daemon`
+  alike: a daemon started from inside a loop-manager session, where the variable is set, needs its own `--socket`, or
+  it refuses to start (another daemon is listening there). TCP only when the orchestrator
   config sets `api_tcp`; the address must be loopback, and every request on it needs `Authorization: Bearer <token>`.
   The token is new at every daemon start and is written to `api.token` in the state directory, readable by the owner
   only. `api_tcp` cannot change on a reload.
