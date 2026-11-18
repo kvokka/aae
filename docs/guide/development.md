@@ -77,4 +77,28 @@ LOOP_MANAGER_CHAOS_SEED=<n> cargo nextest run -p loop-manager-testkit --test cha
 A failing seed is a bug of the core, not of the test. `LOOP_MANAGER_CHAOS_SEEDS=<n>` plays another number of seeds: a
 few dozen take seconds and make a targeted test while you change the core.
 
+## Releasing
+
+A release is a `vX.Y.Z` tag on `main`; CI does the rest.
+
+1. Set `X.Y.Z` as `version` in `[workspace.package]` of `Cargo.toml` and in every dependency of one crate of the
+   workspace on another (`loop-manager-core = { version = "X.Y.Z", path = … }` and the like), then build once so
+   `Cargo.lock` follows. `cargo publish --workspace --dry-run --locked` must pass.
+2. Commit, tag the commit `vX.Y.Z`, push the commit and the tag.
+
+The workflow `release` (`.github/workflows/release.yml`) on the tag:
+
+- **build**: fails unless the tag is `v` and the workspace version; runs `mise run acceptance-release` (the four
+  targets build and the Linux arm64 one runs); packs each binary as `loop-manager-<target>.tar.gz` with the binary at
+  its root, and its `sha256` as `loop-manager-<target>.tar.gz.sha256`. These names are the ones mise's `github:`
+  backend and `cargo binstall` pick for a platform.
+- **github-release**, after build: creates the GitHub Release of the tag with generated notes, if there is none, and
+  uploads the eight files to it, replacing the ones of an earlier run.
+- **crates-io**, after build: `cargo publish --workspace --locked` with the repository secret `CARGO_REGISTRY_TOKEN`,
+  leaving out the crates already on crates.io at this version, so a re-run of the tag publishes only what is missing.
+  `loop-manager-acceptance` is never published (`publish = false`).
+
+A version published on crates.io cannot be replaced or deleted, only yanked: a broken release is fixed by the next
+version.
+
 The rules of work on this repository (budgets, tests, what is decided) are in [docs/agents](../agents/README.md).

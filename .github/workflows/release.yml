@@ -7,6 +7,9 @@ on:
 permissions:
   contents: read
 
+env:
+  TARGETS: x86_64-unknown-linux-musl aarch64-unknown-linux-musl x86_64-apple-darwin aarch64-apple-darwin
+
 jobs:
   build:
     runs-on: ubuntu-24.04-arm
@@ -14,5 +17,68 @@ jobs:
       - uses: actions/checkout@v7
       - uses: jdx/mise-action@v5
       - uses: Swatinem/rust-cache@v2
+      - name: The tag is the workspace version
+        run: |
+          version=$(cargo metadata --no-deps --format-version 1 | jq -r '.packages[] | select(.name == "loop-manager") | .version')
+          test "v$version" = "$GITHUB_REF_NAME" || { echo "tag $GITHUB_REF_NAME, workspace $version" >&2; exit 1; }
       # Criterion 1 of the acceptance: the four release targets build and the arm64 one runs.
       - run: mise run acceptance-release
+      # `loop-manager-<target>.tar.gz` with the binary at its root, and its `.sha256`: the names mise's `github:`
+      # backend and `cargo binstall` pick for a platform.
+      - name: Pack the binaries
+        run: |
+          mkdir dist
+          for t in $TARGETS; do
+            tar -czf "dist/loop-manager-$t.tar.gz" -C "target/$t/release" loop-manager
+            (cd dist && sha256sum "loop-manager-$t.tar.gz" > "loop-manager-$t.tar.gz.sha256")
+          done
+      - uses: actions/upload-artifact@v7
+        with:
+          name: dist
+          path: dist/
+
+  github-release:
+    needs: build
+    runs-on: ubuntu-24.04-arm
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          name: dist
+          path: dist
+      # A re-run of the tag replaces the assets of the release it made before.
+      - name: Create the release and upload the binaries
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          gh release view "$GITHUB_REF_NAME" > /dev/null 2>&1 ||
+            gh release create "$GITHUB_REF_NAME" --verify-tag --generate-notes
+          gh release upload "$GITHUB_REF_NAME" dist/* --clobber
+
+  crates-io:
+    needs: build
+    runs-on: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@v7
+      - uses: jdx/mise-action@v5
+      - uses: Swatinem/rust-cache@v2
+      # A version on crates.io cannot be replaced: a re-run of the tag publishes only the crates not there yet.
+      - name: Publish the crates
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          crates=$(cargo metadata --no-deps --format-version 1 | jq -r '.packages[] | select(.publish != []) | .name')
+          skip=()
+          for name in $crates; do
+            if curl -sf "https://index.crates.io/${name:0:2}/${name:2:2}/$name" | grep -q "\"vers\":\"$version\""; then
+              skip+=(--exclude "$name")
+            fi
+          done
+          if [ "${#skip[@]}" -eq "$((2 * $(wc -w <<< "$crates")))" ]; then
+            echo "every crate is on crates.io at $version already"
+            exit 0
+          fi
+          cargo publish --workspace --locked "${skip[@]}"

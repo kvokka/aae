@@ -19,6 +19,15 @@ by a schedule or by a task tracker, and decides each run's end by an explicit fi
   run states), [HTTP API](docs/api/openapi.json)
 - [Everything else](docs/README.md): the map of the documentation
 
+## Installing
+
+```sh
+mise use -g github:kvokka/loop-manager   # a release binary from GitHub Releases
+cargo install loop-manager --locked      # or built from crates.io
+```
+
+Building from source and the release archives by hand: [Installing loop-manager](docs/guide/install.md).
+
 ## Running the daemon
 
 `loop-manager daemon` runs in the foreground. It finds the `claude`, `codex` and `br` binaries through mise (`mise which

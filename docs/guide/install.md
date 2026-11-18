@@ -4,9 +4,25 @@ loop-manager is one binary: the daemon, the CLI and the bundled addons. It runs 
 linked with musl) and macOS (x86_64, arm64). It is checked on Linux arm64 only: the other targets are built and not
 exercised ([what the first release leaves out](../overview.md#what-the-first-release-leaves-out)).
 
+## Install a release
+
+Each release on [GitHub Releases](https://github.com/kvokka/loop-manager/releases) carries
+`loop-manager-<target>.tar.gz` for the four targets (`x86_64-unknown-linux-musl`, `aarch64-unknown-linux-musl`,
+`x86_64-apple-darwin`, `aarch64-apple-darwin`): the binary alone at the root of the archive, with its sha256 in
+`loop-manager-<target>.tar.gz.sha256`. Any of these installs it:
+
+```sh
+mise use -g github:kvokka/loop-manager   # the archive for this machine, checked against its sha256
+cargo binstall loop-manager              # the same archive, through cargo-binstall
+cargo install loop-manager --locked      # built from the crates on crates.io; needs Rust 1.100
+```
+
+Or download the archive by hand, check it with `sha256sum -c loop-manager-<target>.tar.gz.sha256` (`shasum -a 256 -c`
+on macOS), and put `loop-manager` from it on your `PATH`.
+
 ## Build it
 
-loop-manager is built from source. The repository pins its toolchain with [mise](https://mise.jdx.dev):
+loop-manager can be built from source. The repository pins its toolchain with [mise](https://mise.jdx.dev):
 
 ```sh
 git clone <this repository> loop-manager && cd loop-manager
