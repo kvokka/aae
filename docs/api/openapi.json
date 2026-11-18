@@ -3350,7 +3350,7 @@
               "string",
               "null"
             ],
-            "description": "What a queued run waits for: `concurrency`, `gate` or `daemon_stopping`."
+            "description": "What a queued run waits for: `concurrency`, `writers` (its rig's `max_writers`), `gate` or `daemon_stopping`."
           },
           "workdir": {
             "type": "string"

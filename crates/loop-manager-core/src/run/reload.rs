@@ -69,6 +69,8 @@ impl RunHandler {
             correlation: None,
             data: data.clone(),
         })?;
+        // A run waiting for a limit the new config lifts goes now, not at the next event.
+        self.schedule(tx)?;
         Ok(data)
     }
 

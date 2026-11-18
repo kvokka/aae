@@ -75,6 +75,11 @@ The behaviour itself is described in the document named under each heading; this
 
 - A run without a rig goes in the root; a step of an agent of scope `root` goes in the root whatever the run's rig.
 - Concurrency is bounded per orchestrator and per agent.
+- A rig's `max_writers` counts a run by its whole formula, not by the step it is at: no worktree and an `exec` step or
+  an `ai` step of an agent not of scope `root`. A parked run keeps its place. A run in a `drain` or `formula` step
+  lends its place to the runs that step started, down the chain; a run a session starts counts its parent, which
+  works in the directory. A queued run past the limit waits for `writers`, a reason of its own. `[root]` has no
+  `max_writers`.
 - The states from `preparing` to `finishing` are those of the current step.
 - A session per `ai` step; a return to a step continues its session.
 - Cancelling a parent cancels its live child runs.

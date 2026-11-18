@@ -49,3 +49,37 @@ fn a_formula_is_explained_with_the_layers_of_its_rounds_and_input_values() {
     assert!(text.contains(check), "{text}");
     assert_eq!(text.matches("# runs only if").count(), 1, "{text}");
 }
+
+/// `explain --formula` on a rig that sets `max_writers` names it after `rounds`; on the root there is none.
+#[test]
+fn a_formula_on_a_rig_is_explained_with_its_max_writers() {
+    let dir = tempfile::tempdir().unwrap();
+    let files = [
+        ("config.toml", "projects = [\"shop\"]\n"),
+        (
+            "shop/loop-manager.toml",
+            "[rigs.web]\npath = \"web\"\nmax_writers = 1\n",
+        ),
+        ("shop/web/.keep", ""),
+        (
+            "shop/formulas/flow.toml",
+            "name = \"flow\"\n[[step]]\nname = \"work\"\nkind = \"exec\"\ncommand = [\"true\"]\n",
+        ),
+    ];
+    for (path, text) in files {
+        let path = dir.path().join(path);
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(path, text).unwrap();
+    }
+    let config = loop_manager_core::config::load(&dir.path().join("config.toml")).unwrap();
+    let of = super::config::Explain::Formula("flow".into());
+    let on = |rig| super::config::explained(&config, "shop", &of, rig).unwrap()["text"].clone();
+    let web = on(Some("web"));
+    let web = web.as_str().unwrap();
+    assert!(
+        web.starts_with("rounds = 3  # default\nmax_writers = 1  # rig\n"),
+        "{web}"
+    );
+    let root = on(None);
+    assert!(!root.as_str().unwrap().contains("max_writers"), "{root}");
+}

@@ -51,3 +51,4 @@ mod trigger_scope;
 mod triggers;
 mod watchdog;
 mod worktree;
+mod writers;

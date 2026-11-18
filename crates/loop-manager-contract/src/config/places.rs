@@ -94,6 +94,7 @@ impl Loader {
                 );
             }
             place.prefix = Some(prefix);
+            place.max_writers = r.max_writers.map(std::num::NonZeroU32::get);
             if rig == name {
                 self.fail(
                     file,
@@ -151,6 +152,7 @@ impl Loader {
             settings: Default::default(),
             edits: BTreeMap::new(),
             agents: BTreeMap::new(),
+            max_writers: None,
         }
     }
 }

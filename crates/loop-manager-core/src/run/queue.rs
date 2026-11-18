@@ -1,5 +1,5 @@
-//! Creation and the queue (docs/design/contracts.md 6.1–6.2): a run waits in `queued` for open gates and
-//! a concurrency slot, then leaves for `preparing`, oldest first.
+//! Creation and the queue (docs/design/contracts.md 6.1–6.2): a run waits in `queued` for open gates,
+//! a concurrency slot and a place in its rig (`max_writers`), then leaves for `preparing`, oldest first.
 
 use super::{
     Create, RunHandler, drain::NO_PROCESS, events::attempt_live, not_found, rejected, row::Row, token_sha256,
@@ -288,8 +288,9 @@ impl RunHandler {
     }
 
     /// Why a queued or parked run cannot start yet, `None` when it can: the daemon is stopping, a gate of the run is
-    /// closed (with the closure), or the orchestrator or its agent has as many started runs as allowed
-    /// (docs/design/contracts.md 6; a parked run, or one in a step with no process, holds no slot).
+    /// closed (with the closure), the orchestrator or its agent has as many started runs as allowed
+    /// (docs/design/contracts.md 6; a parked run, or one in a step with no process, holds no slot), or a queued run
+    /// would be one writer too many in its rig's directory (`max_writers`; a parked run already holds its place).
     fn blocker(&self, tx: &Tx<'_>, row: &Row) -> Result<Option<(&'static str, Value)>, Error> {
         if self.stopping.is_some() {
             return Ok(Some(("daemon_stopping", Value::Null)));
@@ -302,8 +303,11 @@ impl RunHandler {
             .query_row(&format!("SELECT COUNT(*) FROM runs WHERE {}", started()), [], |r| {
                 r.get(0)
             })?;
-        let full = all >= self.config.max_runs || self.agent_full(tx, row)?;
-        Ok(full.then_some(("concurrency", Value::Null)))
+        if all >= self.config.max_runs || self.agent_full(tx, row)? {
+            return Ok(Some(("concurrency", Value::Null)));
+        }
+        let full = row.state == "queued" && self.rig_full(tx, row)?;
+        Ok(full.then_some(("writers", Value::Null)))
     }
 
     /// Whether the other started runs of the agent of `row` are as many as its `max_runs` allows

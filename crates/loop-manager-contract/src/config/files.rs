@@ -290,6 +290,8 @@ pub(super) struct RigFile {
     /// `agents.<name>`: a table edits that agent on this rig; a string names the variant that runs in its place.
     #[serde(default)]
     pub agents: BTreeMap<String, toml::Value>,
+    /// The most runs that work in the rig's own directory at once; no limit when absent.
+    pub max_writers: Option<NonZeroU32>,
 }
 
 #[derive(Debug, Deserialize)]

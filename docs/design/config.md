@@ -25,7 +25,8 @@ error in every file.
   step keeps the one it prepared with, and the next step of the run prepares with the config of that moment; an idle
   instance stops with reason `config` only when no agent of the new config, on any rig, starts
   sessions on its fingerprint (a changed MCP restarts only the instances it is part of). It emits `config.reloaded`
-  with the generation (1 at daemon start). A change of the set of harnesses, a harness `binary` or any adapter setting
+  with the generation (1 at daemon start), then goes through the queue again: a run waiting for a limit the reload
+  lifts starts at once. A change of the set of harnesses, a harness `binary` or any adapter setting
   such as `max_sessions` (a harness `model` is fine), or of which projects have a `.beads` tracker is refused: drivers
   and trackers are made at daemon start.
 
@@ -229,8 +230,8 @@ line for the host: inherited by the harness and invisible to loop-manager, or of
 (`loop-manager config explain --project <p> --agent <a> [--rig <r>]` and `GET /v1/config/explain`, on the config the
 daemon holds; with `--config <file>`, on that file with no daemon). The pack, formula and variant layers count only for
 a run, so they show with `--formula <f> --rig <r>` in place of `--agent`. The formula's `rounds` comes first with its
-layer (`rounds = 2  # project`; `formula <f>` when the formula sets it, `default` when no layer does), then one line
-per input value the config gives (`inputs.focus = "security"  # orchestrator`), then the steps one by one: for an ai step a header
+layer (`rounds = 2  # project`; `formula <f>` when the formula sets it, `default` when no layer does), then
+`max_writers` of the rig when it sets one (`max_writers = 1  # rig`), then one line per input value the config gives (`inputs.focus = "security"  # orchestrator`), then the steps one by one: for an ai step a header
 ``# step `<s>` of `<f>` on `<r>`: agent <a>`` (the rig's variant if it maps one) and its effective config, for an exec
 step one line ``# step `<s>` of `<f>`: exec `<command>` ``, for a drain step
 ``# step `<s>` of `<f>`: drain, a run of `<formula>` per bead, <pool> at a time`` (with ``; on a failed bead:
@@ -418,6 +419,7 @@ prefix = "be"                       # optional: the id prefix of the rig's beads
 vars = { test_cmd = "cargo test" }   # `{{ rig.test_cmd }}` in a prompt; `name` and `path` are taken by the rig
 triggers = ["nightly-audit"]        # pack triggers that run on this rig (a pack does not know rig names)
 agents = { implementer = "codex-implementer" }  # on this rig the variant runs where a formula names `implementer`
+max_writers = 1                     # optional positive integer: runs that work in the rig's directory at once (default: no limit)
 [rigs.backend.settings]             # layer 4
 [rigs.backend.agents.implementer]    # a table: settings of the agent on this rig (layer 10)
 
@@ -434,6 +436,17 @@ is set. Two rigs of a project with one prefix are a config error. The prefix mak
 last `-` ([tracker-br.md](tracker-br.md#the-rig-of-a-bead)); changing it makes the rig's existing beads beads of the
 root.
 
+`max_writers` bounds the runs that work in the rig's own directory at once; a run past it waits in `queued` with
+`waiting_for = "writers"` ([contracts 6.1](contracts.md#61-states)). A run counts by its formula, whatever step it is
+at: one of a formula without `worktree = true` with an `exec` step, or an `ai` step of an agent not of scope `root`, on
+this rig (one whose formula or agent no longer resolves counts too). Such a run holds its place from `preparing` to its
+terminal state, `parked` and `interrupted` included: unlike a slot of `max_runs`, a parked run keeps its place, since it
+left the directory half done. A run in a `drain` or `formula` step lends its place to the runs that step started, and
+to theirs down such a chain: against them it does not count, against any other run it does. A run a session starts
+(`loop-manager run start` from an agent) is not such a child: its parent works in the directory, so under a limit of 1
+it waits for the parent to end; give its formula `worktree = true` or raise the limit. A reload that changes the limit
+ends no run; the queue takes the new limit at once.
+
 The project root is itself a pack named after the project: `agents/` and `formulas/` next to `loop-manager.toml` belong
 to it, and its triggers are the `[[trigger]]` of `loop-manager.toml`.
 
@@ -445,7 +458,7 @@ root has these two settings and no variables: text a project gives an agent is a
 rigs. When `path` points elsewhere, the config files (`.loop-manager/agents/`, packs) and the tracker stay next to
 `loop-manager.toml`. The root need not be a git repository: a run in a plain directory works, and only `worktree = true`
 fails that run (`deny`, naming the directory). A rig at the root's path or under the root's name is a config
-error. `[root]` takes no `settings`, `agents` or `triggers`: the project's own are the root's, and a project
+error. `[root]` takes no `settings`, `agents`, `triggers` or `max_writers`: the project's own are the root's, and a project
 `[[trigger]]` that names no `rig` fires in the root.
 
 ### Packs and addons from git
@@ -836,9 +849,9 @@ sends `--input` values as text). A `task` input (there is no input type `bead`: 
 described by all of it; either way the input then holds the bead id ([tracker-br.md](tracker-br.md#beads-and-runs)). A bead named
 by id that belongs to another rig, by the prefix of its id, is refused at the start if the core has seen it, else at
 its claim (the run fails with `bead_of_another_rig` and the claim is released). `worktree = true` gives each run of the formula, of either step kind,
-a git worktree that loop-manager makes and removes (the bundled `worktree`, see below). loop-manager does not serialize
-runs by directory: without a worktree, runs of one rig share its directory, and keeping them apart is the user's choice
-(`worktree`, `pool`, `max_runs`).
+a git worktree that loop-manager makes and removes (the bundled `worktree`, see below). loop-manager does not lock a
+directory: without a worktree, runs of one rig share its directory, and keeping them apart is the user's choice
+(`worktree`, the rig's `max_writers`, `pool`, `max_runs`).
 
 A prompt template is checked at load against each formula whose steps name its agent (contracts 2.3):
 `inputs.<name>` must be a declared input; `bead.<field>` needs a `task` input and a field of `Bead` (contracts 5.2); `run.<field>` a field of `RunView` (1.3); `project.name`,

@@ -202,3 +202,24 @@ fn two_rigs_with_one_prefix_or_a_prefix_br_rewrites_are_an_error() {
     let upper = project("[rigs.web]\npath = \"backend\"\nprefix = \"API\"\n");
     fails(&[("shop/loop-manager.toml", &upper)], "rig `web`: prefix `API`");
 }
+
+#[test]
+fn a_rig_takes_max_writers_and_the_root_does_not() {
+    let rig = |value: &str| {
+        BASE[3].1.replacen(
+            "path = \"backend\"\n",
+            &format!("path = \"backend\"\nmax_writers = {value}\n"),
+            1,
+        )
+    };
+    let config = load_with(&[("shop/loop-manager.toml", &rig("2"))]).unwrap();
+    let shop = &config.projects[0];
+    assert_eq!(shop.rigs["backend"].max_writers, Some(2));
+    assert_eq!(shop.root.1.max_writers, None);
+    assert_eq!(load_with(&[]).unwrap().projects[0].rigs["backend"].max_writers, None);
+    fails(&[("shop/loop-manager.toml", &rig("0"))], "nonzero");
+    fails(
+        &[("shop/loop-manager.toml", &project("[root]\nmax_writers = 1\n"))],
+        "unknown field `max_writers`",
+    );
+}

@@ -44,7 +44,7 @@ pub(crate) struct Run {
     started_at: Option<String>,
     #[schema(value_type = Object)]
     inputs: Map<String, Value>,
-    /// What a queued run waits for: `concurrency`, `gate` or `daemon_stopping`.
+    /// What a queued run waits for: `concurrency`, `writers` (its rig's `max_writers`), `gate` or `daemon_stopping`.
     waiting_for: Option<String>,
     /// The closed gate a run waiting for a gate, or parked, waits on (the oldest closure of its keys).
     gate: Option<Gate>,

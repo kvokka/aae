@@ -213,6 +213,9 @@ pub(crate) fn explained(config: &Config, project: &str, of: &Explain, rig: Optio
             let (_, f) = p.formula(formula)?;
             let (mut text, mut steps, mut host) = (String::new(), Vec::new(), false);
             text += &format!("rounds = {}  # {}\n", f.rounds.value, f.rounds.from);
+            if let Some(n) = p.rigs.get(rig).and_then(|r| r.max_writers) {
+                text += &format!("max_writers = {n}  # rig\n");
+            }
             for (input, given) in &f.defaults {
                 text += &format!("inputs.{input} = {}  # {}\n", given.value, given.from);
             }

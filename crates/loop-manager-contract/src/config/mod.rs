@@ -165,6 +165,8 @@ pub struct Rig {
     pub edits: BTreeMap<String, Settings>,
     /// The variant that runs in place of a pack agent the formulas name, on this rig.
     pub agents: BTreeMap<Name, String>,
+    /// The most runs that work in the rig's own directory at once (docs/design/config.md "Project"); none for the root.
+    pub max_writers: Option<u32>,
 }
 
 #[derive(Clone, Debug)]

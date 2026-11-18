@@ -27,6 +27,7 @@ mod row;
 mod service_proc;
 mod services;
 mod triggers;
+mod writers;
 
 use crate::{
     clock::Clock,
