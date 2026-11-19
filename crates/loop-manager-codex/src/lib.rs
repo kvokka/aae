@@ -44,14 +44,13 @@ pub struct Codex {
     socket: Option<PathBuf>,
     max_sessions: usize,
     instance_idle: Duration,
+    /// How long a resume waits for app-server to close the thread it still holds.
+    unload_wait: Duration,
     instances: Arc<Mutex<HashMap<String, Arc<Instance>>>>,
 }
 
 /// The versions the contract tests ran on, inclusive.
 const TESTED: [(u32, u32, u32); 2] = [(0, 167, 2), (0, 168, 0)];
-
-/// How long a resume waits for app-server to close the thread it still holds.
-const UNLOAD_WAIT: Duration = Duration::from_secs(10);
 
 fn thread_id(session: &SessionRef) -> &str {
     session.0["thread_id"].as_str().unwrap_or_default()
@@ -66,6 +65,7 @@ impl Codex {
             socket,
             max_sessions,
             instance_idle: Duration::from_secs(60),
+            unload_wait: Duration::from_secs(10),
             instances: Arc::default(),
         }
     }
@@ -233,7 +233,7 @@ impl Driver for Codex {
         Box::pin(async move {
             let known = self.instance(&instance.id)?;
             let thread = json!({ "threadId": thread_id(session) });
-            let until = Instant::now() + UNLOAD_WAIT;
+            let until = Instant::now() + self.unload_wait;
             while known.call("thread/unsubscribe", thread.clone(), None).await?["status"] != "notLoaded" {
                 if Instant::now() >= until {
                     let mut failure = Failure::new(FailureKind::TranscriptDivergence, Source::Adapter);
