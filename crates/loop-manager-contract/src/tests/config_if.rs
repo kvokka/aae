@@ -95,6 +95,16 @@ fn the_paths_of_an_if_are_checked_at_load() {
         let loaded = load_with(&[(FLOW, &flow(when))]);
         assert!(loaded.is_ok(), "{when}: {loaded:?}");
     }
+    // The comments and the parents of the bead are for a prompt only.
+    let tasked = |when: &str| {
+        let head = "name = \"flow\"\n[inputs]\nbead = { type = \"task\" }\n".to_string();
+        head + &step("s", "exec", &format!("command = [\"true\"]\nif = {{ {when} }}"))
+    };
+    assert!(load_with(&[(FLOW, &tasked("\"bead.title\" = \"x\""))]).is_ok());
+    fails(
+        &[(FLOW, &tasked("\"bead.comments\" = \"x\""))],
+        "`if`: a run has no `bead.comments`",
+    );
 }
 
 /// A template or the `inputs` of a `formula` step need a value, which a step with an `if` may never leave.

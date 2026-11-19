@@ -5,10 +5,13 @@
 
 #![deny(clippy::disallowed_methods)]
 
+mod parse;
+
 use loop_manager_contract::{
     BoxFuture,
-    tracker::{Bead, Change, Tracker, TrackerError},
+    tracker::{Bead, Change, Commented, Lineage, Tracker, TrackerError},
 };
+use parse::{bead, commented, field};
 use serde_json::Value;
 use std::path::{Path, PathBuf};
 
@@ -322,46 +325,29 @@ impl Tracker for Br {
             bead(&self.br(actor, &args).await?)
         })
     }
-}
 
-/// The bead field an `events` row of br changed.
-fn field(kind: &str) -> Option<&'static str> {
-    Some(match kind {
-        "status_changed" | "reopened" => "status",
-        "assignee_changed" => "assignee",
-        "priority_changed" => "priority",
-        "label_added" | "label_removed" => "labels",
-        "dependency_added" | "dependency_removed" => "dependencies",
-        "commented" => "comments",
-        "updated" => "fields",
-        _ => return None,
-    })
-}
-
-/// A bead of `br show --json`; its parent is its epic (br has no epic field, docs/design/tracker-br.md).
-fn bead(v: &Value) -> Result<Bead, TrackerError> {
-    let text = |k: &str| v[k].as_str().map(str::to_owned);
-    let invalid = || TrackerError::Invalid {
-        text: format!("not a bead: {v}"),
-    };
-    Ok(Bead {
-        id: text("id").ok_or_else(invalid)?,
-        title: text("title").unwrap_or_default(),
-        description: text("description").unwrap_or_default(),
-        status: text("status").ok_or_else(invalid)?,
-        priority: v["priority"].as_i64().unwrap_or_default(),
-        labels: v["labels"]
-            .as_array()
-            .into_iter()
-            .flatten()
-            .filter_map(|l| l.as_str().map(str::to_owned))
-            .collect(),
-        assignee: text("assignee").filter(|a| !a.is_empty()),
-        epic: text("parent"),
-        created_at: text("created_at").unwrap_or_default(),
-        updated_at: text("updated_at").unwrap_or_default(),
-        closed_at: text("closed_at"),
-    })
+    fn lineage<'a>(&'a self, id: &'a str) -> BoxFuture<'a, Result<Lineage, TrackerError>> {
+        Box::pin(async move {
+            let mut line: Vec<Commented> = Vec::new();
+            let mut next = Some(id.to_owned());
+            // One `show` per bead, up the parents; a parent met twice would never end, one deleted meanwhile ends it.
+            while let Some(id) = next.filter(|id| line.iter().all(|c| c.bead.id != *id)) {
+                let shown = match self.br(READER, &["show", &id]).await {
+                    Err(Fail(_, TrackerError::NotFound)) if !line.is_empty() => break,
+                    shown => shown?,
+                };
+                let found = commented(shown.get(0).ok_or(TrackerError::NotFound)?)?;
+                next = found.bead.epic.clone();
+                line.push(found);
+            }
+            let mut line = line.into_iter();
+            let bead = line.next().ok_or(TrackerError::NotFound)?;
+            Ok(Lineage {
+                bead,
+                parents: line.rev().collect(),
+            })
+        })
+    }
 }
 
 fn unavailable(text: String) -> TrackerError {

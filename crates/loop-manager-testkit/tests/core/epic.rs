@@ -6,7 +6,7 @@ use crate::common;
 use loop_manager_core::{
     BoxFuture, Clock, Journal, config, open,
     run::{self, ExecHooks, Msg},
-    tracker::{Bead, Change, Tracker, TrackerError},
+    tracker::{Bead, Change, Lineage, Tracker, TrackerError},
 };
 use loop_manager_testkit::MemoryTracker;
 use serde_json::Value;
@@ -55,6 +55,9 @@ impl Tracker for Chain {
         text: &'a str,
     ) -> BoxFuture<'a, Result<Bead, TrackerError>> {
         self.0.create(actor, key, title, text)
+    }
+    fn lineage<'a>(&'a self, id: &'a str) -> BoxFuture<'a, Result<Lineage, TrackerError>> {
+        self.0.lineage(id)
     }
 }
 

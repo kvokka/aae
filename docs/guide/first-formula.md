@@ -191,8 +191,9 @@ once merged. The rig must be a git repository. Without the key a run works in th
 A project with a `.beads` directory uses [br](../../README.md#the-br-tracker-and-its-license) as its task
 tracker. A formula input of `type = "task"` takes the task: its text, the id of a bead to take up, or
 `{ next_ready = true }` to take the next ready bead;
-the prompt then reads its fields as `{{ bead.title }}`, `{{ bead.description }}` and so on, and the run holds the
-bead's claim until it ends. A trigger on `bead.ready` starts such runs as beads become ready.
+the prompt then reads its fields as `{{ bead.title }}`, `{{ bead.description }}` and so on, the comments on it as
+`{{ bead.comments }}` and its parents as `{{ bead.parents }}` ([config](../design/config.md#formula-formulasfiletoml)),
+and the run holds the bead's claim until it ends. A trigger on `bead.ready` starts such runs as beads become ready.
 
 A task in plain words, `--input 'task=Add a dark mode'`, creates a root bead (an epic titled by the first line) and
 the run works on it; a task that is the id of a bead files nothing and takes that bead. A planner step files the work as beads under that

@@ -15,6 +15,9 @@ pub const TEMPLATE: &str = "prompt.template.md";
 /// The roots of a prompt template (contracts 2.3).
 const ROOTS: &[&str] = &["inputs", "bead", "rig", "run", "project", "steps", "remarks", "agent"];
 
+/// What only a prompt shows of the run's bead: its comments, and its parents with theirs (contracts 2.3).
+const LINEAGE: [&str; 2] = ["bead.comments", "bead.parents"];
+
 /// The prompt of an agent in one project.
 #[derive(Clone, Debug)]
 pub struct Prompt {
@@ -23,6 +26,14 @@ pub struct Prompt {
     pub from: PathBuf,
     /// `{{ agent.<name> }}`: the text of `<name>.md`, the project's file over the pack's.
     pub files: BTreeMap<String, String>,
+}
+
+impl Prompt {
+    /// Whether the template shows the comments or the parents of the run's bead: a run reads them as it enters
+    /// the step (docs/design/contracts.md 5).
+    pub fn shows_lineage(&self) -> bool {
+        self.template.paths().any(|p| LINEAGE.contains(&p))
+    }
 }
 
 /// Sets the prompts of `project`, checking each template against every formula whose `ai` steps name its agent:
@@ -59,8 +70,11 @@ pub(super) fn project(loader: &mut Loader, project: &mut Project) {
             let Some(prompt) = step.kind.agent().and_then(|a| prompts.get(a)) else {
                 continue;
             };
+            let task = formula.inputs.values().any(|i| i.kind == InputType::Task);
+            let known =
+                |p: &str| (task && LINEAGE.contains(&p)) || path(p, &formula.inputs, &formula.steps[..at], false);
             let unknown = prompt.template.paths().filter(|p| !p.starts_with("agent."));
-            for bad in unknown.filter(|p| !path(p, &formula.inputs, &formula.steps[..at], false)) {
+            for bad in unknown.filter(|p| !known(p)) {
                 let why = format!(
                     "`{{{{ {bad} }}}}` is not a value of the runs of `{}.{formula_name}`",
                     pack.name

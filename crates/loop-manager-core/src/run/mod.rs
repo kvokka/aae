@@ -13,6 +13,7 @@ mod finish;
 mod formula_step;
 mod gates;
 mod hooks;
+mod lineage;
 mod machine;
 mod msg;
 mod prompts;
@@ -174,6 +175,7 @@ impl Handler for RunHandler {
             Msg::CheckRefused { run, attempt, text } => self.check_refused(tx, &run, attempt, &text),
             Msg::HookFailed { event, data } => Self::hook_failed(tx, &event, data),
             Msg::Tracked { payload, result } => self.tracked(tx, &payload, result),
+            Msg::Lineage { payload, result } => self.lineage(tx, &payload, result),
             Msg::Ready {
                 project,
                 beads,

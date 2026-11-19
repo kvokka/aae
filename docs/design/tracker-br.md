@@ -40,6 +40,11 @@ run relation is below ([Beads and runs](#beads-and-runs)). Code: `crates/loop-ma
   [contracts.md 6.2](contracts.md#62-transitions).
 - A `formula` step lends the bead of its run to the child run: the child makes no claim and at its end neither closes
   nor releases the bead, the parent run does that at its own end.
+- A prompt that shows the comments or the parents of the run's bead (`{{ bead.comments }}`, `{{ bead.parents }}`,
+  [contracts.md 2.3](contracts.md#23-substitution-inputs-and-prompt-templates)) gets them from `br show <id> --json`,
+  one call for the bead and one for each parent up to the root: its `comments` (`author`, `created_at`, `text`, in
+  br's order, oldest first) and its `parent`. The run reads them each time it enters such a step, so the comments that
+  agents and humans leave on a bead are how the steps and rounds of a run, and the runs after it, hand the work over.
 - A bead has at most one live owner run; a second request for it is refused with the reason.
 - A bead named by id that belongs to another rig is refused at the start; the claim checks it again
   (`failed{infrastructure, bead_of_another_rig}`, the claim released). A start with no rig takes the rig of
@@ -135,6 +140,9 @@ run relation is below ([Beads and runs](#beads-and-runs)). Code: `crates/loop-ma
   instead, so `passed` leaves such a bead open without an assignee.
 - `br show` does not find a bead by `external_ref`: the key of a creation is looked up in the whole list.
 - The exit code of a busy claim differs between versions: the adapter branches on the exit code (4), not on text.
+- `br delete` of a parent removes the link: its children have no parent then, and the line of parents a prompt shows
+  ends there. A comment changes the bead's `updated_at` and reaches the core as `bead.updated` with
+  `changed: ["comments"]`, without its text.
 - br has no events. Changes made through loop-manager raise events at once; changes made by hand are caught by a watcher
   on `.beads/` and read from br's `events` table read-only, under br's `.write.lock` held shared (a stock SQLite
   reader otherwise resets the WAL index under a br write). Reading that table depends on br's schema.

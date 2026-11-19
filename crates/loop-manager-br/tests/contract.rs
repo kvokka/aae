@@ -1,6 +1,6 @@
 //! Contract tests of the br adapter on the pinned br (docs/design/tracker-br.md): claim under concurrency, conditional
-//! release and close, the ready set with epics and labels, the prefix of a rig's beads, the writes as changes, the
-//! watcher.
+//! release and close, the ready set with epics and labels, the prefix of a rig's beads, the comments and parents of a
+//! bead, the writes as changes, the watcher.
 
 use loop_manager_br::Br;
 use loop_manager_contract::tracker::{Tracker, TrackerError};
@@ -176,6 +176,30 @@ async fn under_gives_the_ready_beads_at_any_depth_and_an_epic_once_its_children_
     br(dir.path(), &["close", &kids[0], &kids[1]]);
     assert_eq!(t.under(&root).await.unwrap(), [epic]);
     assert_eq!(t.under("t-none").await, Err(TrackerError::NotFound));
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn the_lineage_of_a_bead_is_its_comments_and_its_parents_from_the_root_down() {
+    let (dir, t) = tracker();
+    let root = create(dir.path(), "Root", &["-t", "epic"]);
+    let epic = create(dir.path(), "Epic", &["-t", "epic", "--parent", &root]);
+    let kid = create(dir.path(), "Kid", &["--parent", &epic]);
+    br(dir.path(), &["comments", "add", &root, "The goal: ship it"]);
+    br(dir.path(), &["comments", "add", &kid, "start with the parser"]);
+    br(dir.path(), &["comments", "add", &kid, "two lines\nhere"]);
+    let lineage = t.lineage(&kid).await.unwrap();
+    assert_eq!(lineage.bead.bead.id, kid);
+    let texts: Vec<&str> = lineage.bead.comments.iter().map(|c| c.text.as_str()).collect();
+    assert_eq!(texts, ["start with the parser", "two lines\nhere"]);
+    assert!(
+        (lineage.bead.comments.iter()).all(|c| c.author == "alice" && !c.created_at.is_empty()),
+        "{lineage:?}"
+    );
+    let parents: Vec<&str> = lineage.parents.iter().map(|p| p.bead.id.as_str()).collect();
+    assert_eq!(parents, [root.as_str(), epic.as_str()]);
+    assert_eq!(lineage.parents[0].comments.len(), 1);
+    assert!(lineage.parents[1].comments.is_empty());
+    assert_eq!(t.lineage("t-none").await, Err(TrackerError::NotFound));
 }
 
 #[tokio::test(flavor = "multi_thread")]

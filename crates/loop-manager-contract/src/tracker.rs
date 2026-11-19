@@ -23,6 +23,31 @@ pub struct Bead {
     pub closed_at: Option<String>,
 }
 
+/// A comment on a bead (contracts 5.2).
+#[derive(Clone, Debug, PartialEq, Serialize)]
+pub struct Comment {
+    pub author: String,
+    pub created_at: String,
+    pub text: String,
+}
+
+/// A bead with its comments, oldest first.
+#[derive(Clone, Debug, PartialEq, Serialize)]
+pub struct Commented {
+    #[serde(flatten)]
+    pub bead: Bead,
+    pub comments: Vec<Comment>,
+}
+
+/// What a prompt shows of a bead beyond its fields (contracts 5.2): its comments, and its parents with theirs, from
+/// the root down to its own parent.
+#[derive(Clone, Debug, PartialEq, Serialize)]
+pub struct Lineage {
+    #[serde(flatten)]
+    pub bead: Commented,
+    pub parents: Vec<Commented>,
+}
+
 /// One write to the tracker (contracts 5.2): `seq` orders the writes and is the cursor of `changes`; `actor` is who
 /// made it (`loop-manager:<run id>[:<attempt n>]` for loop-manager and its sessions); `changed` names the fields of an `updated`.
 #[derive(Clone, Debug, PartialEq)]
@@ -91,4 +116,7 @@ pub trait Tracker: Send + Sync {
         title: &'a str,
         description: &'a str,
     ) -> BoxFuture<'a, Result<Bead, TrackerError>>;
+    /// The bead `id` with its comments and its parents with theirs (contracts 5.1); a parent the tracker no longer
+    /// has ends the line, `NotFound` with no `id`.
+    fn lineage<'a>(&'a self, id: &'a str) -> BoxFuture<'a, Result<Lineage, TrackerError>>;
 }

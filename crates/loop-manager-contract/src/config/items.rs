@@ -238,6 +238,7 @@ impl Loader {
                 model,
                 effort,
                 native,
+                last_comments,
                 ..
             } => {
                 let launch = super::compose::Launch { harness, model, effort };
@@ -250,6 +251,7 @@ impl Loader {
                     agent: reference(&agent),
                     timeout: self.timeout(file, timeout.as_deref()),
                     settings: Box::new(settings),
+                    last_comments,
                 }
             }
             StepFile::Exec {

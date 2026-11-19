@@ -4,7 +4,7 @@
 
 use loop_manager_contract::{
     BoxFuture,
-    tracker::{Bead, Change, Tracker, TrackerError},
+    tracker::{Bead, Change, Comment, Commented, Lineage, Tracker, TrackerError},
 };
 use std::sync::{Arc, Mutex, PoisonError};
 
@@ -19,6 +19,8 @@ struct State {
     log: Vec<Change>,
     /// The beads of `create`, by key.
     keys: Vec<(String, String)>,
+    /// The comments, oldest first, by bead id.
+    comments: Vec<(String, Comment)>,
     down: bool,
 }
 
@@ -53,6 +55,16 @@ impl MemoryTracker {
     /// Deletes `id`, as a human does with `br delete`; its children keep it as their parent.
     pub fn remove(&self, id: &str) {
         self.lock().beads.retain(|b| b.id != id);
+    }
+
+    /// Someone comments on `id`, as `br comments add` does.
+    pub fn comment(&self, id: &str, author: &str, text: &str) {
+        let comment = Comment {
+            author: author.to_owned(),
+            created_at: "2026-11-13T00:00:00Z".to_owned(),
+            text: text.to_owned(),
+        };
+        self.lock().comments.push((id.to_owned(), comment));
     }
 
     /// While down, every call fails as `Unavailable`.
@@ -221,6 +233,37 @@ impl Tracker for MemoryTracker {
             Ok(ids
                 .filter(|id| std::iter::successors(parent(id), parent).any(|e| e == root))
                 .collect())
+        })
+    }
+
+    fn lineage<'a>(&'a self, id: &'a str) -> BoxFuture<'a, Result<Lineage, TrackerError>> {
+        Box::pin(async move {
+            let state = self.lock();
+            if state.down {
+                return Err(TrackerError::Unavailable {
+                    text: "down".to_owned(),
+                });
+            }
+            let commented = |id: &str| {
+                let bead = state.beads.iter().find(|b| b.id == id)?.clone();
+                let comments = state.comments.iter().filter(|(of, _)| of == id);
+                let comments = comments.map(|(_, c)| c.clone()).collect();
+                Some(Commented { bead, comments })
+            };
+            let bead = commented(id).ok_or(TrackerError::NotFound)?;
+            // Up the parents while the tracker has them; a deleted one ends the line.
+            let mut parents: Vec<Commented> = Vec::new();
+            let mut next = bead.bead.epic.clone();
+            while let Some(parent) = next
+                .as_deref()
+                .filter(|p| parents.iter().all(|c| c.bead.id != *p) && *p != id)
+            {
+                let Some(found) = commented(parent) else { break };
+                next = found.bead.epic.clone();
+                parents.push(found);
+            }
+            parents.reverse();
+            Ok(Lineage { bead, parents })
         })
     }
 

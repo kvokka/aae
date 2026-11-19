@@ -143,7 +143,8 @@ impl RunHandler {
         for (run, at) in waiting {
             tx.set_deadline(&format!("{run}:decide"), at + DECIDE_SLACK_MS)?;
         }
-        // A run in `preparing` with a state deadline waits for the claim of its bead in the tracker.
+        // A run in `preparing` with a state deadline waits for the tracker: the claim of its bead, or its comments and
+        // parents.
         tx.sql().execute(
             "UPDATE deadlines SET at_ms = ?1 WHERE id IN (SELECT id || ':state' FROM runs WHERE state = 'preparing')",
             [tx.now_ms() + self.config.watchdog.start_timeout_ms],

@@ -669,6 +669,8 @@ timeout = "4h"                      # optional (default 4h)
 model = "opus"                      # optional, ai steps only: layer 8, the launch settings `harness`,
                                     # `model`, `effort`
 native.claude = { permission_mode = "dontAsk" }  # optional, ai steps only: layer 8, merged by key
+last_comments = 6                   # optional, ai steps only: the prompt shows the last 6 comments of the bead
+                                    # and of each of its parents (default: all)
 
 [[step]]
 name = "test"
@@ -753,8 +755,9 @@ whatever its name), as one child run: the same rig, the run's correlation, one l
 declares (a `task` input too), and on top of them the step's `inputs`: a table as a trigger's, each string a template
 over `inputs`, `steps`, `run`, `bead` and `project`. The child works on the bead its parent holds without owning it
 (an explicit `task` naming that bead works the same way): it makes no claim and at its end neither closes nor releases
-the bead, the parent does that at its own end; `bead` in the child's templates is the parent's snapshot of it, and a
-child of that child may borrow it on. A child that cannot start (the start is refused, or `next_ready` finds no ready
+the bead, the parent does that at its own end; `bead` in the child's templates is the parent's snapshot of it (a step
+of the child whose prompt shows the comments or the parents of the bead reads them itself), and a child of that child
+may borrow it on. A child that cannot start (the start is refused, or `next_ready` finds no ready
 bead) fails the parent at once with class `infrastructure`, with no count toward `max_attempts`; a parent that fails in
 the step cancels its live child. The step has no process: it ends when the child does; a cancelled parent cancels the
 child, and a restart finds the child it made and makes no second one. `max_attempts` and `step_check_script_path`
@@ -828,7 +831,8 @@ step gives it the full `max_attempts` again. A repeat spends neither the session
 
 A step sees the outcomes of the steps before it, by name (the last attempt of each): a prompt template as
 `{{ steps.<name>.result }}`, `.summary` and `.data.<key>` (contracts 2.3; `data` of an exec step is `{exit_code,
-stdout, stderr}`), an exec step as `LOOP_MANAGER_STEP_<NAME>_RESULT` (`pass` or `fail`),
+stdout, stderr}`; a placeholder that holds an object or an array, `{{ steps.<name>.data }}` as a whole among them, is
+written as TOON, contracts 2.3), an exec step as `LOOP_MANAGER_STEP_<NAME>_RESULT` (`pass` or `fail`),
 `LOOP_MANAGER_STEP_<NAME>_SUMMARY` and `LOOP_MANAGER_STEP_<NAME>_DATA` (JSON, when there is data), `<NAME>` formed as
 for inputs; a step name whose variables collide with another step's or an input's is a config error. A skipped step has
 no outcome until it runs again, even one from an earlier round: no `steps.<name>`, no `LOOP_MANAGER_STEP_<NAME>_*`. So a
@@ -858,9 +862,24 @@ directory: without a worktree, runs of one rig share its directory, and keeping 
 (`worktree`, the rig's `max_writers`, `pool`, `max_runs`).
 
 A prompt template is checked at load against each formula whose steps name its agent (contracts 2.3):
-`inputs.<name>` must be a declared input; `bead.<field>` needs a `task` input and a field of `Bead` (contracts 5.2); `run.<field>` a field of `RunView` (1.3); `project.name`,
+`inputs.<name>` must be a declared input; `bead.<field>` needs a `task` input and a field of `Bead` (contracts 5.2),
+or `comments` or `parents`, which only a prompt template may name; `run.<field>` a field of `RunView` (1.3); `project.name`,
 `project.path` (the directory of `loop-manager.toml`); `rig.name`, `rig.path` and `rig.<var>` (a variable of the run's
 rig, checked when the run starts); `agent.<name>` (a file of the agent, see "Agent").
+
+A prompt shows what was said on the task: `{{ bead.comments }}` is the comments of the run's bead, `{{ bead.parents }}`
+its parents from the root down, each with its fields and its comments — the whole picture and the place of the task in
+it. Both are TOON (contracts 2.3), so a template puts each on a line of its own. The run reads them from the tracker
+each time it enters the step: a comment an earlier step of the same run left, or a human meanwhile, is in the prompt
+of the next step and of the next round. `last_comments` on the step keeps the last comments of the bead and of each
+parent, and the agent reads the older ones itself (`br comments <id>`). A bead with no comments shows `[]`.
+
+```
+[2]{author,created_at,text}:
+  alice,"2026-11-19T03:59:18Z",go left
+  "loop-manager:run_7:2","2026-11-19T04:10:00Z","Tests: 2 red\n- parser::tail"
+```
+
 A prompt is never empty: a template file of only whitespace is a load error, and a prompt that is empty after
 substitution fails the run (`infrastructure`, `prompt: empty after substitution`) before any process starts.
 

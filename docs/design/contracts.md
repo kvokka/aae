@@ -178,8 +178,8 @@ A path that is absent or null in the event does not match. There is no negation,
 expression in the first release; a trigger that needs more uses an `exec` step that decides. Example — a trigger
 on beads labelled `auto` is written `where = { "bead.labels" = "auto" }`.
 
-The same table is the `if` of a step, over the run context of a prompt template (2.3, without `remarks` and `agent`)
-and `back_from`, the names of the checks that sent the run back into its current round (config.md, "Formula").
+The same table is the `if` of a step, over the run context of a prompt template (2.3, without `remarks`, `agent` and the bead's
+`comments` and `parents`) and `back_from`, the names of the checks that sent the run back into its current round (config.md, "Formula").
 
 ### 2.3 Substitution (`inputs` and prompt templates)
 
@@ -199,8 +199,14 @@ spaces, nothing else — no filters, conditions or loops.
   (`agent.<name>`: the text of the agent's file `<name>.md`, the project's over the pack's; config.md, "Agent"); an
   unresolved path is an error before the run starts and fails the run with class `infrastructure`. `steps` holds the
   outcome of each step before the current one: `steps.<name>.result`, `.summary`, `.data.<key>` (the last attempt of
-  that step; `data` of an exec step is `{exit_code, stdout, stderr}`); a path to the current or a later step, to
-  a step with an `if` (it may be skipped), or to another field, is a config error.
+  that step; `data` of an exec step is `{exit_code, stdout, stderr}`); a path to the current or a later step, to a
+  step with an `if` (it may be skipped), or to another field, is a config error. `bead` holds the fields of `Bead`
+  (5.2) and, in a prompt template only, `bead.comments` — the comments of the bead, oldest first, each `{author,
+  created_at, text}` — and `bead.parents` — its parents from the root down to its own parent, each with the fields of
+  `Bead` and its own `comments`; a path below either is a config error. A run reads both from the tracker (`lineage`,
+  5.1) each time it enters an `ai` step whose template names one of them, so the prompt holds what was written up to
+  then, by the earlier steps of the run too, and every `bead.*` of that step is the bead as read then. `last_comments`
+  of the step keeps the last of them (config.md, "Formula").
 - `{{` that is not a placeholder is written `{{"{{"}}`.
 
 Structured data in a prompt is TOON ([toonformat.dev](https://toonformat.dev), spec 4.4), not JSON: an agent reads
@@ -612,7 +618,7 @@ The tables are owned by the adapters and pinned by the contract tests ([harness 
 
 ### 5.1 Operations
 
-The trait has the seven operations the core calls; an operation is added only when a caller needs it.
+The trait has the eight operations the core calls; an operation is added only when a caller needs it.
 Every call names the actor: `loop-manager:<run id>` when the daemon acts for a run, `loop-manager` for
 the daemon's own reads. Sessions and exec steps get `BD_ACTOR=loop-manager:<run id>:<attempt n>` and the database path
 in their environment ([experiments](experiments.md#br-as-an-event-source-experiment-3)). An actor of any other form is a
@@ -628,6 +634,7 @@ trait Tracker: Send + Sync {
     fn changes(&self, after: i64) -> BoxFuture<Result<Vec<Change>, TrackerError>>;           // after a seq
     fn create(&self, actor: &str, key: &str, title: &str, description: &str)
         -> BoxFuture<Result<Bead, TrackerError>>;                               // once per key
+    fn lineage(&self, id: &str) -> BoxFuture<Result<Lineage, TrackerError>>;          // comments and parents
 }
 ```
 
@@ -644,6 +651,16 @@ again after a restart) returns the bead of the first call, never a second bead.
 gives out (`config.md`, "Formula"). A bead's `epic` names only its parent, and an epic with open children is not ready, so the
 ancestors of a grandchild cannot be told from `ready()`; the tracker answers for the whole subtree. An epic becomes a
 member once its own children are closed and it is ready itself. A `root` the tracker does not have is `NotFound`.
+
+`lineage` gives the bead `id` with its comments, oldest first, and its parents with theirs, from the root down to its
+own parent: what a prompt shows of a bead beyond its fields (2.3). It is a read, made as `loop-manager`. A parent the
+tracker no longer has ends the line; an `id` it does not have is `NotFound`. The core asks for it by an effect on the
+queue `tracker:<project>` when a run enters an `ai` step whose prompt template names `bead.comments` or
+`bead.parents`, and the run waits for the answer in `preparing`, as for its claim: the answer replaces the run's
+snapshot of the bead and the prompt renders; an `Unavailable` tracker is tried again
+(`tracker.sync_failed{op: "lineage"}`) until `start_timeout` fails the run (`tracker_unavailable`), any other error
+fails it at once (`failed{infrastructure, bead_unreadable: <error>}`). An answer to another entry of a step, or to a
+run that prepares no more, is dropped.
 
 `changes` is pull-only; the adapter also owns a watcher that sends a "changed" message to the core, and the core then
 calls `changes` from its stored cursor (and on start and after recovery without waiting for a signal). One effect on the
@@ -663,6 +680,8 @@ the adapter in the session plan.
 - `Bead`: `{id, title, description, status: "open"|"in_progress"|"blocked"|"deferred"|"closed", priority, labels,
   assignee, epic, created_at, updated_at, closed_at}`. `epic` is computed by the adapter (br has no such field,
   [tracker-br](tracker-br.md#limits-of-br-the-adapter-is-shaped-by)). The rig of a bead is the prefix of its id (no label).
+- `Comment`: `{author, created_at, text}`. `Lineage`: the fields of `Bead`, `comments: [Comment]` and `parents`, each
+  the fields of `Bead` and its `comments`. Comments are no part of `Bead`: a bead event carries none.
 - `Change`: `{seq, kind: "created"|"updated"|"closed", actor, changed: [field], bead: Bead}`; `seq` orders the writes
   and is the cursor of `changes(after)`, `bead` is the bead when the change is read; the core maps it to `bead.created`,
   `bead.updated`, `bead.closed`, and derives `bead.ready` by diffing `ready()` with the last ready set it keeps in the
@@ -686,7 +705,7 @@ the adapter in the session plan.
 | State | Meaning | Deadline (default) | On deadline |
 |---|---|---|---|
 | `queued` | not started: waits for a concurrency slot, a place in its rig (`max_writers`) or an open gate; the reason is visible (`run.queued`) | `queue_timeout` 7 d | `failed{infrastructure, queue_timeout}` |
-| `preparing` | the bead claim confirmed, `run.preparing` hooks running, workdir and environment being fixed, snapshot of the effective config written | `start_timeout` for the claim, then the hook deadline (see 3.3) | the hooks count as failed → deny → `failed{check, hook_deadline}` |
+| `preparing` | the bead claim confirmed, the comments and parents of the bead read when the step's prompt shows them, `run.preparing` hooks running, workdir and environment being fixed, snapshot of the effective config written | `start_timeout` for the claim and for that read, then the hook deadline (see 3.3) | the hooks count as failed → deny → `failed{check, hook_deadline}` |
 | `starting` | an attempt: instance acquired, session started or resumed, first prompt sent, waiting for `prompt.acked` | `start_timeout` 120 s | attempt failure `stall` |
 | `running` | the agent works (or the `exec` command runs, or the `drain` step gives out beads, or the `await` step waits for its outcome) | step `timeout` of the formula (default: `ai` 4 h, `exec` 45 m, `drain` and `formula` 24 h) per attempt → `runaway_turn` (`await`: 168 h → `failed{check, await_timeout}`, or `pass` with `fail_on_timeout = false`); silence budgets (an announced `retrying` pause adds to the limit): first event after ack 15 min, model thinking 15 min, tool running 40 min, background work after the turn 120 min → `stall` | attempt failure |
 | `finishing` | outcome declared and the session idle without background; `run.finishing` hooks running, then the step check script of `step_check_script_path` if the hooks accepted a `pass` (no decision awaited) | hook deadline; for the script the step `timeout` plus a margin, a lost script counting as not passed | the hooks count as failed → veto → `failed{check, hook_deadline}` (a declared `fail` stays `failed{agent}`); script exit 0 → the next step or `passed`; 75 → `failed{check}` with no repeat and no `back_to` round; any other result is an execution that did not pass: under `max_attempts` the run repeats the step (`run.step_finished` with outcome `fail`, then `preparing` with `step_attempt` + 1), else `failed{check}` (`failed{agent}` if the step said `fail`); a script that cannot start → `failed{infrastructure}`, one whose `env` names a variable the daemon does not have (it is not started) → `failed{infrastructure}` with reason `config_error: check script: …` naming the key and the variable, and no `failure_kind` on the attempt, which did not fail |
@@ -768,7 +787,7 @@ cancel); a pass or a failure of the parent leaves them alone.
 | `queued` | slot free, a place in the rig free (`max_writers`), no gate of the run closed | `preparing` | with a task text that names no bead the core knows: the tracker creates the root bead, or returns the bead the text names (`create`, key kept in the effect), the run owns it and its input takes the id; with a bead: the tracker claim as owner `loop-manager:<run>` (queue `tracker:<project>`), and the prompt renders once the claim returned the bead; `run.preparing` hooks |
 | `preparing` | decision `proceed` (or no hooks) | `starting` | attempt 1: instance acquire, `start_session`, `send_prompt` |
 | `preparing` | the `if` of the step does not match, on entry | `preparing` of the next step, or the end of the run | `run.step_skipped`; no hooks, no attempt |
-| `preparing` | `deny`, template error, claim error `Claimed` / `NotFound` / `Invalid`, `create` error other than `Unavailable`, no claim or `create` answer within `start_timeout` | `failed{check}`, `failed{infrastructure}`, `failed{infrastructure, bead_claimed / bead_not_found / bead_invalid}`, `failed{infrastructure, bead_not_created: <error>}`, `failed{infrastructure, tracker_unavailable}` | — |
+| `preparing` | `deny`, template error, claim error `Claimed` / `NotFound` / `Invalid`, `create` error other than `Unavailable`, `lineage` error other than `Unavailable`, no claim, `create` or `lineage` answer within `start_timeout` | `failed{check}`, `failed{infrastructure}`, `failed{infrastructure, bead_claimed / bead_not_found / bead_invalid}`, `failed{infrastructure, bead_not_created: <error>}`, `failed{infrastructure, bead_unreadable: <error>}`, `failed{infrastructure, tracker_unavailable}` | — |
 | `starting` | `prompt.acked` of the first prompt | `running` | — |
 | `running` | turn ended, idle without background, outcome declared | `finishing` | `run.finishing` hooks |
 | `running` | turn ended, idle with background, outcome declared | `running` | the adapter stops the commands the session left (`stop_background`); `finishing` follows on idle without background |
@@ -788,7 +807,7 @@ cancel); a pass or a failure of the parent leaves them alone.
 | `running` (drain) | a read that gave nothing, with no child alive and no later read queued | `finishing` with outcome `pass`, `summary` `<n> closed, <n> failed, <n> refused`, `data` `{closed, failed, refused: {<bead>: <reason>}}` of this entry's beads; after a stop `fail`, `summary` `stopped on <beads>: <n> closed, <n> failed, <n> not started`, `data` adds `stopped_on` and `not_started` | `run.finishing` hooks |
 | `running` (exec) | exit 75 / timeout / spawn error / an `env` reference to a variable the daemon does not have (the command is not spawned) | `interrupted` with failure `unknown` (`text` `exit 75 (EX_TEMPFAIL)`, scope `run`) / `runaway_turn` / `workspace_failure` / `config_error` (`text` names the key and the variable) | `run.attempt_failed` hooks; every attempt runs the command again |
 | `starting`, `running` | `failure`, `exited`, deadline, exec exit 75 | `interrupted` | stop the session (cancel, then stop the instance if it is the session's own, then sweep descendants); `run.attempt_failed` hooks |
-| `finishing` | accept of a `pass` of a step that is not the last | `preparing` of the next step | `run.step_finished`; the next step's prompt renders (the workdir and the bead claim stay) and its `run.preparing` hooks run |
+| `finishing` | accept of a `pass` of a step that is not the last | `preparing` of the next step | `run.step_finished`; the next step's prompt renders (after the read of the bead's comments and parents when it shows them; the workdir and the bead claim stay) and its `run.preparing` hooks run |
 | `finishing` | accept / veto / remark | `passed` or `failed{agent}` / `failed{check}` / `running` | bead close or conditional release; on remark the message goes as the next prompt of the same attempt, the declared outcome is cleared, the token stays valid. A remark for a step other than `ai` is not allowed (hook failure) |
 | `interrupted` | `resume` / `new_session` | `starting` after `after` | new attempt: `generation + 1`, new token; `resume` first checks the transcript (invariant 17), `Missing` → attempt failure `transcript_divergence` |
 | `interrupted` | `park` | `parked` | gate closed in the same transaction |
@@ -889,7 +908,7 @@ for it is not.
   the kill of its instance is the stop, so the run settles its turn as idle without background would — `finishing`
   with the declared outcome — and the stop still queued is dropped. The same holds for a background subagent of
   claude, killed with its instance. The deadlines that wait for an effect's answer count again from the start:
-  `decide` (3.3) and the claim of a bead in `preparing` (`start_timeout`); those of real time — gate `until`,
+  `decide` (3.3), the claim of a bead and the read of its comments and parents in `preparing` (`start_timeout`); those of real time — gate `until`,
   schedules (a missed one fires at most once), the `after` of a retry, `queue_timeout`, `park_timeout` — stay. Then
   resync. Deadlines are wall-clock times: the writer reads the wall clock at least every 30 s, so a deadline passed
   while the machine slept fires late by at most that.

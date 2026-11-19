@@ -37,26 +37,6 @@ impl RunHandler {
         }
     }
 
-    /// Renders the prompt and asks the `run.preparing` hooks.
-    pub(super) fn render_and_prepare(&mut self, tx: &mut Tx<'_>, mut row: Row) -> Result<(), Error> {
-        let prepared = self.render(tx, &row);
-        let (prompt, timeout_ms, config) = match prepared {
-            Ok(Some(p)) => p,
-            Ok(None) => return self.skip(tx, row),
-            Err(reason) => return self.terminal(tx, row, "failed", Some("infrastructure"), &reason),
-        };
-        let env_keys: Vec<&String> = config["env"].as_object().into_iter().flat_map(|e| e.keys()).collect();
-        let data = json!({ "run": row.view(), "workdir": row.workdir, "env_keys": env_keys, "prompt_append": null });
-        tx.sql().execute(
-            "UPDATE runs SET prompt = ?2, timeout_ms = ?3, config = ?4 WHERE id = ?1",
-            params![row.id, prompt, timeout_ms, config.to_string()],
-        )?;
-        row.config = Some(config.to_string());
-        row.prompt = prompt;
-        row.timeout_ms = Some(timeout_ms);
-        self.deciding(tx, row, "run.preparing", data)
-    }
-
     /// Applies the `run.preparing` modifications of the hooks (contracts 3.2), then starts the first attempt.
     pub(super) fn prepared(
         &mut self,

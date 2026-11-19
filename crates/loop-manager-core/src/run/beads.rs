@@ -327,6 +327,7 @@ pub(super) async fn execute(trackers: &Trackers, core: &CoreHandle<Msg>, payload
             .map(Some),
         "close" => tracker.close(&owner, bead, text("reason")).await.map(|()| None),
         "release" => tracker.release(&owner, bead).await.map(|()| None),
+        "lineage" => return super::lineage::read(tracker.as_ref(), core, payload).await,
         _ => {
             let read = async {
                 let changes = tracker.changes(payload["after"].as_i64().unwrap_or_default()).await?;

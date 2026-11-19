@@ -32,7 +32,8 @@ pub(super) struct Row {
     pub(super) created_ms: i64,
     pub(super) started_ms: Option<i64>,
     pub(super) bead: Option<String>,
-    /// The bead as the claim returned it (contracts 5.2).
+    /// The bead as the tracker last gave it: at the claim, or with its comments and parents for a prompt that shows
+    /// them (contracts 5.2).
     pub(super) bead_data: Option<String>,
     /// The agent of every ai step, as the `agent:` label of the bead names it; `None`: each step's own.
     pub(super) as_agent: Option<String>,

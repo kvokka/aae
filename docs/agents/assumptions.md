@@ -70,6 +70,16 @@ The behaviour itself is described in the document named under each heading; this
   all run and their remarks go back together; the executor of a bead is the formula named in the `drain` step; a
   repeat of a step stays within the round.
 - A template is substitution only, without logic; a missing variable is an error before the start.
+- A prompt names the comments of the run's bead `bead.comments` and its parents `bead.parents`, the root first, each
+  parent with every field of `Bead` and its comments; nothing but a prompt template may name them. All comments are
+  shown unless the `ai` step has `last_comments`, which keeps the last of the bead and of each parent.
+- The bead is read again each time a run enters an `ai` step whose prompt shows its comments or parents; the other
+  steps see the bead as it was last read.
+- TOON is written by loop-manager's own encoder, the plain forms of spec 4.4 only: the crates that write TOON turn on
+  `preserve_order` of `serde_json` for the whole build, which would change the key order of every JSON loop-manager
+  writes. An object or array placeholder inside any template text is TOON, in a trigger's `inputs` too.
+- What a script reads stays JSON: `LOOP_MANAGER_STEP_<NAME>_DATA`, `LOOP_MANAGER_INPUT_<NAME>`, `--json` of the CLI.
+  The answers of the MCP tools are still JSON.
 
 ## Runs and triggers — [contracts 6](../design/contracts.md#6-run), [config: trigger](../design/config.md#trigger)
 

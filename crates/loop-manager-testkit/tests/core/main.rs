@@ -12,6 +12,7 @@ mod attempt_edges;
 mod auth;
 mod await_step;
 mod background;
+mod bead_comments;
 mod bead_events;
 mod bead_failed_runs;
 mod beads;

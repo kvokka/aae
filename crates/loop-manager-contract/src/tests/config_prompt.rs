@@ -131,3 +131,45 @@ fn a_prompt_template_may_use_only_values_its_runs_have() {
         "`{{ bead.title }}`",
     );
 }
+
+#[test]
+fn a_prompt_shows_the_comments_and_the_parents_of_its_bead_and_no_field_below_them() {
+    assert!(prompt(&[(OWN, "{{ bead.comments }}\n{{ bead.parents }}")]).shows_lineage());
+    assert!(!prompt(&[]).shows_lineage());
+    for path in ["bead.comment", "bead.comments.text", "bead.parents.title"] {
+        let template = format!("{{{{ {path} }}}}");
+        let error = format!("`{{{{ {path} }}}}` is not a value of the runs of `kit.implement`");
+        fails(&[(OWN, template.as_str())], &error);
+    }
+    // A formula without a task input has no bead.
+    let review = (
+        "kit/formulas/review.toml",
+        "name = \"review\"\n[[step]]\nkind = \"ai\"\nagent = \"implementer\"\n",
+    );
+    fails(
+        &[review, (TEMPLATE, "{{ bead.comments }}")],
+        "`{{ bead.comments }}` is not a value of the runs of `kit.review`",
+    );
+}
+
+#[test]
+fn last_comments_is_a_positive_count_on_an_ai_step() {
+    use crate::config::StepKind;
+    let implement = |keys: &str| {
+        let text = format!(
+            "name = \"implement\"\n[inputs]\nbead = {{ type = \"task\", required = true }}\n[[step]]\n{keys}\n"
+        );
+        ("kit/formulas/implement.toml", text)
+    };
+    let (file, text) = implement("kind = \"ai\"\nagent = \"implementer\"\nlast_comments = 2");
+    let config = load_with(&[(file, text.as_str())]).unwrap();
+    let (_, formula) = config.projects[0].formula("implement").unwrap();
+    let StepKind::Ai { last_comments, .. } = &formula.steps[0].kind else {
+        panic!("an ai step");
+    };
+    assert_eq!(last_comments.map(std::num::NonZeroUsize::get), Some(2));
+    let (file, zero) = implement("kind = \"ai\"\nagent = \"implementer\"\nlast_comments = 0");
+    fails(&[(file, zero.as_str())], "expected a nonzero usize");
+    let (file, exec) = implement("kind = \"exec\"\ncommand = [\"true\"]\nlast_comments = 2");
+    fails(&[(file, exec.as_str())], "unknown field `last_comments`");
+}

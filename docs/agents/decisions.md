@@ -93,6 +93,7 @@ each heading; this file only marks it as decided.
 | 128 | A step may carry `if`: a `where` table (contracts 2.2) over the run context of a prompt template and `back_from`, the names of the checks that sent the run back into the current round. A step whose `if` does not match is skipped. There is no expression language, and `back_to` stays the only jump (2026-11-17) |
 | 134 | Review feedback is worked by an agent of its own on the formula, with its own skills, instructions and permissions, not by the implementer (2026-11-17) |
 | 135 | The working formula of a feature over several repositories has its gate on the epic: an internal `-base` formula plans and gives the beads out, and the formula around it opens the pull requests, waits for the root's to be merged and merges the children's. A variant with a gate per repository is not written (2026-11-17) |
+| 148 | An agent sees the comments of its task in its prompt and, where the formula needs them, the comments and the fields of the task's parents: the whole picture and the place of the task in it. Data that goes into an agent's context is given as TOON, not JSON (fewer tokens); wherever else data reaches a context, TOON is preferred where that is reasonable (2026-11-19) |
 
 ## Runs — [contracts 6](../design/contracts.md#6-run), [invariants](../design/invariants.md)
 

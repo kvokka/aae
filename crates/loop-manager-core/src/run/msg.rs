@@ -151,6 +151,11 @@ pub enum Msg {
         payload: Value,
         result: Result<Option<Bead>, TrackerError>,
     },
+    /// The bead of the read effect `payload` with its comments and parents, for the prompt that shows them.
+    Lineage {
+        payload: Value,
+        result: Result<crate::tracker::Lineage, TrackerError>,
+    },
     /// The writes to the tracker of `project` after its cursor, its ready set and, for the root bead of each run in
     /// a drain step when the read was asked, the ready beads under it at any depth.
     Ready {

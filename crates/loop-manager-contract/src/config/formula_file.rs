@@ -5,7 +5,12 @@ use super::{Name, Settings, Sourced};
 use crate::template::{Filter, Inputs};
 use serde::Deserialize;
 use serde_json::Value;
-use std::{collections::BTreeMap, num::NonZeroU32, path::PathBuf, time::Duration};
+use std::{
+    collections::BTreeMap,
+    num::{NonZeroU32, NonZeroUsize},
+    path::PathBuf,
+    time::Duration,
+};
 
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -88,6 +93,8 @@ pub(super) enum StepFile {
         max_attempts: Option<NonZeroU32>,
         /// The script whose exit code says whether the step passed; empty is none.
         step_check_script_path: Option<String>,
+        /// The prompt shows the last comments only, this many (docs/design/config.md); absent, all.
+        last_comments: Option<NonZeroUsize>,
     },
     Exec {
         name: Option<String>,
@@ -227,6 +234,8 @@ pub enum StepKind {
         timeout: Option<Duration>,
         /// The launch settings and the native blocks of the step.
         settings: Box<Settings>,
+        /// The most comments of the bead, and of each of its parents, the prompt shows: the last ones.
+        last_comments: Option<NonZeroUsize>,
     },
     Exec {
         command: Vec<String>,

@@ -62,7 +62,7 @@ impl RunHandler {
             .collect();
         env.extend((exec.env.iter()).map(|(name, value)| (name.clone(), json!(value))));
         let inherit_env = exec.inherit_env.as_ref().is_some_and(|i| i.value);
-        let timeout = match (&step.kind, row.step_kind.as_str()) {
+        let (timeout, last_comments) = match (&step.kind, row.step_kind.as_str()) {
             (StepKind::Exec { command, timeout, .. }, "exec") => {
                 let config = json!({ "command": command, "env": env, "inherit_env": inherit_env });
                 return Ok(Some((None, timeout_ms(timeout, EXEC_STEP_TIMEOUT_MS), config)));
@@ -114,7 +114,12 @@ impl RunHandler {
                 let config = json!({ "fail_on_timeout": fail_on_timeout });
                 return Ok(Some((None, timeout_ms(timeout, AWAIT_TIMEOUT_MS), config)));
             }
-            (StepKind::Ai { timeout, .. }, "ai") => timeout,
+            (
+                StepKind::Ai {
+                    timeout, last_comments, ..
+                },
+                "ai",
+            ) => (timeout, last_comments),
             _ => return Err(format!("step `{}` of `{}` changed its kind", row.step, row.formula)),
         };
         let (agent, config) =
@@ -127,6 +132,9 @@ impl RunHandler {
         let prompt = self.config.prompt(&row.project, &agent)?;
         context["remarks"] = json!(remarks(tx.sql(), &row.id).map_err(|e| e.to_string())?);
         context["agent"] = json!(prompt.files);
+        if let Some(last) = last_comments {
+            keep_last(&mut context["bead"], last.get());
+        }
         let mut text = prompt.template.render(&context).map_err(|e| format!("prompt: {e}"))?;
         // The remark of a repeat reaches the agent even when its template has no place for remarks
         // (docs/design/config.md).
@@ -166,6 +174,21 @@ pub(super) fn step_results(conn: &Connection, run: &str, except: &str) -> rusqli
         Ok((r.get(0)?, serde_json::from_str(&outcome).unwrap_or_default()))
     })?;
     rows.collect()
+}
+
+/// Keeps the last `n` comments of `bead` and of each of its parents (docs/design/config.md).
+fn keep_last(bead: &mut Value, n: usize) {
+    if let Some(comments) = bead.get_mut("comments").and_then(Value::as_array_mut) {
+        comments.drain(..comments.len().saturating_sub(n));
+    }
+    for parent in bead
+        .get_mut("parents")
+        .and_then(Value::as_array_mut)
+        .into_iter()
+        .flatten()
+    {
+        keep_last(parent, n);
+    }
 }
 
 /// The remarks of the checks that last sent `run` back to an earlier step, then the remark of the execution of its

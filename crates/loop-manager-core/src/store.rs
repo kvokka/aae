@@ -38,7 +38,7 @@ INSERT INTO consumers (name, seq) VALUES ('journal', 0);
 -- the run waits for; `next` is the attempt kind an `interrupted` run starts when its `after` passes; `waiting_for`
 -- is why a queued run waits; `continue_from` is the run whose session a run continues; `account` and `model` are the
 -- gate keys its attempts reported (contracts 7); `trigger` (`<pack>.<name>`) started it, for the overlap check of
--- docs/design/config.md; `bead` and `bead_data` are its bead as the claim returned it; `step` and `step_kind` are
+-- docs/design/config.md; `bead` and `bead_data` are its bead as the tracker last gave it; `step` and `step_kind` are
 -- the step of the formula it is at (a drain step has no agent, and its state is read in SQL); `as_agent` is the
 -- agent the `agent:` label of its bead names for its ai steps; `round`, `remarks` and `back_from` (a JSON array of
 -- names) are of the checks that sent it back; `step_attempt` and `step_remarks` are the execution of its step and the remark of the one before.
