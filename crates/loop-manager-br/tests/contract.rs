@@ -1,6 +1,6 @@
 //! Contract tests of the br adapter on the pinned br (docs/design/tracker-br.md): claim under concurrency, conditional
-//! release and close, the ready set with epics and labels, the prefix of a rig's beads, the comments and parents of a
-//! bead, the writes as changes, the watcher.
+//! release and close, a status a project policy declares, the ready set with epics and labels, the prefix of a rig's
+//! beads, the comments and parents of a bead, the writes as changes, the watcher.
 
 use loop_manager_br::Br;
 use loop_manager_contract::tracker::{Tracker, TrackerError};
@@ -112,6 +112,38 @@ async fn release_and_close_change_only_a_bead_their_owner_holds() {
     t.claim("loop-manager:run_3", &id).await.unwrap();
     t.close("loop-manager:run_3", &id, "passed: done").await.unwrap();
     assert!(t.ready().await.unwrap().is_empty());
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_status_of_the_project_policy_passes_release_and_close_as_text() {
+    let (dir, t) = tracker();
+    let policy = "workflow:\n  strict: true\n  statuses: [open, in_progress, rework, blocked, deferred, closed]\n";
+    std::fs::write(dir.path().join(".beads/policy.yaml"), policy).unwrap();
+    let state = async |id: &str| {
+        let bead = t.lineage(id).await.unwrap().bead.bead;
+        (bead.status, bead.assignee)
+    };
+    let (one, two) = (create(dir.path(), "One", &[]), create(dir.path(), "Two", &[]));
+    for id in [&one, &two] {
+        t.claim("loop-manager:run_1", id).await.unwrap();
+        br(dir.path(), &["update", id, "-s", "rework"]);
+        let held = (String::from("rework"), Some(String::from("loop-manager:run_1")));
+        assert_eq!(state(id).await, held);
+    }
+    t.release("loop-manager:run_1", &one).await.unwrap();
+    assert_eq!(state(&one).await, ("open".into(), None));
+    t.close("loop-manager:run_1", &two, "passed: done").await.unwrap();
+    assert_eq!(state(&two).await.0, "closed");
+    let foreign = Command::new("br")
+        .args(["update", &one, "-s", "foo"])
+        .env("BEADS_DIR", dir.path().join(".beads"))
+        .output();
+    let code = foreign.unwrap().status.code();
+    assert_eq!(
+        code,
+        Some(4),
+        "the policy is in force: br refuses a status it does not declare"
+    );
 }
 
 #[tokio::test(flavor = "multi_thread")]

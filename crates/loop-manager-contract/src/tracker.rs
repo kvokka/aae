@@ -12,7 +12,8 @@ pub struct Bead {
     pub id: String,
     pub title: String,
     pub description: String,
-    /// `open`, `in_progress`, `blocked`, `deferred` or `closed`.
+    /// br's status as text: `open`, `in_progress`, `blocked`, `deferred`, `closed`, or one the project's tracker policy
+    /// adds (such as `rework`); the core decides nothing by it.
     pub status: String,
     pub priority: i64,
     pub labels: Vec<String>,

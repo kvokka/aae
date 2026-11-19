@@ -677,8 +677,9 @@ the adapter in the session plan.
 
 ### 5.2 Types and errors
 
-- `Bead`: `{id, title, description, status: "open"|"in_progress"|"blocked"|"deferred"|"closed", priority, labels,
-  assignee, epic, created_at, updated_at, closed_at}`. `epic` is computed by the adapter (br has no such field,
+- `Bead`: `{id, title, description, status, priority, labels, assignee, epic, created_at, updated_at, closed_at}`.
+  `status` is br's status as text: `open`, `in_progress`, `blocked`, `deferred`, `closed`, or one the project's tracker
+  policy adds (such as `rework`); the core decides nothing by it. `epic` is computed by the adapter (br has no such field,
   [tracker-br](tracker-br.md#limits-of-br-the-adapter-is-shaped-by)). The rig of a bead is the prefix of its id (no label).
 - `Comment`: `{author, created_at, text}`. `Lineage`: the fields of `Bead`, `comments: [Comment]` and `parents`, each
   the fields of `Bead` and its `comments`. Comments are no part of `Bead`: a bead event carries none.
