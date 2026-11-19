@@ -10,10 +10,13 @@ rounds is its comments, and a question to the owner is a comment and a label.
 
 ## The epic and its comments
 
-- Your prompt holds the epic's description and its last comments, in TOON; `br comments <id>` gives the older ones.
+- Your prompt holds the epic's description and its last comments, in TOON;
+  `br comments <id> --json | toon --encode` gives the older ones. Use that conversion when reading JSON command
+  output yourself; use a shell with `set -o pipefail` so a failed producer is not hidden by the encoder. Keep JSON
+  unchanged when another command parses it.
   The comments are the only memory between rounds: the summaries of the coders (`CODER`), the reviews (`REVIEW`),
-  the state a stopped session left, the questions (`QUESTION`), the findings (`NOTE`) and the owner's answers (an
-  author that is not `loop-manager:…`).
+  the state a stopped session left, blocking questions (`QUESTION`), discretionary decisions (`DECISION`), findings
+  (`NOTE`) and the owner's answers (`ANSWER`, including answers recorded by the workflow).
 - The epic is the whole task: there are no child beads, and you file none (`br create`).
 - The status and the assignee of the epic are kept by loop-manager and the gate: do not change them. Of the labels
   you set only `needs-owner`.
@@ -46,7 +49,7 @@ Your context budget is 300k tokens: past it a note tells you to wrap up. Spend t
 
 Your session calls three agents of this pack as subagents, under the type names below; at most three at once. A
 brief is self-contained: the goal, the files, the limits, where to put the result, the format of the answer. A long
-result goes to a file under `target/devloop/notes/`, the answer is a short digest. Subagents do not commit: you do,
+result goes to a file under `target/devloop/runs/$LOOP_MANAGER_RUN/notes/`, the answer is a short digest. Subagents do not commit: you do,
 after checking their work.
 
 | Agent | When |
@@ -98,18 +101,32 @@ HEAD: <HEAD at its end>
 `done`: the whole epic is done as far as you can tell. `partial`: a part is left, and the comment says which.
 `blocked`: nothing is left to do without the owner.
 
-## A question to the owner
+## Decisions and questions for the owner
 
-A comment `QUESTION: …` that reads on its own: what is to be decided, what is at stake, the options, and which one
-you took until the owner answers; then `br label add "$LOOP_MANAGER_BEAD" needs-owner`. The work goes on by the
-option you took. A finding or a decision about an assumption is a comment `NOTE: …`.
+- When you can choose within the task and the owner's decisions, choose and keep working. If the choice is
+  debatable or the owner should know, leave a comment whose first line is `DECISION: <id>`, followed by a
+  self-contained explanation in Russian: the issue, the options, what you chose, why, and its consequences. Add
+  `needs-owner`. This is a notification, not a reason to wait, and completion does not mean the owner accepted it.
+- When no authorized choice can unblock the work, leave `QUESTION: <id>` as the first line of a comment, followed
+  by the issue, what cannot proceed, and the options in Russian. Add `needs-owner`. Finish any independent work,
+  then end the session with `pass` and `needs_owner: true` as below: the formula waits for an external answer,
+  without holding a model session. Never declare a run failure just because the owner must decide.
+- Use a stable unique id for each concern, for example `<run id>-storage-format`; use only letters, digits, dots,
+  hyphens, underscores and colons. Keep the same id while a concern remains open; never reuse it for another one.
+  The question or decision is the whole comment, not a line hidden in the coder's report.
+- An answer is a comment whose first line is `ANSWER: <id>`, with the owner's answer below it. Before carrying an
+  old concern forward, read all comments and check for its answer. The workflow records an await resolution this
+  way; follow it as the owner's decision. Do not invent an answer or treat the label's removal as one.
+- A finding that requires no owner response is a `NOTE: …` comment.
 
 ## Finishing
 
 Stop everything you started in the background (commands, subagents, watchers) and wait for it to end. Commit what
 builds, put your comment on the epic, then declare the outcome:
 
-- `loop-manager finish pass --summary "<done or partial: what was done, in one or two lines>"`;
-- `loop-manager finish fail --summary "blocked: <why>"` only when nothing is left to do without the owner: the
-  question is asked (the comment and the label) and everything else is done. If your question already stands on the
-  epic with no answer after it and there is no other work, finish `fail` at once.
+- Normal progress: `loop-manager finish pass --summary "<done or partial: what was done>" --data
+  '{"needs_owner": false}'`.
+- Blocked on the owner: `loop-manager finish pass --summary "blocked: <what must be decided>" --data
+  '{"needs_owner": true, "question_id": "<id>"}'`. The `QUESTION` comment and `needs-owner` label must already exist.
+  If the question is still unanswered and no independent work remains, take this path at once. The session ends;
+  the formula enters `code_owner`, and an answer starts a new coder round through `code_answer`.

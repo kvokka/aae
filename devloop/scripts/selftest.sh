@@ -4,6 +4,8 @@
 # run's environment reaches the scripts.
 set -eu
 here=$(cd "$(dirname "$0")" && pwd)
+sh "$here/owner-selftest.sh"
+sh "$here/report-selftest.sh"
 tmp=$(mktemp -d)
 trap 'find "$tmp" -delete' EXIT
 unset BEADS_DIR BD_ACTOR LOOP_MANAGER_STEP_REVIEW_DATA LOOP_MANAGER_STEP_TESTS_DATA
@@ -59,7 +61,12 @@ fresh; review '{"score":9,"verdict":"complete"}'; git remote set-url origin "$r/
 fresh; review '{"score":7,"verdict":"continue"}'; git remote set-url origin "$r/gone.git"; expect 1 gate.sh "fail, push failed"
 
 fresh; MISE_RC=0 expect 0 tests.sh "green"; said "RESULT: pass" "green"; said "UNCOMMITTED: 0 paths" "green"
-grep -q "ci says run ci" target/devloop/ci.log || { echo "selftest: tests.sh: no log"; exit 1; }
+log=$(sed -n 's/^LOG: //p' "$tmp/out")
+grep -q "ci says run ci" "$log" || { echo "selftest: tests.sh: no log"; exit 1; }
+MISE_RC=0 expect 0 tests.sh "second test run"
+[ "$(find target/devloop/runs/run_1 -name ci.log | wc -l | tr -d ' ')" = 2 ] || {
+  echo "selftest: tests.sh: a new run overwrote the previous log"; exit 1;
+}
 fresh; echo two >src/a; export MISE_RC=101; expect 0 tests.sh "red"; unset MISE_RC
 said "RESULT: FAIL (mise run ci: exit 101)" "red"; said "ci says run ci" "red"; said "UNCOMMITTED: 1 paths" "red"
 echo "devloop selftest: ok"

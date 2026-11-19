@@ -1,8 +1,7 @@
 name = "epic"
 description = "One epic of loop-manager's own development: rounds of a coder, the full test run and a review, until the review passes"
-# A round is one pass from `code` to `gate`: a review under the bar spends one, whatever the tests say. An epic took
-# 40 rounds before. A run still sent back after the last round fails, and its epic waits for the owner
-# (`bead_failed_runs = 1` in config.toml).
+# A review under the bar starts another round, whatever the tests say; an answer from the owner also starts a new
+# round. A run still sent back after the last round fails and waits for the owner (`bead_failed_runs = 1`).
 rounds = 50
 
 [inputs]
@@ -15,6 +14,21 @@ name = "code"
 kind = "ai"
 agent = "coder"
 last_comments = 8
+
+# A genuine blocker ends the model session and waits for the owner. Resolving with `pass` records the answer and
+# starts a new coder round; `fail` rejects the work and ends the run. Discretionary choices do not enter this wait.
+[[step]]
+name = "code_owner"
+kind = "await"
+if = { "steps.code.data.needs_owner" = true }
+timeout = "168h"
+
+[[step]]
+name = "code_answer"
+kind = "exec"
+command = ["sh", "devloop/scripts/owner-answer.sh", "code"]
+if = { "steps.code.data.needs_owner" = true }
+back_to = "code"
 
 # The full gate of the repository on the tree the coder left. Not a check: the script exits 0 red or green, and its
 # output is in the reviewer's prompt.
@@ -34,6 +48,20 @@ agent = "reviewer"
 max_attempts = 2
 last_comments = 8
 
+# The review can discover a blocker too. Its answer is handed to a new coder by the same path.
+[[step]]
+name = "review_owner"
+kind = "await"
+if = { "steps.review.data.needs_owner" = true }
+timeout = "168h"
+
+[[step]]
+name = "review_answer"
+kind = "exec"
+command = ["sh", "devloop/scripts/owner-answer.sh", "review"]
+if = { "steps.review.data.needs_owner" = true }
+back_to = "code"
+
 # Commits the tracker and pushes, whatever the review says; passes when the review scores 9 or more with the verdict
 # `complete`, and sends the run back to the coder otherwise. The command runs in the rig, the root of the repository.
 [[step]]
@@ -43,3 +71,13 @@ command = ["sh", "devloop/scripts/gate.sh"]
 timeout = "10m"
 inherit_env = true   # `git push` authenticates as the shell that started the daemon (README.md, "The push")
 back_to = "code"
+
+# Package the completed epic and owner handoff without a model, after the review gate passed. Its stdout is the
+# run's result for a caller. The report, comment snapshot and test digests are committed with the final tracker
+# state; full logs and materials are kept in the ignored local artifacts directory.
+[[step]]
+name = "report"
+kind = "exec"
+command = ["sh", "devloop/scripts/report.sh"]
+timeout = "10m"
+inherit_env = true

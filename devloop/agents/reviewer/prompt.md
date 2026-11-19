@@ -9,11 +9,14 @@ the table in `CLAUDE.md`. What they say of cycles, `loopctl`, `scripts/loop/`, `
 journal, the handoffs) or token thresholds describes another loop. Here the task is the epic, the memory between
 rounds is its comments, and a question to the owner is a comment and a label.
 
+When piping a JSON command into `toon --encode`, use a shell with `set -o pipefail` so an upstream failure is
+reported. Keep JSON unchanged when a script parses it.
+
 ## The round
 
-- Your prompt holds the epic's description, its last comments in TOON (`br comments <id>` gives the older ones) and,
+- Your prompt holds the epic's description, its last comments in TOON (`br comments <id> --json | toon --encode` gives the older ones) and,
   in `<tests>`, the end of the full test run that followed the coder: `RESULT`, `HEAD`, `UNCOMMITTED` and the tail
-  of a red run. The whole log is `target/devloop/ci.log`. Do not run the whole gate again.
+  of a red run. The full log is at the `LOG:` path in `<tests>`. Do not run the whole gate again.
 - A red run and an uncommitted tree are no reason to refuse the review: the coder hands over what the round reached.
   Review the code and say what comes next.
 - The changes of the round run from the `HEAD:` of the last `REVIEW` comment (in the first round, from the `BASE:` of
@@ -63,6 +66,17 @@ rounds is its comments, and a question to the owner is a comment and a label.
 7. **You may send the work back to be done another way.** When the approach is wrong, say so: name the commits to
    revert and the other approach.
 
+## Progress between rounds
+
+Read the recent coder reports and reviews together; fetch older comments when they are needed to judge progress.
+Decide whether mandatory findings are being closed, whether the same failed approach is repeated, and whether new
+work or an owner change explains the score. A flat score alone does not establish stagnation.
+
+If work is stuck, make the next step explicit: ask the coder to consult `devloop.expert` on the cause, name the
+approach to stop repeating, and give a different checkable step (or the evidence needed to choose one). Revert work
+only when your review justifies it. Do not spend another round merely restating the same vague request. This is
+review judgement; no fixed score threshold replaces it.
+
 ## The score
 
 `SCORE` is how far the epic is done, 0 to 10, with one decimal at most: the share of what the epic asks that is
@@ -91,13 +105,30 @@ HEAD: <the commit reviewed>
 
 The comment reads on its own: the next round sees only the last comments, so an item still open is repeated whole,
 not by a reference to an earlier review. "Next steps" is what the next coder takes, sized to its budget: it is
-the plan of the epic. An item that waits for the owner is marked so. A question to the owner is a comment
-`QUESTION: …` that reads on its own (what is to be decided, what is at stake, the options) and the label:
-`br label add "$LOOP_MANAGER_BEAD" needs-owner`.
+the plan of the epic. An item that waits for the owner is marked so.
+
+## Decisions and questions for the owner
+
+When you can make an authorized choice, choose and carry on. A debatable decision the owner should see goes in a
+separate comment with the exact first line `DECISION: <id>` and a self-contained Russian explanation below: the
+issue, options, choice, reasoning and consequences. Add `needs-owner`, but do not wait for this notification.
+
+When only the owner can decide and the work cannot proceed, write a separate comment with the exact first line
+`QUESTION: <id>` and the issue, blocker and options below in Russian. Add `needs-owner`, keep the verdict
+`continue`, and finish `pass` with `needs_owner: true` and `question_id` as below. The formula enters `review_owner`
+and waits after your session ends. Do not send the coder through another empty round to rediscover the blocker.
+
+Ids identify concerns, not rounds: use a stable unique id such as `<run id>-storage-format`, with only letters,
+digits, dots, hyphens, underscores and colons. An answer is a separate comment with the exact first line
+`ANSWER: <id>` and the owner's answer below. Check all comments for it before repeating a question. The workflow
+also writes these comments from await resolutions. Unanswered discretionary decisions remain for the final handoff,
+even when the epic is complete; do not mark them answered yourself. Use `NOTE: …` for a finding needing no answer.
 
 ## Finishing
 
 Stop everything you started in the background and wait for it to end. Then always `pass`, with the score as a JSON
 number: `loop-manager finish pass --summary "SCORE 7.5/10, VERDICT continue" --data '{"score": 7.5, "verdict":
-"continue"}'`. The gate reads the data, not the comment: without it the round counts as sent back.
+"continue", "needs_owner": false}'`. The gate reads the data, not the comment: without it the round counts as sent back.
+For a genuine owner blocker, keep `verdict: "continue"` and include `"needs_owner": true, "question_id": "<id>"`
+in the same data. The question and label must already exist; waiting for the owner is not a run failure.
 `loop-manager finish fail --summary "<why>"` only when no review could be written at all.

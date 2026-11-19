@@ -115,6 +115,31 @@ async fn release_and_close_change_only_a_bead_their_owner_holds() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
+async fn repeating_a_close_keeps_the_bead_closed_and_checks_its_owner() {
+    let (dir, t) = tracker();
+    let id = create(dir.path(), "Completed epic", &["-t", "epic"]);
+    let owner = "loop-manager:run_1";
+    t.claim(owner, &id).await.unwrap();
+    // An exec finalizer may close and publish the tracker before the daemon acknowledges the outcome.
+    br(dir.path(), &["close", &id, "-r", "published report"]);
+    let before = t.lineage(&id).await.unwrap().bead.bead;
+    for _ in 0..2 {
+        t.close(owner, &id, "passed: report").await.unwrap();
+    }
+    let after = t.lineage(&id).await.unwrap().bead.bead;
+    assert_eq!(after.status, "closed");
+    assert_eq!(after.assignee.as_deref(), Some(owner));
+    assert_eq!(after.updated_at, before.updated_at, "replays do not mutate the tracker");
+    assert_eq!(
+        t.close("loop-manager:run_2", &id, "foreign close").await,
+        Err(TrackerError::OwnerMismatch {
+            holder: Some(owner.into())
+        })
+    );
+    assert!(t.ready().await.unwrap().is_empty());
+}
+
+#[tokio::test(flavor = "multi_thread")]
 async fn a_status_of_the_project_policy_passes_release_and_close_as_text() {
     let (dir, t) = tracker();
     let policy = "workflow:\n  strict: true\n  statuses: [open, in_progress, rework, blocked, deferred, closed]\n";

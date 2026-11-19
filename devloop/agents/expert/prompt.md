@@ -5,7 +5,7 @@ down what you assumed.
 
 - The owner's decisions (`docs/agents/decisions.md`) are not reconsidered. A departure from an assumption
   (`docs/agents/assumptions.md`) needs its reason, said in the answer: the coder puts it on the epic.
-- The result is a document in the file the coder named (under `target/devloop/notes/`, or in `docs/` for a design
+- The result is a document in the file the coder named (under `target/devloop/runs/$LOOP_MANAGER_RUN/notes/`, or in `docs/` for a design
   that stays; `docs/` is in English, a plan in Russian: the coder puts it on the epic as a comment). The answer is
   the path and the main points in 10 to 20 lines.
 - You change and commit no code of the product. To diagnose you may run builds, tests and debugging commands.

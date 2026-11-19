@@ -210,10 +210,15 @@ impl Tracker for Br {
         Box::pin(async move {
             // shortcut: br 0.7.6 `close` has no `--if-unchanged`, so a claim between this read and the close is
             // overwritten; only the daemon claims (invariant 3), so only a human could; use it once br has it.
-            self.held(owner, id).await?;
+            if self.held(owner, id).await?.status == "closed" {
+                return Ok(());
+            }
             match self.br(owner, &["close", id, "-r", reason]).await {
-                // Exit 3 after `held` found the bead: br skips a parent with open children; it goes back open.
-                Err(Fail(Some(3), _)) => self.release(owner, id).await,
+                // Exit 3 also means already closed. A replay or a close since the read must not reopen it.
+                Err(Fail(Some(3), _)) if self.held(owner, id).await?.status != "closed" => {
+                    self.release(owner, id).await
+                }
+                Err(Fail(Some(3), _)) => Ok(()),
                 other => Ok(other.map(drop)?),
             }
         })

@@ -331,3 +331,50 @@ async fn a_restart_keeps_the_checks_that_sent_the_run_back() {
     w.resolve(&run, "hold", outcome(Verdict::Pass, "")).await.unwrap();
     assert_eq!(w.awaiting(&run, 5).await["run"]["step"], "fix");
 }
+
+/// An optional owner wait, then an answer check, hands the answer to a fresh round. A following check still runs;
+/// a following ordinary step waits for the new round. Both shapes occur in the development workflow.
+#[tokio::test]
+async fn an_optional_owner_answer_returns_before_work_but_keeps_following_checks() {
+    for following_is_check in [false, true] {
+        let work = exec(
+            "work",
+            "if test -e started; then printf done; printf '%s' \"$LOOP_MANAGER_REMARKS\" > remarks; \
+             else touch started; printf question; fi; echo work >> log",
+            None,
+        );
+        let only_question = "if = { \"steps.work.data.stdout\" = \"question\" }\n";
+        let answer = exec(
+            "answer",
+            "echo answer >> log; printf 'answer: %s' \"$LOOP_MANAGER_STEP_OWNER_SUMMARY\"; exit 1",
+            Some("work"),
+        ) + only_question;
+        let following = exec(
+            "following",
+            "echo following >> log",
+            following_is_check.then_some("work"),
+        );
+        let w = working(
+            &[work, gate("owner", only_question), answer, following, gate("end", "")],
+            &[],
+        );
+        let run = w.begin().await;
+        assert_eq!(w.awaiting(&run, 0).await["run"]["step"], "owner");
+        assert_eq!(w.work_log(), "work\n");
+        w.resolve(&run, "owner", outcome(Verdict::Pass, "keep format"))
+            .await
+            .unwrap();
+        assert_eq!(w.awaiting(&run, 1).await["run"]["step"], "end");
+        assert_eq!(w.round(&run), 2);
+        let expected = if following_is_check {
+            "work\nanswer\nfollowing\nwork\nfollowing\n"
+        } else {
+            "work\nanswer\nwork\nfollowing\n"
+        };
+        assert_eq!(w.work_log(), expected);
+        let remarks = std::fs::read_to_string(w.dir.path().join("shop/web/remarks")).unwrap();
+        assert!(remarks.contains("keep format"), "{remarks}");
+        w.resolve(&run, "end", outcome(Verdict::Pass, "done")).await.unwrap();
+        w.until(Some(&run), "run.passed", 0).await;
+    }
+}
