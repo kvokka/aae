@@ -3,13 +3,6 @@
 #   budget <data dir> <soft> <hard> <warn step> <cut>
 set -eu
 data=$1 soft=$2 hard=$3 step=$4 cut=$5
-case $cut in
-pass | fail) ;;
-*)
-    echo "context-budget: cut is \`$cut\`, not pass or fail" >&2
-    exit 1
-    ;;
-esac
 input=$(cat)
 field() { printf '%s' "$input" | jq -r "$1 // empty"; }
 event=$(field .hook_event_name)
@@ -105,9 +98,15 @@ cut_off() {
                 echo "context-budget: the dump is not on $LOOP_MANAGER_BEAD" >&2
         fi
         # A subagent's stop is its own: the session goes on, and its agent declares the outcome.
+        # A wrong `cut` costs only the outcome: the session is stopped all the same.
         if [ -z "$agent" ]; then
-            loop-manager finish "$cut" --summary "context budget: the session was stopped; its state is on the bead" >&2 ||
-                echo "context-budget: the outcome $cut is not accepted" >&2
+            case $cut in
+            pass | fail)
+                loop-manager finish "$cut" --summary "context budget: the session was stopped; its state is on the bead" >&2 ||
+                    echo "context-budget: the outcome $cut is not accepted" >&2
+                ;;
+            *) echo "context-budget: cut is \`$cut\`, not pass or fail; no outcome is declared" >&2 ;;
+            esac
         fi
         : >"$stop"
     fi

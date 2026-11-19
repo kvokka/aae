@@ -96,6 +96,8 @@ struct Bed {
     bead: String,
     /// What the hooks printed, to look for the hard limit in.
     said: std::cell::RefCell<String>,
+    /// Whether the run has a bead: `LOOP_MANAGER_BEAD` is set for the hook.
+    with_bead: std::cell::Cell<bool>,
 }
 
 impl Bed {
@@ -108,26 +110,8 @@ impl Bed {
         fs::create_dir_all(d.join("bin")).unwrap();
         fs::create_dir_all(d.join("data")).unwrap();
         fs::create_dir_all(d.join("work")).unwrap();
-        let git = |args: &[&str]| {
-            let out = common::program("git")
-                .args(args)
-                .current_dir(d.join("work"))
-                .output()
-                .unwrap();
-            assert!(out.status.success(), "git {args:?}");
-        };
-        git(&["init", "-q"]);
-        git(&[
-            "-c",
-            "user.name=t",
-            "-c",
-            "user.email=t@t",
-            "commit",
-            "-q",
-            "--allow-empty",
-            "-m",
-            "start",
-        ]);
+        git(&d.join("work"), &["init", "-q"]);
+        commit(&d.join("work"), "start");
         fs::write(d.join("work/notes.md"), "half done").unwrap();
         let fake = "#!/bin/sh\necho \"$*\" >>\"$(dirname \"$0\")/finished\"\necho accepted\n";
         fs::write(d.join("bin/loop-manager"), fake).unwrap();
@@ -137,6 +121,7 @@ impl Bed {
             dir,
             bead: created["id"].as_str().unwrap().to_owned(),
             said: Default::default(),
+            with_bead: std::cell::Cell::new(true),
         }
     }
 
@@ -182,13 +167,15 @@ impl Bed {
         command
             .args([data.to_str().unwrap(), "1000", "7000", "500", &cut])
             .env("BEADS_DIR", d.join(".beads"))
-            .env("LOOP_MANAGER_BEAD", &self.bead)
             .env("LOOP_MANAGER_RUN", "r1")
             .env("RUST_LOG", "error")
             .env(
                 "PATH",
                 format!("{}:{}", d.join("bin").display(), std::env::var("PATH").unwrap()),
             );
+        if self.with_bead.get() {
+            command.env("LOOP_MANAGER_BEAD", &self.bead);
+        }
         let mut child = command.stdin(Stdio::piped()).stdout(Stdio::piped()).spawn().unwrap();
         child
             .stdin
@@ -226,6 +213,19 @@ impl Bed {
         let said = self.said.borrow();
         assert!(!said.contains("7k") && !said.contains("7000"), "{said}");
     }
+}
+
+fn git(dir: &Path, args: &[&str]) {
+    let out = common::program("git").args(args).current_dir(dir).output().unwrap();
+    assert!(out.status.success(), "git {args:?}");
+}
+
+fn commit(dir: &Path, message: &str) {
+    let id = ["-c", "user.name=t", "-c", "user.email=t@t"];
+    git(
+        dir,
+        &[&id[..], &["commit", "-q", "--allow-empty", "-m", message]].concat(),
+    );
 }
 
 fn br(dir: &Path, args: &[&str]) -> String {
@@ -292,13 +292,19 @@ fn past_soft_the_agent_is_told_to_wrap_up_again_every_warn_step_and_may_call_no_
 
 #[test]
 fn past_hard_the_session_leaves_its_state_on_the_bead_declares_the_cut_and_stops() {
-    for cut in ["fail", "pass"] {
+    // The new usage of a session is seen first by the next call's `PreToolUse`, else by `PostToolUse`.
+    for (cut, event) in [("fail", "PreToolUse"), ("pass", "PostToolUse")] {
         let bed = Bed::new(cut);
         bed.hook(json!({ "hook_event_name": "SessionStart", "source": "startup" }));
+        commit(&bed.path().join("work"), "parser half");
         bed.transcript("s1.jsonl", 7100);
-        let stop = bed.tool("PostToolUse", "Bash");
+        let stop = bed.tool(event, "Bash");
         let reason = "the context budget of this session is spent; it is stopped";
-        assert_eq!(stop, json!({ "continue": false, "stopReason": reason }));
+        assert_eq!(stop["continue"], false, "{event}: {stop}");
+        assert_eq!(stop["stopReason"], reason, "{event}: {stop}");
+        if event == "PreToolUse" {
+            assert_eq!(stop["hookSpecificOutput"]["permissionDecision"], "deny");
+        }
         let summary = "context budget: the session was stopped; its state is on the bead";
         assert_eq!(bed.finished(), format!("finish {cut} --summary {summary}\n"));
         let comments = bed.comments();
@@ -306,7 +312,8 @@ fn past_hard_the_session_leaves_its_state_on_the_bead_declares_the_cut_and_stops
         for part in [
             "# context-budget: the session was stopped",
             "## git status --short",
-            "## git log ",
+            "..HEAD",
+            "parser half",
             "?? notes.md",
             "Bash: {\"command\":\"cargo test -p parser\"}",
             "Edit: {\"file_path\":\"src/parser.rs\"}",
@@ -314,6 +321,8 @@ fn past_hard_the_session_leaves_its_state_on_the_bead_declares_the_cut_and_stops
         ] {
             assert!(comments[0].contains(part), "{part}: {}", comments[0]);
         }
+        // The log is that of the run: from the commit its session started on.
+        assert!(!comments[0].contains(" start\n"), "{}", comments[0]);
         // Every tool is denied from now on, once the context is small again too; the outcome is declared once.
         bed.transcript("s1.jsonl", 100);
         let denied = bed.tool("PreToolUse", "Read");
@@ -359,4 +368,25 @@ fn a_subagent_is_measured_on_its_own_transcript_and_stops_alone_without_an_outco
     assert!(note(&bed.tool("PostToolUse", "Bash")).starts_with("Your context is 6k tokens"));
     assert_eq!(bed.tool("PreToolUse", "Bash"), Value::Null);
     bed.kept_hard_quiet();
+}
+
+#[test]
+fn a_run_without_a_bead_is_told_to_put_its_summary_in_finish() {
+    let bed = Bed::new("fail");
+    bed.with_bead.set(false);
+    bed.transcript("s1.jsonl", 1200);
+    let text = note(&bed.tool("PostToolUse", "Bash")).to_owned();
+    assert!(text.contains("your summary in `--summary`"), "{text}");
+    assert!(!text.contains("br comments add"), "{text}");
+}
+
+#[test]
+fn a_wrong_cut_costs_only_the_outcome() {
+    let bed = Bed::new("Fail");
+    bed.transcript("s1.jsonl", 1200);
+    assert!(note(&bed.tool("PostToolUse", "Bash")).starts_with("Your context is 1k tokens"));
+    bed.transcript("s1.jsonl", 7100);
+    assert_eq!(bed.tool("PreToolUse", "Bash")["continue"], false);
+    assert_eq!(bed.comments().len(), 1);
+    assert_eq!(bed.finished(), "");
 }

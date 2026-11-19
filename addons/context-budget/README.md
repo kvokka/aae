@@ -23,6 +23,10 @@ addons = [{ name = "context-budget", params = { soft = 200000, hard = 300000 } }
 | `warn_step` | `30000` | tokens the context grows past `soft` between two notes |
 | `cut` | `"fail"` | the outcome a stopped session declares for its run: `"fail"` or `"pass"` |
 
+The load checks only the type of a param. A `cut` other than `"fail"` or `"pass"` declares no outcome: the session is
+stopped all the same, and the hook says so on stderr. A `hard` past about 967000 is past the compaction window the
+addon sets (see `PreCompact` below), so there only the blocked `PreCompact` keeps claude from compacting.
+
 ## How it works
 
 The hook `hooks/budget` runs in the agent's session on five claude hooks. The context of an agent is the size of the
