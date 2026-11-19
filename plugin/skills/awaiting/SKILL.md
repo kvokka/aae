@@ -12,17 +12,22 @@ give an outcome or cancel a run the user has not named, and use the user's own w
 Every command below talks to the running daemon; if one answers that it cannot reach it, ask the user to start
 `loop-manager daemon` (or name its socket with `--socket`) and stop there.
 
+Read structured output as TOON: `toon --encode` converts the CLI's JSON before it enters your context. It needs
+`toon` 0.2.5 (`github:Dicklesworthstone/toon_rust`, pinned in this repository's `mise.toml`). Run the pipelines in
+bash or zsh with `set -o pipefail`; an upstream CLI error must not become a successful empty result. Keep JSON when
+another program consumes it.
+
 ## 1. See what waits
 
 ```sh
-loop-manager run list --awaiting --json
-loop-manager run list --awaiting --project <project> --json
+loop-manager run list --awaiting --json | toon --encode
+loop-manager run list --awaiting --project <project> --json | toon --encode
 ```
 
 For each run the user cares about:
 
 ```sh
-loop-manager run show <run> --json
+loop-manager run show <run> --json | toon --encode
 ```
 
 Show the user, per run: `id`, `project`, `formula`, `bead` (the task or the epic it works on), `step` (the `await`
@@ -34,7 +39,10 @@ where a script may leave, say, the address of a pull request). If there are many
 
 Offer these, for the user to pick one per run:
 
-1. **Accept** the work: the run goes on to its next step, or passes when the step is its last.
+1. **Answer or accept**: the run goes on to its next step, or passes when the step is its last. Read the preceding
+   outcome and any question or report it references first. A wait may ask for a decision needed to continue work;
+   then the summary is the user's answer, not a statement that the whole task is complete. Explain what the next
+   step does before resolving it.
 
    ```sh
    loop-manager run resolve <run> <step> pass --summary '<what the user said>'
