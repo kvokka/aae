@@ -70,12 +70,8 @@ fn guard(dir: &Path, path: &std::ffi::OsStr, input: &Value) -> (Option<i32>, Str
         .stderr(Stdio::piped())
         .spawn()
         .unwrap();
-    child
-        .stdin
-        .take()
-        .unwrap()
-        .write_all(input.to_string().as_bytes())
-        .unwrap();
+    // Without `dcg` the hook exits before it reads its input, so the write may meet a closed pipe.
+    let _ = child.stdin.take().unwrap().write_all(input.to_string().as_bytes());
     let out = child.wait_with_output().unwrap();
     let text = |b: &[u8]| String::from_utf8_lossy(b).into_owned();
     (out.status.code(), text(&out.stdout), text(&out.stderr))
