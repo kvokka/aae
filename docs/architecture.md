@@ -57,8 +57,8 @@ for a directory of a repository ([config: packs and addons from git](design/conf
 and an agent attaches it with `addons = [{ name, params }]`
 ([config: addon](design/config.md#addon-addonaddontoml)). There are two:
 
-- [`context-budget`](../addons/context-budget/README.md), a context budget for claude sessions: a note to wrap up
-  past a soft limit, a stop past a hard one, no compaction;
+- [`context-budget`](../addons/context-budget/README.md), a context budget for claude and codex sessions: a note to
+  wrap up past a soft limit, a stop past a hard one, no compaction;
 - [`dcg`](../addons/dcg/README.md), the host's `dcg` (destructive_command_guard) as the `PreToolUse` hook of claude
   and codex sessions: a destructive shell command is denied.
 

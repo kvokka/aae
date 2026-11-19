@@ -1,6 +1,6 @@
 //! The addon `addons/context-budget` of this repository: its params reach claude's settings and hooks, and its hook
 //! measures a session's context from the transcript, tells the agent to wrap up past `soft` and stops it past `hard`,
-//! on fake transcripts and hook inputs of claude (addons/context-budget/README.md).
+//! on fake transcripts and hook inputs of claude (addons/context-budget/README.md); those of codex are in `codex`.
 
 use crate::common;
 use serde_json::{Value, json};
@@ -275,8 +275,10 @@ fn past_soft_the_agent_is_told_to_wrap_up_again_every_warn_step_and_may_call_no_
     ] {
         assert!(text.contains(part), "{part}: {text}");
     }
+    // The call is denied and the turn goes on: `continue: false` would end it without an outcome.
     let denied = bed.tool("PreToolUse", "Agent");
     assert_eq!(denied["hookSpecificOutput"]["permissionDecision"], "deny");
+    assert_eq!(denied.get("continue"), None, "{denied}");
     assert_eq!(bed.tool("PreToolUse", "Bash"), Value::Null);
 
     // The next note comes `warn_step` tokens later.
@@ -390,3 +392,5 @@ fn a_wrong_cut_costs_only_the_outcome() {
     assert_eq!(bed.comments().len(), 1);
     assert_eq!(bed.finished(), "");
 }
+
+mod codex;

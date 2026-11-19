@@ -4,7 +4,7 @@ An addon is a directory with an `addon.toml`. It gives the agents that attach it
 MCP servers, services, environment variables, native harness keys, a prompt fragment) and gives the orchestrator hooks
 on the events of their runs. An addon is used in two steps: it is **declared** once, then **attached** where it
 should work. This guide uses [`addons/context-budget`](../../addons/context-budget/README.md) of this repository,
-which bounds the context of a claude session. To write an addon, see
+which bounds the context of a claude or codex session. To write an addon, see
 [writing an addon](addon-development.md); the full rules are in
 [the config reference](../design/config.md#addon-addonaddontoml).
 

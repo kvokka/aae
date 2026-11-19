@@ -163,15 +163,15 @@ Rules worth keeping:
 
 ## A worked example: `context-budget`
 
-[`addons/context-budget`](../../addons/context-budget/README.md) bounds the context of a claude session: past `soft`
-it tells the agent to wrap up, past `hard` it leaves the state of the work on the run's bead and stops the session,
-and it keeps claude from compacting. It is all agent side:
+[`addons/context-budget`](../../addons/context-budget/README.md) bounds the context of a claude or codex session: past
+`soft` it tells the agent to wrap up, past `hard` it leaves the state of the work on the run's bead and stops the
+session, and it keeps the harness from compacting. It is all agent side:
 
 ```toml
 # addons/context-budget/addon.toml
 name = "context-budget"
-version = "0.2.0"
-harnesses = ["claude"]
+version = "0.3.0"
+harnesses = ["claude", "codex"]
 
 [params]
 soft = 300000           # tokens of context past which the agent is told to wrap up
@@ -182,6 +182,8 @@ cut = "fail"            # the outcome of a run whose session is stopped: "fail" 
 [agent]
 # claude compacts at about this window less 33k tokens; the most it takes keeps it past `hard`.
 native.claude.autoCompactWindow = 1000000
+# codex compacts at `hard`; its `PreCompact` hook stops the session there instead (README.md, "On codex").
+native.codex.model_auto_compact_token_limit = "${params.hard}"
 
 [agent.hooks.context-budget-start]
 event = "SessionStart"
@@ -208,7 +210,9 @@ command = "'${LOOP_MANAGER_ADDON_DIR}/hooks/budget' '${LOOP_MANAGER_ADDON_DATA}'
   and `PreCompact`, and reads the event from the input's `hook_event_name`. The params reach it as arguments; the
   paths are quoted, since the directories may hold spaces.
 - **The measure.** The context is the usage of the model's last answer in the session's transcript
-  (`transcript_path`); a hook input with `agent_id` is a subagent's, measured on its own transcript.
+  (`transcript_path`): claude's last `assistant` entry with `usage`, codex's last `token_count` event. A hook input
+  with `agent_id` is a subagent's, measured on its own transcript. A codex input carries `turn_id`, which tells the
+  hook which harness it runs for.
 - **Talking to the agent.** The note past `soft` is the `additionalContext` of the `PostToolUse` answer; a call of a
   subagent past `soft` gets a `PreToolUse` deny with the reason.
 - **State in the data directory.** The context of the last note, the dump and the stop are files of
@@ -216,8 +220,11 @@ command = "'${LOOP_MANAGER_ADDON_DIR}/hooks/budget' '${LOOP_MANAGER_ADDON_DATA}'
 - **The bead.** With `LOOP_MANAGER_BEAD` set, the dump past `hard` is a comment on it, written with `br` as the
   session's tracker actor.
 - **Stopping.** Past `hard` it declares the outcome with `loop-manager finish <cut>` and answers `{"continue":
-  false}`; the `PreToolUse` hook denies every later tool call of the session, and the turn ends.
-- **No compaction.** `PreCompact` answers `{"decision": "block"}`, and `autoCompactWindow` is the most claude takes.
+  false}`; the `PreToolUse` hook denies every later tool call of the session. On claude the turn ends there. A codex
+  tool hook cannot end a turn, so codex compacts at `hard` (`model_auto_compact_token_limit`) and the stop is the
+  answer to its `PreCompact`.
+- **No compaction.** On claude `PreCompact` answers `{"decision": "block"}`, and `autoCompactWindow` is the most claude
+  takes; on codex the `{"continue": false}` of `PreCompact` keeps the context and ends the turn.
 
 ## Testing an addon
 
@@ -230,8 +237,9 @@ command = "'${LOOP_MANAGER_ADDON_DIR}/hooks/budget' '${LOOP_MANAGER_ADDON_DATA}'
   `LOOP_MANAGER_ADDON_PARAMS`. Put stand-ins for the commands it calls (`loop-manager`, `br`) first on its `PATH`.
 
 The tests of `context-budget` do both: `crates/loop-manager/tests/e2e/context_budget.rs` checks with `config explain`
-that the params reach claude's settings and hooks and drives `hooks/budget` with claude's hook inputs, fake
-transcripts, a stand-in `loop-manager` and a real `br` tracker.
+that the params reach the settings and hooks of claude and codex, and drives `hooks/budget` with the hook inputs of
+both harnesses, fake transcripts and rollouts, a stand-in `loop-manager` and a real `br` tracker
+(`context_budget/codex.rs` for codex).
 
 ## Moving it to its own repository
 

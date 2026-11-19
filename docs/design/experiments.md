@@ -566,8 +566,9 @@ For the context-budget addon:
   already writes it per session), and `autoCompactWindow` in each agent of `--agents` — or one value for the session
   and its subagents through `modelSettings` alone. Its floor is 100000 and a smaller value is dropped silently, so a
   smaller budget goes through `CLAUDE_AUTOCOMPACT_PCT_OVERRIDE` in the process environment (a process per session) as
-  a percent of the window. codex: `model_auto_compact_token_limit` in `thread/start.config`, any size; children inherit
-  it, a role file cannot change it.
+  a percent of the window. codex: `model_auto_compact_token_limit` in `thread/start.config`, any size up to 90% of the
+  model's window (above it codex compacts at 90%, by its source; not measured); children inherit it, a role file
+  cannot change it.
 - **Counting.** `PostCompact` counts compactions on both harnesses (`PreCompact` counts attempts, which repeat on
   claude). The stdin names the session (`session_id`; on codex the parent's thread for a child) and, inside a
   subagent or child, `agent_id` and `agent_type`; `trigger` tells automatic from manual. A count on `SubagentStop`
