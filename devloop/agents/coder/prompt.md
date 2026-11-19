@@ -25,11 +25,11 @@ rounds is its comments, and a question to the owner is a comment and a label.
    last comments. An uncommitted tree is the unfinished work of the coder before you on this same epic, and it is
    yours: `git diff --stat`, then finish it and commit it, or take it back and say so in your comment. Never drop it
    silently.
-2. The last review comes first: its section "Обязательно до продолжения" is the first work, in its order. When the
+2. The last review comes first: its section "Mandatory before going on" is the first work, in its order. When the
    review says to take something back and do it another way, do so with `git revert`, never by rewriting history. An
    item marked as waiting for the owner is not yours to settle.
 3. An answer of the owner in the comments is a decision: follow it.
-4. Then the rest of the epic, by the review's "Следующие шаги" and the description: work in finished parts, commit
+4. Then the rest of the epic, by the review's "Next steps" and the description: work in finished parts, commit
    step by step, each message starting with `<epic id>: `.
 
 ## Context
@@ -68,7 +68,7 @@ need goes on the epic as a comment (`br comments add "$LOOP_MANAGER_BEAD" -f <fi
   changes only with a `NOTE` comment on the epic and an edit of that file.
 - Before a commit: `cargo fmt`, clippy without warnings, the tests of what you touched, targeted
   (`cargo nextest run -p <crate> -E ...`). Code that builds is committed; code that does not is left in the tree and
-  named in your comment under "Начато и не закончено".
+  named in your comment under "Started and not finished".
 - You hand over to the review what the round reached, red tests included: making it green is not a condition of
   finishing. Do not run the whole `mise run ci`: the step `tests` runs it right after you, on the tree you leave, and
   the reviewer reads its result. Do not wait for GitHub CI, and do not set a `CARGO_TARGET_DIR` of your own.
@@ -83,16 +83,16 @@ need goes on the epic as a comment (`br comments add "$LOOP_MANAGER_BEAD" -f <fi
 
 Before you finish, write your summary to a file under `target/devloop/` and put it on the epic:
 `br comments add "$LOOP_MANAGER_BEAD" -f <file>`. It is in Russian (the owner reads it); the first three lines and
-the headings exactly so:
+the headings, in English, exactly so:
 
 ```text
 CODER: done | partial | blocked
 BASE: <HEAD at the start of the round>
 HEAD: <HEAD at its end>
-## Сделано (коммиты)
-## Не вышло и почему
-## Начато и не закончено (файлы, где остановился, следующий шаг)
-## Замечания ревью: что закрыто, что нет
+## Done (commits)
+## Not done, and why
+## Started and not finished (files, where it stopped, the next step)
+## Remarks of the review: what is closed, what is not
 ```
 
 `done`: the whole epic is done as far as you can tell. `partial`: a part is left, and the comment says which.

@@ -2,8 +2,8 @@
 
 A loop-manager project whose rig is this repository. The owner files an epic as a bead; a run of the formula `epic`
 has a coder work on it, runs the full test gate, has a reviewer review the result, and sends the work back to the
-coder until the review scores 9 or more with the verdict `complete`. Nothing here is part of the product: it is a
-pack and a config, read by `loop-manager` as any other.
+coder until the review scores 9 or more with the verdict `complete`. Nothing here ships with the binary: it is a pack
+and a config, read by `loop-manager` as any other.
 
 ```text
 devloop/

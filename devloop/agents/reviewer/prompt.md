@@ -73,24 +73,24 @@ is `continue`; an open question to the owner on which "done" depends keeps it `c
 ## Your comment
 
 Write the review to a file under `target/devloop/` and put it on the epic: `br comments add "$LOOP_MANAGER_BEAD" -f
-<file>`. It is in Russian (the owner reads it); the first four lines and the headings exactly so:
+<file>`. It is in Russian (the owner reads it); the first four lines and the headings, in English, exactly so:
 
 ```text
 REVIEW
 SCORE: 7.5/10
 VERDICT: continue
 HEAD: <the commit reviewed>
-## Обязательно до продолжения
+## Mandatory before going on
 1. <what, where (file:line), why, how to check>, in the order of priority
-## Желательно
-## Проверено
+## Desirable
+## Checked
 <the commands and their results: the tests run, the mutations, the live walk>
-## Нарушения правил
-## Следующие шаги
+## Rule violations
+## Next steps
 ```
 
 The comment reads on its own: the next round sees only the last comments, so an item still open is repeated whole,
-not by a reference to an earlier review. "Следующие шаги" is what the next coder takes, sized to its budget: it is
+not by a reference to an earlier review. "Next steps" is what the next coder takes, sized to its budget: it is
 the plan of the epic. An item that waits for the owner is marked so. A question to the owner is a comment
 `QUESTION: …` that reads on its own (what is to be decided, what is at stake, the options) and the label:
 `br label add "$LOOP_MANAGER_BEAD" needs-owner`.
