@@ -88,18 +88,36 @@ fn the_manifests_are_what_claude_and_codex_install() {
     }
 }
 
-/// Words of a shell line: split on spaces, a single-quoted part is one word.
+/// Words of the first command in a shell pipeline: a single-quoted part is one word, even with a pipe inside.
 fn words(line: &str) -> Vec<String> {
     let (mut out, mut word, mut quoted) = (Vec::new(), String::new(), false);
     for c in line.chars() {
         match c {
             '\'' => quoted = !quoted,
+            '|' if !quoted => break,
             ' ' if !quoted => out.extend((!word.is_empty()).then(|| std::mem::take(&mut word))),
             c => word.push(c),
         }
     }
     out.extend((!word.is_empty()).then_some(word));
     out
+}
+
+#[test]
+fn command_words_keep_a_quoted_pipe_but_leave_out_the_encoder() {
+    assert_eq!(
+        words("loop-manager run resolve run_1 owner pass --summary 'left | right' | toon --encode"),
+        [
+            "loop-manager",
+            "run",
+            "resolve",
+            "run_1",
+            "owner",
+            "pass",
+            "--summary",
+            "left | right"
+        ]
+    );
 }
 
 #[test]
@@ -126,7 +144,7 @@ fn every_command_a_skill_names_exists() {
                 if let Some(rest) = span.strip_prefix("loop-manager ") {
                     let mut command = Cli::command();
                     command.build();
-                    let words: Vec<_> = rest.split(' ').collect();
+                    let words = words(rest);
                     let path = words
                         .iter()
                         .position(|w| w.starts_with(['-', '<']))
