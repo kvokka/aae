@@ -4,7 +4,8 @@
 use crate::common;
 
 use common::{World, beads::slow_turn, last, world};
-use loop_manager_core::run::Verdict;
+use loop_manager_core::run::{Msg, Verdict};
+use loop_manager_core::tracker::Tracker;
 use serde_json::json;
 use std::time::Duration;
 
@@ -81,7 +82,10 @@ async fn a_prompt_shows_the_comments_of_the_bead_and_its_parents_from_the_root_d
 #[tokio::test(start_paused = true)]
 async fn a_return_to_a_step_reads_the_comments_written_since_and_last_comments_keeps_the_last() {
     let w = comments_world("last_comments = 1");
-    let bead = w.tracker.add(&[], None);
+    let parent = w.tracker.add(&[], None);
+    let bead = w.tracker.add(&[], Some(&parent));
+    w.tracker.comment(&parent, "alice", "the old goal");
+    w.tracker.comment(&parent, "alice", "the new goal");
     let run = w.to_review(&bead).await;
     let first = &w.driver.sent(&run, 1).1[0];
     assert!(first.contains("Comments:\n[]\n"), "{first}");
@@ -97,6 +101,47 @@ async fn a_return_to_a_step_reads_the_comments_written_since_and_last_comments_k
         "{third}"
     );
     assert!(!third.contains("first pass"), "{third}");
+    assert!(third.contains("the new goal"), "{third}");
+    assert!(
+        !third.contains("the old goal"),
+        "the parents keep their last too: {third}"
+    );
+}
+
+#[tokio::test(start_paused = true)]
+async fn an_answer_to_an_earlier_entry_of_the_step_is_dropped() {
+    let w = comments_world("");
+    let bead = w.tracker.add(&[], None);
+    let earlier = w.tracker.lineage(&bead).await.unwrap();
+    let run = w.to_review(&bead).await;
+    w.tracker.comment(&bead, "qa", "redo: the parser drops the last line");
+    w.tracker.set_down(true);
+    w.finish_attempt(&run, 2, Verdict::Fail, "redo").await;
+    tokio::time::sleep(Duration::from_secs(12)).await;
+    assert_eq!(w.states(&run).await.last().unwrap(), "preparing");
+
+    // The read of the first entry of `code` answers late, while the run prepares its second.
+    let payload = json!({ "run": run, "step": "code", "attempt": 1, "bead": bead });
+    let msg = Msg::Lineage {
+        payload,
+        result: Ok(earlier),
+    };
+    w.core.send(None, msg).await.unwrap();
+    tokio::time::sleep(Duration::from_secs(1)).await;
+    assert_eq!(w.states(&run).await.last().unwrap(), "preparing");
+    assert_eq!(last_prompt(&w, &run, 3), format!("Review Task {bead}."));
+
+    w.driver.script(slow_turn());
+    w.tracker.set_down(false);
+    let mut third = String::new();
+    for _ in 0..60 {
+        tokio::time::sleep(Duration::from_secs(1)).await;
+        third = last_prompt(&w, &run, 3);
+        if third.starts_with("Fix ") {
+            break;
+        }
+    }
+    assert!(third.contains("redo: the parser drops the last line"), "{third}");
 }
 
 #[tokio::test(start_paused = true)]
