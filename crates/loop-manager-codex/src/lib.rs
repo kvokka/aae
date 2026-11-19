@@ -248,7 +248,15 @@ impl Driver for Codex {
             };
             params["threadId"] = json!(thread_id(session));
             params["excludeTurns"] = json!(true);
-            let result = known.call("thread/resume", params, None).await?;
+            let result = loop {
+                match known.call("thread/resume", params.clone(), None).await {
+                    // `notLoaded` may come while the thread is still closing; codex then asks to retry the resume.
+                    Err(failure) if failure.raw.contains("retry thread/resume") && Instant::now() < until => {
+                        tokio::time::sleep(Duration::from_millis(20)).await;
+                    }
+                    answer => break answer?,
+                }
+            };
             self.bind(&known, thread_id(session), &result, &part.0);
             lock(&known.stream).held(thread_id(session)).map_or(Ok(()), Err)
         })

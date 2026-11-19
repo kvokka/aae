@@ -60,9 +60,9 @@ differently (by its source at 0.166.0, not exercised here): exit 2 blocks only w
 the hook counts as failed; `permissionDecision: "ask"` is rejected and the call goes through; `updatedInput` works
 only with `allow`; `prompt` and `agent` handlers are skipped; there is no `StopFailure`, so a hook cannot catch an
 API error or a quota. Its matchers name `Bash`, `apply_patch` (aliases `Edit`, `Write`) and `mcp__<server>__<tool>`.
-An answer codex does not take for the event fails the hook, which then has no effect: a key it does not know,
-`continue: false` or `stopReason` in a `PreToolUse` answer (the call runs), a `decision` in a `PreCompact` answer (its
-`continue: false` keeps the context and ends the turn).
+By its source at 0.170.0, an answer codex does not take for the event fails the hook, which then has no effect: a
+key it does not know, `continue: false` or `stopReason` in a `PreToolUse` answer (the call runs), a `decision` in a
+`PreCompact` answer (its `continue: false` keeps the context and ends the turn).
 
 ### Environment values
 
