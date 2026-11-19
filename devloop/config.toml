@@ -2,3 +2,6 @@
 # of the loop starts with `loop-manager daemon --config devloop/config.toml`, so it neither reads nor changes the
 # user's ~/.config/loop-manager/config.toml. loop-manager.toml beside it is the project.
 projects = ["."]
+# A run that failed is not started again by itself: the gate of its epic closes and waits for the owner
+# (README.md, "When a run fails").
+bead_failed_runs = 1

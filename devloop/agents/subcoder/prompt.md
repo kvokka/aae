@@ -10,5 +10,5 @@ which files, by which documents of `docs/`, and how to check it. There is no ope
   targeted and with their output cut.
 - An errand that does not fit your context: finish a whole part and describe the rest.
 - The answer: what is done, the files changed, how it was checked, what is left, in 15 lines at most. Details, when
-  needed, go to the file the coder named (under `.loop/runs/<run>/notes/`).
+  needed, go to the file the coder named (under `target/devloop/notes/`).
 - Before the last answer stop everything you started in the background and wait for it to end.

@@ -1,19 +1,22 @@
-Your task is the bead `{{ bead.id }}`: {{ bead.title }}
+Your task is the epic `{{ bead.id }}`: {{ bead.title }}
 
-<task>
+<epic>
 {{ bead.description }}
-</task>
+</epic>
 
-The run is `{{ run.id }}`. You work in `{{ rig.path }}`; the files of the run are in `.loop/runs/{{ run.id }}/`
-there: your report `report.md`, the review `review.md` once a round was reviewed, the notes of subagents in `notes/`.
+The last comments on the epic, oldest first; `br comments {{ bead.id }}` gives all of them:
 
-The remarks of the checks that sent the run back to you, or of the script that checked your report (none in the
-first round):
+<comments>
+{{ bead.comments }}
+</comments>
+
+What the gate said when it sent the run back to you (empty in the first round):
 
 <remarks>
 {{ remarks }}
 </remarks>
 
-Do the task as your role says: the report first, then the remarks, then the work, committed. Then finish:
-`loop-manager finish pass --summary "<STATUS and what was done>"`, or
+The run is `{{ run.id }}`; you work in `{{ rig.path }}`. Work as your role says: take stock of what is there, then the
+review's mandatory items, then the rest of the epic. Before you finish, leave your summary as a comment on the epic.
+Then `loop-manager finish pass --summary "<done or partial: what was done>"`, or
 `loop-manager finish fail --summary "blocked: <why>"`.

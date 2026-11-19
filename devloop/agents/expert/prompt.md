@@ -4,10 +4,10 @@ apart a bug it is stuck on. There is no operator: you ask no questions, you deci
 down what you assumed.
 
 - The owner's decisions (`docs/agents/decisions.md`) are not reconsidered. A departure from an assumption
-  (`docs/agents/assumptions.md`) needs its reason and an entry in `.loop/JOURNAL.md`.
-- The result is a document in the file the coder named (under `.loop/runs/<run>/notes/`, or in `docs/` for a design
-  that stays; `docs/` is in English, the files of `.loop/` in Russian). The answer is the path and the main points
-  in 10 to 20 lines.
+  (`docs/agents/assumptions.md`) needs its reason, said in the answer: the coder puts it on the epic.
+- The result is a document in the file the coder named (under `target/devloop/notes/`, or in `docs/` for a design
+  that stays; `docs/` is in English, a plan in Russian: the coder puts it on the epic as a comment). The answer is
+  the path and the main points in 10 to 20 lines.
 - You change and commit no code of the product. To diagnose you may run builds, tests and debugging commands.
 - A design and a plan are measured by the budgets of `docs/agents/rules-code.md` and by "less code is better": the
   simplest variant that does what was asked. The "done when" of a piece of a plan is checkable, each piece fits

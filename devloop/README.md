@@ -1,46 +1,67 @@
 # devloop: loop-manager develops loop-manager
 
-A loop-manager project whose rig is this repository. The owner files a task as a bead; a run of the formula `task`
-has a coder do it, runs the CI gate, has a reviewer review it, and sends the work back to the coder until the review
-scores 9 or more. Nothing here is part of the product: it is a pack and a config, read by `loop-manager` as any
-other.
+A loop-manager project whose rig is this repository. The owner files an epic as a bead; a run of the formula `epic`
+has a coder work on it, runs the full test gate, has a reviewer review the result, and sends the work back to the
+coder until the review scores 9 or more with the verdict `complete`. Nothing here is part of the product: it is a
+pack and a config, read by `loop-manager` as any other.
 
 ```text
 devloop/
   config.toml           the orchestrator config of the loop's own daemon
-  loop-manager.toml     the project: the rig `repo` (the repository, `..`), the addon, the trigger
+  loop-manager.toml     the project: the addons, the settings of the sessions, the rig `repo` (`..`), the trigger
   agents/               coder and reviewer (steps of the formula); helper, subcoder, expert (subagents of the coder)
-  formulas/task.toml    code -> ci -> review -> gate
-  scripts/              the check scripts of `code` and `review`, the gate, and their self-test
-  .beads/               the tracker of the tasks (br), committed with the code
+  formulas/epic.toml    code -> tests -> review -> gate
+  scripts/              tests.sh and gate.sh (the exec steps) and selftest.sh (their test, part of `mise run ci`)
+  .beads/               the tracker of the epics (br), committed with the code; policy.yaml lists its statuses
 ```
 
 ## A run
 
-| Step | What it does | When it does not pass |
+- `code`: a new coder session works on the epic, commits as `<epic id>: …` and leaves a comment `CODER: done`,
+  `partial` or `blocked` with `BASE:` and `HEAD:`. `blocked` (`finish fail`) fails the run; a session stopped at its
+  context limit still goes on to the next step.
+- `tests`: `scripts/tests.sh` runs `mise run ci` on the tree the coder left, writes the whole log to
+  `target/devloop/ci.log` and prints a digest that ends in `RESULT: pass` or `RESULT: FAIL`. It always passes: red
+  tests go to the reviewer, not back to the coder.
+- `review`: the reviewer leaves a comment `REVIEW` with `SCORE: x/10`, `VERDICT:` and `HEAD:`, and gives the score
+  and the verdict as the data of its `finish`. A review that fails or is stopped is written once more by a new
+  session; a second failure fails the run.
+- `gate`: `scripts/gate.sh` commits `devloop/.beads/` and pushes, then passes on a score of 9 or more with the
+  verdict `complete`. Otherwise the epic gets the status `rework` and the run goes back to `code` with what the gate
+  printed: the score, the verdict and the `RESULT:` of the tests.
+
+A run has 50 rounds (`rounds` in `formulas/epic.toml`); a round is one pass from `code` to `gate`, and only a review
+under the bar spends one. The verdict `complete` needs a green test run, so red tests come back through the review.
+A run that passes closes its epic. All the state of an epic is in its comments: every round is a new session, which
+reads the last 8 comments in its prompt and the rest with `br comments <id>`. Long notes of subagents go to
+`target/devloop/notes/` and do not survive in git.
+
+One run at a time works in the repository (`max_writers = 1` of the rig): the others wait in `queued`. A session of
+the coder or the reviewer is told to wrap up past 300000 tokens of context and stopped past 420000 (the addon
+`context-budget`), and its state goes on the epic as a comment.
+
+## The status of an epic
+
+| Status | What it means | Who sets it |
 |---|---|---|
-| `code` | the coder does the task, commits, writes `.loop/runs/<run>/report.md`; `scripts/check-report.sh` wants the report's first three lines and a tree with nothing uncommitted outside `.loop/` | the coder gets the script's output and goes on, up to 3 times |
-| `ci` | `mise run ci` on HEAD | back to `code` with the tail of the output |
-| `review` | the reviewer writes `.loop/runs/<run>/review.md`; `scripts/check-review.sh` wants its `SCORE:` and `VERDICT:` lines and an unchanged tree | the reviewer gets the script's output and goes on, up to 3 times |
-| `gate` | `scripts/gate.sh` commits `.loop/` and `devloop/.beads/`, pushes, and passes on `SCORE` of 9 or more with `VERDICT: complete` | back to `code`; the review is the remark |
+| `open` | filed and waiting for a run, or the last run failed | you (`br create`); loop-manager when a run fails |
+| `in_progress` | a run works on it and no review has sent it back yet | loop-manager, when a run claims it |
+| `rework` | a review sent it back; the next rounds go on | `scripts/gate.sh` |
+| `closed` | the review passed and the run `passed` | loop-manager |
 
-A run has 4 rounds (`rounds` in `formulas/task.toml`); a red `ci` spends one, and so does a review under the bar. A
-run that passes closes its bead. A run that fails releases it: the bead is ready again and gets a new run with new
-sessions, which read the reports and reviews the earlier runs left. After 3 failed runs (`bead_failed_runs`) loop-manager
-closes the gate `bead:devloop/<id>`, and nothing more starts on that bead until you open it
-(`loop-manager gate list`, `loop-manager gate open <key>`).
-
-One run at a time works in the repository (`max_writers = 1` of the rig): the others wait in `queued`. The session
-of the coder and of the reviewer is told to wrap up past 300000 tokens of context and stopped past 420000; a stopped
-coder's round still goes on to the review (the addon `addons/context-budget`, attached in the two `agent.toml`).
+The agents change neither the status nor the assignee. br refuses a status not listed in `.beads/policy.yaml`;
+`blocked` and `deferred` are there for you to use by hand. Two labels matter: `auto` makes a ready epic start a run,
+and `needs-owner` marks an epic with a question to you (the comment `QUESTION: …`). A finding or a decision the
+agents want you to know of is a comment `NOTE: …`.
 
 ## Before the first start
 
-- `loop-manager`, `claude`, `br`, `jq`, `git` and `mise` are on the `PATH` of the shell that starts the daemon, and
-  `loop-manager doctor --config devloop/config.toml` is content.
-- `git push` works from that shell without a question: see "The push".
-- The loop this pack replaces is switched off: see "Moving over". Until then its hooks in `.claude/settings.json`
-  run inside every claude session that works in this repository, the sessions of this pack included.
+- `loop-manager`, `claude`, `br`, `dcg`, `jq`, `git`, `mise` and `cargo-nextest` are on the `PATH` of the shell that
+  starts the daemon, and `loop-manager doctor --config devloop/config.toml` is content.
+- That shell is one where mise has activated this repository: the sessions take `RUSTUP_TOOLCHAIN`, `RUSTUP_HOME`
+  and `CARGO_HOME` from it, and without them every session fails with `config_error` naming the variable.
+- The branch is `main`, and `git push --dry-run` works from that shell without a question: see "The push".
+- The loop this pack replaces is not running: the two cannot work in one checkout at once (see "Moving over").
 
 ## Start it
 
@@ -52,21 +73,20 @@ The daemon keeps its state in the XDG state directory and listens on its default
 another daemon of yours, give it its own `XDG_STATE_HOME` and `LOOP_MANAGER_SOCKET`, as `demos/*/run.sh` do, and
 export the same `LOOP_MANAGER_SOCKET` in the shell you run the commands below from.
 
-## File a task
+## File an epic
 
-A ready bead with the label `auto` starts a run; a bead without it starts nothing.
+A ready bead with the label `auto` starts a run (the trigger `epic-ready`); a bead without it starts nothing.
 
 ```sh
 cd devloop
-br create "Short title of the task" -l auto -d "What to do, by which documents, and when it is done"
+br create "Short title of the epic" -t epic -l auto --description-file <file>   # or -d "<text>"
 ```
 
-Write the description as a plan package is written: the documents, the result, the checkable "done when". The size
-of a task is what one coder session does, with its subagents. A task that waits for another is filed with a
-dependency (`br dep add <task> <what it waits for>`) and becomes ready when that one is closed.
+Write the description as a plan is written: the documents to read, the result, and a checkable "done when". A long
+epic points to a PRD committed in the repository. An epic that waits for another is filed with a dependency
+(`br dep add <epic> <what it waits for>`) and becomes ready when that one is closed.
 
-By hand, without the label: `loop-manager run start devloop repo task --input task=<bead id>`, or
-`--input 'task=<the text of the task>'`, which files the bead.
+By hand, without the label: `loop-manager run start devloop repo epic --input epic=<bead id>`.
 
 ## Watch it
 
@@ -75,43 +95,87 @@ loop-manager run list                 # the runs, newest first: state, step, for
 loop-manager run show <run>           # one run: its round, the outcomes of its steps, why it failed
 loop-manager run watch <run>          # one run live, with the messages of its session
 loop-manager events                   # every event, live
-loop-manager trigger list             # `task-ready` and whether it is on
+loop-manager trigger list             # `epic-ready` and whether it is on
+cd devloop
+br show <id>                          # the epic, its status and labels
+br comments <id>                      # every summary, review, question and note, oldest first
+br list --status rework               # the epics a review sent back
+br list -l needs-owner                # the epics with a question to you
 ```
 
-What a run leaves for you is in the repository, committed and pushed by the gate after every reviewed round:
-`.loop/runs/<run>/report.md` and `review.md` (the history of a run's rounds is the git history of these files),
-`notes/` beside them, and `.loop/JOURNAL.md`, where the agents write what you need to know or decide. A coder that
-cannot go on without you writes the blocker there and fails its run.
+The log of the last test run is `target/devloop/ci.log`.
+
+## Answer `needs-owner`
+
+```sh
+cd devloop
+br comments add <id> "<the answer>"
+br label remove <id> needs-owner
+```
+
+The agent of the next step or round sees the answer among the comments in its prompt. Until then the agents go on
+by the option the question named: the label holds nothing back, and a ready epic with `auto` starts a run whether it
+has `needs-owner` or not. A coder that has nothing left to do without you fails the run with `blocked`: see the next
+section.
+
+## When a run fails
+
+A run fails when its rounds run out, when the coder is `blocked`, when a review cannot be written twice, when a
+passing review cannot be pushed (see "The push"), or when the infrastructure fails past its retries. The epic is
+`open` again and, since one failed run is enough (`bead_failed_runs = 1` in `config.toml`), loop-manager closes the
+gate `bead:devloop/<id>`: nothing more starts on that epic until you open it. Read the last comments, answer or
+change the epic, then:
+
+```sh
+loop-manager gate list
+loop-manager gate open bead:devloop/<id>
+loop-manager run list --state queued   # with `auto`, a run of the epic may wait here for the gate
+```
+
+If no run of the epic waits, start one with `run start` (see "File an epic").
 
 ## The push
 
-The exec steps and the check scripts get the whole environment of the daemon (`[exec] inherit_env = true` in
-`loop-manager.toml`), not `PATH`, `HOME` and `LANG` alone, so the `git push` of the gate authenticates as your shell
-does: through the ssh agent (`SSH_AUTH_SOCK`), a token (`GH_TOKEN`, `GITHUB_TOKEN`) or a credential helper. Check
-it in the shell that will start the daemon: `git push --dry-run`. A key with a passphrase and no agent cannot work:
-nothing can ask for it, and the gate fails instead of waiting. When the review passes and the push does not, the
-step is tried again three times, 30 s apart, and then the run fails; the commit stays local and the next push takes
-it along.
+The steps `tests` and `gate` get the whole environment of the daemon (`inherit_env = true` on the two steps in
+`formulas/epic.toml`), not `PATH`, `HOME` and `LANG` alone, so `mise run ci` sees what your shell sees and the
+`git push` of the gate authenticates as your shell does: through the ssh agent (`SSH_AUTH_SOCK`), a token
+(`GH_TOKEN`, `GITHUB_TOKEN`) or a credential helper. A key with a passphrase and no agent cannot work: nothing can
+ask for it, and the gate fails instead of waiting. The gate commits `devloop/.beads/` alone and pushes after every
+review, whatever it says; what the coder left uncommitted stays as it was. When the review passes and the push does
+not, the step is tried again three times, 30 s apart, and then the run fails; the commit stays local and the next
+push takes it along. loop-manager closes the epic after the gate, so the closing is not in the last push: it stays
+a change of `devloop/.beads/issues.jsonl` until the next commit of the tracker, or yours.
 
-## Who may change this directory
+## The sessions
 
-Only you. The daemon holds the config in memory until `loop-manager config reload`, but it runs the scripts under
-`scripts/` from the working tree at the moment a step needs them: a coder that edits `scripts/gate.sh` changes the
-check of its own round. The reviewer therefore reports any change under `devloop/`, other than `.beads/`, as a
-mandatory item that waits for you, and a run with such a change does not pass by itself.
+`[settings]` in `loop-manager.toml` holds for every agent of the pack and its subagents: the three toolchain
+variables above, `BR_OUTPUT_FORMAT = "toon"` (br answers in TOON; `--json` still gives JSON), a subagent depth of 2,
+and a prompt cache of 5 minutes instead of the hour a subscription gets by default (`native.claude.promptCacheTtl`
+and `subagentPromptCacheTtl`): every round is a new session and the long test run is a step outside any session. The
+pack runs on claude only. Both roles attach `context-budget` and `dcg`, which refuses a destructive shell command
+before it runs; what `dcg` needs on the host is in `addons/dcg/README.md`. `loop-manager config explain --config
+devloop/config.toml --project devloop --formula epic --rig repo` shows what each step gets and from which layer.
 
-If that is not enough, pin the pack. `packs` in `loop-manager.toml` takes `{ git = "<url>", rev = "<commit or
-tag>" }`, where the url is anything `git clone` takes, an absolute path of a local repository or `file://` included,
-and loop-manager then reads the pack from a checkout in its cache that no agent works in. A pack from git is a
-repository with `pack.toml`, `agents/` and `formulas/` at its root (there is no key for a subdirectory), so the pin
-needs a repository of its own for `agents/`, `formulas/` and `scripts/`, not this one. The check scripts are found
-from the formula's directory and so come from the pinned checkout; the command of the step `gate` is found from the
-rig, so in a pinned pack make it a check script too (`step_check_script_path` on a step whose command is `true`).
+## The addons
+
+`context-budget` and `dcg` are declared by path (`path = "../addons/<name>"`), as no release tag holds the versions
+this pack needs, and a declaration by git would make `config check` in `mise run ci` go to the network on a cold
+cache. Once a release tag holds them, declare each as `git = "<the repository>"`, `rev = "<the tag>"` and
+`dir = "addons/context-budget"` (or `"addons/dcg"`).
+
+## Changing this directory
+
+Anyone may change it, the agents of an epic included. The daemon runs `scripts/` from the working tree at the moment
+a step needs them, so an edit of `gate.sh` or `tests.sh` holds from the next step on. The config, the formula and
+the prompts are held in memory: an edit of them holds only after `loop-manager config reload`, and a running run
+keeps the ones it started with. `mise run ci` runs `scripts/selftest.sh` and `config check` on this directory.
 
 ## Moving over
 
-The loop this pack replaces lives in `.claude/` and `scripts/loop/`. The two do not work side by side: its hooks
-would run in the sessions of this pack, and both would commit to `.loop/`. To move over, between two cycles of the
+The loop this pack replaces lives in `.claude/`, `scripts/loop/` and `.loop/`. The two do not work side by side:
+they share one checkout and one branch. While `.claude/settings.json` has its hooks, they run in the sessions of
+this pack too: a few shell commands are refused, and a subagent gets a second note on its context that names the
+old limits and is stopped at 420000 tokens with a dump in `.loop/handoffs/`. To move over, between two cycles of the
 old loop:
 
 1. Remove `.claude/agents/` and `.claude/hooks/`, and the `hooks` table from `.claude/settings.json` (its `env` and
@@ -120,7 +184,7 @@ old loop:
 3. In `CLAUDE.md` and `docs/agents/loop.md`, replace what describes cycles (`loopctl`, `scripts/loop/checks`,
    `.loop/cycles/`, `.loop/state.json`, `.loop/handoffs/`, the 300k and 420k thresholds, "the harness of the loop")
    with a pointer to this file; the roles of this pack tell their agents to skip those parts until then.
-4. File what is left of `.loop/PLAN.md` as beads.
+4. File what is left of `.loop/PLAN.md` as epics.
 
 After a fresh clone br has no database yet: `cd devloop && br init --prefix dev` makes it, and br fills it from
 `.beads/issues.jsonl`.
