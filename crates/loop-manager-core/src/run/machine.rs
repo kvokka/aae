@@ -122,7 +122,8 @@ impl RunHandler {
             return self.terminal(tx, row, "failed", Some("infrastructure"), &reason);
         }
         // Of one step: each ai step of a formula has a session of its own (docs/design/contracts.md 6). A session from
-        // before the step's last `new_session` attempt is one the policy gave up, never resumed.
+        // before the step's last `new_session` attempt — a new round, a repeat or the policy gave it up — is never
+        // resumed.
         let last_session = |tx: &Tx<'_>, run: &str, step: Option<&str>| {
             tx.sql()
                 .query_row(
@@ -164,11 +165,11 @@ impl RunHandler {
             let reason = format!("the continued session is of harness `{harness}`");
             return self.terminal(tx, row, "failed", Some("infrastructure"), &reason);
         }
+        // A step gone back to or repeated starts a new session, with its prompt and the remarks; only the recovery
+        // after a failed attempt resumes (docs/design/contracts.md 6).
         let session = match (row.attempt, kind) {
             (0, _) => from,
             (_, "resume") => own.or(from),
-            // A step gone back to continues its session, with its prompt and the remarks (docs/design/contracts.md 6).
-            _ if entering => own.filter(|(_, h)| *h == config.harness),
             _ => None,
         };
         let resume = session.and_then(|(s, _)| serde_json::from_str::<SessionRef>(&s).ok());

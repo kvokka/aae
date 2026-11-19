@@ -2,5 +2,5 @@
 harness = "claude"
 model = "opus"
 effort = "high"
-# As the coder's: a review of each round goes on in one session.
+# As the coder's: each round's review is a session of its own.
 addons = [{ name = "context-budget", params = { window = 300000, max_compactions = 4 } }]

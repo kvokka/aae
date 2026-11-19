@@ -152,7 +152,7 @@ async fn a_formula_without_rounds_takes_those_of_the_project() {
     assert_eq!(data["reason"], "still failing after 1 rounds: check: exit 1\nstill red");
 }
 
-/// The step the run went back to continues its session (docs/design/contracts.md 6), and its prompt shows the remarks;
+/// The step the run went back to starts a new session (docs/design/contracts.md 6), and its prompt shows the remarks;
 /// the first round shows none.
 #[tokio::test]
 async fn the_step_gone_back_to_sees_the_remarks_in_its_prompt() {
@@ -189,59 +189,9 @@ async fn the_step_gone_back_to_sees_the_remarks_in_its_prompt() {
     assert_eq!(plans.len(), 2, "{view}");
     assert_eq!(
         (&plans[0]["kind"], &plans[1]["kind"]),
-        (&json!("new_session"), &json!("resume"))
+        (&json!("new_session"), &json!("new_session"))
     );
-    assert_eq!(plans[1]["session"], plans[0]["session"], "{view}");
-}
-
-/// A step gone back to whose agent moved to another harness between the rounds (a config reload) starts a new
-/// session: a session of one harness is not resumed on another.
-#[tokio::test]
-async fn a_step_gone_back_to_on_another_harness_starts_a_new_session() {
-    // The first check waits for the reload, then sends the run back; the second passes.
-    let check = "n=$(($(cat check 2>/dev/null || echo 0) + 1)); echo $n > check; [ $n -gt 1 ] && exit 0; \
-        touch waiting; while [ ! -f go ]; do sleep 0.02; done; echo redo; exit 1";
-    let steps = [
-        "[[step]]\nname = \"plan\"\nkind = \"ai\"\nagent = \"dev\"\n".to_owned(),
-        exec("check", check, Some("plan")),
-    ];
-    let config = "projects = [\"shop\"]\nbuiltin = { default-policy = { enabled = false } }\n[harness.scripted]\n\
-        [harness.other]\n";
-    let w = flow(
-        "",
-        &steps,
-        &[("config.toml", config), ("shop/agents/dev/prompt.template.md", "Plan.")],
-    );
-    let turns = turns(&w, 2);
-    let run = w.start_returns().await;
-    let web = w.dir.path().join("shop/web");
-    let reload = async {
-        while !web.join("waiting").exists() {
-            tokio::time::sleep(Duration::from_millis(20)).await;
-        }
-        let agent = w.dir.path().join("shop/agents/dev/agent.toml");
-        std::fs::write(agent, "harness = \"other\"\n").unwrap();
-        let config = loop_manager_core::config::load(&w.dir.path().join("config.toml")).unwrap();
-        w.core.send(None, Msg::Reload(Arc::new(config))).await.unwrap();
-        std::fs::write(web.join("go"), "").unwrap();
-    };
-    let ((kind, data), ()) = tokio::join!(w.returns_end(&run, &[], &turns), reload);
-    assert_eq!(kind, "run.passed", "{data}");
-    let reader = loop_manager_core::run::Reader::open(&w.dir.path().join("state.db")).unwrap();
-    let view = reader.run(&run).unwrap().unwrap();
-    let plans: Vec<&Value> = view["attempts"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .filter(|a| a["step"] == "plan")
-        .collect();
-    assert_eq!(plans.len(), 2, "{view}");
-    assert_eq!(
-        (&plans[0]["kind"], &plans[1]["kind"]),
-        (&json!("new_session"), &json!("new_session")),
-        "{view}"
-    );
-    assert_eq!(plans[1]["harness"], "other", "{view}");
+    assert_ne!(plans[1]["session"], plans[0]["session"], "{view}");
 }
 
 /// A prompt check: the agent declares `fail`, and the run goes back with its summary as the remark.

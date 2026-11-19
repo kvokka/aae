@@ -784,8 +784,8 @@ reaches it only when they all passed, and failed ones send the run back first; t
 belong to its row. Their remarks — per check its name, its summary and, for an
 exec check, the output it kept — reach the steps of the new round as `{{ remarks }}` in a prompt template and
 `LOOP_MANAGER_REMARKS` in the environment of an exec step (empty and absent in the first round). An ai step of the new
-round that already has a session goes on in it: its first attempt resumes the session and gets the
-rendered prompt with the remarks, not the reconcile prompt of a resumed retry. A check that fails in the
+round starts a new session with the rendered prompt and the remarks; the session of its earlier round is not
+resumed. A check that fails in the
 last of the formula's `rounds` fails the run (class `agent`) with the reason `still failing after <n> rounds:
 <remarks>`. `back_to` must name a step before the check; a `drain` step is no check.
 
@@ -819,7 +819,7 @@ else the one of the orchestrator's and the project's `[exec]`, without the `env`
 the agent's session; never the agent's `env` — plus `LOOP_MANAGER_STEP_<NAME>_RESULT`, `_SUMMARY` and `_DATA` of its own
 step, in the run's workdir under the step timeout. A reference to a variable the daemon does not have keeps the script
 from starting and fails the run at once with reason `config_error: …` (see "Environment values"). A repeat of an `ai`
-step goes on in its session and gets the script's output as a remark: through `{{ remarks }}`, or appended to the prompt
+step starts a new session and gets the script's output as a remark: through `{{ remarks }}`, or appended to the prompt
 when the template has none. A repeat of a `drain` step is a new entry. The count is within a round: a round back to the
 step gives it the full `max_attempts` again. A repeat spends neither the session attempt ceiling (invariant 16,
 [invariants.md](invariants.md#the-invariants)) nor the rounds, and a failure of the infrastructure does not spend

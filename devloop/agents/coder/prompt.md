@@ -13,9 +13,10 @@ written here.
   the review of the last round `review.md`, the long results of subagents go under `notes/`.
 - You commit, the step `gate` pushes. After your step a script checks the first three lines of the report and that
   nothing outside `.loop/` is uncommitted; then `ci` runs `mise run ci` on HEAD.
-- A red `ci`, or a review under 9 or without `VERDICT: complete`, sends the run back to you, in this session, with
-  the remarks in your prompt. The rounds are counted: a run still failing after the last one fails, and its bead
-  gets a new run whose coder knows only what the reports, the reviews and the journal say.
+- A red `ci`, or a review under 9 or without `VERDICT: complete`, sends the run back to your step: a new coder
+  session, with the remarks in its prompt, that knows of the rounds before only what the report and the review say.
+  The rounds are counted: a run still failing after the last one fails, and its bead gets a new run whose coder
+  knows only what the reports, the reviews and the journal say.
 - `devloop/` is the configuration of this loop and the owner's: do not change it. A proposal about it is a journal
   entry.
 - The task is the bead of your prompt and nothing more. A bead you file yourself (`br create`, for your own notes)
@@ -25,7 +26,7 @@ written here.
 
 1. Write `report.md` by the template below with `STATUS: partial` before any work, its `BASE:` the output of
    `git rev-parse HEAD` at that moment; in a later round bring the report up to date first and keep `BASE:`. The
-   report is what a compaction of your session, and the next run, cannot lose.
+   report is what a compaction of your session, the next round and the next run cannot lose.
 2. Earlier runs on this bead left their reports and reviews: `grep -l '^BEAD: <bead id>$' .loop/runs/*/report.md`.
    Read the last of them, with the `review.md` beside it, before you plan.
 3. In a later round the remarks come first: a red `ci` is fixed before anything else, and of a review the section

@@ -145,11 +145,9 @@ async fn a_step_runs_again_until_its_check_script_passes() {
     );
     let attempts = view["attempts"].as_array().unwrap();
     let kinds: Vec<&Value> = attempts.iter().map(|a| &a["kind"]).collect();
-    assert_eq!(kinds, ["new_session", "resume", "resume"], "{view}");
-    assert!(
-        attempts.iter().all(|a| a["session"] == attempts[0]["session"]),
-        "{view}"
-    );
+    assert_eq!(kinds, ["new_session"; 3], "each repeat is a new session: {view}");
+    let sessions: std::collections::HashSet<String> = attempts.iter().map(|a| a["session"].to_string()).collect();
+    assert_eq!(sessions.len(), 3, "{view}");
     assert!(
         attempts.iter().all(|a| a["failure"].is_null()),
         "a repeat is no failure: {view}"
@@ -279,7 +277,14 @@ async fn a_crash_between_attempts_keeps_the_count() {
         "{data}"
     );
     assert_eq!(w.check_calls(), 2, "a reset count would run the step a third time");
-    assert_eq!(w.repeat_view(&run)["step_attempt"], 2);
+    let view = w.repeat_view(&run);
+    assert_eq!(view["step_attempt"], 2);
+    // The repeat's session was never recorded: the recovery starts another new one and does not go back to the
+    // session of the first execution.
+    let attempts = view["attempts"].as_array().unwrap();
+    let kinds: Vec<&Value> = attempts.iter().map(|a| &a["kind"]).collect();
+    assert_eq!(kinds, ["new_session"; 3], "{view}");
+    assert_ne!(attempts[2]["session"], attempts[0]["session"], "{view}");
 }
 
 /// The script still runs when the daemon restarts: the new daemon runs it again, and the lost run counts for nothing.

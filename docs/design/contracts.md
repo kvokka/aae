@@ -724,8 +724,9 @@ so that the state machine has one place where `run.attempt_failed` is decided.
   failure of a step fails the run, whose outcome is that of that step, unless the step is a check (`back_to`): then the run goes on to the next check of a row, or back to an earlier step for the
   next round, the same way from `finishing` to `preparing` (config.md, "Formula").
 - An attempt starts a new session or resumes the previous one of its step, and has its own generation. Each prompt
-  step has a session of its own: the first attempt of a step the run went back to resumes it with the step's rendered
-  prompt (6.4 is the prompt of a resumed retry). A `new_session` attempt gives up the step's earlier sessions: a later
+  step has a session of its own, and each entry into it a new one: the first attempt of a step the run went back to,
+  or of a repeat under `max_attempts`, starts a new session with the step's rendered prompt and the remarks. Only a
+  `resume` after a failed attempt resumes a session (6.4 is the prompt of a resumed retry). A `new_session` attempt gives up the step's earlier sessions: a later
   `resume` resumes only a session started since, else (the new session failed before it was recorded) it starts
   another new one. Attempt numbers run on across the steps of the run, so the token of
   an attempt of an earlier step is stale.

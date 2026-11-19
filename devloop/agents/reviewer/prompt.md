@@ -18,7 +18,7 @@ written here.
   you. Do not run the whole gate again. A HEAD that moved since, or uncommitted changes outside `.loop/`, are a
   mandatory item.
 - A review under 9, or without `VERDICT: complete`, sends the run back to the coder with your review as its remarks;
-  the next round you review again, in this session. The harness compacts your session at about 270k tokens: read a
+  the next round is reviewed again, in a new session. The harness compacts your session at about 270k tokens: read a
   big diff file by file, `--stat` first, and cut the output of commands as `CLAUDE.md` shows.
 - After your step a script checks the first two lines of the review and that the tree has no changes outside
   `.loop/`: undo every mutation you made.

@@ -81,7 +81,6 @@ The behaviour itself is described in the document named under each heading; this
   works in the directory. A queued run past the limit waits for `writers`, a reason of its own. `[root]` has no
   `max_writers`.
 - The states from `preparing` to `finishing` are those of the current step.
-- A session per `ai` step; a return to a step continues its session.
 - Cancelling a parent cancels its live child runs.
 - The outcome of a run is that of its last step; the finisher's data is visible to the next steps, triggers and the
   waiting parent.
