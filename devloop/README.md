@@ -26,7 +26,7 @@ devloop/
 
 A run has 4 rounds (`rounds` in `formulas/task.toml`); a red `ci` spends one, and so does a review under the bar. A
 run that passes closes its bead. A run that fails releases it: the bead is ready again and gets a new run with new
-sessions, which read the reports and reviews the earlier runs left. After 3 failed runs (`bead_failures`) loop-manager
+sessions, which read the reports and reviews the earlier runs left. After 3 failed runs (`bead_failed_runs`) loop-manager
 closes the gate `bead:devloop/<id>`, and nothing more starts on that bead until you open it
 (`loop-manager gate list`, `loop-manager gate open <key>`).
 

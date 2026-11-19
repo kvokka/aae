@@ -264,6 +264,11 @@ fn a_retired_key_is_one_line_that_says_where_it_went() {
             "name = \"implement\"\n[inputs]\nbead = { type = \"bead\" }\n",
             "input type `bead` is `task` now",
         ),
+        (
+            "config.toml",
+            "bead_failures = 2\n",
+            "`bead_failures` is `bead_failed_runs` now",
+        ),
     ] {
         let errors = load(&[(file, text)]).expect_err(text);
         let error = (errors.iter().find(|e| e.message.contains(hint))).unwrap_or_else(|| panic!("{errors:?}"));

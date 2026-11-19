@@ -19,7 +19,8 @@ error in every file.
   (the daemon's file; `--config <file>` loads a file in the CLI, with no daemon).
 - A retired key is a config error of one line that says where it is written now: `permission_mode` (the native block of
   the harness), `[overrides.<agent>]` (`[agents.<agent>]`), step kind `prompt` (`ai`), input type `bead` (`task`), the
-  `prompt` key of an `ai` step (the agent's `prompt.template.md`), `config` of an `[[addon]]` (`params` of an attachment).
+  `prompt` key of an `ai` step (the agent's `prompt.template.md`), `config` of an `[[addon]]` (`params` of an attachment),
+  `bead_failures` (`bead_failed_runs`).
 - A reload is taken by new runs and by the schedules (a schedule whose `cron`/`every` changed, and every `cron` when
   `timezone` changed, is set again from the reload; a removed one is dropped); the snapshot is per step: a running
   step keeps the one it prepared with, and the next step of the run prepares with the config of that moment; an idle
@@ -333,7 +334,7 @@ Checked by acceptance criterion 12 (`crates/loop-manager-acceptance`), the unit 
 ```toml
 projects = ["~/work/shop"]          # project directories, each with a loop-manager.toml
 max_runs = 8                        # runs started at once across all projects (default 8, at least 1)
-bead_failures = 3                   # failed runs of a bead before the core closes its gate (default 3, at least 1)
+bead_failed_runs = 3                # failed runs of one bead before the core closes its gate (default 3, at least 1)
 api_tcp = "127.0.0.1:7171"          # the API on TCP too (off by default; loopback only; a reload cannot change it)
 timezone = "Europe/Berlin"          # IANA zone `cron` is read in (default: the system zone; an unknown name is an error)
 rounds = 3                          # the rounds of a formula that sets none (default 3, see "Formula")
@@ -888,7 +889,7 @@ payload, as do the paths of `where`. `rig` is allowed only in a project's `[[tri
   a long epic is legal. A `bead.ready` event does not add a level: a bead made ready by the run that closed its
   blocker is the tracker's next work, not a run that run started, so its run keeps the depth of the event's run
   (at least 1) and an epic of beads each blocked by the last runs to its end. Repeated runs over one bead are
-  bounded by the bead's failure count (`bead_failures`).
+  bounded by its failed runs (`bead_failed_runs`).
 
 ### How runs start and what a firing guarantees
 

@@ -2,7 +2,7 @@ name = "task"
 description = "One task of loop-manager's own development: the code, the CI gate, a review and the gate on its score"
 # A round is one pass from `code` to the check that sends the run back: a red `ci` spends one, and so does a review
 # under the bar. A run still failing after the last round fails and releases its bead: the bead becomes ready again
-# and gets a new run with new sessions, until `bead_failures` runs failed (3 by default, then the bead's gate closes).
+# and gets a new run with new sessions, until `bead_failed_runs` runs failed (3 by default, then the bead's gate closes).
 rounds = 4
 
 [inputs]

@@ -56,10 +56,12 @@ run relation is below ([Beads and runs](#beads-and-runs)). Code: `crates/loop-ma
   beads passed over).
 - Work is cut into beads and the next one is taken by this ready pick, within an epic too. A chain of several
   formulas over one bead is not in the first release: `pass` always closes the bead.
-- The failure counter of a bead lives in the state of the orchestrator: every failed run that held the claim adds
-  one, `passed` resets it. At `bead_failures` (orchestrator config, default 3) the core closes the gate
-  `bead:<project>/<id>` with a `gate.closed` event; the ready pick skips the bead until a human opens the gate, which
-  resets the counter. Without it a released bead would raise `bead.ready` again and repeat forever.
+- The failed runs of a bead are counted in the state of the orchestrator: every run that ended `failed` while it held
+  the claim is one, of any class; a round or a repeat inside a run is none, nor is a cancelled run
+  ([contracts.md 6.2](contracts.md#62-transitions)). `passed` resets the count. At `bead_failed_runs` (orchestrator
+  config, default 3) the core closes the gate `bead:<project>/<id>` with a `gate.closed` event; the ready pick skips
+  the bead until a human opens the gate, which resets the count. Without it a released bead would raise `bead.ready`
+  again and repeat forever.
 - The ownership record in the state is the truth; br's assignee mirrors it. A failed `br close` or release does not
   change the outcome of the run: the operation is retried through the queue `tracker:<project>`, and a difference is
   shown by an event (`tracker.sync_failed`, `resync.diverged`). A `.beads` directory the daemon cannot watch at start

@@ -49,8 +49,8 @@ What the failure kind suggests, as a hint for the user and not a decision:
 
 ## 2. Offer the ways to go on
 
-A failed run has let go of its bead: the bead is open again and its failure count went up. Once the count reaches
-`bead_failures` (default 3) the gate `bead:<project>/<bead>` is closed and no run takes the bead until it is opened.
+A failed run has let go of its bead: the bead is open again and its count of failed runs went up. Once the count
+reaches `bead_failed_runs` (default 3) the gate `bead:<project>/<bead>` is closed and no run takes the bead until it is opened.
 
 Offer these, for the user to pick one per run:
 
@@ -68,7 +68,7 @@ Offer these, for the user to pick one per run:
 
 Take `project`, `rig`, `formula` and the task input's name (often `task`) from `loop-manager run show`; leave `<rig>`
 out when the run has none. The note formula's input names are its own (`loop-manager formula list --json`). If the
-bead's gate is closed and the user wants the bead taken again, open it first (that resets the failure count):
+bead's gate is closed and the user wants the bead taken again, open it first (that resets the count):
 
 ```sh
 loop-manager gate open bead:<project>/<bead>

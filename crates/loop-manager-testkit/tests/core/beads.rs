@@ -4,34 +4,12 @@
 use crate::common;
 
 use common::{
-    World,
     beads::{FIX, next_ready, slow_turn},
     hollow_turn, last, world,
 };
-use loop_manager_core::run::{Msg, Outcome, Verdict};
+use loop_manager_core::run::{Msg, Verdict};
 use serde_json::{Value, json};
 use std::time::Duration;
-
-impl World {
-    async fn finish_bead(&self, run: &str, result: Verdict, summary: &str) {
-        self.finish_attempt(run, 1, result, summary).await;
-    }
-
-    async fn finish_attempt(&self, run: &str, attempt: u32, result: Verdict, summary: &str) {
-        let token = self.driver.token(run, attempt).unwrap();
-        let outcome = Outcome {
-            result,
-            summary: summary.into(),
-            data: None,
-        };
-        let msg = Msg::Finish {
-            run: run.into(),
-            token,
-            outcome,
-        };
-        self.core.send(None, msg).await.unwrap();
-    }
-}
 
 #[tokio::test(start_paused = true)]
 async fn five_requests_for_the_next_ready_bead_take_five_beads_and_the_sixth_finds_nothing() {
@@ -248,25 +226,6 @@ async fn the_next_ready_bead_in_an_epic_skips_beads_of_other_epics() {
     let events = w.events(&run, Duration::ZERO).await;
     assert_eq!(last(&events, "run.queued")["run"]["bead"], json!(mine));
     assert_eq!(w.fix(in_epic()).await.unwrap(), json!({ "nothing_ready": true }));
-}
-
-#[tokio::test(start_paused = true)]
-async fn a_cancelled_run_releases_its_bead_without_counting_a_failure() {
-    let w = world(FIX);
-    let bead = w.tracker.add(&[], None);
-    w.driver.script(slow_turn());
-    let run = w.run_on(json!(bead)).await;
-    tokio::time::sleep(Duration::from_secs(1)).await;
-    assert_eq!(w.assignee(&bead), Some(format!("loop-manager:{run}")));
-    let cancel = Msg::Cancel {
-        run: run.clone(),
-        reason: "operator".into(),
-    };
-    w.core.send(None, cancel).await.unwrap();
-    tokio::time::sleep(Duration::from_secs(20)).await;
-    assert_eq!(w.states(&run).await.last().unwrap(), "cancelled");
-    let released = w.tracker.bead(&bead).unwrap();
-    assert_eq!((released.assignee, released.status.as_str()), (None, "open"));
 }
 
 #[tokio::test(start_paused = true)]

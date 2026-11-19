@@ -792,9 +792,13 @@ bead. A bead the run
 claimed is closed (`passed`) or released conditionally (`failed`, `cancelled`) by an effect on the queue
 `tracker:<project>`, followed by a new read of the ready set; a refusal (`OwnerMismatch`, `NotFound`) is
 `resync.diverged{subject: "bead"}`, an unavailable tracker `tracker.sync_failed` and a retry, and the outcome of the
-run never changes. The failure counter of the bead: a failed run that held the claim adds one, `passed`
-resets it, `cancelled` and a refused claim leave it; at `bead_failures` (orchestrator config, default 3) the core
-closes the gate `bead:<project>/<id>`, and the operator opening that gate resets the counter. Operator holds (gates
+run never changes. The failed runs of a bead are counted: a run that ends `failed` while it held the claim is one,
+whatever its class, because a run fails only for good: the rounds of its formula or the `max_attempts` of a step ran
+out, a check refused it outright (exit 75, a veto, a deny), the policy or a ceiling of the core ended it (6.1), or it
+could not go on. What a live run goes through is not counted: a failed attempt the policy retries, a repeat of a
+step, a check that sends the run back for another round. `passed` resets the count; `cancelled`, and a run whose
+claim was refused or never answered, leave it. At `bead_failed_runs` (orchestrator config, default 3) the core closes
+the gate `bead:<project>/<id>`, and the operator opening that gate resets the count. Operator holds (gates
 closed by the operator, 7, and cancel) are read by every automatic decision: a decision that would start an attempt
 of a run whose gate the operator closed parks it instead (invariant 18).
 

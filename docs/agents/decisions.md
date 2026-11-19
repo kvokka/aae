@@ -126,6 +126,7 @@ each heading; this file only marks it as decided.
 | 82 | An executor's bead carries all it needs: the task, the rig, the agent and the harness. Which beads to file and for whom is the planner's judgement |
 | 92 | The user gives a formula a task, not a bead: nobody files one in advance. A task that names an existing bead takes it up; otherwise `loop-manager` files the root bead |
 | 96 | A rig's bead carries the rig's prefix: the acronym of its name (`backend` → `b`, `my-project` → `mp`) or the rig's `prefix` key; the root's beads carry no rig prefix |
+| 147 | A failure of a bead is one that cannot be repaired: the rounds or the attempts for the work ran out. Red tests on a second round, a reviewer sending the work back, one more round are not failures. The key that bounds the failures of a bead says so by its name and by what it counts: `bead_failed_runs`, the runs of the bead that ended `failed` (2026-11-19) |
 
 ## Addons — [addon guide](../guide/addons.md), [writing an addon](../guide/addon-development.md), [contracts 3](../design/contracts.md#3-orchestrator-hooks-decisions-and-timeouts)
 

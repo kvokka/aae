@@ -25,8 +25,8 @@ pub(super) const ADDON_DIR: &str = "${LOOP_MANAGER_ADDON_DIR}";
 pub(super) const PARAMS: &str = "${params.";
 /// How an addon's strings name the directory the daemon keeps for its data.
 pub(super) const ADDON_DATA: &str = "${LOOP_MANAGER_ADDON_DATA}";
-/// Failed runs of a bead before the core closes its gate (docs/design/config.md).
-const DEFAULT_BEAD_FAILURES: u32 = 3;
+/// Runs of one bead that may end `failed` before the core closes its gate (docs/design/config.md).
+const DEFAULT_BEAD_FAILED_RUNS: u32 = 3;
 
 #[derive(Default)]
 pub(super) struct Loader {
@@ -95,7 +95,7 @@ impl Loader {
             api_token: String::new(),
             timezone,
             max_runs: raw.max_runs.map_or(DEFAULT_MAX_RUNS, NonZeroU32::get),
-            bead_failures: raw.bead_failures.map_or(DEFAULT_BEAD_FAILURES, NonZeroU32::get),
+            bead_failed_runs: raw.bead_failed_runs.map_or(DEFAULT_BEAD_FAILED_RUNS, NonZeroU32::get),
             harnesses: raw.harness,
             settings,
             edits,

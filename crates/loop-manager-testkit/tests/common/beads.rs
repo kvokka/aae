@@ -1,7 +1,7 @@
 //! Helpers of the bead tests: a formula on one bead, its runs and the bead events in the journal.
 
 use super::{World, hollow_turn};
-use loop_manager_core::run::{Create, Msg};
+use loop_manager_core::run::{Create, Msg, Outcome, Verdict};
 use loop_manager_testkit::Step;
 use serde_json::{Value, json};
 use std::time::Duration;
@@ -55,6 +55,25 @@ impl World {
 
     pub(crate) fn assignee(&self, bead: &str) -> Option<String> {
         self.tracker.bead(bead).unwrap().assignee
+    }
+
+    pub(crate) async fn finish_bead(&self, run: &str, result: Verdict, summary: &str) {
+        self.finish_attempt(run, 1, result, summary).await;
+    }
+
+    pub(crate) async fn finish_attempt(&self, run: &str, attempt: u32, result: Verdict, summary: &str) {
+        let token = self.driver.token(run, attempt).unwrap();
+        let outcome = Outcome {
+            result,
+            summary: summary.into(),
+            data: None,
+        };
+        let msg = Msg::Finish {
+            run: run.into(),
+            token,
+            outcome,
+        };
+        self.core.send(None, msg).await.unwrap();
     }
 
     /// The tracker says it changed; the core reads its ready set again.

@@ -231,8 +231,8 @@ impl RunHandler {
     }
 
     /// The run ended: its hold on the bead goes; a claimed bead is closed (`passed`) or released conditionally, and
-    /// its failure counter moves (docs/design/contracts.md 5): `bead_failures` failed runs close the bead's gate for
-    /// the core.
+    /// its count of failed runs moves (docs/design/contracts.md 6.2): any `failed` end counts, whatever its class,
+    /// and `bead_failed_runs` of them close the bead's gate for the core.
     pub(super) fn let_go_bead(&mut self, tx: &mut Tx<'_>, row: &Row, state: &str, reason: &str) -> Result<(), Error> {
         let Some(bead) = &row.bead else { return Ok(()) };
         let owned = tx.sql().execute(
@@ -261,7 +261,8 @@ impl RunHandler {
                 )?;
                 0
             }
-            // Only a run that held the claim counts; a claim that never answered says nothing of the bead.
+            // A failed run of any class counts: a run fails only for good. Only a run that held the claim: a claim
+            // that never answered says nothing of the bead.
             "failed" if row.bead_data.is_some() => 1,
             _ => return Ok(()),
         };
@@ -271,7 +272,7 @@ impl RunHandler {
             params![row.project, bead, failures],
             |r| r.get(0),
         )?;
-        if total < self.config.bead_failures {
+        if total < self.config.bead_failed_runs {
             return Ok(());
         }
         let gate = GateSpec {

@@ -1,8 +1,8 @@
 //! Criterion 16 on the real br: the daemon claims a run's bead and holds the claim through the death of the step
 //! (a `kill -9` of the daemon mid-step) and its resumed attempt; `passed` closes the bead, `failed` returns it; five
 //! requests at once for the next ready bead of an epic of three give each bead to exactly one run; a bead whose runs
-//! failed `bead_failures` times is no longer given out; every step gets the tracker's path in `BEADS_DIR`; br holds
-//! no record of loop-manager's own beyond claims and closes.
+//! ended `failed` `bead_failed_runs` times is no longer given out; every step gets the tracker's path in
+//! `BEADS_DIR`; br holds no record of loop-manager's own beyond claims and closes.
 
 use super::{br, exec_formula, tracker};
 use crate::{
@@ -47,7 +47,7 @@ pub(crate) async fn run(env: Arc<Env>) -> String {
     let mut d = Daemon::start(&env, |root| {
         write(
             root.join("config/loop-manager/config.toml"),
-            "projects = [\"shop\"]\nbead_failures = 2\n",
+            "projects = [\"shop\"]\nbead_failed_runs = 2\n",
         );
         let input = "bead = { type = \"task\", required = true }";
         exec_formula(
@@ -130,7 +130,7 @@ pub(crate) async fn run(env: Arc<Env>) -> String {
         "each bead of the epic to one run"
     );
 
-    // `failed` returns the bead, and after `bead_failures` failures it is no longer given out.
+    // `failed` returns the bead, and after `bead_failed_runs` failed runs it is no longer given out.
     for n in 1..=2 {
         let run = start(&d, "break", json!({ "next_ready": true, "epic": once })).await;
         let run = run["run"]
@@ -174,7 +174,7 @@ pub(crate) async fn run(env: Arc<Env>) -> String {
             "no label or comment of loop-manager's: {bead}"
         );
     }
-    "claim held through a crash; 5 requests for an epic of 3: 3 runs, 2 nothing_ready; out after 2 failures".into()
+    "claim held through a crash; 5 requests for an epic of 3: 3 runs, 2 nothing_ready; out after 2 failed runs".into()
 }
 
 /// Five requests for `next` at once.

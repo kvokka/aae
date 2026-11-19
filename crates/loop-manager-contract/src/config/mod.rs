@@ -37,8 +37,8 @@ use std::{collections::BTreeMap, fmt, path::PathBuf, time::Duration};
 pub struct Config {
     /// Runs started at once across every project (docs/design/contracts.md 6).
     pub max_runs: u32,
-    /// Failed runs of a bead before the core closes the bead's gate (docs/design/config.md).
-    pub bead_failures: u32,
+    /// Runs of one bead that may end `failed` before the core closes its gate (docs/design/config.md).
+    pub bead_failed_runs: u32,
     /// The loopback address the API also listens on with a token (docs/api/frontends.md); off when absent.
     pub api_tcp: Option<std::net::SocketAddr>,
     /// The token of `api_tcp` for this daemon start: not from a file, the daemon sets it.

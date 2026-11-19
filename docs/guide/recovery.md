@@ -31,8 +31,8 @@ the conversation with the harness's own tools. `loop-manager run list --state fa
 every run in the list. A run of a formula with children (a `drain` or `formula` step) lists them with
 `loop-manager run list --parent <run>`.
 
-A run that failed has already let go of its bead: the bead is open and unassigned again, and its failure count went up
-by one (a passed run resets it). At `bead_failures` failures (default 3) loop-manager closes the gate
+A run that failed has already let go of its bead: the bead is open and unassigned again, and its count of failed runs
+went up by one (a passed run resets it). At `bead_failed_runs` failed runs (default 3) loop-manager closes the gate
 `bead:<project>/<id>`: no run takes the bead until you open it (`loop-manager gate list`,
 `loop-manager gate open bead:shop/<id>`); opening it resets the count.
 

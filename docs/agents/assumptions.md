@@ -105,7 +105,9 @@ The behaviour itself is described in the document named under each heading; this
   no run and an explicit answer.
 - The `harness:` label shows the harness, it does not set it; a bead whose label differs from the effective config
   is not given out, and the reason is visible.
-- After a set number of failed runs over a bead (default 3) the core closes that bead's gate until a human opens it.
+- Every run that ended `failed` while it held the claim is a failed run of its bead, of any class, `infrastructure`
+  among them: a run fails only when the recovery inside it is spent. After `bead_failed_runs` of them (default 3)
+  the core closes that bead's gate until a human opens it.
 
 ## Addons and frontends — [contracts 3](../design/contracts.md#3-orchestrator-hooks-decisions-and-timeouts), [MCP](../api/mcp.md)
 

@@ -13,6 +13,7 @@ mod auth;
 mod await_step;
 mod background;
 mod bead_events;
+mod bead_failed_runs;
 mod beads;
 mod children;
 mod config_inputs;
