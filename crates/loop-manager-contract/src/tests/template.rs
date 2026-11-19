@@ -58,8 +58,12 @@ fn where_rejects_what_it_cannot_match() {
 }
 
 #[test]
-fn a_prompt_template_substitutes_scalars_and_fails_on_missing_values() {
-    let context = json!({ "bead": { "id": "bd-1", "priority": 2 }, "rig": { "path": "/src" }, "inputs": {} });
+fn a_prompt_template_substitutes_scalars_writes_structures_as_toon_and_fails_on_missing_values() {
+    let context = json!({
+        "bead": { "id": "bd-1", "priority": 2, "labels": ["auto", "ui"] },
+        "rig": { "path": "/src" },
+        "inputs": {}
+    });
     let t = Template::parse("Fix {{bead.id}} (p{{ bead.priority }}) in {{rig.path}}.", PROMPT).unwrap();
     assert_eq!(t.render(&context).unwrap(), "Fix bd-1 (p2) in /src.");
     assert_eq!(t.paths().collect::<Vec<_>>(), ["bead.id", "bead.priority", "rig.path"]);
@@ -67,19 +71,13 @@ fn a_prompt_template_substitutes_scalars_and_fails_on_missing_values() {
     assert_eq!(
         missing.render(&context),
         Err(Unresolved {
-            path: "inputs.goal".into(),
-            not_scalar: false
+            path: "inputs.goal".into()
         })
     );
     let object = Template::parse("{{ rig }}", PROMPT).unwrap();
-    assert_eq!(
-        object.render(&context),
-        Err(Unresolved {
-            path: "rig".into(),
-            not_scalar: true
-        }),
-        "an object is not text"
-    );
+    assert_eq!(object.render(&context).unwrap(), "path: /src");
+    let labels = Template::parse("Labels {{ bead.labels }}", PROMPT).unwrap();
+    assert_eq!(labels.render(&context).unwrap(), "Labels [2]: auto,ui");
 }
 
 #[test]
@@ -98,7 +96,8 @@ fn inputs_keep_json_types_map_recursively_and_report_unresolved_paths() {
         "bead": { "next_ready": true, "epic": "{{event.bead.epic}}" },
         "labels": "{{ event.bead.labels }}",
         "note": "from {{event.type}} #{{event.seq}}",
-        "list": ["{{event.bead.priority}}", 3]
+        "list": ["{{event.bead.priority}}", 3],
+        "all": "labels {{ event.bead.labels }}"
     });
     let inputs = Inputs::parse(&spec, true).unwrap();
     let view = event_view(&ready_event());
@@ -108,15 +107,16 @@ fn inputs_keep_json_types_map_recursively_and_report_unresolved_paths() {
             "bead": { "next_ready": true, "epic": "bd-0" },
             "labels": ["auto", "ui"],
             "note": "from bead.ready #7",
-            "list": [2, 3]
+            "list": [2, 3],
+            "all": "labels [2]: auto,ui"
         })
     );
-    let other = event_view(&json!({ "seq": 8, "type": "bead.ready", "data": { "bead": { "id": "bd-2" } } }));
+    let other =
+        event_view(&json!({ "seq": 8, "type": "bead.ready", "data": { "bead": { "id": "bd-2", "labels": [] } } }));
     assert_eq!(
         inputs.resolve(Some(&other)),
         Err(Unresolved {
-            path: "event.bead.epic".into(),
-            not_scalar: false
+            path: "event.bead.epic".into()
         })
     );
 }

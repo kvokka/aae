@@ -16,29 +16,15 @@ impl fmt::Display for SyntaxError {
 
 impl std::error::Error for SyntaxError {}
 
-/// A placeholder that cannot be substituted: its path is absent or null in the values it is resolved against, or,
-/// inside text, it holds an object or array (`not_scalar`).
+/// A placeholder that cannot be substituted: its path is absent or null in the values it is resolved against.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Unresolved {
     pub path: String,
-    pub not_scalar: bool,
-}
-
-impl Unresolved {
-    fn absent(path: &str) -> Self {
-        Self {
-            path: path.to_owned(),
-            not_scalar: false,
-        }
-    }
 }
 
 impl fmt::Display for Unresolved {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self.not_scalar {
-            true => write!(f, "`{}` is an object or array, not text", self.path),
-            false => write!(f, "`{}` has no value", self.path),
-        }
+        write!(f, "`{}` has no value", self.path)
     }
 }
 
@@ -170,7 +156,7 @@ impl Template {
         })
     }
 
-    /// Renders as text; every placeholder must resolve to a scalar.
+    /// Renders as text: a scalar as it is, an object or an array as TOON (contracts 2.3).
     pub fn render(&self, context: &Value) -> Result<String, Unresolved> {
         let mut out = String::new();
         for part in &self.0 {
@@ -179,13 +165,8 @@ impl Template {
                 Part::Path(path) => match lookup(context, path) {
                     Some(Value::String(s)) => out.push_str(s),
                     Some(v @ (Value::Number(_) | Value::Bool(_))) => out.push_str(&v.to_string()),
-                    Some(Value::Object(_) | Value::Array(_)) => {
-                        return Err(Unresolved {
-                            path: path.clone(),
-                            not_scalar: true,
-                        });
-                    }
-                    _ => return Err(Unresolved::absent(path)),
+                    Some(structured) => out.push_str(&crate::toon::encode(structured)),
+                    None => return Err(Unresolved { path: path.clone() }),
                 },
             }
         }
@@ -195,7 +176,9 @@ impl Template {
     /// A template that is exactly one placeholder keeps the JSON type of its value.
     fn resolve(&self, context: &Value) -> Result<Value, Unresolved> {
         match self.0.as_slice() {
-            [Part::Path(path)] => lookup(context, path).cloned().ok_or_else(|| Unresolved::absent(path)),
+            [Part::Path(path)] => lookup(context, path)
+                .cloned()
+                .ok_or_else(|| Unresolved { path: path.clone() }),
             _ => self.render(context).map(Value::String),
         }
     }

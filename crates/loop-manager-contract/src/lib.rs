@@ -9,6 +9,7 @@ pub mod driver;
 mod event;
 pub mod orphans;
 pub mod template;
+mod toon;
 pub mod tracker;
 
 pub use event::{SCHEMA, envelope, parse_rfc3339_ms, rfc3339_ms};

@@ -18,3 +18,4 @@ mod config_triggers;
 mod cron;
 mod journal;
 mod template;
+mod toon;

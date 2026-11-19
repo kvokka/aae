@@ -189,7 +189,8 @@ spaces, nothing else — no filters, conditions or loops.
 - In `inputs` the root is `event` (`{{ event.bead.epic }}`); a schedule trigger has no event, so any placeholder
   there is a config error.
 - A string that is exactly one placeholder takes the JSON type of the value (an integer stays an integer, an
-  object stays an object). A placeholder inside a longer string must resolve to a scalar and is rendered as text.
+  object stays an object). A placeholder inside a longer string is rendered as text: a scalar as it is, an object or
+  an array as TOON (below).
 - Tables and arrays in `inputs` are mapped recursively.
 - An unresolved path in `inputs` (absent or null at fire time) skips the firing:
   `trigger.skipped{reason: "input_unresolved", detail: <path>}`.
@@ -201,6 +202,15 @@ spaces, nothing else — no filters, conditions or loops.
   that step; `data` of an exec step is `{exit_code, stdout, stderr}`); a path to the current or a later step, to
   a step with an `if` (it may be skipped), or to another field, is a config error.
 - `{{` that is not a placeholder is written `{{"{{"}}`.
+
+Structured data in a prompt is TOON ([toonformat.dev](https://toonformat.dev), spec 4.4), not JSON: an agent reads
+it for fewer tokens. loop-manager writes the plain forms of the format, with the keys of an object in alphabetical
+order: `key: value` fields, nested by two spaces; an array of scalars on one line (`labels[2]: auto,ui`); an array of
+objects that have the same scalar fields as a table, a header `[2]{author,created_at,text}:` and one row per object;
+any other array as a list of `- ` items; an empty array as `[]`. A string is quoted when it would not read back as
+itself: empty, blank at an edge, a number, `true`, `false` or `null`, starting with `-` or `#`, or holding `:`, `,`,
+`"`, `\`, a bracket, a brace or a control character. It does not write the keyed tables and the nested field groups
+of the spec; a TOON decoder reads its output all the same.
 
 A task input is a string — the id of a bead the run takes up, or the text of a task that gets a root bead — or
 `{ next_ready = true, epic = <id or absent> }` ([tracker-br.md](tracker-br.md#beads-and-runs)).
