@@ -6,7 +6,7 @@
 use serde_json::{Map, Value};
 
 /// `value` as TOON, without a final newline.
-pub(crate) fn encode(value: &Value) -> String {
+pub fn encode(value: &Value) -> String {
     let mut lines = Vec::new();
     match value {
         Value::Object(fields) => object(&mut lines, fields, 0),

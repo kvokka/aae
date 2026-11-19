@@ -109,9 +109,10 @@ Code: `crates/loop-manager-front/src/cli/`. The CLI is a thin client of the HTTP
 ## MCP
 
 Code: `crates/loop-manager-front/src/api/mcp.rs`; details in `docs/api/mcp.md`. Five tools only (`list_formulas`,
-`start_run`, `run_state`, `list_runs`, `cancel_run`), over the same handlers as the API, served on `/mcp` of the
-API listeners in both protocol epochs. No agent gets it by default: tool descriptions cost tokens in every session,
-so an agent names it in its own config (`[mcp.loop-manager] url = "${LOOP_MANAGER_API}/mcp"`, which needs `api_tcp`).
+`start_run`, `run_state`, `list_runs`, `cancel_run`), over the same handlers as the API, their replies as TOON text,
+served on `/mcp` of the API listeners in both protocol epochs. No agent gets it by default: tool descriptions cost
+tokens in every session, so an agent names it in its own config
+(`[mcp.loop-manager] url = "${LOOP_MANAGER_API}/mcp"`, which needs `api_tcp`).
 
 ## Humans and runs
 

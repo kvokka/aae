@@ -37,12 +37,17 @@ async fn rpc(d: &Daemon, modern: bool, method: &str, params: Value) -> Value {
     reply
 }
 
-/// A tool call in the `initialize` epoch: the JSON its text carries, and whether it is an error.
-async fn call(d: &Daemon, tool: &str, arguments: Value) -> (Value, bool) {
+/// A tool call in the `initialize` epoch: its text, and whether it is an error.
+async fn call(d: &Daemon, tool: &str, arguments: Value) -> (String, bool) {
     let reply = rpc(d, false, "tools/call", json!({ "name": tool, "arguments": arguments })).await;
-    let text = reply["result"]["content"][0]["text"].as_str().unwrap();
-    let error = reply["result"]["isError"].as_bool().unwrap();
-    (serde_json::from_str(text).unwrap_or_else(|_| json!(text)), error)
+    let text = reply["result"]["content"][0]["text"].as_str().unwrap().to_owned();
+    (text, reply["result"]["isError"].as_bool().unwrap())
+}
+
+/// The value of the top-level field `key` of a TOON object: its `key: value` line.
+fn field<'a>(toon: &'a str, key: &str) -> &'a str {
+    let line = toon.lines().find_map(|line| line.strip_prefix(key)?.strip_prefix(": "));
+    line.unwrap_or_else(|| panic!("no field {key} in {toon}"))
 }
 
 fn names(reply: &Value) -> Vec<&str> {
@@ -91,18 +96,15 @@ async fn a_run_started_over_mcp_is_followed_listed_and_cancelled_there() {
     })
     .await;
     let (formulas, _) = call(&d, "list_formulas", json!({ "project": "shop" })).await;
-    // An internal formula is no part of the catalog a user starts from (docs/api/frontends.md).
+    // The answer an agent reads is TOON, not JSON (docs/api/mcp.md); an internal formula is no part of the catalog a
+    // user starts from (docs/api/frontends.md).
+    assert!(serde_json::from_str::<Value>(&formulas).is_err(), "{formulas}");
     assert!(
-        formulas.as_array().unwrap().iter().all(|f| f["formula"] != "inner"),
+        formulas.contains("formula: check") && !formulas.contains("inner"),
         "{formulas}"
     );
-    let check = formulas
-        .as_array()
-        .unwrap()
-        .iter()
-        .find(|f| f["formula"] == "check")
-        .unwrap();
-    assert_eq!(check["inputs"]["n"], json!({ "type": "integer", "required": false }));
+    let n = "      n:\n        required: false\n        type: integer";
+    assert!(formulas.contains(n), "{formulas}");
 
     let (started, error) = call(
         &d,
@@ -111,13 +113,13 @@ async fn a_run_started_over_mcp_is_followed_listed_and_cancelled_there() {
     )
     .await;
     assert!(!error, "{started}");
-    let run = started["run"].as_str().unwrap().to_owned();
+    let run = field(&started, "run").to_owned();
     let state = |want: &'static str| {
         let (d, run) = (&d, run.clone());
         async move {
             for _ in 0..100 {
                 let (view, _) = call(d, "run_state", json!({ "id": run })).await;
-                if view["state"] == want {
+                if field(&view, "state") == want {
                     return;
                 }
                 tokio::time::sleep(Duration::from_millis(50)).await;
@@ -127,7 +129,10 @@ async fn a_run_started_over_mcp_is_followed_listed_and_cancelled_there() {
     };
     state("running").await;
     let (runs, _) = call(&d, "list_runs", json!({ "project": "shop" })).await;
-    assert_eq!(runs[0]["id"], run.as_str());
+    assert!(
+        runs.starts_with("[1]") && runs.contains(&format!("\n    id: {run}\n")),
+        "{runs}"
+    );
     let (_, error) = call(&d, "cancel_run", json!({ "id": run, "reason": "enough" })).await;
     assert!(!error);
     state("cancelled").await;
@@ -139,8 +144,10 @@ async fn a_run_started_over_mcp_is_followed_listed_and_cancelled_there() {
         modern["_meta"]["io.modelcontextprotocol/serverInfo"]["name"],
         "loop-manager"
     );
-    let view: Value = serde_json::from_str(modern["content"][0]["text"].as_str().unwrap()).unwrap();
-    assert_eq!(view["state"], "cancelled");
+    assert_eq!(
+        field(modern["content"][0]["text"].as_str().unwrap(), "state"),
+        "cancelled"
+    );
 
     let (text, error) = call(
         &d,
@@ -149,12 +156,9 @@ async fn a_run_started_over_mcp_is_followed_listed_and_cancelled_there() {
         "continue_from": "nope" }),
     )
     .await;
-    assert!(
-        error && text.as_str().unwrap().contains("it has no session to continue"),
-        "{text}"
-    );
+    assert!(error && text.contains("it has no session to continue"), "{text}");
     let (text, error) = call(&d, "start_run", json!({ "project": "shop" })).await;
-    assert!(error && text.as_str().unwrap().starts_with("bad_request"), "{text}");
+    assert!(error && text.starts_with("bad_request"), "{text}");
     let keyed = |formula| json!({ "project": "shop", "rig": "web", "formula": formula, "idempotency_key": "k-1" });
     let (first, error) = call(&d, "start_run", keyed("check")).await;
     assert!(!error, "{first}");
@@ -164,10 +168,7 @@ async fn a_run_started_over_mcp_is_followed_listed_and_cancelled_there() {
         "the first result"
     );
     let (text, error) = call(&d, "start_run", keyed("slow")).await;
-    assert!(
-        error && text.as_str().unwrap().starts_with("idempotency_key_reused"),
-        "{text}"
-    );
+    assert!(error && text.starts_with("idempotency_key_reused"), "{text}");
     let (text, error) = call(&d, "run_state", json!({ "id": "nope" })).await;
-    assert!(error && text.as_str().unwrap().starts_with("not_found"), "{text}");
+    assert!(error && text.starts_with("not_found"), "{text}");
 }

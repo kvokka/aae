@@ -24,7 +24,26 @@ An MCP session carries no attempt of an agent session, so `start_run` starts a r
 correlation; an agent starts a child of its own run with `loop-manager run start` from its session's shell
 ([frontends](frontends.md#cli)).
 
-A tool result carries the API's JSON reply as text. An API error (`bad_request`, `not_found`, `rejected`, ...) is a
+A tool result carries the API's reply as text, in TOON rather than JSON: it goes into the agent's context, where
+TOON costs fewer tokens ([contracts](../design/contracts.md), the TOON forms loop-manager writes). The result has no
+`structuredContent`. `start_run` answers, for one:
+
+```text
+run: run_1
+```
+
+and `run_state` a run view, its scalars as fields, its attempts as a table:
+
+```text
+agent: null
+attempt: 1
+attempts[1]{ended_at,failure_kind,generation,harness,input_tokens,kind,n,output_tokens,session,started_at,step}:
+  null,null,1,exec,0,new_session,1,0,null,"2026-11-19T04:52:09.427Z","1"
+...
+state: running
+```
+
+An API error (`bad_request`, `not_found`, `rejected`, ...) is a
 result with `isError: true` and the text `<code>: <message>`; an unknown tool is the JSON-RPC error `-32602`.
 `idempotency_key` works as the API's `Idempotency-Key`: the same key and
 arguments return the first result, other arguments are `idempotency_key_reused`.

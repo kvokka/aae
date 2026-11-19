@@ -14,7 +14,10 @@ use axum::{
     http::{HeaderMap, HeaderValue, StatusCode, header},
     response::{IntoResponse, Response},
 };
-use loop_manager_core::config::{Config, InputType};
+use loop_manager_core::{
+    config::{Config, InputType},
+    toon,
+};
 use serde_json::{Map, Value, json};
 
 /// The stateless epoch: chosen by the request header, never negotiated.
@@ -159,7 +162,8 @@ async fn call(state: State, params: &Value) -> Option<Value> {
         _ => return None,
     };
     Some(match reply {
-        Ok(Json(value)) => json!({ "content": [{ "type": "text", "text": value.to_string() }], "isError": false }),
+        // What goes into an agent's context is TOON, not JSON (docs/api/mcp.md).
+        Ok(Json(value)) => json!({ "content": [{ "type": "text", "text": toon::encode(&value) }], "isError": false }),
         Err(e) => {
             let text = format!("{}: {}", e.code, e.message);
             json!({ "content": [{ "type": "text", "text": text }], "isError": true })
