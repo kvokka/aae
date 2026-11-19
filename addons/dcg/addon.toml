@@ -1,0 +1,8 @@
+name = "dcg"
+version = "0.1.0"
+harnesses = ["claude", "codex"]
+
+[agent.hooks.dcg]
+event = "PreToolUse"
+matcher = "Bash"
+command = "'${LOOP_MANAGER_ADDON_DIR}/hooks/guard'"

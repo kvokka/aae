@@ -12,6 +12,7 @@ mod cli;
 mod cli_local;
 mod codex;
 mod context_budget;
+mod dcg;
 mod doctor;
 mod exec_env;
 mod git_cache;

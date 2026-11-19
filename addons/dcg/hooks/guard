@@ -1,0 +1,10 @@
+#!/bin/sh
+# The PreToolUse hook of the dcg addon (README.md), for claude and codex: the call goes to dcg, which reads the hook
+# input on stdin and answers in the protocol of the harness. Without dcg no command runs: an exit 2 with a reason on
+# stderr blocks the call on both harnesses.
+if ! command -v dcg >/dev/null 2>&1; then
+  echo "addon dcg: \`dcg\` (destructive_command_guard) is not on the PATH of this session, so no shell command runs;" \
+    "install it on the host or put it on the agent's PATH" >&2
+  exit 2
+fi
+exec dcg
