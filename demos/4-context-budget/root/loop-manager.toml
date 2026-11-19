@@ -15,10 +15,8 @@ permission_mode = "bypassPermissions" # claude's `--permission-mode`
 [settings.native.codex]
 approval_policy = "never"             # codex's approval policy
 
-[agents.glossarist]                   # the cheapest claude model
+[agents.glossarist]                   # the cheapest claude model, with a window of 200000
 model = "haiku"
-
-# The indexer keeps the addon of config.toml with a window of its own: codex takes any size, claude 100000 at the
-# least. `max_compactions` stays 8, from config.toml.
-[agents.indexer]
-addons = [{ name = "context-budget", params = { window = 50000 } }]
+# The addon serves claude only. Its soft limit is far below what the documents take, so the agent reaches it and wraps
+# up; the hard limit is the safety net past it.
+addons = [{ name = "context-budget", params = { soft = 40000, hard = 150000, warn_step = 20000 } }]

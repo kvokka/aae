@@ -1,9 +1,9 @@
-# Demo 4: a context budget for every agent
+# Demo 4: a context budget for an agent
 
-What the addon [`context-budget`](../../addons/context-budget/README.md) does on both harnesses: an agent on claude
-and an agent on codex each read about 100000 tokens of documents, more than the window the addon gives them, so
-each session compacts its context; the addon counts the compactions and keeps the label `compactions:<n>` on the
-bead of the run.
+What the addon [`context-budget`](../../addons/context-budget/README.md) does: an agent on claude reads about 100000
+tokens of documents, more than the budget the addon gives it. At the budget's soft limit the addon tells the agent to
+wrap up; the agent stops reading, leaves a summary of its work as a comment on the bead of its run and finishes the
+run.
 
 There are two requests, one per agent, run side by side:
 
@@ -22,6 +22,8 @@ The documents are the `docs/` of this checkout of loop-manager, copied by `run.s
   write. `root/config.toml` is the orchestrator config of the demo: `run.sh` starts a daemon of the demo's own with
   it, so the demo neither reads nor changes your `~/.config/loop-manager`.
 
+The addon serves claude only; there is none for codex yet, so `indexer` runs without it and reads all the documents.
+
 ## Run
 
 You need `loop-manager`, logins of `claude` and `codex`, `br` and `jq`; `mise install` in this directory installs all but
@@ -33,41 +35,45 @@ loop-manager config check --config root/config.toml   # the pack, the project an
 ./run.sh                                     # or: mise run demo
 ```
 
-`run.sh` writes `RESULT.md`: when and on what it ran, and for each agent what it ran on with the addon's params,
-the labels of its bead, the outcome of its run, and the count of each session. The demo passes when both runs pass
-and both beads carry a `compactions:<n>` label. Everything a run creates is in `.gitignore`;
-`git clean -ffdX -- .` clears it for the next run. Compare with the author's run: `library-example/` (what the
-agents wrote) and `RESULT-example.md`.
+`run.sh` writes `RESULT.md`: when and on what it ran, and for each agent what it ran on with the addon's params and
+the outcome of its run, the comments on the bead of `glossarist`, and the files the addon kept. The demo passes when
+both runs pass and the bead of `glossarist` carries a comment. Everything a run creates is in `.gitignore`;
+`git clean -ffdX -- .` clears it for the next run. `library-example/` holds what the agents wrote in a run of the
+author's.
 
 ## How the addon is set up
 
-`root/config.toml` declares the addon by its directory in this repository and attaches it in `[settings]`, so it
-reaches every agent of every project of the daemon:
+`root/config.toml` declares the addon by its directory in this repository:
 
 ```toml
 [[addon]]
 path = "../../../addons/context-budget"
-
-[settings]
-addons = [{ name = "context-budget", params = { window = 100000, max_compactions = 8 } }]
 ```
 
-claude takes a window of 100000 at the least and compacts at about 67000 tokens of it. codex takes any size, so the
-project gives `indexer` a smaller window of its own in `root/loop-manager.toml`; `max_compactions` stays the one of
-`config.toml`:
+The project attaches it to `glossarist` alone, in `root/loop-manager.toml`. The agent runs on `haiku`, with a window
+of 200000 tokens:
 
 ```toml
-[agents.indexer]
-addons = [{ name = "context-budget", params = { window = 50000 } }]
+[agents.glossarist]
+model = "haiku"
+addons = [{ name = "context-budget", params = { soft = 40000, hard = 150000, warn_step = 20000 } }]
 ```
 
-`loop-manager config explain --config root/config.toml --project library --agent study.indexer` shows each param with the
-layer that set it, and the native key it reaches: `autoCompactWindow` of claude, `model_auto_compact_token_limit` of
-codex. A session past `max_compactions` fails its run with `context budget: <n> compactions`; set it to 0 to see
-that.
+- `soft = 40000`: past 40000 tokens of context the agent gets a note after a tool call: its context, its budget and
+  how to wrap up; the note comes again each time the context grows by `warn_step` (20000) tokens. It starts nothing new and calls no subagents, finishes or
+  reverts the step at hand, commits, writes what is done, what is not and what is started and not finished as a
+  comment on its bead, and finishes the run.
+- `hard = 150000`: the safety net, of which the agent is told nothing. A session that gets there anyway is stopped:
+  the addon writes a dump of its state (git status, the commits of the run, the diff stat, the last tool calls and texts
+  of the agent) as a comment on the bead and finishes the run with `cut`, `fail` by default.
+- The addon turns off claude's own compaction of the context, so the budget is the one limit the session meets.
+
+`loop-manager config explain --config root/config.toml --project library --agent study.glossarist` shows each param
+with the layer that set it.
 
 ## What to check
 
-- `br label list <bead>` in `root/` (the beads are in `RESULT.md`): `compactions:<n>`, one label, the count of the
-  session's compactions.
-- `.loop-manager/state/loop-manager/addons/context-budget/`: a `<session>.count` per session that compacted.
+- `br comments list <bead>` in `root/` (the bead is in `RESULT.md`): the agent's summary of its work, written when it
+  wrapped up.
+- `.loop-manager/state/loop-manager/addons/context-budget/`: the files the addon keeps for each session,
+  `<session>.*`.

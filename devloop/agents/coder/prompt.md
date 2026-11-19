@@ -26,7 +26,7 @@ written here.
 
 1. Write `report.md` by the template below with `STATUS: partial` before any work, its `BASE:` the output of
    `git rev-parse HEAD` at that moment; in a later round bring the report up to date first and keep `BASE:`. The
-   report is what a compaction of your session, the next round and the next run cannot lose.
+   report is what the end of your session, the next round and the next run cannot lose.
 2. Earlier runs on this bead left their reports and reviews: `grep -l '^BEAD: <bead id>$' .loop/runs/*/report.md`.
    Read the last of them, with the `review.md` beside it, before you plan.
 3. In a later round the remarks come first: a red `ci` is fixed before anything else, and of a review the section
@@ -38,8 +38,7 @@ written here.
 
 ## Context
 
-The harness compacts your session at about 270k tokens, and a run whose session was compacted more than four times
-fails. Spend the context on the task:
+Your context budget is 300k tokens: past it a note tells you to wrap up. Spend the context on the task:
 
 - the output of a command is always cut, as `CLAUDE.md` shows; grep before Read, Read with `offset` and `limit`;
 - the big references (`docs/design/contracts.md`, `docs/design/config.md`) are read by section;

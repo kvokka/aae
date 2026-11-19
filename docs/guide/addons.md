@@ -4,7 +4,7 @@ An addon is a directory with an `addon.toml`. It gives the agents that attach it
 MCP servers, services, environment variables, native harness keys, a prompt fragment) and gives the orchestrator hooks
 on the events of their runs. An addon is used in two steps: it is **declared** once, then **attached** where it
 should work. This guide uses [`addons/context-budget`](../../addons/context-budget/README.md) of this repository,
-which bounds how often a session may compact its context. To write an addon, see
+which bounds the context of a claude session. To write an addon, see
 [writing an addon](addon-development.md); the full rules are in
 [the config reference](../design/config.md#addon-addonaddontoml).
 
@@ -54,7 +54,7 @@ The config above attaches `context-budget` to every agent. An agent attaches one
 # ~/src/shop/agents/dev/agent.toml
 harness = "claude"
 subagents = ["qa"]
-addons = [{ name = "context-budget", params = { window = 150000 } }]
+addons = [{ name = "context-budget", params = { soft = 200000 } }]
 ```
 
 An agent has any number of addons. They apply in the order of their first mention, the layers read weakest first
@@ -66,8 +66,8 @@ an agent can still override what an addon sets.
 ### Parameters
 
 A parameter takes its default from the addon's `[params]`, then the value each layer that attaches the addon gives,
-key by key, the strongest last. In the example `dev` gets `window = 150000` from its own attachment and
-`max_compactions = 3` from the addon. A key the addon does not declare, or a value of another type than its
+key by key, the strongest last. In the example `dev` gets `soft = 200000` from its own attachment and
+`hard = 420000` from the addon. A key the addon does not declare, or a value of another type than its
 default's, is a load error of the file that has it.
 
 ### Harnesses

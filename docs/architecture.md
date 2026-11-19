@@ -56,8 +56,8 @@ changes only its declaration. A config declares an addon by `[[addon]]` with a `
 for a directory of a repository ([config: packs and addons from git](design/config.md#packs-and-addons-from-git)),
 and an agent attaches it with `addons = [{ name, params }]`
 ([config: addon](design/config.md#addon-addonaddontoml)). There is one so far:
-[`context-budget`](../addons/context-budget/README.md), the compaction window of claude and codex sessions and a
-budget of compactions per session.
+[`context-budget`](../addons/context-budget/README.md), a context budget for claude sessions: a note to wrap up
+past a soft limit, a stop past a hard one, no compaction.
 
 The skills for a user's agent are a different thing: `plugin/` is a plugin of the operator's harness, Claude
 Code or Codex, with the skills by which the operator drives loop-manager, each harness in its current format. Claude

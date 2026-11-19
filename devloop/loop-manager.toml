@@ -3,7 +3,7 @@
 name = "devloop"
 
 # The addon of this repository that bounds the context of a session (addons/context-budget/README.md). The agents
-# that attach it, with the window and the count of compactions, are agents/coder and agents/reviewer.
+# that attach it, with its params, are agents/coder and agents/reviewer.
 [[addon]]
 path = "../addons/context-budget"
 

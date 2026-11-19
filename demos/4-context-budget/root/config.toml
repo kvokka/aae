@@ -3,11 +3,7 @@
 # loop-manager.toml beside it is the project: its pack and what the agents run on.
 projects = ["."]
 
-# The addon of this repository, declared by its directory: relative to this file.
+# The addon of this repository, declared by its directory: relative to this file. The project attaches it to the
+# one agent it serves, in loop-manager.toml.
 [[addon]]
 path = "../../../addons/context-budget"
-
-# Attached here, it reaches every agent of every project. The window is small, so that reading the documents is
-# enough to compact: claude takes 100000 at the least and compacts at about 67000 tokens of it.
-[settings]
-addons = [{ name = "context-budget", params = { window = 100000, max_compactions = 8 } }]

@@ -31,8 +31,8 @@ closes the gate `bead:devloop/<id>`, and nothing more starts on that bead until 
 (`loop-manager gate list`, `loop-manager gate open <key>`).
 
 One run at a time works in the repository (`max_writers = 1` of the rig): the others wait in `queued`. The session
-of the coder and of the reviewer is compacted at a window of 300000 tokens, and the run fails at the fifth compaction
-of one session (the addon `addons/context-budget`, attached in the two `agent.toml`).
+of the coder and of the reviewer is told to wrap up past 300000 tokens of context and stopped past 420000; a stopped
+coder's round still goes on to the review (the addon `addons/context-budget`, attached in the two `agent.toml`).
 
 ## Before the first start
 

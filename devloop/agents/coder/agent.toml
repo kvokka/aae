@@ -4,6 +4,6 @@ model = "opus"
 effort = "high"
 # The agents its session may call as native subagents; each has a `description` in its own agent.toml.
 subagents = ["helper", "subcoder", "expert"]
-# The session is compacted at about 267k tokens (claude compacts some 33k under the window), and the run fails at the
-# fifth compaction of one session; each round is a session of its own.
-addons = [{ name = "context-budget", params = { window = 300000, max_compactions = 4 } }]
+# Past 300k tokens of context the coder is told to wrap up; a session stopped past 420k still goes on to the review
+# (`cut = "pass"`). Each round is a session of its own.
+addons = [{ name = "context-budget", params = { cut = "pass" } }]

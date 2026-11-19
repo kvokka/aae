@@ -42,12 +42,12 @@ for agent in glossarist indexer; do
   "$loop_manager" run wait "$(cat .loop-manager/$agent.run)" --timeout 60m >".loop-manager/$agent.txt" || result=failed
 done
 seconds=$(($(date +%s) - started))
-# The demo shows a compaction of each agent: a bead without the addon's label fails it.
 for agent in glossarist indexer; do
   "$loop_manager" --json run show "$(cat .loop-manager/$agent.run)" | jq -r .bead >".loop-manager/$agent.bead"
-  (cd root && br label list "$(cat ../.loop-manager/$agent.bead)") >".loop-manager/$agent.labels"
-  grep -q 'compactions:' ".loop-manager/$agent.labels" || result=failed
 done
+# The demo shows the wrap-up of the glossarist at the addon's soft limit: a bead without its summary comment fails it.
+(cd root && br comments list --json "$(cat ../.loop-manager/glossarist.bead)") >.loop-manager/glossarist.comments
+jq -e 'length > 0' .loop-manager/glossarist.comments >/dev/null || result=failed
 
 versions="loop-manager-$("$loop_manager" --version | cut -d' ' -f2)@$sha"
 for harness in claude codex; do
@@ -70,12 +70,14 @@ done
     echo
     echo "The request: \"$(if [ $agent = glossarist ]; then echo "$glossary"; else echo "$index"; fi)\"."
     echo
-    echo "The labels of its bead \`$(cat .loop-manager/$agent.bead)\` (\`br label list\`):"
-    echo
-    echo '```'
-    cat ".loop-manager/$agent.labels"
-    echo '```'
-    echo
+    if [ $agent = glossarist ]; then
+      echo "The comments on its bead \`$(cat .loop-manager/$agent.bead)\` (\`br comments list\`):"
+      echo
+      echo '```'
+      jq -r '.[] | "[\(.author)] at \(.created_at)\n\(.text)\n"' .loop-manager/glossarist.comments
+      echo '```'
+      echo
+    fi
     echo "The outcome of the run (\`loop-manager run wait\`):"
     echo
     echo '```'
@@ -83,12 +85,10 @@ done
     echo '```'
   done
   echo
-  echo "The compactions the addon counted, per session (\`<state>/loop-manager/addons/context-budget/<session>.count\`):"
+  echo "The files the addon kept, per session (\`<state>/loop-manager/addons/context-budget/\`):"
   echo
   echo '```'
-  for count in "$XDG_STATE_HOME"/loop-manager/addons/context-budget/*.count; do
-    if [ -e "$count" ]; then echo "$(basename "$count" .count): $(cat "$count")"; fi
-  done
+  ls "$XDG_STATE_HOME/loop-manager/addons/context-budget" 2>/dev/null || true
   echo '```'
 } >RESULT.md
 "$loop_manager" drain >/dev/null 2>&1 || true

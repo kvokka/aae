@@ -1,35 +1,170 @@
 #!/bin/sh
-# The harness hooks of the context-budget addon, for claude and codex (README.md); the hook's input is on stdin.
-#   budget compacted <data dir> <max compactions>   on PostCompact: count, label the bead, stop past the budget
-#   budget tool <data dir>                          on PreToolUse: stop a session past its budget
+# The claude hook of the context-budget addon (README.md), on every event it is attached to; the input is on stdin.
+#   budget <data dir> <soft> <hard> <warn step> <cut>
 set -eu
-input=$(cat)
-session=$(printf '%s' "$input" | jq -r '.session_id')
-stop="$2/$session.stop"
-
-case $1 in
-tool)
-    [ -f "$stop" ] || exit 0
-    jq -nc --rawfile r "$stop" '{continue: false, stopReason: $r, hookSpecificOutput:
-        {hookEventName: "PreToolUse", permissionDecision: "deny", permissionDecisionReason: $r}}'
+data=$1 soft=$2 hard=$3 step=$4 cut=$5
+case $cut in
+pass | fail) ;;
+*)
+    echo "context-budget: cut is \`$cut\`, not pass or fail" >&2
+    exit 1
     ;;
-compacted)
-    # A subagent's or a child thread's compaction is of its own context, not of the session's.
-    [ -z "$(printf '%s' "$input" | jq -r '.agent_id // empty')" ] || exit 0
-    count="$2/$session.count"
-    n=$(($(cat "$count" 2>/dev/null || echo 0) + 1))
-    echo "$n" >"$count"
-    if [ -n "${LOOP_MANAGER_BEAD:-}" ]; then
-        old=$(br label list "$LOOP_MANAGER_BEAD" --json | jq -r '[.[] | select(startswith("compactions:"))] | join(",")') &&
-            { [ -z "$old" ] || br label remove "$LOOP_MANAGER_BEAD" -l "$old" >/dev/null; } &&
-            br label add "$LOOP_MANAGER_BEAD" -l "compactions:$n" >/dev/null ||
-            echo "context-budget: the label compactions:$n is not on $LOOP_MANAGER_BEAD" >&2
+esac
+input=$(cat)
+field() { printf '%s' "$input" | jq -r "$1 // empty"; }
+event=$(field .hook_event_name)
+session=$(field .session_id)
+agent=$(field .agent_id)
+# The files of this agent: the session's own, or a subagent's of it.
+me="$data/$session${agent:+.agent-$agent}"
+cwd=$(field .cwd)
+[ -z "$cwd" ] || cd "$cwd"
+
+# The transcript of the agent the hook runs for: a subagent's is its own, beside the session's.
+transcript() {
+    main=$(field .transcript_path)
+    if [ -z "$agent" ]; then
+        printf '%s' "$main"
+        return
     fi
-    [ "$n" -gt "$3" ] || exit 0
-    reason="context budget: $n compactions"
-    # The session stops only on an accepted outcome: a finisher that failed or got a remark leaves it going.
-    loop-manager finish fail --summary "$reason" >&2
-    printf '%s' "$reason" >"$stop"
-    jq -nc --arg r "$reason" '{continue: false, stopReason: $r}'
+    for dir in "$(dirname "$main")/$session/subagents" "${CLAUDE_CONFIG_DIR:-$HOME/.claude}/projects"; do
+        [ -d "$dir" ] || continue
+        found=$(find "$dir" -path "*/$session/subagents/*" -name "agent-$agent.jsonl" 2>/dev/null | head -n 1)
+        [ -z "$found" ] || {
+            printf '%s' "$found"
+            return
+        }
+    done
+}
+
+# The tokens of the context: those of the last answer of the model, its input with the cache and its output.
+tokens() {
+    [ -f "$1" ] || {
+        echo 0
+        return
+    }
+    n=$(grep -E '"usage"|"compact_boundary"' "$1" | jq -R 'fromjson? |
+        if .type == "system" and .subtype == "compact_boundary" then 0
+        elif .type == "assistant" and .message.usage and .message.model != "<synthetic>" then
+            .message.usage | [.input_tokens, .cache_creation_input_tokens, .cache_read_input_tokens, .output_tokens]
+            | map(. // 0) | add
+        else empty end' | tail -n 1)
+    echo "${n:-0}"
+}
+
+git_state() {
+    echo "## git status --short"
+    fenced "$(git status --short 2>&1 | head -n 80)"
+    # The commits of the run: since the commit its first session started on, else the last ten.
+    base=$(cat "$data/${LOOP_MANAGER_RUN:-}.base" 2>/dev/null || true)
+    if [ -n "$base" ]; then set -- "$base..HEAD"; else set -- -n 10; fi
+    echo "## git log $*"
+    fenced "$(git log --oneline "$@" 2>&1 | head -n 30)"
+    echo "## git diff --stat HEAD"
+    fenced "$(git diff --stat HEAD 2>&1 | head -n 40)"
+}
+
+fenced() { printf '\n%s\n%s\n%s\n\n' '```' "$1" '```'; }
+
+# The state of the work when the session is stopped, for whoever takes it up: git and the agent's last steps.
+dump() {
+    echo "# context-budget: the session was stopped"
+    echo
+    echo "The ${agent:+subagent $agent of the }session $session went past its context budget before it wrapped up."
+    echo "Below is the state as it was then."
+    echo
+    if git rev-parse -q --verify HEAD >/dev/null 2>&1; then
+        git_state
+    else
+        echo "Its directory $(pwd) is not a git checkout."
+        echo
+    fi
+    echo "## The last tool calls"
+    fenced "$(jq -R -r 'fromjson? | select(.type == "assistant" and .message.model != "<synthetic>") | .message.content[]? |
+        select(.type == "tool_use") | "\(.name): \(.input | tojson | .[0:240])"' "$1" 2>/dev/null | tail -n 12)"
+    echo "## The last texts of the agent"
+    jq -R -c 'fromjson? | select(.type == "assistant" and .message.model != "<synthetic>") | .message.content[]? |
+        select(.type == "text" and (.text | test("\\S"))) | .text[0:3000]' "$1" 2>/dev/null | tail -n 3 |
+        jq -r '"", .'
+}
+
+stopped="the context budget of this session is spent; it is stopped"
+deny() {
+    jq -nc --arg r "$1" '{continue: false, stopReason: $r, hookSpecificOutput:
+        {hookEventName: "PreToolUse", permissionDecision: "deny", permissionDecisionReason: $r}}'
+    exit 0
+}
+
+# Past `hard`: the dump goes on the bead, the session declares the outcome `cut`, and the agent stops.
+cut_off() {
+    if [ -z "$agent" ]; then stop="$data/$session.stop"; else stop="$me.stop"; fi
+    if [ ! -f "$stop" ]; then
+        dump "$1" >"$me.dump.md"
+        if [ -n "${LOOP_MANAGER_BEAD:-}" ]; then
+            br comments add "$LOOP_MANAGER_BEAD" --file "$me.dump.md" >/dev/null ||
+                echo "context-budget: the dump is not on $LOOP_MANAGER_BEAD" >&2
+        fi
+        # A subagent's stop is its own: the session goes on, and its agent declares the outcome.
+        if [ -z "$agent" ]; then
+            loop-manager finish "$cut" --summary "context budget: the session was stopped; its state is on the bead" >&2 ||
+                echo "context-budget: the outcome $cut is not accepted" >&2
+        fi
+        : >"$stop"
+    fi
+    if [ "$event" = PreToolUse ]; then deny "$stopped"; fi
+    jq -nc --arg r "$stopped" '{continue: false, stopReason: $r}'
+    exit 0
+}
+
+context() {
+    jq -nc --arg e "$event" --arg t "$1" '{hookSpecificOutput: {hookEventName: $e, additionalContext: $t}}'
+}
+
+k() { echo "$(($1 / 1000))k"; }
+
+case $event in
+SessionStart)
+    if [ -n "${LOOP_MANAGER_RUN:-}" ] && [ ! -f "$data/$LOOP_MANAGER_RUN.base" ]; then
+        base=$(git rev-parse -q --verify HEAD 2>/dev/null) && echo "$base" >"$data/$LOOP_MANAGER_RUN.base" || true
+    fi
+    context "Your context budget is $(k "$soft") tokens. Past it you get a note: then wrap up your work."
+    ;;
+SubagentStart)
+    context "Your context budget is $(k "$soft") tokens. Past it you get a note: then wrap up and return your summary."
+    ;;
+PreCompact)
+    jq -nc '{decision: "block", reason: "compaction is off: the context-budget addon bounds the context instead"}'
+    ;;
+PreToolUse)
+    { [ -f "$data/$session.stop" ] || [ -f "$me.stop" ]; } && deny "$stopped"
+    t=$(transcript)
+    n=$(tokens "$t")
+    [ "$n" -lt "$hard" ] || cut_off "$t"
+    case $(field .tool_name) in
+    Agent | Task)
+        [ "$n" -lt "$soft" ] ||
+            deny "Your context is $(k "$n") tokens, past your budget of $(k "$soft"): call no subagents, wrap up."
+        ;;
+    esac
+    ;;
+PostToolUse)
+    t=$(transcript)
+    n=$(tokens "$t")
+    [ "$n" -lt "$hard" ] || cut_off "$t"
+    [ "$n" -ge "$soft" ] || exit 0
+    last=$(cat "$me.noted" 2>/dev/null || echo 0)
+    [ "$last" -eq 0 ] || [ "$n" -ge $((last + step)) ] || exit 0
+    echo "$n" >"$me.noted"
+    wrap="Your context is $(k "$n") tokens, past your budget of $(k "$soft"). Wrap up now: start nothing new"
+    wrap="$wrap and call no subagents; finish the step at hand or roll it back"
+    summary="what is done, what did not work and why, what is started and not finished"
+    summary="$summary (files, where it stopped, the next step)"
+    if [ -n "$agent" ]; then
+        context "$wrap; then return your summary to your caller: $summary."
+    elif [ -n "${LOOP_MANAGER_BEAD:-}" ]; then
+        context "$wrap; commit what is done; leave your summary on the bead with \`br comments add \"\$LOOP_MANAGER_BEAD\" \"...\"\`: $summary; then end with \`loop-manager finish\`."
+    else
+        context "$wrap; commit what is done; then end with \`loop-manager finish\`, your summary in \`--summary\`: $summary."
+    fi
     ;;
 esac

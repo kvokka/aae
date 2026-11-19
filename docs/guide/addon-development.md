@@ -163,45 +163,61 @@ Rules worth keeping:
 
 ## A worked example: `context-budget`
 
-[`addons/context-budget`](../../addons/context-budget/README.md) bounds the compactions of a session: it sets the
-context window at which the harness compacts, counts the compactions, keeps the label `compactions:<n>` on the run's
-bead and fails the run past `max_compactions`. It is all agent side:
+[`addons/context-budget`](../../addons/context-budget/README.md) bounds the context of a claude session: past `soft`
+it tells the agent to wrap up, past `hard` it leaves the state of the work on the run's bead and stops the session,
+and it keeps claude from compacting. It is all agent side:
 
 ```toml
 # addons/context-budget/addon.toml
 name = "context-budget"
-version = "0.1.0"
-harnesses = ["claude", "codex"]
+version = "0.2.0"
+harnesses = ["claude"]
 
 [params]
-window = 200000         # tokens at which the harness compacts the session
-max_compactions = 3     # compactions of a session past which its run fails
+soft = 300000           # tokens of context past which the agent is told to wrap up
+hard = 420000           # tokens of context past which the session is stopped
+warn_step = 30000       # tokens of growth past `soft` between two notes
+cut = "fail"            # the outcome of a run whose session is stopped: "fail" or "pass"
 
 [agent]
-native.claude.autoCompactWindow = "${params.window}"
-native.codex.model_auto_compact_token_limit = "${params.window}"
+# claude compacts at about this window less 33k tokens; the most it takes keeps it past `hard`.
+native.claude.autoCompactWindow = 1000000
 
-[agent.hooks.context-budget-count]
-event = "PostCompact"
-command = "'${LOOP_MANAGER_ADDON_DIR}/hooks/budget' compacted '${LOOP_MANAGER_ADDON_DATA}' ${params.max_compactions}"
+[agent.hooks.context-budget-start]
+event = "SessionStart"
+command = "'${LOOP_MANAGER_ADDON_DIR}/hooks/budget' '${LOOP_MANAGER_ADDON_DATA}' ${params.soft} ${params.hard} ${params.warn_step} '${params.cut}'"
 
-[agent.hooks.context-budget-stop]
+[agent.hooks.context-budget-subagent]
+event = "SubagentStart"
+command = "'${LOOP_MANAGER_ADDON_DIR}/hooks/budget' '${LOOP_MANAGER_ADDON_DATA}' ${params.soft} ${params.hard} ${params.warn_step} '${params.cut}'"
+
+[agent.hooks.context-budget-tool]
 event = "PreToolUse"
-command = "'${LOOP_MANAGER_ADDON_DIR}/hooks/budget' tool '${LOOP_MANAGER_ADDON_DATA}'"
+command = "'${LOOP_MANAGER_ADDON_DIR}/hooks/budget' '${LOOP_MANAGER_ADDON_DATA}' ${params.soft} ${params.hard} ${params.warn_step} '${params.cut}'"
+
+[agent.hooks.context-budget-note]
+event = "PostToolUse"
+command = "'${LOOP_MANAGER_ADDON_DIR}/hooks/budget' '${LOOP_MANAGER_ADDON_DATA}' ${params.soft} ${params.hard} ${params.warn_step} '${params.cut}'"
+
+[agent.hooks.context-budget-compact]
+event = "PreCompact"
+command = "'${LOOP_MANAGER_ADDON_DIR}/hooks/budget' '${LOOP_MANAGER_ADDON_DATA}' ${params.soft} ${params.hard} ${params.warn_step} '${params.cut}'"
 ```
 
-- **One parameter, two harnesses.** `window` reaches each harness in its own key: claude's `autoCompactWindow` (in
-  its `--settings`) and codex's `model_auto_compact_token_limit`. Each string is only `${params.window}`, so each
-  harness gets an integer.
-- **State in the data directory.** `hooks/budget compacted` counts by the hook input's `session_id` in
-  `${LOOP_MANAGER_ADDON_DATA}/<session>.count`; the paths are quoted, since the directories may hold spaces.
-- **The bead.** With `LOOP_MANAGER_BEAD` set, it replaces the bead's `compactions:*` label with `br`, as the session's
-  tracker actor.
-- **Stopping.** Past the budget it declares the outcome with `loop-manager finish fail --summary ...` and answers
-  `{"continue": false}`, which ends a codex turn. claude does not stop on a compaction hook's answer, so the
-  `PreToolUse` hook denies every tool call of a session past its budget, and the turn ends. An outcome that is not
-  accepted fails the hook and the session goes on: the next compaction tries again.
-- **Subagents.** A compaction whose input has `agent_id` is of a subagent's own context and is not counted.
+- **One hook, many events.** The same command runs on `SessionStart`, `SubagentStart`, `PreToolUse`, `PostToolUse`
+  and `PreCompact`, and reads the event from the input's `hook_event_name`. The params reach it as arguments; the
+  paths are quoted, since the directories may hold spaces.
+- **The measure.** The context is the usage of the model's last answer in the session's transcript
+  (`transcript_path`); a hook input with `agent_id` is a subagent's, measured on its own transcript.
+- **Talking to the agent.** The note past `soft` is the `additionalContext` of the `PostToolUse` answer; a call of a
+  subagent past `soft` gets a `PreToolUse` deny with the reason.
+- **State in the data directory.** The context of the last note, the dump and the stop are files of
+  `${LOOP_MANAGER_ADDON_DATA}`, by the input's `session_id`.
+- **The bead.** With `LOOP_MANAGER_BEAD` set, the dump past `hard` is a comment on it, written with `br` as the
+  session's tracker actor.
+- **Stopping.** Past `hard` it declares the outcome with `loop-manager finish <cut>` and answers `{"continue":
+  false}`; the `PreToolUse` hook denies every later tool call of the session, and the turn ends.
+- **No compaction.** `PreCompact` answers `{"decision": "block"}`, and `autoCompactWindow` is the most claude takes.
 
 ## Testing an addon
 
@@ -214,8 +230,8 @@ command = "'${LOOP_MANAGER_ADDON_DIR}/hooks/budget' tool '${LOOP_MANAGER_ADDON_D
   `LOOP_MANAGER_ADDON_PARAMS`. Put stand-ins for the commands it calls (`loop-manager`, `br`) first on its `PATH`.
 
 The tests of `context-budget` do both: `crates/loop-manager/tests/e2e/context_budget.rs` checks with `config explain`
-that the params reach each harness and drives `hooks/budget` with the `PostCompact` and `PreToolUse` inputs of claude
-and codex, a stand-in `loop-manager` and a real `br` tracker.
+that the params reach claude's settings and hooks and drives `hooks/budget` with claude's hook inputs, fake
+transcripts, a stand-in `loop-manager` and a real `br` tracker.
 
 ## Moving it to its own repository
 

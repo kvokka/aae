@@ -113,9 +113,9 @@ fn the_examples_of_the_addon_guides_load_and_their_hooks_answer() {
 
     assert!(loop_manager(home, &["--json", "config", "check"]).contains("\"ok\":true"));
     let dev = loop_manager(home, &["config", "explain", "--project", "shop", "--agent", "dev"]);
-    assert!(dev.contains("addons.context-budget.params.window = 150000"), "{dev}");
+    assert!(dev.contains("addons.context-budget.params.soft = 200000"), "{dev}");
     assert!(
-        dev.contains("{\"autoCompactWindow\":150000}  # addon context-budget"),
+        dev.contains("{\"autoCompactWindow\":1000000}  # addon context-budget"),
         "{dev}"
     );
     let qa = loop_manager(home, &["config", "explain", "--project", "shop", "--agent", "qa"]);
