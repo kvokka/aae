@@ -1,0 +1,32 @@
+id: devloop.daemon
+name: Devloop daemon operations
+version: 1.0.0
+keywords: [drain, restart, reload, devloop-install, devloop/scripts/install, pitchfork, daemons, systemctl, launchctl]
+destructive_patterns:
+  # A shell variable can name either the installed CLI or a build in target/. Quote marks may surround the executable.
+  - name: lifecycle
+    pattern: |-
+      (?x)
+      (?:^|[\s;&|(]) ["\x27]? (?:[^\s;&|]*/)?
+      (?:loop-manager|lm|\$\{?[A-Za-z_]\w*\}?) ["\x27]? \s+
+      (?:(?:--json|--socket(?:=|\s+)\S+)\s+)*
+      (?:drain|restart|config\s+reload)\b
+    severity: critical
+    description: The working devloop daemon is managed by the operator.
+    explanation: Run lifecycle checks through the isolated daemon fixtures.
+  - name: install
+    pattern: '(?:\bmise\s+(?:run\s+)?devloop-install\b|\bdevloop/scripts/install\.sh\b)'
+    severity: critical
+    description: Updating the installed devloop binary requires an explicit request from the owner.
+    explanation: Build in the Cargo target directory to test a change.
+  - name: service-control
+    pattern: |-
+      (?x) \b(?:
+        pitchfork\s+(?:stop|kill|restart|disable|d)
+        | mise\s+(?:(?:-C|--cd)\s+\S+\s+)?daemons\s+(?:stop|restart|disable)
+        | systemctl\s+(?:--user\s+)?(?:stop|restart|disable)
+        | launchctl\s+(?:bootout|kickstart|disable)
+      )\s+(?:[^\s;&|]+\s+)* (?:[^\s;&|]*/)?loop-manager-dev(?:\.service)?(?:$|[\s;&|])
+    severity: critical
+    description: This service manages the working devloop daemon.
+    explanation: Inspect its status or logs. The owner authorizes changes to the service.

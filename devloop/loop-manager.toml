@@ -21,14 +21,10 @@ path = "../addons/conventional-commits"
 env.RUSTUP_TOOLCHAIN = "${RUSTUP_TOOLCHAIN}"
 env.RUSTUP_HOME = "${RUSTUP_HOME}"
 env.CARGO_HOME = "${CARGO_HOME}"
+# Apply devloop's DCG pack to agent hooks, including shells that change directory.
+env.DCG_CUSTOM_PATHS = "${DEVLOOP_DCG_PACK}"
 # The prompt cache lives 5 minutes, not the hour a subscription gets by default: every round is a new session, and
 # the long test run is a step of its own, outside any session.
-# Devloop agents test the lifecycle through isolated test binaries. These Bash deny rules also cover
-# a CLI called through a shell variable (for example, "$binary drain"). Operator shells are separate.
-native.claude.permissions.deny = [
-  "Bash(* drain)", "Bash(* drain *)", "Bash(* restart)", "Bash(* restart *)",
-  "Bash(* config reload)", "Bash(* config reload *)", "Bash(* devloop-install)",
-]
 native.claude.promptCacheTtl = "5m"
 native.claude.subagentPromptCacheTtl = "5m"
 

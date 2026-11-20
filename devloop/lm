@@ -6,6 +6,9 @@ if [ -n "${LOOP_MANAGER_RUN:-}${DEVLOOP_TEST_ENV:-}" ]; then
   exit 1
 fi
 bin="$HOME/.local/opt/loop-manager-dev/bin"
+# Agent settings resolve this from the daemon's environment.
+DEVLOOP_DCG_PACK="$(cd "$(dirname "$0")" && pwd -P)/dcg.yaml"
+export DEVLOOP_DCG_PACK
 export PATH="$bin:$PATH"
 export XDG_STATE_HOME="$HOME/.local/state/loop-manager-dev"
 export LOOP_MANAGER_SOCKET="$XDG_STATE_HOME/loop-manager/loop-manager.sock"

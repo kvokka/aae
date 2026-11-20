@@ -57,8 +57,13 @@ fn the_hook_reaches_a_claude_and_a_codex_agent() {
 
 /// The hook of the addon on `input`, in `dir` (no repository there, so no project config of `dcg`), with `dir` for a
 /// home that has no user config of `dcg`, and `path` for `PATH`: its exit code, stdout and stderr.
-fn guard(dir: &Path, path: &std::ffi::OsStr, input: &Value) -> (Option<i32>, String, String) {
-    let mut child = common::program(addon().join("hooks/guard"))
+fn guard(dir: &Path, path: &std::ffi::OsStr, pack: Option<&Path>, input: &Value) -> (Option<i32>, String, String) {
+    let mut cmd = common::program(addon().join("hooks/guard"));
+    cmd.env_remove("DCG_CUSTOM_PATHS");
+    if let Some(pack) = pack {
+        cmd.env("DCG_CUSTOM_PATHS", pack);
+    }
+    let mut child = cmd
         .current_dir(dir)
         .env("PATH", path)
         .env("HOME", dir)
@@ -102,7 +107,7 @@ fn a_destructive_command_is_denied_and_an_ordinary_one_passes_on_both_harnesses(
     let tmp = tempfile::tempdir().unwrap();
     let path = std::env::var_os("PATH").unwrap();
     for harness in ["claude", "codex"] {
-        let (code, out, err) = guard(tmp.path(), &path, &input(harness, "git reset --hard"));
+        let (code, out, err) = guard(tmp.path(), &path, None, &input(harness, "git reset --hard"));
         assert_eq!(code, Some(0), "{harness}: {err}");
         let answer: Value = serde_json::from_str(&out).unwrap_or_else(|e| panic!("{harness}: {e}: {out}{err}"));
         let decision = &answer["hookSpecificOutput"];
@@ -110,9 +115,49 @@ fn a_destructive_command_is_denied_and_an_ordinary_one_passes_on_both_harnesses(
         let reason = decision["permissionDecisionReason"].as_str().unwrap();
         assert!(reason.contains("git reset --hard"), "{harness}: {reason}");
 
-        let (code, out, err) = guard(tmp.path(), &path, &input(harness, "git status"));
+        let (code, out, err) = guard(tmp.path(), &path, None, &input(harness, "git status"));
         assert_eq!(code, Some(0), "{harness}: {err}");
         assert!(!out.contains("deny"), "{harness}: {out}");
+    }
+}
+
+#[test]
+fn the_devloop_pack_denies_its_operator_commands_on_both_harnesses() {
+    let tmp = tempfile::tempdir().unwrap();
+    let path = std::env::var_os("PATH").unwrap();
+    let pack = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../devloop/dcg.yaml");
+    for harness in ["claude", "codex"] {
+        for (command, blocked) in [
+            ("B=target/debug/loop-manager; $B drain 2>&1 | head -3", true),
+            (r#""${binary}" restart"#, true),
+            ("target/debug/loop-manager --socket /tmp/test.sock config reload", true),
+            ("mise run devloop-install", true),
+            ("sh devloop/scripts/install.sh", true),
+            ("pitchfork stop namespace/loop-manager-dev", true),
+            ("mise -C ~ daemons stop loop-manager-dev", true),
+            ("mise daemons restart namespace/loop-manager-dev", true),
+            ("systemctl --user restart loop-manager-dev.service", true),
+            ("launchctl disable gui/501/loop-manager-dev", true),
+            ("loop-manager finish pass", false),
+            ("cargo test drain", false),
+            ("rg 'loop-manager drain' docs", false),
+            ("pitchfork restart other-service", false),
+            ("pitchfork status loop-manager-dev", false),
+            ("mise -C ~ daemons status loop-manager-dev", false),
+            ("mise daemons restart other-service", false),
+        ] {
+            let (code, out, err) = guard(tmp.path(), &path, Some(&pack), &input(harness, command));
+            assert_eq!(code, Some(0), "{harness}: {command}: {err}");
+            let reason = serde_json::from_str::<Value>(&out).unwrap_or(Value::Null);
+            assert_eq!(
+                reason["hookSpecificOutput"]["permissionDecision"] == "deny",
+                blocked,
+                "{harness}: {command}: {out}{err}"
+            );
+        }
+        let (code, out, err) = guard(tmp.path(), &path, None, &input(harness, "$B drain"));
+        assert_eq!(code, Some(0), "{err}");
+        assert!(!out.contains("deny"), "{harness} outside devloop: {out}");
     }
 }
 
@@ -121,7 +166,7 @@ fn without_dcg_on_the_path_every_command_is_refused_and_the_agent_is_told_why() 
     let tmp = tempfile::tempdir().unwrap();
     let empty = tmp.path().join("bin");
     fs::create_dir(&empty).unwrap();
-    let (code, out, err) = guard(tmp.path(), empty.as_os_str(), &input("claude", "git status"));
+    let (code, out, err) = guard(tmp.path(), empty.as_os_str(), None, &input("claude", "git status"));
     assert_eq!(code, Some(2), "{out}{err}");
     assert!(
         err.contains("`dcg` (destructive_command_guard) is not on the PATH"),

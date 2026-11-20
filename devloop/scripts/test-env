@@ -16,6 +16,8 @@ with tempfile.TemporaryDirectory(prefix="devloop-test-") as work:
     for key in list(env):
         if key in {"GIT_CONFIG_COUNT", "GIT_CONFIG_PARAMETERS"} or key.startswith(("GIT_CONFIG_KEY_", "GIT_CONFIG_VALUE_")):
             del env[key]
+    # Fixture projects select their own DCG packs.
+    env.pop("DCG_CUSTOM_PATHS", None)
     env["DEVLOOP_TEST_ENV"] = "1"
     for kind in ("CONFIG", "STATE", "CACHE", "RUNTIME"):
         path = Path(work, kind.lower())

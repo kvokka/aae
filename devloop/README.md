@@ -68,33 +68,51 @@ resolves that concern. The following lines explain it in Russian. An ordinary fi
 
 The installed daemon, socket, state and tracker serve working epics. Agents use them to report on their assigned
 work. Only an explicit owner request authorizes testing on, administering or upgrading this daemon. Coder and
-reviewer checks use isolated tests, including tests of daemon startup, shutdown and tracker writes.
+reviewer checks use isolated tests, including tests of daemon startup, shutdown and tracker writes. The DCG addon
+loads the [devloop pack](dcg.yaml) for these sessions through the project's `DCG_CUSTOM_PATHS` setting. It applies
+to both Claude and Codex. The pack blocks daemon drain, restart, config reload, dev binary installation and
+commands to stop, restart or disable the `loop-manager-dev` service.
 
 ## Install and start devloop
 
-Run these commands from the repository root. After a fresh clone, initialize the tracker once with
+For an existing installation, check `devloop/lm status` and locate the service registration before starting or
+recovering the daemon. A stopped service can still have a registration. Inspect the managers available on the host:
+
+- On Linux, check both `systemctl --user list-unit-files --type=service` and `systemctl list-unit-files --type=service`.
+- On macOS, inspect launchd with `launchctl print gui/$(id -u)` and `launchctl print system`, plus the installed
+  LaunchAgents and LaunchDaemons plists.
+- In Pitchfork, use `pitchfork daemons` for configured services and `pitchfork list` for their states. For a
+  service registered by mise, inspect its `[daemons]` entry and use `mise daemons` with the owning config.
+- Check any other supervisor configured on the host.
+
+Identify devloop by its installed binary, arguments, project config, working directory and state path. Use the
+existing manager and its registered service for an authorized start or recovery. Keep its config and binary
+version. Use tmux only when the host has no daemon manager available for devloop. Check `devloop/lm status`
+after startup.
+
+For a fresh installation, work from the repository root. Initialize the tracker once with
 `(cd devloop && br init --prefix dev)`. Use a checkout on `main` where `git push --dry-run` works without a prompt.
 The coder and reviewer share that checkout.
 
 ```sh
 mise run devloop-install
 mise exec -- devloop/lm doctor --config devloop/config.toml
-mise exec -- devloop/lm daemon --config devloop/config.toml
 ```
 
 The install task copies the existing `debug/loop-manager` from Cargo's target directory to
 `~/.local/opt/loop-manager-dev/bin/loop-manager`. If the artifact is missing or you want a newer build,
-run `cargo build --locked -p loop-manager` first. Only the final command starts a daemon, in the foreground.
-Starting it under mise supplies the project's tools and the `RUSTUP_TOOLCHAIN`, `RUSTUP_HOME` and `CARGO_HOME`
+run `cargo build --locked -p loop-manager` first. For a new service, set the working directory to this
+checkout and the command to `mise exec -- devloop/lm daemon --config devloop/config.toml`. Starting it under
+mise supplies the project's tools and the `RUSTUP_TOOLCHAIN`, `RUSTUP_HOME` and `CARGO_HOME`
 required by its sessions.
 
 Use `devloop/lm` from the repository root for client commands as well. It selects the installed binary and puts
 its directory first on the daemon's `PATH` for child commands. The dev database and socket are under
 `~/.local/state/loop-manager-dev/loop-manager/`, separate from the ordinary installation.
 
-To pick up a new artifact, run `mise run devloop-install` between epics and then `devloop/lm restart` if the
-daemon is running. Installation replaces the file atomically. The running process picks it up on restart,
-and subsequent CLI invocations use it immediately.
+For an authorized upgrade, install the new artifact between epics with `mise run devloop-install`, then restart the
+registered service through its manager. Installation replaces the file atomically. Subsequent CLI invocations use
+it immediately, and the daemon picks it up on restart.
 
 ## File an epic
 
