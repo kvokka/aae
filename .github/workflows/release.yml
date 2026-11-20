@@ -1,43 +1,64 @@
 name: release
+run-name: ${{ github.event_name == 'workflow_dispatch' && 'Release dry-run' || github.ref_name }}
 
 on:
+  workflow_dispatch:
   push:
-    tags: ["v*"]
+    tags: ["[0-9]+.[0-9]+.[0-9]+"]
 
 permissions:
   contents: read
 
-env:
-  TARGETS: x86_64-unknown-linux-musl aarch64-unknown-linux-musl x86_64-apple-darwin aarch64-apple-darwin
-
 jobs:
   build:
-    runs-on: ubuntu-24.04-arm
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-24.04
+            target: x86_64-unknown-linux-musl
+          - runner: ubuntu-24.04-arm
+            target: aarch64-unknown-linux-musl
+          - runner: macos-15
+            target: aarch64-apple-darwin
+    runs-on: ${{ matrix.runner }}
+    env:
+      TARGET: ${{ matrix.target }}
     steps:
       - uses: actions/checkout@v7
-      - uses: jdx/mise-action@v5
+      - uses: dtolnay/rust-toolchain@1.100
+        with:
+          targets: ${{ matrix.target }}
       - uses: Swatinem/rust-cache@v2
-      - name: The tag is the workspace version
+      - name: Check release tag
+        if: github.event_name == 'push'
         run: |
-          version=$(cargo metadata --no-deps --format-version 1 | jq -r '.packages[] | select(.name == "loop-manager") | .version')
-          test "v$version" = "$GITHUB_REF_NAME" || { echo "tag $GITHUB_REF_NAME, workspace $version" >&2; exit 1; }
-      # Criterion 1 of the acceptance: the four release targets build and the arm64 one runs.
-      - run: mise run acceptance-release
-      # `loop-manager-<target>.tar.gz` with the binary at its root, and its `.sha256`: the names mise's `github:`
-      # backend and `cargo binstall` pick for a platform.
-      - name: Pack the binaries
+          version=$(cargo metadata --locked --no-deps --format-version 1 | jq -r '.packages[] | select(.name == "loop-manager") | .version')
+          test "$version" = "$GITHUB_REF_NAME" || { echo "tag $GITHUB_REF_NAME, workspace $version" >&2; exit 1; }
+      - name: Install musl compiler
+        if: runner.os == 'Linux'
         run: |
+          sudo apt-get update -q
+          sudo apt-get install -y musl-tools
+          echo "TARGET_CC=musl-gcc" >> "$GITHUB_ENV"
+      - name: Build and package
+        run: |
+          cargo build --release --locked -p loop-manager --target "$TARGET"
           mkdir dist
-          for t in $TARGETS; do
-            tar -czf "dist/loop-manager-$t.tar.gz" -C "target/$t/release" loop-manager
-            (cd dist && sha256sum "loop-manager-$t.tar.gz" > "loop-manager-$t.tar.gz.sha256")
-          done
+          cd dist
+          archive="loop-manager-$TARGET.tar.gz"
+          tar -czf "$archive" -C "../target/$TARGET/release" loop-manager
+          shasum -a 256 "$archive" > "$archive.sha256"
+          tar -xzf "$archive" -C "$RUNNER_TEMP"
+          "$RUNNER_TEMP/loop-manager" --version
       - uses: actions/upload-artifact@v7
         with:
-          name: dist
+          name: dist-${{ matrix.target }}
           path: dist/
+          if-no-files-found: error
 
   github-release:
+    if: github.event_name == 'push'
     needs: build
     runs-on: ubuntu-24.04-arm
     permissions:
@@ -45,7 +66,8 @@ jobs:
     steps:
       - uses: actions/download-artifact@v8
         with:
-          name: dist
+          pattern: dist-*
+          merge-multiple: true
           path: dist
       # A re-run of the tag replaces the assets of the release it made before.
       - name: Create the release and upload the binaries
@@ -58,18 +80,19 @@ jobs:
           gh release upload "$GITHUB_REF_NAME" dist/* --clobber
 
   crates-io:
+    if: github.event_name == 'push'
     needs: build
     runs-on: ubuntu-24.04-arm
     steps:
       - uses: actions/checkout@v7
-      - uses: jdx/mise-action@v5
+      - uses: dtolnay/rust-toolchain@1.100
       - uses: Swatinem/rust-cache@v2
       # A version on crates.io cannot be replaced: a re-run of the tag publishes only the crates not there yet.
       - name: Publish the crates
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
         run: |
-          version="${GITHUB_REF_NAME#v}"
+          version="$GITHUB_REF_NAME"
           crates=$(cargo metadata --no-deps --format-version 1 | jq -r '.packages[] | select(.publish != []) | .name')
           skip=()
           for name in $crates; do

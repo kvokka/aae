@@ -7,7 +7,7 @@
 | while you work | the tests of what you touch, clippy of the crate | `cargo nextest run -p <crate> -E 'test(<name>)'`, `cargo clippy -p <crate> --all-targets -q -- -D warnings` |
 | once, on the committed HEAD, before you hand the work over | **the gate** | `mise run ci` (the `tests` step runs it in devloop) |
 | only when the owner asks | the model-free acceptance scenarios and the chaos stand, in CI | `gh workflow run acceptance`, then `gh run watch` |
-| only when the owner asks | live models, the demos, release builds, on this machine | `mise run acceptance`, `demos/<demo>/run.sh`, `mise run acceptance-release` |
+| only when the owner asks | live models, the demos, on this machine | `mise run acceptance`, `demos/<demo>/run.sh` |
 
 - `mise run ci` is the whole gate: formatting, clippy, the unit and integration tests without the chaos stand,
   `cargo deny`, `cargo machete` and the scripts of `scripts/`. A change is done when it is green on the HEAD you hand over. Do not run it after

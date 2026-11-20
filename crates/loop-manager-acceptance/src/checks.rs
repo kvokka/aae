@@ -3,30 +3,10 @@
 //! run one after another once the scenarios are done (see `main`).
 
 use crate::{Env, Launch, Scenario};
-use std::{env::consts, path::PathBuf, sync::Arc};
-
-/// The four release targets of docs/guide/install.md.
-const TARGETS: [&str; 4] = [
-    "x86_64-unknown-linux-musl",
-    "aarch64-unknown-linux-musl",
-    "x86_64-apple-darwin",
-    "aarch64-apple-darwin",
-];
+use std::{path::PathBuf, sync::Arc};
 
 const KILLED_IN_A_COMMAND: &str = "-p loop-manager -E test(/killed_in_a_command_is_resumed/)";
 pub(crate) const ALL: &[Scenario] = &[
-    Scenario {
-        criterion: "1",
-        title: "the release build for this host's target runs without extra runtimes",
-        launch: Launch::Request,
-        run: |env| Box::pin(release(env, &[])),
-    },
-    Scenario {
-        criterion: "1",
-        title: "one binary builds for each of the four targets",
-        launch: Launch::Release,
-        run: |env| Box::pin(release(env, &TARGETS)),
-    },
     Scenario {
         criterion: "9",
         title: "kill -9 of claude and of the codex app-server mid-tool is typed, resumed and reaches its outcome",
@@ -296,32 +276,6 @@ fn line_with(text: &str, word: &str) -> String {
         .unwrap_or_default()
         .trim()
         .to_owned()
-}
-
-/// The release build for this host's target and `targets` besides, then the host's binary runs.
-async fn release(env: Arc<Env>, targets: &[&str]) -> String {
-    let os = if consts::OS == "macos" {
-        "apple-darwin"
-    } else {
-        "unknown-linux-musl"
-    };
-    let host = format!("{}-{os}", consts::ARCH);
-    let mut built: Vec<&str> = targets.to_vec();
-    if !built.contains(&host.as_str()) {
-        built.push(&host);
-    }
-    for target in &built {
-        let mut args = Vec::from_iter("zigbuild -q --release --locked -p loop-manager --target".split(' '));
-        args.push(target);
-        command(&env, "cargo", &args).await;
-    }
-    let binary = env.target.join(&host).join("release/loop-manager");
-    let version = command(&env, &binary.to_string_lossy(), &["--version"]).await;
-    format!(
-        "built for {}; the {host} build runs: {}",
-        built.join(", "),
-        version.trim()
-    )
 }
 
 /// The nextest summary of `filter`, which must run `want` tests: a renamed test would leave its row passing.

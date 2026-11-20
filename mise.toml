@@ -1,10 +1,8 @@
 [tools]
-rust = { version = "1.100", components = "clippy,rustfmt,rust-src,rust-analyzer", targets = "aarch64-unknown-linux-musl,x86_64-unknown-linux-musl,aarch64-apple-darwin,x86_64-apple-darwin" }
+rust = { version = "1.100", components = "clippy,rustfmt,rust-src,rust-analyzer" }
 "cargo:cargo-nextest" = "0.9.151"
 "cargo:cargo-deny" = "0.20.2"
 "cargo:cargo-machete" = "0.9.2"
-zig = "0.17.1"
-"cargo:cargo-zigbuild" = "0.24.1"
 claude = "2.1"
 codex = "0"
 "github:Dicklesworthstone/beads_rust" = "0.7.6"
@@ -80,14 +78,6 @@ target=$(echo "$metadata" | jq -er .target_directory)
 PATH="$target/debug:$PATH" devloop/scripts/selftest.sh
 """
 
-[tasks.build-all]
-description = "Release builds for the four targets"
-run = """
-for t in x86_64-unknown-linux-musl aarch64-unknown-linux-musl x86_64-apple-darwin aarch64-apple-darwin; do
-  cargo zigbuild --release --locked --target "$t"
-done
-"""
-
 [tasks.acceptance]
 description = "The whole acceptance spec (docs/acceptance.md) on the release build of loop-manager; scenarios with a real model cost money and need a login"
 run = [
@@ -95,12 +85,8 @@ run = [
   "cargo run -q --locked -p loop-manager-acceptance -- --loop-manager {{config_root}}/target/release/loop-manager",
 ]
 
-[tasks.acceptance-release]
-description = "Criterion 1 of the acceptance with the four release targets, and this host's build runs; CI runs it on tags"
-run = "cargo run -q --locked -p loop-manager-acceptance -- --release 1"
-
 [tasks.acceptance-ci]
-description = "The model-free acceptance scenarios, without the release builds; run on request"
+description = "The model-free acceptance scenarios; run on request"
 run = [
   "cargo build -q --locked -p loop-manager",
   "cargo run -q --locked -p loop-manager-acceptance -- --ci",

@@ -19,8 +19,8 @@ that starts a formula on every matching event or tick of a schedule.
 4. **Less code is better.** Only what a described result needs is written: no stubs, no extension points, no fields
    or flags for later. What is deferred is absent from the code altogether.
 
-loop-manager ships as one binary for Linux and macOS, x86_64 and arm64, under the MIT license. It is checked on Linux
-arm64 only; the other three targets are built and trusted to the portability of the language.
+loop-manager ships as one binary for Linux (x86_64 and arm64) and macOS (arm64) under the MIT license.
+The release workflow runs the packaged CLI on each platform. The full checks run on Linux arm64.
 
 ## Glossary
 
@@ -75,7 +75,7 @@ arm64 only; the other three targets are built and trusted to the portability of 
 | A web interface, a dashboard | The task board is `bv`; observation is the CLI and the event stream |
 | Alerting a human about a failure | Only the event journal and the logs; a notice addon is on the [roadmap](roadmap.md) |
 | Windows, several machines, several users | A local daemon of one user |
-| Checks on macOS and on x86_64 | Checked on Linux arm64 only; the other targets are built |
+| Checks on macOS and on x86_64 | The full suite runs on Linux arm64; release builds run `--version` on each supported platform |
 | A bundled check "the work is really done" | A check is a formula step, a script or an agent, written by the author of the pack or the project |
 | Account rotation and failover between subscriptions | A zone of vendor-policy risk; not the core's business |
 | Translation of hooks between harness dialects | The hook formats of claude and codex are nearly one; a translator when a third dialect appears |

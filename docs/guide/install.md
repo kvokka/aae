@@ -1,14 +1,13 @@
 # Installing loop-manager
 
 loop-manager is one binary: the daemon, the CLI and the bundled addons. It runs on Linux (x86_64, arm64; statically
-linked with musl) and macOS (x86_64, arm64). It is checked on Linux arm64 only: the other targets are built and not
-exercised ([what the first release leaves out](../overview.md#what-the-first-release-leaves-out)).
+linked with musl) and macOS (Apple Silicon).
 
 ## Install a release
 
 Each release on [GitHub Releases](https://github.com/kvokka/loop-manager/releases) carries
-`loop-manager-<target>.tar.gz` for the four targets (`x86_64-unknown-linux-musl`, `aarch64-unknown-linux-musl`,
-`x86_64-apple-darwin`, `aarch64-apple-darwin`): the binary alone at the root of the archive, with its sha256 in
+`loop-manager-<target>.tar.gz` for the three targets (`x86_64-unknown-linux-musl`, `aarch64-unknown-linux-musl`,
+`aarch64-apple-darwin`): the binary alone at the root of the archive, with its sha256 in
 `loop-manager-<target>.tar.gz.sha256`. Any of these installs it:
 
 ```sh
@@ -26,20 +25,13 @@ loop-manager can be built from source. The repository pins its toolchain with [m
 
 ```sh
 git clone <this repository> loop-manager && cd loop-manager
-mise install                       # Rust, zig, cargo-zigbuild, br, and claude and codex
+mise install                       # project toolchain
 cargo build --release --locked -p loop-manager
 install -m 0755 target/release/loop-manager ~/.local/bin/loop-manager
 ```
 
 mise is a convenience, not a requirement. Without it, install Rust 1.100 any way you like (for example with
 rustup); `cargo build` then works as above.
-
-`mise run build-all` builds all four release targets with `cargo zigbuild` into
-`target/<target>/release/loop-manager`; take the one for your machine (for example `aarch64-unknown-linux-musl` on a
-Linux arm64 host). The Linux binaries need no runtime besides the kernel. Without mise, this needs zig 0.17.1,
-cargo-zigbuild 0.24.1 and the Rust targets `x86_64-unknown-linux-musl`, `aarch64-unknown-linux-musl`,
-`x86_64-apple-darwin` and `aarch64-apple-darwin`; then run `cargo zigbuild --release --locked --target <target>`
-for each.
 
 ## What loop-manager runs
 

@@ -30,9 +30,6 @@ pub(crate) enum Launch {
     Ci,
     /// With a real model: only when the user runs the whole spec.
     Request,
-    /// The builds for every release target: only with `--release`, as the release workflow runs it on a tag; dev
-    /// builds this host's target alone.
-    Release,
 }
 
 pub(crate) type Notes = Pin<Box<dyn Future<Output = String> + Send>>;
@@ -60,7 +57,6 @@ const SCENARIO_LIMIT: Duration = Duration::from_secs(45 * 60);
 
 struct Args {
     ci: bool,
-    release: bool,
     loop_manager: PathBuf,
     report: PathBuf,
     target: PathBuf,
@@ -75,7 +71,6 @@ fn args() -> Result<Args, String> {
     let target = dir.parent().unwrap_or(dir).to_owned();
     let mut args = Args {
         ci: false,
-        release: false,
         loop_manager: dir.join("loop-manager"),
         report: target.join("acceptance/report.md"),
         target,
@@ -86,7 +81,6 @@ fn args() -> Result<Args, String> {
     while let Some(arg) = it.next() {
         match arg.as_str() {
             "--ci" => args.ci = true,
-            "--release" => args.release = true,
             "--loop-manager" => args.loop_manager = it.next().ok_or("--loop-manager needs a path")?.into(),
             "--report" => args.report = it.next().ok_or("--report needs a path")?.into(),
             "--mcp-probe" | "--mcp-stdio-probe" => {
@@ -177,8 +171,7 @@ fn order(criterion: &str) -> (u32, &str) {
     (criterion[..digits].parse().unwrap_or(u32::MAX), &criterion[digits..])
 }
 
-/// A line of the report: `mark` is `pass`, `FAIL`, `not run` (a request row of a CI run), `on a tag` (a release row
-/// of a run without `--release`).
+/// A report row records a pass, a failure or a skipped live scenario.
 struct Row {
     criterion: &'static str,
     title: &'static str,
@@ -242,7 +235,6 @@ async fn main() -> ExitCode {
         list.partition(|s| match s.launch {
             Launch::Ci => true,
             Launch::Request => !args.ci,
-            Launch::Release => args.release,
         })
     };
     let (checks, mut skipped) = pick(checks::ALL);
@@ -267,16 +259,11 @@ async fn main() -> ExitCode {
         rows.push(row);
     }
     for s in skipped {
-        let (mark, notes) = if s.launch == Launch::Release {
-            ("on a tag", "built on a tag: `mise run acceptance-release`")
-        } else {
-            ("not run", "a request row: run the spec without --ci")
-        };
         rows.push(Row {
             criterion: s.criterion,
             title: s.title,
-            mark,
-            notes: notes.to_owned(),
+            mark: "not run",
+            notes: "a request row: run the spec without --ci".to_owned(),
             took: Duration::ZERO,
         });
     }
@@ -310,10 +297,9 @@ fn write_report(args: &Args, env: &Env, mut rows: Vec<Row>, started: Instant) ->
     }
     let _ = writeln!(
         report,
-        "\n{passed} of {} rows passed, {failed} failed, {} not run, {} on a tag, in {:.0} s.",
+        "\n{passed} of {} rows passed, {failed} failed, {} not run, in {:.0} s.",
         rows.len(),
         count("not run"),
-        count("on a tag"),
         started.elapsed().as_secs_f64()
     );
     let written = args

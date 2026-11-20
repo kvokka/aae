@@ -164,8 +164,8 @@ described in the document named under each heading; this file only marks it as d
 
 | № | Decision |
 |---|---|
-| 29 | Checks run on the owner's host only (Linux arm64); the other three targets are built |
-| 63 | The four targets are built only for a release (`mise run acceptance-release`, the workflow `release` on a `v*` tag): development, the gate and a local acceptance run build the host's target only. No tag is made only to check the build |
+| 29 | The full checks run on Linux arm64. Each release runner starts its packaged binary |
+| 63 | The release workflow builds Linux musl (x86_64 and arm64) and macOS arm64. A numeric X.Y.Z tag publishes; a manual dry-run produces workflow artifacts |
 | 66 | `br` is pinned by an exact version, claude and codex by a release line; there is no `mise.lock` |
 | 87 | mise is a convenience, not a requirement, for development and for the demos; a demo's dependencies are in its own `mise.toml` without a lock |
 | 138 | loop-manager follows the current versions of the harnesses and tools it works with: a legacy or compatibility format or method (a manifest layout, a flag, an API a tool marks as legacy) is used only on the owner's explicit request (2026-11-17) |

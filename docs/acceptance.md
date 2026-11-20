@@ -17,28 +17,26 @@ model: they run on a developer's machine, on the same request.
 | `cargo build -p loop-manager && cargo run -p loop-manager-acceptance -- --ci 3 19` | the named criteria, model-free rows only | nothing |
 | `mise run acceptance-ci` | every model-free row: a fake provider, the scripted driver, exec steps, the chaos stand; what the workflow `acceptance` runs | nothing |
 | `mise run acceptance` | every row on the release build, the live-model rows and the live runs of demos 1 to 4 among them | a harness login; for demo 3 a login of `gh` (or `GITHUB_TOKEN`) that may push to its repositories; it spends real tokens and opens real pull requests |
-| `mise run acceptance-release` | criterion 1 with the four release targets; the workflow `release` runs it on a `v*` tag | zig, cargo-zigbuild |
 
 A run writes one report, `target/acceptance/report.md`: a line for every row, run or not, with the date, the version
 of `loop-manager` and the versions of the harnesses. A row that is not run cannot fail, so a green model-free run says
 nothing of the live-model rows. After the scenarios the same binary runs the rows that live in cargo and the scripts,
-one at a time: the release build (1), the crash tests of the adapters (9), the contract tests (11), the stub
+one at a time: the crash tests of the adapters (9), the contract tests (11), the stub
 linters (23) and the chaos stand (35). The crash scenario (8) prints its pause seed;
 `LOOP_MANAGER_CRASH_SEED=<n>` replays it, and the chaos stand does the same with `LOOP_MANAGER_CHAOS_SEED`
 ([development](guide/development.md#the-chaos-stand)).
 
 The live-model rows use the cheapest model of each harness, set by the agents of their fixtures. The checks run on
-Linux arm64; the other three targets are built (criterion 1) and not exercised. The numeric thresholds were proposed
+Linux arm64. The release workflow builds and runs the packaged binaries on all supported platforms. The numeric thresholds were proposed
 by the author of the criteria and may be changed on evidence. `default-policy` is on in every scenario unless a row
 says otherwise.
 
 ## Criteria
 
-`model-free` rows need no login. `live` rows call a real model. Numbers 21 and 22 are retired.
+`model-free` rows need no login. `live` rows call a real model. Numbers 1, 21 and 22 are retired.
 
 | № | Criterion | Kind |
 |---|---|---|
-| 1 | One binary builds for the four targets; the Linux arm64 build runs on the host without extra runtimes | build |
 | 2 | A formula of one `ai` step passes as a real run on a cheap model through claude and through codex, ended `pass` by the finisher | live |
 | 3 | A formula of one `exec` step passes; exit 75 fails the attempt, not the formula | model-free |
 | 4 | A turn that ends without the finisher gives no `pass`; the finisher of a stale attempt is refused; a hook on `run.finishing` returns a remark and the run passes on the second go in the same attempt | model-free |
