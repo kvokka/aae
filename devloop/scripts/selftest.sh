@@ -20,6 +20,7 @@ cat >"$tmp/bin/mise" <<'STUB'
 #!/bin/sh
 # An inherited socket wins over XDG paths. An inherited tracker wins over the working directory.
 test -z "${LOOP_MANAGER_RUN+x}${LOOP_MANAGER_SOCKET+x}${LOOP_MANAGER_ATTEMPT_TOKEN+x}${BD_ACTOR+x}" || exit 88
+test -z "${GIT_CONFIG_COUNT+x}${GIT_CONFIG_KEY_0+x}${GIT_CONFIG_VALUE_0+x}${GIT_CONFIG_PARAMETERS+x}" || exit 88
 test "$BEADS_DIR" != "$outer_tracker" && test "$XDG_STATE_HOME" != "$outer_state" || exit 88
 test -d "$XDG_RUNTIME_DIR" && test -d "$XDG_STATE_HOME" || exit 88
 echo "ci says $*"
@@ -95,6 +96,7 @@ for operator in "$here/../lm" "$here/install.sh"; do
   if "$here/test-env" "$operator" --help >"$tmp/operator" 2>&1; then echo "test ran $operator" >&2; exit 1; fi
   grep -q 'operator command' "$tmp/operator"
 done
+export GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=user.name GIT_CONFIG_VALUE_0=test
 MISE_RC=0 expect 0 tests.sh "green"; jq -e '.exit_code == 0 and .uncommitted == 0 and .failed == []' "$tmp/out" >/dev/null
 log=$(jq -r .log "$tmp/out")
 grep -q "ci says run ci" "$log"
