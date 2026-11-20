@@ -56,17 +56,17 @@ Running a harness headless spends the limits of your subscription, and a vendor'
 subscription is used through its automation interfaces (OpenAI's terms for the codex app-server limit commercial and
 hosted use). loop-manager supports API keys for both harnesses; keeping to the vendor's terms is your responsibility.
 
-claude labels every request with `CLAUDE_CODE_ENTRYPOINT` (`sdk-cli` for `claude -p` when it is unset; `cli` is
-rewritten to `sdk-cli` there, any other value goes as is). Community A/B runs in
+The claude adapter sets `CLAUDE_CODE_ENTRYPOINT=loop-manager` to label requests. An agent can override the label in
+`env` or `native.claude.env`. Claude's own default for `claude -p` is `sdk-cli`. Community A/B runs in
 [anthropics/claude-code#97074](https://github.com/anthropics/claude-code/issues/97074), not an official statement, report
 that `sdk-cli` spends the 5-hour window of a subscription 1.8–2.5 times faster than another label (2026-11, claude
 2.1.3xx); a measurement of this project on a weekly-only limit saw no clear difference (2026-11-18, claude 2.1.327).
 <!-- MEASURE id=claude-entrypoint-community date=2026-11-18 ver=claude-2.1.3xx env=community-ab-runs src=anthropics/claude-code#97074 note="not official; several ABBA runs, not every one on cached tool-heavy load saw a difference" -->
-<!-- MEASURE id=claude-entrypoint-weekly date=2026-11-18 ver=claude-2.1.327 env=linux-arm64-orbstack-max-20x src="own run, data outside the repository" note="weekly limit only, ratio up to ~1.6, not decisive; measure again on an account with a 5-hour window" --> loop-manager sets no label; set it in an agent's `env`, for
-example `CLAUDE_CODE_ENTRYPOINT = "loop-manager"`; whether that suits the vendor's terms is yours to judge. With any
-label but `sdk-cli`, claude sends one more request per session: it names the session from the whole first prompt, on
-the small model (on the main one behind a third-party `ANTHROPIC_BASE_URL`), uncached and billed, and
-`total_cost_usd` does not always count it. The claude adapter skips that request by default.
+<!-- MEASURE id=claude-entrypoint-weekly date=2026-11-18 ver=claude-2.1.327 env=linux-arm64-orbstack-max-20x src="own run, data outside the repository" note="weekly limit only, ratio up to ~1.6, not decisive; measure again on an account with a 5-hour window" -->
+
+With a custom label, Claude normally sends an extra request to generate the session title from the full first
+prompt. It uses the small model (the main model behind a third-party `ANTHROPIC_BASE_URL`). That request is
+uncached and billed, and `total_cost_usd` can omit it. The adapter skips that request by default.
 
 ### Headless session defaults
 
@@ -83,13 +83,8 @@ Disabling Claude telemetry also disables remote feature-flag fetching. The broad
 Explicit Codex OpenTelemetry exporters use their own settings.
 [Claude environment variables](https://code.claude.com/docs/en/env-vars) · [Codex configuration](https://developers.openai.com/codex/config-reference/)
 
-### Interactive sessions
-
-In this repository, `mise exec -- claude` requests experimental Code Mode. Elsewhere, start an interactive
-terminal session with `CLAUDE_CODE_EXPERIMENTAL_CODE_MODE=1 claude`, or set that variable in the `env` of
-`~/.claude/settings.json`. Claude ignores it in project settings and supports Code Mode only in interactive
-terminal sessions on eligible accounts and models. Interactive Codex needs no configuration for loop-manager.
-[Claude Code Mode requirements](https://code.claude.com/docs/en/code-mode#requirements)
+Agent sessions and exec steps get `BR_OUTPUT_FORMAT=toon` from loop-manager. Pass `--json` to `br`
+when a script needs JSON.
 
 ### Installing the harnesses
 

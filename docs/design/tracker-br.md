@@ -119,6 +119,7 @@ run relation is below ([Beads and runs](#beads-and-runs)). Code: `crates/loop-ma
 ## Generated from the project configs
 
 - `BEADS_DIR` in the environment of every session and every call, and, for a rig, `BD_ISSUE_PREFIX`.
+- Sessions and exec steps get `BR_OUTPUT_FORMAT=toon` by default. The adapter requests JSON with `br --json`.
 - At daemon start, `.bv/workspace.yaml` next to the orchestrator config: one repository per project with a tracker,
   with the id prefix from `br config get issue_prefix` (a project whose prefix br does not give is listed without
   one, and bv assumes `<name>-`). The trackers are fixed for the daemon's life (a reload that changes them is

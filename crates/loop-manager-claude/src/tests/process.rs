@@ -22,10 +22,12 @@ fn headless_defaults_yield_to_the_agents_env_and_native_settings() {
     ] {
         assert_eq!(defaults[key], "1", "{key}");
     }
-    assert!(!defaults.contains_key("CLAUDE_CODE_EXPERIMENTAL_CODE_MODE"));
+    assert_eq!(defaults["CLAUDE_CODE_ENTRYPOINT"], "loop-manager");
+    p["env"]["CLAUDE_CODE_ENTRYPOINT"] = json!("sdk-cli");
     p["env"]["DISABLE_TELEMETRY"] = json!("");
     p["settings"] = json!({ "env": { "DISABLE_AUTOUPDATER": "0" } });
     let configured = env(&p);
+    assert_eq!(configured["CLAUDE_CODE_ENTRYPOINT"], "sdk-cli");
     assert_eq!(configured["DISABLE_TELEMETRY"], "");
     assert!(!configured.contains_key("DISABLE_AUTOUPDATER"));
 }
