@@ -1,23 +1,13 @@
 ---
 name: recover
-description: Sort out the aftermath of loop-manager runs that failed for good. Use when the user asks what failed in loop-manager, why a run failed, or how to recover, retry, continue or abandon a failed run. Finds the failed runs and their sessions, shows the failure kinds, offers the ways to go on, and runs the one the user picks with loop-manager commands.
+description: Diagnose failed loop-manager runs and carry out the recovery the user chooses.
 ---
 
 # Recover failed loop-manager runs
 
-A run that failed for good is the user's to sort out: no recovery fits every failure. Your job is to show what
-failed, lay out the ways to go on, and run the one the user chooses. Decide nothing yourself: never start, cancel or
-gate anything the user has not picked. The full guide is
-[Recovering a failed run by hand](https://github.com/kvokka/loop-manager/blob/main/docs/guide/recovery.md).
-
-Use the daemon the user selected. For this repository's devloop installation, run the examples from the checkout
-with `devloop/lm` in place of `loop-manager` to select its binary and socket. If the selected daemon is unreachable,
-ask the user to start it or provide its socket.
-
-Read the CLI's structured replies directly in TOON. Add `--json` when passing a reply to a JSON parser.
-
-For a recap of the work on the bead, including a replacement run you followed to completion, use
-[recap](../recap/SKILL.md).
+Inspect the failed run on the user's selected daemon. Explain the cause and apply the user's chosen recovery.
+Read structured replies in TOON. When a replacement run you follow finishes, use [recap](../recap/SKILL.md).
+See the [recovery guide](https://github.com/kvokka/loop-manager/blob/main/docs/guide/recovery.md) for CLI details.
 
 ## 1. See what failed
 
@@ -37,7 +27,7 @@ loop-manager gate list
 `loop-manager run list --parent` lists the children of a run whose formula has a `drain` or `formula` step;
 `loop-manager gate list` shows whether the bead's gate `bead:<project>/<bead>` is closed.
 
-Show the user, per run: `id`, `project`, `rig`, `formula`, `bead`, `class` (`agent`, `check`, `hollow_done`,
+Identify the run, project, formula and any associated rig or bead. For diagnosis, inspect `class` (`agent`, `check`, `hollow_done`,
 `infrastructure`), `reason`, `workdir`, and per attempt its `kind` (`new_session` or `resume`), `failure_kind` and
 `session`. The `session` is the harness's own reference (claude `{session_id, config_dir, workdir}`, codex
 `{thread_id, codex_home}`). Start with task comments, step results and referenced artifacts; a transcript is a
@@ -65,27 +55,24 @@ It need not appear in an attempt's `failure_kind`: there was no harness running 
 command `loop-manager run wait <run> --timeout 2h` ending with exit 124 only ends that client's wait; it does not fail
 the underlying run.
 
-Recover the question and its task context using [awaiting's context procedure](../awaiting/SKILL.md#2-understand-the-question-before-asking-the-user).
-Explain the decision to the user before proposing recovery. For `devloop`, follow the
-[pack-specific timeout procedure](../awaiting/references/devloop.md#after-an-owner-wait-times-out).
-
-An expired run is terminal: `run resolve` cannot answer it. Preserve the user's answer in the task's documented
-handoff format before reopening its gate or starting another run. The timeout counts toward `bead_failed_runs`, so
-inspect the bead's gate as well; `devloop` closes it after one failed run. Gate opening alone records no answer.
+Recover the question using [awaiting's context procedure](../awaiting/SKILL.md#understand-the-question).
+Explain the decision to the user. The expired run is terminal. For a retry, carry the user's answer through
+the project's documented task or formula input. For runs with a bead, check its gate and preserve the answer
+before reopening it. The timeout counts toward the project's configured failure threshold.
 Check whether an existing queued run will proceed when the gate opens before creating another run on the same bead.
 Do not recommend continuing a worker session merely because it was the last session before the wait; the missing
 input was an external decision, and the workflow must receive that answer through its task or inputs.
 
 ## 2. Offer the ways to go on
 
-A failed run has let go of its bead: the bead is open again and its count of failed runs went up. Once the count
+For a run that held a bead, failure releases it and increments its failure count. Once the count
 reaches `bead_failed_runs` (default 3) the gate `bead:<project>/<bead>` is closed and no run takes the bead until it is opened.
 
 Offer these, for the user to pick one per run:
 
 1. **Continue the session.** A new run continues the failed run's last session in the same workdir. The formula's
    first step must be `ai` on the harness of that session.
-2. **A new session on the same task.** A new run of the formula on the same bead, in a new session.
+2. **A new session on the same task.** Start the formula with the original inputs and a fresh session.
 3. **A new session with a note** saying the work was begun before and its state is unknown. This needs a formula
    with an input for the note that its agent's prompt template uses; look for one with
    `loop-manager formula list`. If there is none, point the user to the guide's section on it
@@ -95,9 +82,8 @@ Offer these, for the user to pick one per run:
 
 ## 3. Run the chosen way
 
-Take `project`, `rig`, `formula` and the task input's name (often `task`) from `loop-manager run show`; leave `<rig>`
-out when the run has none. The note formula's input names are its own
-(`loop-manager formula list`). If the bead's gate is closed and the user wants the bead taken
+Use the failed run's project, formula, inputs and optional rig. In these examples, substitute the chosen
+formula's input names and values. Omit the rig or task input when the run has none. If the bead's gate is closed and the user wants the bead taken
 again, open it first (that resets the count):
 
 ```sh
@@ -107,19 +93,19 @@ loop-manager gate open bead:<project>/<bead>
 1. Continue the session:
 
    ```sh
-   loop-manager run start <project> <rig> <formula> --continue-from <run> --input task=<bead>
+   loop-manager run start <project> <rig> <formula> --continue-from <run> --input <task-input>=<bead>
    ```
 
 2. A new session:
 
    ```sh
-   loop-manager run start <project> <rig> <formula> --input task=<bead>
+   loop-manager run start <project> <rig> <formula> --input <task-input>=<bead>
    ```
 
 3. A new session with a note, on the formula the user picked:
 
    ```sh
-   loop-manager run start <project> <rig> <note-formula> --input task=<bead> --input 'note=This task was started before by run <run>; its state is unknown. Find out what was done, then finish it.'
+   loop-manager run start <project> <rig> <note-formula> --input <task-input>=<bead> --input '<note-input>=This task was started before by run <run>; its state is unknown. Find out what was done, then finish it.'
    ```
 
 4. Abandon it:

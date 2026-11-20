@@ -1,122 +1,53 @@
 ---
 name: awaiting
-description: Explain questions and decisions waiting in loop-manager, gather their task and report context, and pass on the user's answer. Use when the user asks what needs their attention, what a worker's question means, or wants to answer, accept, send back or cancel a run waiting on an await step.
+description: Explain what a waiting loop-manager run needs and submit the user's decision.
 ---
 
-# Runs that wait for a decision
+# Handle a waiting run
 
-A formula may stop between its steps on an `await` step and wait for an outcome from outside: a human, a script or a
-bridge. Your job is to show the user what waits and to pass on what the user decides. Decide nothing yourself: never
-give an outcome or cancel a run the user has not named, and use the user's own words for the summary.
-
-Use the daemon the user selected. For this repository's devloop installation, run the examples from the checkout
-with `devloop/lm` in place of `loop-manager` to select its binary and socket. If the selected daemon is unreachable,
-ask the user to start it or provide its socket.
-
-Read the CLI's structured replies directly in TOON. Add `--json` when passing a reply to a JSON parser.
-
-When a run you are following finishes, use [recap](../recap/SKILL.md) to brief the user.
-
-## 1. See what waits
+Use the user's selected daemon. Read CLI replies in TOON. To find the active wait and its context:
 
 ```sh
 loop-manager run list --awaiting
 loop-manager run list --awaiting --project <project>
-```
-
-For each run the user cares about:
-
-```sh
 loop-manager run show <run>
 ```
 
-Show the user, per run: `id`, `project`, `formula`, `bead` (the task or the epic it works on), `step` (the `await`
-step it waits on), `round` (one more each time a check sent it back) and, from `steps`, the outcome of the step
-before the one it waits on: its `result`, `summary` and `data` (an exec step keeps its output in `data.stdout`,
-where a script may leave, say, the address of a pull request). If there are many runs, ask which ones matter.
+## Understand the question
 
-## 2. Understand the question before asking the user
-
-An `await` is a saved workflow state: the worker's model session has ended, and no model or polling process waits
-for the answer. The daemon advances when it receives `run resolve`; a restart preserves the wait. A closed issue
-gate is different: opening a gate permits work to start or resume, but does not answer an `await` step.
-
-`run show` gives the step results and the bead id, not the bead's description or comments. A `question_id` and a
-short summary may only identify the question. Follow its references to recover the full context before presenting
-it to the user. Discover the project's directory rather than assuming the run's `workdir` holds its tracker:
+Identify the current step, the preceding outcome and its summary, data or artifact references. Read the
+formula's instructions to learn what the external outcome means. An approval, a choice of input and a request
+for changes can all use an await step. If there is a bead, locate its tracker via the project's directory:
 
 ```sh
 loop-manager project list --project <project>
-```
-
-For a project using br, its tracker is `<dir>/.beads`, where `dir` is the project entry's field. Read the task and
-its comments there, with the bead id from the run:
-
-```sh
 BEADS_DIR='<project dir>/.beads' br show <bead> --format toon
 ```
 
-Read the matching question, subsequent answers or corrections, recent coder and review reports, and any parent
-task needed to understand the goal. Use referenced files, diffs and test artifacts in the run's `workdir` to resolve
-ambiguity. A missing artifact is missing evidence, not permission to guess. Attaching to or resuming the worker's
-session is unnecessary; reading its transcript is a fallback when these durable sources do not explain the issue.
+Use the br command for projects with that tracker. Read the task, relevant comments and later corrections.
+Follow referenced artifacts from the run's workdir when needed. Explain what is blocked, the available choices
+and their consequences. Keep each decision tied to its run and step.
 
-Explain the task, the exact decision needed, why it blocks progress, the available options and their consequences.
-Separate the worker's statements from your own deductions and recommendations. If the question is poorly phrased,
-reconstruct it from the evidence rather than passing its shorthand on to the user. Keep related questions together
-when useful, retaining each run, step and question id so an answer reaches the right wait.
+## Submit the user's choice
 
-For the `devloop` pack, read [its question and handoff procedure](references/devloop.md): the `QUESTION` / `DECISION`
-comment convention, comment queries and answer routing are pack-specific, not requirements on other formulas.
+Check that the run still waits on the same step. Act on the user's chosen outcome and use their words in the
+summary. Check the formula's routing with `loop-manager config explain --project <project> --formula <formula>`.
+A pass advances the formula. A fail on a step with `back_to` returns the user's remarks to the target step and
+uses a round. A fail without that route ends the run. Cancellation ends it as cancelled.
 
-## 3. Pass on the decision
+```sh
+loop-manager run resolve <run> <step> pass --summary '<answer>'
+loop-manager run resolve <run> <step> fail --summary '<remarks>'
+loop-manager run cancel <run> --reason '<reason>'
+```
 
-Offer these, for the user to pick one per run:
+Confirm the resulting state. If someone else already resolved the wait, report the current outcome. When a run
+you follow finishes, use [recap](../recap/SKILL.md). For an expired wait, use [recover](../recover/SKILL.md#an-expired-external-wait).
 
-1. **Answer or accept**: the run goes on to its next step, or passes when the step is its last. Read the preceding
-   outcome and any question or report it references first. A wait may ask for a decision needed to continue work;
-   then the summary is the user's answer, not a statement that the whole task is complete. Explain what the next
-   step does before resolving it.
+## Observe waits when requested
 
-   ```sh
-   loop-manager run resolve <run> <step> pass --summary '<what the user said>'
-   ```
-
-2. **Send it back** with the user's remarks: a step with `back_to` returns the run to that earlier step, which gets
-   the summary as its remarks, and this spends one of the formula's rounds; a step without `back_to` fails the run.
-   Say which of the two it is before you run it: the step is a check when
-   `loop-manager config explain --project <project> --formula <formula>` says so under it
-   (`a check: on fail, back to ...`).
-
-   ```sh
-   loop-manager run resolve <run> <step> fail --summary '<the remarks of the user>'
-   ```
-
-3. **Cancel** the run: nothing more of it runs, and whatever the project starts on a cancelled run (a cleanup, say)
-   starts.
-
-   ```sh
-   loop-manager run cancel <run> --reason '<why, in the words of the user>'
-   ```
-
-`<step>` is the step the run waits on, `step` of `loop-manager run show`. A run that no longer waits on that step
-refuses the outcome and nothing changes: someone else decided first. Show the user the answer and the run's state after
-it.
-
-## Timeouts and optional observation
-
-If the run ended with `reason: await_timeout`, the deadline for an external answer expired. Say that explicitly;
-it does not mean the worker's code failed review. The run is no longer resolvable: use the `recover` skill's
-[timeout procedure](../recover/SKILL.md#an-expired-external-wait) to preserve the answer before starting more work.
-The deadline is carried by `run.awaiting`; `run show` does not currently expose it as a separate field.
-
-This skill inspects current state on request. Start no background monitor or notification process unless the user
-asks for one. The existing building blocks for a requested script are `loop-manager events --json` (one JSON event
-per line), `run.awaiting` (the run and deadline), and the current-state queries above. Process each event as it
-arrives. Resume from a journal cursor with `loop-manager events --from <seq> --json`. After a gap, reread current state.
-
-The user's script can filter projects or task labels, notify on every question, or accumulate a batch. For
-nonblocking concerns such as `devloop` decisions, br comments produce `bead.updated` with `changed: ["comments"]`;
-read the comments to distinguish a new concern from an answer. The event does not contain their text. Read labels
-from the tracker; `run.awaiting` is not a full task snapshot. Notification and answer submission are separate:
-observing an event never authorizes a resolution. Query current state before acting, since a wait may have ended.
+A waiting run survives daemon restarts. For requested notifications, `loop-manager events --json` emits
+`run.awaiting` with the run and deadline. Resume with `loop-manager events --from <seq> --json` and refresh
+the current run list after a gap. Projects may also record nonblocking concerns in task comments.
+A `bead.updated` event with a comments change signals when to reread the task. Use the project's convention
+to interpret it. Resolving a wait requires the user's decision.

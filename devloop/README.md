@@ -159,6 +159,8 @@ emit structured replies in TOON. For scripts, `devloop/lm run show <run> --json`
 
 ## Answer `needs-owner`
 
+See the [owner question procedure](owner-questions.md) for comment queries, answer routing and expired waits.
+
 The label alone does not pause a run. A discretionary `DECISION` is a notification: work goes on, and closing the
 epic does not mark the decision accepted. To acknowledge or change it, add a comment whose first line is
 `ANSWER: <id>` and whose following lines contain your answer (`br comments add <bead> -f <file>`).

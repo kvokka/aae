@@ -1,52 +1,46 @@
 ---
 name: recap
-description: Give the user a brief or detailed account of work recorded on one or more Beads issues. Use at the end of a loop-manager run you are following and when asked what was delivered, what hurt, what needs attention, or what several runs learned.
+description: Summarize outcomes, setbacks and open decisions across loop-manager runs or Beads issues.
 ---
 
-# Recap work from Beads
+# Recap completed work
 
-When a run you are following finishes, include the recap in your reply without waiting for a separate request.
-Follow the user's focus and language. If a run is waiting for an owner decision, surface the question now using
-the [awaiting procedure](../awaiting/SKILL.md).
+When a run you are following finishes, give the user a short recap. For a run waiting on a decision,
+use [awaiting](../awaiting/SKILL.md) to surface the question while the answer can still advance the run.
 
-## Read the evidence once
+## Gather the evidence
 
-For run IDs, get the bead and project from `loop-manager run show <run>` on the selected daemon.
-Find the project directory with `loop-manager project list --project <project>`. In this repository
-use `devloop/lm` for those commands. For bead IDs and a known tracker, go straight to br.
+For run IDs, use `loop-manager run show <run>` on the user's daemon. Read the project, inputs, outcome,
+step results and artifact references. If the run has a bead, locate its project directory with
+`loop-manager project list --project <project>`. For bead IDs in a known tracker, start there directly.
+For runs without a bead, use the step outcomes and referenced artifacts.
 
-Group requested IDs by tracker. Read each distinct bead once, including its description, status and full comments.
-This command accepts one or several IDs and returns TOON:
+For a br tracker, group the requested beads by project. Read each description, status and full thread once:
 
 ```sh
 BEADS_DIR='<project dir>/.beads' br show <bead> <another-bead> --format toon
 ```
 
-Where the host supports delegated model selection, give this read-only extraction to an inexpensive available
-model. Pass the tracker, IDs, requested focus and depth. Have it read br directly and return compact TOON
-findings with bead and comment IDs so the caller need not ingest the same thread again. Batch beads that fit
-in context together. Otherwise apply the same procedure in the current session. For a long thread, select
-comments in smaller groups and convert any JSON pipeline back to TOON before returning it to the agent.
-See the [devloop comment queries](../awaiting/references/devloop.md#context-and-outstanding-concerns).
+Where delegated model selection is available, give the read-only extraction to an inexpensive model.
+Pass the tracker, IDs and user's focus. Have it read the source directly and return compact TOON findings
+with source IDs. Batch related beads that fit its context. Otherwise do the extraction in the current session.
+For long threads, select the needed comments and return TOON:
 
-## Interpret the thread
+```sh
+BEADS_DIR='<project dir>/.beads' br comments "$bead" --json |
+  jq --argjson ids "$comment_ids" 'map(select(.id as $id | $ids | index($id) != null))' |
+  loop-manager format
+```
 
-- Compare the requested outcome with what the coder delivered and the reviewer verified. Trace significant
-  setbacks through later fixes or corrections. For a specific run on a reused bead, attribute work using
-  the run's comment authors and consult the rest of the thread for owner answers and later developments.
-- In devloop, match each `QUESTION` or `DECISION` with later entries of the same ID across the whole bead.
-  Show what still needs an answer and the concrete choice. Describe a discretionary decision as a choice
-  already made. A closed bead alone says nothing about owner acceptance.
-- Read addon comments alongside worker and owner comments. A `LESSONS: <run>` entry or another addon's
-  finding belongs in the answer when it explains the outcome, a material difficulty, or a pattern the user
-  asked about. New addon headings require no change to the query. Check later corrections before repeating a claim.
+Here `comment_ids` is a JSON array of numeric comment IDs.
 
-## Reply to the user
+## Brief the user
 
-Default to a few sentences or short bullets. Lead with any decision the user needs to make now, then say what
-changed and the most important difficulty or remaining limitation. Say whether a significant problem was fixed.
-If the user asked what needs their attention and the record shows nothing outstanding, say so directly.
+Compare the requested outcome with the recorded work and verification. Read comments using the project's own
+conventions. On a reused bead, attribute work to the requested run and check later answers, fixes and corrections.
+Distinguish a decision the worker already made from a question that still needs the user. Include addon findings
+or lessons when they explain a result or a recurring difficulty, whatever heading the addon uses.
 
-For several beads, identify each outcome by bead ID and combine repeated difficulties or lessons once, naming
-the affected beads. On request, expand with the relevant sequence of events, choices and reasons, review or CI
-evidence, unresolved work and comment IDs. If evidence is missing, identify the gap. Deliver the recap in chat.
+Default to a few sentences in the user's language. Lead with anything the user needs to decide, then give the
+outcome, the most important difficulty and whether it was resolved. For several beads, identify each outcome
+and report shared patterns once. On request, expand with the reasoning, evidence, remaining work and comment IDs.
