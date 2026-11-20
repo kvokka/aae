@@ -15,6 +15,7 @@ destructive_patterns:
     description: The working devloop daemon is managed by the operator.
     explanation: Run lifecycle checks through the isolated daemon fixtures.
   - name: install
+    executables: [mise, install.sh, sh, bash, dash, zsh]
     pattern: '(?:\bmise\s+(?:run\s+)?devloop-install\b|\bdevloop/scripts/install\.sh\b)'
     severity: critical
     description: Updating the installed devloop binary requires an explicit request from the owner.
