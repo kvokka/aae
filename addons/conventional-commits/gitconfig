@@ -1,0 +1,3 @@
+[hook "loop-manager-conventional"]
+	event = commit-msg
+	command = lm-conventional-commit-msg

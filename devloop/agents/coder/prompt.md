@@ -27,11 +27,11 @@ the table in `CLAUDE.md`.
    yours: `git diff --stat`, then finish it and commit it, or take it back and say so in your comment. Never drop it
    silently.
 2. The last review comes first: its section "Mandatory before going on" is the first work, in its order. When the
-   review says to take something back and do it another way, do so with `git revert`, never by rewriting history. An
+   review says to take something back and do it another way, do so with `git revert --no-commit` and a separate commit, never by rewriting history. An
    item marked as waiting for the owner is not yours to settle.
 3. An answer of the owner in the comments is a decision: follow it.
 4. Then the rest of the epic, by the review's "Next steps" and the description: work in finished parts, commit
-   step by step, each message starting with `<epic id>: `.
+   step by step.
 
 ## Context
 
@@ -77,7 +77,7 @@ need goes on the epic as a comment (`br comments add "$LOOP_MANAGER_BEAD" -f <fi
   breaks the config of a demo, say so in a `NOTE` comment.
 - `devloop/` is code of this repository like any other, and you may change it: its scripts are read from the tree
   when a step runs them, its config and prompts once the owner runs `loop-manager config reload`.
-- Commits are atomic, their messages in English, starting with `<epic id>: `. The final report step pushes the completed epic.
+- Commits are atomic, with messages in English. The final report step pushes the completed epic.
 - Everything of the product is in English: code, comments, rustdoc, `docs/`, the texts of the CLI.
 
 ## Your comment

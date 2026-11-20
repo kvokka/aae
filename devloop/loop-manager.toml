@@ -10,6 +10,9 @@ path = "../addons/context-budget"
 [[addon]]
 path = "../addons/dcg"
 
+[[addon]]
+path = "../addons/conventional-commits"
+
 # Every agent of the project. The harness's own config of the host is inherited (`inherit_host` is on by default):
 # the host's plugins reach the sessions that way.
 [settings]

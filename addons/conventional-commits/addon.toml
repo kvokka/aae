@@ -1,0 +1,12 @@
+name = "conventional-commits"
+version = "0.1.0"
+prompt = "prompt.md"
+
+[agent.env]
+GIT_CONFIG_COUNT = "1"
+GIT_CONFIG_KEY_0 = "include.path"
+GIT_CONFIG_VALUE_0 = "${LOOP_MANAGER_ADDON_DIR}/gitconfig"
+
+[[hook]]
+on = "run.preparing"
+command = ["hooks/prepare"]

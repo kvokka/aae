@@ -17,7 +17,7 @@ fi
 if [ "$pass" = false ]; then br update "$bead" -s rework -q; fi
 br sync --flush-only -q
 git add -- devloop/.beads
-git diff --cached --quiet -- devloop/.beads || git commit -q -m "devloop: the tracker of $bead" -- devloop/.beads
+git diff --cached --quiet -- devloop/.beads || git commit -q -m "chore(devloop): record tracker state [$bead]" -- devloop/.beads
 
 echo "gate: SCORE ${score:-none}/10, VERDICT ${verdict:-none}"
 if [ "$pass" = true ]; then exit 0; fi

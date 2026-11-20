@@ -78,7 +78,7 @@ br sync --flush-only -q >&2
 export GIT_TERMINAL_PROMPT=0
 git add -- devloop/.beads "$out"
 git diff --cached --quiet -- devloop/.beads "$out" || \
-  git commit -q -m "devloop: completed $bead, handoff for $run" -- devloop/.beads "$out" >&2
+  git commit -q -m "chore(devloop): archive handoff for $run [$bead]" -- devloop/.beads "$out" >&2
 git push -q >&2 || { echo "report: closed epic and handoff are local; git push failed" >&2; exit 75; }
 # Exec outcomes retain only the last 4 KiB: give callers a bounded preview and the path to the complete report.
 jq --arg report "$out/report.toon" '{run, epic, status, report: $report, artifacts, module_lines,

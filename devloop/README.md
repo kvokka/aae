@@ -19,7 +19,7 @@ devloop/
 
 ## A run
 
-- `code`: a new coder session works on the epic, commits as `<epic id>: …` and leaves a comment `CODER: done`,
+- `code`: a new coder session works on the epic, commits as `type(scope): description [<epic id>]` and leaves a comment `CODER: done`,
   `partial` or `blocked` with `BASE:` and `HEAD:`. When only the owner can unblock it, the session finishes with
   `pass` and `data.needs_owner = true`: `code_owner` waits for the answer. A session stopped at its context limit
   still goes on to the next step.
@@ -219,10 +219,12 @@ devloop/config.toml --project devloop --formula epic --rig repo` shows what each
 
 ## The addons
 
-`context-budget` and `dcg` are declared by path (`path = "../addons/<name>"`), as no release tag holds the versions
+The coder also attaches `conventional-commits`. Its Git commit-msg hook checks the subject and bead suffix before each commit in the working repository. See [the addon](../addons/conventional-commits/README.md) for requirements.
+
+All three addons are declared by path (`path = "../addons/<name>"`), as no release tag holds the versions
 this pack needs, and a declaration by git would make `config check` in `mise run ci` go to the network on a cold
 cache. Once a release tag holds them, declare each as `git = "<the repository>"`, `rev = "<the tag>"` and
-`dir = "addons/context-budget"` (or `"addons/dcg"`).
+`dir = "addons/<name>"`.
 
 ## Changing this directory
 
