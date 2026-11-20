@@ -1,6 +1,6 @@
 //! The CLI (docs/api/frontends.md): a thin client of the API, one command per API operation, TOON output by default.
-//! Without a daemon only `loop-manager daemon`, `loop-manager cache clear`, `loop-manager --version`, and `loop-manager doctor` and `loop-manager config
-//! check|explain` on a file named with `--config` work.
+//! Local commands include `format`, `daemon`, `cache clear`, `--version`, and `doctor` and `config check|explain`
+//! on a file named with `--config`.
 
 mod commands;
 mod config;
@@ -74,6 +74,8 @@ pub enum CacheCommand {
 
 #[derive(Subcommand)]
 pub enum Command {
+    /// Read one JSON value from stdin and print it as TOON (or JSON with --json).
+    Format,
     /// Run the daemon in the foreground.
     Daemon {
         /// The orchestrator config (default: `$XDG_CONFIG_HOME/loop-manager/config.toml`).
@@ -238,8 +240,8 @@ fn report(json: bool, error: Value) -> ExitCode {
 async fn execute(client: &Client, cli: Cli) -> Result<ExitCode, ClientError> {
     let json = cli.json;
     match cli.command {
-        Command::Daemon { .. } | Command::Cache(_) | Command::McpBridge { .. } => {
-            let message = "`daemon`, `cache clear` and `mcp-bridge` run without a daemon, not as its client";
+        Command::Format | Command::Daemon { .. } | Command::Cache(_) | Command::McpBridge { .. } => {
+            let message = "`format`, `daemon`, `cache clear` and `mcp-bridge` run locally";
             return Ok(fail(json, "usage", message));
         }
         Command::Doctor { .. } => return Ok(doctor(json, &client.request("GET", "/v1/doctor", None, None).await?)),

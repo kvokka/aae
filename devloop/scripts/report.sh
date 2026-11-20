@@ -10,22 +10,25 @@ case "$mode" in
   *) echo "usage: report.sh [finish | snapshot <run> <bead>]" >&2; exit 1;;
 esac
 case "$run" in *[!a-zA-Z0-9_-]*|'') echo "report: invalid run id" >&2; exit 1;; esac
-for tool in jq toon br git; do command -v "$tool" >/dev/null; done
+for tool in jq loop-manager br git; do command -v "$tool" >/dev/null; done
 tmp=$(mktemp -d)
 trap 'find "$tmp" -delete' EXIT
 out=devloop/results/$run
 artifacts=devloop/artifacts/$run
 br comments "$bead" --json >"$tmp/comments.json"
 br show "$bead" --json >"$tmp/bead.json"
-head=$(git rev-parse HEAD)
-if [ -f "$out/report.toon" ]; then
-  toon --decode "$out/report.toon" >"$tmp/previous.json"
-  head=$(jq -r .code_head "$tmp/previous.json")
-fi
 # Prefer the reviewed code revision to the later tracker commits.
-review_head=$(jq -r '[.[] | select(.text | startswith("REVIEW\n")) | .text
+head=$(jq -r '[.[] | select(.text | startswith("REVIEW\n")) | .text
   | split("\n")[] | select(startswith("HEAD: ")) | ltrimstr("HEAD: ")] | last // empty' "$tmp/comments.json")
-[ -z "$review_head" ] || head=$review_head
+if [ -z "$head" ]; then
+  if [ -f "$out/report.toon" ]; then
+    # Only this top-level string is needed for a retry. An all-numeric revision can be quoted.
+    head=$(jq -Rer 'select(startswith("code_head: ")) | ltrimstr("code_head: ")
+      | if startswith("\"") then fromjson else . end' "$out/report.toon")
+  else
+    head=$(git rev-parse HEAD)
+  fi
+fi
 : >"$tmp/tests.txt"
 source=target/devloop/runs/$run
 [ -d "$source" ] || source=$artifacts
@@ -53,9 +56,10 @@ fi
 jq -n --slurpfile comments "$tmp/comments.json" --slurpfile bead "$tmp/bead.json" \
   --arg run "$run" --arg head "$head" --arg artifacts "$report_artifacts" --arg comment_path "$comment_path" \
   --rawfile tests "$tmp/tests.txt" -f "$here/report.jq" >"$tmp/report.json"
-if [ "$mode" = snapshot ]; then toon --encode "$tmp/report.json"; exit 0; fi
-toon --encode "$tmp/report.json" >"$out/report.toon"
-toon --encode "$tmp/comments.json" >"$out/comments.toon"
+if [ "$mode" = snapshot ]; then loop-manager format <"$tmp/report.json"; exit 0; fi
+loop-manager format <"$tmp/report.json" >"$tmp/report.toon"
+loop-manager format <"$tmp/comments.json" >"$tmp/comments.toon"
+mv "$tmp/report.toon" "$tmp/comments.toon" "$out/"
 br sync --flush-only -q >&2
 export GIT_TERMINAL_PROMPT=0
 git add -- devloop/.beads "$out"
@@ -69,9 +73,9 @@ jq --arg report "$out/report.toon" '{run, epic, status, report: $report, artifac
   questions: [.questions[:2][] | {key: .key[:80], text: .text[:160]}],
   decisions: [.decisions[:2][] | {key: .key[:80], text: .text[:160]}]
 }' "$tmp/report.json" >"$tmp/preview.json"
-toon --encode "$tmp/preview.json" >"$tmp/preview.toon"
+loop-manager format <"$tmp/preview.json" >"$tmp/preview.toon"
 if [ "$(wc -c <"$tmp/preview.toon")" -gt 3500 ]; then
   jq '{run, epic, status, report, artifacts, question_count, decision_count}' "$tmp/preview.json" >"$tmp/small.json"
-  toon --encode "$tmp/small.json" >"$tmp/preview.toon"
+  loop-manager format <"$tmp/small.json" >"$tmp/preview.toon"
 fi
 cat "$tmp/preview.toon"

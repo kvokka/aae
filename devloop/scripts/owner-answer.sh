@@ -28,7 +28,7 @@ mkdir -p "$dir" || exit 75
 answer=$(mktemp "$dir/answer.XXXXXX") || exit 75
 {
   printf 'ANSWER: %s\n%s\n' "$id" "$summary"
-  if [ "$data" != null ]; then printf '%s' "$data" | toon --encode || exit 75; fi
+  if [ "$data" != null ]; then printf '%s' "$data" | loop-manager format || exit 75; fi
 } >"$answer" || exit 75
 # A process may be retried after its comment reached the tracker; do not append that answer twice.
 existing=$(br comments "$bead" --json) || exit 75

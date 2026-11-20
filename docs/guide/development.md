@@ -1,7 +1,7 @@
 # Developing loop-manager
 
 The repository pins its toolchain with [mise](https://mise.jdx.dev); `mise install` brings Rust, the cargo
-tools, br and toon (exact versions) and claude and codex (a release line: `2.1`, `0`; there is no `mise.lock`).
+tools and br (exact versions) and claude and codex (a release line: `2.1`, `0`; there is no `mise.lock`).
 Every check below is a mise task (`mise.toml`).
 
 mise is a convenience, not a requirement: install the same tools any way you like.
@@ -16,8 +16,6 @@ mise is a convenience, not a requirement: install the same tools any way you lik
   demos' `run.sh`, which `mise run acceptance` runs; jq and rumdl 0.3.4 also for the model-free scenario of demo 2's
   format step. Demo 3 also needs gh 2.103.2, logged in, from its own `mise.toml` (`mise install` in
   `demos/3-review-gate`).
-- toon 0.2.5 (`github:Dicklesworthstone/toon_rust`) encodes the JSON assembled by devloop's report and owner-answer
-  scripts. The loop-manager CLI emits its own structured replies in TOON.
 
 Each task is a list of plain commands in `[tasks.<name>]` of `mise.toml`; run them by hand in that order:
 

@@ -10,7 +10,6 @@ claude = "2.1"
 codex = "0"
 "github:Dicklesworthstone/beads_rust" = "0.7.6"
 "github:Dicklesworthstone/destructive_command_guard" = "0.16.0"
-"github:Dicklesworthstone/toon_rust" = "0.2.5"
 jq = "1.8.2"
 rumdl = "0.3.4"
 
@@ -38,8 +37,8 @@ run = [
   "! git grep -n 'CARGO_BIN_EXE_loop-manager' -- crates ':!crates/loop-manager/tests/common'",
   # The pack that develops loop-manager with loop-manager (devloop/README.md): its scripts on sample files, and its
   # config loads.
-  "devloop/scripts/selftest.sh",
   "cargo run -q --locked -p loop-manager -- config check --config devloop/config.toml",
+  '''PATH="$(cargo metadata --locked --no-deps --format-version 1 | jq -r .target_directory)/debug:$PATH" devloop/scripts/selftest.sh''',
 ]
 
 [tasks.build-all]

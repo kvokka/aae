@@ -69,7 +69,7 @@ resolves that concern. The following lines explain it in Russian. An ordinary fi
 - Use a binary built from this checkout, with idempotent tracker closure, for both the daemon and the commands its
   scripts call. `cargo build --locked -p loop-manager`, then `export PATH="$PWD/target/debug:$PATH"` from the
   repository root makes that binary available to the daemon and its children.
-- `loop-manager`, `claude`, `br`, `dcg`, `jq`, `toon` 0.2.5, `git`, `mise` and `cargo-nextest` are on the shell's `PATH` when it
+- `loop-manager`, `claude`, `br`, `dcg`, `jq`, `git`, `mise` and `cargo-nextest` are on the shell's `PATH` when it
   starts the daemon, and `loop-manager doctor --config devloop/config.toml` is content.
 - That shell is one where mise has activated this repository: the sessions take `RUSTUP_TOOLCHAIN`, `RUSTUP_HOME`
   and `CARGO_HOME` from it, and without them every session fails with `config_error` naming the variable.

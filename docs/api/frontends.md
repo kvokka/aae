@@ -97,7 +97,9 @@ Code: `crates/loop-manager-front/src/cli/`. The CLI is a thin client of the HTTP
 - `loop-manager finish` reads the attempt token from the session environment and prints the acknowledgement
   (for example `accepted`), or the object with the `answer` field under `--json`. It retries for 60 s under one
   idempotency key and exits 75 when the daemon stays unreachable.
-- Without a daemon only `loop-manager daemon`, `loop-manager cache clear`, `loop-manager --version`, and
+- `loop-manager format` reads one JSON value from stdin and writes TOON to stdout. For example,
+  `loop-manager format < report.json` formats a report assembled by a script. Invalid input exits 1.
+- Without a daemon only `loop-manager format`, `loop-manager daemon`, `loop-manager cache clear`, `loop-manager --version`, and
   `loop-manager doctor` and `loop-manager config check|explain` with `--config <file>` work; `loop-manager cache clear`
   removes the packs and addons downloaded from git, and the next load of the config downloads them again; any other
   command says that no daemon listens on the socket and how to start one, and for `doctor` and `config check|explain`
