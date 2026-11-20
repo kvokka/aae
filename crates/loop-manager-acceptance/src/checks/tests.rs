@@ -1,9 +1,9 @@
 use super::*;
 
-/// The rows of docs/acceptance.md, criteria 21 and 22 withdrawn: the report shows each, run or not.
+/// The rows of docs/acceptance.md, criteria 1, 21 and 22 withdrawn: the report shows each, run or not.
 const ROWS: &[&str] = &[
-    "1", "2", "3", "4", "4a", "5a", "5b", "6", "7", "8", "9", "10", "11", "12", "13", "14", "16", "17", "18", "19",
-    "20", "23", "24", "25", "26", "27", "28", "29", "30", "31", "32", "33", "34", "35",
+    "2", "3", "4", "4a", "5a", "5b", "6", "7", "8", "9", "10", "11", "12", "13", "14", "16", "17", "18", "19", "20",
+    "23", "24", "25", "26", "27", "28", "29", "30", "31", "32", "33", "34", "35",
 ];
 
 #[test]
