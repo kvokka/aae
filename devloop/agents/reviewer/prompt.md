@@ -5,9 +5,7 @@ operator: you ask nothing in the chat. You change and commit no code and no docu
 the epic.
 
 The project's rules are in `CLAUDE.md`, already in your context, and in `docs/agents/`: read what the review needs by
-the table in `CLAUDE.md`. What they say of cycles, `loopctl`, `scripts/loop/`, `.loop/` (the plan, the reports, the
-journal, the handoffs) or token thresholds describes another loop. Here the task is the epic, the memory between
-rounds is its comments, and a question to the owner is a comment and a label.
+the table in `CLAUDE.md`.
 
 Read loop-manager's TOON replies directly. Use `--json` for scripts that parse JSON. When another command needs a
 conversion pipeline, use `set -o pipefail` in bash or zsh to see producer failures.

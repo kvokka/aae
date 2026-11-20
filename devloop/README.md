@@ -64,27 +64,31 @@ and `needs-owner` marks an epic with an owner concern. A separate comment starti
 blocking decision; `DECISION: <id>` records a debatable choice the agent made while continuing. `ANSWER: <id>`
 resolves that concern. The following lines explain it in Russian. An ordinary finding is a `NOTE: …` comment.
 
-## Before the first start
+## Install and start devloop
 
-- Use a binary built from this checkout, with idempotent tracker closure, for both the daemon and the commands its
-  scripts call. `cargo build --locked -p loop-manager`, then `export PATH="$PWD/target/debug:$PATH"` from the
-  repository root makes that binary available to the daemon and its children.
-- `loop-manager`, `claude`, `br`, `dcg`, `jq`, `git`, `mise` and `cargo-nextest` are on the shell's `PATH` when it
-  starts the daemon, and `loop-manager doctor --config devloop/config.toml` is content.
-- That shell is one where mise has activated this repository: the sessions take `RUSTUP_TOOLCHAIN`, `RUSTUP_HOME`
-  and `CARGO_HOME` from it, and without them every session fails with `config_error` naming the variable.
-- The branch is `main`, and `git push --dry-run` works from that shell without a question: see "The push".
-- The loop this pack replaces is not running: the two cannot work in one checkout at once (see "Moving over").
-
-## Start it
+Run these commands from the repository root. After a fresh clone, initialize the tracker once with
+`(cd devloop && br init --prefix dev)`. Use a checkout on `main` where `git push --dry-run` works without a prompt.
+The coder and reviewer share that checkout.
 
 ```sh
-loop-manager daemon --config devloop/config.toml
+mise run devloop-install
+mise exec -- devloop/lm doctor --config devloop/config.toml
+mise exec -- devloop/lm daemon --config devloop/config.toml
 ```
 
-The daemon keeps its state in the XDG state directory and listens on its default socket. To keep it apart from
-another daemon of yours, give it its own `XDG_STATE_HOME` and `LOOP_MANAGER_SOCKET`, as `demos/*/run.sh` do, and
-export the same `LOOP_MANAGER_SOCKET` in the shell you run the commands below from.
+The install task copies the existing `debug/loop-manager` from Cargo's target directory to
+`~/.local/opt/loop-manager-dev/bin/loop-manager`. If the artifact is missing or you want a newer build,
+run `cargo build --locked -p loop-manager` first. Only the final command starts a daemon, in the foreground.
+Starting it under mise supplies the project's tools and the `RUSTUP_TOOLCHAIN`, `RUSTUP_HOME` and `CARGO_HOME`
+required by its sessions.
+
+Use `devloop/lm` from the repository root for client commands as well. It selects the installed binary and puts
+its directory first on the daemon's `PATH` for child commands. The dev database and socket are under
+`~/.local/state/loop-manager-dev/loop-manager/`, separate from the ordinary installation.
+
+To pick up a new artifact, run `mise run devloop-install` between epics and then `devloop/lm restart` if the
+daemon is running. Installation replaces the file atomically. The running process picks it up on restart,
+and subsequent CLI invocations use it immediately.
 
 ## File an epic
 
@@ -99,16 +103,16 @@ Write the description as a plan is written: the documents to read, the result, a
 epic points to a PRD committed in the repository. An epic that waits for another is filed with a dependency
 (`br dep add <epic> <what it waits for>`) and becomes ready when that one is closed.
 
-By hand, without the label: `loop-manager run start devloop repo epic --input epic=<bead id>`.
+By hand, without the label: `devloop/lm run start devloop repo epic --input epic=<bead id>`.
 
 ## Watch it
 
 ```sh
-loop-manager run list                 # the runs, newest first: state, step, formula
-loop-manager run show <run>           # one run: its round, the outcomes of its steps, why it failed
-loop-manager run watch <run>          # one run live, with the messages of its session
-loop-manager events                   # every event, live
-loop-manager trigger list             # `epic-ready` and whether it is on
+devloop/lm run list                 # the runs, newest first: state, step, formula
+devloop/lm run show <run>           # one run: its round, the outcomes of its steps, why it failed
+devloop/lm run watch <run>          # one run live, with the messages of its session
+devloop/lm events                   # every event, live
+devloop/lm trigger list             # `epic-ready` and whether it is on
 cd devloop
 br show <id>                          # the epic, its status and labels
 br comments <id>                      # every summary, review, question and note, oldest first
@@ -117,7 +121,7 @@ br list -l needs-owner                # the epics with a question to you
 ```
 
 Each test invocation keeps its own log: the step's `LOG:` line gives the path. The loop-manager commands above
-emit structured replies in TOON. For scripts, `loop-manager run show <run> --json` returns the run as JSON.
+emit structured replies in TOON. For scripts, `devloop/lm run show <run> --json` returns the run as JSON.
 
 ## Answer `needs-owner`
 
@@ -129,9 +133,9 @@ A blocking `QUESTION` ends the model session and enters `code_owner` or `review_
 seven-day timeout. Inspect it and answer through the existing external-decision API:
 
 ```sh
-loop-manager run list --awaiting
-loop-manager run show <run>
-loop-manager run resolve <run> code_owner pass --summary '<your answer>'
+devloop/lm run list --awaiting
+devloop/lm run show <run>
+devloop/lm run resolve <run> code_owner pass --summary '<your answer>'
 # For a question from the reviewer, use review_owner instead of code_owner.
 ```
 
@@ -146,8 +150,8 @@ await step; use `run resolve` for that wait.
 ## The result for a caller
 
 ```sh
-loop-manager run wait <run>
-loop-manager run show <run>
+devloop/lm run wait <run>
+devloop/lm run show <run>
 ```
 
 The last step's `data.stdout` is a bounded TOON handoff: the epic, status, summary and review previews, outstanding
@@ -163,7 +167,8 @@ Full test logs and run-scoped notes are copied to `devloop/artifacts/<run>/`. Th
 To inspect an epic before it finishes, including one waiting on you or whose run failed, from the repository root:
 
 ```sh
-BEADS_DIR="$PWD/devloop/.beads" sh devloop/scripts/report.sh snapshot <run> <bead>
+PATH="$HOME/.local/opt/loop-manager-dev/bin:$PATH" \
+  BEADS_DIR="$PWD/devloop/.beads" sh devloop/scripts/report.sh snapshot <run> <bead>
 ```
 
 This prints the full current handoff as TOON without closing the epic, committing or pushing.
@@ -177,9 +182,9 @@ gate `bead:devloop/<id>`: nothing more starts on that epic until you open it. Re
 change the epic, then:
 
 ```sh
-loop-manager gate list
-loop-manager gate open bead:devloop/<id>
-loop-manager run list --state queued   # with `auto`, a run of the epic may wait here for the gate
+devloop/lm gate list
+devloop/lm gate open bead:devloop/<id>
+devloop/lm run list --state queued   # with `auto`, a run of the epic may wait here for the gate
 ```
 
 If no run of the epic waits, start one with `run start` (see "File an epic").
@@ -206,7 +211,7 @@ variables above, `BR_OUTPUT_FORMAT = "toon"` (br answers in TOON; `--json` still
 and a prompt cache of 5 minutes instead of the hour a subscription gets by default (`native.claude.promptCacheTtl`
 and `subagentPromptCacheTtl`): every round is a new session and the long test run is a step outside any session. The
 pack runs on claude only. Both roles attach `context-budget` and `dcg`, which refuses a destructive shell command
-before it runs; what `dcg` needs on the host is in `addons/dcg/README.md`. `loop-manager config explain --config
+before it runs; what `dcg` needs on the host is in `addons/dcg/README.md`. `devloop/lm config explain --config
 devloop/config.toml --project devloop --formula epic --rig repo` shows what each step gets and from which layer.
 
 ## The addons
@@ -220,24 +225,5 @@ cache. Once a release tag holds them, declare each as `git = "<the repository>"`
 
 Anyone may change it, the agents of an epic included. The daemon runs `scripts/` from the working tree at the moment
 a step needs them, so an edit of `gate.sh` or `tests.sh` holds from the next step on. The config, the formula and
-the prompts are held in memory: an edit of them holds only after `loop-manager config reload`, and a running run
+the prompts are held in memory: an edit of them holds only after `devloop/lm config reload`, and a running run
 keeps the ones it started with. `mise run ci` runs `scripts/selftest.sh` and `config check` on this directory.
-
-## Moving over
-
-The loop this pack replaces lives in `.claude/`, `scripts/loop/` and `.loop/`. The two do not work side by side:
-they share one checkout and one branch. While `.claude/settings.json` has its hooks, they run in the sessions of
-this pack too: a few shell commands are refused, and a subagent gets a second note on its context that names the
-old limits and is stopped at 420000 tokens with a dump in `.loop/handoffs/`. To move over, between two cycles of the
-old loop:
-
-1. Remove `.claude/agents/` and `.claude/hooks/`, and the `hooks` table from `.claude/settings.json` (its `env` and
-   `enabledPlugins` stay: the sessions of this pack inherit them).
-2. Remove `scripts/loop/`.
-3. In `CLAUDE.md` and `docs/agents/loop.md`, replace what describes cycles (`loopctl`, `scripts/loop/checks`,
-   `.loop/cycles/`, `.loop/state.json`, `.loop/handoffs/`, the 300k and 420k thresholds, "the harness of the loop")
-   with a pointer to this file; the roles of this pack tell their agents to skip those parts until then.
-4. File what is left of `.loop/PLAN.md` as epics.
-
-After a fresh clone br has no database yet: `cd devloop && br init --prefix dev` makes it, and br fills it from
-`.beads/issues.jsonl`.

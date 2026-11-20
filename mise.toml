@@ -13,6 +13,11 @@ codex = "0"
 jq = "1.8.2"
 rumdl = "0.3.4"
 
+[tasks.devloop-install]
+description = "Install the existing debug binary for devloop"
+dir = "{{config_root}}"
+run = "devloop/scripts/install.sh"
+
 [tasks.test]
 description = "Unit and integration tests; the local loop. The chaos stand is an acceptance row (criterion 35)"
 run = "cargo nextest run --locked -E 'not binary(chaos)'"

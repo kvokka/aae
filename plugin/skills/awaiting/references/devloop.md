@@ -24,7 +24,8 @@ question; check referenced code or artifacts when its wording alone is insuffici
 From the repository rig's `workdir`, the pack can extract a current handoff without a model:
 
 ```sh
-BEADS_DIR='<project dir>/.beads' sh devloop/scripts/report.sh snapshot <run> <bead>
+PATH="$HOME/.local/opt/loop-manager-dev/bin:$PATH" \
+  BEADS_DIR='<project dir>/.beads' sh devloop/scripts/report.sh snapshot <run> <bead>
 ```
 
 This prints TOON without closing, committing or pushing. It includes the latest coder and review reports, test
@@ -55,7 +56,8 @@ answer to the coder. Cancel only when the user wants to abandon the run.
 A tracker comment by itself does not resolve an active wait, and opening an issue gate does not resolve one either.
 For a discretionary decision with no active wait, record the owner's response as a comment instead: prepare a file
 whose first line is `ANSWER: <id>` and whose following lines contain their answer, then use
-`BEADS_DIR='<project dir>/.beads' br comments add <bead> -f <answer file>`. Remove `needs-owner` only if all concerns
+`PATH="$HOME/.local/opt/loop-manager-dev/bin:$PATH" \
+  BEADS_DIR='<project dir>/.beads' br comments add <bead> -f <answer file>`. Remove `needs-owner` only if all concerns
 have answers. An answer on an already completed epic does not start new implementation work automatically.
 
 ## After an owner wait times out
