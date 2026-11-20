@@ -24,6 +24,9 @@
   charges for headless use in a way the owner will not accept, or the vendors' own tools cover most of the formulas
   in real use.
 
+Generated files owned by another tool can be excluded from prek by their exact paths. Validate them with the
+tool that writes them. Keep checks enabled for hand-written configuration and source files.
+
 ## Measurements
 
 Any measurement (time, memory, size, count, share), wherever it appears (docs, a report, a comment on a threshold in

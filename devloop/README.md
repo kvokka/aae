@@ -73,6 +73,12 @@ loads the [devloop pack](dcg.yaml) for these sessions through the project's `DCG
 to both Claude and Codex. The pack blocks daemon drain, restart, config reload, dev binary installation and
 commands to stop, restart or disable the `loop-manager-dev` service.
 
+The tracker writes `.beads/issues.jsonl` as its Git export. Prek excludes this generated file from its checks.
+During a commit, prek can still temporarily replace it with the staged version. Devloop disables automatic
+JSONL import so the watcher reads the live database throughout. If a pull brings a new tracker export,
+run `br sync --status` in `devloop/` and import it with `br sync --import-only`, or use `br sync --merge`
+when the database also has local changes.
+
 ## Install and start devloop
 
 For an existing installation, check `devloop/lm status` and locate the service registration before starting or

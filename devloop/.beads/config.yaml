@@ -2,3 +2,6 @@
 # issue_prefix: dev
 # default_priority: 2
 # default_type: task
+
+# A staged-file check may temporarily restore an older issues.jsonl. Read the live database.
+sync.auto_import: false
