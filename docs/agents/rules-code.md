@@ -16,7 +16,9 @@
 - `tokio::select!` in the core (`loop-manager-contract`, `loop-manager-core`) is written only with `biased;` and a
   comment on why the branches stand in that order (`scripts/select-biased.sh`): a random choice between ready branches
   breaks the replay of a seed.
-- Follow Clippy's default thresholds for the workspace lints in `Cargo.toml`. CI checks every crate and target.
+- Follow Clippy's default thresholds for the workspace lints in `Cargo.toml`. Before handoff, `mise run ci:clippy`
+  must pass for the whole workspace with warnings denied. Fix every diagnostic, including any already present when the
+  work began.
 - Keep unit tests in a separate `tests.rs` or `tests/` module.
 - Ask the owner when harness updates keep breaking the contract tests and eat more work than the product, a vendor
   charges for headless use in a way the owner will not accept, or the vendors' own tools cover most of the formulas

@@ -135,12 +135,18 @@ fn the_config_is_checked_and_explained_without_a_daemon() {
     let beads = format!("env.BEADS_DIR = \"{}\"", files.join("shop/.beads").display());
     assert!(text.contains(&beads), "{text}");
     assert!(text.contains("env.BR_OUTPUT_FORMAT = \"toon\""), "{text}");
-    // A reader that went away (`loop-manager config explain | head -1`): a quiet SIGPIPE exit, not a panic.
+}
+
+#[test]
+fn config_explain_exits_quietly_when_the_reader_closes_the_pipe() {
+    let dir = tempfile::tempdir().unwrap();
+    let config = write_project(dir.path()).join("config.toml");
     let (reader, writer) = std::io::pipe().unwrap();
     drop(reader);
     let out = common::loop_manager()
         .args(["config", "explain", "--project", "shop", "--agent", "dev"])
-        .args(["--config", &config])
+        .arg("--config")
+        .arg(config)
         .stdout(writer)
         .output()
         .unwrap();
