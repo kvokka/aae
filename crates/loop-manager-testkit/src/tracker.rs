@@ -52,6 +52,25 @@ impl MemoryTracker {
         }
     }
 
+    /// A human adds `label` to `id`, as `br label add` does.
+    pub fn label(&self, id: &str, label: &str) {
+        self.edit(id, &["labels"], |b| b.labels.push(label.to_owned()));
+    }
+
+    /// A human retitles `id`, as `br update --title` does.
+    pub fn retitle(&self, id: &str, title: &str) {
+        self.edit(id, &["fields"], |b| title.clone_into(&mut b.title));
+    }
+
+    /// A write of a human to `id` that changes `changed`.
+    fn edit(&self, id: &str, changed: &[&str], f: impl FnOnce(&mut Bead)) {
+        let mut state = self.lock();
+        if let Some(b) = state.beads.iter_mut().find(|b| b.id == id) {
+            f(b);
+            state.record(id, "updated", "human", changed);
+        }
+    }
+
     /// Deletes `id`, as a human does with `br delete`; its children keep it as their parent.
     pub fn remove(&self, id: &str) {
         self.lock().beads.retain(|b| b.id != id);

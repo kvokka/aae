@@ -3,7 +3,7 @@ use std::{os::unix::fs::OpenOptionsExt, path::Path};
 
 /// The number of [`SCHEMA`] in `user_version`. Before the first release there are no migrations: a change of the
 /// schema takes the next number, and a database of another number is refused.
-const VERSION: i32 = 24;
+const VERSION: i32 = 25;
 
 const SCHEMA: &str = "
 CREATE TABLE outbox (
@@ -159,7 +159,8 @@ CREATE INDEX instances_fingerprint ON instances (fingerprint, state);
 
 -- Bead ownership (contracts 5, invariants 2-4): the owner run of a bead (the truth the tracker's assignee mirrors),
 -- the generation of its claims and the failed runs counted toward its gate; the last ready set of each project's
--- tracker, in the tracker's order; the last tracker write each project's tracker events were read to (`Change::seq`).
+-- tracker, in the tracker's order; the labels of each bead as last read, for `bead.labeled`; the last tracker write
+-- each project's tracker events were read to (`Change::seq`).
 CREATE TABLE beads (
     project TEXT NOT NULL,
     id TEXT NOT NULL,
@@ -174,6 +175,12 @@ CREATE TABLE ready_beads (
     id TEXT NOT NULL,
     body TEXT NOT NULL,
     PRIMARY KEY (project, pos)
+);
+CREATE TABLE bead_labels (
+    project TEXT NOT NULL,
+    id TEXT NOT NULL,
+    labels TEXT NOT NULL,
+    PRIMARY KEY (project, id)
 );
 CREATE TABLE tracker_cursors (project TEXT PRIMARY KEY, seq INTEGER NOT NULL);
 -- The triggers the operator switched off, by `<project>/<rig>/<trigger>`.

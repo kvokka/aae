@@ -150,7 +150,11 @@ run relation is below ([Beads and runs](#beads-and-runs)). Code: `crates/loop-ma
   `changed: ["comments"]`, without its text.
 - br has no events. Changes made through loop-manager raise events at once; changes made by hand are caught by a watcher
   on `.beads/` and read from br's `events` table read-only, under br's `.write.lock` held shared (a stock SQLite
-  reader otherwise resets the WAL index under a br write). Reading that table depends on br's schema.
+  reader otherwise resets the WAL index under a br write). Reading that table depends on br's schema. Its rows of
+  one bead and one actor in a row are one change while no kind repeats, so `br create` followed by `br label add`
+  read together is a creation with the label: the bead was filed with it, and `bead.labeled` does not tell it
+  ([contracts 5.1](contracts.md#51-operations)). A row says which field changed, not the value: a gained label is
+  told by the core from the bead's labels when read.
 - Every br command costs time linear in the size of the database: `close` takes 81 ms on 100 beads, 311 ms on
   5 thousand, 3.2–4.4 s on 50 thousand (br 0.7.6).
   <!-- MEASURE id=br-close-latency date=2026-11-10 ver=br-0.7.6 env=linux-arm64-orbstack,9vcpu,12gb src=reports/11 note="medians, synthetic database: 2 % epics, 60 % closed; measure again on every br update" -->

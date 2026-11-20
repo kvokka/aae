@@ -35,11 +35,21 @@ prefix = "lm"
 max_writers = 1
 
 # A ready bead with the label `auto` is an epic to work on: it gets a run of the formula. Without the label nothing
-# starts.
+# starts. `epic-ready` takes a bead that becomes ready with the label: filed with it, or freed by its blockers with
+# it; `epic-labeled` takes a bead that is ready already and gains it. A label added to a bead that is not ready waits
+# for `epic-ready`.
 [[trigger]]
 name = "epic-ready"
 on = "bead.ready"
 where = { "bead.labels" = "auto" }
+run = "epic"
+rig = "repo"
+inputs = { epic = "{{ event.bead.id }}" }
+
+[[trigger]]
+name = "epic-labeled"
+on = "bead.labeled"
+where = { label = "auto", ready = true }
 run = "epic"
 rig = "repo"
 inputs = { epic = "{{ event.bead.id }}" }

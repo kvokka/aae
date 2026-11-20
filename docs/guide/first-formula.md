@@ -193,7 +193,9 @@ tracker. A formula input of `type = "task"` takes the task: its text, the id of 
 `{ next_ready = true }` to take the next ready bead;
 the prompt then reads its fields as `{{ bead.title }}`, `{{ bead.description }}` and so on, the comments on it as
 `{{ bead.comments }}` and its parents as `{{ bead.parents }}` ([config](../design/config.md#formula-formulasfiletoml)),
-and the run holds the bead's claim until it ends. A trigger on `bead.ready` starts such runs as beads become ready.
+and the run holds the bead's claim until it ends. A trigger on `bead.ready` starts such runs as beads become ready;
+with a label in its `where`, a second trigger on `bead.labeled` also starts one when a bead that is ready already
+gains the label ([config: trigger](../design/config.md#how-runs-start-and-what-a-firing-guarantees)).
 
 A task in plain words, `--input 'task=Add a dark mode'`, creates a root bead (an epic titled by the first line) and
 the run works on it; a task that is the id of a bead files nothing and takes that bead. A planner step files the work as beads under that

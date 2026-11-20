@@ -58,3 +58,79 @@ async fn a_write_whose_signal_is_lost_is_read_by_the_periodic_resync() {
     assert_eq!(created.len(), 1, "{created:?}");
     assert_eq!(created[0]["bead"]["id"], json!(lost));
 }
+
+/// A project trigger on a label gained by a ready bead, with a label other than devloop's `auto`.
+const ON_REVIEW: &str = "[rigs.web]\npath = \"web\"\n\n[[trigger]]\nname = \"on-review\"\non = \"bead.labeled\"\n\
+     where = { label = \"review\", ready = true }\nrun = \"fix\"\nrig = \"web\"\n\
+     inputs = { bead = \"{{ event.bead.id }}\" }\n";
+
+#[tokio::test(start_paused = true)]
+async fn a_label_a_ready_bead_gains_fires_a_trigger_once_and_nothing_else_does() {
+    let mut files = FIX.to_vec();
+    files.push(("shop/loop-manager.toml", ON_REVIEW));
+    let w = world(&files);
+    let fired = || w.all("trigger.fired");
+    let labeled = || w.all("bead.labeled");
+    let ready = w.tracker.add_in("w", &["ui"], None);
+    let held = w.tracker.add_in("w", &[], None);
+    w.changed().await;
+    // A bead a human holds is not ready: the label it gains is told, and starts nothing.
+    w.tracker.assign(&held, "bob");
+    w.tracker.label(&held, "review");
+    w.changed().await;
+    assert_eq!(
+        (labeled().len(), &labeled()[0]["label"], &labeled()[0]["ready"]),
+        (1, &json!("review"), &json!(false))
+    );
+    assert!(fired().is_empty(), "{:?}", fired());
+
+    // Another label, then an edit of no label: no run.
+    w.tracker.label(&ready, "docs");
+    w.tracker.retitle(&ready, "Renamed");
+    w.changed().await;
+    let docs = labeled().pop().unwrap();
+    assert_eq!(
+        (labeled().len(), &docs["label"], &docs["ready"], &docs["actor"]),
+        (2, &json!("docs"), &json!(true), &json!("human"))
+    );
+    assert!(fired().is_empty(), "{:?}", fired());
+
+    w.driver.script(slow_turn());
+    w.tracker.label(&ready, "review");
+    w.changed().await;
+    let fired_once = fired();
+    assert_eq!(fired_once.len(), 1, "{fired_once:?}");
+    assert_eq!(fired_once[0]["inputs"]["bead"], json!(ready));
+    let review = labeled().pop().unwrap();
+    assert_eq!(
+        (&review["bead"]["labels"], &review["ready"]),
+        (&json!(["ui", "docs", "review"]), &json!(true))
+    );
+    // Reading the same tracker again, or a write on another bead, sees no new label.
+    w.changed().await;
+    w.tracker.retitle(&held, "Renamed");
+    w.changed().await;
+
+    // A bead filed with the label, or labelled before the core saw it ready, is new to the ready set: `bead.ready`
+    // tells it, and the label it gained is not of a ready bead.
+    let filed = w.tracker.add_in("w", &["review"], None);
+    let late = w.tracker.add_in("w", &[], None);
+    w.tracker.label(&late, "review");
+    w.changed().await;
+    let of = |id: &str| {
+        labeled()
+            .into_iter()
+            .filter(|e| e["bead"]["id"] == id)
+            .collect::<Vec<_>>()
+    };
+    assert!(of(&filed).is_empty(), "{:?}", of(&filed));
+    assert_eq!(of(&late)[0]["ready"], json!(false));
+    let new_ready = w.all("bead.ready");
+    assert!(
+        [&filed, &late]
+            .iter()
+            .all(|id| new_ready.iter().any(|e| e["bead"]["id"] == ***id)),
+        "{new_ready:?}"
+    );
+    assert_eq!(fired().len(), 1, "{:?}", fired());
+}

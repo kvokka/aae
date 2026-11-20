@@ -199,3 +199,124 @@ async fn a_task_takes_up_the_bead_it_names_and_a_text_files_one_root() {
         (2, &json!("Add a dark mode"), &json!("epic"))
     );
 }
+
+/// Reads the stream on to the first event `pick` takes; every event read is kept in `seen`.
+async fn until(
+    events: &mut loop_manager_front::client::Events,
+    seen: &mut Vec<Value>,
+    what: &str,
+    pick: impl Fn(&Value) -> bool,
+) -> Value {
+    loop {
+        let next = tokio::time::timeout(Duration::from_secs(20), events.next()).await;
+        let event = next.unwrap_or_else(|_| panic!("no {what}")).unwrap().unwrap();
+        let envelope: Value = serde_json::from_str(&event.data).unwrap();
+        seen.push(envelope.clone());
+        if pick(&envelope) {
+            return envelope;
+        }
+    }
+}
+
+/// The project `shop` with the rig `repo` and the triggers of devloop (`devloop/loop-manager.toml`), the rig's path
+/// moved into the test's tree.
+fn devloop_project() -> String {
+    let path = concat!(env!("CARGO_MANIFEST_DIR"), "/../../devloop/loop-manager.toml");
+    let devloop: toml::Table = toml::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
+    let mut repo = devloop["rigs"]["repo"].as_table().unwrap().clone();
+    repo.insert("path".into(), "repo".into());
+    let mut project = toml::Table::new();
+    project.insert(
+        "rigs".into(),
+        toml::Table::from_iter([("repo".to_owned(), repo.into())]).into(),
+    );
+    project.insert("trigger".into(), devloop["trigger"].clone());
+    toml::to_string(&project).unwrap()
+}
+
+#[tokio::test]
+async fn devloop_runs_an_epic_once_for_a_bead_ready_with_auto_whenever_it_got_the_label() {
+    let epic = "name = \"epic\"\n[inputs]\nepic = { type = \"task\", required = true }\n\
+                [[step]]\nkind = \"exec\"\ncommand = [\"true\"]\ntimeout = \"10s\"\n";
+    let d = Daemon::start(|dir| {
+        let project = dir.join("config/loop-manager/shop");
+        std::fs::write(project.join("formulas/epic.toml"), epic).unwrap();
+        std::fs::write(project.join("loop-manager.toml"), devloop_project()).unwrap();
+        std::fs::create_dir(project.join("repo")).unwrap();
+        assert!(
+            Command::new("git")
+                .args(["init", "-q"])
+                .current_dir(&project)
+                .status()
+                .unwrap()
+                .success()
+        );
+        br(&project, &["init", "--prefix", "lm", "-q"]);
+    })
+    .await;
+    let project = d.dir.path().join("config/loop-manager/shop");
+    let mut events = d.client.events(Some(1)).await.unwrap();
+    let mut seen = Vec::new();
+    let of = |kind: &'static str, id: &str| {
+        let id = id.to_owned();
+        move |e: &Value| e["type"] == kind && e["data"]["bead"]["id"] == id
+    };
+    let labeled = |id: &str, label: &'static str| {
+        let id = id.to_owned();
+        move |e: &Value| e["type"] == "bead.labeled" && e["data"]["bead"]["id"] == id && e["data"]["label"] == label
+    };
+    let create = |args: &[&str]| br(&project, &[&["create", "--silent"], args].concat());
+
+    // Ready without `auto`: another label and an edit start nothing; `auto` then starts the epic.
+    let plain = create(&["Plain"]);
+    until(&mut events, &mut seen, "plain ready", of("bead.ready", &plain)).await;
+    br(&project, &["label", "add", &plain, "docs"]);
+    let docs = until(&mut events, &mut seen, "docs on plain", labeled(&plain, "docs")).await;
+    assert_eq!(docs["data"]["ready"], json!(true));
+    br(&project, &["update", &plain, "--title", "Plain, renamed"]);
+    br(&project, &["label", "add", &plain, "auto"]);
+    let auto = until(&mut events, &mut seen, "auto on plain", labeled(&plain, "auto")).await;
+    assert_eq!(auto["data"]["ready"], json!(true));
+    until(&mut events, &mut seen, "plain closed", of("bead.closed", &plain)).await;
+
+    // Filed with `auto`: started once, when it is ready.
+    let filed = create(&["Filed", "--labels", "auto"]);
+    until(&mut events, &mut seen, "filed closed", of("bead.closed", &filed)).await;
+
+    // `auto` on a blocked bead waits for its blocker.
+    let blocker = create(&["Blocker"]);
+    let blocked = create(&["Blocked"]);
+    // Read once without the label: br's writes of one bead by one actor read together are one change, and a label
+    // read with the creation is one the bead was filed with.
+    until(&mut events, &mut seen, "blocked created", of("bead.created", &blocked)).await;
+    br(&project, &["dep", "add", &blocked, &blocker]);
+    br(&project, &["label", "add", &blocked, "auto"]);
+    let waiting = until(&mut events, &mut seen, "auto on blocked", labeled(&blocked, "auto")).await;
+    assert_eq!(waiting["data"]["ready"], json!(false));
+    br(&project, &["close", &blocker]);
+    until(&mut events, &mut seen, "blocked closed", of("bead.closed", &blocked)).await;
+
+    // Every write so far is read once the last one is: no run started late.
+    let last = create(&["Last"]);
+    until(&mut events, &mut seen, "last ready", of("bead.ready", &last)).await;
+    let fired = |kind: &str| -> Vec<(String, String)> {
+        let firings = seen.iter().filter(|e| e["type"] == kind);
+        let pair = |e: &Value| {
+            (
+                e["data"]["trigger"].to_string(),
+                e["data"]["inputs"]["epic"].to_string(),
+            )
+        };
+        firings.map(pair).collect()
+    };
+    let started = |trigger: &str, bead: &str| (json!(format!("shop.{trigger}")).to_string(), json!(bead).to_string());
+    assert_eq!(
+        fired("trigger.fired"),
+        [
+            started("epic-labeled", &plain),
+            started("epic-ready", &filed),
+            started("epic-ready", &blocked)
+        ]
+    );
+    assert_eq!(fired("trigger.skipped"), []);
+}

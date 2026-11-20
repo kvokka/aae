@@ -8,7 +8,7 @@ and a config, read by `loop-manager` as any other.
 ```text
 devloop/
   config.toml           the orchestrator config of the loop's own daemon
-  loop-manager.toml     the project: the addons, the settings of the sessions, the rig `repo` (`..`), the trigger
+  loop-manager.toml     the project: the addons, the settings of the sessions, the rig `repo` (`..`), the triggers
   agents/               coder and reviewer (steps of the formula); helper, subcoder, expert (subagents of the coder)
   formulas/epic.toml    code -> tests -> review -> gate -> report, with conditional owner waits
   scripts/              test, gate, owner-answer and report steps; self-tests in `mise run ci`
@@ -94,7 +94,11 @@ and subsequent CLI invocations use it immediately.
 
 ## File an epic
 
-A ready bead with the label `auto` starts a run (the trigger `epic-ready`); a bead without it starts nothing.
+A ready bead with the label `auto` starts a run; a bead without it starts nothing. It does not matter when the bead
+got the label: filed with it or freed by its blockers with it, the bead starts a run as it becomes ready (the trigger
+`epic-ready`); ready without it, it starts one as it gains it (`br label add <id> auto`, the trigger `epic-labeled`).
+A label added to a bead that is blocked or held waits until the bead is ready. Other edits, and other labels, start
+nothing, nor does a bead a run already holds.
 
 ```sh
 cd devloop
@@ -114,7 +118,7 @@ devloop/lm run list                 # the runs, newest first: state, step, formu
 devloop/lm run show <run>           # one run: its round, the outcomes of its steps, why it failed
 devloop/lm run watch <run>          # one run live, with the messages of its session
 devloop/lm events                   # every event, live
-devloop/lm trigger list             # `epic-ready` and whether it is on
+devloop/lm trigger list             # `epic-ready`, `epic-labeled` and whether they are on
 cd devloop
 br show <id>                          # the epic, its status and labels
 br comments <id>                      # every summary, review, question and note, oldest first

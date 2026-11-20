@@ -36,7 +36,8 @@ all of them share.
   the schema takes the next number, and the daemon does not start on a state of another number (the message says to
   move the state directory away).
 - The state holds runtime only: runs, attempts, session references, harness instances (the process part and the handle:
-  pid, start time, pgid), bead ownership with its generation and failure count, ready sets and tracker cursors,
+  pid, start time, pgid), bead ownership with its generation and failure count, ready sets, the labels of the beads
+  read and tracker cursors,
   deadlines (timers and schedules), gates (operator holds among them), idempotency keys, the outbox and the effects
   queue.
 - Definitions (projects, rigs, agents, formulas, triggers, addons) live in config files. A run keeps only the

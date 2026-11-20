@@ -929,8 +929,34 @@ off fires neither on its schedule nor on events, only by hand, and stays off acr
 - A run started by a trigger inherits the correlation of its event. A tracker event carries the correlation of the
   run whose attempt made the write, known from the br actor `loop-manager:<run>[:<attempt>]`; a write by a human starts
   a new chain ([contracts 5](contracts.md#5-tracker-interface)).
-- Tracker events are `bead.created`, `bead.updated`, `bead.closed` and `bead.ready`; `bead.ready` is raised when a
-  bead first enters the ready set: open, unclaimed, every blocker closed.
+- Tracker events are `bead.created`, `bead.updated`, `bead.closed`, `bead.labeled` and `bead.ready`; `bead.ready` is
+  raised when a bead first enters the ready set: open, unclaimed, every blocker closed. `bead.labeled` is raised for
+  each label a bead the core already read gains later, once per gain, with `label` and `ready`: `ready` is true when
+  the bead is ready and already was, so a bead that becomes ready with the label in the same read is
+  `bead.ready`'s alone ([contracts 5.1](contracts.md#51-operations)).
+- Work on a bead with a label, whenever it got the label, takes two triggers: one on `bead.ready` for a bead that becomes
+  ready with it (filed with it, freed by its blockers with it, released by a run) and one on `bead.labeled` for a bead
+  that is ready already and gains it. A label added to a bead that is not ready starts nothing then; the bead is
+  `bead.ready`'s when it becomes ready. A bead held by a live run refuses another run (`trigger.skipped{rejected}`),
+  and a bead's closed gate holds the run in `queued`:
+
+  ```toml
+  [[trigger]]
+  name = "review-ready"
+  on = "bead.ready"
+  where = { "bead.labels" = "review" }
+  run = "review"
+  rig = "web"
+  inputs = { bead = "{{ event.bead.id }}" }
+
+  [[trigger]]
+  name = "review-labeled"
+  on = "bead.labeled"
+  where = { label = "review", ready = true }
+  run = "review"
+  rig = "web"
+  inputs = { bead = "{{ event.bead.id }}" }
+  ```
 - The event schema and its version, the `where` and `inputs` language, hook decisions and timeouts and the outbox
   lifetime are fixed in `docs/design/contracts.md`.
 

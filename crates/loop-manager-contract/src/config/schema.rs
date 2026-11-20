@@ -152,6 +152,7 @@ fn payload(event_type: &str) -> Option<&'static [(&'static str, Shape)]> {
         "bead.created" | "bead.updated" | "bead.closed" | "bead.ready" => {
             &[("bead", BEAD), ("actor", Leaf), ("changed", Leaf)]
         }
+        "bead.labeled" => &[("bead", BEAD), ("actor", Leaf), ("label", Leaf), ("ready", Leaf)],
         "tracker.sync_failed" => &[("op", Leaf), ("bead", Leaf), ("error", Leaf), ("next_retry_at", Leaf)],
         "addon.hook_failed" => &[
             ("addon", Leaf),

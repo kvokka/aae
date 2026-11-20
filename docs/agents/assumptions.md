@@ -100,6 +100,8 @@ The behaviour itself is described in the document named under each heading; this
   chain. The depth limit is 10; `bead.ready` adds no depth.
 - While a run of the same trigger with the same input key is alive, a new firing is skipped (`trigger.skipped`).
 - `bead.ready` is raised when a bead first enters the ready set.
+- `bead.labeled` is raised for a label a bead the core already read gains; its `ready` is true only for a bead that
+  was ready before that read and still is, so one gain never fires both a `bead.ready` and a `bead.labeled` trigger.
 
 ## Tracker — [tracker](../design/tracker-br.md)
 

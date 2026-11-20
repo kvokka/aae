@@ -120,6 +120,7 @@ Observed events (addons and clients read them and cannot change what happens):
 | `gate.closed` | `{gate: Gate}` |
 | `gate.opened` | `{key, by: "timer"\|"operator"\|"policy"}` |
 | `bead.created`, `bead.updated`, `bead.closed`, `bead.ready` | `{bead: Bead, actor, changed: [field]}`; `changed` empty except `updated` |
+| `bead.labeled` | `{bead: Bead, actor, label, ready}`; a write gave a bead the core had read before the label `label`, one event per label (5.1); `ready` is true when the bead is in the ready set and already was before this read: a bead that enters the set in the same read is told by `bead.ready` with the label instead |
 | `tracker.sync_failed` | `{op, bead, error, next_retry_at}` |
 | `addon.hook_failed` | `{addon, hook_type, event_seq, error: "spawn"\|"timeout"\|"exit"\|"output", exit_code, stderr_tail}` |
 | `resync.diverged` | `{subject: "process"\|"instance"\|"run"\|"bead"\|"gate", id, expected, observed}` (no automatic effect follows, invariant 20); `instance` also tells an event `seq` that is not the last + 1 (4.3) |
@@ -669,10 +670,18 @@ calls `changes` from its stored cursor (and on start and after recovery without 
 queue `tracker:<project>` reads `changes(cursor)`, then `ready()`, then `under` for the root of each run in a `drain`
 step; the core turns the writes past the cursor into events, moves the cursor (table `tracker_cursors`, never back) and
 diffs the ready set. The first read of a project's tracker takes its whole history as the starting cursor and raises no
-`bead.created|updated|closed` for it; every bead ready at that read is new to the set and raises `bead.ready`. A write
-whose actor is `loop-manager:<run id>[:<attempt n>]` carries that run and its correlation; `bead.ready` carries those of
-the last such write in the same read (the write that freed the bead is usually that one); the rig of a bead event is the
-one whose prefix is the bead's id up to its last `-`, absent for a bead of the root. The daemon gives a project a
+`bead.created|updated|closed` for it; every bead ready at that read is new to the set and raises `bead.ready`.
+A write whose actor is `loop-manager:<run id>[:<attempt n>]` carries that run and its correlation; `bead.ready` carries
+those of the last such write in the same read (the write that freed the bead is usually that one); the rig of a bead
+event is the one whose prefix is the bead's id up to its last `-`, absent for a bead of the root.
+The core keeps the labels of every bead as last read (table `bead_labels`): from each write it reads, the history of
+the first read included, and from a ready bead it has none of, whose write the read did not list yet. Each label that a
+write past the cursor shows and the bead's last read labels lack raises `bead.labeled` after the write's own event,
+with the write's actor, run and correlation. A bead the core never read gains nothing: a bead filed with a label, or
+labelled before the core first read it, is told by its `bead.created` and `bead.ready`. The core compares labels as
+read, not writes: a label removed and added again with no read seeing it removed is no gain, one added again after
+such a read is gained again. A read queued before the last one was made repeats writes already read: the cursor drops
+them, so a repeated observation raises nothing. The daemon gives a project a
 tracker when `<project>/.beads` exists, and every session and exec step of the project gets `BEADS_DIR` (layer: project)
 and `BD_ACTOR=loop-manager:<run id>:<attempt n>`; the core sets the actor of an exec step and hands that of a session to
 the adapter in the session plan.
@@ -687,8 +696,9 @@ the adapter in the session plan.
   the fields of `Bead` and its `comments`. Comments are no part of `Bead`: a bead event carries none.
 - `Change`: `{seq, kind: "created"|"updated"|"closed", actor, changed: [field], bead: Bead}`; `seq` orders the writes
   and is the cursor of `changes(after)`, `bead` is the bead when the change is read; the core maps it to `bead.created`,
-  `bead.updated`, `bead.closed`, and derives `bead.ready` by diffing `ready()` with the last ready set it keeps in the
-  state (a bead is "ready" the first time it enters the set, `config.md` "Trigger").
+  `bead.updated`, `bead.closed`, derives `bead.labeled` by comparing its `labels` with those it kept (5.1), and derives
+  `bead.ready` by diffing `ready()` with the last ready set it keeps in the state (a bead is "ready" the first time it
+  enters the set, `config.md` "Trigger").
 - `TrackerError`: `NotFound`; `Claimed { holder }` (claim of a bead someone else holds — told by the state of the
   bead after the call, not by the exit code text, [tracker-br](tracker-br.md#limits-of-br-the-adapter-is-shaped-by)); `OwnerMismatch { holder }` (conditional release or close
   found another owner, nothing changed); `Unavailable { text }` (transient: retried by the effect queue with

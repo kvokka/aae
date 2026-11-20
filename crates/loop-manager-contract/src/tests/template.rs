@@ -164,6 +164,11 @@ fn event_paths_follow_the_payload_schemas() {
     assert_eq!(event_path("bead.ready", "bead.labels.x", false), Some(false));
     assert_eq!(event_path("bead.ready", "seq", false), Some(true));
     assert_eq!(event_path("bead.ready", "seq.x", false), Some(false));
+    assert_eq!(event_path("bead.labeled", "label", false), Some(true));
+    assert_eq!(event_path("bead.labeled", "ready", false), Some(true));
+    assert_eq!(event_path("bead.labeled", "bead.id", false), Some(true));
+    assert_eq!(event_path("bead.labeled", "changed", false), Some(false));
+    assert_eq!(event_path("bead.ready", "label", false), Some(false));
     assert_eq!(event_path("run.passed", "run", false), Some(true));
     assert_eq!(event_path("run.passed", "run.formula", false), Some(true));
     assert_eq!(event_path("run.passed", "outcome.data.x.y", false), Some(true));
