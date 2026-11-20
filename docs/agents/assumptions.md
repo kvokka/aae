@@ -2,7 +2,7 @@
 
 An assumption is a choice the author of the design or an implementer made where the owner said nothing. It holds
 until the owner corrects it. An agent may propose a replacement, and may replace one with a reason, but never
-silently: the change comes with a journal entry (`РЕШЕНИЕ`), an edit of this file and of the product document in the
+silently: the change comes with a recorded decision (a `DECISION` comment in devloop), an edit of this file and of the product document in the
 same change. What the owner decided is in [decisions.md](decisions.md) and is not replaced at all.
 
 The behaviour itself is described in the document named under each heading; this file only marks it as assumed.

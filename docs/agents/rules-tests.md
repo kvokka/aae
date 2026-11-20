@@ -5,7 +5,7 @@
 | When | What | Command |
 |---|---|---|
 | while you work | the tests of what you touch, clippy of the crate | `cargo nextest run -p <crate> -E 'test(<name>)'`, `cargo clippy -p <crate> --all-targets -q -- -D warnings` |
-| once, on the committed HEAD, before you hand the work over | **the gate** | `mise run ci` (in the loop: `scripts/loop/checks NN`) |
+| once, on the committed HEAD, before you hand the work over | **the gate** | `mise run ci` (the `tests` step runs it in devloop) |
 | only when the owner asks | the model-free acceptance scenarios and the chaos stand, in CI | `gh workflow run acceptance`, then `gh run watch` |
 | only when the owner asks | live models, the demos, release builds, on this machine | `mise run acceptance`, `demos/<demo>/run.sh`, `mise run acceptance-release` |
 
@@ -13,8 +13,8 @@
   `cargo deny`, `cargo machete` and the scripts of `scripts/`. A change is done when it is green on the HEAD you hand over. Do not run it after
   every edit: targeted tests are the everyday loop.
 - [Acceptance scenarios](../acceptance.md) and the demos are never a condition of "done" and are never run on your
-  own judgement, however large the change. They run when the owner's request, the plan package or a journal entry of
-  the owner names them, and only the part it names. You may say in your report that a change deserves a scenario; you
+  own judgement, however large the change. They run when the owner's request, the epic or the owner's comment
+  names them, and only the part it names. You may say in your report that a change deserves a scenario; you
   do not run it.
 - `loop-manager-acceptance` is not a default member of the workspace: plain `cargo build`, `clippy` and `nextest` skip
   it, `mise run ci` checks it with `--workspace`. Check a change to it with `--workspace` too
@@ -47,8 +47,7 @@
 ## Live models
 
 - CI has no access to a model, by design. A run on a real `claude` or `codex` happens only on the owner's request,
-  on the cheapest model (claude: haiku; codex: the cheapest available), narrowly: before it you know what is being
-  checked, after it the journal has an entry (what, how many runs, the result).
+  on the cheapest model (claude: haiku; codex: the cheapest available), for a specific check. Record the check, number of runs and result on the epic or in the report.
 - The demos run on the models the owner named: demo 1 on `haiku` and `luna`, demo 2 on `sol`, `terra`, `luna`;
   demo 3 on `terra` and `luna`.
 - The model `astra` is never run, anywhere.
@@ -59,7 +58,7 @@
 
 - `demos/` is frozen: it changes only on the owner's request. A finished demo is not reworked, re-run or re-recorded
   because the code changed.
-- If your change would stop a demo's config from loading, say so in your report and in the journal; do not edit the
+- If your change would stop a demo's config from loading, say so in your report; do not edit the
   demo.
 - When the owner does ask: a demo's config is a sample a user writes their own from, so it holds nothing extra or
   unclear; everything a run creates is in `.gitignore`; the author's result lies beside it with the suffix
