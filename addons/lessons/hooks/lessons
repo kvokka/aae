@@ -1,0 +1,40 @@
+#!/bin/sh
+# The claude and codex `Stop` hook of the lessons addon (README.md); the hook input is on stdin.
+#   lessons <data dir>
+set -eu
+data=$1
+input=$(cat)
+field() { printf '%s' "$input" | jq -r "$1 // empty"; }
+
+# Only the session's own agent, in a run on a bead; a subagent's stop is not the end of the work.
+[ -n "${LOOP_MANAGER_RUN:-}" ] && [ -n "${LOOP_MANAGER_BEAD:-}" ] || exit 0
+[ -z "$(field .agent_id)" ] || exit 0
+session=$(field .session_id)
+[ -n "$session" ] || exit 0
+me="$data/$session"
+
+if [ -f "$me.asked" ]; then
+    # The session was asked. Only the stop that ends the turn of the request publishes, and only once; any other
+    # stop of the session, as after a remark of a check, asks nothing again.
+    [ "$(field .stop_hook_active)" = true ] && [ ! -f "$me.done" ] || exit 0
+    : >"$me.done"
+    notes=$(field .last_assistant_message)
+    # An empty answer or NONE: nothing to publish.
+    word=$(printf '%s' "$notes" | tr -d '[:space:].`*_' | tr '[:lower:]' '[:upper:]')
+    case $word in "" | NONE) exit 0 ;; esac
+    cwd=$(field .cwd)
+    [ -z "$cwd" ] || cd "$cwd"
+    printf 'LESSONS: %s\n\n%s' "$LOOP_MANAGER_RUN" "$notes" >"$me.lessons.md"
+    br comments add "$LOOP_MANAGER_BEAD" --file "$me.lessons.md" >/dev/null ||
+        echo "lessons: the lessons of $session are not on $LOOP_MANAGER_BEAD" >&2
+    exit 0
+fi
+
+# The work is finished when the current attempt of the run has declared its outcome.
+view=$(loop-manager run show "$LOOP_MANAGER_RUN" --json) || {
+    echo "lessons: the run $LOOP_MANAGER_RUN is not readable; no lessons are asked" >&2
+    exit 0
+}
+[ -n "$(printf '%s' "$view" | jq -r '.outcome.result // empty')" ] || exit 0
+: >"$me.asked"
+jq -nc --rawfile r "$(dirname "$0")/../request.md" '{decision: "block", reason: $r}'

@@ -55,12 +55,17 @@ loop-manager's own addons are not crates either: each lives in `addons/<name>/` 
 changes only its declaration. A config declares an addon by `[[addon]]` with a `path`, or with `git` + `rev` + `dir`
 for a directory of a repository ([config: packs and addons from git](design/config.md#packs-and-addons-from-git)),
 and an agent attaches it with `addons = [{ name, params }]`
-([config: addon](design/config.md#addon-addonaddontoml)). There are two:
+([config: addon](design/config.md#addon-addonaddontoml)). There are four:
 
 - [`context-budget`](../addons/context-budget/README.md), a context budget for claude and codex sessions: a note to
   wrap up past a soft limit, a stop past a hard one, no compaction;
+- [`conventional-commits`](../addons/conventional-commits/README.md), a Git commit-msg check of Conventional Commits
+  subjects, with the bead's id at the end of each subject in a run on a bead;
 - [`dcg`](../addons/dcg/README.md), the host's `dcg` (destructive_command_guard) as the `PreToolUse` hook of claude
-  and codex sessions: a destructive shell command is denied.
+  and codex sessions: a destructive shell command is denied;
+- [`lessons`](../addons/lessons/README.md), a request to a claude or codex session that has declared the outcome of
+  its run on a bead: in the same conversation, the agent writes the lessons that would have saved tokens, and a
+  useful answer goes on the bead as one comment.
 
 The skills for a user's agent are a different thing: `plugin/` is a plugin of the operator's harness, Claude
 Code or Codex, with the skills by which the operator drives loop-manager, each harness in its current format. Claude

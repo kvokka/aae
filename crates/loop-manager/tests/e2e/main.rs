@@ -18,6 +18,7 @@ mod doctor_version;
 mod exec_env;
 mod git_cache;
 mod guides;
+mod lessons;
 mod mcp;
 mod replies;
 mod review_gate;

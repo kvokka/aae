@@ -10,6 +10,9 @@ which bounds the context of a claude or codex session. To write an addon, see
 
 The [conventional-commits addon](../../addons/conventional-commits/README.md) checks Git commit subjects and appends a format hint to the coding agent's prompt.
 
+The [lessons addon](../../addons/lessons/README.md) asks an agent that has finished its work on a bead, in the same
+session, for short lessons for future agents, and puts a useful answer on that bead as one comment.
+
 ## Declare it
 
 A declaration only says where the addon is. It goes in the orchestrator config or in a project's `loop-manager.toml`:

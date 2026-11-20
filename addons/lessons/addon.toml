@@ -1,0 +1,10 @@
+name = "lessons"
+version = "0.1.0"
+harnesses = ["claude", "codex"]
+
+# The turn in which the agent declared its outcome ends: the hook asks the same session for its lessons once, and
+# publishes the answer on the run's bead at the end of the next turn.
+[agent.hooks.lessons]
+event = "Stop"
+command = "'${LOOP_MANAGER_ADDON_DIR}/hooks/lessons' '${LOOP_MANAGER_ADDON_DATA}'"
+timeout = "60s"
