@@ -14,6 +14,7 @@ mod codex;
 mod context_budget;
 mod dcg;
 mod doctor;
+mod doctor_version;
 mod exec_env;
 mod git_cache;
 mod guides;
