@@ -1,0 +1,5 @@
+# The statuses a bead of this tracker may have (README.md, "The status of an epic"); br refuses any other.
+# `rework` is set by scripts/gate.sh; `open`, `in_progress` and `closed` are set by loop-manager.
+workflow:
+  strict: true
+  statuses: [open, in_progress, rework, blocked, deferred, closed]

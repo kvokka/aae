@@ -1,0 +1,47 @@
+# The project of loop-manager's own development. Its root is this directory: the agents (agents/), the formula
+# (formulas/), the scripts the formula names (scripts/) and the tracker (.beads/). The work itself is done in the rig.
+name = "devloop"
+
+# The addons of this repository, by path: no release tag holds them yet (README.md, "The addons"). The agents that
+# attach them, with their params, are agents/coder and agents/reviewer.
+[[addon]]
+path = "../addons/context-budget"
+
+[[addon]]
+path = "../addons/dcg"
+
+# Every agent of the project. The harness's own config of the host is inherited (`inherit_host` is on by default):
+# the host's plugins reach the sessions that way.
+[settings]
+# A session gets PATH, HOME and LANG of the daemon and nothing else of its environment. `cargo` is rustup's proxy:
+# without these it builds with the host's default toolchain, not the one mise.toml pins. mise sets all three; a
+# daemon started outside mise fails the session with `config_error` naming the variable.
+env.RUSTUP_TOOLCHAIN = "${RUSTUP_TOOLCHAIN}"
+env.RUSTUP_HOME = "${RUSTUP_HOME}"
+env.CARGO_HOME = "${CARGO_HOME}"
+env.BR_OUTPUT_FORMAT = "toon"                     # br answers an agent in TOON, not JSON; `--json` still gives JSON
+env.CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH = "2"    # a subagent of the coder may call one more level
+env.CLAUDE_CODE_ENTRYPOINT = "loop-manager"       # the label of the requests (docs/guide/install.md)
+env.CLAUDE_CODE_DISABLE_TERMINAL_TITLE = "1"      # no extra request that names the session
+# The prompt cache lives 5 minutes, not the hour a subscription gets by default: every round is a new session, and
+# the long test run is a step of its own, outside any session.
+native.claude.promptCacheTtl = "5m"
+native.claude.subagentPromptCacheTtl = "5m"
+
+# The repository itself. A bead an agent files on this rig has the id prefix `lm`; the tracker's own prefix is `dev`.
+[rigs.repo]
+path = ".."
+prefix = "lm"
+# One run at a time works in the checkout: the runs share one tree and one branch. The runs past it wait in `queued`
+# with `waiting_for = "writers"`.
+max_writers = 1
+
+# A ready bead with the label `auto` is an epic to work on: it gets a run of the formula. Without the label nothing
+# starts.
+[[trigger]]
+name = "epic-ready"
+on = "bead.ready"
+where = { "bead.labels" = "auto" }
+run = "epic"
+rig = "repo"
+inputs = { epic = "{{ event.bead.id }}" }

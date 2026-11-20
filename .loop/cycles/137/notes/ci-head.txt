@@ -1,0 +1,1 @@
+HEAD a45ef90e162f2236c8da9e3c81878271b6df740d exit 0 time 41s (mise run ci напрямую: scripts/loop/checks отказывает из-за незакоммиченного .claude/settings.json; nextest 702/702, devloop selftest ok)

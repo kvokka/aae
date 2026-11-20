@@ -1,0 +1,45 @@
+name = "epic"
+description = "One epic of loop-manager's own development: rounds of a coder, the full test run and a review, until the review passes"
+# A round is one pass from `code` to `gate`: a review under the bar spends one, whatever the tests say. An epic took
+# 40 rounds before. A run still sent back after the last round fails, and its epic waits for the owner
+# (`bead_failed_runs = 1` in config.toml).
+rounds = 50
+
+[inputs]
+epic = { type = "task", required = true }   # the bead of the epic
+
+# The coder of the round: a new session each round, with the epic, its last comments and what the gate said. It hands
+# over whatever it reached; a session stopped at its context limit hands over too (`cut = "pass"` in agent.toml).
+[[step]]
+name = "code"
+kind = "ai"
+agent = "coder"
+last_comments = 8
+
+# The full gate of the repository on the tree the coder left. Not a check: the script exits 0 red or green, and its
+# output is in the reviewer's prompt.
+[[step]]
+name = "tests"
+kind = "exec"
+command = ["sh", "devloop/scripts/tests.sh"]
+timeout = "60m"
+inherit_env = true   # the toolchain variables of the shell that started the daemon
+
+# The reviewer leaves the review as a comment on the epic and its score and verdict as the data of its outcome. A
+# review that could not be written (the session failed or was stopped) is written once more by a new session.
+[[step]]
+name = "review"
+kind = "ai"
+agent = "reviewer"
+max_attempts = 2
+last_comments = 8
+
+# Commits the tracker and pushes, whatever the review says; passes when the review scores 9 or more with the verdict
+# `complete`, and sends the run back to the coder otherwise. The command runs in the rig, the root of the repository.
+[[step]]
+name = "gate"
+kind = "exec"
+command = ["sh", "devloop/scripts/gate.sh"]
+timeout = "10m"
+inherit_env = true   # `git push` authenticates as the shell that started the daemon (README.md, "The push")
+back_to = "code"

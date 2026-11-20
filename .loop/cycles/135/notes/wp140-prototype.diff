@@ -1,0 +1,119 @@
+--- a/addons/context-budget/hooks/budget	2026-11-19 12:04:26.653973082 +0700
++++ b/addons/context-budget/hooks/budget	2026-11-19 12:13:02.137204160 +0700
+@@ -10,13 +10,15 @@
+ agent=$(field .agent_id)
+ # The files of this agent: the session's own, or a subagent's of it.
+ me="$data/$session${agent:+.agent-$agent}"
++main=$(field .transcript_path)
++# codex names the turn in every input but that of `SessionStart`; claude in none.
++codex=$(field .turn_id)
+ cwd=$(field .cwd)
+ [ -z "$cwd" ] || cd "$cwd"
+
+ # The transcript of the agent the hook runs for: a subagent's is its own, beside the session's.
+ transcript() {
+-    main=$(field .transcript_path)
+-    if [ -z "$agent" ]; then
++    if [ -z "$agent" ] || [ -n "$codex" ]; then
+         printf '%s' "$main"
+         return
+     fi
+@@ -36,11 +38,13 @@
+         echo 0
+         return
+     }
+-    n=$(grep -E '"usage"|"compact_boundary"' "$1" | jq -R 'fromjson? |
++    n=$(grep -E '"usage"|"compact_boundary"|"token_count"' "$1" | jq -R 'fromjson? |
+         if .type == "system" and .subtype == "compact_boundary" then 0
+         elif .type == "assistant" and .message.usage and .message.model != "<synthetic>" then
+             .message.usage | [.input_tokens, .cache_creation_input_tokens, .cache_read_input_tokens, .output_tokens]
+             | map(. // 0) | add
++        elif .type == "event_msg" and .payload.type == "token_count" then
++            .payload.info.last_token_usage.total_tokens // empty
+         else empty end' | tail -n 1)
+     echo "${n:-0}"
+ }
+@@ -73,20 +77,30 @@
+         echo
+     fi
+     echo "## The last tool calls"
+-    fenced "$(jq -R -r 'fromjson? | select(.type == "assistant" and .message.model != "<synthetic>") | .message.content[]? |
+-        select(.type == "tool_use") | "\(.name): \(.input | tojson | .[0:240])"' "$1" 2>/dev/null | tail -n 12)"
++    fenced "$(jq -R -r 'fromjson? |
++        if .type == "assistant" and .message.model != "<synthetic>" then
++            .message.content[]? | select(.type == "tool_use") | "\(.name): \(.input | tojson | .[0:240])"
++        elif .type == "response_item" and (.payload.type | . == "function_call" or . == "custom_tool_call") then
++            .payload | "\(.name): \(.arguments // (.input | tojson) | .[0:240])"
++        else empty end' "$1" 2>/dev/null | tail -n 12)"
+     echo "## The last texts of the agent"
+-    jq -R -c 'fromjson? | select(.type == "assistant" and .message.model != "<synthetic>") | .message.content[]? |
+-        select(.type == "text" and (.text | test("\\S"))) | .text[0:3000]' "$1" 2>/dev/null | tail -n 3 |
++    jq -R -c 'fromjson? |
++        if .type == "assistant" and .message.model != "<synthetic>" then .message.content[]? | select(.type == "text")
++        elif .type == "response_item" and .payload.type == "message" and .payload.role == "assistant" then
++            .payload.content[]? | select(.type == "output_text")
++        else empty end | .text | select(test("\\S")) | .[0:3000]' "$1" 2>/dev/null | tail -n 3 |
+         jq -r '"", .'
+ }
+
+ stopped="the context budget of this session is spent; it is stopped"
++# claude ends the turn on `continue: false`; codex takes no such answer of `PreToolUse` and would run the call.
+ deny() {
+-    jq -nc --arg r "$1" '{continue: false, stopReason: $r, hookSpecificOutput:
+-        {hookEventName: "PreToolUse", permissionDecision: "deny", permissionDecisionReason: $r}}'
++    jq -nc --arg r "$1" --argjson end "${2:-false}" '(if $end then {continue: false, stopReason: $r} else {} end) +
++        {hookSpecificOutput: {hookEventName: "PreToolUse", permissionDecision: "deny", permissionDecisionReason: $r}}'
+     exit 0
+ }
++ends=true
++[ -z "$codex" ] || ends=false
+
+ # Past `hard`: the dump goes on the bead, the session declares the outcome `cut`, and the agent stops.
+ cut_off() {
+@@ -110,7 +124,7 @@
+         fi
+         : >"$stop"
+     fi
+-    if [ "$event" = PreToolUse ]; then deny "$stopped"; fi
++    if [ "$event" = PreToolUse ]; then deny "$stopped" "$ends"; fi
+     jq -nc --arg r "$stopped" '{continue: false, stopReason: $r}'
+     exit 0
+ }
+@@ -132,15 +146,17 @@
+     context "Your context budget is $(k "$soft") tokens. Past it you get a note: then wrap up and return your summary."
+     ;;
+ PreCompact)
++    # codex compacts at `hard` (addon.toml) and takes no block: the answer that keeps the context ends the turn.
++    [ -z "$codex" ] || cut_off "$main"
+     jq -nc '{decision: "block", reason: "compaction is off: the context-budget addon bounds the context instead"}'
+     ;;
+ PreToolUse)
+-    { [ -f "$data/$session.stop" ] || [ -f "$me.stop" ]; } && deny "$stopped"
++    { [ -f "$data/$session.stop" ] || [ -f "$me.stop" ]; } && deny "$stopped" "$ends"
+     t=$(transcript)
+     n=$(tokens "$t")
+     [ "$n" -lt "$hard" ] || cut_off "$t"
+     case $(field .tool_name) in
+-    Agent | Task)
++    Agent | Task | *spawn_agent)
+         [ "$n" -lt "$soft" ] ||
+             deny "Your context is $(k "$n") tokens, past your budget of $(k "$soft"): call no subagents, wrap up."
+         ;;
+--- a/addons/context-budget/addon.toml	2026-11-19 11:45:19.551826557 +0700
++++ b/addons/context-budget/addon.toml	2026-11-19 12:11:10.633958953 +0700
+@@ -1,6 +1,6 @@
+ name = "context-budget"
+ version = "0.2.0"
+-harnesses = ["claude"]
++harnesses = ["claude", "codex"]
+
+ [params]
+ soft = 300000           # tokens of context past which the agent is told to wrap up
+@@ -11,6 +11,7 @@
+ [agent]
+ # claude compacts at about this window less 33k tokens; the most it takes keeps it past `hard`.
+ native.claude.autoCompactWindow = 1000000
++native.codex.model_auto_compact_token_limit = "${params.hard}"
+
+ [agent.hooks.context-budget-start]
+ event = "SessionStart"
