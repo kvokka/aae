@@ -4,6 +4,7 @@
 use crate::common;
 
 use common::{
+    World,
     beads::{FIX, slow_turn},
     world,
 };
@@ -66,9 +67,7 @@ const ON_REVIEW: &str = "[rigs.web]\npath = \"web\"\n\n[[trigger]]\nname = \"on-
 
 #[tokio::test(start_paused = true)]
 async fn a_label_a_ready_bead_gains_fires_a_trigger_once_and_nothing_else_does() {
-    let mut files = FIX.to_vec();
-    files.push(("shop/loop-manager.toml", ON_REVIEW));
-    let w = world(&files);
+    let w = on_review();
     let fired = || w.all("trigger.fired");
     let labeled = || w.all("bead.labeled");
     let ready = w.tracker.add_in("w", &["ui"], None);
@@ -133,4 +132,61 @@ async fn a_label_a_ready_bead_gains_fires_a_trigger_once_and_nothing_else_does()
         "{new_ready:?}"
     );
     assert_eq!(fired().len(), 1, "{:?}", fired());
+}
+
+/// The world of `FIX` with the project trigger `ON_REVIEW`.
+fn on_review() -> World {
+    let mut files = FIX.to_vec();
+    files.push(("shop/loop-manager.toml", ON_REVIEW));
+    world(&files)
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_bead_known_from_the_history_of_the_first_read_tells_the_label_it_gains() {
+    let w = on_review();
+    // Held by a human from the start, so never in the ready set: only the history of the first read knows its labels.
+    let held = w.tracker.add_in("w", &[], None);
+    w.tracker.assign(&held, "bob");
+    w.changed().await;
+    w.tracker.label(&held, "review");
+    w.changed().await;
+    let labeled = w.all("bead.labeled");
+    assert_eq!(labeled.len(), 1, "{labeled:?}");
+    assert_eq!(
+        (&labeled[0]["bead"]["id"], &labeled[0]["label"], &labeled[0]["ready"]),
+        (&json!(held), &json!("review"), &json!(false))
+    );
+    assert!(w.all("trigger.fired").is_empty(), "{:?}", w.all("trigger.fired"));
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_ready_bead_whose_write_a_read_missed_fires_once_on_the_label_it_gains() {
+    let w = on_review();
+    w.changed().await;
+    // The bead is filed after the read of the writes and before the read of the ready set: ready, its write unread.
+    w.tracker.lag();
+    let late = w.tracker.add_in("w", &[], None);
+    w.changed().await;
+    assert!(w.all("bead.created").is_empty(), "{:?}", w.all("bead.created"));
+    assert_eq!(w.all("bead.ready").len(), 1, "{:?}", w.all("bead.ready"));
+    // The label joins the unread write: the next read has one write, the creation, with the label.
+    w.driver.script(slow_turn());
+    w.tracker.label_with_last(&late, "review");
+    w.changed().await;
+    let created = w.all("bead.created");
+    assert_eq!(created.len(), 1, "{created:?}");
+    assert_eq!(created[0]["bead"]["labels"], json!(["review"]));
+    let labeled = w.all("bead.labeled");
+    assert_eq!(labeled.len(), 1, "{labeled:?}");
+    assert_eq!(
+        (&labeled[0]["label"], &labeled[0]["ready"]),
+        (&json!("review"), &json!(true))
+    );
+    let fired = w.all("trigger.fired");
+    assert_eq!(fired.len(), 1, "{fired:?}");
+    assert_eq!(
+        (&fired[0]["trigger"], &fired[0]["inputs"]["bead"]),
+        (&json!("shop.on-review"), &json!(late))
+    );
+    assert_eq!(w.all("bead.ready").len(), 1, "{:?}", w.all("bead.ready"));
 }

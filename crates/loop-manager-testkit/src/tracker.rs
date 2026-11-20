@@ -22,6 +22,8 @@ struct State {
     /// The comments, oldest first, by bead id.
     comments: Vec<(String, Comment)>,
     down: bool,
+    /// The last write the next read of the writes sees; set by `lag`.
+    lag: Option<i64>,
 }
 
 impl MemoryTracker {
@@ -55,6 +57,30 @@ impl MemoryTracker {
     /// A human adds `label` to `id`, as `br label add` does.
     pub fn label(&self, id: &str, label: &str) {
         self.edit(id, &["labels"], |b| b.labels.push(label.to_owned()));
+    }
+
+    /// A human adds `label` to `id` right after their last write, which is to `id`: br reads the two as one write,
+    /// with the bead as it is now (docs/design/tracker-br.md).
+    pub fn label_with_last(&self, id: &str, label: &str) {
+        let mut state = self.lock();
+        let state = &mut *state;
+        let bead = state.beads.iter_mut().find(|b| b.id == id).expect("no such bead");
+        bead.labels.push(label.to_owned());
+        let last = state.log.last_mut().expect("no write to join");
+        assert_eq!(
+            (last.bead.id.as_str(), last.actor.as_str()),
+            (id, "human"),
+            "the last write is not of the bead"
+        );
+        last.bead = bead.clone();
+        last.changed.push("labels".to_owned());
+    }
+
+    /// The next read of the writes misses those from here on, as a read does when they land after it read the writes
+    /// and before it read the ready set.
+    pub fn lag(&self) {
+        let mut state = self.lock();
+        state.lag = Some(i64::try_from(state.log.len()).unwrap_or(i64::MAX));
     }
 
     /// A human retitles `id`, as `br update --title` does.
@@ -288,13 +314,19 @@ impl Tracker for MemoryTracker {
 
     fn changes(&self, after: i64) -> BoxFuture<'_, Result<Vec<Change>, TrackerError>> {
         Box::pin(async move {
-            let state = self.lock();
+            let mut state = self.lock();
             if state.down {
                 return Err(TrackerError::Unavailable {
                     text: "down".to_owned(),
                 });
             }
-            Ok(state.log.iter().filter(|c| c.seq > after).cloned().collect())
+            let last = state.lag.take().unwrap_or(i64::MAX);
+            Ok(state
+                .log
+                .iter()
+                .filter(|c| c.seq > after && c.seq <= last)
+                .cloned()
+                .collect())
         })
     }
 
