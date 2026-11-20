@@ -66,6 +66,10 @@ and `needs-owner` marks an epic with an owner concern. A separate comment starti
 blocking decision; `DECISION: <id>` records a debatable choice the agent made while continuing. `ANSWER: <id>`
 resolves that concern. The following lines explain it in Russian. An ordinary finding is a `NOTE: …` comment.
 
+The installed daemon, socket, state and tracker serve working epics. Agents use them to report on their assigned
+work. Only an explicit owner request authorizes testing on, administering or upgrading this daemon. Coder and
+reviewer checks use isolated tests, including tests of daemon startup, shutdown and tracker writes.
+
 ## Install and start devloop
 
 Run these commands from the repository root. After a fresh clone, initialize the tracker once with

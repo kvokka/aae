@@ -1,6 +1,10 @@
 #!/bin/sh
 # Select the installed dev binary for the CLI and for commands started by its daemon.
 set -eu
+if [ -n "${LOOP_MANAGER_RUN:-}" ]; then
+  echo "This is an operator command for the working devloop. Use isolated tests inside a run." >&2
+  exit 1
+fi
 bin="$HOME/.local/opt/loop-manager-dev/bin"
 export PATH="$bin:$PATH"
 export XDG_STATE_HOME="$HOME/.local/state/loop-manager-dev"

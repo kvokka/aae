@@ -18,6 +18,10 @@ mkdir "$tmp/bin"
 printf '#!/bin/sh\necho "$*" >>"%s/br.log"\necho "$*" >>devloop/.beads/issues.jsonl\n' "$tmp" >"$tmp/bin/br"
 cat >"$tmp/bin/mise" <<'STUB'
 #!/bin/sh
+# An inherited socket wins over XDG paths. An inherited tracker wins over the working directory.
+test -z "${LOOP_MANAGER_RUN+x}${LOOP_MANAGER_SOCKET+x}${LOOP_MANAGER_ATTEMPT_TOKEN+x}${BD_ACTOR+x}" || exit 88
+test "$BEADS_DIR" != "$outer_tracker" && test "$XDG_STATE_HOME" != "$outer_state" || exit 88
+test -d "$XDG_RUNTIME_DIR" && test -d "$XDG_STATE_HOME" || exit 88
 echo "ci says $*"
 rc=${MISE_RC:-0}
 status=passed
@@ -79,7 +83,17 @@ fresh; review '{"score":9,"verdict":"complete"}'; ci_data 0 deadbeef; expect 1 g
 fresh; review '{"score":9,"verdict":"complete"}'; echo dirty >>src/a; expect 1 gate.sh "review left a dirty tree"
 fresh; review '{"score":9,"verdict":"complete"}'; git remote set-url origin "$r/gone.git"; expect 0 gate.sh "final report owns the push"
 
-fresh; MISE_RC=0 expect 0 tests.sh "green"; jq -e '.exit_code == 0 and .uncommitted == 0 and .failed == []' "$tmp/out" >/dev/null
+fresh
+outer_state=$tmp/working-state
+outer_tracker=$r/work/devloop/.beads
+export outer_state outer_tracker
+export BEADS_DIR="$outer_tracker" XDG_STATE_HOME="$outer_state" LOOP_MANAGER_SOCKET="$tmp/working.sock"
+export BD_ACTOR=working LOOP_MANAGER_ATTEMPT_TOKEN=outer-token
+for operator in "$here/../lm" "$here/install.sh"; do
+  if "$operator" --help >"$tmp/operator" 2>&1; then echo "agent ran $operator" >&2; exit 1; fi
+  grep -q 'operator command' "$tmp/operator"
+done
+MISE_RC=0 expect 0 tests.sh "green"; jq -e '.exit_code == 0 and .uncommitted == 0 and .failed == []' "$tmp/out" >/dev/null
 log=$(jq -r .log "$tmp/out")
 grep -q "ci says run ci" "$log"
 MISE_RC=0 expect 0 tests.sh "second test run"

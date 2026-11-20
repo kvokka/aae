@@ -1,5 +1,20 @@
 # Test rules
 
+## The working devloop
+
+The installed daemon, its socket, state, binary and tracker serve real runs. Only an explicit owner
+request naming the operation on that daemon authorizes an update, a restart, a drain, a signal,
+a config reload, a state change or a test there. A development epic authorizes the agent to report
+on its assigned run and bead. Keep those operations separate from tests.
+
+The devloop CI step runs through `devloop/scripts/test-env`, which removes outer run credentials and gives the
+check private XDG directories and a private tracker path. For targeted checks in a working session use, for
+example, `devloop/scripts/test-env cargo nextest run -p loop-manager -E 'test(drain)'`.
+Exercise CLI, API and tracker behavior through the isolated test fixtures described below. Add a
+fixture test if a changed user path lacks coverage. This also applies to reviewers and subagents.
+A temporary working directory or a change to XDG variables alone still leaves the parent's
+`LOOP_MANAGER_SOCKET` and `BEADS_DIR` in each fresh shell call.
+
 ## What to run, and when
 
 | When | What | Command |

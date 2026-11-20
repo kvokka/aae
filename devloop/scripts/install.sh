@@ -1,6 +1,10 @@
 #!/bin/sh
 # Promote the existing dev artifact without modifying a running executable in place.
 set -eu
+if [ -n "${LOOP_MANAGER_RUN:-}" ]; then
+  echo "This is an operator command for the working devloop. Use isolated tests inside a run." >&2
+  exit 1
+fi
 metadata=$(cargo metadata --locked --no-deps --format-version 1)
 target=$(printf '%s\n' "$metadata" | jq -er '.target_directory')
 artifact="$target/debug/loop-manager"

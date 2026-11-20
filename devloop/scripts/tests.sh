@@ -9,7 +9,7 @@ log=$dir/ci.log
 head=$(git rev-parse HEAD)
 start=$(date +%s)
 rc=0
-DEVLOOP_CI_REPORT="$dir/checks.json" mise run ci >"$log" 2>&1 || rc=$?
+DEVLOOP_CI_REPORT="$dir/checks.json" "$(dirname "$0")/test-env" mise run ci >"$log" 2>&1 || rc=$?
 duration=$(($(date +%s) - start))
 changes=$(git status --porcelain -- . ':!devloop/.beads')
 uncommitted=0

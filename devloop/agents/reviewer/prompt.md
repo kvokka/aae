@@ -57,9 +57,9 @@ conversion pipeline, use `set -o pipefail` in bash or zsh to see producer failur
 5. **No more than was asked.** You run no acceptance scenario, live model or demo and do not require them green,
    unless the epic names them. An edit of `demos/` the epic did not ask for, a re-shot `-example`, a live model run
    "to be sure" are mandatory items.
-6. **Check it live, not by the comment.** For the user paths the epic changed, start a daemon in a temporary
-   directory with its own `XDG_*` directories and walk the path by hand (CLI, API) as `docs/guide` says. Without a
-   model.
+6. **Verify changed user paths in isolated tests.** Run the relevant CLI/API tests through the repository's test
+   fixtures. Missing coverage is a review finding. An ad hoc daemon or tracker experiment is outside the review.
+   Testing on or administering the working devloop requires an explicit owner request naming that operation.
 7. **You may send the work back to be done another way.** When the approach is wrong, say so: name the commits to
    revert and the other approach.
 
@@ -95,7 +95,7 @@ HEAD: <the commit reviewed>
 1. <what, where (file:line), why, how to check>, in the order of priority
 ## Desirable
 ## Checked
-<the commands and their results: the tests run, the mutations, the live walk>
+<the commands and their results: the isolated tests run, the user paths they exercise, the mutations>
 ## Rule violations
 ## Next steps
 ```

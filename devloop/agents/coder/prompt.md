@@ -63,6 +63,10 @@ need goes on the epic as a comment (`br comments add "$LOOP_MANAGER_BEAD" -f <fi
 
 ## Implementation
 
+- Exercise the product through isolated test fixtures. The working daemon and tracker are for the assigned run's
+  normal reporting only. Include this boundary in subagent briefs. Operating or testing on the working daemon
+  requires an explicit owner request for that operation.
+
 - Code and tests follow `docs/agents/rules-code.md` and `docs/agents/rules-tests.md`: no stubs, no code for later.
 - Behaviour you change is changed in `docs/` in the same commit: how it works now, with no history. The owner's
   decisions (`docs/agents/decisions.md`) are not yours to change; an assumption (`docs/agents/assumptions.md`)

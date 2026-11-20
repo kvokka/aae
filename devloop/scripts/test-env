@@ -1,0 +1,20 @@
+#!/usr/bin/env python3
+"""Run a devloop check with private LM paths and no outer run credentials."""
+import os
+from pathlib import Path
+import subprocess
+import sys
+import tempfile
+
+with tempfile.TemporaryDirectory(prefix="devloop-test-") as work:
+    env = dict(os.environ)
+    for key in os.environ:
+        if key.startswith(("LOOP_MANAGER_", "BEADS_", "BD_")) and key != "LOOP_MANAGER_INSTANCE":
+            del env[key]
+    for kind in ("CONFIG", "STATE", "CACHE", "RUNTIME"):
+        path = Path(work, kind.lower())
+        path.mkdir(mode=0o700)
+        env[f"XDG_{kind}_HOME" if kind != "RUNTIME" else "XDG_RUNTIME_DIR"] = str(path)
+    # Pin br even when the check changes directory into a project with a real .beads.
+    env["BEADS_DIR"] = str(Path(work, ".beads"))
+    sys.exit(subprocess.run(sys.argv[1:], env=env).returncode)
