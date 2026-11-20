@@ -21,17 +21,26 @@ fn tracker() -> (tempfile::TempDir, Br) {
 
 /// Runs br by hand, as a human (`alice`) would; its trimmed stdout.
 fn br(root: &Path, args: &[&str]) -> String {
-    let out = Command::new("br")
-        .args(args)
+    br_on(root, None, args)
+}
+
+/// Runs br by hand with the given `BD_ISSUE_PREFIX`, as from a rig's shell, or with none; the prefix of the test
+/// process's own environment (a loop-manager session sets one) never reaches it.
+fn br_on(root: &Path, prefix: Option<&str>, args: &[&str]) -> String {
+    let mut br = Command::new("br");
+    br.args(args)
         .args(["--actor", "alice"])
         .env("BEADS_DIR", root.join(".beads"))
         .env("RUST_LOG", "error")
-        .output()
-        .unwrap();
+        .env_remove("BD_ISSUE_PREFIX");
+    if let Some(prefix) = prefix {
+        br.env("BD_ISSUE_PREFIX", prefix);
+    }
+    let out = br.output().unwrap();
     assert!(
         out.status.success(),
         "br {args:?}: {}",
-        String::from_utf8_lossy(&out.stdout)
+        String::from_utf8_lossy(&out.stderr)
     );
     String::from_utf8(out.stdout).unwrap().trim().to_owned()
 }
@@ -201,17 +210,7 @@ async fn the_ready_set_carries_the_epic_labels_and_description() {
 async fn a_bead_filed_with_a_rig_prefix_under_a_root_keeps_it_and_parent_loses_it() {
     let (dir, t) = tracker();
     let root = create(dir.path(), "Root", &["-t", "epic"]);
-    let on_rig = |link: &str| {
-        let out = Command::new("br")
-            .args(["create", "For the rig", "--silent", link, "--actor", "alice"])
-            .env("BEADS_DIR", dir.path().join(".beads"))
-            .env("BD_ISSUE_PREFIX", "api")
-            .env("RUST_LOG", "error")
-            .output()
-            .unwrap();
-        assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
-        String::from_utf8(out.stdout).unwrap().trim().to_owned()
-    };
+    let on_rig = |link: &str| br_on(dir.path(), Some("api"), &["create", "For the rig", "--silent", link]);
     let kept = on_rig(&format!("--deps=parent-child:{root}"));
     assert!(kept.starts_with("api-"), "{kept}");
     let ready = t.ready().await.unwrap();
@@ -359,7 +358,7 @@ async fn a_key_creates_one_epic_whose_children_run_and_which_is_released_while_t
 #[tokio::test(flavor = "multi_thread")]
 async fn a_task_naming_a_bead_gives_it_and_a_text_files_a_root_of_the_database_prefix() {
     const NAME: &str = "a_task_naming_a_bead_gives_it_and_a_text_files_a_root_of_the_database_prefix";
-    if std::env::var_os("BD_ISSUE_PREFIX").is_none() {
+    if std::env::var("BD_ISSUE_PREFIX").as_deref() != Ok("api") {
         // The variable is set for a run of this test alone: the test binary runs it again with it.
         let me = Command::new(std::env::current_exe().unwrap())
             .args(["--exact", NAME, "--quiet"])
@@ -369,7 +368,7 @@ async fn a_task_naming_a_bead_gives_it_and_a_text_files_a_root_of_the_database_p
         return;
     }
     let (dir, t) = tracker();
-    let named = create(dir.path(), "For the rig", &[]);
+    let named = br_on(dir.path(), Some("api"), &["create", "For the rig", "--silent"]);
     assert!(named.starts_with("api-"), "{named}");
     let taken = t
         .create("loop-manager:run_1", "loop-manager-k1", &named, &named)
