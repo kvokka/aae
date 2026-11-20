@@ -16,6 +16,9 @@ ask the user to start it or provide its socket.
 
 Read the CLI's structured replies directly in TOON. Add `--json` when passing a reply to a JSON parser.
 
+For a recap of the work on the bead, including a replacement run you followed to completion, use
+[recap](../recap/SKILL.md).
+
 ## 1. See what failed
 
 ```sh

@@ -1,6 +1,6 @@
 ---
 name: awaiting
-description: Explain questions and decisions waiting in loop-manager, gather their task and report context, and pass on the user's answer. Use when the user asks for a completed devloop run’s agent reports, what needs their attention, what a worker's question means, or wants to answer, accept, send back or cancel a run waiting on an await step.
+description: Explain questions and decisions waiting in loop-manager, gather their task and report context, and pass on the user's answer. Use when the user asks what needs their attention, what a worker's question means, or wants to answer, accept, send back or cancel a run waiting on an await step.
 ---
 
 # Runs that wait for a decision
@@ -15,8 +15,7 @@ ask the user to start it or provide its socket.
 
 Read the CLI's structured replies directly in TOON. Add `--json` when passing a reply to a JSON parser.
 
-For a completed devloop run, take its bead from `devloop/lm run show <run>` and follow the
-[TOON comment queries](references/devloop.md#context-and-outstanding-concerns).
+When a run you are following finishes, use [recap](../recap/SKILL.md) to brief the user.
 
 ## 1. See what waits
 

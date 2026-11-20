@@ -8,7 +8,7 @@
     {
       "name": "loop-manager",
       "source": "./plugin",
-      "description": "Skills for working with loop-manager from Claude Code or Codex: recover runs that failed for good, decide on runs that wait on an await step"
+      "description": "Skills for working with loop-manager from Claude Code or Codex: recap work from Beads, recover failed runs and answer waiting runs"
     }
   ]
 }

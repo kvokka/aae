@@ -182,7 +182,7 @@ Do not remove `needs-owner` until all questions and decisions have answers: ther
 ## Read the result
 
 Use `devloop/lm run show <run>` to find the bead and the CI step outcome. The epic holds the agent reports,
-questions and answers. The plugin documents [how to select comments in TOON](../plugin/skills/awaiting/references/devloop.md).
+questions and answers. The plugin’s [recap skill](../plugin/skills/recap/SKILL.md) reads one or more beads in TOON and briefs the user.
 Full CI logs and notes for a completed run are local to `devloop/artifacts/<run>/`.
 
 ## When a run fails
