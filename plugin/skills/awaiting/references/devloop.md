@@ -21,21 +21,31 @@ Each concern is a separate comment with an exact first line and a self-contained
 decision. Only a later matching answer resolves the concern. Read recent coder and review reports along with the
 question; check referenced code or artifacts when its wording alone is insufficient.
 
-From the repository rig's `workdir`, the pack can extract a current handoff without a model:
+Use the bead from `devloop/lm run show <run>` for completed runs as well. From the checkout root,
+set `BEADS_DIR` to the selected project's tracker. Read the epic in TOON. For a narrower selection,
+keep JSON inside the pipeline and return TOON to the caller.
 
 ```sh
-PATH="$HOME/.local/opt/loop-manager-dev/bin:$PATH" \
-  BEADS_DIR='<project dir>/.beads' sh devloop/scripts/report.sh snapshot <run> <bead>
+export BEADS_DIR='<project dir>/.beads'
+br show "$bead" --format toon
+
+# One comment by numeric id
+br comments "$bead" --json | jq --argjson id "$comment_id" 'map(select(.id == $id))' | devloop/lm format
+
+# Latest reviewer comment from this run. For the coder, use startswith("CODER:").
+br comments "$bead" --json |
+  jq --arg actor "loop-manager:$run:" 'map(select(
+    (.author | startswith($actor)) and (.text | startswith("REVIEW\n"))
+  )) | .[-1:]' | devloop/lm format
+
+# Questions, decisions and answers across the whole epic, in order
+br comments "$bead" --json |
+  jq 'map(select(.text | test("^(QUESTION|DECISION|ANSWER): ")))' | devloop/lm format
 ```
 
-This prints TOON without closing, committing or pushing. It includes the latest coder and review reports, test
-digests and unresolved questions and decisions. It does not include the full task description or all older comments;
-read those through br when needed. Full logs and notes are local and may be unavailable on another machine.
-
-A completed run points to `devloop/results/<run>/report.toon` and `comments.toon`, committed with the closed tracker.
-The last step's `data.stdout` has bounded previews and counts: read the full report before telling the user there
-are no other concerns. Disputed decisions can remain after success and will not appear in `run list --awaiting`.
-Find them through the reports or `br list -l needs-owner --format toon` on this project's tracker.
+For each concern id, read the latest matching entry. A final `QUESTION` or `DECISION` still needs attention.
+Include closed epics when looking for discretionary decisions with `br list --all -l needs-owner --format toon`.
+CI step outcomes are available through `devloop/lm run show <run>`. Full logs and notes are local to the run machine.
 
 ## Answer an active wait
 

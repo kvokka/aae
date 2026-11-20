@@ -10,9 +10,8 @@ devloop/
   config.toml           the orchestrator config of the loop's own daemon
   loop-manager.toml     the project: the addons, the settings of the sessions, the rig `repo` (`..`), the triggers
   agents/               coder and reviewer (steps of the formula); helper, subcoder, expert (subagents of the coder)
-  formulas/epic.toml    code -> tests -> review -> gate -> report, with conditional owner waits
-  scripts/              test, gate, owner-answer and report steps; self-tests in `mise run ci`
-  results/<run>/        the completed run's report and comment snapshot, in git
+  formulas/epic.toml    code -> tests -> review -> gate -> close, with conditional owner waits
+  scripts/              test, gate, owner-answer and close steps; self-tests in `mise run ci`
   artifacts/<run>/      full logs and notes, local and ignored by git
   .beads/               the tracker of the epics (br), committed with the code; policy.yaml lists its statuses
 ```
@@ -35,16 +34,13 @@ devloop/
   session; a second failure fails the run. A blocking owner question takes the equivalent `review_owner` wait.
 - `gate`: commits the round's tracker state locally. It accepts a review scored at least 9 with verdict `complete`
   and green CI on the current clean revision. Otherwise it marks the epic `rework` and returns it to the coder.
-- `report`: without a model, `scripts/report.sh` extracts the coder's summary, the review, test digests and unresolved
-  owner concerns, closes the epic and commits and pushes its closed tracker state with the report. Its TOON output
-  is the run's result for a calling agent or external tool.
+- `close`: saves local logs and notes, closes the epic, then commits and pushes the tracker.
 
 A run has 50 rounds (`rounds` in `formulas/epic.toml`). A CI return, a review under the bar or a return after an owner answer starts
 the next round. All the working
 context of an epic is in its comments: every round is a new session, which
 reads the last 8 comments in its prompt and the rest with `br comments <id>`. Long notes of subagents go to
-`target/devloop/runs/<run>/notes/`. The final step archives them with the full logs locally; the report and comment
-snapshot survive in git. The reviewer judges repeated lack of progress from the reports and directs a different
+`target/devloop/runs/<run>/notes/`. The final step archives them with the full logs locally. The epic and its comments are committed in Git. The reviewer judges repeated lack of progress from the reports and directs a different
 approach or a consultation with the expert when needed.
 
 One run at a time works in the repository (`max_writers = 1` of the rig): the others wait in `queued`. A session of
@@ -58,7 +54,7 @@ the coder or the reviewer is told to wrap up past 300000 tokens of context and s
 | `open` | filed and waiting for a run, or the last run failed | you (`br create`); loop-manager when a run fails |
 | `in_progress` | a run works on it and no review has sent it back yet | loop-manager, when a run claims it |
 | `rework` | a review sent it back; the next rounds go on | `scripts/gate.sh` |
-| `closed` | the review passed and the report step closes and publishes the epic | `scripts/report.sh`; loop-manager reconciles the close |
+| `closed` | the review passed and the close step closes and publishes the epic | `scripts/close.sh`; loop-manager reconciles the close |
 
 The agents change neither the status nor the assignee. br refuses a status not listed in `.beads/policy.yaml`;
 `blocked` and `deferred` are there for you to use by hand. Two labels matter: `auto` makes a ready epic start a run,
@@ -181,42 +177,13 @@ The following exec step records `ANSWER: <id>` with the resolution's summary and
 returns to a new coder with the answer in its remarks and comments. A restart preserves the wait. Resolving with
 `fail` ends the run; cancelling abandons it. A timeout fails the run rather than choosing an answer for you.
 
-Do not remove `needs-owner` until all questions and decisions have answers: there may be several. The snapshot
-below extracts the outstanding concerns without a model. An answer alone in a comment does not resolve an active
-await step; use `run resolve` for that wait.
+Do not remove `needs-owner` until all questions and decisions have answers: there may be several. Use `run resolve` to answer an active wait.
 
-## The result for a caller
+## Read the result
 
-```sh
-devloop/lm run wait <run>
-devloop/lm run show <run>
-```
-
-The last step's `data.stdout` is a bounded TOON handoff: the epic, status, summary and review previews, outstanding
-question and decision counts and previews, per-crate line changes when they fit, and the full report path.
-A calling agent or tool should read that report to relay all outstanding concerns, even when the run passed.
-`devloop/results/<run>/report.toon` holds this run's full summaries, review, test digests and changes to the code.
-It also lists unresolved concerns across the epic. `comments.toon` holds the complete comment snapshot. Extraction
-matches the explicit concern ids; it does not infer answers from prose, a removed label or a passing review.
-Only a later matching `ANSWER` resolves a concern.
-
-`module_lines` gives the net change in physical Rust lines for each changed crate under `crates/`, from the first
-coder's `BASE` (`code_base`) to `code_head`. Positive numbers mean growth. The `tests` column covers files in
-`tests/`, files named `tests.rs`, and the entire `loop-manager-testkit` and `loop-manager-acceptance` crates.
-Other Rust files contribute to `code`. Both columns skip `generated/` directories. An empty list means the two
-revisions have no Rust file changes in scope. A missing first-round base or unavailable commit range gives `null`.
-
-Full test logs and run-scoped notes are copied to `devloop/artifacts/<run>/`. This local archive survives a
-`cargo clean` but is ignored by git: a fresh clone has the report and comments, not the full logs and notes.
-
-To inspect an epic before it finishes, including one waiting on you or whose run failed, from the repository root:
-
-```sh
-PATH="$HOME/.local/opt/loop-manager-dev/bin:$PATH" \
-  BEADS_DIR="$PWD/devloop/.beads" sh devloop/scripts/report.sh snapshot <run> <bead>
-```
-
-This prints the full current handoff as TOON without closing the epic, committing or pushing.
+Use `devloop/lm run show <run>` to find the bead and the CI step outcome. The epic holds the agent reports,
+questions and answers. The plugin documents [how to select comments in TOON](../plugin/skills/awaiting/references/devloop.md).
+Full CI logs and notes for a completed run are local to `devloop/artifacts/<run>/`.
 
 ## When a run fails
 
@@ -237,11 +204,11 @@ If no run of the epic waits, start one with `run start` (see "File an epic").
 ## The push
 
 The CI and finalization commands inherit the daemon's environment. Each round's commits stay local until
-`report` closes the epic, flushes the tracker and commits the handoff. This final step pushes the entire epic to
+`close` closes the epic, flushes the tracker and commits its state. This final step pushes the entire epic to
 the configured upstream in one update. The push authenticates through the daemon's SSH agent or Git credentials.
 A failed push is retryable; repeating finalization reuses the local commit. If
 finalization ultimately fails, the daemon releases the epic to `open`, as for another failed run; inspect its state
-before recovery, since a local report is not proof of a successful push.
+and the upstream before recovery.
 
 ## The sessions
 

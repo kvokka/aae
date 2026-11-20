@@ -1,6 +1,6 @@
 ---
 name: awaiting
-description: Explain questions and decisions waiting in loop-manager, gather their task and report context, and pass on the user's answer. Use when the user asks what needs their attention, what a worker's question means, or wants to answer, accept, send back or cancel a run waiting on an await step.
+description: Explain questions and decisions waiting in loop-manager, gather their task and report context, and pass on the user's answer. Use when the user asks for a completed devloop run’s agent reports, what needs their attention, what a worker's question means, or wants to answer, accept, send back or cancel a run waiting on an await step.
 ---
 
 # Runs that wait for a decision
@@ -14,6 +14,9 @@ with `devloop/lm` in place of `loop-manager` to select its binary and socket. If
 ask the user to start it or provide its socket.
 
 Read the CLI's structured replies directly in TOON. Add `--json` when passing a reply to a JSON parser.
+
+For a completed devloop run, take its bead from `devloop/lm run show <run>` and follow the
+[TOON comment queries](references/devloop.md#context-and-outstanding-concerns).
 
 ## 1. See what waits
 
@@ -65,7 +68,7 @@ reconstruct it from the evidence rather than passing its shorthand on to the use
 when useful, retaining each run, step and question id so an answer reaches the right wait.
 
 For the `devloop` pack, read [its question and handoff procedure](references/devloop.md): the `QUESTION` / `DECISION`
-comment convention, snapshot command and answer routing are pack-specific, not requirements on other formulas.
+comment convention, comment queries and answer routing are pack-specific, not requirements on other formulas.
 
 ## 3. Pass on the decision
 

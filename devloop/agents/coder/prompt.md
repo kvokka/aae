@@ -81,7 +81,7 @@ need goes on the epic as a comment (`br comments add "$LOOP_MANAGER_BEAD" -f <fi
   breaks the config of a demo, say so in a `NOTE` comment.
 - `devloop/` is code of this repository like any other, and you may change it: its scripts are read from the tree
   when a step runs them, its config and prompts once the owner runs `loop-manager config reload`.
-- Commits are atomic, with messages in English. The final report step pushes the completed epic.
+- Commits are atomic, with messages in English. The close step pushes the completed epic.
 - Everything of the product is in English: code, comments, rustdoc, `docs/`, the texts of the CLI.
 
 ## Your comment

@@ -1,4 +1,4 @@
 # What the daemon writes next to the orchestrator config: the bv workspace of the project (docs/design/tracker-br.md).
 /.bv/
-# Local full logs and run materials; the portable handoff is committed under results/.
+# Local full logs and run materials.
 /artifacts/

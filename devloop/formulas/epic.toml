@@ -68,7 +68,7 @@ command = ["sh", "devloop/scripts/owner-answer.sh", "review"]
 if = { "steps.review.data.needs_owner" = true }
 back_to = "code"
 
-# Commit the tracker locally. Green CI on the current revision and an accepted review open the final report step.
+# Commit the tracker locally. Green CI on the current revision and an accepted review allow the epic to close.
 [[step]]
 name = "gate"
 kind = "exec"
@@ -77,12 +77,10 @@ timeout = "10m"
 inherit_env = true
 back_to = "code"
 
-# Package the completed epic and owner handoff without a model, after the review gate passed. Its stdout is the
-# run's result for a caller. The report, comment snapshot and test digests are committed with the final tracker
-# state; full logs and materials are kept in the ignored local artifacts directory.
+# Close and publish the tracker after the gate passes.
 [[step]]
-name = "report"
+name = "close"
 kind = "exec"
-command = ["sh", "devloop/scripts/report.sh"]
+command = ["sh", "devloop/scripts/close.sh"]
 timeout = "10m"
 inherit_env = true

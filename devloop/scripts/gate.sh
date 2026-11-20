@@ -1,5 +1,5 @@
 #!/bin/sh
-# Commit the round's tracker state locally. The report step publishes the completed epic.
+# Commit the round's tracker state locally. The close step publishes the completed epic.
 set -eu
 bead=${LOOP_MANAGER_BEAD:?}
 head=$(git rev-parse HEAD)

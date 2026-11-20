@@ -5,7 +5,7 @@
 set -eu
 here=$(cd "$(dirname "$0")" && pwd)
 sh "$here/owner-selftest.sh"
-sh "$here/report-selftest.sh"
+sh "$here/close-selftest.sh"
 tmp=$(mktemp -d)
 trap 'find "$tmp" -delete' EXIT
 unset BEADS_DIR BD_ACTOR LOOP_MANAGER_STEP_REVIEW_DATA LOOP_MANAGER_STEP_CI_REPORT_DATA
@@ -83,7 +83,7 @@ fresh; review '{"score":7,"verdict":"continue"}'; echo two >src/a; echo new >src
 fresh; review '{"score":9,"verdict":"complete"}'; ci_data 101; expect 1 gate.sh "red CI overrides acceptance"; said "CI exit 101" "red"
 fresh; review '{"score":9,"verdict":"complete"}'; ci_data 0 deadbeef; expect 1 gate.sh "stale CI"; rework "stale CI"
 fresh; review '{"score":9,"verdict":"complete"}'; echo dirty >>src/a; expect 1 gate.sh "review left a dirty tree"
-fresh; review '{"score":9,"verdict":"complete"}'; git remote set-url origin "$r/gone.git"; expect 0 gate.sh "final report owns the push"
+fresh; review '{"score":9,"verdict":"complete"}'; git remote set-url origin "$r/gone.git"; expect 0 gate.sh "close step owns the push"
 
 fresh
 outer_state=$tmp/working-state
