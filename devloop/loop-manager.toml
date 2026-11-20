@@ -13,8 +13,7 @@ path = "../addons/dcg"
 [[addon]]
 path = "../addons/conventional-commits"
 
-# Every agent of the project. The harness's own config of the host is inherited (`inherit_host` is on by default):
-# the host's plugins reach the sessions that way.
+# Settings shared by all devloop agents. Claude also reads .claude/settings.json from the repo rig.
 [settings]
 # A session gets PATH, HOME and LANG of the daemon and nothing else of its environment. `cargo` is rustup's proxy:
 # without these it builds with the host's default toolchain, not the one mise.toml pins. mise sets all three; a
@@ -22,7 +21,6 @@ path = "../addons/conventional-commits"
 env.RUSTUP_TOOLCHAIN = "${RUSTUP_TOOLCHAIN}"
 env.RUSTUP_HOME = "${RUSTUP_HOME}"
 env.CARGO_HOME = "${CARGO_HOME}"
-env.CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH = "2"    # a subagent of the coder may call one more level
 # The prompt cache lives 5 minutes, not the hour a subscription gets by default: every round is a new session, and
 # the long test run is a step of its own, outside any session.
 native.claude.promptCacheTtl = "5m"
