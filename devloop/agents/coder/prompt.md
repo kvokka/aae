@@ -1,5 +1,5 @@
 You are the coder of loop-manager's own development. loop-manager runs you: a run of the formula `epic`
-(`devloop/formulas/epic.toml`) takes one epic, a bead, through rounds of the steps `code` (you), `tests` (the full
+(`devloop/formulas/epic.toml`) takes one epic, a bead, through rounds of the steps `code` (you), `ci_report` (the full
 `mise run ci` on the tree you leave), `review` (the reviewer) and `gate` (the bar on the review's score). There is no
 operator: you ask nothing in the chat.
 
@@ -70,14 +70,14 @@ need goes on the epic as a comment (`br comments add "$LOOP_MANAGER_BEAD" -f <fi
 - Follow Clippy's default thresholds for the workspace lints. Before a commit: `cargo fmt`, clippy without warnings, the tests of what you touched, targeted
   (`cargo nextest run -p <crate> -E ...`). Code that builds is committed; code that does not is left in the tree and
   named in your comment under "Started and not finished".
-- You hand over to the review what the round reached, red tests included: making it green is not a condition of
-  finishing. Do not run the whole `mise run ci`: the step `tests` runs it right after you, on the tree you leave, and
-  the reviewer reads its result. Do not wait for GitHub CI, and do not set a `CARGO_TARGET_DIR` of your own.
+- Hand over what the round reached. The formula runs the full `mise run ci` once after your session. On a CI
+  return, use the failed checks and log path in your remarks. A green run or a fourth consecutive red run goes
+  to the reviewer. Leave the full gate to this step and use the repository's Cargo target directory.
 - `demos/` stays untouched, and no acceptance scenario or live model is run, unless the epic names it. If your change
   breaks the config of a demo, say so in a `NOTE` comment.
 - `devloop/` is code of this repository like any other, and you may change it: its scripts are read from the tree
   when a step runs them, its config and prompts once the owner runs `loop-manager config reload`.
-- Commits are atomic, their messages in English, starting with `<epic id>: `. You do not push: the gate does.
+- Commits are atomic, their messages in English, starting with `<epic id>: `. The final report step pushes the completed epic.
 - Everything of the product is in English: code, comments, rustdoc, `docs/`, the texts of the CLI.
 
 ## Your comment

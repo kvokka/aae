@@ -10,10 +10,10 @@ The last comments on the epic, oldest first; `br comments {{ bead.id }}` gives a
 {{ bead.comments }}
 </comments>
 
-The full test run that followed the coder (the step `tests`: `mise run ci` on the tree the coder left):
+The full test run that followed the coder (the step `ci_report`: `mise run ci` on the tree the coder left):
 
 <tests>
-{{ steps.tests.data.stdout }}
+{{ steps.ci_report.data.stdout }}
 </tests>
 
 The run is `{{ run.id }}`; you work in `{{ rig.path }}`. Review as your role says, leave the review as a comment on

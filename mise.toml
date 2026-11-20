@@ -22,28 +22,63 @@ description = "Unit and integration tests; the local loop. The chaos stand is an
 run = "cargo nextest run --locked -E 'not binary(chaos)'"
 
 [tasks.ci]
-description = "Checks that CI runs on every commit"
-run = [
-  "cargo fmt --all --check",
-  "cargo clippy --workspace --all-targets --locked -q -- -D warnings",
-  # Without the chaos stand: its 1000 seeds are acceptance criterion 35 (docs/acceptance.md).
-  "cargo nextest run --workspace --locked --no-tests=warn -E 'not binary(chaos)'",
-  "cargo deny check",
-  "cargo machete",
-  "scripts/unused-pub.sh",
-  "scripts/core-boundary.sh",
-  "scripts/select-biased.sh",
-  "scripts/measure-selftest.sh",
-  "scripts/measure.sh",
-  # The repository is public: no absolute home paths of the machine the demos or tests ran on.
-  "! git grep -nE '/(home|Users)/[A-Za-z]' -- . ':!.loop'",
-  # Tests may run inside a loop-manager session: they start the binary only through `common` (docs/agents/rules-tests.md).
-  "! git grep -n 'CARGO_BIN_EXE_loop-manager' -- crates ':!crates/loop-manager/tests/common'",
-  # The pack that develops loop-manager with loop-manager (devloop/README.md): its scripts on sample files, and its
-  # config loads.
-  "cargo run -q --locked -p loop-manager -- config check --config devloop/config.toml",
-  '''PATH="$(cargo metadata --locked --no-deps --format-version 1 | jq -r .target_directory)/debug:$PATH" devloop/scripts/selftest.sh''',
-]
+description = "Run all CI checks and report every failure"
+run = """
+mkdir -p target/ci
+report=${DEVLOOP_CI_REPORT:-$(mktemp target/ci/checks.XXXXXX)}
+rc=0
+mise run --jobs 1 --continue-on-error --timeout 5m --report-file "$report" 'ci:*' || rc=$?
+echo "CI report: $report"
+exit "$rc"
+"""
+
+[tasks."ci:fmt"]
+run = "cargo fmt --all --check"
+
+[tasks."ci:clippy"]
+run = "cargo clippy --workspace --all-targets --locked -q -- -D warnings"
+
+[tasks."ci:tests"]
+# The chaos stand belongs to acceptance criterion 35.
+run = "cargo nextest run --workspace --locked --no-fail-fast --no-tests=warn -E 'not binary(chaos)'"
+
+[tasks."ci:deny"]
+run = "cargo deny check"
+
+[tasks."ci:machete"]
+run = "cargo machete"
+
+[tasks."ci:unused-pub"]
+run = "scripts/unused-pub.sh"
+
+[tasks."ci:core-boundary"]
+run = "scripts/core-boundary.sh"
+
+[tasks."ci:select-biased"]
+run = "scripts/select-biased.sh"
+
+[tasks."ci:measure-selftest"]
+run = "scripts/measure-selftest.sh"
+
+[tasks."ci:measure"]
+run = "scripts/measure.sh"
+
+[tasks."ci:home-paths"]
+run = """rc=0; git grep -nE '/(home|Users)/[A-Za-z]' -- . ':!.loop' || rc=$?; test "$rc" = 1"""
+
+[tasks."ci:test-constructor"]
+run = """rc=0; git grep -n 'CARGO_BIN_EXE_loop-manager' -- crates ':!crates/loop-manager/tests/common' || rc=$?; test "$rc" = 1"""
+
+[tasks."ci:devloop-config"]
+run = "cargo run -q --locked -p loop-manager -- config check --config devloop/config.toml"
+
+[tasks."ci:devloop-selftest"]
+run = """
+cargo build -q --locked -p loop-manager
+metadata=$(cargo metadata --locked --no-deps --format-version 1)
+target=$(echo "$metadata" | jq -er .target_directory)
+PATH="$target/debug:$PATH" devloop/scripts/selftest.sh
+"""
 
 [tasks.build-all]
 description = "Release builds for the four targets"

@@ -23,22 +23,24 @@ devloop/
   `partial` or `blocked` with `BASE:` and `HEAD:`. When only the owner can unblock it, the session finishes with
   `pass` and `data.needs_owner = true`: `code_owner` waits for the answer. A session stopped at its context limit
   still goes on to the next step.
-- `tests`: `scripts/tests.sh` runs `mise run ci` on the tree the coder left, writes the whole log to
-  a new directory under `target/devloop/runs/<run>/tests.*/` and prints its `LOG:` path and a digest ending in
-  `RESULT: pass` or `RESULT: FAIL`. Red tests still pass this step:
-  tests go to the reviewer, not back to the coder.
+- `ci_report`: runs `mise run ci` with a five-minute limit. The independent checks all run within that deadline;
+  nextest runs the suite with fail-fast disabled. The run keeps the full log, per-check JSON report and digest
+  under `target/devloop/runs/<run>/tests.*/`. The step returns the CI exit code, tested revision, dirty path
+  count, failed checks and log path. A timeout retains the statuses of interrupted and pending checks.
+- `ci_route`: green CI goes directly to review. Red CI returns the failed checks and log path to the coder up to
+  three consecutive times. If CI is still red after those three fixes, the reviewer gets the report. A return from
+  review or an owner answer starts a fresh sequence.
 - `review`: the reviewer leaves a comment `REVIEW` with `SCORE: x/10`, `VERDICT:` and `HEAD:`, and gives the score
   and the verdict as the data of its `finish`. A review that fails or is stopped is written once more by a new
   session; a second failure fails the run. A blocking owner question takes the equivalent `review_owner` wait.
-- `gate`: `scripts/gate.sh` commits `devloop/.beads/` and pushes, then passes on a score of 9 or more with the
-  verdict `complete`. Otherwise the epic gets the status `rework` and the run goes back to `code` with what the gate
-  printed: the score, the verdict and the `RESULT:` of the tests.
+- `gate`: commits the round's tracker state locally. It accepts a review scored at least 9 with verdict `complete`
+  and green CI on the current clean revision. Otherwise it marks the epic `rework` and returns it to the coder.
 - `report`: without a model, `scripts/report.sh` extracts the coder's summary, the review, test digests and unresolved
   owner concerns, closes the epic and commits and pushes its closed tracker state with the report. Its TOON output
   is the run's result for a calling agent or external tool.
 
-A run has 50 rounds (`rounds` in `formulas/epic.toml`). A review under the bar or a return after an owner answer starts
-the next round. The reviewer requires green tests for `complete`; the gate trusts its verdict. All the working
+A run has 50 rounds (`rounds` in `formulas/epic.toml`). A CI return, a review under the bar or a return after an owner answer starts
+the next round. All the working
 context of an epic is in its comments: every round is a new session, which
 reads the last 8 comments in its prompt and the rest with `br comments <id>`. Long notes of subagents go to
 `target/devloop/runs/<run>/notes/`. The final step archives them with the full logs locally; the report and comment
@@ -198,16 +200,10 @@ If no run of the epic waits, start one with `run start` (see "File an epic").
 
 ## The push
 
-The steps `tests`, `gate` and `report` get the whole environment of the daemon (`inherit_env = true` in
-`formulas/epic.toml`), not `PATH`, `HOME` and `LANG` alone, so `mise run ci` sees what your shell sees and the
-`git push` of the gate authenticates as your shell does: through the ssh agent (`SSH_AUTH_SOCK`), a token
-(`GH_TOKEN`, `GITHUB_TOKEN`) or a credential helper. A key with a passphrase and no agent cannot work: nothing can
-ask for it, and the gate fails instead of waiting. The gate commits `devloop/.beads/` alone and pushes after every
-review, whatever it says; what the coder left uncommitted stays as it was. When the review passes and the push does
-not, the step is tried again three times, 30 s apart, and then the run fails; the commit stays local and the next
-push takes it along. After the gate passes, `report` closes the epic while preserving its assignee, flushes the
-tracker and commits and pushes the closed state with the handoff. A failed final push is retryable too. Repeating
-the same finalization does not add another commit; the adapter's later close by the same owner is a no-op. If
+The CI and finalization commands inherit the daemon's environment. Each round's commits stay local until
+`report` closes the epic, flushes the tracker and commits the handoff. This final step pushes the entire epic to
+the configured upstream in one update. The push authenticates through the daemon's SSH agent or Git credentials.
+A failed push is retryable; repeating finalization reuses the local commit. If
 finalization ultimately fails, the daemon releases the epic to `open`, as for another failed run; inspect its state
 before recovery, since a local report is not proof of a successful push.
 

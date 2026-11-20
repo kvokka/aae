@@ -10,7 +10,7 @@ The last comments on the epic, oldest first; `br comments {{ bead.id }}` gives a
 {{ bead.comments }}
 </comments>
 
-What the gate said when it sent the run back to you (empty in the first round):
+Why the workflow returned to you, including any failed CI checks and log path (empty in the first round):
 
 <remarks>
 {{ remarks }}
