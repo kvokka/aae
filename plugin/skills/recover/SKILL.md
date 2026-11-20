@@ -10,7 +10,7 @@ failed, lay out the ways to go on, and run the one the user chooses. Decide noth
 gate anything the user has not picked. The full guide is
 [Recovering a failed run by hand](https://github.com/kvokka/loop-manager/blob/main/docs/guide/recovery.md).
 
-Every command below talks to the running daemon; if one answers that it cannot reach it, ask the user to start
+The loop-manager commands below talk to the running daemon; if one answers that it cannot reach it, ask the user to start
 `loop-manager daemon` (or name its socket with `--socket`) and stop there.
 
 Read structured output as TOON: `toon --encode` converts the CLI's JSON before it enters your context. It needs
@@ -39,7 +39,11 @@ loop-manager gate list --json | toon --encode
 Show the user, per run: `id`, `project`, `rig`, `formula`, `bead`, `class` (`agent`, `check`, `hollow_done`,
 `infrastructure`), `reason`, `workdir`, and per attempt its `kind` (`new_session` or `resume`), `failure_kind` and
 `session`. The `session` is the harness's own reference (claude `{session_id, config_dir, workdir}`, codex
-`{thread_id, codex_home}`); offer to read the conversation with the harness's own tools when the cause is unclear.
+`{thread_id, codex_home}`). Start with task comments, step results and referenced artifacts; a transcript is a
+fallback when those do not explain the cause. Reading context does not require attaching to or resuming the session.
+
+Inspect `reason` before interpreting the broad `class` or an attempt's `failure_kind`. In particular,
+`await_timeout` is an expired external wait, not a model failure or a failed review; follow the procedure below.
 
 What the failure kind suggests, as a hint for the user and not a decision:
 
@@ -49,8 +53,27 @@ What the failure kind suggests, as a hint for the user and not a decision:
 - `stall`, `harness_crash`, `adapter_crash`, `daemon_crash`, `overloaded`, `rate_limited`, `unknown`: the session
   may be fine to continue; read its end first.
 - `config_error`, `tool_failure`, `workspace_failure`: fix the config, the MCP server or the workspace first.
-- class `check` or `hollow_done`: the agent finished but its work did not pass; a new session with a note, or a
+- Other class `check` or `hollow_done` failures: the work did not pass its completion conditions; a new session with a note, or a
   look at the work, fits better than a plain continue.
+
+### An expired external wait
+
+`state: failed`, `class: check`, `reason: await_timeout` means no external outcome arrived before the await deadline.
+Show it as "The deadline for an external answer expired (await_timeout)", with the step and question it concerned.
+It need not appear in an attempt's `failure_kind`: there was no harness running in that step. By contrast, the CLI
+command `loop-manager run wait <run> --timeout 2h` ending with exit 124 only ends that client's wait; it does not fail
+the underlying run.
+
+Recover the question and its task context using [awaiting's context procedure](../awaiting/SKILL.md#2-understand-the-question-before-asking-the-user).
+Explain the decision to the user before proposing recovery. For `devloop`, follow the
+[pack-specific timeout procedure](../awaiting/references/devloop.md#after-an-owner-wait-times-out).
+
+An expired run is terminal: `run resolve` cannot answer it. Preserve the user's answer in the task's documented
+handoff format before reopening its gate or starting another run. The timeout counts toward `bead_failed_runs`, so
+inspect the bead's gate as well; `devloop` closes it after one failed run. Gate opening alone records no answer.
+Check whether an existing queued run will proceed when the gate opens before creating another run on the same bead.
+Do not recommend continuing a worker session merely because it was the last session before the wait; the missing
+input was an external decision, and the workflow must receive that answer through its task or inputs.
 
 ## 2. Offer the ways to go on
 
