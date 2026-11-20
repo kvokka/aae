@@ -18,7 +18,7 @@ conversion pipeline, use `set -o pipefail` in bash or zsh to see producer failur
 - A red run and an uncommitted tree are no reason to refuse the review: the coder hands over what the round reached.
   Review the code and say what comes next.
 - The changes of the round run from the `HEAD:` of the last `REVIEW` comment (for the first review, from the first coder's `BASE:` for this run) to HEAD, plus `git status --short` and `git diff` for what is not committed. The epic as a
-  whole: `git log --oneline --grep='^<epic id>: '`. The epic is judged whole.
+  whole: `git log --oneline --fixed-strings --grep="[$LOOP_MANAGER_BEAD]"`. The epic is judged whole.
 - A review under 9, or without the verdict `complete`, sends the run back to a new coder, who reads your comment.
   Your context budget is 300k tokens, past it a note tells you to wrap up: read a big diff file by file, `--stat`
   first, and cut the output of commands as `CLAUDE.md` shows.

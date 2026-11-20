@@ -1,0 +1,17 @@
+#!/bin/sh
+set -eu
+gitdir=$(git rev-parse --path-format=absolute --git-common-dir)
+[ "$gitdir" = "${LOOP_MANAGER_COMMIT_GIT_DIR:?}" ] || exit 0
+
+subject=$(head -n 1 "$1")
+if [ -n "${LOOP_MANAGER_BEAD:-}" ]; then
+  suffix=" [$LOOP_MANAGER_BEAD]"
+  case "$subject" in
+    *"$suffix") subject=${subject%"$suffix"} ;;
+    *) echo "End the commit subject with '$suffix'." >&2; exit 1 ;;
+  esac
+fi
+if ! printf '%s\n' "$subject" | grep -Eq '^[a-z][a-z0-9-]*(\([^()[:space:]]+\))?!?: [^[:space:]].*$'; then
+  echo "Use a Conventional Commit subject such as 'fix(parser): handle empty input'." >&2
+  exit 1
+fi

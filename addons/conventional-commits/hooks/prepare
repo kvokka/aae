@@ -1,0 +1,10 @@
+#!/bin/sh
+set -eu
+workdir=$(jq -er '.data.workdir')
+gitdir=$(git -C "$workdir" rev-parse --path-format=absolute --git-common-dir)
+if ! git -C "$workdir" -c "include.path=$LOOP_MANAGER_ADDON_DIR/gitconfig" \
+    hook list commit-msg | grep -Fxq loop-manager-conventional; then
+  echo "conventional-commits requires Git with support for configured hooks (git hook list)." >&2
+  exit 2
+fi
+jq -nc --arg dir "$gitdir" '{decision:"proceed",env:{LOOP_MANAGER_COMMIT_GIT_DIR:$dir}}'

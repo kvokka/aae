@@ -8,6 +8,8 @@ which bounds the context of a claude or codex session. To write an addon, see
 [writing an addon](addon-development.md); the full rules are in
 [the config reference](../design/config.md#addon-addonaddontoml).
 
+The [conventional-commits addon](../../addons/conventional-commits/README.md) checks Git commit subjects and appends a format hint to the coding agent's prompt.
+
 ## Declare it
 
 A declaration only says where the addon is. It goes in the orchestrator config or in a project's `loop-manager.toml`:
