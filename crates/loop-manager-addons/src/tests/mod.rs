@@ -203,10 +203,18 @@ fn every_policy_threshold_comes_from_the_config() {
         "new_session"
     );
 
+    let unknown = failed("unknown", none, &[("resume", "unknown", 9); 2], json!([]));
+    assert_eq!(policy(&unknown, json!({}))["decision"], "resume");
+    assert_eq!(policy(&unknown, json!({"unknown_retries": 1}))["decision"], "fail");
+}
+
+#[test]
+fn auth_backoff_and_invalid_thresholds_follow_the_config() {
+    let until = |v: &Value| v["gate"]["until"].clone();
     // The streak of `auth_required` began an hour ago, when its first attempt started.
     let auth = failed(
         "auth_required",
-        none.clone(),
+        json!({}),
         &[("resume", "auth_required", 9); 2],
         json!([]),
     );
@@ -229,15 +237,11 @@ fn every_policy_threshold_comes_from_the_config() {
     // However long it lasts, the wait grows to an hour and never goes to an operator.
     let long = failed(
         "auth_required",
-        none.clone(),
+        json!({}),
         &[("resume", "auth_required", 9); 40],
         json!([]),
     );
     assert_eq!(until(&policy(&long, json!({}))), "2026-11-13T13:00:00.000Z");
-
-    let unknown = failed("unknown", none, &[("resume", "unknown", 9); 2], json!([]));
-    assert_eq!(policy(&unknown, json!({}))["decision"], "resume");
-    assert_eq!(policy(&unknown, json!({"unknown_retries": 1}))["decision"], "fail");
 }
 
 #[test]

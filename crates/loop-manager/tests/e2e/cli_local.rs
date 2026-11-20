@@ -41,24 +41,7 @@ fn format_reads_one_json_value_without_a_daemon() {
 #[test]
 fn the_config_is_checked_and_explained_without_a_daemon() {
     let dir = tempfile::tempdir().unwrap();
-    for (path, text) in crate::common::FILES {
-        let path = dir.path().join(path);
-        fs::create_dir_all(path.parent().unwrap()).unwrap();
-        fs::write(path, text).unwrap();
-    }
-    let files = dir.path().join("config/loop-manager");
-    let claude = "projects = [\"shop\"]\n[harness.claude]\nbinary = \"true\"\n";
-    fs::write(files.join("config.toml"), claude).unwrap();
-    fs::create_dir_all(files.join("shop/agents/dev")).unwrap();
-    fs::write(
-        files.join("shop/agents/dev/agent.toml"),
-        "harness = \"claude\"\neffort = \"high\"\n",
-    )
-    .unwrap();
-    fs::create_dir_all(files.join("shop/formulas")).unwrap();
-    let formula = "name = \"go\"\n[[step]]\nkind = \"ai\"\nagent = \"dev\"\neffort = \"low\"\n";
-    fs::write(files.join("shop/formulas/go.toml"), formula).unwrap();
-    fs::write(files.join("shop/agents/dev/prompt.template.md"), "Go.\n").unwrap();
+    let files = write_project(dir.path());
     let broken = files.join("broken.toml");
     fs::write(&broken, "projects = [\"shop\"\n").unwrap();
     let broken = broken.to_str().unwrap();
@@ -162,4 +145,26 @@ fn the_config_is_checked_and_explained_without_a_daemon() {
         .unwrap();
     assert_eq!(out.status.code(), Some(141), "{}", String::from_utf8_lossy(&out.stderr));
     assert!(out.stderr.is_empty(), "{}", String::from_utf8_lossy(&out.stderr));
+}
+
+fn write_project(root: &std::path::Path) -> std::path::PathBuf {
+    for (path, text) in crate::common::FILES {
+        let path = root.join(path);
+        fs::create_dir_all(path.parent().unwrap()).unwrap();
+        fs::write(path, text).unwrap();
+    }
+    let files = root.join("config/loop-manager");
+    let claude = "projects = [\"shop\"]\n[harness.claude]\nbinary = \"true\"\n";
+    fs::write(files.join("config.toml"), claude).unwrap();
+    fs::create_dir_all(files.join("shop/agents/dev")).unwrap();
+    fs::write(
+        files.join("shop/agents/dev/agent.toml"),
+        "harness = \"claude\"\neffort = \"high\"\n",
+    )
+    .unwrap();
+    fs::create_dir_all(files.join("shop/formulas")).unwrap();
+    let formula = "name = \"go\"\n[[step]]\nkind = \"ai\"\nagent = \"dev\"\neffort = \"low\"\n";
+    fs::write(files.join("shop/formulas/go.toml"), formula).unwrap();
+    fs::write(files.join("shop/agents/dev/prompt.template.md"), "Go.\n").unwrap();
+    files
 }

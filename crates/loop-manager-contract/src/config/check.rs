@@ -28,45 +28,7 @@ pub(super) fn project(loader: &mut Loader, project: &mut Project, variants: &BTr
             "loop-manager.toml"
         });
         for (name, formula) in &mut pack.formulas {
-            let own_inputs = formula.inputs.clone();
-            for step in &mut formula.steps {
-                match &mut step.kind {
-                    StepKind::Ai { agent, .. } => match resolve(&index, &own, agent, has_agent, "agent") {
-                        Ok(found) => *agent = found,
-                        Err(e) => loader.fail(&manifest, format!("formula `{name}`: {e}")),
-                    },
-                    StepKind::Drain { formula: run, .. } => {
-                        let what = format!("formula `{name}`, step `{}`", step.name);
-                        match resolve(&index, &own, run, has_formula, "formula") {
-                            Ok(found) => {
-                                let pack = index.iter().find(|p| p.name == found.pack).expect("resolved");
-                                if let Err(e) = executor(&pack.formulas[&found.name]) {
-                                    loader.fail(&manifest, format!("{what}: `{found}` {e}"));
-                                }
-                                *run = found;
-                            }
-                            Err(e) => loader.fail(&manifest, format!("{what}: {e}")),
-                        }
-                    }
-                    StepKind::Formula {
-                        formula: run, inputs, ..
-                    } => {
-                        let what = format!("formula `{name}`, step `{}`", step.name);
-                        match resolve(&index, &own, run, has_formula, "formula") {
-                            Ok(found) => {
-                                let pack = index.iter().find(|p| p.name == found.pack).expect("resolved");
-                                let child = &pack.formulas[&found.name];
-                                for e in step_inputs(child, &own_inputs, inputs) {
-                                    loader.fail(&manifest, format!("{what}: `{found}` {e}"));
-                                }
-                                *run = found;
-                            }
-                            Err(e) => loader.fail(&manifest, format!("{what}: {e}")),
-                        }
-                    }
-                    StepKind::Exec { .. } | StepKind::Await { .. } => {}
-                }
-            }
+            resolve_steps(loader, &manifest, &index, &own, name, formula);
         }
         for trigger in &mut pack.triggers {
             let what = format!("trigger `{}`", trigger.name);
@@ -129,6 +91,57 @@ pub(super) fn project(loader: &mut Loader, project: &mut Project, variants: &BTr
         let name = super::load::reference(agent);
         if let Err(e) = resolve(&index, &own, &name, has_agent, "agent") {
             loader.fail(&file, format!("`agents.{agent}`: {e}{NEW_NAME}"));
+        }
+    }
+}
+
+fn resolve_steps(
+    loader: &mut Loader,
+    manifest: &Path,
+    index: &[Pack],
+    own: &str,
+    name: &str,
+    formula: &mut super::Formula,
+) {
+    let has_agent = |p: &Pack, n: &str| p.agents.contains_key(n);
+    let has_formula = |p: &Pack, n: &str| p.formulas.contains_key(n);
+    let own_inputs = &formula.inputs;
+    for step in &mut formula.steps {
+        match &mut step.kind {
+            StepKind::Ai { agent, .. } => match resolve(index, own, agent, has_agent, "agent") {
+                Ok(found) => *agent = found,
+                Err(e) => loader.fail(manifest, format!("formula `{name}`: {e}")),
+            },
+            StepKind::Drain { formula: run, .. } => {
+                let what = format!("formula `{name}`, step `{}`", step.name);
+                match resolve(index, own, run, has_formula, "formula") {
+                    Ok(found) => {
+                        let pack = index.iter().find(|p| p.name == found.pack).expect("resolved");
+                        if let Err(e) = executor(&pack.formulas[&found.name]) {
+                            loader.fail(manifest, format!("{what}: `{found}` {e}"));
+                        }
+                        *run = found;
+                    }
+                    Err(e) => loader.fail(manifest, format!("{what}: {e}")),
+                }
+            }
+            StepKind::Formula {
+                formula: run, inputs, ..
+            } => {
+                let what = format!("formula `{name}`, step `{}`", step.name);
+                match resolve(index, own, run, has_formula, "formula") {
+                    Ok(found) => {
+                        let pack = index.iter().find(|p| p.name == found.pack).expect("resolved");
+                        let child = &pack.formulas[&found.name];
+                        for e in step_inputs(child, own_inputs, inputs) {
+                            loader.fail(manifest, format!("{what}: `{found}` {e}"));
+                        }
+                        *run = found;
+                    }
+                    Err(e) => loader.fail(manifest, format!("{what}: {e}")),
+                }
+            }
+            StepKind::Exec { .. } | StepKind::Await { .. } => {}
         }
     }
 }

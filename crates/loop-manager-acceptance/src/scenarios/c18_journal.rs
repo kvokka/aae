@@ -77,6 +77,11 @@ pub(crate) async fn run(env: Arc<Env>) -> String {
     ];
     assert_eq!(names, kept, "five files after rotation");
 
+    check_readers_after_rotation(&d).await;
+    format!("rotated after {runs} runs")
+}
+
+async fn check_readers_after_rotation(d: &Daemon) {
     match d.client.events(Some(5)).await {
         Err(ClientError::Api { status: 410, error }) => {
             assert_eq!((&error["code"], &error["oldest"]), (&json!("gap"), &json!(11)));
@@ -99,5 +104,4 @@ pub(crate) async fn run(env: Arc<Env>) -> String {
     }
     let mut again = d.client.events(Some(53)).await.unwrap();
     assert_eq!(next(&mut again).await["seq"], 53, "a reader continues from a held seq");
-    format!("rotated after {runs} runs")
 }

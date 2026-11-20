@@ -13,19 +13,6 @@ fn hooks_join_the_native_settings_and_mcp_servers_take_claude_form() {
         timeout: Some("90s".into()),
     };
     let mut config = EffectiveConfig {
-        services: Default::default(),
-        harness: "claude".into(),
-        harness_from: loop_manager_contract::config::Layer::Agent,
-        scope: Default::default(),
-        description: None,
-        subagents: None,
-        targets: Default::default(),
-        model_given: None,
-        model: None,
-        effort: None,
-        system_prompt: None,
-        inherit_host: None,
-        env: Default::default(),
         mcp: [(
             "web".to_owned(),
             agent(Mcp {
@@ -42,11 +29,9 @@ fn hooks_join_the_native_settings_and_mcp_servers_take_claude_form() {
             ("b".to_owned(), agent(hook("Stop", false))),
         ]
         .into(),
-        skills: Default::default(),
-        addons: Vec::new(),
-        native: Some(agent(
+        ..config(Some(
             json!({ "hooks": { "Stop": [{ "hooks": [] }] }, "env": { "X": "1" } }),
-        )),
+        ))
     };
     let plan = SessionPlan::New {
         workdir: "/w".into(),

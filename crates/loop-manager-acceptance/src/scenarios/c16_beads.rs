@@ -110,46 +110,8 @@ pub(crate) async fn run(env: Arc<Env>) -> String {
     );
     until_shown(&root, alone, "closed", &json!(owner)).await;
 
-    // Five requests at once for the next ready bead of an epic of three.
-    let next = json!({ "next_ready": true, "epic": many });
-    let replies = futures_join(&d, &next).await;
-    let runs: Vec<&str> = replies.iter().filter_map(|r| r["run"].as_str()).collect();
-    let nothing = replies.iter().filter(|r| r["nothing_ready"] == true).count();
-    assert_eq!((runs.len(), nothing), (3, 2), "{replies:?}");
-    let mut given = HashSet::new();
-    for run in &runs {
-        let view = d.until_state(run, "passed", WITHIN).await;
-        assert!(
-            given.insert(view["bead"].as_str().unwrap().to_owned()),
-            "a bead given twice: {view}"
-        );
-    }
-    assert_eq!(
-        given,
-        parts.iter().cloned().collect(),
-        "each bead of the epic to one run"
-    );
-
-    // `failed` returns the bead, and after `bead_failed_runs` failed runs it is no longer given out.
-    for n in 1..=2 {
-        let run = start(&d, "break", json!({ "next_ready": true, "epic": once })).await;
-        let run = run["run"]
-            .as_str()
-            .unwrap_or_else(|| panic!("failure {n}: {run}"))
-            .to_owned();
-        d.until_state(&run, "failed", WITHIN).await;
-        until_shown(&root, flaky, "open", &Value::Null).await;
-        // Given out again only once the daemon has read it back into the ready set.
-        let again = |seen: &[(String, Value)]| {
-            let ready = seen
-                .iter()
-                .filter(|(k, e)| k == "bead.ready" && e["data"]["bead"]["id"] == flaky.as_str());
-            ready.count() > n
-        };
-        d.journal_until(WITHIN, again).await;
-    }
-    let refused = start(&d, "break", json!({ "next_ready": true, "epic": once })).await;
-    assert_eq!(refused["nothing_ready"], true, "{refused}");
+    check_concurrent_claims(&d, many, parts).await;
+    check_failed_bead_limit(&d, once, flaky).await;
 
     // Every step had the tracker's path; br holds nothing of loop-manager's but claims and closes.
     let journal = d
@@ -175,6 +137,51 @@ pub(crate) async fn run(env: Arc<Env>) -> String {
         );
     }
     "claim held through a crash; 5 requests for an epic of 3: 3 runs, 2 nothing_ready; out after 2 failed runs".into()
+}
+
+async fn check_concurrent_claims(d: &Daemon, many: &str, parts: &[String]) {
+    // Five requests at once for the next ready bead of an epic of three.
+    let next = json!({ "next_ready": true, "epic": many });
+    let replies = futures_join(d, &next).await;
+    let runs: Vec<&str> = replies.iter().filter_map(|r| r["run"].as_str()).collect();
+    let nothing = replies.iter().filter(|r| r["nothing_ready"] == true).count();
+    assert_eq!((runs.len(), nothing), (3, 2), "{replies:?}");
+    let mut given = HashSet::new();
+    for run in &runs {
+        let view = d.until_state(run, "passed", WITHIN).await;
+        assert!(
+            given.insert(view["bead"].as_str().unwrap().to_owned()),
+            "a bead given twice: {view}"
+        );
+    }
+    assert_eq!(
+        given,
+        parts.iter().cloned().collect(),
+        "each bead of the epic to one run"
+    );
+}
+
+async fn check_failed_bead_limit(d: &Daemon, once: &str, flaky: &str) {
+    // `failed` returns the bead, and after `bead_failed_runs` failed runs it is no longer given out.
+    for n in 1..=2 {
+        let run = start(d, "break", json!({ "next_ready": true, "epic": once })).await;
+        let run = run["run"]
+            .as_str()
+            .unwrap_or_else(|| panic!("failure {n}: {run}"))
+            .to_owned();
+        d.until_state(&run, "failed", WITHIN).await;
+        until_shown(d.dir.path(), flaky, "open", &Value::Null).await;
+        // Given out again only once the daemon has read it back into the ready set.
+        let again = |seen: &[(String, Value)]| {
+            let ready = seen
+                .iter()
+                .filter(|(k, e)| k == "bead.ready" && e["data"]["bead"]["id"] == flaky);
+            ready.count() > n
+        };
+        d.journal_until(WITHIN, again).await;
+    }
+    let refused = start(d, "break", json!({ "next_ready": true, "epic": once })).await;
+    assert_eq!(refused["nothing_ready"], true, "{refused}");
 }
 
 /// Five requests for `next` at once.

@@ -6,8 +6,8 @@ use super::{
     row::{Row, attempts},
 };
 use crate::{
-    config::Sourced,
-    driver::{Failure, FailureKind, PromptKey, SessionPlan, SessionRef, Source},
+    config::{EffectiveConfig, Sourced},
+    driver::{Driver, Failure, FailureKind, PromptKey, SessionPlan, SessionRef, Source},
     journal::rfc3339_ms,
     writer::{Error, Tx},
 };
@@ -18,6 +18,13 @@ use std::{collections::BTreeMap, path::PathBuf};
 /// The prompt of a resumed attempt (contracts 6.4).
 const RECONCILE: &str =
     "Your previous turn was interrupted. Check the current state of the work and continue toward the goal.";
+
+/// The session and previous run a launch must reconcile, and whether the step is starting afresh.
+struct AttemptSession {
+    resume: Option<SessionRef>,
+    continued: Option<String>,
+    entering: bool,
+}
 
 impl RunHandler {
     pub(super) fn prepare(&mut self, tx: &mut Tx<'_>, mut row: Row) -> Result<(), Error> {
@@ -73,7 +80,7 @@ impl RunHandler {
     }
 
     /// A new attempt (contracts 6.2): a new or resumed session on an instance of its own, then the prompt.
-    pub(super) fn start_attempt(&mut self, tx: &mut Tx<'_>, mut row: Row, kind: &str) -> Result<(), Error> {
+    pub(super) fn start_attempt(&mut self, tx: &mut Tx<'_>, row: Row, kind: &str) -> Result<(), Error> {
         // Every automatic start reads the gates, the operator's among them (invariant 18), and a drain: both park.
         if let Some(gate) = self.held(tx, &row)? {
             return self.park(tx, row, gate, kind);
@@ -85,10 +92,7 @@ impl RunHandler {
             "await" => return self.start_await(tx, row),
             _ => {}
         }
-        let config = row
-            .config
-            .as_deref()
-            .map(serde_json::from_str::<crate::config::EffectiveConfig>);
+        let config = row.config.as_deref().map(serde_json::from_str::<EffectiveConfig>);
         let Some(Ok(config)) = config else {
             return self.terminal(tx, row, "failed", Some("infrastructure"), "no config snapshot");
         };
@@ -152,6 +156,34 @@ impl RunHandler {
             _ => None,
         };
         let resume = session.and_then(|(s, _)| serde_json::from_str::<SessionRef>(&s).ok());
+        self.launch_attempt(
+            tx,
+            row,
+            kind,
+            config,
+            driver.as_ref(),
+            AttemptSession {
+                resume,
+                continued,
+                entering,
+            },
+        )
+    }
+
+    fn launch_attempt(
+        &mut self,
+        tx: &mut Tx<'_>,
+        mut row: Row,
+        kind: &str,
+        config: EffectiveConfig,
+        driver: &dyn Driver,
+        session: AttemptSession,
+    ) -> Result<(), Error> {
+        let AttemptSession {
+            resume,
+            continued,
+            entering,
+        } = session;
         let Some(token) = super::new_token() else {
             return self.terminal(
                 tx,
@@ -161,28 +193,8 @@ impl RunHandler {
                 "no randomness for the attempt token",
             );
         };
-        let (run, attempt, workdir) = (row.id.clone(), row.attempt + 1, self.session_dir(&row, &config));
         let token_sha256 = super::token_sha256(&token);
-        let (actor, bead) = (self.config.actor(&row.project, &run, attempt), row.bead.clone());
-        let plan = match resume.clone() {
-            Some(session) => SessionPlan::Resume {
-                session,
-                workdir,
-                actor,
-                run,
-                attempt,
-                token,
-                bead,
-            },
-            None => SessionPlan::New {
-                workdir,
-                actor,
-                run,
-                attempt,
-                token,
-                bead,
-            },
-        };
+        let plan = self.session_plan(&row, &config, token, resume.clone());
         let (config, services) = Self::bind_services(tx, &row, config, &self.config)?;
         let split = driver.split(&config, &plan);
         // The account comes from the config before the start (docs/design/contracts.md 7): a closed account gate parks
@@ -196,7 +208,7 @@ impl RunHandler {
                 return self.park(tx, row, gate, kind);
             }
         }
-        row.attempt = attempt;
+        row.attempt += 1;
         tx.sql().execute(
             "UPDATE runs SET attempt = ?2, next = NULL WHERE id = ?1",
             params![row.id, row.attempt],
@@ -256,6 +268,36 @@ impl RunHandler {
             &row.deadline("state"),
             tx.now_ms() + self.config.watchdog.start_timeout_ms,
         )
+    }
+
+    fn session_plan(
+        &self,
+        row: &Row,
+        config: &EffectiveConfig,
+        token: String,
+        resume: Option<SessionRef>,
+    ) -> SessionPlan {
+        let (run, attempt, workdir) = (row.id.clone(), row.attempt + 1, self.session_dir(row, config));
+        let (actor, bead) = (self.config.actor(&row.project, &run, attempt), row.bead.clone());
+        match resume {
+            Some(session) => SessionPlan::Resume {
+                session,
+                workdir,
+                actor,
+                run,
+                attempt,
+                token,
+                bead,
+            },
+            None => SessionPlan::New {
+                workdir,
+                actor,
+                run,
+                attempt,
+                token,
+                bead,
+            },
+        }
     }
 
     /// Ends the current attempt with `failure` and asks for a decision on it (`interrupted`).

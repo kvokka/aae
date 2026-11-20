@@ -74,20 +74,7 @@ impl Executor for RunExecutor {
                 }
                 Some("stop_exec") => super::exec_step::stop(&self.running, payload),
                 Some("check_instances") => {
-                    for instance in payload["instances"].as_array().into_iter().flatten() {
-                        let driver = instance["harness"].as_str().and_then(|h| self.drivers.get(h));
-                        let handle = serde_json::from_value::<InstanceHandle>(instance["handle"].clone());
-                        if let (Some(driver), Ok(handle)) = (driver, handle)
-                            && matches!(driver.health(&handle).await, Health::Dead)
-                        {
-                            // A stopped writer drops the message; recovery kills every instance on restart.
-                            let _ = core.send(None, Msg::InstanceGone { handle }).await;
-                        }
-                    }
-                    let lost: BTreeSet<String> = serde_json::from_value(payload["lost"].clone()).unwrap_or_default();
-                    if !lost.is_empty() {
-                        crate::process::walk(move || crate::orphans::sweep_all(&lost)).await;
-                    }
+                    self.check_instances(core, payload).await;
                 }
                 Some("sweep") => {
                     // Done once nothing carrying the marker is alive: what queues after it under its key starts
@@ -177,6 +164,23 @@ fn key(payload: &Value) -> PromptKey {
 }
 
 impl RunExecutor {
+    async fn check_instances(&self, core: &CoreHandle<Msg>, payload: &Value) {
+        for instance in payload["instances"].as_array().into_iter().flatten() {
+            let driver = instance["harness"].as_str().and_then(|h| self.drivers.get(h));
+            let handle = serde_json::from_value::<InstanceHandle>(instance["handle"].clone());
+            if let (Some(driver), Ok(handle)) = (driver, handle)
+                && matches!(driver.health(&handle).await, Health::Dead)
+            {
+                // A stopped writer drops the message; recovery kills every instance on restart.
+                let _ = core.send(None, Msg::InstanceGone { handle }).await;
+            }
+        }
+        let lost: BTreeSet<String> = serde_json::from_value(payload["lost"].clone()).unwrap_or_default();
+        if !lost.is_empty() {
+            crate::process::walk(move || crate::orphans::sweep_all(&lost)).await;
+        }
+    }
+
     /// The processes it replaces gone (invariant 6), the instance, then the session (new or resumed after a
     /// transcript check, invariant 17), then the prompt. The writer learns the instance and the session before the
     /// next call, so every event of them finds its attempt.

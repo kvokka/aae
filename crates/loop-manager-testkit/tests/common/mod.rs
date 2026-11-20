@@ -1,6 +1,5 @@
 //! The world the run tests share: a project on the scripted driver, the run machine on the managed clock.
-// Each test crate uses a part of this module.
-#![allow(dead_code)]
+#![allow(dead_code, reason = "each test crate uses a different subset of this shared fixture")]
 
 use loop_manager_core::{
     BoxFuture, Clock, CoreHandle, Error, Journal, config,

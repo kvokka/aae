@@ -84,6 +84,10 @@ type State = axum::extract::State<Arc<Api>>;
 )]
 struct Doc;
 
+#[expect(
+    clippy::cognitive_complexity,
+    reason = "routes! expands each entry in this route table"
+)]
 fn router() -> OpenApiRouter<Arc<Api>> {
     OpenApiRouter::with_openapi(Doc::openapi())
         .routes(routes!(runs::create, runs::list))

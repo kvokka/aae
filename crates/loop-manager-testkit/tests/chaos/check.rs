@@ -51,36 +51,8 @@ pub(crate) fn check(w: &World, play: &mut Play) -> Result<(), String> {
     if let Some(broken) = &play.broken {
         return Err(broken.clone());
     }
-    for e in &new_events(w, play)? {
-        let seq = e["seq"].as_i64().unwrap();
-        let last = play.seq;
-        if seq <= last {
-            return Err(format!("journal seq {seq} after {last}: an event delivered twice"));
-        }
-        play.seq = seq;
-        let (Some(run), Some(kind)) = (e["run"].as_str(), e["type"].as_str()) else {
-            continue;
-        };
-        if let Some(end) = play.ended.get(run).filter(|_| kind.starts_with("run.")) {
-            return Err(format!("{run}: {kind} at {seq} after {end} (an end is final)"));
-        }
-        if let Some(end) = kind.strip_prefix("run.").filter(|k| TERMINAL.contains(k)) {
-            play.ended.insert(run.to_owned(), end.to_owned());
-            if end == "passed" {
-                if e["data"]["outcome"]["result"] != "pass" {
-                    return Err(format!("{run} passed without a pass outcome: {}", e["data"]));
-                }
-                if !play.finished.contains(run) {
-                    return Err(format!("{run} passed with no accepted pass finisher (invariant 12)"));
-                }
-            }
-            if end == "failed" {
-                failed(run, &e["data"], play)?;
-            }
-        }
-        if !crate::repeat::repeated(run, kind, &e["data"], play)? {
-            step_finished(run, kind, &e["data"]["run"], play)?;
-        }
+    for event in new_events(w, play)? {
+        check_event(&event, play)?;
     }
     let conn = state(w);
     let all = runs(w);
@@ -174,6 +146,39 @@ pub(crate) fn check(w: &World, play: &mut Play) -> Result<(), String> {
         if bad {
             return Err(format!("{bead}: owner {owner:?}, {live} live runs on it"));
         }
+    }
+    Ok(())
+}
+
+fn check_event(e: &Value, play: &mut Play) -> Result<(), String> {
+    let seq = e["seq"].as_i64().unwrap();
+    let last = play.seq;
+    if seq <= last {
+        return Err(format!("journal seq {seq} after {last}: an event delivered twice"));
+    }
+    play.seq = seq;
+    let (Some(run), Some(kind)) = (e["run"].as_str(), e["type"].as_str()) else {
+        return Ok(());
+    };
+    if let Some(end) = play.ended.get(run).filter(|_| kind.starts_with("run.")) {
+        return Err(format!("{run}: {kind} at {seq} after {end} (an end is final)"));
+    }
+    if let Some(end) = kind.strip_prefix("run.").filter(|k| TERMINAL.contains(k)) {
+        play.ended.insert(run.to_owned(), end.to_owned());
+        if end == "passed" {
+            if e["data"]["outcome"]["result"] != "pass" {
+                return Err(format!("{run} passed without a pass outcome: {}", e["data"]));
+            }
+            if !play.finished.contains(run) {
+                return Err(format!("{run} passed with no accepted pass finisher (invariant 12)"));
+            }
+        }
+        if end == "failed" {
+            failed(run, &e["data"], play)?;
+        }
+    }
+    if !crate::repeat::repeated(run, kind, &e["data"], play)? {
+        step_finished(run, kind, &e["data"]["run"], play)?;
     }
     Ok(())
 }

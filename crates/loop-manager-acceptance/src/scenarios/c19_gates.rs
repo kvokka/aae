@@ -56,19 +56,24 @@ pub(crate) async fn run(env: Arc<Env>) -> String {
         d.until_state(run, "queued", WITHIN).await;
     }
 
+    check_opening_each_gate(&d, &keys, &exec, &agent, &on_bead).await;
+    String::new()
+}
+
+async fn check_opening_each_gate(d: &Daemon, keys: &[String; 4], exec: &str, agent: &str, on_bead: &str) {
     // Each opening lets through only the runs no other closed gate holds. The reply comes after the transaction
     // that opened the gate and dispatched what it could has committed, so a run still `queued` then is held.
     let open = |key: &str| d.post("/v1/gates/open", json!({ "key": key }));
     open(&keys[0]).await.unwrap();
-    for run in [&exec, &agent, &on_bead] {
+    for run in [exec, agent, on_bead] {
         d.until_state(run, "queued", WITHIN).await;
     }
     open(&keys[1]).await.unwrap();
-    d.until_state(&exec, "passed", WITHIN).await;
+    d.until_state(exec, "passed", WITHIN).await;
     assert_eq!(d.get(&format!("/v1/runs/{agent}")).await["state"], "queued");
     assert_eq!(d.get(&format!("/v1/runs/{on_bead}")).await["state"], "queued");
     open(&keys[2]).await.unwrap();
-    d.until_state(&agent, "passed", WITHIN).await;
+    d.until_state(agent, "passed", WITHIN).await;
     assert_eq!(d.get(&format!("/v1/runs/{on_bead}")).await["state"], "queued");
     assert_eq!(
         d.get("/v1/gates").await[0]["key"],
@@ -76,7 +81,6 @@ pub(crate) async fn run(env: Arc<Env>) -> String {
         "automation opened nothing"
     );
     open(&keys[3]).await.unwrap();
-    d.until_state(&on_bead, "passed", WITHIN).await;
+    d.until_state(on_bead, "passed", WITHIN).await;
     assert_eq!(d.get("/v1/gates").await, json!([]));
-    String::new()
 }

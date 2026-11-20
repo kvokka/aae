@@ -6,7 +6,7 @@ use super::{
     triggers::MAX_DEPTH,
 };
 use crate::{
-    config::{Formula, InputType, Step, StepKind},
+    config::{Formula, InputType, Name, Project, Rig, Step, StepKind},
     writer::{Error, Tx},
 };
 use rusqlite::{OptionalExtension, params};
@@ -88,61 +88,10 @@ impl RunHandler {
         }
         let project = self.config.projects.iter().find(|p| p.name == c.project);
         let project = project.ok_or_else(|| not_found(format!("no project `{}`", c.project)))?;
-        // An ambiguous name is of formulas that are there; only a name of none is "no such thing".
-        let (name, formula) = project
-            .formula(&c.formula)
-            .map_err(|why| match why.starts_with("no formula") {
-                true => not_found(why),
-                false => rejected(why),
-            })?;
-        if direct && formula.internal {
-            return Err(rejected(format!(
-                "`{name}` is internal: only a step of another formula runs it"
-            )));
-        }
-        // A start that names no rig runs on the rig of the bead its task names, else on the root.
-        let rig_name = c.rig.take().unwrap_or_else(|| {
-            let beads = formula.inputs.iter().filter(|(_, i)| i.kind == InputType::Task);
-            let named = beads.filter_map(|(k, _)| c.inputs.get(k)?.as_str()).next();
-            named
-                .and_then(|id| project.rig_of(id))
-                .unwrap_or(&project.root.0)
-                .to_owned()
-        });
-        let rig = project.place(&rig_name);
-        let rig = rig.ok_or_else(|| not_found(format!("no rig `{rig_name}` in `{}`", c.project)))?;
+        let (name, formula) = c.resolve_formula(project, direct)?;
+        let (rig_name, rig) = c.select_rig(project, formula)?;
+        c.validate_inputs(&name, formula)?;
         let first = &formula.steps[0];
-        if c.continue_from.is_some() && !matches!(first.kind, StepKind::Ai { .. }) {
-            return Err(rejected(format!(
-                "`{name}` starts with a step of kind `{}`: it has no session to continue",
-                first.kind.name()
-            )));
-        }
-        // A skipped first step would hand the continued session to a later step (docs/design/config.md).
-        if c.continue_from.is_some() && !first.condition.is_empty() {
-            return Err(rejected(format!(
-                "`{name}` starts with a step with an `if`: it may be skipped, so it cannot continue a session"
-            )));
-        }
-        if let Some(extra) = c.inputs.keys().find(|k| !formula.inputs.contains_key(*k)) {
-            return Err(rejected(format!("`{name}` has no input `{extra}`")));
-        }
-        // A null is no value; an input given no value takes the one the config gives (docs/design/config.md).
-        c.inputs.retain(|_, value| !value.is_null());
-        for (key, given) in &formula.defaults {
-            c.inputs.entry(key.clone()).or_insert_with(|| given.value.clone());
-        }
-        let missing = formula
-            .inputs
-            .iter()
-            .find(|(k, i)| i.required && !c.inputs.contains_key(*k));
-        if let Some((key, _)) = missing {
-            return Err(rejected(format!("`{name}` needs input `{key}`")));
-        }
-        for (key, value) in &mut c.inputs {
-            *value = (formula.inputs[key].kind.take(value))
-                .map_err(|want| rejected(format!("input `{key}` of `{name}` must be {want}, not {value}")))?;
-        }
         // A run holds at most one bead (docs/design/contracts.md 5); its task input becomes the id of the bead it works
         // on.
         let bead_input = formula
@@ -183,27 +132,10 @@ impl RunHandler {
             }
             None => self.bead_agent(tx, &c.project, &rig_name, &name.to_string(), formula, None)?,
         };
-        // A continued session resumes in the workdir it ran in (a harness may find its transcript by the cwd).
-        let mut workdir = rig.path.to_string_lossy().into_owned();
-        if let Some(from) = &c.continue_from {
-            let found: Option<(String, bool, String)> = tx
-                .sql()
-                .query_row(
-                    "SELECT state, EXISTS (SELECT 1 FROM attempts WHERE run = ?1 AND session IS NOT NULL), \
-                     workdir FROM runs WHERE id = ?1",
-                    [from],
-                    |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
-                )
-                .optional()?;
-            match found {
-                None => return Err(not_found(format!("no run `{from}` to continue"))),
-                Some((state, ..)) if !matches!(state.as_str(), "passed" | "failed" | "cancelled") => {
-                    return Err(rejected(format!("`{from}` is still `{state}`")));
-                }
-                Some((_, false, _)) => return Err(rejected(format!("`{from}` has no session to continue"))),
-                Some((.., dir)) => workdir = dir,
-            }
-        }
+        let workdir = match &c.continue_from {
+            Some(from) => continued_workdir(tx, from)?,
+            None => rig.path.to_string_lossy().into_owned(),
+        };
         let n: i64 = tx
             .sql()
             .query_row("SELECT COALESCE(MAX(n), 0) + 1 FROM runs", [], |r| r.get(0))?;
@@ -382,4 +314,94 @@ fn with_passed_over(mut reply: Value, passed_over: serde_json::Map<String, Value
         reply["passed_over"] = Value::Object(passed_over);
     }
     reply
+}
+
+impl Create {
+    fn resolve_formula<'a>(&self, project: &'a Project, direct: bool) -> Result<(Name, &'a Formula), Error> {
+        // An ambiguous name is of formulas that are there; only a name of none is "no such thing".
+        let (name, formula) = project
+            .formula(&self.formula)
+            .map_err(|why| match why.starts_with("no formula") {
+                true => not_found(why),
+                false => rejected(why),
+            })?;
+        if direct && formula.internal {
+            return Err(rejected(format!(
+                "`{name}` is internal: only a step of another formula runs it"
+            )));
+        }
+        Ok((name, formula))
+    }
+
+    fn select_rig<'a>(&mut self, project: &'a Project, formula: &Formula) -> Result<(String, &'a Rig), Error> {
+        // A start that names no rig runs on the rig of the bead its task names, else on the root.
+        let rig_name = self.rig.take().unwrap_or_else(|| {
+            let beads = formula.inputs.iter().filter(|(_, i)| i.kind == InputType::Task);
+            let named = beads.filter_map(|(k, _)| self.inputs.get(k)?.as_str()).next();
+            named
+                .and_then(|id| project.rig_of(id))
+                .unwrap_or(&project.root.0)
+                .to_owned()
+        });
+        let rig = project.place(&rig_name);
+        let rig = rig.ok_or_else(|| not_found(format!("no rig `{rig_name}` in `{}`", self.project)))?;
+        Ok((rig_name, rig))
+    }
+
+    fn validate_inputs(&mut self, name: &Name, formula: &Formula) -> Result<(), Error> {
+        let first = &formula.steps[0];
+        if self.continue_from.is_some() && !matches!(first.kind, StepKind::Ai { .. }) {
+            return Err(rejected(format!(
+                "`{name}` starts with a step of kind `{}`: it has no session to continue",
+                first.kind.name()
+            )));
+        }
+        // A skipped first step would hand the continued session to a later step (docs/design/config.md).
+        if self.continue_from.is_some() && !first.condition.is_empty() {
+            return Err(rejected(format!(
+                "`{name}` starts with a step with an `if`: it may be skipped, so it cannot continue a session"
+            )));
+        }
+        if let Some(extra) = self.inputs.keys().find(|k| !formula.inputs.contains_key(*k)) {
+            return Err(rejected(format!("`{name}` has no input `{extra}`")));
+        }
+        // A null is no value; an input given no value takes the one the config gives (docs/design/config.md).
+        self.inputs.retain(|_, value| !value.is_null());
+        for (key, given) in &formula.defaults {
+            self.inputs.entry(key.clone()).or_insert_with(|| given.value.clone());
+        }
+        let missing = formula
+            .inputs
+            .iter()
+            .find(|(k, i)| i.required && !self.inputs.contains_key(*k));
+        if let Some((key, _)) = missing {
+            return Err(rejected(format!("`{name}` needs input `{key}`")));
+        }
+        for (key, value) in &mut self.inputs {
+            *value = (formula.inputs[key].kind.take(value))
+                .map_err(|want| rejected(format!("input `{key}` of `{name}` must be {want}, not {value}")))?;
+        }
+        Ok(())
+    }
+}
+
+/// A continued session resumes in the workdir where the harness wrote its transcript.
+fn continued_workdir(tx: &Tx<'_>, from: &str) -> Result<String, Error> {
+    let found: Option<(String, bool, String)> = tx
+        .sql()
+        .query_row(
+            "SELECT state, EXISTS (SELECT 1 FROM attempts WHERE run = ?1 AND session IS NOT NULL), \
+                     workdir FROM runs WHERE id = ?1",
+            [from],
+            |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
+        )
+        .optional()?;
+    match found {
+        None => Err(not_found(format!("no run `{from}` to continue"))),
+        Some((state, ..)) if !matches!(state.as_str(), "passed" | "failed" | "cancelled") => {
+            Err(rejected(format!("`{from}` is still `{state}`")))
+        }
+        Some((_, false, _)) => Err(rejected(format!("`{from}` has no session to continue"))),
+        Some((.., dir)) => Ok(dir),
+    }
 }

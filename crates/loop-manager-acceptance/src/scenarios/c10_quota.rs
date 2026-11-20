@@ -56,24 +56,7 @@ pub(crate) async fn run(env: Arc<Env>) -> String {
         .iter()
         .find(|g| g["key"].as_str().is_some_and(|k| k.starts_with("account:")));
     let gate = gate.unwrap_or_else(|| panic!("no account gate in {gates}"));
-    let until = gate["until"].as_str().and_then(parse_rfc3339_ms);
-    let until = until.unwrap_or_else(|| panic!("the gate opens at the reset: {gate}"));
-    let limited = parse_rfc3339_ms(failed.1["ts"].as_str().unwrap()).unwrap();
-    // The fake resets at `floor(request, 1 s) + RESET`, and the request falls between `before` and `limited`:
-    // bounds on whole seconds hold whatever the fraction of a second or the delay of the failure.
-    let reset = failure["retry_at"].as_str().and_then(parse_rfc3339_ms);
-    let reset = reset.unwrap_or_else(|| panic!("the failure names the reset: {failure}"));
-    let ms = |d: Duration| i64::try_from(d.as_millis()).unwrap();
-    let low = i64::try_from(before.as_secs()).unwrap() * 1000 + ms(RESET);
-    assert!(
-        (low..=limited + ms(RESET)).contains(&reset),
-        "the reset of the provider: {low} <= {reset} <= {limited} + {RESET:?}"
-    );
-    assert_eq!(
-        until,
-        reset + ms(MARGIN),
-        "the gate holds until the reset and the margin: {gate}"
-    );
+    let (until, limited) = check_reset(before, &failed.1, gate);
 
     let body = json!({ "project": "shop", "rig": "api", "formula": "dev" });
     let second = d.post("/v1/runs", body).await.unwrap()["run"]
@@ -128,4 +111,27 @@ pub(crate) async fn run(env: Arc<Env>) -> String {
         gate["until"],
         opened - limited
     )
+}
+
+fn check_reset(before: Duration, failed: &Value, gate: &Value) -> (i64, i64) {
+    let failure = &failed["data"]["failure"];
+    let until = gate["until"].as_str().and_then(parse_rfc3339_ms);
+    let until = until.unwrap_or_else(|| panic!("the gate opens at the reset: {gate}"));
+    let limited = parse_rfc3339_ms(failed["ts"].as_str().unwrap()).unwrap();
+    // The fake resets at `floor(request, 1 s) + RESET`, and the request falls between `before` and `limited`:
+    // bounds on whole seconds hold whatever the fraction of a second or the delay of the failure.
+    let reset = failure["retry_at"].as_str().and_then(parse_rfc3339_ms);
+    let reset = reset.unwrap_or_else(|| panic!("the failure names the reset: {failure}"));
+    let ms = |d: Duration| i64::try_from(d.as_millis()).unwrap();
+    let low = i64::try_from(before.as_secs()).unwrap() * 1000 + ms(RESET);
+    assert!(
+        (low..=limited + ms(RESET)).contains(&reset),
+        "the reset of the provider: {low} <= {reset} <= {limited} + {RESET:?}"
+    );
+    assert_eq!(
+        until,
+        reset + ms(MARGIN),
+        "the gate holds until the reset and the margin: {gate}"
+    );
+    (until, limited)
 }

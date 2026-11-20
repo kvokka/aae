@@ -96,34 +96,6 @@ fn failed_turns_are_classified() {
         ("error_during_execution", "a_reason_of_tomorrow", Unknown),
     ];
     cases.extend(ends.map(|(subtype, reason, kind)| (vec![ended(subtype, reason)], kind)));
-    // C8: a claude that cannot start is told by its reason; what may pass by itself is unknown.
-    let reasons = [
-        ("gateway_signin_required", AuthRequired),
-        ("gateway_access_denied", AuthRequired),
-        ("session_held_by_background", TranscriptDivergence),
-        ("org_pin_api_key_conflict", ConfigError),
-        ("provider_not_allowed", ConfigError),
-        ("org_pin_mismatch", ConfigError),
-        ("managed_settings_invalid", ConfigError),
-        ("proxy_invalid", ConfigError),
-        ("temp_dir_unusable", ConfigError),
-        ("cwd_unavailable", ConfigError),
-        ("shell_tool_missing", ConfigError),
-        ("worktree_resume_refused", ConfigError),
-        ("worktree_unverified", ConfigError),
-        ("cli_version_too_old", ConfigError),
-        ("bypass_root", ConfigError),
-        ("org_config_refused", ConfigError),
-        ("sandbox_required_unavailable", ConfigError),
-        ("initialize_not_first", ConfigError),
-        ("config_file_invalid", ConfigError),
-        ("org_verify_failed", Unknown),
-        ("remote_settings_required_unavailable", Unknown),
-        ("org_config_required_unavailable", Unknown),
-        ("managed_settings_not_delivered", Unknown),
-        ("a_reason_of_tomorrow", Unknown),
-    ];
-    cases.extend(reasons.map(|(reason, kind)| (vec![startup(reason)], kind)));
     let rejected = limit(json!({ "status": "rejected", "resetsAt": 1_794_286_800 }));
     let credits = limit(json!({ "status": "allowed_warning", "errorCode": "credits_required" }));
     cases.extend([
@@ -154,23 +126,63 @@ fn failed_turns_are_classified() {
         (vec![credits, assistant("rate_limit"), api(429)], Billing),
     ]);
     for (lines, kind) in cases {
-        let events = feed(&mut stream(), &lines);
-        let f = failure(&events);
-        assert_eq!(f.kind, kind, "{lines:?}");
-        assert_eq!(f.account.as_deref(), Some("acct"));
-        assert_eq!(
-            f.retried_by_harness,
-            matches!(kind, RateLimited | Overloaded),
-            "{lines:?}"
-        );
-        assert_eq!(f.text.is_some(), kind == Unknown, "{lines:?}");
-        assert_eq!(
-            events.last(),
-            Some(&Normalized::TurnEnded {
-                stop_reason: StopReason::Failed
-            })
-        );
+        assert_failure(&lines, kind);
     }
+}
+
+#[test]
+fn startup_failures_are_classified_by_reason() {
+    use FailureKind::*;
+    // C8: a claude that cannot start is told by its reason; what may pass by itself is unknown.
+    let reasons = [
+        ("gateway_signin_required", AuthRequired),
+        ("gateway_access_denied", AuthRequired),
+        ("session_held_by_background", TranscriptDivergence),
+        ("org_pin_api_key_conflict", ConfigError),
+        ("provider_not_allowed", ConfigError),
+        ("org_pin_mismatch", ConfigError),
+        ("managed_settings_invalid", ConfigError),
+        ("proxy_invalid", ConfigError),
+        ("temp_dir_unusable", ConfigError),
+        ("cwd_unavailable", ConfigError),
+        ("shell_tool_missing", ConfigError),
+        ("worktree_resume_refused", ConfigError),
+        ("worktree_unverified", ConfigError),
+        ("cli_version_too_old", ConfigError),
+        ("bypass_root", ConfigError),
+        ("org_config_refused", ConfigError),
+        ("sandbox_required_unavailable", ConfigError),
+        ("initialize_not_first", ConfigError),
+        ("config_file_invalid", ConfigError),
+        ("org_verify_failed", Unknown),
+        ("remote_settings_required_unavailable", Unknown),
+        ("org_config_required_unavailable", Unknown),
+        ("managed_settings_not_delivered", Unknown),
+        ("a_reason_of_tomorrow", Unknown),
+    ];
+    for (reason, kind) in reasons {
+        assert_failure(&[startup(reason)], kind);
+    }
+}
+
+fn assert_failure(lines: &[Value], kind: FailureKind) {
+    use FailureKind::*;
+    let events = feed(&mut stream(), lines);
+    let f = failure(&events);
+    assert_eq!(f.kind, kind, "{lines:?}");
+    assert_eq!(f.account.as_deref(), Some("acct"));
+    assert_eq!(
+        f.retried_by_harness,
+        matches!(kind, RateLimited | Overloaded),
+        "{lines:?}"
+    );
+    assert_eq!(f.text.is_some(), kind == Unknown, "{lines:?}");
+    assert_eq!(
+        events.last(),
+        Some(&Normalized::TurnEnded {
+            stop_reason: StopReason::Failed
+        })
+    );
 }
 
 /// A failed result with no field that names a kind.

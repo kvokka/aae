@@ -162,34 +162,7 @@ impl RunHandler {
         if given > 0 || alive || reads > 1 {
             return Ok(());
         }
-        let of = |states: &[&str]| -> Vec<&String> {
-            (kids.iter())
-                .filter(|(_, _, state, mine)| *mine && states.contains(&state.as_str()))
-                .map(|(_, bead, ..)| bead)
-                .collect()
-        };
-        let (closed, failed) = (of(&["passed"]), of(&["failed", "cancelled"]));
-        let counts = format!("{} closed, {} failed", closed.len(), failed.len());
-        let outcome = if stopped {
-            let on = of(&["failed"]);
-            let on_ids: Vec<&str> = on.iter().map(|b| b.as_str()).collect();
-            Outcome {
-                result: Verdict::Fail,
-                summary: format!(
-                    "stopped on {}: {counts}, {} not started",
-                    on_ids.join(", "),
-                    not_started.len()
-                ),
-                data: Some(json!({ "closed": closed, "failed": failed, "refused": refused,
-                    "stopped_on": on, "not_started": not_started })),
-            }
-        } else {
-            Outcome {
-                result: Verdict::Pass,
-                summary: format!("{counts}, {} refused", refused.len()),
-                data: Some(json!({ "closed": closed, "failed": failed, "refused": refused })),
-            }
-        };
+        let outcome = drain_outcome(&kids, stopped, not_started, refused);
         self.step_done(tx, row, &outcome)
     }
 
@@ -293,4 +266,40 @@ pub(super) fn sync(tx: &Tx<'_>, project: &str) -> Result<Value, Error> {
         json!({ "op": "tracker", "call": "sync", "project": project, "after": after.unwrap_or_default(),
             "under": under }),
     )
+}
+
+fn drain_outcome(
+    kids: &[(String, String, String, bool)],
+    stopped: bool,
+    not_started: Vec<String>,
+    refused: Map<String, Value>,
+) -> Outcome {
+    let of = |states: &[&str]| -> Vec<&String> {
+        (kids.iter())
+            .filter(|(_, _, state, mine)| *mine && states.contains(&state.as_str()))
+            .map(|(_, bead, ..)| bead)
+            .collect()
+    };
+    let (closed, failed) = (of(&["passed"]), of(&["failed", "cancelled"]));
+    let counts = format!("{} closed, {} failed", closed.len(), failed.len());
+    if stopped {
+        let on = of(&["failed"]);
+        let on_ids: Vec<&str> = on.iter().map(|b| b.as_str()).collect();
+        Outcome {
+            result: Verdict::Fail,
+            summary: format!(
+                "stopped on {}: {counts}, {} not started",
+                on_ids.join(", "),
+                not_started.len()
+            ),
+            data: Some(json!({ "closed": closed, "failed": failed, "refused": refused,
+                    "stopped_on": on, "not_started": not_started })),
+        }
+    } else {
+        Outcome {
+            result: Verdict::Pass,
+            summary: format!("{counts}, {} refused", refused.len()),
+            data: Some(json!({ "closed": closed, "failed": failed, "refused": refused })),
+        }
+    }
 }

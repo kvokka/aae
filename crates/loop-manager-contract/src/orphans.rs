@@ -30,7 +30,10 @@ fn own() -> MutexGuard<'static, BTreeSet<i32>> {
 
 /// Spawns `command` as a child of the daemon's own; [`waited`] once its `wait` returned. Every child of the daemon
 /// is spawned here or in [`spawn_std`] (`clippy.toml`): the reaper would take the exit of any other from its `wait`.
-#[allow(clippy::disallowed_methods)]
+#[expect(
+    clippy::disallowed_methods,
+    reason = "this wrapper registers the child under the reaper lock"
+)]
 pub fn spawn(command: &mut Command) -> io::Result<Child> {
     // Held across the spawn: a child that exits at once is not reaped before it is known.
     let mut own = own();
@@ -40,7 +43,10 @@ pub fn spawn(command: &mut Command) -> io::Result<Child> {
 }
 
 /// [`spawn`] for a `std` command; the child is the daemon's own until the [`Own`] is dropped, once it was waited for.
-#[allow(clippy::disallowed_methods)]
+#[expect(
+    clippy::disallowed_methods,
+    reason = "this wrapper registers the child under the reaper lock"
+)]
 pub fn spawn_std(command: &mut std::process::Command) -> io::Result<(std::process::Child, Own)> {
     let mut own = own();
     let child = command.spawn()?;
@@ -279,5 +285,5 @@ fn listener(line: &str, port: u16) -> Option<String> {
 }
 
 #[cfg(test)]
-#[allow(clippy::disallowed_methods)]
+#[allow(clippy::disallowed_methods, reason = "test processes run outside the daemon reaper")]
 mod tests;

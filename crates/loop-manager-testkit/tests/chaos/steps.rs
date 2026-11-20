@@ -267,47 +267,7 @@ async fn act(w: &mut World, rng: &mut Rng, play: &mut Play, op: u64, natural: bo
             w.driver.script(steps);
             play.log.push(format!("script {name}"));
         }
-        7..=9 => {
-            let running: Vec<_> = live.iter().filter(|r| r.1 == "running").cloned().collect();
-            let pool = if running.is_empty() { live } else { &running };
-            let Some((run, _, attempt, _)) = rng.pick(pool).cloned() else {
-                return;
-            };
-            // Now and then the finisher of the attempt before: it must be refused (contracts 6.3).
-            let stale = !natural && attempt > 1 && rng.below(4) == 0;
-            let of = if stale { attempt - 1 } else { attempt };
-            let token = w.driver.token(&run, of).unwrap_or_else(|| "forged".into());
-            let result = if !natural && rng.below(3) == 0 {
-                Verdict::Fail
-            } else {
-                Verdict::Pass
-            };
-            let pass = result == Verdict::Pass;
-            let outcome = Outcome {
-                result,
-                summary: "chaos".into(),
-                data: None,
-            };
-            let times = 1 + rng.below(2);
-            for _ in 0..times {
-                let msg = Msg::Finish {
-                    run: run.clone(),
-                    token: token.clone(),
-                    outcome: outcome.clone(),
-                };
-                let answer = w.core.send(None, msg).await.map(|r| r["answer"].clone());
-                if matches!(&answer, Ok(a) if a == "accepted") {
-                    if stale {
-                        play.broken = Some(format!("{run}: the finisher of attempt {of} accepted after {attempt}"));
-                    }
-                    play.said.insert(run.clone(), pass);
-                    if pass {
-                        play.finished.insert(run.clone());
-                    }
-                }
-            }
-            play.log.push(format!("finish {run}#{of} pass={pass} x{times}"));
-        }
+        7..=9 => finish(w, rng, play, natural, live).await,
         10..=15 => {
             // A decision on what a run waits for, once, twice or never (lost: its deadline decides).
             let waiting: Vec<_> = live.iter().filter_map(|r| Some((r.0.clone(), r.3?))).collect();
@@ -386,4 +346,46 @@ async fn act(w: &mut World, rng: &mut Rng, play: &mut Play, op: u64, natural: bo
             play.log.push(format!("wait {ms} ms"));
         }
     }
+}
+
+async fn finish(w: &World, rng: &mut Rng, play: &mut Play, natural: bool, live: &[Run]) {
+    let running: Vec<_> = live.iter().filter(|r| r.1 == "running").cloned().collect();
+    let pool = if running.is_empty() { live } else { &running };
+    let Some((run, _, attempt, _)) = rng.pick(pool).cloned() else {
+        return;
+    };
+    // Now and then the finisher of the attempt before: it must be refused (contracts 6.3).
+    let stale = !natural && attempt > 1 && rng.below(4) == 0;
+    let of = if stale { attempt - 1 } else { attempt };
+    let token = w.driver.token(&run, of).unwrap_or_else(|| "forged".into());
+    let result = if !natural && rng.below(3) == 0 {
+        Verdict::Fail
+    } else {
+        Verdict::Pass
+    };
+    let pass = result == Verdict::Pass;
+    let outcome = Outcome {
+        result,
+        summary: "chaos".into(),
+        data: None,
+    };
+    let times = 1 + rng.below(2);
+    for _ in 0..times {
+        let msg = Msg::Finish {
+            run: run.clone(),
+            token: token.clone(),
+            outcome: outcome.clone(),
+        };
+        let answer = w.core.send(None, msg).await.map(|r| r["answer"].clone());
+        if matches!(&answer, Ok(a) if a == "accepted") {
+            if stale {
+                play.broken = Some(format!("{run}: the finisher of attempt {of} accepted after {attempt}"));
+            }
+            play.said.insert(run.clone(), pass);
+            if pass {
+                play.finished.insert(run.clone());
+            }
+        }
+    }
+    play.log.push(format!("finish {run}#{of} pass={pass} x{times}"));
 }

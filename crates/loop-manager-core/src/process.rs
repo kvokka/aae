@@ -261,5 +261,8 @@ impl Drop for Own {
 }
 
 #[cfg(test)]
-#[allow(clippy::disallowed_methods)]
+#[allow(
+    clippy::disallowed_methods,
+    reason = "the tests spawn and reap their own child processes"
+)]
 mod tests;

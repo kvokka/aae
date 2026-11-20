@@ -39,7 +39,7 @@ impl RunHandler {
         for (key, value) in &rig.vars {
             rig_view[key] = json!(value);
         }
-        let mut context = json!({
+        let context = json!({
             "inputs": serde_json::from_str::<Value>(&row.inputs).unwrap_or_default(),
             "rig": rig_view, "run": row.view(),
             "bead": row.bead_data.as_deref().map(serde_json::from_str::<Value>).transpose().ok().flatten(),
@@ -92,9 +92,8 @@ impl RunHandler {
                 "formula",
             ) => {
                 let (_, child) = project.formula(&run.to_string())?;
-                let own: Value = serde_json::from_str(&row.inputs).unwrap_or_default();
                 let mut given: Map<String, Value> = (child.inputs.keys())
-                    .filter_map(|k| Some((k.clone(), own.get(k)?.clone())))
+                    .filter_map(|k| Some((k.clone(), context["inputs"].get(k)?.clone())))
                     .collect();
                 let explicit = inputs
                     .resolve_in(&context)
@@ -127,9 +126,24 @@ impl RunHandler {
         if agent != row.agent {
             return Err(format!("`{}` now runs agent `{agent}`", row.formula));
         }
+        let text = self.render_prompt(tx, row, &agent, context, *last_comments)?;
+        // The check script of the step gets the environment of an exec step, not the agent's.
+        let mut config = json!(config);
+        config["exec"] = json!({ "env": env, "inherit_env": inherit_env });
+        Ok(Some((Some(text), timeout_ms(timeout, AI_STEP_TIMEOUT_MS), config)))
+    }
+
+    fn render_prompt(
+        &self,
+        tx: &Tx<'_>,
+        row: &Row,
+        agent: &str,
+        mut context: Value,
+        last_comments: Option<std::num::NonZeroUsize>,
+    ) -> Result<String, String> {
         // The run's agent brings its template: the step's, or the one a bead's `agent:` label names
         // (docs/design/config.md).
-        let prompt = self.config.prompt(&row.project, &agent)?;
+        let prompt = self.config.prompt(&row.project, agent)?;
         context["remarks"] = json!(remarks(tx.sql(), &row.id).map_err(|e| e.to_string())?);
         context["agent"] = json!(prompt.files);
         if let Some(last) = last_comments {
@@ -145,10 +159,7 @@ impl RunHandler {
         if text.trim().is_empty() {
             return Err("prompt: empty after substitution".to_owned());
         }
-        // The check script of the step gets the environment of an exec step, not the agent's.
-        let mut config = json!(config);
-        config["exec"] = json!({ "env": env, "inherit_env": inherit_env });
-        Ok(Some((Some(text), timeout_ms(timeout, AI_STEP_TIMEOUT_MS), config)))
+        Ok(text)
     }
 
     /// Where the session of `row`'s step works: the root for an agent of the root (docs/design/config.md), else the

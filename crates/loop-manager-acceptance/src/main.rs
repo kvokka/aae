@@ -280,6 +280,10 @@ async fn main() -> ExitCode {
             took: Duration::ZERO,
         });
     }
+    write_report(&args, &env, rows, started)
+}
+
+fn write_report(args: &Args, env: &Env, mut rows: Vec<Row>, started: Instant) -> ExitCode {
     rows.sort_by(|a, b| order(a.criterion).cmp(&order(b.criterion)));
     let mut report = format!(
         "# loop-manager acceptance spec\n\n- date: {}\n- loop-manager: {}\n- claude: {}\n- codex: {}\n- br: {}\n- host: {}\n- run: {}\n\n\

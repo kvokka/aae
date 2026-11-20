@@ -176,24 +176,7 @@ impl Stream {
                 }]
             }
             "item/started" | "item/completed" => {
-                let item = &params["item"];
-                let command = item["type"] == "commandExecution";
-                if command {
-                    let item_id = item["id"].as_str().unwrap_or_default().to_owned();
-                    match method {
-                        "item/started" => thread.commands.insert(item_id),
-                        _ => thread.commands.remove(&item_id),
-                    };
-                }
-                let mut out = activity(thread, now, !thread.commands.is_empty());
-                // The last background command of an ended turn is done: the thread is idle without background.
-                if command && method == "item/completed" && !thread.open && thread.commands.is_empty() {
-                    out.push(Normalized::State {
-                        state: SessionState::Idle,
-                        background: false,
-                    });
-                }
-                out
+                item_activity(thread, now, &params["item"], method == "item/completed")
             }
             _ if method.ends_with("/delta") => {
                 let busy = !thread.commands.is_empty();
@@ -378,6 +361,27 @@ fn fail(account: &Option<String>, model: &Option<String>, kind: FailureKind, mut
     failure.account.clone_from(account);
     failure.provider_model.clone_from(model);
     failure
+}
+
+fn item_activity(thread: &mut Thread, now: Instant, item: &Value, completed: bool) -> Vec<Normalized> {
+    let command = item["type"] == "commandExecution";
+    if command {
+        let item_id = item["id"].as_str().unwrap_or_default().to_owned();
+        if completed {
+            thread.commands.remove(&item_id);
+        } else {
+            thread.commands.insert(item_id);
+        }
+    }
+    let mut out = activity(thread, now, !thread.commands.is_empty());
+    // The last background command of an ended turn is done: the thread is idle without background.
+    if command && completed && !thread.open && thread.commands.is_empty() {
+        out.push(Normalized::State {
+            state: SessionState::Idle,
+            background: false,
+        });
+    }
+    out
 }
 
 /// At most one activity a second, but a change of `tool_running` always goes through.

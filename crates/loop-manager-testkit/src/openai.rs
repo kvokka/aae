@@ -130,10 +130,6 @@ impl Drop for Provider {
 
 async fn answer(n: usize, reply: Reply, body: &Value) -> Response {
     let model = body["model"].as_str().unwrap_or_default();
-    let now = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_secs();
     match reply {
         Reply::Text(text) => {
             let item = json!({ "type": "message", "id": format!("msg_fake_{n}"), "role": "assistant",
@@ -185,23 +181,7 @@ async fn answer(n: usize, reply: Reply, body: &Value) -> Response {
                 "message": "Rate limit reached. Please try again in 1s." }),
             &[("retry-after", "1")],
         ),
-        Reply::UsageLimit(after) => {
-            let reset = now + after;
-            let (primary, week) = (reset.to_string(), (reset + 400_000).to_string());
-            error(
-                StatusCode::TOO_MANY_REQUESTS,
-                json!({ "type": "usage_limit_reached", "message": "The usage limit has been reached",
-                    "plan_type": "pro", "resets_at": reset, "limit_window_minutes": 300 }),
-                &[
-                    ("x-codex-primary-used-percent", "100"),
-                    ("x-codex-primary-window-minutes", "300"),
-                    ("x-codex-primary-reset-at", &primary),
-                    ("x-codex-secondary-used-percent", "42"),
-                    ("x-codex-secondary-window-minutes", "10080"),
-                    ("x-codex-secondary-reset-at", &week),
-                ],
-            )
-        }
+        Reply::UsageLimit(after) => usage_limit(after),
         Reply::StrangeQuota => error(
             StatusCode::TOO_MANY_REQUESTS,
             json!({ "message": "Usage paused for this workspace until the next billing period." }),
@@ -244,6 +224,28 @@ async fn answer(n: usize, reply: Reply, body: &Value) -> Response {
         }
         Reply::Silent => std::future::pending().await,
     }
+}
+
+fn usage_limit(after: u64) -> Response {
+    let now = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs();
+    let reset = now + after;
+    let (primary, week) = (reset.to_string(), (reset + 400_000).to_string());
+    error(
+        StatusCode::TOO_MANY_REQUESTS,
+        json!({ "type": "usage_limit_reached", "message": "The usage limit has been reached",
+            "plan_type": "pro", "resets_at": reset, "limit_window_minutes": 300 }),
+        &[
+            ("x-codex-primary-used-percent", "100"),
+            ("x-codex-primary-window-minutes", "300"),
+            ("x-codex-primary-reset-at", &primary),
+            ("x-codex-secondary-used-percent", "42"),
+            ("x-codex-secondary-window-minutes", "10080"),
+            ("x-codex-secondary-reset-at", &week),
+        ],
+    )
 }
 
 /// A completed response of one output item; a text item is streamed by its delta first.

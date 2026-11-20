@@ -346,5 +346,5 @@ fn transcript(session: &Value, key: PromptKey, host: &Path) -> Transcript {
 }
 
 #[cfg(test)]
-#[allow(clippy::disallowed_methods)]
+#[allow(clippy::disallowed_methods, reason = "test processes run outside the daemon reaper")]
 mod tests;

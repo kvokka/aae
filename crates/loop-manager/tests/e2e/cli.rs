@@ -224,43 +224,7 @@ async fn the_config_from_the_cli_lists_explains_checks_and_reloads() {
         fs::write(loop_manager.join("shop/formulas/inner.toml"), inner).unwrap();
     })
     .await;
-    assert_eq!(d.json(&["project", "list"])[0]["rigs"][0]["name"], "web");
-    let agent = &d.json(&["agent", "list", "--project", "shop"])[0];
-    assert_eq!(
-        (&agent["agent"], &agent["harness"], agent.get("provider")),
-        (&"shop.dev".into(), &"claude".into(), None)
-    );
-    // The call graph, the agent itself left out of it.
-    let agents = d.json(&["agent", "list"]);
-    let graph = |a: &Value| (a["agent"].clone(), a["subagents"].clone(), a["called_by"].clone());
-    assert_eq!(
-        agents.as_array().unwrap().iter().map(graph).collect::<Vec<_>>(),
-        [
-            (json!("shop.dev"), json!(["shop.qa"]), json!([])),
-            (json!("shop.qa"), json!([]), json!(["shop.dev"]))
-        ]
-    );
-    let out = d.cli(&["agent", "list"], &[]);
-    let text = String::from_utf8_lossy(&out.stdout);
-    assert_eq!(text.trim_end(), loop_manager_core::toon::encode(&agents));
-    // An internal formula (docs/design/config.md): marked in the API, hidden from `loop-manager formula list` unless `--all`.
-    let internal = |args: &[&str]| -> Vec<Value> {
-        let formulas = d.json(args);
-        let inner = formulas.as_array().unwrap().iter().filter(|f| f["formula"] == "inner");
-        inner.map(|f| f["internal"].clone()).collect()
-    };
-    assert_eq!(internal(&["formula", "list"]), Vec::<Value>::new());
-    assert_eq!(internal(&["formula", "list", "--all"]), vec![Value::Bool(true)]);
-    assert_eq!(d.json(&["formula", "list"]).as_array().unwrap().len(), 2);
-    assert_eq!(d.json(&["pack", "list"])[0]["name"], "shop");
-    let addons = d.json(&["addon", "list"]);
-    assert_eq!(
-        (&addons[0]["project"], &addons[0]["name"]),
-        (&Value::Null, &"default-policy".into())
-    );
-    let shop = (addons.as_array().unwrap().iter()).any(|p| p["project"] == "shop" && p["name"] == "default-policy");
-    assert!(shop, "every project's addons without --project: {addons}");
-    assert!(!d.cli(&["agent", "list", "--project", "nope"], &[]).status.success());
+    check_config_lists(&d);
     // Asked from another environment, whose own config file is not the daemon's, the daemon answers by its config.
     let other = [("XDG_CONFIG_HOME", "/nonexistent")];
     let out = d.cli(&["config", "explain", "--project", "shop", "--agent", "dev"], &other);
@@ -323,4 +287,44 @@ async fn the_config_from_the_cli_lists_explains_checks_and_reloads() {
         (&"shop.tick".into(), &"3600s".into())
     );
     assert!(triggers[0]["next_at"].is_string(), "{triggers}");
+}
+
+fn check_config_lists(d: &Daemon) {
+    assert_eq!(d.json(&["project", "list"])[0]["rigs"][0]["name"], "web");
+    let agent = &d.json(&["agent", "list", "--project", "shop"])[0];
+    assert_eq!(
+        (&agent["agent"], &agent["harness"], agent.get("provider")),
+        (&"shop.dev".into(), &"claude".into(), None)
+    );
+    // The call graph, the agent itself left out of it.
+    let agents = d.json(&["agent", "list"]);
+    let graph = |a: &Value| (a["agent"].clone(), a["subagents"].clone(), a["called_by"].clone());
+    assert_eq!(
+        agents.as_array().unwrap().iter().map(graph).collect::<Vec<_>>(),
+        [
+            (json!("shop.dev"), json!(["shop.qa"]), json!([])),
+            (json!("shop.qa"), json!([]), json!(["shop.dev"]))
+        ]
+    );
+    let out = d.cli(&["agent", "list"], &[]);
+    let text = String::from_utf8_lossy(&out.stdout);
+    assert_eq!(text.trim_end(), loop_manager_core::toon::encode(&agents));
+    // An internal formula (docs/design/config.md): marked in the API, hidden from `loop-manager formula list` unless `--all`.
+    let internal = |args: &[&str]| -> Vec<Value> {
+        let formulas = d.json(args);
+        let inner = formulas.as_array().unwrap().iter().filter(|f| f["formula"] == "inner");
+        inner.map(|f| f["internal"].clone()).collect()
+    };
+    assert_eq!(internal(&["formula", "list"]), Vec::<Value>::new());
+    assert_eq!(internal(&["formula", "list", "--all"]), vec![Value::Bool(true)]);
+    assert_eq!(d.json(&["formula", "list"]).as_array().unwrap().len(), 2);
+    assert_eq!(d.json(&["pack", "list"])[0]["name"], "shop");
+    let addons = d.json(&["addon", "list"]);
+    assert_eq!(
+        (&addons[0]["project"], &addons[0]["name"]),
+        (&Value::Null, &"default-policy".into())
+    );
+    let shop = (addons.as_array().unwrap().iter()).any(|p| p["project"] == "shop" && p["name"] == "default-policy");
+    assert!(shop, "every project's addons without --project: {addons}");
+    assert!(!d.cli(&["agent", "list", "--project", "nope"], &[]).status.success());
 }

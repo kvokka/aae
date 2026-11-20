@@ -88,6 +88,10 @@ const SERVICE: Shape = Obj(&[
 const ENVELOPE: &[&str] = &["seq", "ts", "type", "project", "rig", "run", "correlation"];
 
 /// The `data` keys of an event type, `None` for a type that 1.3 does not define.
+#[expect(
+    clippy::too_many_lines,
+    reason = "the match is the lookup table for event payload schemas"
+)]
 fn payload(event_type: &str) -> Option<&'static [(&'static str, Shape)]> {
     Some(match event_type {
         "daemon.started" => &[("version", Leaf), ("pid", Leaf), ("interrupted_runs", Leaf)],

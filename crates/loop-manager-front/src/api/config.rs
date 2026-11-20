@@ -206,92 +206,7 @@ pub(crate) enum Explain {
 pub(crate) fn explained(config: &Config, project: &str, of: &Explain, rig: Option<&str>) -> Result<Value, String> {
     let agent = match of {
         Explain::Agent(agent) => agent,
-        Explain::Formula(formula) => {
-            let p = (config.projects.iter()).find(|p| p.name == project);
-            let p = p.ok_or_else(|| format!("no project `{project}`"))?;
-            let rig = rig.unwrap_or(&p.root.0);
-            let (_, f) = p.formula(formula)?;
-            let (mut text, mut steps, mut host) = (String::new(), Vec::new(), false);
-            text += &format!("rounds = {}  # {}\n", f.rounds.value, f.rounds.from);
-            if let Some(n) = p.rigs.get(rig).and_then(|r| r.max_writers) {
-                text += &format!("max_writers = {n}  # rig\n");
-            }
-            for (input, given) in &f.defaults {
-                text += &format!("inputs.{input} = {}  # {}\n", given.value, given.from);
-            }
-            for step in &f.steps {
-                let name = &step.name;
-                let agent = match &step.kind {
-                    StepKind::Exec { command, env, .. } => {
-                        text += &format!("# step `{name}` of `{formula}`: exec `{}`\n", command.join(" "));
-                        text += &env.explain();
-                        None
-                    }
-                    StepKind::Drain {
-                        formula: each,
-                        pool,
-                        on_item_failure,
-                        ..
-                    } => {
-                        let stop = match on_item_failure {
-                            OnItemFailure::Continue => "",
-                            OnItemFailure::SoftStop => "; on a failed bead: soft_stop",
-                            OnItemFailure::HardStop => "; on a failed bead: hard_stop",
-                        };
-                        text += &format!(
-                            "# step `{name}` of `{formula}`: drain, a run of `{each}` per bead, {pool} at a time{stop}\n"
-                        );
-                        None
-                    }
-                    StepKind::Formula { formula: run, .. } => {
-                        text += &format!("# step `{name}` of `{formula}`: a run of `{run}`\n");
-                        None
-                    }
-                    StepKind::Await { .. } => {
-                        text += &format!("# step `{name}` of `{formula}`: await an outcome from outside\n");
-                        None
-                    }
-                    StepKind::Ai { .. } => {
-                        let (agent, effective) = config.for_run(project, rig, formula, name)?;
-                        text += &format!("# step `{name}` of `{formula}` on `{rig}`: agent {agent}\n");
-                        let template = config.prompt(project, &agent)?.from.display();
-                        text += &format!("# prompt template: {template}\n");
-                        text += &effective.explain();
-                        host |= effective.inherits_host();
-                        Some(agent)
-                    }
-                };
-                if !step.condition.is_empty() {
-                    let entries: Vec<String> = (step.condition.paths())
-                        .map(
-                            |path| match step.condition.accepted(path).collect::<Vec<_>>().as_slice() {
-                                [one] => format!("{} = {one}", json!(path)),
-                                many => format!("{} = {}", json!(path), json!(many)),
-                            },
-                        )
-                        .collect();
-                    text += &format!("# runs only if {{ {} }}\n", entries.join(", "));
-                }
-                if let Some(to) = &step.back_to {
-                    text += &format!(
-                        "# a check: on fail, back to `{to}`, at most {} rounds\n",
-                        f.rounds.value
-                    );
-                }
-                let times = (step.max_attempts > 1).then(|| format!("runs at most {} times", step.max_attempts));
-                let check = (step.check.as_ref()).map(|c| format!("passes when {} exits 0", c.display()));
-                let repeat: Vec<String> = times.into_iter().chain(check).collect();
-                if !repeat.is_empty() {
-                    text += &format!("# {}\n", repeat.join("; "));
-                }
-                // The check script of a step of another kind gets `[exec]` of the orchestrator and the project.
-                if step.check.is_some() && !matches!(step.kind, StepKind::Exec { .. }) {
-                    text += &p.exec.explain();
-                }
-                steps.push(json!({ "step": name, "kind": step.kind.name(), "agent": agent }));
-            }
-            return Ok(json!({ "agent": null, "steps": steps, "text": text, "inherits_host": host }));
-        }
+        Explain::Formula(formula) => return explain_formula(config, project, formula, rig),
     };
     let agent = match agent.split_once('.') {
         Some((pack, name)) => Name {
@@ -313,6 +228,93 @@ pub(crate) fn explained(config: &Config, project: &str, of: &Explain, rig: Optio
         json!({ "agent": agent.to_string(), "steps": [], "text": effective.explain(),
         "inherits_host": effective.inherits_host() }),
     )
+}
+
+fn explain_formula(config: &Config, project: &str, formula: &str, rig: Option<&str>) -> Result<Value, String> {
+    let p = (config.projects.iter()).find(|p| p.name == project);
+    let p = p.ok_or_else(|| format!("no project `{project}`"))?;
+    let rig = rig.unwrap_or(&p.root.0);
+    let (_, f) = p.formula(formula)?;
+    let (mut text, mut steps, mut host) = (String::new(), Vec::new(), false);
+    text += &format!("rounds = {}  # {}\n", f.rounds.value, f.rounds.from);
+    if let Some(n) = p.rigs.get(rig).and_then(|r| r.max_writers) {
+        text += &format!("max_writers = {n}  # rig\n");
+    }
+    for (input, given) in &f.defaults {
+        text += &format!("inputs.{input} = {}  # {}\n", given.value, given.from);
+    }
+    for step in &f.steps {
+        let name = &step.name;
+        let agent = match &step.kind {
+            StepKind::Exec { command, env, .. } => {
+                text += &format!("# step `{name}` of `{formula}`: exec `{}`\n", command.join(" "));
+                text += &env.explain();
+                None
+            }
+            StepKind::Drain {
+                formula: each,
+                pool,
+                on_item_failure,
+                ..
+            } => {
+                let stop = match on_item_failure {
+                    OnItemFailure::Continue => "",
+                    OnItemFailure::SoftStop => "; on a failed bead: soft_stop",
+                    OnItemFailure::HardStop => "; on a failed bead: hard_stop",
+                };
+                text += &format!(
+                    "# step `{name}` of `{formula}`: drain, a run of `{each}` per bead, {pool} at a time{stop}\n"
+                );
+                None
+            }
+            StepKind::Formula { formula: run, .. } => {
+                text += &format!("# step `{name}` of `{formula}`: a run of `{run}`\n");
+                None
+            }
+            StepKind::Await { .. } => {
+                text += &format!("# step `{name}` of `{formula}`: await an outcome from outside\n");
+                None
+            }
+            StepKind::Ai { .. } => {
+                let (agent, effective) = config.for_run(project, rig, formula, name)?;
+                text += &format!("# step `{name}` of `{formula}` on `{rig}`: agent {agent}\n");
+                let template = config.prompt(project, &agent)?.from.display();
+                text += &format!("# prompt template: {template}\n");
+                text += &effective.explain();
+                host |= effective.inherits_host();
+                Some(agent)
+            }
+        };
+        if !step.condition.is_empty() {
+            let entries: Vec<String> = (step.condition.paths())
+                .map(
+                    |path| match step.condition.accepted(path).collect::<Vec<_>>().as_slice() {
+                        [one] => format!("{} = {one}", json!(path)),
+                        many => format!("{} = {}", json!(path), json!(many)),
+                    },
+                )
+                .collect();
+            text += &format!("# runs only if {{ {} }}\n", entries.join(", "));
+        }
+        if let Some(to) = &step.back_to {
+            text += &format!(
+                "# a check: on fail, back to `{to}`, at most {} rounds\n",
+                f.rounds.value
+            );
+        }
+        let times = (step.max_attempts > 1).then(|| format!("runs at most {} times", step.max_attempts));
+        let check = (step.check.as_ref()).map(|c| format!("passes when {} exits 0", c.display()));
+        let repeat: Vec<String> = times.into_iter().chain(check).collect();
+        if !repeat.is_empty() {
+            text += &format!("# {}\n", repeat.join("; "));
+        }
+        // The check script of a step of another kind gets `[exec]` of the orchestrator and the project.
+        if step.check.is_some() && !matches!(step.kind, StepKind::Exec { .. }) {
+            text += &p.exec.explain();
+        }
+        steps.push(json!({ "step": name, "kind": step.kind.name(), "agent": agent }));
+    }
+    Ok(json!({ "agent": null, "steps": steps, "text": text, "inherits_host": host }))
 }
 
 /// Loads the config file as a reload would and reports its errors; changes nothing.

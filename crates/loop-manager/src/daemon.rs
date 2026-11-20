@@ -4,7 +4,8 @@
 use crate::harness::{binary, driver, load, minimum};
 use loop_manager_br::Br;
 use loop_manager_core::{
-    Clock, Journal,
+    Clock, CoreHandle, Journal,
+    config::Config,
     driver::Driver,
     open,
     run::{self, ExecHooks, Msg, Reader},
@@ -24,7 +25,7 @@ use std::{
     sync::{Arc, RwLock},
 };
 use tokio::{
-    net::{UnixListener, UnixStream},
+    net::{TcpListener, UnixListener, UnixStream},
     signal::unix::{SignalKind, signal},
     sync::mpsc,
 };
@@ -68,7 +69,7 @@ impl Paths {
 }
 
 /// The directory of each declared addon's data, `${LOOP_MANAGER_ADDON_DATA}` (docs/design/config.md): made, never read.
-fn addon_data(config: &loop_manager_core::config::Config) -> Result<(), String> {
+fn addon_data(config: &Config) -> Result<(), String> {
     let Some(data) = &config.addon_data else {
         return Ok(());
     };
@@ -94,28 +95,10 @@ pub(crate) async fn run(paths: Paths) -> Result<bool, String> {
     let conn = open(&db).map_err(|e| format!("{}: {e}", db.display()))?;
     let journal_dir = paths.state.join("journal");
     let journal = Journal::new(&journal_dir);
-    let written = journal.subscribe();
+    let mut written = journal.subscribe();
     let journal_health = journal.health();
     let listener = bind(&paths.socket).await?;
-    let tcp = match config.api_tcp {
-        Some(addr) => {
-            // A new token every start, for the owner's clients in `api.token` and for sessions through `${LOOP_MANAGER_API}`.
-            config.api_token = loop_manager_core::run::new_token().ok_or("no randomness for the API token")?;
-            let file = paths.state.join("api.token");
-            // Created 0600 so the token is never readable by others, not even until a chmod.
-            let _ = std::fs::remove_file(&file);
-            std::fs::OpenOptions::new()
-                .write(true)
-                .create_new(true)
-                .mode(0o600)
-                .open(&file)
-                .and_then(|mut f| std::io::Write::write_all(&mut f, config.api_token.as_bytes()))
-                .map_err(|e| format!("{}: {e}", file.display()))?;
-            let tcp = tokio::net::TcpListener::bind(addr).await;
-            Some(tcp.map_err(|e| format!("api_tcp {addr}: {e}"))?)
-        }
-        None => None,
-    };
+    let tcp = bind_tcp(&mut config, &paths.state).await?;
     // Descendants of instances that left their group are re-parented here and reaped (invariant 7).
     loop_manager_core::orphans::adopt_orphans().map_err(|e| format!("cannot become the child subreaper: {e}"))?;
     let mut drivers: Vec<Arc<dyn Driver>> = Vec::new();
@@ -135,27 +118,9 @@ pub(crate) async fn run(paths: Paths) -> Result<bool, String> {
         .map(|p| (p.name.clone(), p.dir.join(".beads")))
         .filter(|(_, dir)| dir.is_dir())
         .collect();
-    let br = binary("br", None).0;
-    let trackers: BTreeMap<String, Arc<dyn Tracker>> = beads
-        .iter()
-        .map(|(name, dir)| {
-            (
-                name.clone(),
-                Arc::new(Br::new(br.clone(), dir.clone())) as Arc<dyn Tracker>,
-            )
-        })
-        .collect();
-    if let Some(why) = (!beads.is_empty())
-        .then(|| loop_manager_core::tested_version(&br, loop_manager_br::TESTED).err())
-        .flatten()
-    {
-        eprintln!("loop-manager daemon: warning: {why}");
-    }
-    if let Err(e) = bv_workspace(&paths.config, &br, &beads) {
-        eprintln!("loop-manager daemon: warning: the bv workspace file: {e}");
-    }
+    let trackers = trackers(&paths.config, &beads);
     let config = Arc::new(config);
-    let (core, task) = run::start(
+    let (core, mut task) = run::start(
         conn,
         Clock::system(),
         config.clone(),
@@ -167,34 +132,7 @@ pub(crate) async fn run(paths: Paths) -> Result<bool, String> {
         }),
         journal,
     );
-    // Each watched write tells the core to read its project's tracker; a burst of writes is one read.
-    let (changed, mut changes) = mpsc::unbounded_channel::<String>();
-    let mut watchers = Vec::new();
-    for (name, dir) in beads {
-        let (changed, project) = (changed.clone(), name.clone());
-        match loop_manager_br::watch(&dir, move || drop(changed.send(project.clone()))) {
-            Ok(w) => watchers.push(w),
-            Err(e) => {
-                eprintln!("loop-manager daemon: warning: tracker of `{name}` is not watched: {e}");
-                // A failure with no retry: the periodic resync alone reads this tracker.
-                let payload = json!({ "call": "watch", "project": name });
-                let result = Err(loop_manager_core::tracker::TrackerError::Invalid { text: e });
-                let _ = core.send(None, Msg::Tracked { payload, result }).await;
-            }
-        }
-    }
-    let notify = core.clone();
-    tokio::spawn(async move {
-        while let Some(first) = changes.recv().await {
-            let mut projects = BTreeSet::from([first]);
-            while let Ok(more) = changes.try_recv() {
-                projects.insert(more);
-            }
-            for project in projects {
-                let _ = notify.send(None, Msg::TrackerChanged(project)).await;
-            }
-        }
-    });
+    let watchers = watch_trackers(core.clone(), beads).await;
     let token = config.api_token.clone();
     let api = Api {
         core: core.clone(),
@@ -212,17 +150,7 @@ pub(crate) async fn run(paths: Paths) -> Result<bool, String> {
         applied: tokio::sync::Mutex::new(1),
         load: Box::new({
             let paths = paths.clone();
-            move || {
-                // git may take seconds, and reload and check call this from a handler.
-                let mut loaded = tokio::task::block_in_place(|| load(&paths));
-                if let Ok(config) = &mut loaded {
-                    config.api_token.clone_from(&token);
-                }
-                if let Ok(Err(e)) = loaded.as_ref().map(addon_data) {
-                    loaded = Err(vec![e]);
-                }
-                loaded
-            }
+            move || reload(&paths, &token)
         }),
         drivers,
         doctor: Box::new({
@@ -233,7 +161,6 @@ pub(crate) async fn run(paths: Paths) -> Result<bool, String> {
     let stop = stop_signal().map_err(|e| format!("signals: {e}"))?;
     eprintln!("loop-manager daemon listening on {}", paths.socket.display());
     // A core that stopped leaves an API that can only fail: the daemon exits with an error, for a supervisor to see.
-    let mut task = task;
     let served = tokio::select! {
         served = api::serve(listener, tcp, api, stop) => served,
         died = &mut task => {
@@ -251,7 +178,6 @@ pub(crate) async fn run(paths: Paths) -> Result<bool, String> {
     };
     if let Ok(reply) = core.send(None, stopping).await {
         let seq = reply["seq"].as_i64().unwrap_or_default();
-        let mut written = written;
         let flushed = written.wait_for(|w| *w >= seq);
         let _ = tokio::time::timeout(std::time::Duration::from_secs(5), flushed).await;
     }
@@ -264,6 +190,91 @@ pub(crate) async fn run(paths: Paths) -> Result<bool, String> {
     served
         .map(|reason| reason == "restart")
         .map_err(|e| format!("serving the API: {e}"))
+}
+
+async fn bind_tcp(config: &mut Config, state: &Path) -> Result<Option<TcpListener>, String> {
+    let Some(addr) = config.api_tcp else {
+        return Ok(None);
+    };
+    // A new token every start, for the owner's clients in `api.token` and for sessions through `${LOOP_MANAGER_API}`.
+    config.api_token = loop_manager_core::run::new_token().ok_or("no randomness for the API token")?;
+    let file = state.join("api.token");
+    // Created 0600 so the token is never readable by others, not even until a chmod.
+    let _ = std::fs::remove_file(&file);
+    std::fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .mode(0o600)
+        .open(&file)
+        .and_then(|mut f| std::io::Write::write_all(&mut f, config.api_token.as_bytes()))
+        .map_err(|e| format!("{}: {e}", file.display()))?;
+    TcpListener::bind(addr)
+        .await
+        .map(Some)
+        .map_err(|e| format!("api_tcp {addr}: {e}"))
+}
+
+fn trackers(config_file: &Path, beads: &[(String, PathBuf)]) -> BTreeMap<String, Arc<dyn Tracker>> {
+    let br = binary("br", None).0;
+    let trackers = beads
+        .iter()
+        .map(|(name, dir)| {
+            (
+                name.clone(),
+                Arc::new(Br::new(br.clone(), dir.clone())) as Arc<dyn Tracker>,
+            )
+        })
+        .collect();
+    if let Some(why) = (!beads.is_empty())
+        .then(|| loop_manager_core::tested_version(&br, loop_manager_br::TESTED).err())
+        .flatten()
+    {
+        eprintln!("loop-manager daemon: warning: {why}");
+    }
+    if let Err(e) = bv_workspace(config_file, &br, beads) {
+        eprintln!("loop-manager daemon: warning: the bv workspace file: {e}");
+    }
+    trackers
+}
+
+/// Keeps filesystem watches active until the daemon drops the returned guard.
+async fn watch_trackers(core: CoreHandle<Msg>, beads: Vec<(String, PathBuf)>) -> impl Drop {
+    // Each watched write tells the core to read its project's tracker; a burst of writes is one read.
+    let (changed, mut changes) = mpsc::unbounded_channel::<String>();
+    let mut watchers = Vec::new();
+    for (name, dir) in beads {
+        let (changed, project) = (changed.clone(), name.clone());
+        match loop_manager_br::watch(&dir, move || drop(changed.send(project.clone()))) {
+            Ok(w) => watchers.push(w),
+            Err(e) => {
+                eprintln!("loop-manager daemon: warning: tracker of `{name}` is not watched: {e}");
+                // A failure with no retry: the periodic resync alone reads this tracker.
+                let payload = json!({ "call": "watch", "project": name });
+                let result = Err(loop_manager_core::tracker::TrackerError::Invalid { text: e });
+                let _ = core.send(None, Msg::Tracked { payload, result }).await;
+            }
+        }
+    }
+    tokio::spawn(async move {
+        while let Some(first) = changes.recv().await {
+            let mut projects = BTreeSet::from([first]);
+            while let Ok(more) = changes.try_recv() {
+                projects.insert(more);
+            }
+            for project in projects {
+                let _ = core.send(None, Msg::TrackerChanged(project)).await;
+            }
+        }
+    });
+    watchers
+}
+
+fn reload(paths: &Paths, token: &str) -> Result<Config, Vec<String>> {
+    // git may take seconds, and reload and check call this from a handler.
+    let mut config = tokio::task::block_in_place(|| load(paths))?;
+    token.clone_into(&mut config.api_token);
+    addon_data(&config).map_err(|e| vec![e])?;
+    Ok(config)
 }
 
 /// An exclusive lock on the state directory itself, so no lock file is left in it (docs/design/event-model.md); the OS

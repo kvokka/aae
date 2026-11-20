@@ -181,31 +181,7 @@ impl Loader {
                 condition,
             });
         }
-        for bad in super::prompt::strangers(&steps) {
-            self.fail(file, bad);
-        }
-        // The task bead a drain step gives out beads under (docs/design/config.md).
-        let drains = steps.iter().any(|s| matches!(s.kind, StepKind::Drain { .. }));
-        if drains && !raw.inputs.values().any(|i| i.kind == InputType::Task && i.required) {
-            self.fail(
-                file,
-                "a formula with a `drain` step needs a required input of type `task`",
-            );
-        }
-        if steps.iter().any(|s| matches!(s.kind, StepKind::Exec { .. })) {
-            let mut seen = BTreeMap::new();
-            for name in raw.inputs.keys() {
-                if let Some(other) = seen.insert(super::input_variable(name), name) {
-                    self.fail(
-                        file,
-                        format!(
-                            "inputs `{other}` and `{name}` are both `{}`",
-                            super::input_variable(name)
-                        ),
-                    );
-                }
-            }
-        }
+        self.check_formula_inputs(file, &raw.inputs, &steps);
         let own = raw.rounds.map(|n| (n.get(), super::Layer::Formula(raw.name.clone())));
         let (value, from) = own.unwrap_or((3, super::Layer::Default));
         Some((
@@ -220,6 +196,39 @@ impl Loader {
                 steps,
             },
         ))
+    }
+
+    fn check_formula_inputs(
+        &mut self,
+        file: &Path,
+        inputs: &BTreeMap<String, super::formula_file::Input>,
+        steps: &[Step],
+    ) {
+        for bad in super::prompt::strangers(steps) {
+            self.fail(file, bad);
+        }
+        // The task bead a drain step gives out beads under (docs/design/config.md).
+        let drains = steps.iter().any(|s| matches!(s.kind, StepKind::Drain { .. }));
+        if drains && !inputs.values().any(|i| i.kind == InputType::Task && i.required) {
+            self.fail(
+                file,
+                "a formula with a `drain` step needs a required input of type `task`",
+            );
+        }
+        if steps.iter().any(|s| matches!(s.kind, StepKind::Exec { .. })) {
+            let mut seen = BTreeMap::new();
+            for name in inputs.keys() {
+                if let Some(other) = seen.insert(super::input_variable(name), name) {
+                    self.fail(
+                        file,
+                        format!(
+                            "inputs `{other}` and `{name}` are both `{}`",
+                            super::input_variable(name)
+                        ),
+                    );
+                }
+            }
+        }
     }
 
     /// A step of formula `of` in `file`.

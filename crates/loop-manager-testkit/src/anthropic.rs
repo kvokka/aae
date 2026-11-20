@@ -126,12 +126,6 @@ impl Drop for Provider {
 async fn answer(n: usize, reply: Reply, body: &Value) -> Response {
     let model = body["model"].as_str().unwrap_or_default();
     let stream = body["stream"].as_bool().unwrap_or(false);
-    let reset = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_secs()
-        + 3600;
-    let reset = reset.to_string();
     match reply {
         Reply::Text(text) => {
             let block = json!({ "type": "text", "text": text });
@@ -167,25 +161,7 @@ async fn answer(n: usize, reply: Reply, body: &Value) -> Response {
             "This request would exceed your organization's rate limit of 50 requests per minute",
             &[("retry-after", "1")],
         ),
-        Reply::Quota => error(
-            StatusCode::TOO_MANY_REQUESTS,
-            "rate_limit_error",
-            "This request would exceed your account's rate limit. Please try again later.",
-            &[
-                ("retry-after", "3600"),
-                ("anthropic-ratelimit-unified-status", "rejected"),
-                ("anthropic-ratelimit-unified-reset", &reset),
-                ("anthropic-ratelimit-unified-representative-claim", "five_hour"),
-                ("anthropic-ratelimit-unified-5h-status", "rejected"),
-                ("anthropic-ratelimit-unified-5h-reset", &reset),
-                ("anthropic-ratelimit-unified-5h-utilization", "1.0"),
-                ("anthropic-ratelimit-unified-overage-status", "rejected"),
-                (
-                    "anthropic-ratelimit-unified-overage-disabled-reason",
-                    "org_level_disabled",
-                ),
-            ],
-        ),
+        Reply::Quota => quota(),
         Reply::StrangeQuota => error(
             StatusCode::TOO_MANY_REQUESTS,
             "rate_limit_error",
@@ -230,6 +206,34 @@ async fn answer(n: usize, reply: Reply, body: &Value) -> Response {
         }
         Reply::Hang | Reply::Silent => std::future::pending().await,
     }
+}
+
+fn quota() -> Response {
+    let reset = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs()
+        + 3600;
+    let reset = reset.to_string();
+    error(
+        StatusCode::TOO_MANY_REQUESTS,
+        "rate_limit_error",
+        "This request would exceed your account's rate limit. Please try again later.",
+        &[
+            ("retry-after", "3600"),
+            ("anthropic-ratelimit-unified-status", "rejected"),
+            ("anthropic-ratelimit-unified-reset", &reset),
+            ("anthropic-ratelimit-unified-representative-claim", "five_hour"),
+            ("anthropic-ratelimit-unified-5h-status", "rejected"),
+            ("anthropic-ratelimit-unified-5h-reset", &reset),
+            ("anthropic-ratelimit-unified-5h-utilization", "1.0"),
+            ("anthropic-ratelimit-unified-overage-status", "rejected"),
+            (
+                "anthropic-ratelimit-unified-overage-disabled-reason",
+                "org_level_disabled",
+            ),
+        ],
+    )
 }
 
 /// A complete assistant message of one content block, streamed or as JSON.

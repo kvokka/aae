@@ -35,5 +35,5 @@ fn parse<T: DeserializeOwned>(name: &str, params: &Value) -> Result<T, String> {
 }
 
 #[cfg(test)]
-#[allow(clippy::disallowed_methods)]
+#[allow(clippy::disallowed_methods, reason = "test processes run outside the daemon reaper")]
 mod tests;
