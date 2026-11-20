@@ -48,8 +48,9 @@ it).
 - Past `hard`, on either tool hook: the state of the work goes on the bead as a comment: `git status --short`, the
   commits since the run's first session started, `git diff --stat`, the agent's last tool calls and last texts. The
   session declares the outcome `cut` (`loop-manager finish <cut>`) and stops: every tool call is denied from then on
-  and the turn ends. A subagent past its own `hard` stops alone, with the dump and no outcome: the session goes on,
-  and its agent declares the outcome.
+  and the turn ends. Neither claude nor codex runs a `Stop` hook after that stop, so no `Stop` hook of another addon,
+  as `lessons`, takes the session on. A subagent past its own `hard` stops alone, with the dump and no outcome: the
+  session goes on, and its agent declares the outcome.
 - `PreCompact`: blocked, so claude never compacts. The addon sets claude's `autoCompactWindow` to 1000000, the most
   claude takes, so that the window stays past `hard`.
 

@@ -18,19 +18,27 @@ const NOTE: &str = "- When `cargo test` cannot find the fixture, run it from the
 /// A daemon whose formula `fix` is a run of the agent `dev` on a bead, `agent` its harness settings, with the addon
 /// attached and `loop-manager` on the `PATH` of its sessions.
 async fn daemon(agent: &str) -> Daemon {
+    daemon_with("[{ name = \"lessons\" }]", agent).await
+}
+
+/// [`daemon`] with `addons` attached to `dev`; the addon `context-budget` of this repository is declared too.
+async fn daemon_with(addons: &str, agent: &str) -> Daemon {
+    let budget = addon().join("../context-budget");
     Daemon::start(|dir| {
         let shop = dir.join("config/loop-manager/shop");
         let files = [
             (
                 dir.join("config/loop-manager/config.toml"),
                 format!(
-                    "projects = [\"shop\"]\n[harness.claude]\n[harness.codex]\n[[addon]]\npath = \"{}\"\n",
-                    addon().display()
+                    "projects = [\"shop\"]\n[harness.claude]\n[harness.codex]\n[[addon]]\npath = \"{}\"\n\
+                     [[addon]]\npath = \"{}\"\n",
+                    addon().display(),
+                    budget.display()
                 ),
             ),
             (
                 shop.join("agents/dev/agent.toml"),
-                format!("addons = [{{ name = \"lessons\" }}]\n{agent}"),
+                format!("addons = {addons}\n{agent}"),
             ),
             (
                 shop.join("agents/dev/prompt.template.md"),
@@ -160,6 +168,65 @@ async fn a_claude_agent_with_no_lesson_leaves_no_comment() {
     let (project, id, _, _) = fix(&d).await;
     assert_eq!(provider.requests().len(), 3);
     assert!(comments(&project, &id).is_empty());
+}
+
+/// `addons/context-budget` beside the addon, with a hard limit any session passes on its first measure.
+const STOPPED: &str = "[{ name = \"lessons\" }, { name = \"context-budget\", params = { soft = 1, hard = 5 } }]";
+
+/// The run of `fix` whose session `context-budget` stopped: no request for lessons reached the model, and the bead holds
+/// the dump of the stop alone. `requests` gives the texts of the requests to the model.
+async fn stopped_and_not_asked(d: &Daemon, requests: impl Fn() -> Vec<String>) {
+    let project = d.dir.path().join("config/loop-manager/shop");
+    let id = br(&project, &["create", "Fix the cart", "--silent"]);
+    let body = json!({ "project": "shop", "rig": "web", "formula": "fix", "inputs": { "bead": id } });
+    let run = d.post("/v1/runs", body, None).await.unwrap()["run"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+    let view = d.until_state(&run, "failed").await;
+    let cut = "context budget: the session was stopped; its state is on the bead";
+    assert_eq!(view["outcome"]["summary"], cut, "{view}");
+    let requests = requests();
+    assert!(requests.iter().all(|r| !r.contains(ASKED)), "{requests:?}");
+    let comments = comments(&project, &id);
+    assert_eq!(comments.len(), 1, "{comments:?}");
+    assert!(
+        comments[0].starts_with("# context-budget: the session was stopped"),
+        "{comments:?}"
+    );
+    let data = d.dir.path().join("state/loop-manager/addons/lessons");
+    assert_eq!(fs::read_dir(data).unwrap().count(), 0);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_claude_session_stopped_by_its_context_budget_is_not_asked() {
+    use anthropic::Reply;
+    // claude writes the transcript the budget is measured on after the first call.
+    let plan = vec![
+        Reply::Bash("true".into()),
+        Reply::Bash("true".into()),
+        Reply::Text("Done.".into()),
+        Reply::Text(NOTE.into()),
+    ];
+    let provider = anthropic::Provider::start(plan).await;
+    let d = daemon_with(STOPPED, &claude(&provider)).await;
+    let texts = || provider.requests().iter().map(|r| r.body.to_string()).collect();
+    stopped_and_not_asked(&d, texts).await;
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_codex_session_stopped_by_its_context_budget_is_not_asked() {
+    use openai::Reply;
+    let plan = vec![
+        Reply::Command("true".into()),
+        Reply::Command("true".into()),
+        Reply::Text("Done.".into()),
+        Reply::Text(NOTE.into()),
+    ];
+    let provider = openai::Provider::start(plan).await;
+    let d = daemon_with(STOPPED, &codex(&provider)).await;
+    let texts = || provider.requests().iter().map(|r| r.body.to_string()).collect();
+    stopped_and_not_asked(&d, texts).await;
 }
 
 #[tokio::test(flavor = "multi_thread")]

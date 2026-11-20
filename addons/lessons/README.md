@@ -44,8 +44,13 @@ outcome.
 note in ASD-STE100 Simplified Technical English that tells when it applies and what works, at most five, and `NONE`
 when there is none.
 
-The answer is a turn of its own: its tokens count in the run's usage and in the context of the session. When the
-daemon's session ends before the answer does (a crash, a cancel), there is no comment.
+The answer is a turn of its own: its tokens count in the run's usage and in the context of the session. It runs on
+the clock of the step: the step's `timeout` and the silence watchdog go on through it, so an outcome declared at the
+edge of the timeout can leave no time for the answer. When the daemon's session ends before the answer does (a crash,
+a cancel, a timeout), there is no comment.
+
+A session that a hook stopped with `continue: false`, as `context-budget` does past its `hard` limit, is not asked:
+neither claude nor codex runs the `Stop` hook after it, though the outcome is declared.
 
 The addon's data directory keeps, per session, the request (`<session>.asked`), the publication (`<session>.done`) and
 the comment's text (`<session>.lessons.md`).
@@ -69,5 +74,6 @@ read the run) on the `PATH` of the harness's hooks.
 - The tests: `crates/loop-manager/tests/e2e/lessons.rs` runs a real daemon with the real `claude` and the real
   `codex app-server` on fake providers. It checks that the request goes to the model on the conversation of the
   finished turn, that a useful answer reaches the run's bead once and no other bead, that an empty answer leaves no
-  comment, that the request leaves the outcome as declared, and that no request follows the answer. It drives the
-  hook by hand for the rest: no outcome, a subagent, the stops after the answer.
+  comment, that the request leaves the outcome as declared, that no request follows the answer, and that a session
+  `context-budget` stopped is not asked. It drives the hook by hand for the rest: no outcome, a subagent, a run on no
+  bead, the stops after the answer, and a stop of an asked session that is not the end of its answer.
