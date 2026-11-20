@@ -11,9 +11,9 @@ rounds is its comments, and a question to the owner is a comment and a label.
 ## The epic and its comments
 
 - Your prompt holds the epic's description and its last comments, in TOON;
-  `br comments <id> --json | toon --encode` gives the older ones. Use that conversion when reading JSON command
-  output yourself; use a shell with `set -o pipefail` so a failed producer is not hidden by the encoder. Keep JSON
-  unchanged when another command parses it.
+  `br comments <id>` gives the older ones in TOON under this pack's `BR_OUTPUT_FORMAT` setting. Read loop-manager's
+  TOON replies directly. When another command needs a conversion pipeline, use `set -o pipefail` in bash or zsh
+  to see producer failures. Keep JSON for programs that parse it.
   The comments are the only memory between rounds: the summaries of the coders (`CODER`), the reviews (`REVIEW`),
   the state a stopped session left, blocking questions (`QUESTION`), discretionary decisions (`DECISION`), findings
   (`NOTE`) and the owner's answers (`ANSWER`, including answers recorded by the workflow).

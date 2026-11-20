@@ -114,7 +114,8 @@ async fn run_watch_on_a_going_run_prints_its_session_and_exits_with_the_run() {
         assert!(Instant::now() < deadline, "the session did not start");
         tokio::time::sleep(Duration::from_millis(20)).await;
     }
-    let mut watch = common::loop_manager()
+    let watch = tokio::process::Command::from(common::loop_manager())
+        .kill_on_drop(true)
         .args(["run", "watch", &run])
         .env("LOOP_MANAGER_SOCKET", d.socket())
         .stdout(std::process::Stdio::piped())
@@ -122,20 +123,23 @@ async fn run_watch_on_a_going_run_prints_its_session_and_exits_with_the_run() {
         .unwrap();
     assert_eq!(d.get(&format!("/v1/runs/{run}")).await["state"], "running");
     d.until_state(&run, "passed").await;
-    let deadline = Instant::now() + Duration::from_secs(5);
-    while watch.try_wait().unwrap().is_none() {
-        if Instant::now() > deadline {
-            let _ = watch.kill();
-            panic!("`run watch` outlives its run");
-        }
-        tokio::time::sleep(Duration::from_millis(20)).await;
-    }
-    let out = watch.wait_with_output().unwrap();
+    let out = tokio::time::timeout(Duration::from_secs(5), watch.wait_with_output())
+        .await
+        .expect("`run watch` outlives its run")
+        .unwrap();
     assert!(out.status.success(), "{:?}", out.status);
     let watched = String::from_utf8(out.stdout).unwrap();
-    assert!(watched.trim_end().ends_with(&format!("run.passed  {run}")), "{watched}");
-    // A harness message has no seq: `-  harness  <type>`, the tool result of the Bash call at least.
-    assert!(watched.lines().any(|l| l == "-  harness  user"), "{watched}");
+    let mut events = watched.trim_end().split("\n\n");
+    let last = events.clone().last().unwrap();
+    assert!(
+        last.lines().any(|l| l == "type: run.passed") && last.lines().any(|l| l == format!("run: {run}")),
+        "{last}"
+    );
+    // The tool result of the Bash call arrives as a live harness message.
+    assert!(
+        events.any(|e| e.lines().any(|l| l == "event: harness") && e.lines().any(|l| l == "  type: user")),
+        "{watched}"
+    );
 }
 
 #[tokio::test(flavor = "multi_thread")]

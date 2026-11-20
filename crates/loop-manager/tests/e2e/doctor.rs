@@ -179,7 +179,7 @@ fn a_harness_with_no_adapter_is_a_config_error_naming_the_known_ones() {
     assert!(why.ends_with(want));
     let config = dir.path().join("config/loop-manager/config.toml");
     let out = lm(dir.path(), &["config", "check", "--config", config.to_str().unwrap()]);
-    assert!(!out.status.success() && String::from_utf8_lossy(&out.stderr).contains("known: claude, codex"));
+    assert!(!out.status.success() && String::from_utf8_lossy(&out.stdout).contains("known: claude, codex"));
 }
 
 #[test]
@@ -346,7 +346,8 @@ async fn the_daemon_answers_the_same_checks_over_the_api() {
     let table = lm_env(d.dir.path(), &["doctor"], &other);
     let table = String::from_utf8_lossy(&table.stdout);
     assert!(
-        table.starts_with(&format!("ok       config           {config}\n")),
+        table.lines().next().unwrap().ends_with("{check,detail,level}:")
+            && table.contains(&format!("  config,{config},ok\n")),
         "{table}"
     );
     let state = api.as_array().unwrap().iter().find(|f| f["check"] == "state").unwrap();

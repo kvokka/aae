@@ -210,10 +210,7 @@ pub(crate) fn clear(cache: &Path, json: bool) -> ExitCode {
         Err(e) if e.kind() == ErrorKind::NotFound => {}
         Err(e) => return loop_manager_front::cli::fail(json, "io_error", &format!("{}: {e}", cache.display())),
     }
-    match json {
-        true => println!("{}", serde_json::json!({ "cleared": cache })),
-        false => println!("cleared {}", cache.display()),
-    }
+    loop_manager_front::cli::print(json, &serde_json::json!({ "cleared": cache.to_string_lossy() }));
     ExitCode::SUCCESS
 }
 

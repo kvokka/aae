@@ -81,13 +81,13 @@ In another:
 loop-manager project list                      # the project with its root and no rigs
 loop-manager formula list                      # the formula with its inputs
 loop-manager run start hello check             # project, formula (no rig: the root); prints the run id, e.g. run_1
-loop-manager run list                          # run_1  passed  1  hello/root  hello.check  ...
+loop-manager run list                          # runs, newest first, with their state and step
 loop-manager run show run_1                    # the whole run: state, attempts, outcome
 ```
 
 `loop-manager events` follows the event stream live (`--from <seq>` to replay from a point),
-`loop-manager run watch <run>` one run with the raw messages of its session, and every command takes
-`--json` to print the API's JSON as it is.
+and `loop-manager run watch <run>` follows one run with the raw messages of its session. Structured replies are TOON
+by default. Scripts can read JSON with `--json`, for example `loop-manager run list --json | jq '.[].id'`.
 
 ## 5. Change the config
 

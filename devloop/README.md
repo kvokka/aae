@@ -116,10 +116,8 @@ br list --status rework               # the epics a review sent back
 br list -l needs-owner                # the epics with a question to you
 ```
 
-Each test invocation keeps its own log: the step's `LOG:` line gives the path. When reading structured command
-output into an agent's context, use `loop-manager run show <run> --json | toon --encode` (bash or zsh with
-`set -o pipefail`). Keep JSON for programs that parse it. `toon` is pinned as
-`"github:Dicklesworthstone/toon_rust" = "0.2.5"` in `mise.toml`.
+Each test invocation keeps its own log: the step's `LOG:` line gives the path. The loop-manager commands above
+emit structured replies in TOON. For scripts, `loop-manager run show <run> --json` returns the run as JSON.
 
 ## Answer `needs-owner`
 

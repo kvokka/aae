@@ -41,6 +41,9 @@ fn the_config_is_checked_and_explained_without_a_daemon() {
     };
     let config = files.join("config.toml").display().to_string();
     let local = |args: &[&str]| loop_manager(&[args, &["--config", &config]].concat());
+    let out = local(&["config", "check"]);
+    assert!(out.status.success());
+    assert_eq!(out.stdout, b"errors: []\nok: true\n");
     let out = local(&["config", "check", "--json"]);
     let reply: Value = serde_json::from_slice(&out.stdout).unwrap();
     assert!(out.status.success(), "{reply}");
@@ -78,7 +81,7 @@ fn the_config_is_checked_and_explained_without_a_daemon() {
     );
     let out = loop_manager(&["config", "check", "--config", broken]);
     assert!(!out.status.success());
-    assert!(String::from_utf8_lossy(&out.stderr).contains("broken.toml"));
+    assert!(String::from_utf8_lossy(&out.stdout).contains("broken.toml"));
     let out = loop_manager(&[
         "config",
         "explain",
@@ -93,7 +96,7 @@ fn the_config_is_checked_and_explained_without_a_daemon() {
     // A named config must exist; a relative one resolves against the working directory, and its project paths are
     // absolute after that.
     let out = loop_manager(&["config", "check", "--config", "/nonexistent/config.toml"]);
-    let text = String::from_utf8_lossy(&out.stderr);
+    let text = String::from_utf8_lossy(&out.stdout);
     assert!(
         !out.status.success() && text.contains("/nonexistent/config.toml"),
         "{text}"

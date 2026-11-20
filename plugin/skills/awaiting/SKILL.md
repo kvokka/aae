@@ -12,22 +12,19 @@ give an outcome or cancel a run the user has not named, and use the user's own w
 The loop-manager commands below talk to the running daemon; if one answers that it cannot reach it, ask the user to start
 `loop-manager daemon` (or name its socket with `--socket`) and stop there.
 
-Read structured output as TOON: `toon --encode` converts the CLI's JSON before it enters your context. It needs
-`toon` 0.2.5 (`github:Dicklesworthstone/toon_rust`, pinned in this repository's `mise.toml`). Run the pipelines in
-bash or zsh with `set -o pipefail`; an upstream CLI error must not become a successful empty result. Keep JSON when
-another program consumes it.
+Read the CLI's structured replies directly in TOON. Add `--json` when passing a reply to a JSON parser.
 
 ## 1. See what waits
 
 ```sh
-loop-manager run list --awaiting --json | toon --encode
-loop-manager run list --awaiting --project <project> --json | toon --encode
+loop-manager run list --awaiting
+loop-manager run list --awaiting --project <project>
 ```
 
 For each run the user cares about:
 
 ```sh
-loop-manager run show <run> --json | toon --encode
+loop-manager run show <run>
 ```
 
 Show the user, per run: `id`, `project`, `formula`, `bead` (the task or the epic it works on), `step` (the `await`
@@ -46,15 +43,14 @@ short summary may only identify the question. Follow its references to recover t
 it to the user. Discover the project's directory rather than assuming the run's `workdir` holds its tracker:
 
 ```sh
-loop-manager project list --project <project> --json | toon --encode
+loop-manager project list --project <project>
 ```
 
 For a project using br, its tracker is `<dir>/.beads`, where `dir` is the project entry's field. Read the task and
 its comments there, with the bead id from the run:
 
 ```sh
-BEADS_DIR='<project dir>/.beads' br show <bead> --json | toon --encode
-BEADS_DIR='<project dir>/.beads' br comments <bead> --json | toon --encode
+BEADS_DIR='<project dir>/.beads' br show <bead> --format toon
 ```
 
 Read the matching question, subsequent answers or corrections, recent coder and review reports, and any parent
@@ -113,9 +109,8 @@ The deadline is carried by `run.awaiting`; `run show` does not currently expose 
 
 This skill inspects current state on request. Start no background monitor or notification process unless the user
 asks for one. The existing building blocks for a requested script are `loop-manager events --json` (one JSON event
-per line), `run.awaiting` (the run and deadline), and the current-state queries above. An event stream has no end:
-do not pipe the whole stream into `toon --encode`; scripts process JSON events and can encode selected results for
-the agent. `loop-manager events --from <seq> --json` resumes from a journal cursor; after a gap, reread current state.
+per line), `run.awaiting` (the run and deadline), and the current-state queries above. Process each event as it
+arrives. Resume from a journal cursor with `loop-manager events --from <seq> --json`. After a gap, reread current state.
 
 The user's script can filter projects or task labels, notify on every question, or accumulate a batch. For
 nonblocking concerns such as `devloop` decisions, br comments produce `bead.updated` with `changed: ["comments"]`;

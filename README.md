@@ -4,6 +4,9 @@ loop-manager is an event-driven orchestrator for coding agents. One daemon runs 
 command — as runs on your projects, through the agents' own harnesses (Claude Code, Codex), started by hand, by events,
 by a schedule or by a task tracker, and decides each run's end by an explicit finisher and by addons.
 
+The CLI returns structured data in TOON by default. For example, agents can read `loop-manager run list` directly.
+Scripts can request JSON with the global `--json` flag, as in `loop-manager run list --json | jq '.[].id'`.
+
 ## Documentation
 
 - [loop-manager in one page](docs/overview.md): what it is, the glossary, what the first release leaves out
@@ -38,7 +41,7 @@ mise is a convenience, not a requirement: install these binaries any way you lik
 - `loop-manager doctor` checks what the daemon needs: the config, each harness binary with its source, version and
   login, br and its license, the mode of the state and socket directories, the state and its outbox. It asks the running
   daemon; before the first start, `loop-manager doctor --config <file>` checks a file with no daemon. It exits non-zero
-  on an error; warnings (an untested version, no login file) do not fail it. `--json` prints the checks as JSON.
+  on an error; warnings (an untested version, no login file) do not fail it.
 - Packs and addons from git, at a tag, a commit or (a pack only) the latest revision, are downloaded by `loop-manager`
   into `~/.cache/loop-manager/git` when it loads the config; `loop-manager cache clear` empties that cache
   (docs/design/config.md).

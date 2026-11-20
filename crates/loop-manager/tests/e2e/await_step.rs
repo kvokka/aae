@@ -57,10 +57,9 @@ async fn an_outcome_from_the_cli_moves_a_waiting_run_on() {
     d.until_state(&slow, "running").await;
     assert_eq!(awaiting(&d), [json!(run)], "only the run waiting on `await`");
     let text = String::from_utf8(cli(&d, &["run", "list", "--awaiting"]).stdout).unwrap();
-    assert!(
-        text.lines()
-            .any(|l| l.starts_with(&run) && l.contains("  running  gate  shop/web  shop.gate  ")),
-        "{text}"
+    assert_eq!(
+        text.trim_end(),
+        loop_manager_core::toon::encode(&ok(&d, &["run", "list", "--awaiting"]))
     );
     // An outcome for a step the run does not wait on is refused and changes nothing.
     assert_eq!(

@@ -187,7 +187,7 @@ fn cache_clear_needs_no_daemon_and_no_cache() {
         assert!(ok, "{err}");
         assert_eq!(
             out.trim(),
-            format!("cleared {}", d.join("cache/loop-manager/git").display())
+            format!("cleared: {}", d.join("cache/loop-manager/git").display())
         );
     }
     assert!(!d.join("cache/loop-manager/git").exists());

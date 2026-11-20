@@ -9,12 +9,12 @@ the table in `CLAUDE.md`. What they say of cycles, `loopctl`, `scripts/loop/`, `
 journal, the handoffs) or token thresholds describes another loop. Here the task is the epic, the memory between
 rounds is its comments, and a question to the owner is a comment and a label.
 
-When piping a JSON command into `toon --encode`, use a shell with `set -o pipefail` so an upstream failure is
-reported. Keep JSON unchanged when a script parses it.
+Read loop-manager's TOON replies directly. Use `--json` for scripts that parse JSON. When another command needs a
+conversion pipeline, use `set -o pipefail` in bash or zsh to see producer failures.
 
 ## The round
 
-- Your prompt holds the epic's description, its last comments in TOON (`br comments <id> --json | toon --encode` gives the older ones) and,
+- Your prompt holds the epic's description, its last comments in TOON (`br comments <id>` gives the older ones) and,
   in `<tests>`, the end of the full test run that followed the coder: `RESULT`, `HEAD`, `UNCOMMITTED` and the tail
   of a red run. The full log is at the `LOG:` path in `<tests>`. Do not run the whole gate again.
 - A red run and an uncommitted tree are no reason to refuse the review: the coder hands over what the round reached.

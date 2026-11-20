@@ -35,6 +35,7 @@ fn comments_are_a_table_and_a_bead_with_parents_a_list() {
 
 #[test]
 fn a_string_is_quoted_when_it_would_not_read_back_as_itself() {
+    assert_eq!(encode(&json!("\u{feff}hello")), "\"\u{feff}hello\"");
     let strings = json!([
         "plain words",
         "",
