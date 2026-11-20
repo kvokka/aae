@@ -34,8 +34,8 @@ use tokio::{
 };
 use uuid::Uuid;
 
-/// The versions the contract tests and experiments ran on, inclusive.
-const TESTED: [(u32, u32, u32); 2] = [(2, 1, 322), (2, 1, 327)];
+/// The oldest supported claude, inclusive; newer versions have no upper bound.
+const MINIMUM: (u32, u32, u32) = (2, 1, 329);
 
 /// The claude driver; `state` holds the config directories of isolated sessions, `socket` is the API socket a
 /// session gets in `LOOP_MANAGER_SOCKET`.
@@ -190,7 +190,7 @@ impl Driver for Claude {
         Capabilities {
             sessions_per_instance: 1,
             instance_idle: Duration::ZERO,
-            versions: TESTED,
+            min_version: MINIMUM,
         }
     }
 

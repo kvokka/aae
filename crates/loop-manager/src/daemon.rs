@@ -1,7 +1,7 @@
 //! `loop-manager daemon`: the core and the API on a unix socket, in the foreground (docs/guide/install.md), until SIGTERM or
 //! SIGINT.
 
-use crate::harness::{binary, driver, load, tested};
+use crate::harness::{binary, driver, load, minimum};
 use loop_manager_br::Br;
 use loop_manager_core::{
     Clock, Journal,
@@ -123,7 +123,7 @@ pub(crate) async fn run(paths: Paths) -> Result<bool, String> {
         let Some((driver, binary, _)) = driver(name, harness, &paths) else {
             continue;
         };
-        if let Err(why) = loop_manager_core::tested_version(&binary, tested(&driver)) {
+        if let Err(why) = loop_manager_core::supported_version(&binary, minimum(&driver)) {
             eprintln!("loop-manager daemon: warning: {why}");
         }
         drivers.push(driver);

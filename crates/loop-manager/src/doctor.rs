@@ -41,13 +41,17 @@ pub(crate) fn findings(paths: &Paths) -> Vec<Value> {
                 // `load` refused a harness with no adapter.
                 let Some(adapter) = adapter(name) else { continue };
                 let (path, source) = binary(name, harness.binary.as_deref());
-                found.push(binary_check(name, &path, source, adapter.tested));
+                found.push(binary_check(name, &path, source, |p| {
+                    loop_manager_core::supported_version(p, adapter.minimum)
+                }));
                 let checks = (adapter.doctor)(&agents(&config, name));
                 found.extend(checks.into_iter().map(|c| check(c.check, c.level, c.detail)));
             }
             if config.projects.iter().any(|p| p.dir.join(".beads").is_dir()) {
                 let (path, source) = binary("br", None);
-                found.push(binary_check("br", &path, source, loop_manager_br::TESTED));
+                found.push(binary_check("br", &path, source, |p| {
+                    loop_manager_core::tested_version(p, loop_manager_br::TESTED)
+                }));
                 found.push(check(
                     "br license",
                     "warning",
@@ -121,12 +125,12 @@ fn agents(config: &Config, harness: &str) -> Vec<(String, Option<EffectiveConfig
     found.into_iter().collect()
 }
 
-/// The binary exists and its version is one the adapter was tested on.
-fn binary_check(name: &str, path: &Path, source: &str, versions: [(u32, u32, u32); 2]) -> Value {
+/// The binary exists and its version passes `version`, the check of its adapter.
+fn binary_check(name: &str, path: &Path, source: &str, version: impl FnOnce(&Path) -> Result<String, String>) -> Value {
     let Some(path) = on_disk(path) else {
         return check(name, "error", format!("{} (from {source}): not found", path.display()));
     };
-    match loop_manager_core::tested_version(&path, versions) {
+    match version(&path) {
         Ok(version) => check(name, "ok", format!("{} `{version}` (from {source})", path.display())),
         Err(why) => check(name, "warning", why),
     }

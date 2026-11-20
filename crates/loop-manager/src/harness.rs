@@ -57,11 +57,11 @@ pub(crate) fn driver(
     Some((driver, binary, source))
 }
 
-/// The harness versions the adapter of `driver` was tested on.
-pub(crate) fn tested(driver: &Arc<dyn Driver>) -> [(u32, u32, u32); 2] {
+/// The oldest harness version the adapter of `driver` supports, inclusive.
+pub(crate) fn minimum(driver: &Arc<dyn Driver>) -> (u32, u32, u32) {
     adapter(driver.harness())
         .expect("every driver comes from an adapter")
-        .tested
+        .minimum
 }
 
 /// What is wrong with `[harness.<name>]`: no adapter for it, or settings its adapter does not take.

@@ -455,7 +455,7 @@ Success traps are the adapter's: claude `subtype:"success"` with `is_error:true`
 
 ### 4.5 Capabilities
 
-`Capabilities { sessions_per_instance, instance_idle, versions }`:
+`Capabilities { sessions_per_instance, instance_idle, min_version }`:
 
 - `sessions_per_instance`: claude 1 (a process per session, 8); codex the config value `max_sessions`
   (default 8).
@@ -469,8 +469,10 @@ Success traps are the adapter's: claude `subtype:"success"` with `is_error:true`
   carries `retry_at` shows on the failure itself (claude: subscription login only; codex: yes, from the rate-limit
   update).
   <!-- MEASURE id=claude-self-retries date=2026-11-10 ver=claude-2.1.322 env=linux-arm64-orbstack src=reports/34 note="delays 0.57→32.8 s on a fake API; set by CLAUDE_CODE_MAX_RETRIES" -->
-- `versions`: the tested range of the harness binary, `[lowest, highest]` inclusive, the same as `Adapter.tested`
-  ([adapters](adapters.md)); outside it the daemon warns at start, and `loop-manager doctor` does.
+- `min_version`: the oldest supported version of the harness binary, inclusive, with no upper bound; the same as
+  `Adapter.minimum` ([adapters](adapters.md)): claude 2.1.329, codex 0.171.0. A version below it, or `--version`
+  output with no `major.minor.patch` in it, gets a warning naming the minimum from the daemon at start and from
+  `loop-manager doctor`; the harness still runs.
 
 `account(process)` returns the account id the gates use (7): a stable hash of the credential source of the
 process part, never the credential itself; an `env` reference counts as written (`${NAME}`), so the id says where

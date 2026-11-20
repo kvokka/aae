@@ -2,8 +2,15 @@
 //! docs/guide/install.md).
 
 use crate::common::{self, FILES};
+use loop_manager_front::client::Client;
 use serde_json::Value;
-use std::{fs, os::unix::fs::PermissionsExt, path::Path, process::Output};
+use std::{
+    fs,
+    os::unix::fs::PermissionsExt,
+    path::Path,
+    process::{Command, Output, Stdio},
+    time::{Duration, Instant},
+};
 
 /// An executable script at `path`.
 fn script(path: &Path, body: &str) {
@@ -25,8 +32,8 @@ fn tree(extra: &str) -> tempfile::TempDir {
         d.join("tools/claude").display()
     );
     fs::write(d.join("config/loop-manager/config.toml"), config).unwrap();
-    script(&d.join("tools/claude"), "echo '2.1.322 (Claude Code)'");
-    script(&d.join("tools/codex"), "echo 'codex-cli 0.167.2'");
+    script(&d.join("tools/claude"), "echo '2.1.329 (Claude Code)'");
+    script(&d.join("tools/codex"), "echo 'codex-cli 0.171.0'");
     let codex = d.join("tools/codex").display().to_string();
     script(
         &d.join("bin/mise"),
@@ -96,7 +103,7 @@ fn harnesses_resolve_from_the_config_and_from_mise_and_a_missing_one_fails() {
     );
     let (codex, path) = level(&found, "codex");
     assert!(
-        codex == "ok" && path.ends_with("tools/codex `codex-cli 0.167.2` (from mise)"),
+        codex == "ok" && path.ends_with("tools/codex `codex-cli 0.171.0` (from mise)"),
         "{found:?}"
     );
     assert_eq!(level(&found, "claude login").0, "warning", "no login in the fake home");
@@ -180,6 +187,64 @@ fn a_harness_with_no_adapter_is_a_config_error_naming_the_known_ones() {
     let config = dir.path().join("config/loop-manager/config.toml");
     let out = lm(dir.path(), &["config", "check", "--config", config.to_str().unwrap()]);
     assert!(!out.status.success() && String::from_utf8_lossy(&out.stdout).contains("known: claude, codex"));
+}
+
+/// What `loop-manager daemon` in `dir` prints on stderr from its start until it is stopped once it serves.
+async fn daemon_stderr(dir: &Path) -> String {
+    let mut child = common::command(dir).stderr(Stdio::piped()).spawn().unwrap();
+    let client = Client::new(dir.join("run/loop-manager/loop-manager.sock"));
+    let deadline = Instant::now() + common::WAIT;
+    while client.request("GET", "/v1/daemon", None, None).await.is_err() {
+        assert!(child.try_wait().unwrap().is_none(), "the daemon exited at start");
+        assert!(Instant::now() < deadline, "the daemon did not come up");
+        tokio::time::sleep(Duration::from_millis(20)).await;
+    }
+    let pid = child.id().to_string();
+    assert!(Command::new("kill").args(["-TERM", &pid]).status().unwrap().success());
+    String::from_utf8(child.wait_with_output().unwrap().stderr).unwrap()
+}
+
+#[tokio::test]
+async fn a_harness_below_its_minimum_warns_and_the_minimum_and_newer_do_not() {
+    let dir = tree("");
+    let d = dir.path();
+    let config = format!(
+        "projects = [\"shop\"]\n[harness.claude]\nbinary = \"{}\"\n[harness.codex]\nbinary = \"{}\"\n",
+        d.join("tools/claude").display(),
+        d.join("tools/codex").display()
+    );
+    fs::write(d.join("config/loop-manager/config.toml"), config).unwrap();
+    // Each harness: below its minimum, at it, and above it, with no upper bound.
+    for [claude, codex] in [
+        ["2.1.328 (Claude Code)", "codex-cli 0.171.0"],
+        ["2.1.329 (Claude Code)", "codex-cli 0.170.9"],
+        ["3.0.0 (Claude Code)", "codex-cli 1.0.0"],
+        ["2.1.400 (Claude Code)", "codex-cli 0.172.0"],
+    ] {
+        script(&d.join("tools/claude"), &format!("echo '{claude}'"));
+        script(&d.join("tools/codex"), &format!("echo '{codex}'"));
+        let (passed, found) = doctor(d);
+        assert!(passed, "warnings do not fail: {found:?}");
+        let stderr = daemon_stderr(d).await;
+        for (name, out, minimum, below) in [
+            ("claude", claude, "2.1.329", claude.starts_with("2.1.328")),
+            ("codex", codex, "0.171.0", codex.ends_with("0.170.9")),
+        ] {
+            let path = d.join("tools").join(name).display().to_string();
+            let warning = format!("{path} is `{out}`; supported: {minimum} or newer");
+            let (level, detail) = level(&found, name);
+            if below {
+                assert_eq!((level, detail), ("warning", warning.as_str()), "{found:?}");
+                assert!(stderr.contains(&format!("warning: {warning}\n")), "{stderr}");
+            } else {
+                assert_eq!(
+                    (level, detail),
+                    ("ok", format!("{path} `{out}` (from config)").as_str())
+                );
+                assert!(!stderr.contains(&path), "{stderr}");
+            }
+        }
+    }
 }
 
 #[test]

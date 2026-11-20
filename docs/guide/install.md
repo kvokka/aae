@@ -81,9 +81,9 @@ codex = "0"
 ```
 
 These ranges are what to install (the repository's `mise.toml` takes br at an exact version and claude and codex
-by release line). This release is tested against
-claude 2.1.322 to 2.1.327 and codex 0.167.2 to 0.168.0; outside these, `loop-manager doctor` and the daemon print a
-warning and still run the harness. The daemon resolves each
+by release line). This release supports claude 2.1.329 and codex 0.171.0 and any newer version; below these, or when
+`--version` shows no version, `loop-manager doctor` and the daemon print a warning naming the minimum and still run
+the harness. br has its own tested range ([tracker-br](../design/tracker-br.md#versions)). The daemon resolves each
 binary in this order: `binary` in the config (`[harness.claude] binary = "/path/to/claude"`; harnesses only, br has
 no such key), then `mise which <name>`, then `PATH`. A daemon under systemd or launchd has no mise shims on its
 `PATH`, which is why mise is asked directly. Without mise, or when mise does not know the tool, the bare name is
@@ -101,8 +101,9 @@ license, the modes of the state and socket directories, and the state with its o
 the running daemon (`GET /v1/doctor`), which makes the checks from inside its process, with its environment, `PATH`
 and config file; with no daemon it fails and says so. With `--config <file>` it needs no daemon and checks that file
 from the shell it runs in. Both modes print the findings in TOON by default and exit non-zero when a check has
-level `error`. Warnings (an untested version, no login file) do not fail the command. `loop-manager doctor --json`
-prints the API's array of findings. The API returns HTTP 200 even when a finding has level `error`.
+level `error`. Warnings (an unsupported or untested version, no login file) do not fail the command.
+`loop-manager doctor --json` prints the API's array of findings. The API returns HTTP 200 even when a finding has
+level `error`.
 
 ## Directories
 

@@ -2,7 +2,7 @@
 //! `loop-manager doctor` checks.
 
 use crate::{
-    Codex, TESTED,
+    Codex, MINIMUM,
     part::{CREDENTIALS, host_config, host_home, host_key, host_provider_name, unconfined},
 };
 use loop_manager_contract::driver::{Adapter, Check, DoctorAgents, Driver, Setup, login_check};
@@ -11,7 +11,7 @@ use std::{num::NonZeroU32, path::Path, sync::Arc, time::Duration};
 pub const ADAPTER: Adapter = Adapter {
     name: "codex",
     models: MODELS,
-    tested: TESTED,
+    minimum: MINIMUM,
     agent_types: &["default", "explorer", "worker"],
     subagents_inherit: true,
     new,

@@ -20,7 +20,7 @@ config ([config](config.md#where-the-bundled-addons-end-and-the-core-begins)).
    pub const ADAPTER: loop_manager_contract::driver::Adapter = Adapter {
        name: "<name>",                   // [harness.<name>] and the binary mise resolves
        models: &[("<short>", "<full>")], // short model names it expands; any other name goes as it is
-       tested: [(1, 2, 0), (1, 4, 3)],   // tested binary versions, inclusive; also Capabilities.versions
+       minimum: (1, 2, 0),               // oldest supported binary version, inclusive; also Capabilities.min_version
        agent_types: &["<type>"],         // agent types built into the harness: no subagent takes such a name
        subagents_inherit: false,         // true: a subagent has its session's MCP servers and hooks only
        new,                              // fn(&Setup) -> Result<Arc<dyn Driver>, String>
@@ -130,6 +130,6 @@ Made for the two harnesses there are; none is changed before a harness needs it.
 - `EffectiveConfig.targets` (the subagents a session may call) is delivered as the harness's own subagent
   definitions: claude takes them by `--agents`, codex as agent roles of the thread
   (`config.agents`, a generated role file per target).
-- `capabilities(&ProcessPart)` takes a process part although the tested versions do not depend on it; the root
-  reads them from `Adapter.tested` instead.
+- `capabilities(&ProcessPart)` takes a process part although the minimum version does not depend on it; the root
+  reads it from `Adapter.minimum` instead.
 - `InstanceHandle{pid, start_time, pgid}`: an instance is a local child process of the daemon.

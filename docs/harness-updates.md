@@ -1,9 +1,10 @@
 # Harness updates
 
-loop-manager drives `claude` and `codex` through their own protocols, so every new harness version is checked before the
-adapter's tested range takes it in. The check is the contract suite below: the real binary against a fake provider
-API, no model and no account. Keeping the harness up to date is the user's or the loop-manager developer's job;
-loop-manager itself only warns outside the tested range.
+loop-manager drives `claude` and `codex` through their own protocols, so every new harness version is checked with
+the contract suite below: the real binary against a fake provider API, no model and no account. Each adapter has a
+minimum supported version, inclusive, and no upper bound: a newer version gets no warning, so the suite is what
+guards it. Keeping the harness up to date is the user's or the loop-manager developer's job; loop-manager itself
+only warns below the minimum.
 
 `mise.toml` selects a release line of each harness, not an exact version: a newer release of the line is taken on
 `mise upgrade`, and the contract suite is what guards the protocol. That matters most for codex: app-server is
@@ -27,8 +28,9 @@ marked `[experimental]`, and codex released every 2–8 days (observed on 2026-1
    `cargo build -p loop-manager && cargo run -p loop-manager-acceptance -- 2`, does it on both harnesses (it costs model
    calls and needs a login). The suite runs against fake providers; this turn is the only check against the real one, so
    it is not skipped.
-5. Then widen the tested range in the adapter's `capabilities().versions` (outside it the daemon and
-   `loop-manager doctor` warn) and add a line to the log below, naming the real turn.
+5. Then add a line to the log below, naming the real turn. When the adapter comes to rely on the new version, or
+   older ones are no longer supported, raise the minimum (`MINIMUM` of the adapter crate, which is `Adapter.minimum`
+   and `capabilities().min_version`; below it the daemon and `loop-manager doctor` warn).
 
 ## How the suite is built
 
@@ -100,3 +102,5 @@ The rest match claude: rate limits, overload, 401, context, unknown model, `kill
 | 2026-11-14 | claude | 2.1.325 | contract suite green, tested range widened |
 | 2026-11-19 | claude | 2.1.327 | contract suite green, real turn of criterion 2 on haiku passed, tested range widened |
 | 2026-11-19 | codex | 0.170.0 | contract suite green once the adapter retried a `thread/resume` refused while the thread closes; no real turn yet, tested range not widened |
+| 2026-11-20 | claude | 2.1.329 | minimum supported version, inclusive, no upper bound; older versions are not supported |
+| 2026-11-20 | codex | 0.171.0 | minimum supported version, inclusive, no upper bound; older versions are not supported |

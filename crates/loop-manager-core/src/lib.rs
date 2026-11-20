@@ -15,7 +15,7 @@ pub use clock::Clock;
 pub use journal::{Journal, JournalHealth, ReadError, SCHEMA, parse_rfc3339_ms, rfc3339_ms};
 pub use loop_manager_contract::{BoxFuture, config, driver, orphans, template, toon, tracker};
 pub use store::open;
-pub use version::tested_version;
+pub use version::{supported_version, tested_version};
 pub use writer::{CoreHandle, Error, Event, Executor, Handler, Tx, start};
 
 #[cfg(test)]

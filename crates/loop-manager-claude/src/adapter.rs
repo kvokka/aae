@@ -1,7 +1,7 @@
 //! The claude adapter as the root of the build lists it: its driver and its `loop-manager doctor` checks.
 
 use crate::{
-    Claude, TESTED,
+    Claude, MINIMUM,
     part::{CREDENTIALS, host_dir},
 };
 use loop_manager_contract::driver::{Adapter, Check, DoctorAgents, Driver, Setup, login_check};
@@ -15,7 +15,7 @@ pub const ADAPTER: Adapter = Adapter {
     name: "claude",
     // The CLI itself takes the short names (`fable`, `opus`, `sonnet`, `haiku`) for the latest model of the family.
     models: &[],
-    tested: TESTED,
+    minimum: MINIMUM,
     agent_types: &["general-purpose", "Explore", "Plan", "claude"],
     subagents_inherit: false,
     new,

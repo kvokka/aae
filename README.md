@@ -41,7 +41,7 @@ mise is a convenience, not a requirement: install these binaries any way you lik
 - `loop-manager doctor` checks what the daemon needs: the config, each harness binary with its source, version and
   login, br and its license, the mode of the state and socket directories, the state and its outbox. It asks the running
   daemon; before the first start, `loop-manager doctor --config <file>` checks a file with no daemon. It exits non-zero
-  on an error; warnings (an untested version, no login file) do not fail it.
+  on an error; warnings (an unsupported or untested version, no login file) do not fail it.
 - Packs and addons from git, at a tag, a commit or (a pack only) the latest revision, are downloaded by `loop-manager`
   into `~/.cache/loop-manager/git` when it loads the config; `loop-manager cache clear` empties that cache
   (docs/design/config.md).

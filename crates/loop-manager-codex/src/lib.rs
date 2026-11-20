@@ -49,8 +49,8 @@ pub struct Codex {
     instances: Arc<Mutex<HashMap<String, Arc<Instance>>>>,
 }
 
-/// The versions the contract tests ran on, inclusive.
-const TESTED: [(u32, u32, u32); 2] = [(0, 167, 2), (0, 168, 0)];
+/// The oldest supported codex, inclusive; newer versions have no upper bound.
+const MINIMUM: (u32, u32, u32) = (0, 171, 0);
 
 fn thread_id(session: &SessionRef) -> &str {
     session.0["thread_id"].as_str().unwrap_or_default()
@@ -162,7 +162,7 @@ impl Driver for Codex {
         Capabilities {
             sessions_per_instance: self.max_sessions,
             instance_idle: self.instance_idle,
-            versions: TESTED,
+            min_version: MINIMUM,
         }
     }
 

@@ -145,8 +145,8 @@ pub struct Capabilities {
     pub sessions_per_instance: usize,
     /// How long an instance with no sessions lives on before it is stopped (contracts 8).
     pub instance_idle: Duration,
-    /// The tested versions of the harness binary, `[lowest, highest]` as `(major, minor, patch)`, inclusive.
-    pub versions: [(u32, u32, u32); 2],
+    /// The oldest supported version of the harness binary, `(major, minor, patch)`, inclusive; no upper bound.
+    pub min_version: (u32, u32, u32),
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

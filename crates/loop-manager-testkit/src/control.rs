@@ -17,7 +17,7 @@ impl ScriptedDriver {
             capabilities: Capabilities {
                 sessions_per_instance,
                 instance_idle: Duration::ZERO,
-                versions: [(0, 0, 0), (u32::MAX, u32::MAX, u32::MAX)],
+                min_version: (0, 0, 0),
             },
             state: Arc::default(),
         }

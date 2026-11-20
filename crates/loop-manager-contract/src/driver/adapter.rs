@@ -50,8 +50,8 @@ pub struct Adapter {
     /// Short model names and the full names they stand for, the latest of each family; any other name goes to the
     /// harness as it is.
     pub models: &'static [(&'static str, &'static str)],
-    /// The harness versions the adapter was tested on, `[lowest, highest]` as `(major, minor, patch)`, inclusive.
-    pub tested: [(u32, u32, u32); 2],
+    /// The oldest harness version the adapter supports, `(major, minor, patch)`, inclusive; there is no upper bound.
+    pub minimum: (u32, u32, u32),
     /// The agent types the harness has built in: an agent of such a name is no subagent of a session on it.
     pub agent_types: &'static [&'static str],
     /// A subagent of the harness has the MCP servers and hooks of its session, none of its own: a target with ones
