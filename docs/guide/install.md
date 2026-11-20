@@ -56,19 +56,37 @@ Running a harness headless spends the limits of your subscription, and a vendor'
 subscription is used through its automation interfaces (OpenAI's terms for the codex app-server limit commercial and
 hosted use). loop-manager supports API keys for both harnesses; keeping to the vendor's terms is your responsibility.
 
-claude labels every request with `CLAUDE_CODE_ENTRYPOINT` (`sdk-cli` for `claude -p` when it is unset; `cli` is
-rewritten to `sdk-cli` there, any other value goes as is). Community A/B runs in
+The claude adapter sets `CLAUDE_CODE_ENTRYPOINT=loop-manager` to label requests. An agent can override the label in
+`env` or `native.claude.env`. Claude's own default for `claude -p` is `sdk-cli`. Community A/B runs in
 [anthropics/claude-code#97074](https://github.com/anthropics/claude-code/issues/97074), not an official statement, report
 that `sdk-cli` spends the 5-hour window of a subscription 1.8–2.5 times faster than another label (2026-11, claude
 2.1.3xx); a measurement of this project on a weekly-only limit saw no clear difference (2026-11-18, claude 2.1.327).
 <!-- MEASURE id=claude-entrypoint-community date=2026-11-18 ver=claude-2.1.3xx env=community-ab-runs src=anthropics/claude-code#97074 note="not official; several ABBA runs, not every one on cached tool-heavy load saw a difference" -->
-<!-- MEASURE id=claude-entrypoint-weekly date=2026-11-18 ver=claude-2.1.327 env=linux-arm64-orbstack-max-20x src="own run, data outside the repository" note="weekly limit only, ratio up to ~1.6, not decisive; measure again on an account with a 5-hour window" --> loop-manager sets no label; set it in an agent's `env`, for
-example `CLAUDE_CODE_ENTRYPOINT = "loop-manager"`; whether that suits the vendor's terms is yours to judge. With any
-label but `sdk-cli`, claude sends one more request per session: it names the session from the whole first prompt, on
-the small model (on the main one behind a third-party `ANTHROPIC_BASE_URL`), uncached and billed, and
-`total_cost_usd` does not always count it; `CLAUDE_CODE_DISABLE_TERMINAL_TITLE=1` in the same `env` turns it off.
-`CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1` turns it off too, but also the server flags and the recheck of a rate limit
-while claude waits for its reset, so it does not suit loop-manager's sessions.
+<!-- MEASURE id=claude-entrypoint-weekly date=2026-11-18 ver=claude-2.1.327 env=linux-arm64-orbstack-max-20x src="own run, data outside the repository" note="weekly limit only, ratio up to ~1.6, not decisive; measure again on an account with a 5-hour window" -->
+
+With a custom label, Claude normally sends an extra request to generate the session title from the full first
+prompt. It uses the small model (the main model behind a third-party `ANTHROPIC_BASE_URL`). That request is
+uncached and billed, and `total_cost_usd` can omit it. The adapter skips that request by default.
+
+### Headless session defaults
+
+Every project gets these defaults when loop-manager starts or resumes an agent. Native subagents run under
+the same harness settings.
+
+| Harness | Defaults | Override in the agent config |
+|---|---|---|
+| Claude Code | Sets `CLAUDE_CODE_DISABLE_TERMINAL_TITLE`, `DISABLE_TELEMETRY`, `DISABLE_ERROR_REPORTING`, `DISABLE_AUTOUPDATER`, `DISABLE_FEEDBACK_COMMAND` and `CLAUDE_CODE_DISABLE_FEEDBACK_SURVEY` to `1`. The feedback switch covers `/bug` too. | Set the variable in `env` or `native.claude.env`. To opt back into telemetry or error reporting, use an empty string. Claude treats any nonempty value for either as an opt-out. |
+| Codex app-server | Sets `analytics.enabled = false`, `feedback.enabled = false`, `check_for_update_on_startup = false` and `notify = []`. | Set the key under `native.codex`, for example `native.codex.feedback.enabled = true`. |
+
+Disabling Claude telemetry also disables remote feature-flag fetching. The broader
+`CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC` switch would additionally suppress the check for a lifted rate limit.
+Explicit Codex OpenTelemetry exporters use their own settings.
+[Claude environment variables](https://code.claude.com/docs/en/env-vars) · [Codex configuration](https://developers.openai.com/codex/config-reference/)
+
+Agent sessions and exec steps get `BR_OUTPUT_FORMAT=toon` from loop-manager. Pass `--json` to `br`
+when a script needs JSON.
+
+### Installing the harnesses
 
 Install them any way you like. With mise, the daemon finds the same versions you test with, for example from your
 global `~/.config/mise/config.toml`:

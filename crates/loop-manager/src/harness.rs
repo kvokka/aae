@@ -89,6 +89,7 @@ pub(crate) fn load(paths: &Paths) -> Result<config::Config, Vec<String>> {
         let dir = p.dir.join(".beads");
         p.tracker.present = dir.is_dir();
         (p.tracker.env).insert("BEADS_DIR".to_owned(), dir.to_string_lossy().into_owned());
+        p.tracker.env.insert("BR_OUTPUT_FORMAT".to_owned(), "toon".to_owned());
         p.tracker.actor = Some("BD_ACTOR".to_owned());
         p.tracker.prefix = Some("BD_ISSUE_PREFIX".to_owned());
     }
