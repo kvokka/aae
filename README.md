@@ -73,7 +73,7 @@ Claude or Codex agents running `br` inside a loop-manager session has not been a
 This repository uses [devloop](devloop/README.md) to develop loop-manager with its own daemon.
 
 - `mise run test` runs the unit and integration tests: the local loop.
-- `mise run ci` adds formatting, clippy, `cargo deny`, `cargo machete` and the line budgets. It is the gate of a
+- `mise run ci` adds formatting, clippy, `cargo deny`, `cargo machete` and the `MEASURE` marker check. It is the gate of a
   change, and all that CI runs on a commit.
 - The [acceptance scenarios](docs/acceptance.md) are end-to-end runs on real daemons, some on a real model, with the
   demos and the chaos stand (1000 new seeds a run); they run on request, not on a commit.

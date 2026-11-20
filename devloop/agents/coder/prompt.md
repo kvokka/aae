@@ -67,7 +67,7 @@ need goes on the epic as a comment (`br comments add "$LOOP_MANAGER_BEAD" -f <fi
 - Behaviour you change is changed in `docs/` in the same commit: how it works now, with no history. The owner's
   decisions (`docs/agents/decisions.md`) are not yours to change; an assumption (`docs/agents/assumptions.md`)
   changes only with a `NOTE` comment on the epic and an edit of that file.
-- Before a commit: `cargo fmt`, clippy without warnings, the tests of what you touched, targeted
+- Follow Clippy's default thresholds for the workspace lints. Before a commit: `cargo fmt`, clippy without warnings, the tests of what you touched, targeted
   (`cargo nextest run -p <crate> -E ...`). Code that builds is committed; code that does not is left in the tree and
   named in your comment under "Started and not finished".
 - You hand over to the review what the round reached, red tests included: making it green is not a condition of

@@ -5,8 +5,8 @@ in the code is a defect, not an option. What is not listed here and is not said 
 implementation choice or an [assumption](assumptions.md).
 
 The numbers are stable: old notes say "decision 49". Missing numbers were assumptions (12, 33, 34) or are retired
-(31, 53, 55: the readiness file and the spec are gone; 144: replaced by 149). The behaviour itself is described in the document named under
-each heading; this file only marks it as decided.
+(23 and 88: the line budgets; 31, 53, 55: the readiness file and the spec; 144: replaced by 149). The behaviour itself is
+described in the document named under each heading; this file only marks it as decided.
 
 ## The shape of the product — [overview](../overview.md), [architecture](../architecture.md)
 
@@ -175,7 +175,6 @@ each heading; this file only marks it as decided.
 | № | Decision |
 |---|---|
 | 14 | Acceptance scenarios with real runs on a cheap model run only on the owner's explicit request |
-| 23 | Line budgets are checked by CI |
 | 26 | Every measurement carries a visible date, a version or short sha, and an invisible `MEASURE` comment |
 | 27 | No stubs and no code "for later"; less code is better |
 | 30 | There are no deadlines and no calendar budgets |
@@ -184,14 +183,13 @@ each heading; this file only marks it as decided.
 | 37 | Fast tests come before new features: a slow or flaky suite is fixed before anything new is built |
 | 39 | The demos are `demos/1-planner-executor/` and `demos/2-multirepo-qa/` |
 | 44 | An acceptance run writes one report with every criterion, the rows that live in cargo tests and scripts among them |
-| 54 | Results of experiments go to `docs/design/experiments.md` and the code of a recorded experiment is deleted; experiment code stays under 5 000 lines; each of `experiments/*`, `demos/*`, `examples/*` has a short README |
+| 54 | Results of experiments go to `docs/design/experiments.md` and the code of a recorded experiment is deleted; each of `experiments/*`, `demos/*`, `examples/*` has a short README |
 | 56 | No locked seeds: a test passes on any seed; a random stand takes a new seed each run and prints it |
 | 57 | Unit and integration tests are the everyday loop; nothing new is built on a slow or unstable stand |
 | 64 | The repository is public: research reports are not in it, and no other project of the owner, the predecessor among them, is named in it |
 | 67 | Temporary logs of the work process are not committed; git history is not rewritten |
 | 79 | The averaging window of the idle-CPU check is 30 seconds |
 | 86 | Running a demo does not conflict with the files of the repository: what a run creates is in `.gitignore`; the author's result lies beside it with the suffix `-example` and the date it was made |
-| 88 | The core's budget is 18 000 lines |
 | 115 | The integration tests of the core and those of the binary are one test binary each (`crates/loop-manager-testkit/tests/core`, `crates/loop-manager/tests/e2e`): a new test is a module there, not one more binary (2026-11-17) |
 | 105 | `mise run ci` is the gate of every change. Acceptance scenarios, live models and the demos run only on the owner's explicit request, and are a criterion of done only when the owner says so (2026-11-17) |
 | 106 | There is no spec and no readiness file: `docs/` describes the product as it is, `docs/agents/` holds the rules for agents (2026-11-17) |
@@ -202,3 +200,4 @@ each heading; this file only marks it as decided.
 | 150 | loop-manager's own development runs on loop-manager as the pack `devloop/`: the whole task is one epic bead, with no child beads; a round is a coder, the full test run and a reviewer; the coder hands over what it reached, red tests included, and the test run is a step whose result goes to the reviewer, not a check; each round is a new coder that reads the epic and its comments, which hold all the state; an epic may take many rounds (50), and running out of them is a failure that waits for a human; a question to the owner is a comment on the epic and the label `needs-owner`; the agents may change `devloop/` (2026-11-19) |
 | 151 | Moving development onto `devloop` comes before improving the workflow. The shared unfinished tree and the final gate trusting the reviewer are accepted properties of this pack. The reviewer directs the work within the epic and judges repeated lack of progress from the reports; a reusable progress addon and self-improvement workflows come later (2026-11-20) |
 | 152 | A debatable choice the agent can make is recorded for the owner and does not stop work. A decision only the owner can make uses an `await` step after the model session ends; its answer returns to the coder. A deterministic final step packages the epic's result, unresolved questions and disputed decisions, closes the epic and publishes its tracker state; it needs no model (2026-11-20) |
+| 153 | CI applies the workspace Clippy lints with their default thresholds (2026-11-20) |

@@ -56,7 +56,7 @@ done
 {
   echo "# $demo: $result"
   echo
-  # Split so that scripts/budget.sh does not take this template for a marker.
+  # Split so that the marker check does not take this template for a marker.
   echo "<!-- MEASURE" "id=demo-$demo date=$(date -u +%Y-%m-%d) ver=$versions env=$(uname -sm | tr ' ' '-')" \
     "src=demos/$demo/run.sh note=\"$result in $seconds s from the requests, n=1\" -->"
   echo

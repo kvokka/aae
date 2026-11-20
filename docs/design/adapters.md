@@ -52,7 +52,7 @@ config ([config](config.md#where-the-bundled-addons-end-and-the-core-begins)).
 3. One row in `ADAPTERS` (`crates/loop-manager/src/harness.rs`) and the crate in `crates/loop-manager/Cargo.toml`.
    Nothing else in the root names a harness; a `[harness.<name>]` with no row is a config error that lists the known
    ones.
-4. The binary pinned in `mise.toml` by release line ([harness updates](../harness-updates.md)), a line budget in `scripts/budget.sh`, and the contract suite below.
+4. The binary pinned in `mise.toml` by release line ([harness updates](../harness-updates.md)) and the contract suite below.
 
 ## What the core expects of a driver
 

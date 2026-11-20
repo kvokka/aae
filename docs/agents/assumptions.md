@@ -124,7 +124,6 @@ The behaviour itself is described in the document named under each heading; this
 - A failed veto hook blocks the run; a failed observing hook is ignored.
 - Several addons on one event: one block is enough for a veto; for the reaction to a failure the first decision in
   attachment order wins.
-- The bundled addons are outside the core's budget, on a line of their own.
 - MCP has five tools, and the server is attached to an agent only when the agent's config says so.
 
 ## Delivery and process — [install](../guide/install.md), [code rules](rules-code.md)
@@ -132,9 +131,6 @@ The behaviour itself is described in the document named under each heading; this
 - Directories follow XDG; the daemon runs in the foreground; a command generates service files; the CLI never
   starts a daemon by itself. Packs and addons from git are downloaded by `loop-manager` outside the core; mise does not
   touch them.
-- The budget limits of the parts (adapters, tracker, frontends, addons, the rest) are estimates; the release limit
-  and the hard stop the owner confirmed.
-- If the budget does not fit, the first to go are: continuing another run's session, the `bv` workspace file.
 - The numeric thresholds of the [acceptance criteria](../acceptance.md) were proposed by their author.
 
 ## Not verified
@@ -162,10 +158,10 @@ Open questions the code must not lean on without an experiment
 
 | Risk | What holds it back |
 |---|---|
-| Agents commit faster than a human checks | the budgets and the "no code for later" rule, checked by `mise run ci`; the review |
+| Agents commit faster than a human checks | the workspace Clippy lints in `mise run ci` and review against the "no code for later" rule |
 | Vendor protocols drift: codex app-server is experimental, harnesses ship weekly | release lines in `mise.toml`, the minimum supported version of each adapter, contract tests, a narrow subset of the protocol |
 | Subscription policy: headless use spends subscription limits, and vendor terms limit commercial and hosted use | API keys are supported; the install guide says keeping to the vendor's terms is the user's responsibility and [what claude's entrypoint label does](../guide/install.md#what-loop-manager-runs) |
 | br in a public project: one author, no outside PRs, a license with a rider | br is installed apart; the license warning in the README, the install guide and `doctor`; a narrow tracker interface |
 | A daemon's death cuts claude sessions | `--resume`, a drain on a planned restart |
-| Vendors close the niche | the rule "check the vendor first" and the stop conditions of the [code rules](rules-code.md#budgets) |
-| The core grows by "one more mechanism" | the mechanism and policy boundary, the core's budget, `scripts/core-boundary.sh` |
+| Vendors close the niche | the rule "check the vendor first" and the stop conditions of the [code rules](rules-code.md#less-code) |
+| The core grows by "one more mechanism" | the mechanism and policy boundary checked by `scripts/core-boundary.sh` |

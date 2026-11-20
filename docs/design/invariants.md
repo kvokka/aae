@@ -7,7 +7,7 @@ history of an earlier orchestrator of the same kind, where about half of the com
 since 2026-07-01 (counted 2026-11-10 at its commit `f1f75f53c`).
 <!-- MEASURE id=prior-orchestrator-fix-commits date=2026-11-10 ver=f1f75f53c env=linux-arm64-orbstack src=reports/21 note="git log --since=2026-07-01: 3156 commits, 1609 of them fixes; one manual pass over the subjects" -->
 
-All of them except 19 are mechanisms of the core and are never cut to fit a line budget. Thresholds (how many
+All of them except 19 are mechanisms of the core. Thresholds (how many
 times, how long) are config parameters with defaults; the choice of a reaction is policy (`default-policy`,
 [contracts](contracts.md) 10).
 

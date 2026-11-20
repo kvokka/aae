@@ -8,8 +8,7 @@ mise is a convenience, not a requirement: install the same tools any way you lik
 
 - Rust 1.100 with the components `clippy`, `rustfmt`, `rust-src`, `rust-analyzer`; for the release builds also the
   targets `x86_64-unknown-linux-musl`, `aarch64-unknown-linux-musl`, `x86_64-apple-darwin`, `aarch64-apple-darwin`.
-- cargo-nextest 0.9.151, cargo-deny 0.20.2, cargo-machete 0.9.2 (`cargo install --locked <crate>@<version>`) and
-  tokei 15.0.0 (`scripts/budget.sh`).
+- cargo-nextest 0.9.151, cargo-deny 0.20.2, cargo-machete 0.9.2 (`cargo install --locked <crate>@<version>`).
 - zig 0.17.1 and cargo-zigbuild 0.24.1: for the static release build (`acceptance`, `build-all`,
   `acceptance-release`).
 - br 0.7.6, claude (line `2.1`), codex (line `0`): for the acceptance scenarios that run them; jq 1.8.2 for the
@@ -24,7 +23,7 @@ Each task is a list of plain commands in `[tasks.<name>]` of `mise.toml`; run th
 - `ci`: `cargo fmt --all --check`, `cargo clippy --workspace --all-targets --locked -q -- -D warnings`,
   `cargo nextest run --workspace --locked --no-tests=warn -E 'not binary(chaos)'`, `cargo deny check`,
   `cargo machete`, then `scripts/unused-pub.sh`,
-  `scripts/core-boundary.sh`, `scripts/select-biased.sh`, `scripts/budget-selftest.sh`, `scripts/budget.sh`, and a
+  `scripts/core-boundary.sh`, `scripts/select-biased.sh`, `scripts/measure-selftest.sh`, `scripts/measure.sh`, and a
   `git grep` that fails on an absolute home path (`/home/…`, `/Users/…`) outside `.loop/`.
 - `acceptance-ci`: `cargo build -q --locked -p loop-manager`, then
   `cargo run -q --locked -p loop-manager-acceptance -- --ci`.
@@ -39,7 +38,7 @@ Each task is a list of plain commands in `[tasks.<name>]` of `mise.toml`; run th
 | Task | What it runs | When | Wall time |
 |---|---|---|---|
 | `mise run test` | unit and integration tests (`cargo nextest run`), without the chaos stand | the everyday loop, usually narrowed to a crate or a test | 25 s (2026-11-17, `57d8ff8`) |
-| `mise run ci` | the above plus formatting, clippy, `cargo deny`, `cargo machete`, the unused-`pub` check, the line budgets, the core boundary (`scripts/core-boundary.sh`: no harness name, `br`, `max_sessions`, `instance_idle_s`, `beads_dir` or `.beads` in the code of the core, `loop-manager-contract` and `loop-manager-core`, and no `loop-manager-core` among the normal and build dependencies of `loop-manager-claude`, `loop-manager-codex`, `loop-manager-br` and `loop-manager-addons`), the fixed branch order of its `select!` (`scripts/select-biased.sh`: `biased;` with a comment on the order), no absolute home paths in the repository and no test that starts `loop-manager` past the common constructor, which keeps out the environment of a loop-manager session the tests may run in ([test rules](../agents/rules-tests.md)), and the pack in `devloop/` ([its README](../../devloop/README.md)): the self-test of its scripts and a load of its config | **the gate of a change**: locally before handing work over; CI on every commit | 33 s (2026-11-17, `57d8ff8`) |
+| `mise run ci` | the above plus formatting, clippy, `cargo deny`, `cargo machete`, the unused-`pub` check, the `MEASURE` marker check, the core boundary (`scripts/core-boundary.sh`: no harness name, `br`, `max_sessions`, `instance_idle_s`, `beads_dir` or `.beads` in the code of the core, `loop-manager-contract` and `loop-manager-core`, and no `loop-manager-core` among the normal and build dependencies of `loop-manager-claude`, `loop-manager-codex`, `loop-manager-br` and `loop-manager-addons`), the fixed branch order of its `select!` (`scripts/select-biased.sh`: `biased;` with a comment on the order), no absolute home paths in the repository and no test that starts `loop-manager` past the common constructor, which keeps out the environment of a loop-manager session the tests may run in ([test rules](../agents/rules-tests.md)), and the pack in `devloop/` ([its README](../../devloop/README.md)): the self-test of its scripts and a load of its config | **the gate of a change**: locally before handing work over; CI on every commit | 33 s (2026-11-17, `57d8ff8`) |
 | `mise run acceptance-ci` | the [acceptance scenarios](../acceptance.md) without a model, each on a real `loop-manager daemon`, and the chaos stand | on request, in the workflow `acceptance` (started by hand) | 144 s (2026-11-16, `04984d6`) |
 | `mise run acceptance-release` | acceptance criterion 1 with `--release`: `cargo zigbuild --release` for the four targets, then this host's binary runs | the workflow `release` on a `v*` tag; no tag is made only to check it | 169 s cold (2026-11-14, `a070cd6`) |
 | `mise run acceptance` | all acceptance scenarios, including those on a real model and the demos, whose result stays in the demo's directory, ignored by git | on request: they cost money and need a harness login | 2650 s (2026-11-16, `b32c55c`) |

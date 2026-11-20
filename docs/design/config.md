@@ -1047,9 +1047,8 @@ The mechanisms live in the core: resuming an attempt, a new session that keeps o
 the policy reads, the ceiling of 20 failed attempts per run (waits on an account gate not counted), the watchdog and
 every deadline. The bundled addons only choose a reaction and its thresholds; they never change a harness. With
 `default-policy` off, the "no addon decision" column of [contracts 1.3](contracts.md#13-payloads) applies: a failed
-attempt ends the run `failed` with class `infrastructure`. The bundled addons are compiled into the same binary, need
-no external runtime, and are counted on their own budget line (`addons` in `scripts/budget.sh`, 1500 lines) inside the
-release total.
+attempt ends the run `failed` with class `infrastructure`. The bundled addons are compiled into the same binary and need
+no external runtime.
 
 An `auth_required` or `billing` failure may be a passing error of a proxy or WAF (a 403 that goes away by itself)
 rather than a real logout, so every such failure parks the account gate for a wait that grows with each failure in a row up to an hour, and the next

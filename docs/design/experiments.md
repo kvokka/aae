@@ -4,8 +4,7 @@ Results of the throwaway experiments that precede the core. Every number carries
 recorded here and their code has left the tree; each section names the commit that still holds it
 (`git show <commit>:<path>`). Their logs stay in `experiments/`: sanitized samples (`<home>`, `<work>` placeholders;
 long `tools`/`skills` arrays are replaced by their length) kept as the record of what each harness printed; no test
-reads them. A new experiment goes to `experiments/` as a separate Cargo workspace outside the product budgets, ≤ 5 000
-lines in total, checked by `scripts/budget.sh`.
+reads them. A new experiment goes to `experiments/` as a separate Cargo workspace.
 
 A cheap experiment comes before the code that relies on it. The set and where each stands:
 
@@ -238,7 +237,7 @@ measurement with another setup).
 **Types.** `codex app-server generate-json-schema --out DIR` writes the bundle;
 `cargo run -p codex-appserver --bin gen -- DIR/codex_app_server_protocol.v2.schemas.json` takes the hand-picked roots
 listed in `gen.rs`, collects the definitions they reach and generates `src/generated/protocol.rs` with `typify`
-(9 roots → 83 definitions → 5.1k lines, excluded from the line budgets). The four types the scenarios parse
+(9 roots → 83 definitions → 5.1k lines). The four types the scenarios parse
 (`ThreadStartResponse`, `ThreadResumeResponse`, `TurnCompletedNotification`, `HookCompletedNotification`)
 deserialized every message received. `InitializeResponse` is only in the non-v2 bundle
 (`codex_app_server_protocol.schemas.json`); the client reads it as plain JSON. The adapter does not take this

@@ -32,7 +32,7 @@ conversion pipeline, use `set -o pipefail` in bash or zsh to see producer failur
    the code works; a document that differs from the code is a mandatory item.
 3. The owner's decisions (`docs/agents/decisions.md`) are untouched; an assumption (`docs/agents/assumptions.md`) is
    replaced only with a `NOTE` comment on the epic and an edit of that file.
-4. The rules of code (`docs/agents/rules-code.md`): the line budgets, a file of 400 lines at most, no `todo!` or
+4. The rules of code (`docs/agents/rules-code.md`): the workspace Clippy lints, no `todo!` or
    `unimplemented!`, no stubs and no code for later, a `MEASURE` marker at every measurement, no mechanism without a
    use.
 5. Dependencies: new ones are the latest released versions, `Cargo.lock` is in git, the licenses fit MIT.

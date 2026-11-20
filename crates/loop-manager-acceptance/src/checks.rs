@@ -124,12 +124,6 @@ pub(crate) const ALL: &[Scenario] = &[
         run: |env| Box::pin(demo(env, "4-context-budget", 1)),
     },
     Scenario {
-        criterion: "22",
-        title: "line budgets and MEASURE markers (scripts/budget.sh)",
-        launch: Launch::Ci,
-        run: |env| Box::pin(budget(env)),
-    },
-    Scenario {
         criterion: "23",
         title: "no todo!/unimplemented!, no unused public items or dependencies (the rest is review)",
         launch: Launch::Ci,
@@ -367,11 +361,6 @@ async fn demo(env: Arc<Env>, name: &str, times: usize) -> String {
         runs.push(line_with(&out, name));
     }
     runs.join("; ")
-}
-
-async fn budget(env: Arc<Env>) -> String {
-    let out = command(&env, "scripts/budget.sh", &[]).await;
-    line_with(&out, "budget: total")
 }
 
 async fn no_stubs(env: Arc<Env>) -> String {

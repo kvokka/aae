@@ -5,7 +5,7 @@ directory is the kitchen. Read a file when its "when" comes, not all of them at 
 
 | File | What is in it | Read it |
 |---|---|---|
-| [rules-code.md](rules-code.md) | line budgets, no stubs, file size, measurements, dependencies, git | before writing or reviewing code |
+| [rules-code.md](rules-code.md) | Clippy, no stubs, measurements, dependencies, git | before writing or reviewing code |
 | [rules-tests.md](rules-tests.md) | what to run and when, live models, the demos, how tests are written | before running or writing tests, before touching `demos/` |
 | [decisions.md](decisions.md) | what the owner decided: not revisited | before changing a behaviour, a config key or an interface |
 | [assumptions.md](assumptions.md) | choices that are not the owner's, open questions, what is not verified | the same |

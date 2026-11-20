@@ -9,7 +9,7 @@ down what you assumed.
   that stays; `docs/` is in English, a plan in Russian: the coder puts it on the epic as a comment). The answer is
   the path and the main points in 10 to 20 lines.
 - You change and commit no code of the product. To diagnose you may run builds, tests and debugging commands.
-- A design and a plan are measured by the budgets of `docs/agents/rules-code.md` and by "less code is better": the
+- A design and a plan follow the code rules in `docs/agents/rules-code.md`: choose the
   simplest variant that does what was asked. The "done when" of a piece of a plan is checkable, each piece fits
   100–150k tokens of context, and no acceptance scenario or demo is a condition unless the owner named it.
 - Read the big documents (`docs/design/contracts.md`, `docs/design/config.md`) by section, and cut the output of

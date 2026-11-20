@@ -16,31 +16,11 @@
 - `tokio::select!` in the core (`loop-manager-contract`, `loop-manager-core`) is written only with `biased;` and a
   comment on why the branches stand in that order (`scripts/select-biased.sh`): a random choice between ready branches
   breaks the replay of a seed.
-
-## Budgets
-
-Lines of code without blanks and comments, counted by `tokei`; tests and generated code are left out by path.
-`scripts/budget.sh` checks them in `mise run ci`.
-
-| Part | Limit |
-|---|---|
-| the core (`loop-manager-contract`, `loop-manager-core`) | 18 000 |
-| **the whole first release** | **30 000** |
-| **hard stop** | **35 000** |
-| a harness adapter, each | 3 500 |
-| the tracker adapter | 1 200 |
-| the three frontends together | 4 000 |
-| the bundled addons together | 1 500 |
-| the rest: `doctor`, service files, pack loading, the MCP bridge | 4 300 |
-| experiments (`experiments/`), outside the limits above | 5 000 |
-
-- A limit is a ceiling, not a goal. The parts add up to more than the release limit: both hold.
-- A file is at most 400 lines, tests included. Unit tests live in a separate `tests.rs`
-  (`#[cfg(test)] mod tests;`), or the counter takes them for product code.
-- Past the release limit nothing ships; past the hard stop no feature is added until code is removed.
-- Stop and ask the owner when: the hard stop is passed; harness updates keep breaking the contract tests and eat more
-  work than the product; a vendor charges for headless use in a way the owner will not accept; the vendors' own tools
-  cover most of the formulas in real use.
+- Follow Clippy's default thresholds for the workspace lints in `Cargo.toml`. CI checks every crate and target.
+- Keep unit tests in a separate `tests.rs` or `tests/` module.
+- Ask the owner when harness updates keep breaking the contract tests and eat more work than the product, a vendor
+  charges for headless use in a way the owner will not accept, or the vendors' own tools cover most of the formulas
+  in real use.
 
 ## Measurements
 
@@ -52,7 +32,7 @@ it, in one format for the whole project:
 <!-- MEASURE id=<slug> date=<YYYY-MM-DD> ver=<version or sha> env=<OS and stand> src=<where from> note="<conditions; what to measure again>" -->
 ```
 
-In code the same marker stands in the language's comment syntax. `scripts/budget.sh` checks that every marker of the
+In code the same marker stands in the language's comment syntax. `scripts/measure.sh` checks that every marker of the
 repository (outside `.loop/` and `.claude/`) has `id`, `date`, `ver` and `env`; what the agents of a demo wrote
 (`demos/*/*-example/`) is no measurement of this repository and is not checked. A measurement with no marker at all
 is for the review to catch.
