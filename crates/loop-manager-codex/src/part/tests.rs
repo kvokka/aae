@@ -9,6 +9,25 @@ use serde_json::{Value, json};
 use std::path::Path;
 
 #[test]
+fn the_app_server_takes_headless_defaults_before_native_overrides() {
+    let args = part::args(&json!({ "overrides": ["feedback.enabled=true"] }));
+    let flags: Vec<_> = args
+        .windows(2)
+        .filter(|w| w[0] == "-c")
+        .map(|w| w[1].as_str())
+        .collect();
+    for default in [
+        "analytics.enabled=false",
+        "check_for_update_on_startup=false",
+        "notify=[]",
+    ] {
+        assert!(flags.contains(&default), "{default}");
+    }
+    let feedback: Vec<_> = flags.into_iter().filter(|f| f.starts_with("feedback.")).collect();
+    assert_eq!(feedback, ["feedback.enabled=false", "feedback.enabled=true"]);
+}
+
+#[test]
 fn the_process_gets_the_native_block_and_the_thread_the_rest() {
     let mut config = config();
     config.hooks.insert(

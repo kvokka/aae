@@ -218,6 +218,12 @@ pub(crate) fn args(p: &Value) -> Vec<String> {
         "-c",
         "analytics.enabled=false",
         "-c",
+        "feedback.enabled=false",
+        "-c",
+        "check_for_update_on_startup=false",
+        "-c",
+        "notify=[]",
+        "-c",
         "thread_unload_delay_secs=0",
     ]
     .map(str::to_owned)

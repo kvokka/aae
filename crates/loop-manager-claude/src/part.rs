@@ -310,6 +310,18 @@ pub(crate) fn materialize(p: &Value) -> std::io::Result<()> {
 /// host's login from there (docs/design/config.md).
 pub(crate) fn env(p: &Value, id: &str, socket: Option<&Path>, host: &Path) -> Result<Vec<(String, String)>, Failure> {
     let mut env = loop_manager_contract::driver::child::base_env(daemon_vars(p), &p["env"], id, socket)?;
+    for key in [
+        "CLAUDE_CODE_DISABLE_TERMINAL_TITLE",
+        "DISABLE_TELEMETRY",
+        "DISABLE_ERROR_REPORTING",
+        "DISABLE_FEEDBACK_COMMAND",
+        "DISABLE_AUTOUPDATER",
+        "CLAUDE_CODE_DISABLE_FEEDBACK_SURVEY",
+    ] {
+        if p["env"].get(key).is_none() && p["settings"]["env"].get(key).is_none() {
+            env.push((key.to_owned(), "1".to_owned()));
+        }
+    }
     let text = |v: &Value| v.as_str().map(str::to_owned).unwrap_or_else(|| v.to_string());
     env.extend([
         ("CLAUDE_CODE_EMIT_SESSION_STATE_EVENTS".to_owned(), "1".to_owned()),

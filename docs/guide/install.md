@@ -66,9 +66,32 @@ that `sdk-cli` spends the 5-hour window of a subscription 1.8–2.5 times faster
 example `CLAUDE_CODE_ENTRYPOINT = "loop-manager"`; whether that suits the vendor's terms is yours to judge. With any
 label but `sdk-cli`, claude sends one more request per session: it names the session from the whole first prompt, on
 the small model (on the main one behind a third-party `ANTHROPIC_BASE_URL`), uncached and billed, and
-`total_cost_usd` does not always count it; `CLAUDE_CODE_DISABLE_TERMINAL_TITLE=1` in the same `env` turns it off.
-`CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1` turns it off too, but also the server flags and the recheck of a rate limit
-while claude waits for its reset, so it does not suit loop-manager's sessions.
+`total_cost_usd` does not always count it. The claude adapter skips that request by default.
+
+### Headless session defaults
+
+Every project gets these defaults when loop-manager starts or resumes an agent. Native subagents run under
+the same harness settings.
+
+| Harness | Defaults | Override in the agent config |
+|---|---|---|
+| Claude Code | Sets `CLAUDE_CODE_DISABLE_TERMINAL_TITLE`, `DISABLE_TELEMETRY`, `DISABLE_ERROR_REPORTING`, `DISABLE_AUTOUPDATER`, `DISABLE_FEEDBACK_COMMAND` and `CLAUDE_CODE_DISABLE_FEEDBACK_SURVEY` to `1`. The feedback switch covers `/bug` too. | Set the variable in `env` or `native.claude.env`. To opt back into telemetry or error reporting, use an empty string. Claude treats any nonempty value for either as an opt-out. |
+| Codex app-server | Sets `analytics.enabled = false`, `feedback.enabled = false`, `check_for_update_on_startup = false` and `notify = []`. | Set the key under `native.codex`, for example `native.codex.feedback.enabled = true`. |
+
+Disabling Claude telemetry also disables remote feature-flag fetching. The broader
+`CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC` switch would additionally suppress the check for a lifted rate limit.
+Explicit Codex OpenTelemetry exporters use their own settings.
+[Claude environment variables](https://code.claude.com/docs/en/env-vars) · [Codex configuration](https://developers.openai.com/codex/config-reference/)
+
+### Interactive sessions
+
+In this repository, `mise exec -- claude` requests experimental Code Mode. Elsewhere, start an interactive
+terminal session with `CLAUDE_CODE_EXPERIMENTAL_CODE_MODE=1 claude`, or set that variable in the `env` of
+`~/.claude/settings.json`. Claude ignores it in project settings and supports Code Mode only in interactive
+terminal sessions on eligible accounts and models. Interactive Codex needs no configuration for loop-manager.
+[Claude Code Mode requirements](https://code.claude.com/docs/en/code-mode#requirements)
+
+### Installing the harnesses
 
 Install them any way you like. With mise, the daemon finds the same versions you test with, for example from your
 global `~/.config/mise/config.toml`:
