@@ -196,16 +196,23 @@ async fn a_codex_agent_is_asked_in_its_thread_and_its_lessons_reach_its_bead_onc
 
 /// The hook by hand, with `stand-ins` first on its `PATH`, in a session of run `r1` on bead `t-1`: its stdout.
 fn hook(data: &Path, stand_ins: &Path, input: &Value) -> String {
+    hook_on(Some("t-1"), data, stand_ins, input)
+}
+
+/// [`hook`] in a session of run `r1` on `bead`, or on no bead.
+fn hook_on(bead: Option<&str>, data: &Path, stand_ins: &Path, input: &Value) -> String {
     use std::io::Write;
     let path = std::env::join_paths(
         std::iter::once(stand_ins.to_owned()).chain(std::env::split_paths(&std::env::var_os("PATH").unwrap())),
     )
     .unwrap();
-    let mut child = common::program(addon().join("hooks/lessons"))
-        .arg(data)
-        .env("PATH", path)
-        .env("LOOP_MANAGER_RUN", "r1")
-        .env("LOOP_MANAGER_BEAD", "t-1")
+    let mut command = common::program(addon().join("hooks/lessons"));
+    command.arg(data).env("PATH", path).env("LOOP_MANAGER_RUN", "r1");
+    match bead {
+        Some(bead) => command.env("LOOP_MANAGER_BEAD", bead),
+        None => command.env_remove("LOOP_MANAGER_BEAD"),
+    };
+    let mut child = command
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
@@ -276,5 +283,12 @@ fn the_hook_asks_once_per_session_and_publishes_only_the_answer_to_its_request()
         assert!(asked.contains("\"block\""), "{asked}");
         assert_eq!(hook(&data, &stand_ins, &stop(session, true, answer)), "");
     }
+    // A session asked whose answer never ended its turn, as one resumed after its attempt failed: its next stop is not
+    // an answer, and its last message is the work's, not a lesson.
+    assert!(hook(&data, &stand_ins, &stop("s5", false, "Done.")).contains("\"block\""));
+    assert_eq!(hook(&data, &stand_ins, &stop("s5", false, "Fixed again.")), "");
     assert_eq!(posted_text(), format!("t-1\nLESSONS: r1\n\n{NOTE}"));
+    // A run on no bead is not asked, outcome or not.
+    assert_eq!(hook_on(None, &data, &stand_ins, &stop("s6", false, "Done.")), "");
+    assert!(!data.join("s6.asked").exists());
 }
