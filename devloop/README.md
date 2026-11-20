@@ -209,11 +209,13 @@ before recovery, since a local report is not proof of a successful push.
 
 ## The sessions
 
-`[settings]` in `loop-manager.toml` holds for every agent of the pack and its subagents: the three toolchain
-variables above, a subagent depth of 2,
-and a prompt cache of 5 minutes instead of the hour a subscription gets by default (`native.claude.promptCacheTtl`
-and `subagentPromptCacheTtl`): every round is a new session and the long test run is a step outside any session. The
-pack runs on claude only. Both roles attach `context-budget` and `dcg`, which refuses a destructive shell command
+The coder and reviewer launch Claude in the repository checkout. Claude reads the [project settings](../.claude/settings.json)
+there for both sessions. That file sets the subagent depth, enables the Rust Analyzer LSP and Ponytail plugins,
+and selects the roles that Ponytail matches. The coder's native subagents share its session settings.
+
+`[settings]` in `loop-manager.toml` supplies the three toolchain variables above and sets the Claude prompt cache
+to 5 minutes for each session and its subagents. Every round starts a new session, and the long test run happens
+outside it. Both roles attach `context-budget` and `dcg`, which refuses a destructive shell command
 before it runs; what `dcg` needs on the host is in `addons/dcg/README.md`. `devloop/lm config explain --config
 devloop/config.toml --project devloop --formula epic --rig repo` shows what each step gets and from which layer.
 
