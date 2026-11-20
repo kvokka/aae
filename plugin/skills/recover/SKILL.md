@@ -10,8 +10,9 @@ failed, lay out the ways to go on, and run the one the user chooses. Decide noth
 gate anything the user has not picked. The full guide is
 [Recovering a failed run by hand](https://github.com/kvokka/loop-manager/blob/main/docs/guide/recovery.md).
 
-The loop-manager commands below talk to the running daemon; if one answers that it cannot reach it, ask the user to start
-`loop-manager daemon` (or name its socket with `--socket`) and stop there.
+Use the daemon the user selected. For this repository's devloop installation, run the examples from the checkout
+with `devloop/lm` in place of `loop-manager` to select its binary and socket. If the selected daemon is unreachable,
+ask the user to start it or provide its socket.
 
 Read the CLI's structured replies directly in TOON. Add `--json` when passing a reply to a JSON parser.
 

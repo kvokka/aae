@@ -9,8 +9,9 @@ A formula may stop between its steps on an `await` step and wait for an outcome 
 bridge. Your job is to show the user what waits and to pass on what the user decides. Decide nothing yourself: never
 give an outcome or cancel a run the user has not named, and use the user's own words for the summary.
 
-The loop-manager commands below talk to the running daemon; if one answers that it cannot reach it, ask the user to start
-`loop-manager daemon` (or name its socket with `--socket`) and stop there.
+Use the daemon the user selected. For this repository's devloop installation, run the examples from the checkout
+with `devloop/lm` in place of `loop-manager` to select its binary and socket. If the selected daemon is unreachable,
+ask the user to start it or provide its socket.
 
 Read the CLI's structured replies directly in TOON. Add `--json` when passing a reply to a JSON parser.
 

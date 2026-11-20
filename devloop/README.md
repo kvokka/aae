@@ -167,7 +167,8 @@ Full test logs and run-scoped notes are copied to `devloop/artifacts/<run>/`. Th
 To inspect an epic before it finishes, including one waiting on you or whose run failed, from the repository root:
 
 ```sh
-BEADS_DIR="$PWD/devloop/.beads" sh devloop/scripts/report.sh snapshot <run> <bead>
+PATH="$HOME/.local/opt/loop-manager-dev/bin:$PATH" \
+  BEADS_DIR="$PWD/devloop/.beads" sh devloop/scripts/report.sh snapshot <run> <bead>
 ```
 
 This prints the full current handoff as TOON without closing the epic, committing or pushing.
