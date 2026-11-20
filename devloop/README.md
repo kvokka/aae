@@ -210,7 +210,7 @@ before recovery, since a local report is not proof of a successful push.
 ## The sessions
 
 `[settings]` in `loop-manager.toml` holds for every agent of the pack and its subagents: the three toolchain
-variables above, `BR_OUTPUT_FORMAT = "toon"` (br answers in TOON; `--json` still gives JSON), a subagent depth of 2,
+variables above, a subagent depth of 2,
 and a prompt cache of 5 minutes instead of the hour a subscription gets by default (`native.claude.promptCacheTtl`
 and `subagentPromptCacheTtl`): every round is a new session and the long test run is a step outside any session. The
 pack runs on claude only. Both roles attach `context-budget` and `dcg`, which refuses a destructive shell command

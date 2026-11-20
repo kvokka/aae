@@ -3,6 +3,36 @@
 use super::*;
 
 #[test]
+fn headless_defaults_yield_to_the_agents_env_and_native_settings() {
+    let env = |p: &Value| {
+        part::env(p, "i1", None, Path::new("/state"))
+            .unwrap()
+            .into_iter()
+            .collect::<std::collections::BTreeMap<_, _>>()
+    };
+    let mut p = json!({ "env": {} });
+    let defaults = env(&p);
+    for key in [
+        "CLAUDE_CODE_DISABLE_TERMINAL_TITLE",
+        "DISABLE_TELEMETRY",
+        "DISABLE_ERROR_REPORTING",
+        "DISABLE_FEEDBACK_COMMAND",
+        "DISABLE_AUTOUPDATER",
+        "CLAUDE_CODE_DISABLE_FEEDBACK_SURVEY",
+    ] {
+        assert_eq!(defaults[key], "1", "{key}");
+    }
+    assert_eq!(defaults["CLAUDE_CODE_ENTRYPOINT"], "loop-manager");
+    p["env"]["CLAUDE_CODE_ENTRYPOINT"] = json!("sdk-cli");
+    p["env"]["DISABLE_TELEMETRY"] = json!("");
+    p["settings"] = json!({ "env": { "DISABLE_AUTOUPDATER": "0" } });
+    let configured = env(&p);
+    assert_eq!(configured["CLAUDE_CODE_ENTRYPOINT"], "sdk-cli");
+    assert_eq!(configured["DISABLE_TELEMETRY"], "");
+    assert!(!configured.contains_key("DISABLE_AUTOUPDATER"));
+}
+
+#[test]
 fn hooks_join_the_native_settings_and_mcp_servers_take_claude_form() {
     use loop_manager_contract::config::{Hook, Mcp};
     let hook = |event: &str, enabled| Hook {

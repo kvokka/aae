@@ -134,6 +134,7 @@ fn the_config_is_checked_and_explained_without_a_daemon() {
     let text = String::from_utf8_lossy(&out.stdout);
     let beads = format!("env.BEADS_DIR = \"{}\"", files.join("shop/.beads").display());
     assert!(text.contains(&beads), "{text}");
+    assert!(text.contains("env.BR_OUTPUT_FORMAT = \"toon\""), "{text}");
     // A reader that went away (`loop-manager config explain | head -1`): a quiet SIGPIPE exit, not a panic.
     let (reader, writer) = std::io::pipe().unwrap();
     drop(reader);
