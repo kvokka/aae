@@ -135,6 +135,10 @@ By hand, without the label: `devloop/lm run start devloop repo epic --input epic
 
 ## Watch it
 
+From the repository root, `mise install` installs the pinned viewer. Run `mise run bv` to open the devloop
+tracker with a group for each status present, including `rework`. From this directory use `bv --recipe default`
+for the same view. The built-in Kanban board has four fixed columns.
+
 ```sh
 devloop/lm run list                 # the runs, newest first: state, step, formula
 devloop/lm run show <run>           # one run: its round, the outcomes of its steps, why it failed
@@ -249,7 +253,10 @@ devloop/config.toml --project devloop --formula epic --rig repo` shows what each
 
 The coder also attaches `conventional-commits`. Its Git commit-msg hook checks the subject and bead suffix before each commit in the working repository. See [the addon](../addons/conventional-commits/README.md) for requirements.
 
-All three addons are declared by path (`path = "../addons/<name>"`), as no release tag holds the versions
+Both roles also attach [lessons](../addons/lessons/README.md). When an agent finishes, it can leave a short
+lesson on its epic. An empty answer leaves no comment.
+
+All four addons are declared by path (`path = "../addons/<name>"`), as no release tag holds the versions
 this pack needs, and a declaration by git would make `config check` in `mise run ci` go to the network on a cold
 cache. Once a release tag holds them, declare each as `git = "<the repository>"`, `rev = "<the tag>"` and
 `dir = "addons/<name>"`.

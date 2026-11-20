@@ -7,4 +7,4 @@ subagents = ["helper", "subcoder", "expert"]
 # Past 300k tokens of context the coder is told to wrap up; a session stopped past 420k still goes on to the review
 # (`cut = "pass"`). Each round is a session of its own. `dcg` refuses a destructive shell command before it runs.
 # The addons are attached here and not in `[settings]`: a hook of the session also runs inside its subagents.
-addons = [{ name = "context-budget", params = { cut = "pass" } }, { name = "dcg" }, { name = "conventional-commits" }]
+addons = [{ name = "context-budget", params = { cut = "pass" } }, { name = "dcg" }, { name = "conventional-commits" }, { name = "lessons" }]

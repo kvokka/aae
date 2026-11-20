@@ -13,6 +13,9 @@ path = "../addons/dcg"
 [[addon]]
 path = "../addons/conventional-commits"
 
+[[addon]]
+path = "../addons/lessons"
+
 # Settings shared by all devloop agents. Claude also reads .claude/settings.json from the repo rig.
 [settings]
 # A session gets PATH, HOME and LANG of the daemon and nothing else of its environment. `cargo` is rustup's proxy:

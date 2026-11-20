@@ -6,9 +6,15 @@ rust = { version = "1.100", components = "clippy,rustfmt,rust-src,rust-analyzer"
 claude = "2.1"
 codex = "0"
 "github:Dicklesworthstone/beads_rust" = "0.7.6"
+"github:Dicklesworthstone/beads_viewer" = "0.26.0"
 "github:Dicklesworthstone/destructive_command_guard" = "0.16.0"
 jq = "1.8.2"
 rumdl = "0.3.4"
+
+[tasks.bv]
+description = "View the devloop tracker grouped by status"
+dir = "{{config_root}}/devloop"
+run = "bv --recipe default"
 
 [tasks.devloop-install]
 description = "Install the existing debug binary for devloop"

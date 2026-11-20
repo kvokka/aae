@@ -3,4 +3,4 @@ harness = "claude"
 model = "opus"
 effort = "high"
 # The addon's default budget; each round's review is a session of its own. `dcg` refuses a destructive shell command.
-addons = [{ name = "context-budget" }, { name = "dcg" }]
+addons = [{ name = "context-budget" }, { name = "dcg" }, { name = "lessons" }]

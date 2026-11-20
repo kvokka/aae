@@ -1,0 +1,8 @@
+name: default
+description: Devloop epics grouped by their tracker status, including rework.
+sort:
+  field: priority
+  direction: asc
+view:
+  group_by: status
+  columns: [id, status, title]
