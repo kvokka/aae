@@ -155,11 +155,18 @@ devloop/lm run show <run>
 ```
 
 The last step's `data.stdout` is a bounded TOON handoff: the epic, status, summary and review previews, outstanding
-question and decision counts and previews, and the full report path. A calling agent or tool should read that
-report to relay all outstanding concerns, even when the run passed. The files in git are
-`devloop/results/<run>/report.toon` (full summaries, review, test digests, unresolved concerns and code revision) and
-`comments.toon` (the complete comment snapshot). Extraction matches the explicit concern ids; it does not infer
-answers from prose, a removed label or a passing review. Only a later matching `ANSWER` resolves a concern.
+question and decision counts and previews, per-crate line changes when they fit, and the full report path.
+A calling agent or tool should read that report to relay all outstanding concerns, even when the run passed.
+`devloop/results/<run>/report.toon` holds this run's full summaries, review, test digests and changes to the code.
+It also lists unresolved concerns across the epic. `comments.toon` holds the complete comment snapshot. Extraction
+matches the explicit concern ids; it does not infer answers from prose, a removed label or a passing review.
+Only a later matching `ANSWER` resolves a concern.
+
+`module_lines` gives the net change in physical Rust lines for each changed crate under `crates/`, from the first
+coder's `BASE` (`code_base`) to `code_head`. Positive numbers mean growth. The `tests` column covers files in
+`tests/`, files named `tests.rs`, and the entire `loop-manager-testkit` and `loop-manager-acceptance` crates.
+Other Rust files contribute to `code`. Both columns skip `generated/` directories. An empty list means the two
+revisions have no Rust file changes in scope. A missing first-round base or unavailable commit range gives `null`.
 
 Full test logs and run-scoped notes are copied to `devloop/artifacts/<run>/`. This local archive survives a
 `cargo clean` but is ignored by git: a fresh clone has the report and comments, not the full logs and notes.

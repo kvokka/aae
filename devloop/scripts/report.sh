@@ -17,9 +17,13 @@ out=devloop/results/$run
 artifacts=devloop/artifacts/$run
 br comments "$bead" --json >"$tmp/comments.json"
 br show "$bead" --json >"$tmp/bead.json"
-# Prefer the reviewed code revision to the later tracker commits.
+jq --arg actor "loop-manager:$run:" 'map(select(.author | startswith($actor)))' "$tmp/comments.json" >"$tmp/run-comments.json"
+# An epic can be run again. Only its first coder attempt knows where this run began.
+base=$(jq -r --arg actor "loop-manager:$run:1" '[.[] | select(.author == $actor and (.text | startswith("CODER:")))
+  | .text | split("\n")[1] // "" | select(startswith("BASE: ")) | ltrimstr("BASE: ")] | first // empty' "$tmp/run-comments.json")
+# Prefer this run's reviewed revision to later tracker commits.
 head=$(jq -r '[.[] | select(.text | startswith("REVIEW\n")) | .text
-  | split("\n")[] | select(startswith("HEAD: ")) | ltrimstr("HEAD: ")] | last // empty' "$tmp/comments.json")
+  | first(split("\n")[] | select(startswith("HEAD: "))) | ltrimstr("HEAD: ")] | last // empty' "$tmp/run-comments.json")
 if [ -z "$head" ]; then
   if [ -f "$out/report.toon" ]; then
     # Only this top-level string is needed for a retry. An all-numeric revision can be quoted.
@@ -28,6 +32,16 @@ if [ -z "$head" ]; then
   else
     head=$(git rev-parse HEAD)
   fi
+fi
+: >"$tmp/numstat"
+# Missing or stale handoff revisions leave the size delta unknown. Never substitute a later round's BASE.
+case "$base$head" in *[!0-9a-fA-F]*) base=;; esac
+if [ -n "$base" ] && git merge-base --is-ancestor "$base" "$head" 2>/dev/null; then
+  # Counting a rename as deletion + addition also handles moves between crates and from product code to tests.
+  git diff --no-ext-diff --no-textconv --no-renames --numstat -z "$base" "$head" -- \
+    ':(glob)crates/*/**/*.rs' ':(exclude,glob)**/generated/**' >"$tmp/numstat"
+else
+  base=
 fi
 : >"$tmp/tests.txt"
 source=target/devloop/runs/$run
@@ -53,9 +67,9 @@ if [ "$mode" = finish ]; then
   fi
   br show "$bead" --json >"$tmp/bead.json"
 fi
-jq -n --slurpfile comments "$tmp/comments.json" --slurpfile bead "$tmp/bead.json" \
+jq -n --slurpfile comments "$tmp/comments.json" --slurpfile run_comments "$tmp/run-comments.json" --slurpfile bead "$tmp/bead.json" \
   --arg run "$run" --arg head "$head" --arg artifacts "$report_artifacts" --arg comment_path "$comment_path" \
-  --rawfile tests "$tmp/tests.txt" -f "$here/report.jq" >"$tmp/report.json"
+  --arg base "$base" --rawfile numstat "$tmp/numstat" --rawfile tests "$tmp/tests.txt" -f "$here/report.jq" >"$tmp/report.json"
 if [ "$mode" = snapshot ]; then loop-manager format <"$tmp/report.json"; exit 0; fi
 loop-manager format <"$tmp/report.json" >"$tmp/report.toon"
 loop-manager format <"$tmp/comments.json" >"$tmp/comments.toon"
@@ -67,13 +81,17 @@ git diff --cached --quiet -- devloop/.beads "$out" || \
   git commit -q -m "devloop: completed $bead, handoff for $run" -- devloop/.beads "$out" >&2
 git push -q >&2 || { echo "report: closed epic and handoff are local; git push failed" >&2; exit 75; }
 # Exec outcomes retain only the last 4 KiB: give callers a bounded preview and the path to the complete report.
-jq --arg report "$out/report.toon" '{run, epic, status, report: $report, artifacts,
+jq --arg report "$out/report.toon" '{run, epic, status, report: $report, artifacts, module_lines,
   summary: (.coder[:240]), review: (.review[:240]),
   question_count: (.questions | length), decision_count: (.decisions | length),
   questions: [.questions[:2][] | {key: .key[:80], text: .text[:160]}],
   decisions: [.decisions[:2][] | {key: .key[:80], text: .text[:160]}]
 }' "$tmp/report.json" >"$tmp/preview.json"
 loop-manager format <"$tmp/preview.json" >"$tmp/preview.toon"
+if [ "$(wc -c <"$tmp/preview.toon")" -gt 3500 ]; then
+  jq 'del(.module_lines)' "$tmp/preview.json" >"$tmp/no-lines.json"
+  loop-manager format <"$tmp/no-lines.json" >"$tmp/preview.toon"
+fi
 if [ "$(wc -c <"$tmp/preview.toon")" -gt 3500 ]; then
   jq '{run, epic, status, report, artifacts, question_count, decision_count}' "$tmp/preview.json" >"$tmp/small.json"
   loop-manager format <"$tmp/small.json" >"$tmp/preview.toon"
