@@ -1,7 +1,7 @@
 #!/bin/sh
 # Promote the existing dev artifact without modifying a running executable in place.
 set -eu
-if [ -n "${LOOP_MANAGER_RUN:-}" ]; then
+if [ -n "${LOOP_MANAGER_RUN:-}${DEVLOOP_TEST_ENV:-}" ]; then
   echo "This is an operator command for the working devloop. Use isolated tests inside a run." >&2
   exit 1
 fi

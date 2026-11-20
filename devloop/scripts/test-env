@@ -11,6 +11,7 @@ with tempfile.TemporaryDirectory(prefix="devloop-test-") as work:
     for key in os.environ:
         if key.startswith(("LOOP_MANAGER_", "BEADS_", "BD_")) and key != "LOOP_MANAGER_INSTANCE":
             del env[key]
+    env["DEVLOOP_TEST_ENV"] = "1"
     for kind in ("CONFIG", "STATE", "CACHE", "RUNTIME"):
         path = Path(work, kind.lower())
         path.mkdir(mode=0o700)

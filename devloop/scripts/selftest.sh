@@ -92,6 +92,8 @@ export BD_ACTOR=working LOOP_MANAGER_ATTEMPT_TOKEN=outer-token
 for operator in "$here/../lm" "$here/install.sh"; do
   if "$operator" --help >"$tmp/operator" 2>&1; then echo "agent ran $operator" >&2; exit 1; fi
   grep -q 'operator command' "$tmp/operator"
+  if "$here/test-env" "$operator" --help >"$tmp/operator" 2>&1; then echo "test ran $operator" >&2; exit 1; fi
+  grep -q 'operator command' "$tmp/operator"
 done
 MISE_RC=0 expect 0 tests.sh "green"; jq -e '.exit_code == 0 and .uncommitted == 0 and .failed == []' "$tmp/out" >/dev/null
 log=$(jq -r .log "$tmp/out")
