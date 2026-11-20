@@ -13,24 +13,21 @@ gate anything the user has not picked. The full guide is
 The loop-manager commands below talk to the running daemon; if one answers that it cannot reach it, ask the user to start
 `loop-manager daemon` (or name its socket with `--socket`) and stop there.
 
-Read structured output as TOON: `toon --encode` converts the CLI's JSON before it enters your context. It needs
-`toon` 0.2.5 (`github:Dicklesworthstone/toon_rust`, pinned in this repository's `mise.toml`). Run the pipelines in
-bash or zsh with `set -o pipefail`; an upstream CLI error must not become a successful empty result. Keep JSON when
-another program consumes it.
+Read the CLI's structured replies directly in TOON. Add `--json` when passing a reply to a JSON parser.
 
 ## 1. See what failed
 
 ```sh
-loop-manager run list --state failed --json | toon --encode
-loop-manager run list --state failed --project <project> --limit 20 --json | toon --encode
+loop-manager run list --state failed
+loop-manager run list --state failed --project <project> --limit 20
 ```
 
 The list is newest first. Ask which runs matter if there are many. For each run the user cares about:
 
 ```sh
-loop-manager run show <run> --json | toon --encode
-loop-manager run list --parent <run> --json | toon --encode
-loop-manager gate list --json | toon --encode
+loop-manager run show <run>
+loop-manager run list --parent <run>
+loop-manager gate list
 ```
 
 `loop-manager run list --parent` lists the children of a run whose formula has a `drain` or `formula` step;
@@ -87,7 +84,7 @@ Offer these, for the user to pick one per run:
 2. **A new session on the same task.** A new run of the formula on the same bead, in a new session.
 3. **A new session with a note** saying the work was begun before and its state is unknown. This needs a formula
    with an input for the note that its agent's prompt template uses; look for one with
-   `loop-manager formula list --json | toon --encode`. If there is none, point the user to the guide's section on it
+   `loop-manager formula list`. If there is none, point the user to the guide's section on it
    and stop: writing one is the user's change to their config.
 4. **Abandon it.** The failed run needs nothing more. To keep every run off the bead, close its gate; to drop the
    task for good, the user closes the bead in the tracker.
@@ -96,7 +93,7 @@ Offer these, for the user to pick one per run:
 
 Take `project`, `rig`, `formula` and the task input's name (often `task`) from `loop-manager run show`; leave `<rig>`
 out when the run has none. The note formula's input names are its own
-(`loop-manager formula list --json | toon --encode`). If the bead's gate is closed and the user wants the bead taken
+(`loop-manager formula list`). If the bead's gate is closed and the user wants the bead taken
 again, open it first (that resets the count):
 
 ```sh

@@ -104,18 +104,18 @@ fn words(line: &str) -> Vec<String> {
 }
 
 #[test]
-fn command_words_keep_a_quoted_pipe_but_leave_out_the_encoder() {
+fn command_words_keep_a_quoted_pipe_and_stop_at_the_next_command() {
     assert_eq!(
-        words("loop-manager run resolve run_1 owner pass --summary 'left | right' | toon --encode"),
+        words("loop-manager run start shop check --input 'name=left | right' --json | jq -r .run"),
         [
             "loop-manager",
             "run",
-            "resolve",
-            "run_1",
-            "owner",
-            "pass",
-            "--summary",
-            "left | right"
+            "start",
+            "shop",
+            "check",
+            "--input",
+            "name=left | right",
+            "--json"
         ]
     );
 }

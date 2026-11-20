@@ -11,6 +11,8 @@ pub fn encode(value: &Value) -> String {
     match value {
         Value::Object(fields) => object(&mut lines, fields, 0),
         Value::Array(items) => array(&mut lines, String::new(), items, 0),
+        // A decoder discards a byte-order mark at the start of a document.
+        Value::String(text) if text.starts_with('\u{feff}') => lines.push(quoted(text)),
         scalar => lines.push(primitive(scalar)),
     }
     lines.join("\n")

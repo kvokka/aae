@@ -1,4 +1,4 @@
-//! The CLI against a real `loop-manager daemon` (docs/api/frontends.md): a thin client with JSON output.
+//! The CLI against a real `loop-manager daemon` (docs/api/frontends.md): native TOON and JSON output.
 
 use crate::common::{self, Daemon};
 use serde_json::{Value, json};
@@ -74,10 +74,8 @@ async fn runs_and_gates_by_hand_from_the_cli() {
         (&"project:shop".into(), &"pause".into())
     );
     let out = d.cli(&["gate", "open", "project:shop"], &[]);
-    assert!(
-        out.status.success() && out.stdout.is_empty(),
-        "nothing to print, not `null`"
-    );
+    assert!(out.status.success());
+    assert_eq!(out.stdout, b"null\n");
     d.until_state(&run, "passed").await;
     assert_eq!(d.json(&["run", "show", &run])["reason"], "pass");
     let slow = d.json(&["run", "start", "shop", "web", "slow"])["run"]
@@ -95,19 +93,22 @@ async fn runs_and_gates_by_hand_from_the_cli() {
     // The live view of a run that ended replays its events and ends too.
     let out = d.cli(&["run", "watch", &run], &[]);
     let watched = String::from_utf8(out.stdout).unwrap();
-    assert!(watched.trim_end().ends_with(&format!("run.passed  {run}")), "{watched}");
-    assert!(
-        watched.contains(&format!("run.state_changed  {run}  preparing -> running")),
-        "{watched}"
-    );
+    let ndjson = d.cli(&["run", "watch", &run, "--json"], &[]);
+    assert!(ndjson.status.success());
+    let events: Vec<Value> = std::str::from_utf8(&ndjson.stdout)
+        .unwrap()
+        .lines()
+        .map(|line| serde_json::from_str(line).unwrap())
+        .collect();
+    let last = events.last().unwrap();
+    assert_eq!((&last["type"], &last["run"]), (&json!("run.passed"), &json!(run)));
+    let blocks: Vec<_> = events.iter().map(loop_manager_core::toon::encode).collect();
+    assert_eq!(watched.trim_end(), blocks.join("\n\n"));
     assert_eq!(d.json(&["status"])["version"], env!("CARGO_PKG_VERSION"));
-    // Without `--json` a reply is `key: value` lines, nulls left out.
+    // The default status is a TOON object.
     let status = String::from_utf8(d.cli(&["status"], &[]).stdout).unwrap();
     let version = format!("version: {}\n", env!("CARGO_PKG_VERSION"));
-    assert!(
-        status.contains(&version) && !status.contains("null") && !status.contains('{'),
-        "{status}"
-    );
+    assert!(status.contains(&version), "{status}");
 }
 
 #[tokio::test]
@@ -123,6 +124,12 @@ async fn the_finisher_reports_the_answer_and_needs_the_session_environment() {
     let out = d.cli(&["finish", "pass", "--summary", "done", "--data", "{\"n\":1}"], &env);
     assert_eq!(String::from_utf8_lossy(&out.stdout).trim(), "invalid");
     assert_eq!(out.status.code(), Some(1));
+    let out = d.cli(&["--json", "finish", "pass", "--summary", "done"], &env);
+    assert_eq!(out.status.code(), Some(1));
+    assert_eq!(
+        serde_json::from_slice::<Value>(&out.stdout).unwrap(),
+        json!({ "answer": "invalid" })
+    );
 }
 
 #[tokio::test]
@@ -133,7 +140,11 @@ async fn without_a_daemon_a_client_command_fails_and_names_the_daemon() {
         &[("LOOP_MANAGER_SOCKET", "/nonexistent/loop-manager.sock")],
     );
     assert_eq!(out.status.code(), Some(1));
-    assert!(String::from_utf8_lossy(&out.stderr).contains("loop-manager daemon"));
+    let error = String::from_utf8_lossy(&out.stderr);
+    assert!(
+        error.starts_with("error:\n  code: no_daemon\n") && error.contains("loop-manager daemon"),
+        "{error}"
+    );
     let out = d.cli(
         &["status", "--json"],
         &[("LOOP_MANAGER_SOCKET", "/nonexistent/loop-manager.sock")],
@@ -231,14 +242,7 @@ async fn the_config_from_the_cli_lists_explains_checks_and_reloads() {
     );
     let out = d.cli(&["agent", "list"], &[]);
     let text = String::from_utf8_lossy(&out.stdout);
-    assert!(
-        text.contains("agent: shop.dev\nharness: claude\nproject: shop\nsubagents: shop.qa\n"),
-        "{text}"
-    );
-    assert!(
-        text.contains("agent: shop.qa\ncalled_by: shop.dev\nharness: claude\n"),
-        "{text}"
-    );
+    assert_eq!(text.trim_end(), loop_manager_core::toon::encode(&agents));
     // An internal formula (docs/design/config.md): marked in the API, hidden from `loop-manager formula list` unless `--all`.
     let internal = |args: &[&str]| -> Vec<Value> {
         let formulas = d.json(args);
@@ -272,13 +276,13 @@ async fn the_config_from_the_cli_lists_explains_checks_and_reloads() {
     fs::write(&file, "projects = [\"shop\"\n").unwrap();
     let out = d.cli(&["config", "check"], &other);
     assert!(!out.status.success());
-    assert!(String::from_utf8_lossy(&out.stderr).contains("config.toml"));
+    assert!(String::from_utf8_lossy(&out.stdout).contains("config.toml"));
     let out = d.cli(&["config", "reload"], &[]);
     let stderr = String::from_utf8_lossy(&out.stderr);
     assert!(!out.status.success(), "{stderr}");
     // The errors of the refused file, not only that it has some.
     assert!(
-        stderr.contains("config_error)\n") && stderr.contains("config.toml"),
+        stderr.contains("code: config_error\n") && stderr.contains("config.toml"),
         "{stderr}"
     );
     assert_eq!(
@@ -300,10 +304,10 @@ async fn the_config_from_the_cli_lists_explains_checks_and_reloads() {
     ] {
         fs::write(&file, &text).unwrap();
         let out = d.cli(&["config", "check"], &[]);
-        let stderr = String::from_utf8_lossy(&out.stderr);
+        let checked = String::from_utf8_lossy(&out.stdout);
         match error {
-            Some(error) => assert!(!out.status.success() && stderr.contains(error), "{text}: {stderr}"),
-            None => assert!(out.status.success(), "{text}: {stderr}"),
+            Some(error) => assert!(!out.status.success() && checked.contains(error), "{text}: {checked}"),
+            None => assert!(out.status.success(), "{text}: {checked}"),
         }
     }
 

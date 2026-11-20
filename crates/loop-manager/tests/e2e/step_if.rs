@@ -29,10 +29,14 @@ async fn a_skipped_step_shows_in_run_watch() {
         .unwrap();
     let text = String::from_utf8(out.stdout).unwrap();
     assert!(out.status.success(), "{text}{}", String::from_utf8_lossy(&out.stderr));
-    let skipped: Vec<&str> = text.lines().filter(|l| l.contains("run.step_skipped")).collect();
+    let skipped: Vec<&str> = text
+        .trim_end()
+        .split("\n\n")
+        .filter(|event| event.lines().any(|l| l == "type: run.step_skipped"))
+        .collect();
     assert_eq!(skipped.len(), 1, "{text}");
     assert!(
-        skipped[0].ends_with(&format!("  run.step_skipped  {run}  step=notify")),
+        skipped[0].lines().any(|l| l == format!("run: {run}")) && skipped[0].lines().any(|l| l == "  step: notify"),
         "{text}"
     );
 }

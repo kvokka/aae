@@ -69,7 +69,7 @@ resolves that concern. The following lines explain it in Russian. An ordinary fi
 - Use a binary built from this checkout, with idempotent tracker closure, for both the daemon and the commands its
   scripts call. `cargo build --locked -p loop-manager`, then `export PATH="$PWD/target/debug:$PATH"` from the
   repository root makes that binary available to the daemon and its children.
-- `loop-manager`, `claude`, `br`, `dcg`, `jq`, `toon` 0.2.5, `git`, `mise` and `cargo-nextest` are on the shell's `PATH` when it
+- `loop-manager`, `claude`, `br`, `dcg`, `jq`, `git`, `mise` and `cargo-nextest` are on the shell's `PATH` when it
   starts the daemon, and `loop-manager doctor --config devloop/config.toml` is content.
 - That shell is one where mise has activated this repository: the sessions take `RUSTUP_TOOLCHAIN`, `RUSTUP_HOME`
   and `CARGO_HOME` from it, and without them every session fails with `config_error` naming the variable.
@@ -116,10 +116,8 @@ br list --status rework               # the epics a review sent back
 br list -l needs-owner                # the epics with a question to you
 ```
 
-Each test invocation keeps its own log: the step's `LOG:` line gives the path. When reading structured command
-output into an agent's context, use `loop-manager run show <run> --json | toon --encode` (bash or zsh with
-`set -o pipefail`). Keep JSON for programs that parse it. `toon` is pinned as
-`"github:Dicklesworthstone/toon_rust" = "0.2.5"` in `mise.toml`.
+Each test invocation keeps its own log: the step's `LOG:` line gives the path. The loop-manager commands above
+emit structured replies in TOON. For scripts, `loop-manager run show <run> --json` returns the run as JSON.
 
 ## Answer `needs-owner`
 

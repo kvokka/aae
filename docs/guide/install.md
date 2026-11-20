@@ -100,9 +100,9 @@ loop-manager doctor                                      # with the daemon runni
 license, the modes of the state and socket directories, and the state with its outbox. Without `--config` it asks
 the running daemon (`GET /v1/doctor`), which makes the checks from inside its process, with its environment, `PATH`
 and config file; with no daemon it fails and says so. With `--config <file>` it needs no daemon and checks that file
-from the shell it runs in. Either way it prints the same table and exits non-zero on an error; warnings (an
-untested version, no login file) do not fail it. `loop-manager doctor --json` prints the checks as JSON, the API's reply
-as it is (a failing check is an `error` level in it, still 200).
+from the shell it runs in. Both modes print the findings in TOON by default and exit non-zero when a check has
+level `error`. Warnings (an untested version, no login file) do not fail the command. `loop-manager doctor --json`
+prints the API's array of findings. The API returns HTTP 200 even when a finding has level `error`.
 
 ## Directories
 

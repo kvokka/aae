@@ -17,7 +17,7 @@ printf 'target/\ndevloop/artifacts/\n' >.gitignore
 (cd devloop && br init --prefix dev -q)
 export BEADS_DIR="$tmp/work/devloop/.beads"
 bead=$(br create 'Report the epic' --json | jq -r .id)
-export LOOP_MANAGER_BEAD=$bead
+export LOOP_MANAGER_BEAD="$bead"
 br update "$bead" --assignee loop-manager:run_report -q
 comment() { br comments add "$bead" "$1" -q; }
 comment 'CODER: done
@@ -36,11 +36,6 @@ comment 'DECISION: d2
 A decision that was accepted.'
 comment 'ANSWER: d2
 Accepted.'
-comment 'REVIEW
-SCORE: 9/10
-VERDICT: complete
-HEAD: def
-The work is complete.'
 printf 'HEAD: def\nRESULT: pass\n' >target/devloop/runs/run_report/tests.first/result.txt
 echo 'full CI output' >target/devloop/runs/run_report/tests.first/ci.log
 echo 'plan detail' >target/devloop/runs/run_report/notes/plan.md
@@ -49,20 +44,43 @@ git add -A && git commit -q -m init && git push -q -u origin HEAD
 printf '#!/bin/sh\necho "pre-commit progress that is not part of the report"\n' >.git/hooks/pre-commit
 chmod +x .git/hooks/pre-commit
 before=$(git rev-parse HEAD)
+# A run without a review HEAD first uses the checked-out revision.
 sh "$here/report.sh" snapshot run_report "$bead" >"$tmp/snapshot.toon"
-toon --decode "$tmp/snapshot.toon" >"$tmp/snapshot.json"
-jq -e '.status == "open" and .comments == null and .artifacts == "target/devloop/runs/run_report"
-  and (.questions | length) == 1 and .questions[0].key == "q2"
-  and (.decisions | length) == 1 and .decisions[0].key == "d1"' "$tmp/snapshot.json" >/dev/null
+grep -Fxq "code_head: $before" "$tmp/snapshot.toon" || grep -Fxq "code_head: \"$before\"" "$tmp/snapshot.toon"
+comment 'REVIEW
+SCORE: 9/10
+VERDICT: complete
+HEAD: def
+The work is complete.'
+sh "$here/report.sh" snapshot run_report "$bead" >"$tmp/snapshot.toon"
+br comments "$bead" --json >"$tmp/comments.json"
+jq --arg bead "$bead" '
+  def note($prefix): first(.[] | select(.text | startswith($prefix)));
+  {run: "run_report", epic: $bead, title: "Report the epic", status: "open", comments: null,
+   code_head: "def", artifacts: "target/devloop/runs/run_report", tests: ["HEAD: def\nRESULT: pass\n"],
+   coder: note("CODER:").text, review: note("REVIEW\n").text,
+   questions: [note("QUESTION: q2\n") | {author, created_at, text, key: "q2"}],
+   decisions: [note("DECISION: d1\n") | {author, created_at, text, key: "d1"}]}' \
+  "$tmp/comments.json" >"$tmp/snapshot.json"
+loop-manager format <"$tmp/snapshot.json" >"$tmp/expected.toon"
+cmp "$tmp/expected.toon" "$tmp/snapshot.toon"
 [ "$(git rev-parse HEAD)" = "$before" ]
 [ ! -e devloop/results ]
 # Finalization publishes both a closed bead and the portable report; full logs stay local.
 sh "$here/report.sh" >"$tmp/result.toon"
-toon --decode "$tmp/result.toon" >"$tmp/result.json"
-jq -e '.status == "closed" and .question_count == 1 and .decision_count == 1
-  and .report == "devloop/results/run_report/report.toon"' "$tmp/result.json" >/dev/null
-toon --decode devloop/results/run_report/report.toon >"$tmp/report.json"
-jq -e '.code_head == "def" and (.tests | length) == 1' "$tmp/report.json" >/dev/null
+archive=devloop/results/run_report
+jq --arg comments "$archive/comments.toon" '.status = "closed" | .comments = $comments
+  | .artifacts = "devloop/artifacts/run_report"' "$tmp/snapshot.json" >"$tmp/closed.json"
+loop-manager format <"$tmp/closed.json" >"$tmp/expected.toon"
+cmp "$tmp/expected.toon" "$archive/report.toon"
+loop-manager format <"$tmp/comments.json" >"$tmp/expected.toon"
+cmp "$tmp/expected.toon" "$archive/comments.toon"
+jq --arg report "$archive/report.toon" '{run, epic, status, report: $report, artifacts,
+  summary: .coder, review, question_count: 1, decision_count: 1,
+  questions: [.questions[] | {key, text}], decisions: [.decisions[] | {key, text}]}' \
+  "$tmp/closed.json" >"$tmp/preview.json"
+loop-manager format <"$tmp/preview.json" >"$tmp/expected.toon"
+cmp "$tmp/expected.toon" "$tmp/result.toon"
 grep -q 'full CI output' devloop/artifacts/run_report/tests.first/ci.log
 grep -q 'plan detail' devloop/artifacts/run_report/notes/plan.md
 [ "$(git rev-parse HEAD)" = "$(git -C ../origin.git rev-parse HEAD)" ]
@@ -83,8 +101,7 @@ before=$(git rev-parse HEAD)
 git remote set-url origin "$tmp/origin.git"
 sh "$here/report.sh" >"$tmp/retry.toon"
 [ "$(git rev-parse HEAD)" = "$before" ]
-toon --decode "$tmp/retry.toon" >"$tmp/retry.json"
-jq -e '.question_count == 2' "$tmp/retry.json" >/dev/null
+grep -Fxq 'question_count: 2' "$tmp/retry.toon"
 # Even large UTF-8 comments cannot truncate the exec result into an unreadable TOON fragment.
 long=$(jq -nr '"🧭" * 4000')
 comment "CODER: done
@@ -94,6 +111,17 @@ HEAD: def
 $long"
 sh "$here/report.sh" >"$tmp/large.toon"
 [ "$(wc -c <"$tmp/large.toon")" -le 3500 ]
-toon --decode "$tmp/large.toon" >"$tmp/large.json"
-jq -e '.report == "devloop/results/run_report/report.toon"' "$tmp/large.json" >/dev/null
+grep -Fxq "report: $archive/report.toon" "$tmp/large.toon"
+# Retry an old handoff with no review HEAD. Its archived revision, including a quoted
+# numeric-looking SHA, survives both the first native write and subsequent retries.
+export LOOP_MANAGER_RUN=legacy
+LOOP_MANAGER_BEAD=$(br create 'Legacy handoff' --json | jq -r .id)
+mkdir -p devloop/results/legacy
+printf '%s\n' 'status: closed' 'code_head: "1234567"' 'questions[0]:' >devloop/results/legacy/report.toon
+sh "$here/report.sh" >"$tmp/legacy.toon"
+grep -Fxq 'code_head: "1234567"' devloop/results/legacy/report.toon
+before=$(git rev-parse HEAD)
+sh "$here/report.sh" >"$tmp/retry.toon"
+[ "$(git rev-parse HEAD)" = "$before" ]
+cmp "$tmp/legacy.toon" "$tmp/retry.toon"
 echo "devloop report selftest: ok"

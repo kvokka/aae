@@ -1,6 +1,6 @@
 //! The command groups of the CLI: `run`, `gate`, `trigger` and `instance`, each with the API calls behind it.
 
-use super::{encode, follow, print, run_path, text};
+use super::{encode, follow, print, run_path};
 use crate::client::{Client, ClientError};
 use clap::Subcommand;
 use serde_json::{Map, Value, json};
@@ -195,21 +195,7 @@ pub(super) async fn run(client: &Client, json: bool, command: RunCommand) -> Res
             let runs = client
                 .request("GET", &format!("/v1/runs?{}", query.join("&")), None, None)
                 .await?;
-            if json {
-                print(json, &runs);
-            }
-            for run in runs.as_array().filter(|_| !json).into_iter().flatten() {
-                let at = format!("{}/{}", text(&run["project"]), text(&run["rig"]));
-                let line = [
-                    text(&run["id"]),
-                    text(&run["state"]),
-                    text(&run["step"]),
-                    at,
-                    text(&run["formula"]),
-                    text(&run["created_at"]),
-                ];
-                println!("{}", line.join("  "));
-            }
+            print(json, &runs);
         }
         RunCommand::Show { id } => print(json, &client.request("GET", &run_path(&id, ""), None, None).await?),
         RunCommand::Watch { id, from } => {
@@ -256,19 +242,7 @@ pub(super) async fn gate(client: &Client, json: bool, command: GateCommand) -> R
     let (path, body, idempotency) = match command {
         GateCommand::List => {
             let gates = client.request("GET", "/v1/gates", None, None).await?;
-            if json {
-                print(json, &gates);
-            }
-            for gate in gates.as_array().filter(|_| !json).into_iter().flatten() {
-                let until = gate["until"].as_str().unwrap_or("until opened");
-                let line = [
-                    text(&gate["key"]),
-                    text(&gate["closed_by"]),
-                    until.to_owned(),
-                    text(&gate["reason"]),
-                ];
-                println!("{}", line.join("  "));
-            }
+            print(json, &gates);
             return Ok(());
         }
         GateCommand::Close {

@@ -154,20 +154,16 @@ pub fn local(
     show(json, &reply)
 }
 
-/// Prints the reply of a check or an explain, the daemon's or a file's alike: the text of an explain, the errors of a
-/// check, which fail it; the reply as it is with `--json`.
+/// Prints a check as a structured reply and an explain as its generated text or its JSON envelope.
 fn show(json: bool, reply: &Value) -> ExitCode {
-    match reply["text"].as_str() {
-        _ if json => print(json, reply),
-        Some(text) => print!("{text}"),
-        None => {}
+    if !json && let Some(text) = reply["text"].as_str() {
+        print!("{text}");
+    } else {
+        print(json, reply);
     }
-    let errors = reply["errors"].as_array().map(Vec::as_slice).unwrap_or_default();
-    for error in errors.iter().filter(|_| !json) {
-        eprintln!("{}", error.as_str().unwrap_or_default());
-    }
-    match errors.is_empty() {
-        true => ExitCode::SUCCESS,
-        false => ExitCode::FAILURE,
+    if reply["ok"] == false {
+        ExitCode::FAILURE
+    } else {
+        ExitCode::SUCCESS
     }
 }

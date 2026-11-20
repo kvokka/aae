@@ -41,6 +41,12 @@ async fn wait_prints_the_outcomes_and_exits_zero_only_when_all_passed() {
         (code, &all[0]["id"], &all[0]["state"]),
         (Some(0), &passed.as_str().into(), &"passed".into())
     );
+    let out = loop_manager(&d, &["run", "wait", &passed]).output().unwrap();
+    assert!(out.status.success());
+    assert_eq!(
+        String::from_utf8(out.stdout).unwrap().trim_end(),
+        loop_manager_core::toon::encode(&all)
+    );
     let out = loop_manager(&d, &["run", "wait", &passed, &failed, "--json"])
         .output()
         .unwrap();
@@ -50,12 +56,6 @@ async fn wait_prints_the_outcomes_and_exits_zero_only_when_all_passed() {
         (&all[1]["state"], &all[1]["class"]),
         (&"failed".into(), &"agent".into()),
         "{all}"
-    );
-    let out = loop_manager(&d, &["run", "wait", &passed]).output().unwrap();
-    let text = String::from_utf8_lossy(&out.stdout);
-    assert!(
-        text.contains(&format!("id: {passed}")) && text.contains("state: passed"),
-        "{text}"
     );
     let out = loop_manager(&d, &["run", "wait", "run_999"]).output().unwrap();
     assert_eq!(out.status.code(), Some(1));

@@ -34,7 +34,7 @@ read those through br when needed. Full logs and notes are local and may be unav
 A completed run points to `devloop/results/<run>/report.toon` and `comments.toon`, committed with the closed tracker.
 The last step's `data.stdout` has bounded previews and counts: read the full report before telling the user there
 are no other concerns. Disputed decisions can remain after success and will not appear in `run list --awaiting`.
-Find them through the reports or `br list -l needs-owner --json | toon --encode` on this project's tracker.
+Find them through the reports or `br list -l needs-owner --format toon` on this project's tracker.
 
 ## Answer an active wait
 

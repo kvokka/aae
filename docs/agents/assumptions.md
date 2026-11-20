@@ -79,7 +79,7 @@ The behaviour itself is described in the document named under each heading; this
   `preserve_order` of `serde_json` for the whole build, which would change the key order of every JSON loop-manager
   writes. An object or array placeholder inside any template text is TOON, in a trigger's `inputs` too.
 - What a script reads stays JSON: `LOOP_MANAGER_STEP_<NAME>_DATA`, `LOOP_MANAGER_INPUT_<NAME>`, `--json` of the CLI.
-  The text of an MCP tool's answer goes into an agent's context, so it is TOON.
+  CLI structured replies default to TOON, as do MCP tools' text results.
 
 ## Runs and triggers — [contracts 6](../design/contracts.md#6-run), [config: trigger](../design/config.md#trigger)
 

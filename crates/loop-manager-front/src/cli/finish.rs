@@ -1,6 +1,6 @@
 //! The finisher (contracts 6.3): `loop-manager finish pass|fail` inside an agent session.
 
-use super::{Verdict, fail, run_path};
+use super::{Verdict, fail, print, run_path};
 use crate::client::{Client, ClientError};
 use serde_json::{Value, json};
 use std::{
@@ -53,7 +53,7 @@ pub(super) async fn finish(
         match client.request("POST", &path, Some(&body), Some(&key)).await {
             Ok(reply) => {
                 let answer = reply["answer"].as_str().unwrap_or_default();
-                println!("{answer}");
+                print(json, if json { &reply } else { &reply["answer"] });
                 return Ok(if answer == "accepted" {
                     ExitCode::SUCCESS
                 } else {
@@ -61,9 +61,10 @@ pub(super) async fn finish(
                 });
             }
             Err(ClientError::Io(e)) if tokio::time::Instant::now() + pause > give_up => {
-                eprintln!(
-                    "loop-manager: the daemon stayed unreachable for {} s: {e}",
-                    retry.as_secs()
+                let _ = fail(
+                    json,
+                    "no_daemon",
+                    &format!("the daemon stayed unreachable for {} s: {e}", retry.as_secs()),
                 );
                 return Ok(ExitCode::from(EX_TEMPFAIL));
             }

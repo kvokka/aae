@@ -1,8 +1,40 @@
-//! The CLI without a daemon (docs/api/frontends.md): `config check` and `config explain` of a file.
+//! Local CLI commands (docs/api/frontends.md).
 
 use crate::common;
 use serde_json::Value;
-use std::fs;
+use std::{fs, io::Write};
+
+#[test]
+fn format_reads_one_json_value_without_a_daemon() {
+    let format = |args: &[&str], input: &str| {
+        let (reader, mut writer) = std::io::pipe().unwrap();
+        writer.write_all(input.as_bytes()).unwrap();
+        drop(writer);
+        common::loop_manager()
+            .arg("format")
+            .args(args)
+            .env_remove("HOME")
+            .env_remove("XDG_RUNTIME_DIR")
+            .env_remove("LOOP_MANAGER_SOCKET")
+            .stdin(reader)
+            .output()
+            .unwrap()
+    };
+    let input = r#"{"answer":["yes","no"]}"#;
+    let toon = format(&[], input);
+    assert!(toon.status.success());
+    assert_eq!(toon.stdout, b"answer[2]: yes,no\n");
+    let json = format(&["--json"], input);
+    assert!(json.status.success());
+    assert_eq!(json.stdout, format!("{input}\n").as_bytes());
+    for invalid in ["", "{", "{} []"] {
+        let out = format(&["--json"], invalid);
+        assert_eq!(out.status.code(), Some(1));
+        assert!(out.stdout.is_empty());
+        let error: Value = serde_json::from_slice(&out.stderr).unwrap();
+        assert_eq!(error["error"]["code"], "usage");
+    }
+}
 
 /// `config check` and `config explain` of a file named with `--config` load it as the daemon would, so they need none
 /// (docs/design/config.md).
@@ -41,6 +73,9 @@ fn the_config_is_checked_and_explained_without_a_daemon() {
     };
     let config = files.join("config.toml").display().to_string();
     let local = |args: &[&str]| loop_manager(&[args, &["--config", &config]].concat());
+    let out = local(&["config", "check"]);
+    assert!(out.status.success());
+    assert_eq!(out.stdout, b"errors: []\nok: true\n");
     let out = local(&["config", "check", "--json"]);
     let reply: Value = serde_json::from_slice(&out.stdout).unwrap();
     assert!(out.status.success(), "{reply}");
@@ -78,7 +113,7 @@ fn the_config_is_checked_and_explained_without_a_daemon() {
     );
     let out = loop_manager(&["config", "check", "--config", broken]);
     assert!(!out.status.success());
-    assert!(String::from_utf8_lossy(&out.stderr).contains("broken.toml"));
+    assert!(String::from_utf8_lossy(&out.stdout).contains("broken.toml"));
     let out = loop_manager(&[
         "config",
         "explain",
@@ -93,7 +128,7 @@ fn the_config_is_checked_and_explained_without_a_daemon() {
     // A named config must exist; a relative one resolves against the working directory, and its project paths are
     // absolute after that.
     let out = loop_manager(&["config", "check", "--config", "/nonexistent/config.toml"]);
-    let text = String::from_utf8_lossy(&out.stderr);
+    let text = String::from_utf8_lossy(&out.stdout);
     assert!(
         !out.status.success() && text.contains("/nonexistent/config.toml"),
         "{text}"

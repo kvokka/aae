@@ -4,7 +4,7 @@ Your task is the epic `{{ bead.id }}`: {{ bead.title }}
 {{ bead.description }}
 </epic>
 
-The last comments on the epic, oldest first; `br comments {{ bead.id }} --json | toon --encode` gives all of them:
+The last comments on the epic, oldest first; `br comments {{ bead.id }}` gives all of them:
 
 <comments>
 {{ bead.comments }}

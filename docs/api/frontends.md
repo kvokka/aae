@@ -39,7 +39,7 @@ The surface: projects with their root and rigs (`GET /v1/projects`: `name`, `dir
 `loop-manager.toml`, `root` and `rigs`, each `{name, path, vars}`; the root is not among the rigs); agents
 (`GET /v1/agents` gives each agent's harness in the project outside any rig and formula, `null` when its layers do not
 set one, and the call graph there: `subagents`, the agents and variants its session may call, and `called_by`, the
-agents that may call it, the agent itself left out of both; `loop-manager agent list` prints both as lines of names),
+agents that may call it, the agent itself left out of both; `loop-manager agent list` includes both arrays),
 formulas, packs, addons (list), config check, explain and reload; runs
 (start, list, state, live view, cancel, finish, resolve); triggers (list, enable, disable, fire by hand);
 instances and services (list, stop an idle one); issue gates (list, close, open — orchestrator, project, agent, bead,
@@ -50,25 +50,29 @@ account); events; daemon status, drain and planned restart.
 Code: `crates/loop-manager-front/src/cli/`. The CLI is a thin client of the HTTP API in the same binary.
 
 - One command per API operation; a test checks the command table against the OpenAPI document.
-- `--json` on every command gives the API's JSON; `--key` on every mutating command sets the idempotency key.
-- An error exits 1 with `loop-manager: <message>` on stderr; under `--json`, stderr is
-  `{"error": {"code", "message", ...}}`: the API's error object, or for a local error the code `no_daemon`, `usage`,
-  `config_error`, `not_found` or `internal`. Arguments that do not parse exit 2 with the usage text.
-- `loop-manager run start <project> [<rig>] <formula>` (options after the positionals) prints the run id; without the
-  rig the run takes the rig of the id prefix of the bead its task names, else works in the project root. When a task
-  input `{"next_ready": true}` finds nothing ready it says so on
-  stderr and exits 3. Inside an agent session (`LOOP_MANAGER_RUN` and `LOOP_MANAGER_ATTEMPT_TOKEN` set, as for
-  `loop-manager finish`) it sends them as `parent` of `POST /v1/runs`: the run is a child of the session's run, with its
+- Structured replies use TOON by default, including when stdout is piped. The CLI encodes them in-process with the
+  same encoder as MCP tools. Pass the global `--json` flag before or after the subcommand to request JSON, for
+  example `loop-manager run list --json | jq '.[].id'`.
+- API and local client errors print an `error` object on stderr in the selected format. It contains
+  `code`, `message` and any details from the daemon. The usual exit code is 1. Arguments that do not parse exit 2
+  with the usage text.
+- `--key` on a mutating command sets the idempotency key.
+- `loop-manager run start <project> [<rig>] <formula>` (options after the positionals) prints the bare run id.
+  With `--json`, read the id from the reply's `run` field. Without the rig the run takes the rig of the id prefix of
+  the bead its task names, else works in the project root. When a task input `{"next_ready": true}` finds nothing
+  ready it exits 3, with a message on stderr by default or `"nothing_ready": true` in the JSON reply. Inside an agent
+  session (`LOOP_MANAGER_RUN` and `LOOP_MANAGER_ATTEMPT_TOKEN` set, as for `loop-manager finish`) it sends them as
+  `parent` of `POST /v1/runs`: the run is a child of the session's run, with its
   correlation and one level deeper, at most 10 ([contracts](../design/contracts.md#61-states)); a token that is not that
   of the parent's live current attempt is `rejected` ("stale attempt"). From a shell of its own the run starts a new
   correlation at depth 0. `loop-manager run list --parent <run>` lists a run's children; cancelling a run cancels the
   live runs its sessions started (reason `parent_cancelled`), while its pass or failure leaves them alone.
 - `GET /v1/formulas` gives every formula with `internal` (bool): an internal formula only starts as a step of
   another formula, not directly. `loop-manager formula list` leaves the internal ones out; `--all` shows them too.
-- `loop-manager run watch <run>` prints the live view (a line per event, `-  harness  <type>` per session message) and
-  exits 0 once the stream ends with the run; `loop-manager run wait` gives the outcome. An event line is
-  `<seq>  <type>  <run>`, then `step=<name>` when the event names a step (`run.step_skipped`), `<from> -> <to>` for a
-  state change and `reason=<reason>` when the event has one.
+- `loop-manager events` and `loop-manager run watch <run>` print each event as it arrives, with a blank line between
+  TOON documents. Journal events include their `seq`, `type` and `data`. Events outside the journal (such as
+  `harness` and `lagged`) have `event` and `data` fields. With `--json`, each line contains the original SSE data as
+  a JSON value. A watch exits 0 when the run's stream ends. Use `loop-manager run wait` for the outcome.
 - `loop-manager run wait <run>... [--timeout <dur>]` waits on the event stream (not by polling) until every named run is
   terminal, then prints for each `id`, `state`, `class`, `reason` and the finisher's `summary` and `data` (with
   `--json` an array of these objects). A run already terminal is answered at once. Exit codes: 0 when all passed,
@@ -87,12 +91,15 @@ Code: `crates/loop-manager-front/src/cli/`. The CLI is a thin client of the HTTP
   (`POST /v1/runs/{id}/resolve`) gives the outcome of the `await` step a run waits on
   ([formula](../design/config.md#formula-formulasfiletoml)); a run that does not wait on that step refuses it with
   `rejected` and nothing changes. `loop-manager run list --awaiting` (`GET /v1/runs?awaiting=true`) lists the runs
-  waiting on an `await` step; the text line of `loop-manager run list` names each run's step, and the state of a run
+  waiting on an `await` step. The `step` field names the current step of each run, and the state of a run
   gives the outcomes of the steps it went through as `steps`. A bridge that may send an outcome twice sets `--key`:
   without a key, a late repeat could resolve the step again after a round brought the run back to it.
-- `loop-manager finish` reads the attempt token from the session environment, retries for 60 s under one idempotency key
-  and exits 75 when the daemon stays unreachable (an attempt failure, not a failed run).
-- Without a daemon only `loop-manager daemon`, `loop-manager cache clear`, `loop-manager --version`, and
+- `loop-manager finish` reads the attempt token from the session environment and prints the acknowledgement
+  (for example `accepted`), or the object with the `answer` field under `--json`. It retries for 60 s under one
+  idempotency key and exits 75 when the daemon stays unreachable.
+- `loop-manager format` reads one JSON value from stdin and writes TOON to stdout. For example,
+  `loop-manager format < report.json` formats a report assembled by a script. Invalid input exits 1.
+- Without a daemon only `loop-manager format`, `loop-manager daemon`, `loop-manager cache clear`, `loop-manager --version`, and
   `loop-manager doctor` and `loop-manager config check|explain` with `--config <file>` work; `loop-manager cache clear`
   removes the packs and addons downloaded from git, and the next load of the config downloads them again; any other
   command says that no daemon listens on the socket and how to start one, and for `doctor` and `config check|explain`
@@ -102,9 +109,10 @@ Code: `crates/loop-manager-front/src/cli/`. The CLI is a thin client of the HTTP
   `PATH` the daemon runs with, whatever shell they are typed in. With `--config <file>` they load that file themselves
   as the daemon would and make the checks from this shell, with no daemon: how a file is checked before a daemon first
   runs on it. Both ways print the same reply the same way and exit alike: non-zero on a config error or an `error` level
-  check; `--json` prints the API's reply as it is. `explain --formula` without `--rig` is of a run in the project root.
+  check. A config check writes `ok` and `errors` to stdout. An explain prints the configuration report as text, or
+  its JSON envelope with `--json`. `explain --formula` without `--rig` is of a run in the project root.
   The daemon's own state is in `GET /v1/daemon` (journal, outbox, runs in a turn).
-- A refused `loop-manager config reload` prints the errors of the file, one per line.
+- A config reload that fails validation includes the file's errors in `error.errors` on stderr.
 
 ## MCP
 

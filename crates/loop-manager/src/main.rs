@@ -20,6 +20,14 @@ fn main() -> ExitCode {
         quiet_on_closed_stdout();
     }
     let config = match cli.command {
+        Command::Format => {
+            let value = match serde_json::from_reader(std::io::stdin().lock()) {
+                Ok(value) => value,
+                Err(e) => return cli::fail(cli.json, "usage", &format!("reading JSON from stdin: {e}")),
+            };
+            cli::print(cli.json, &value);
+            return ExitCode::SUCCESS;
+        }
         Command::Daemon {
             config,
             service: Some(kind),

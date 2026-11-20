@@ -1,6 +1,6 @@
-//! The CLI (docs/api/frontends.md): a thin client of the API, one command per API operation, JSON output with `--json`.
-//! Without a daemon only `loop-manager daemon`, `loop-manager cache clear`, `loop-manager --version`, and `loop-manager doctor` and `loop-manager config
-//! check|explain` on a file named with `--config` work.
+//! The CLI (docs/api/frontends.md): a thin client of the API, one command per API operation, TOON output by default.
+//! Local commands include `format`, `daemon`, `cache clear`, `--version`, and `doctor` and `config check|explain`
+//! on a file named with `--config`.
 
 mod commands;
 mod config;
@@ -59,7 +59,7 @@ pub struct Cli {
     /// The API socket of the daemon (default: the XDG runtime directory).
     #[arg(long, global = true, env = "LOOP_MANAGER_SOCKET")]
     pub socket: Option<PathBuf>,
-    /// Print the API's JSON as it is.
+    /// Print structured replies as JSON (default: TOON).
     #[arg(long, global = true)]
     pub json: bool,
     #[command(subcommand)]
@@ -74,6 +74,8 @@ pub enum CacheCommand {
 
 #[derive(Subcommand)]
 pub enum Command {
+    /// Read one JSON value from stdin and print it as TOON (or JSON with --json).
+    Format,
     /// Run the daemon in the foreground.
     Daemon {
         /// The orchestrator config (default: `$XDG_CONFIG_HOME/loop-manager/config.toml`).
@@ -220,30 +222,26 @@ pub fn run(cli: Cli) -> ExitCode {
             }
             json!({ "code": "no_daemon", "message": message })
         }
-        Err(e @ ClientError::Api { .. }) if !json => return fail(false, "", &e.to_string()),
         Err(ClientError::Api { error, .. }) => error,
     };
     report(json, error)
 }
 
-/// A local error: `loop-manager: <message>`, or under `--json` the API's error object with `code`.
+/// Prints a local error on stderr in the selected format.
 pub fn fail(json: bool, code: &str, message: &str) -> ExitCode {
     report(json, json!({ "code": code, "message": message }))
 }
 
 fn report(json: bool, error: Value) -> ExitCode {
-    match json {
-        true => eprintln!("{}", json!({ "error": error })),
-        false => eprintln!("loop-manager: {}", error["message"].as_str().unwrap_or_default()),
-    }
+    eprintln!("{}", render(json, &json!({ "error": error })));
     ExitCode::FAILURE
 }
 
 async fn execute(client: &Client, cli: Cli) -> Result<ExitCode, ClientError> {
     let json = cli.json;
     match cli.command {
-        Command::Daemon { .. } | Command::Cache(_) | Command::McpBridge { .. } => {
-            let message = "`daemon`, `cache clear` and `mcp-bridge` run without a daemon, not as its client";
+        Command::Format | Command::Daemon { .. } | Command::Cache(_) | Command::McpBridge { .. } => {
+            let message = "`format`, `daemon`, `cache clear` and `mcp-bridge` run locally";
             return Ok(fail(json, "usage", message));
         }
         Command::Doctor { .. } => return Ok(doctor(json, &client.request("GET", "/v1/doctor", None, None).await?)),
@@ -276,62 +274,29 @@ async fn execute(client: &Client, cli: Cli) -> Result<ExitCode, ClientError> {
     Ok(ExitCode::SUCCESS)
 }
 
-/// Prints the findings of `loop-manager doctor`, the daemon's or a file's alike: a line each, or the API's JSON as it is with
-/// `--json`; fails when one is an error.
+/// Prints the findings of `loop-manager doctor`, the daemon's or a file's alike; fails when one is an error.
 pub fn doctor(json: bool, found: &Value) -> ExitCode {
-    if json {
-        println!("{found}");
-    }
-    let found = found.as_array().map(Vec::as_slice).unwrap_or_default();
-    for f in found.iter().filter(|_| !json) {
-        let s = |key: &str| f[key].as_str().unwrap_or_default();
-        println!("{:<8} {:<16} {}", s("level"), s("check"), s("detail"));
-    }
-    match found.iter().any(|f| f["level"] == "error") {
+    print(json, found);
+    match found
+        .as_array()
+        .is_some_and(|items| items.iter().any(|f| f["level"] == "error"))
+    {
         true => ExitCode::FAILURE,
         false => ExitCode::SUCCESS,
     }
 }
 
-/// Prints the API's JSON: as it is with `--json`; else a `key: value` line per value, nested keys dotted and nulls
-/// left out, with a blank line between the items of a list.
-fn print(json: bool, value: &Value) {
+fn render(json: bool, value: &Value) -> String {
     if json {
-        println!("{value}");
-        return;
-    }
-    let items = value
-        .as_array()
-        .map_or_else(|| vec![value], |items| items.iter().collect());
-    let blocks: Vec<String> = items.into_iter().map(|item| lines("", item).join("\n")).collect();
-    let text = blocks.join("\n\n");
-    if !text.is_empty() {
-        println!("{text}");
+        value.to_string()
+    } else {
+        loop_manager_core::toon::encode(value)
     }
 }
 
-/// The `key: value` lines of `value` under the dotted key `at`.
-fn lines(at: &str, value: &Value) -> Vec<String> {
-    let under = |key: &dyn std::fmt::Display| match at {
-        "" => key.to_string(),
-        _ => format!("{at}.{key}"),
-    };
-    match value {
-        Value::Null => vec![],
-        Value::Object(map) => map.iter().flat_map(|(k, v)| lines(&under(k), v)).collect(),
-        Value::Array(items) if items.is_empty() => vec![],
-        Value::Array(items) if items.iter().any(|i| i.is_object() || i.is_array()) => items
-            .iter()
-            .enumerate()
-            .flat_map(|(i, v)| lines(&under(&i), v))
-            .collect(),
-        Value::Array(items) => vec![format!(
-            "{at}: {}",
-            items.iter().map(text).collect::<Vec<_>>().join(", ")
-        )],
-        _ if at.is_empty() => vec![text(value)],
-        _ => vec![format!("{at}: {}", text(value))],
-    }
+/// Prints one structured CLI reply.
+pub fn print(json: bool, value: &Value) {
+    println!("{}", render(json, value));
 }
 
 fn stop_path(what: &str, timeout: Option<u64>) -> String {
@@ -343,34 +308,20 @@ pub(crate) fn run_path(id: &str, then: &str) -> String {
     format!("/v1/runs/{}{then}", encode(id))
 }
 
-/// Prints a stream until it ends: an event per line, or its data as it is with `--json`. An event with no `seq` (a
-/// harness message, `lagged`, `gap`) shows its `type` or `method`, or its data.
+/// Emits a TOON document per event, separated by a blank line. Journal envelopes carry their type;
+/// other SSE events (harness messages, gaps) carry it only in the SSE event field. JSON streams are raw data as NDJSON.
 async fn follow(mut events: Events, json: bool) -> Result<(), ClientError> {
     while let Some(event) = events.next().await? {
-        let data: Value = serde_json::from_str(&event.data).unwrap_or(Value::String(event.data));
-        if json {
-            println!("{data}");
-        } else if event.id.is_some() {
-            // A state change shows its move and why; an event of no run leaves the run out.
-            let inner = &data["data"];
-            let mut line = vec![text(&data["seq"]), event.event];
-            line.extend(data["run"].as_str().map(str::to_owned));
-            line.extend(inner["step"].as_str().map(|s| format!("step={s}")));
-            if let (Some(from), Some(to)) = (inner["from"].as_str(), inner["to"].as_str()) {
-                line.push(format!("{from} -> {to}"));
-            }
-            line.extend(inner["reason"].as_str().map(|r| format!("reason={r}")));
-            println!("{}", line.join("  "));
-        } else {
-            let what = [&data["type"], &data["method"]].into_iter().find(|v| !v.is_null());
-            println!("-  {}  {}", event.event, text(what.unwrap_or(&data)));
+        let mut data: Value = serde_json::from_str(&event.data).unwrap_or(Value::String(event.data));
+        if !json && event.id.is_none() {
+            data = json!({ "event": event.event, "data": data });
+        }
+        print(json, &data);
+        if !json {
+            println!();
         }
     }
     Ok(())
-}
-
-fn text(value: &Value) -> String {
-    value.as_str().map_or_else(|| value.to_string(), str::to_owned)
 }
 
 /// Percent-encodes everything but the unreserved characters of RFC 3986.
