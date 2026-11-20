@@ -8,7 +8,7 @@ use crate::{
     tracker::{Bead, Change},
     writer::{Error, Event, Tx},
 };
-use rusqlite::{OptionalExtension, params};
+use rusqlite::{OptionalExtension, params, types::Type};
 use serde_json::{Value, json};
 use std::collections::HashSet;
 
@@ -103,12 +103,17 @@ impl RunHandler {
 
 /// Keeps the labels `bead` has now and returns those it had when last read; `None`: it was never read.
 fn remember_labels(tx: &Tx<'_>, project: &str, bead: &Bead) -> Result<Option<Vec<String>>, Error> {
-    let before: Option<String> = tx
+    // Labels it cannot read are an error of the state, not a bead with none: each would be told as gained.
+    let before: Option<Vec<String>> = tx
         .sql()
         .query_row(
             "SELECT labels FROM bead_labels WHERE project = ?1 AND id = ?2",
             [project, &bead.id],
-            |r| r.get(0),
+            |r| {
+                let text: String = r.get(0)?;
+                serde_json::from_str(&text)
+                    .map_err(|e| rusqlite::Error::FromSqlConversionFailure(0, Type::Text, Box::new(e)))
+            },
         )
         .optional()?;
     tx.sql().execute(
@@ -116,7 +121,7 @@ fn remember_labels(tx: &Tx<'_>, project: &str, bead: &Bead) -> Result<Option<Vec
          ON CONFLICT (project, id) DO UPDATE SET labels = ?3",
         params![project, bead.id, json!(bead.labels).to_string()],
     )?;
-    Ok(before.map(|b| serde_json::from_str(&b).unwrap_or_default()))
+    Ok(before)
 }
 
 /// A tracker write as an event; a write by a run's attempt (`loop-manager:<run>[:<n>]`) carries that run and its correlation,
