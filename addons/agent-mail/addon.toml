@@ -1,11 +1,13 @@
 name = "agent-mail"
-version = "0.2.0"
+version = "0.3.0"
 harnesses = ["claude", "codex"]
 prompt = "prompt.md"
 
 [params]
 # Empty selects an ephemeral loopback port.
 bind = ""
+# Shared service option: enable Agent Mail product operations across linked repositories.
+multi_repo = false
 # The mail project of the rig; empty: the canonical path of the rig's repository (its own path outside Git).
 project_key = ""
 # Seconds a reservation lasts unless renewed.
@@ -43,6 +45,6 @@ command = ["bin/lm-agent-mail", "release"]
 name = "agent-mail"
 scope = "orchestrator"
 bind = "${params.bind}"
-command = ["${LOOP_MANAGER_ADDON_DIR}/bin/lm-agent-mail", "serve", "${LOOP_MANAGER_ADDON_DATA}"]
+command = ["${LOOP_MANAGER_ADDON_DIR}/bin/lm-agent-mail", "serve", "${LOOP_MANAGER_ADDON_DATA}", "${params.multi_repo}"]
 health = { http = "/health/readiness" }
 mcp = { url = "/mcp/" }

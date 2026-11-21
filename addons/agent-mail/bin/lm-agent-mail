@@ -63,6 +63,10 @@ binding() {
 
 serve() {
   dir=$1
+  if [ "${2:-false}" = true ]; then
+    export WORKTREES_ENABLED=true
+    TOOLS=$TOOLS,ensure_product,products_link,search_messages_product,fetch_inbox_product,summarize_thread_product
+  fi
   umask 077
   # Agent Mail v0.3.40 fails its first readiness check when the mailbox directory is missing.
   mkdir -p "$dir/mailbox" "$dir/runtime"
@@ -211,7 +215,7 @@ release() {
 }
 
 case ${1:-} in
-serve) serve "${2:?the data directory}" ;;
+serve) serve "${2:?the data directory}" "${3:-false}" ;;
 prepare) prepare ;;
 session-start) session_start ;;
 pre-commit) pre_commit ;;

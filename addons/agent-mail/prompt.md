@@ -12,4 +12,6 @@ you with them; your session context names your mail name, the project key and yo
   over (`release_file_reservations`). A commit of a path another agent holds is refused.
 - An agent of another project is reached by its qualified address (`Name@project`) once your contact request is
   approved (`request_contact`, `respond_contact`); a direct conversation needs no product.
+- When the product tools are available, use the agreed product key to query linked repositories. Keep path
+  reservations scoped to the repository being edited.
 - Task status and dependencies stay in Beads.

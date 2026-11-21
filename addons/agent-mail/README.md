@@ -25,7 +25,7 @@ attachment alone is enough. No parameter is required.
 ```toml
 [[addon]]
 git = "https://github.com/kvokka/loop-manager.git"
-rev = "addons/agent-mail/0.2.0"
+rev = "addons/agent-mail/0.3.0"
 dir = "addons/agent-mail"
 
 [settings]
@@ -76,6 +76,7 @@ Run `loop-manager config check`, then `loop-manager config reload` to apply the 
 
 | Parameter | Default | Meaning |
 |---|---|---|
+| `multi_repo` | `false` | Enable the product bus for the shared Agent Mail service |
 | `bind` | `""` | Fixed IPv4 address and port, e.g. `127.0.0.1:8765` or `0.0.0.0:8765`. Empty selects an automatic loopback port |
 | `project_key` | `""` | The mail project of the rig: set it on the rig's attachment to keep an existing one. Empty: the canonical path of the rig's repository (the main worktree), or of the rig's directory outside Git |
 | `ttl` | `3600` | The seconds a reservation lasts unless renewed, told to the agents |
@@ -88,6 +89,25 @@ Run `loop-manager config check`, then `loop-manager config reload` to apply the 
 The daemon starts a shared server when the first agent uses it and stops it five minutes after the last consumer
 leaves. Sessions using the same service definition get the endpoint and its bearer automatically. Use the same
 `bind` across attachments that share an addon data directory.
+
+### Coordinate multiple repositories
+
+Use the same `multi_repo` and `bind` values on all attachments sharing one mailbox. Set them once in the
+orchestrator's settings when several projects use the addon. Different service definitions start separate instances.
+
+```toml
+[settings]
+addons = [{ name = "agent-mail", params = { multi_repo = true } }]
+```
+
+Each repository keeps its own project key, inboxes and path reservations. After a session has registered in each
+repository, call `ensure_product(product_key="suite")`, then `products_link(product_key="suite", project_key=...)`
+once per repository using its registered key. A coordinator can search messages, read the named agent's inbox
+or summarize a shared thread across the linked projects. Product membership is explicit. A direct cross-project
+message still uses a qualified recipient and an approved contact link.
+
+This option activates Agent Mail's product feature and adds its five tools to the addon's default filter.
+Build-slot tools stay filtered. If you supply your own tool filter, include the product tools you want to use.
 
 ### Publish the MCP endpoint from Docker
 
@@ -109,8 +129,7 @@ The file contains the full HTTP authorization header. The default directory is
 `runtime/endpoint.json` contains the internal URL and PID. The daemon generates the bearer.
 
 MCP calls require the bearer by default. Agent Mail's explicit `HTTP_ALLOW_LOCALHOST_UNAUTHENTICATED=true`
-allows callers the server sees on loopback to omit it. An empty value or `false` requires it. Remote calls
-still require it. Agent Mail serves `/health/*` without credentials.
+allows callers the server sees on loopback to omit it. An empty value or `false` requires it. With Docker port publishing, a connection to localhost on the host normally reaches the server from the Docker bridge and requires the bearer. The bind address `0.0.0.0` selects listening interfaces. Agent Mail serves `/health/*` without credentials.
 
 The default tool filter exposes the 12 tools used for coordination. An explicit Agent Mail filter takes precedence.
 See the [tool inventory](tools.md) for the full list and how to enable it.

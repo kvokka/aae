@@ -71,10 +71,11 @@ impl Drop for Server {
 }
 
 /// The launcher as the daemon runs it: a clean environment with `home`, the port and the token.
-fn serve(data: &Path, home: &Path, port: u16, token: &str) -> Server {
+fn serve(data: &Path, home: &Path, port: u16, token: &str, multi_repo: bool) -> Server {
     let child = common::owned_program(helper())
         .args(["serve"])
         .arg(data)
+        .arg(multi_repo.to_string())
         .env_clear()
         .env("PATH", std::env::var_os("PATH").unwrap())
         .env("HOME", home)
@@ -120,12 +121,59 @@ fn explicit_loopback_auth_settings_and_empty_values_reach_the_server() {
         .unwrap();
         let port = free_port();
         let token = "token-of-the-auth-test";
-        let _server = serve(&home.join("data"), home, port, token);
+        let _server = serve(&home.join("data"), home, port, token, false);
         let list = json!({"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}});
         let url = format!("http://127.0.0.1:{port}/mcp/");
         assert_eq!(post(&url, None, &list).0, status, "{value:?}");
         assert_eq!(post(&url, Some(token), &list).0, "200");
     }
+}
+
+#[test]
+fn the_optional_product_bus_reads_mail_from_two_repositories() {
+    let tmp = tempfile::Builder::new().prefix("agent-mail-").tempdir().unwrap();
+    let data = tmp.path().join("data");
+    let port = free_port();
+    let token = "product-test-token";
+    let _server = serve(&data, tmp.path(), port, token, true);
+    let offered = tools(port, token);
+    assert_eq!(offered.len(), 17, "{offered:?}");
+    assert!(!offered.iter().any(|name| name.ends_with("build_slot")));
+    let env = [("LOOP_MANAGER_AGENT_MAIL_DATA".into(), data.display().to_string())];
+    let call = |tool: &str, args: Value| -> Value {
+        serde_json::from_str(&run(&["call", tool, &args.to_string()], &env, "").unwrap()).unwrap()
+    };
+    call("ensure_product", json!({"product_key":"suite"}));
+    for repo in ["frontend", "backend"] {
+        let path = tmp.path().join(repo);
+        fs::create_dir(&path).unwrap();
+        git(&path, &["init", "-q"]);
+        for name in ["RedFox", "BlueLake"] {
+            call(
+                "macro_start_session",
+                json!({"human_key":path,"program":"test","model":"test","agent_name":name}),
+            );
+        }
+        let linked = call("products_link", json!({"product_key":"suite","project_key":path}));
+        assert_eq!(linked["project"]["human_key"], path.display().to_string());
+        call(
+            "send_message",
+            json!({"project_key":path,"sender_name":"RedFox","to":["BlueLake"],"subject":repo,"body_md":"ready","thread_id":"schema"}),
+        );
+    }
+    let inbox = call(
+        "fetch_inbox_product",
+        json!({"product_key":"suite","agent_name":"BlueLake"}),
+    );
+    let mut subjects: Vec<_> = inbox
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|m| m["thread_id"] == "schema")
+        .map(|m| m["subject"].as_str().unwrap())
+        .collect();
+    subjects.sort_unstable();
+    assert_eq!(subjects, ["backend", "frontend"]);
 }
 
 fn free_port() -> u16 {
@@ -168,7 +216,7 @@ fn a_session_keeps_its_mail_name_across_a_retry_and_a_lost_mailbox() {
     fs::create_dir_all(&home).unwrap();
     fs::create_dir_all(&notes).unwrap();
     let (port, token) = (free_port(), "token-of-the-first-start");
-    let server = serve(&data, &home, port, token);
+    let server = serve(&data, &home, port, token, false);
 
     // A clean home: the compact tool set, and the daemon's bearer for every caller, loopback included.
     let mut offered = tools(port, token);
@@ -238,7 +286,7 @@ fn a_session_keeps_its_mail_name_across_a_retry_and_a_lost_mailbox() {
     drop(server);
     fs::remove_dir_all(data.join("mailbox")).unwrap();
     let (port, token) = (free_port(), "token-of-the-second-start");
-    let _server = serve(&data, &home, port, token);
+    let _server = serve(&data, &home, port, token, false);
     assert_eq!(start(&env).0, name);
     let reserve = json!({"project_key": key, "agent_name": name, "paths": ["notes.md"], "exclusive": true});
     let granted: Value =
@@ -259,7 +307,7 @@ fn a_codex_agent_gets_the_server_the_session_hook_and_the_data_directory() {
         (
             "shop/loop-manager.toml",
             format!(
-                "[[addon]]\npath = \"{}\"\n[settings]\naddons = [{{ name = \"agent-mail\", params = {{ bind = \"0.0.0.0:8765\" }} }}]\n",
+                "[[addon]]\npath = \"{}\"\n[settings]\naddons = [{{ name = \"agent-mail\", params = {{ bind = \"0.0.0.0:8765\", multi_repo = true }} }}]\n",
                 addon().display()
             ),
         ),
@@ -273,6 +321,7 @@ fn a_codex_agent_gets_the_server_the_session_hook_and_the_data_directory() {
     let text = crate::context_budget::explain(d, &d.join("config.toml"), "shop", "shop.coder");
     let data = d.join("state/loop-manager/addons/agent-mail");
     for line in [
+        format!(r#""serve","{}","true"]"#, data.display()),
         format!("env.LOOP_MANAGER_AGENT_MAIL_DATA = \"{}\"", data.display()),
         r#""scope":"orchestrator","bind":"0.0.0.0:8765","health":{"http":"/health/readiness"},"mcp":"/mcp/"}"#
             .to_owned(),
@@ -322,7 +371,7 @@ fn a_commit_is_checked_on_both_sides_of_a_rename_and_refused_when_it_cannot_be_c
     git(&repo, &["init", "-q", "-b", "main"]);
     git(&repo, &["add", "-A"]);
     git(&repo, &["commit", "-q", "-m", "base"]);
-    let server = serve(&data, &home, free_port(), "token-of-the-commit-check");
+    let server = serve(&data, &home, free_port(), "token-of-the-commit-check", false);
 
     // Two runs of one agent in the repository, each with its session's name.
     let session = |id: &str| {
