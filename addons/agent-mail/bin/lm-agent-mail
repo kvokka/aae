@@ -111,7 +111,7 @@ prepare() {
     env: ({
       LOOP_MANAGER_AGENT_MAIL_KEY: $key,
       LOOP_MANAGER_AGENT_MAIL_THREAD: (if ($p.thread // "") != "" then $p.thread
-        else "\(.project):\(.correlation // .run)" end),
+        else "\(.project).\(.correlation // .run)" | gsub("[^A-Za-z0-9._-]"; "-") end),
       LOOP_MANAGER_AGENT_MAIL_BINDING: ([.project, .rig // "-", .run, .data.run.agent // "-"] | join("/")),
       LOOP_MANAGER_AGENT_MAIL_TTL: ($p.ttl // 3600 | tostring)
     } + if $git != "" then {LOOP_MANAGER_AGENT_MAIL_GIT_DIR: $git} else {} end)

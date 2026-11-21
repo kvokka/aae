@@ -10,7 +10,7 @@ fn br(project: &Path, args: &[&str]) -> String {
 }
 
 /// br by hand, filing new beads with the id prefix `prefix` (a rig's) if any.
-fn br_in(project: &Path, prefix: Option<&str>, args: &[&str]) -> String {
+pub(crate) fn br_in(project: &Path, prefix: Option<&str>, args: &[&str]) -> String {
     let mut br = common::program("br");
     if let Some(prefix) = prefix {
         br.env("BD_ISSUE_PREFIX", prefix);

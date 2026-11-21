@@ -79,7 +79,7 @@ Run `loop-manager config check`, then `loop-manager config reload` to apply the 
 |---|---|---|
 | `project_key` | `""` | The mail project of the rig: set it on the rig's attachment to keep an existing one. Empty: the canonical path of the rig's repository (the main worktree), or of the rig's directory outside Git |
 | `ttl` | `3600` | The seconds a reservation lasts unless renewed, told to the agents |
-| `thread` | `""` | The thread of the runs. Empty: one per chain of runs, `<project>:<correlation>`, so the children of one drain share it. Set it to join independent chains |
+| `thread` | `""` | The thread of the runs. Empty: one per chain of runs, `<project>.<correlation>` (a character Agent Mail does not take in a thread ID becomes `-`), so the children of one drain share it. Set it to join independent chains |
 
 ## How it works
 
@@ -151,8 +151,10 @@ reserves anew.
   the hook in place: a rename that leaves or makes a path another run holds is refused, a session with no mail name
   or with the server down is refused, `HEAD` unchanged, and a commit outside a session goes;
 - `two_runs_in_worktrees_coordinate_through_one_server`: a real daemon with a home whose `config.env` sets the
-  filter above, anonymous loopback callers and a mailbox of its own; two runs of one claude agent on a fake provider,
-  each in its worktree, meet on one server, write and answer in one thread, commit the paths they add, change and
+  filter above, anonymous loopback callers and a mailbox of its own, and the project of the example above: the addon
+  attached with no parameter, a drain with `pool = 2` over two ready beads; the two runs of one claude agent on a fake
+  provider, each in its worktree, get the rig's canonical path as their project key and the drain's thread, meet on
+  one server, write and answer in one thread, commit the paths they add, change and
   delete, and the second is refused a commit of the path the first holds, `HEAD` unchanged; the pass of one releases
   its reservations only, the cancel of the other releases the rest. The user's file stays byte for byte.
 

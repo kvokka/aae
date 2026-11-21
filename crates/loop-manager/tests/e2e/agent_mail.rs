@@ -3,7 +3,10 @@
 //! config, a session keeps its mail name across a retry and a lost mailbox, and two runs of one agent in their own
 //! worktrees write to each other, commit their own paths, and are refused a commit of a path the other holds.
 
-use crate::common::{self, Daemon};
+use crate::{
+    common::{self, Daemon},
+    tracker::br_in,
+};
 use loop_manager_testkit::anthropic::{Provider, Reply};
 use serde_json::{Value, json};
 use std::{
@@ -172,7 +175,7 @@ fn a_session_keeps_its_mail_name_across_a_retry_and_a_lost_mailbox() {
     assert_eq!(
         decision,
         json!({"decision": "proceed", "env": {
-            "LOOP_MANAGER_AGENT_MAIL_KEY": key, "LOOP_MANAGER_AGENT_MAIL_THREAD": "shop:cor_1",
+            "LOOP_MANAGER_AGENT_MAIL_KEY": key, "LOOP_MANAGER_AGENT_MAIL_THREAD": "shop.cor_1",
             "LOOP_MANAGER_AGENT_MAIL_BINDING": "shop/notes/run_7/kit.writer", "LOOP_MANAGER_AGENT_MAIL_TTL": "900"}})
     );
     let mut env: Vec<(String, String)> = decision["env"]
@@ -198,7 +201,7 @@ fn a_session_keeps_its_mail_name_across_a_retry_and_a_lost_mailbox() {
     };
     let (name, context) = start(&env);
     assert!(
-        context.contains(&format!("you are `{name}`")) && context.contains("`shop:cor_1` as `thread_id`"),
+        context.contains(&format!("you are `{name}`")) && context.contains("`shop.cor_1` as `thread_id`"),
         "{context}"
     );
     // A subagent works under its session's name: no registration of its own.
@@ -346,6 +349,8 @@ key=$LOOP_MANAGER_AGENT_MAIL_KEY
 thread=$LOOP_MANAGER_AGENT_MAIL_THREAD
 echo "$name" >"$t/$me.name"
 echo "$LOOP_MANAGER_RUN" >"$t/$me.run"
+echo "$key" >"$t/$me.key"
+echo "$thread" >"$t/$me.thread"
 wait_for() {
   n=0
   until [ -e "$1" ]; do n=$((n + 1)); [ "$n" -lt 900 ]; sleep 0.1; done
@@ -360,7 +365,7 @@ own() {
   echo "$me" >>"$me-changed.txt"
   git rm -q "$me-gone.txt"
   git add -A
-  git commit -q -m "feat: own paths of $me"
+  git commit -q -m "feat: own paths of $me [$LOOP_MANAGER_BEAD]"
 }
 wait_for "$t/$peer.name"
 if [ "$me" = a ]; then
@@ -370,7 +375,7 @@ if [ "$me" = a ]; then
   touch "$t/a.reserved"
   own
   echo a >>shared.txt
-  git commit -q -a -m "feat: shared path of a"
+  git commit -q -a -m "feat: shared path of a [$LOOP_MANAGER_BEAD]"
   wait_for "$t/b.replied"
   mail fetch_inbox '{agent_name: $n, include_bodies: true}' >"$t/a.inbox"
   id=$(jq -r '.[0].id' "$t/a.inbox")
@@ -387,7 +392,7 @@ else
   head=$(git rev-parse HEAD)
   echo b >>shared.txt
   git add shared.txt
-  if git commit -q -m "feat: shared path of b" 2>"$t/b.refusal"; then touch "$t/b.accepted"; fi
+  if git commit -q -m "feat: shared path of b [$LOOP_MANAGER_BEAD]" 2>"$t/b.refusal"; then touch "$t/b.accepted"; fi
   [ "$(git rev-parse HEAD)" = "$head" ] && touch "$t/b.head-kept"
   git reset -q --hard
   if git commit -q --allow-empty -m "no conventional subject"; then touch "$t/b.subject-accepted"; fi
@@ -424,10 +429,11 @@ fn user_config(user_mailbox: &Path) -> String {
     )
 }
 
-/// The project `shop` in the daemon's tree under `dir`: the addon on every agent beside `conventional-commits`, the
-/// agent `dev` on the fake provider at `base_url`, its worktree formula `build`, the rig `web` with its first commit,
-/// and the user's `config.env`.
-fn shop(dir: &Path, base_url: &str) {
+/// The project `shop` of the addon's README in the daemon's tree under `dir`: the addon on every agent beside
+/// `conventional-commits`, with no parameter; the agent `dev` on the fake provider at `base_url`; its worktree formula
+/// `build`, and `epic`, a drain of two runs of `build` at a time; the rig `web` at `rig` with its first commit; a
+/// tracker whose root bead has two ready beads of `web` (their ids); and the user's `config.env`.
+fn shop(dir: &Path, rig: &Path, base_url: &str) -> (String, [String; 2]) {
     let shop = dir.join("config/loop-manager/shop");
     let files = [
         (
@@ -438,10 +444,10 @@ fn shop(dir: &Path, base_url: &str) {
             shop.join("loop-manager.toml"),
             format!(
                 "[[addon]]\npath = \"{}\"\n[[addon]]\npath = \"{}\"\n[settings]\naddons = [{{ name = \
-                 \"conventional-commits\" }}, {{ name = \"agent-mail\", params = {{ thread = \"web-pair\", project_key = \
-                 \"{KEY}\" }} }}]\n[rigs.web]\npath = \"web\"\nmax_writers = 2\n",
+                 \"conventional-commits\" }}, {{ name = \"agent-mail\" }}]\n[rigs.web]\npath = \"{}\"\nmax_writers = 2\n",
                 addon().display(),
-                addon().join("../conventional-commits").display()
+                addon().join("../conventional-commits").display(),
+                rig.display()
             ),
         ),
         (
@@ -455,7 +461,15 @@ fn shop(dir: &Path, base_url: &str) {
         ),
         (
             shop.join("formulas/build.toml"),
-            "name = \"build\"\nworktree = true\n[[step]]\nkind = \"ai\"\nagent = \"dev\"\n".to_owned(),
+            "name = \"build\"\nworktree = true\n[inputs]\ntask = { type = \"task\", required = true }\n\
+             [[step]]\nkind = \"ai\"\nagent = \"dev\"\n"
+                .to_owned(),
+        ),
+        (
+            shop.join("formulas/epic.toml"),
+            "name = \"epic\"\n[inputs]\ntask = { type = \"task\", required = true }\n\
+             [[step]]\nkind = \"drain\"\nformula = \"build\"\npool = 2\n"
+                .to_owned(),
         ),
         (
             shop.join("agents/dev/prompt.template.md"),
@@ -470,7 +484,7 @@ fn shop(dir: &Path, base_url: &str) {
         fs::create_dir_all(path.parent().unwrap()).unwrap();
         fs::write(path, text).unwrap();
     }
-    let rig = shop.join("web");
+    fs::create_dir_all(rig).unwrap();
     for file in [
         "shared.txt",
         "a-changed.txt",
@@ -480,21 +494,31 @@ fn shop(dir: &Path, base_url: &str) {
     ] {
         fs::write(rig.join(file), "base\n").unwrap();
     }
-    git(&rig, &["init", "-q", "-b", "main"]);
-    git(&rig, &["add", "-A"]);
-    git(&rig, &["commit", "-q", "-m", "base"]);
+    git(rig, &["init", "-q", "-b", "main"]);
+    git(rig, &["add", "-A"]);
+    git(rig, &["commit", "-q", "-m", "base"]);
+    git(&shop, &["init", "-q"]);
+    br_in(&shop, None, &["init", "--prefix", "t", "-q"]);
+    let root = br_in(&shop, None, &["create", "Pair", "--silent"]);
+    let child = |title: &str| {
+        br_in(
+            &shop,
+            Some("w"),
+            &["create", title, "--deps", &format!("parent-child:{root}"), "--silent"],
+        )
+    };
+    let children = [child("A"), child("B")];
+    (root, children)
 }
 
-/// The mail project of the rig `web`: a key of no temporary directory, which Agent Mail refuses.
-const KEY: &str = "/srv/shop/web";
-
-/// The paths of `paths` other agents than `me` hold, sorted, asked of the server whose data is `data`.
-fn held(data: &Path, me: &str, paths: &[&str]) -> Vec<String> {
+/// The paths of `paths` other agents than `me` hold in the mail project `key`, sorted, asked of the server whose data
+/// is `data`.
+fn held(data: &Path, key: &str, me: &str, paths: &[&str]) -> Vec<String> {
     let env = [(
         "LOOP_MANAGER_AGENT_MAIL_DATA".to_owned(),
         data.to_string_lossy().into_owned(),
     )];
-    let args = json!({"project_key": KEY, "agent_name": me, "paths": paths});
+    let args = json!({"project_key": key, "agent_name": me, "paths": paths});
     let out = run(
         &["call", "check_file_reservation_conflicts", &args.to_string()],
         &env,
@@ -511,11 +535,11 @@ fn held(data: &Path, me: &str, paths: &[&str]) -> Vec<String> {
     held
 }
 
-/// Waits until `me` sees others hold exactly `want` of `paths`.
-async fn until_held(data: &Path, me: &str, paths: &[&str], want: &[&str]) {
+/// Waits until `me` sees others hold exactly `want` of `paths` in `key`.
+async fn until_held(data: &Path, key: &str, me: &str, paths: &[&str], want: &[&str]) {
     let deadline = Instant::now() + common::WAIT;
-    while held(data, me, paths) != want {
-        assert!(Instant::now() < deadline, "{me} sees {:?}", held(data, me, paths));
+    while held(data, key, me, paths) != want {
+        assert!(Instant::now() < deadline, "{me} sees {:?}", held(data, key, me, paths));
         tokio::time::sleep(Duration::from_millis(50)).await;
     }
 }
@@ -569,6 +593,44 @@ fn check_commits(rig: &Path, runs: [(&str, &str); 2]) {
     }
 }
 
+/// The runs `runs` of the drain `epic` are its children on the ready beads `children` in the rig `web` at `rig`; with no
+/// parameter of the addon, both sessions got the rig's canonical path as their mail project, shared by the worktrees,
+/// and the drain's chain as their thread: these two.
+async fn check_drain(
+    d: &Daemon,
+    t: &Path,
+    epic: &str,
+    runs: [&str; 2],
+    mut children: [String; 2],
+    rig: &Path,
+) -> (String, String) {
+    let mut beads = Vec::new();
+    for run in runs {
+        let view = d.get(&format!("/v1/runs/{run}")).await;
+        assert_eq!(
+            (&view["parent_run"], &view["rig"]),
+            (&json!(epic), &json!("web")),
+            "{view}"
+        );
+        beads.push(view["bead"].as_str().unwrap().to_owned());
+    }
+    beads.sort();
+    children.sort();
+    assert_eq!(beads, children);
+    // With no parameter: the rig's canonical path as the mail project of both worktrees, the drain's chain as their
+    // thread.
+    let key = rig.canonicalize().unwrap().to_string_lossy().into_owned();
+    let correlation = d.get(&format!("/v1/runs/{epic}")).await["correlation"].clone();
+    let thread = format!("shop.{}", correlation.as_str().unwrap());
+    for who in ["a", "b"] {
+        assert_eq!(
+            (left(t, who, "key"), left(t, who, "thread")),
+            (key.clone(), thread.clone())
+        );
+    }
+    (key, thread)
+}
+
 #[tokio::test(flavor = "multi_thread")]
 async fn two_runs_in_worktrees_coordinate_through_one_server() {
     let shared = tempfile::tempdir().unwrap();
@@ -581,23 +643,30 @@ async fn two_runs_in_worktrees_coordinate_through_one_server() {
     ])])
     .await;
     let base_url = provider.base_url();
-    let d = Daemon::start(|dir| shop(dir, &base_url)).await;
+    // Agent Mail refuses a project under a directory named as `tempfile` names them, as the daemon's is.
+    let rigs = tempfile::Builder::new().prefix("agent-mail-").tempdir().unwrap();
+    let rig = rigs.path().join("web");
+    let mut beads = None;
+    let d = Daemon::start(|dir| beads = Some(shop(dir, &rig, &base_url))).await;
+    let (root, children) = beads.unwrap();
     let dir = d.dir.path().to_owned();
-    let (rig, data) = (
-        dir.join("config/loop-manager/shop/web"),
-        dir.join("state/loop-manager/addons/agent-mail"),
-    );
+    let data = dir.join("state/loop-manager/addons/agent-mail");
     let config = dir.join(".config/mcp-agent-mail/config.env");
     let user_text = fs::read(&config).unwrap();
 
-    let mut created = [d.create("build", None).await, d.create("build", None).await];
+    // The drain of the README gives each ready bead a run of `build`: two at once, in the rig `web`.
+    let body = json!({"project": "shop", "formula": "epic", "inputs": {"task": root}});
+    let epic = d.post("/v1/runs", body, None).await.unwrap()["run"]
+        .as_str()
+        .unwrap()
+        .to_owned();
     let (a, b) = until_b_passed(&d, &t).await;
-    let mut runs = [a.clone(), b.clone()];
-    runs.sort();
-    created.sort();
-    assert_eq!(runs, created);
+    let (key, thread) = check_drain(&d, &t, &epic, [&a, &b], children, &rig).await;
     let (name_a, name_b) = (left(&t, "a", "name"), left(&t, "b", "name"));
     assert_ne!(name_a, name_b);
+    // The drain step, which has no session, put no commit check in the project's repository.
+    let project_git = fs::read_to_string(dir.join("config/loop-manager/shop/.git/config")).unwrap();
+    assert!(!project_git.contains("agent-mail"), "{project_git}");
 
     // One server for both sessions, which got its tools under the user's filter and their mail names as context.
     let instances = d.get("/v1/instances").await;
@@ -642,7 +711,7 @@ async fn two_runs_in_worktrees_coordinate_through_one_server() {
     for (who, from) in [("a", &name_b), ("b", &name_a)] {
         let inbox: Value = serde_json::from_str(&left(&t, who, "inbox")).unwrap();
         let got = (&inbox[0]["from"], &inbox[0]["thread_id"]);
-        assert_eq!(got, (&json!(from), &json!("web-pair")), "{inbox}");
+        assert_eq!(got, (&json!(from), &json!(thread)), "{inbox}");
     }
 
     // A real commit of a path the other run holds is refused, naming it and its holder, and HEAD stays.
@@ -660,12 +729,12 @@ async fn two_runs_in_worktrees_coordinate_through_one_server() {
     git(&rig, &["commit", "-q", "-a", "-m", "by hand"]);
 
     // The pass of b released its reservations only; the cancel of a releases a's.
-    until_held(&data, &name_a, &["b-new.txt", "b-changed.txt"], &[]).await;
+    until_held(&data, &key, &name_a, &["b-new.txt", "b-changed.txt"], &[]).await;
     assert_eq!(
-        held(&data, &name_b, &["shared.txt", "a-new.txt"]),
+        held(&data, &key, &name_b, &["shared.txt", "a-new.txt"]),
         ["a-new.txt", "shared.txt"]
     );
     d.post(&format!("/v1/runs/{a}/cancel"), json!({}), None).await.unwrap();
     d.until_state(&a, "cancelled").await;
-    until_held(&data, &name_b, &["shared.txt", "a-new.txt"], &[]).await;
+    until_held(&data, &key, &name_b, &["shared.txt", "a-new.txt"], &[]).await;
 }
