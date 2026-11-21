@@ -70,6 +70,8 @@ pub struct Config {
     /// How long a service may take to pass its health check, and a launch waits for it (docs/design/config.md): 30 s.
     /// Not from a file: [`load`] sets it, a test shortens it.
     pub service_wait: Duration,
+    /// Runtime prefix for service commands. The Linux daemon supplies its parent-death launcher.
+    pub service_prefix: Vec<String>,
 }
 
 /// The thresholds of `[watchdog]` in the orchestrator file, in milliseconds (contracts 6.1).

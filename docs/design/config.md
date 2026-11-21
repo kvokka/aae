@@ -160,6 +160,8 @@ mcp = { url = "/mcp" }                         # | true (= /mcp); none: no MCP e
   `LOOP_MANAGER_SERVICE_<NAME>_URL` (`http://127.0.0.1:<port>`) and `LOOP_MANAGER_SERVICE_<NAME>_TOKEN` in their
   environment (`<NAME>`: the name in upper case, other characters than letters and digits as `_`). Either way a session
   start waits up to 30 s for the service to be `ready` and gets the port it is ready on.
+- On Linux the kernel kills the service leader if its daemon dies, including on SIGKILL. A launcher script should
+  use `exec` for the server so it keeps that protection.
 - Health decides readiness only: the service is `ready` once its check passes (checked every 100 ms, each check
   up to 5 s; `http` is a `GET` with the token answering 2xx; `command` runs with the service's environment and
   passes on exit 0). Not ready within 30 s, it is stopped and fails. Once ready, a live service is one whose

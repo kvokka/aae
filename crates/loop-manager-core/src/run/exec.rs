@@ -39,6 +39,7 @@ pub(super) struct RunExecutor {
     pub services: super::service_proc::Running,
     /// [`crate::config::Config::service_wait`] at the daemon start.
     pub service_wait: Duration,
+    pub service_prefix: Vec<String>,
 }
 
 impl Executor for RunExecutor {
@@ -64,7 +65,9 @@ impl Executor for RunExecutor {
                     // A stopped writer drops the message; recovery (WP-20) finds the attempt on restart.
                     let _ = core.send(None, msg).await;
                 }
-                Some("start_service") => super::service_proc::start(&self.services, core, payload, self.service_wait),
+                Some("start_service") => {
+                    super::service_proc::start(&self.services, core, payload, self.service_wait, &self.service_prefix)
+                }
                 Some("stop_service") => {
                     let id = payload["service"].as_str().unwrap_or_default().to_owned();
                     super::service_proc::stop(&self.services, &id).await;

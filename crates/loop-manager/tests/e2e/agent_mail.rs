@@ -72,7 +72,7 @@ impl Drop for Server {
 
 /// The launcher as the daemon runs it: a clean environment with `home`, the port and the token.
 fn serve(data: &Path, home: &Path, port: u16, token: &str) -> Server {
-    let child = common::program(helper())
+    let child = common::owned_program(helper())
         .args(["serve"])
         .arg(data)
         .env_clear()
@@ -514,6 +514,8 @@ fn user_config(user_mailbox: &Path) -> String {
 /// `build`, and `epic`, a drain of two runs of `build` at a time; the rig `web` at `rig` with its first commit; a
 /// tracker whose root bead has two ready beads of `web` (their ids); and the user's `config.env`.
 fn shop(dir: &Path, rig: &Path, base_url: &str) -> (String, [String; 2]) {
+    fs::create_dir_all(dir.join("path")).unwrap();
+    std::os::unix::fs::symlink(common::EXE, dir.join("path/loop-manager")).unwrap();
     let shop = dir.join("config/loop-manager/shop");
     let files = [
         (
@@ -817,4 +819,16 @@ async fn two_runs_in_worktrees_coordinate_through_one_server() {
     d.post(&format!("/v1/runs/{a}/cancel"), json!({}), None).await.unwrap();
     d.until_state(&a, "cancelled").await;
     until_held(&data, &key, &name_b, &["shared.txt", "a-new.txt"], &[]).await;
+
+    #[cfg(target_os = "linux")]
+    {
+        let pid = pid.parse().unwrap();
+        let start = loop_manager_core::orphans::start_time(pid).expect("service is still idle");
+        drop(d); // SIGKILL: the daemon cannot run its shutdown cleanup.
+        let deadline = Instant::now() + common::WAIT;
+        while loop_manager_core::orphans::start_time(pid) == Some(start) {
+            assert!(Instant::now() < deadline, "Agent Mail survived its daemon");
+            tokio::time::sleep(Duration::from_millis(20)).await;
+        }
+    }
 }

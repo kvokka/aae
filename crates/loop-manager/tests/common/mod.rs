@@ -40,6 +40,17 @@ pub(crate) fn program(program: impl AsRef<std::ffi::OsStr>) -> Command {
     command
 }
 
+/// Test daemons and standalone servers also go away if the test runner is killed.
+pub(crate) fn owned_program(path: PathBuf) -> Command {
+    let mut command = loop_manager();
+    command
+        .arg("exec-with-parent")
+        .arg(std::process::id().to_string())
+        .arg("--")
+        .arg(path);
+    command
+}
+
 /// The built `loop-manager`, through [`program`].
 pub(crate) fn loop_manager() -> Command {
     program(EXE)
@@ -127,7 +138,7 @@ pub(crate) fn spawn(dir: &std::path::Path) -> Child {
 /// `loop-manager daemon` in the XDG tree under `dir`: the binary `dir/bin/loop-manager` if a test put one there, else the built one.
 pub(crate) fn command(dir: &std::path::Path) -> Command {
     let own = dir.join("bin/loop-manager");
-    let mut command = program(if own.exists() { own } else { EXE.into() });
+    let mut command = owned_program(if own.exists() { own } else { EXE.into() });
     command
         .arg("daemon")
         .env("HOME", dir)

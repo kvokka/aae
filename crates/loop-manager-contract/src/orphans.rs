@@ -95,6 +95,16 @@ pub fn waited(pid: Option<u32>) {
     }
 }
 
+/// Arms the service leader before exec. Check the expected parent afterwards in case it already died.
+#[cfg(target_os = "linux")]
+pub fn bind_to_parent(expected: u32) -> io::Result<()> {
+    rustix::process::set_parent_process_death_signal(Some(Signal::KILL))?;
+    if rustix::process::getppid().map(|p| p.as_raw_nonzero().get() as u32) != Some(expected) {
+        return Err(io::Error::other("parent exited before exec"));
+    }
+    Ok(())
+}
+
 /// Makes this process the child subreaper and reaps, from now on, the orphans it adopts once they exit.
 pub fn adopt_orphans() -> io::Result<()> {
     #[cfg(target_os = "linux")]

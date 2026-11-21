@@ -158,6 +158,13 @@ pub enum Command {
         #[arg(long)]
         key: Option<String>,
     },
+    /// Start a long-lived child bound to its spawning parent.
+    #[command(hide = true)]
+    ExecWithParent {
+        parent: u32,
+        #[arg(last = true, required = true)]
+        command: Vec<std::ffi::OsString>,
+    },
     /// Serve a stdio MCP server over HTTP on `LOOP_MANAGER_SERVICE_PORT` behind `LOOP_MANAGER_SERVICE_TOKEN`: how the daemon shares one.
     #[command(hide = true)]
     McpBridge {
@@ -240,8 +247,12 @@ fn report(json: bool, error: Value) -> ExitCode {
 async fn execute(client: &Client, cli: Cli) -> Result<ExitCode, ClientError> {
     let json = cli.json;
     match cli.command {
-        Command::Format | Command::Daemon { .. } | Command::Cache(_) | Command::McpBridge { .. } => {
-            let message = "`format`, `daemon`, `cache clear` and `mcp-bridge` run locally";
+        Command::Format
+        | Command::Daemon { .. }
+        | Command::Cache(_)
+        | Command::McpBridge { .. }
+        | Command::ExecWithParent { .. } => {
+            let message = "this command runs locally";
             return Ok(fail(json, "usage", message));
         }
         Command::Doctor { .. } => return Ok(doctor(json, &client.request("GET", "/v1/doctor", None, None).await?)),

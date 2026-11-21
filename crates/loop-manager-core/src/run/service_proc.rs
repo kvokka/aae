@@ -61,14 +61,18 @@ pub(super) fn token_of(id: &str) -> String {
 /// Runs the service of a `start_service` effect in a task of its own: `ServiceReady` once it is healthy,
 /// `ServiceFailed` once it ends unless the registry stopped it.
 /// It has `wait` to pass its health check.
-pub(super) fn start(running: &Running, core: &CoreHandle<Msg>, p: &Value, wait: Duration) {
+pub(super) fn start(running: &Running, core: &CoreHandle<Msg>, p: &Value, wait: Duration, prefix: &[String]) {
     let id = p["service"].as_str().unwrap_or_default().to_owned();
     let port = p["port"]
         .as_u64()
         .and_then(|p| u16::try_from(p).ok())
         .unwrap_or_default();
     let command: Vec<String> = serde_json::from_value(p["command"].clone()).unwrap_or_default();
-    let command: Vec<String> = command.iter().map(|a| a.replace(PORT, &port.to_string())).collect();
+    let command: Vec<String> = prefix
+        .iter()
+        .cloned()
+        .chain(command.iter().map(|a| a.replace(PORT, &port.to_string())))
+        .collect();
     let health: Health = serde_json::from_value(p["health"].clone()).unwrap_or(Health::Port);
     let token = p["token"].as_str().unwrap_or_default().to_owned();
     let pairs: BTreeMap<String, String> = serde_json::from_value(p["env"].clone()).unwrap_or_default();

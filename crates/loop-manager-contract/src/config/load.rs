@@ -106,6 +106,7 @@ impl Loader {
             watchdog,
             projects,
             bridge: Vec::new(),
+            service_prefix: Vec::new(),
             addon_data: None,
             service_wait: std::time::Duration::from_secs(30),
         };

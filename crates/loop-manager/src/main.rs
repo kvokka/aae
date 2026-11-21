@@ -46,6 +46,17 @@ fn main() -> ExitCode {
                 Err(e) => cli::fail(cli.json, "config_error", &format!("cache clear: {e}")),
             };
         }
+        Command::ExecWithParent { parent, command } => {
+            #[cfg(target_os = "linux")]
+            if let Err(e) = loop_manager_core::orphans::bind_to_parent(parent) {
+                return cli::fail(cli.json, "spawn_failed", &e.to_string());
+            }
+            #[cfg(not(target_os = "linux"))]
+            let _ = parent;
+            let error =
+                std::os::unix::process::CommandExt::exec(std::process::Command::new(&command[0]).args(&command[1..]));
+            return cli::fail(cli.json, "spawn_failed", &format!("{:?}: {error}", command[0]));
+        }
         Command::McpBridge { command, timeout } => {
             return bridge::run(command, std::time::Duration::from_secs(timeout));
         }

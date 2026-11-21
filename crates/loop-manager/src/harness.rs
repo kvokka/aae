@@ -94,6 +94,15 @@ pub(crate) fn load(paths: &Paths) -> Result<config::Config, Vec<String>> {
         p.tracker.prefix = Some("BD_ISSUE_PREFIX".to_owned());
     }
     config.addon_data = Some(paths.state.join("addons"));
+    #[cfg(target_os = "linux")]
+    {
+        config.service_prefix = vec![
+            "/proc/self/exe".into(),
+            "exec-with-parent".into(),
+            std::process::id().to_string(),
+            "--".into(),
+        ];
+    }
     config.bridge = [paths.exe.to_string_lossy().as_ref(), "mcp-bridge", "--"]
         .map(str::to_owned)
         .to_vec();
