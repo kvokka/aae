@@ -13,7 +13,7 @@ If you already have a `[settings]` table, append the attachment to its `addons` 
 ```toml
 [[addon]]
 git = "https://github.com/kvokka/loop-manager.git"
-rev = "2278ccdcccba31f65560c8ed5b039036e0e65b01"  # context-budget 0.3.0
+rev = "addons/context-budget/0.3.0"
 dir = "addons/context-budget"
 
 [settings]

@@ -17,7 +17,7 @@ If you already have a `[settings]` table, append the attachment to its `addons` 
 ```toml
 [[addon]]
 git = "https://github.com/kvokka/loop-manager.git"
-rev = "2278ccdcccba31f65560c8ed5b039036e0e65b01"  # conventional-commits 0.1.0
+rev = "addons/conventional-commits/0.1.0"
 dir = "addons/conventional-commits"
 
 [settings]
