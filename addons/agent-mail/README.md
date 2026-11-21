@@ -150,8 +150,8 @@ reserves anew.
 - `a_codex_agent_gets_the_server_the_session_hook_and_the_data_directory`: the effective config of a codex agent
   that attaches the addon (the session hook answers codex's input as claude's, which the first test feeds it);
 - `a_commit_is_checked_on_both_sides_of_a_rename_and_refused_when_it_cannot_be_checked`: real `git commit`s with
-  the hook in place: a rename that leaves or makes a path another run holds is refused, a session with no mail name
-  or with the server down is refused, `HEAD` unchanged, and a commit outside a session goes;
+  the hook in place: a rename that leaves or makes a path another run holds is refused, a session with no mail
+  name, with the server down or with an answer cut short is refused, `HEAD` unchanged, and a commit outside a session goes;
 - `two_runs_in_worktrees_coordinate_through_one_server`: a real daemon with a home whose `config.env` sets the
   filter above, anonymous loopback callers and a mailbox of its own, and the project of the example above: the addon
   attached with no parameter, a drain with `pool = 2` over two ready beads; the two runs of one claude agent on a fake

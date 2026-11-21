@@ -365,9 +365,53 @@ fn a_commit_is_checked_on_both_sides_of_a_rename_and_refused_when_it_cannot_be_c
         refusal.contains("its reservations could not be checked") && refusal.contains("is not running"),
         "{refusal}"
     );
+    // Nor with an answer the server cut short.
+    let cut = json!({"conflicts": [], "output_truncated": true}).to_string();
+    let port = answer_once(&json!({"jsonrpc": "2.0", "id": 1, "result": {"content": [{"type": "text", "text": cut}]}}));
+    let endpoint = json!({"url": format!("http://127.0.0.1:{port}"), "pid": std::process::id()});
+    fs::write(data.join("runtime/endpoint.json"), endpoint.to_string()).unwrap();
+    let refusal = commit(&repo, &b, "feat: cut short").unwrap_err();
+    assert!(
+        refusal.contains("the check of its reservations was cut short"),
+        "{refusal}"
+    );
     assert_eq!(git(&repo, &["rev-parse", "HEAD"]), head);
     // Outside a session the hook lets a commit through.
     commit(&repo, &[], "feat: by hand").unwrap();
+}
+
+/// A port on which one HTTP request, read to its end, gets `body` as JSON.
+fn answer_once(body: &Value) -> u16 {
+    use std::io::{Read, Write};
+    let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    let port = listener.local_addr().unwrap().port();
+    let body = body.to_string();
+    std::thread::spawn(move || {
+        let (mut stream, _) = listener.accept().unwrap();
+        let mut request = Vec::new();
+        let mut chunk = [0; 4096];
+        // The headers, then as many bytes as their `Content-Length` says.
+        loop {
+            let n = stream.read(&mut chunk).unwrap();
+            request.extend_from_slice(&chunk[..n]);
+            let text = String::from_utf8_lossy(&request).to_lowercase();
+            if let Some((head, rest)) = text.split_once("\r\n\r\n") {
+                let length = head
+                    .lines()
+                    .find_map(|l| l.strip_prefix("content-length:"))
+                    .map_or(0, |v| v.trim().parse().unwrap());
+                if rest.len() >= length || n == 0 {
+                    break;
+                }
+            }
+        }
+        let answer = format!(
+            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+            body.len()
+        );
+        stream.write_all(answer.as_bytes()).unwrap();
+    });
+    port
 }
 
 /// What each session runs: the two runs meet, the first reserves `shared.txt` and writes to the second, the second
