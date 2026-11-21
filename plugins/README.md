@@ -4,7 +4,7 @@ Claude Code and Codex can install either plugin independently from the `loop-man
 
 | Plugin | What it does |
 | --- | --- |
-| `loop-manager@loop-manager` | Operator skills for answering waiting runs, recovering failed runs and recapping work. |
+| `loop-manager@loop-manager` | Operator skills for discovering, installing and creating addons, answering waiting runs, recovering failed runs and recapping work. |
 | `run-card@loop-manager` | A read-only MCP App that shows the formula, current step, waits and returns for one run. |
 
 ## Install
@@ -27,6 +27,13 @@ codex plugin add loop-manager@loop-manager
 
 When installing unpublished changes, use the absolute path to the repository root in the marketplace
 command. Run the install command for each plugin you want.
+
+## Find and install addons
+
+With the operator plugin installed, ask “What loop-manager addons are available?” or “Install version X.Y.Z
+of this addon for the dev agent in my project.” The addons skill looks up the current catalog and published
+versions. You can also give it the Git URL of an addon from another publisher, or ask “Create an addon in
+my repository that adds our review checklist to the agent’s prompt.”
 
 ## Follow a run
 

@@ -8,10 +8,13 @@ which bounds the context of a claude or codex session. To write an addon, see
 [writing an addon](addon-development.md); the full rules are in
 [the config reference](../design/config.md#addon-addonaddontoml).
 
-The [conventional-commits addon](../../addons/conventional-commits/README.md) checks Git commit subjects and appends a format hint to the coding agent's prompt.
+Browse the current [addon catalog](../../addons/) or ask the [operator plugin](../../plugins/README.md#find-and-install-addons)
+which addons are available. Each addon's README describes its requirements and its CHANGELOG records version changes.
+To see published versions for one addon, replace `<name>` below with its directory name:
 
-The [lessons addon](../../addons/lessons/README.md) asks an agent that has finished its work on a bead, in the same
-session, for short lessons for future agents, and puts a useful answer on that bead as one comment.
+```sh
+git ls-remote --tags --refs https://github.com/kvokka/loop-manager.git 'refs/tags/addons/<name>/*'
+```
 
 ## Declare it
 
@@ -29,12 +32,13 @@ addons = [{ name = "context-budget" }]
 ```
 
 An addon in a git repository is declared with `git` and `rev` instead of `path`, and with `dir` when it is not at the
-root of the repository:
+root of the repository. Prefer the published version tag so readers can see which release the project uses.
+Use a full commit SHA to pin an untagged revision:
 
 ```toml
 [[addon]]
-git = "https://github.com/acme/loop-manager"
-rev = "v1.4.0"                      # a tag or a full commit id; required for an addon
+git = "https://github.com/kvokka/loop-manager.git"
+rev = "addons/context-budget/0.3.0"
 dir = "addons/context-budget"
 ```
 

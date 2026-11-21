@@ -13,6 +13,7 @@
 | Пишешь или ревьюишь код | `docs/agents/rules-code.md` |
 | Запускаешь или пишешь тесты, трогаешь `demos/` | `docs/agents/rules-tests.md` |
 | Меняешь поведение, ключ конфига, интерфейс | `docs/agents/decisions.md` (решения владельца, не пересматриваются) и `docs/agents/assumptions.md` (допущения: менять можно, с записью решения в комментариях эпика) |
+| Меняешь или выпускаешь аддон | `docs/guide/addon-development.md#versioning-and-releasing-an-addon` — SemVer, changelog и теги |
 | Работаешь ролью автономного цикла | `docs/agents/loop.md` и своё определение в `devloop/agents/` |
 
 Большие справочники (`docs/design/contracts.md`, `docs/design/config.md`) читаются по разделам:

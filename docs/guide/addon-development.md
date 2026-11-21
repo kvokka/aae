@@ -250,9 +250,45 @@ root:
 ```toml
 [[addon]]
 git = "https://github.com/acme/loop-manager-addon-review"
-rev = "v0.1.0"
+rev = "addons/review/0.1.0"
 ```
 
 `rev` is a tag or a full commit id, and the addon runs only at it; a new version is a new tag and a new `rev`
 ([packs and addons from git](../design/config.md#packs-and-addons-from-git)). Keep its tests in that repository
 too.
+
+## Versioning and releasing an addon
+
+Each addon has its own SemVer in `addon.toml`, a `CHANGELOG.md` beside it and Git tags named
+`addons/<name>/<version>`, for example `addons/context-budget/0.3.0`. The numeric tag at the
+repository root is reserved for the loop-manager binary. An addon release needs only its source commit
+and tag. The same convention works in a separate repository, including one with its manifest at the root.
+
+1. Develop against a relative `path` in the config that declares the addon. For example,
+   `devloop/loop-manager.toml` uses `../addons/<name>`. Keep repository-local consumers on these paths.
+2. For each user-visible change, add a note under `## Unreleased` in the addon's changelog.
+   Describe the effect on users and how to migrate changed parameters or requirements. When preparing a release,
+   review the whole section and the diff under the addon directory since its last tag.
+3. Choose the next SemVer from those changes. Bump patch for compatible fixes, minor for compatible
+   features, and major for incompatible changes to configuration, behavior or host requirements.
+   During initial development (0.x), bump minor for an incompatible change and document the migration.
+   For the first tag of existing untagged content, use its manifest version if it still describes that content.
+4. Set `version` in the manifest and rename the Unreleased heading to that version. If the first tag
+   publishes an already documented version, use its existing heading. Run the checks in the addon's README,
+   check a config using the addon, and update the README installation example with the Git URL,
+   release tag, optional subdirectory and attachment a user can copy into their project. Include these
+   files in the release commit.
+5. To publish, run the following from the repository root with the addon's name, version and tested commit.
+   Check that the manifest at that commit has this name and version, and that its changelog describes it.
+   Publish the commit through the repository's usual workflow, then publish only this tag:
+
+   ```sh
+   tag="addons/$name/$version"
+   git tag -a "$tag" "$commit" -m "$name $version"
+   git push origin "refs/tags/$tag"
+   git ls-remote --refs --tags origin "refs/tags/$tag"
+   ```
+
+Keep published tags on their original commits. A client caches the commit it first resolves for a tag.
+Publish a new version for a correction. When moving an addon, keep old tags reachable at the old URL
+so clean installs of existing pins still work. Document the new URL and relative directory for later versions.

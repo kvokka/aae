@@ -8,7 +8,7 @@
     {
       "name": "loop-manager",
       "source": "./plugins/loop-manager",
-      "description": "Skills for working with loop-manager from Claude Code or Codex: recap work from Beads, recover failed runs and answer waiting runs"
+      "description": "Discover, install and create loop-manager addons, recap work from Beads, recover failed runs and answer waiting runs."
     },
     {
       "name": "run-card",

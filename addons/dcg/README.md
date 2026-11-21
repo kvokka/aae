@@ -6,14 +6,24 @@ a command `dcg` finds destructive (`git reset --hard`, `rm -rf` of a root, `git 
 agent sees the reason. The addon brings no rules of its own: what is blocked is what the host's `dcg` and its config
 say.
 
-```toml
-# the orchestrator's config.toml or a project's loop-manager.toml
-[[addon]]
-path = "<this directory>"            # or git = "<this repository>", rev = "<tag>", dir = "addons/dcg"
+## Install
 
-# any settings layer: [settings], a rig, agent.toml, a variant
+In your project's `loop-manager.toml`, declare the Git source and attach the addon to the project's agents.
+If you already have a `[settings]` table, append the attachment to its `addons` array.
+
+```toml
+[[addon]]
+git = "https://github.com/kvokka/loop-manager.git"
+rev = "2278ccdcccba31f65560c8ed5b039036e0e65b01"  # dcg 0.1.0
+dir = "addons/dcg"
+
+[settings]
 addons = [{ name = "dcg" }]
 ```
+
+Run `loop-manager config check`, then `loop-manager config reload` to apply the change on the project's daemon.
+To enable the addon for a single agent, put the attachment in that agent's `agent.toml` and keep the Git
+declaration in the project file.
 
 ## What the host needs
 
@@ -35,3 +45,5 @@ its reason for a destructive command, and with nothing for any other. It fires i
 
 When `dcg` is not on the session's `PATH`, the hook exits 2 and says so on stderr: both harnesses block the call, so
 no shell command runs unguarded and the agent sees why.
+
+See the [changelog](CHANGELOG.md) for version history.

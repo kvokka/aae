@@ -2,7 +2,7 @@
 # (formulas/), the scripts the formula names (scripts/) and the tracker (.beads/). The work itself is done in the rig.
 name = "devloop"
 
-# The addons of this repository, by path: no release tag holds them yet (README.md, "The addons"). The agents that
+# The addons of this repository, from this checkout by relative path (README.md, "The addons"). The agents that
 # attach them, with their params, are agents/coder and agents/reviewer.
 [[addon]]
 path = "../addons/context-budget"

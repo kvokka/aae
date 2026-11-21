@@ -234,10 +234,9 @@ The coder also attaches `conventional-commits`. Its Git commit-msg hook checks t
 Both roles also attach [lessons](../addons/lessons/README.md). When an agent finishes, it can leave a short
 lesson on its epic. An empty answer leaves no comment.
 
-All four addons are declared by path (`path = "../addons/<name>"`), as no release tag holds the versions
-this pack needs, and a declaration by git would make `config check` in `mise run ci` go to the network on a cold
-cache. Once a release tag holds them, declare each as `git = "<the repository>"`, `rev = "<the tag>"` and
-`dir = "addons/<name>"`.
+This pack uses repository-relative declarations (`path = "../addons/<name>"`) so its agents and CI
+exercise the addons from the same checkout, including changes under development. External projects
+can [pin a published addon](../docs/guide/addons.md#declare-it).
 
 ## Changing this directory
 

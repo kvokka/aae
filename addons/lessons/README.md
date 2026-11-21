@@ -5,14 +5,24 @@ is asked, in the context it just used and while its prompt cache is warm, for th
 another agent at least 1,000 tokens on similar work. A useful answer goes on the run's bead as one comment; an empty
 answer, the usual one, leaves nothing. The addon ends there: what is done with the notes later is not its part.
 
-```toml
-# the orchestrator's config.toml or a project's loop-manager.toml
-[[addon]]
-path = "<this directory>"            # or git = "<this repository>", rev = "<tag>", dir = "addons/lessons"
+## Install
 
-# any settings layer: [settings], a rig, agent.toml, a variant
+In your project's `loop-manager.toml`, declare the Git source and attach the addon to the project's agents.
+If you already have a `[settings]` table, append the attachment to its `addons` array.
+
+```toml
+[[addon]]
+git = "https://github.com/kvokka/loop-manager.git"
+rev = "2278ccdcccba31f65560c8ed5b039036e0e65b01"  # lessons 0.1.0
+dir = "addons/lessons"
+
+[settings]
 addons = [{ name = "lessons" }]
 ```
+
+Run `loop-manager config check`, then `loop-manager config reload` to apply the change on the project's daemon.
+To enable the addon for a single agent, put the attachment in that agent's `agent.toml` and keep the Git
+declaration in the project file.
 
 It has no params.
 
@@ -77,3 +87,5 @@ read the run) on the `PATH` of the harness's hooks.
   comment, that the request leaves the outcome as declared, that no request follows the answer, and that a session
   `context-budget` stopped is not asked. It drives the hook by hand for the rest: no outcome, a subagent, a run on no
   bead, the stops after the answer, and a stop of an asked session that is not the end of its answer.
+
+See the [changelog](CHANGELOG.md) for version history.

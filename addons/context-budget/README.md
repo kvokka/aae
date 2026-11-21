@@ -5,14 +5,24 @@ is told to wrap up and leave its summary on the run's bead; past a hard limit th
 goes on the bead. The context is never compacted. [Demo 4](../../demos/4-context-budget/README.md) runs it on a claude
 agent. What differs on codex is in [On codex](#on-codex).
 
-```toml
-# the orchestrator's config.toml or a project's loop-manager.toml
-[[addon]]
-path = "<this directory>"            # or git = "<this repository>", rev = "<tag>", dir = "addons/context-budget"
+## Install
 
-# any settings layer: [settings], a rig, agent.toml, a variant
-addons = [{ name = "context-budget", params = { soft = 200000, hard = 300000 } }]
+In your project's `loop-manager.toml`, declare the Git source and attach the addon to the project's agents.
+If you already have a `[settings]` table, append the attachment to its `addons` array.
+
+```toml
+[[addon]]
+git = "https://github.com/kvokka/loop-manager.git"
+rev = "2278ccdcccba31f65560c8ed5b039036e0e65b01"  # context-budget 0.3.0
+dir = "addons/context-budget"
+
+[settings]
+addons = [{ name = "context-budget" }]
 ```
+
+Run `loop-manager config check`, then `loop-manager config reload` to apply the change on the project's daemon.
+To enable the addon for a single agent, put the attachment in that agent's `agent.toml` and keep the Git
+declaration in the project file.
 
 ## Params
 
@@ -92,3 +102,5 @@ its own, named by its input's `transcript_path`, and its tool is `spawn_agent`. 
 
 `jq`, `git`, `br` (the comments; it finds the tracker by the session's `BEADS_DIR`, as the agent's own calls do) and
 `loop-manager` (the finisher) on the `PATH` of the harness's hooks.
+
+See the [changelog](CHANGELOG.md) for version history.
