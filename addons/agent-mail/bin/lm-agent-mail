@@ -89,6 +89,11 @@ serve() {
 # `run.preparing`: the mail identity of the run's session in its environment, and the commit check in the repository.
 prepare() {
   event=$(cat)
+  # A session alone has a mail name: another step (exec, drain, formula) gets no identity, and its commits no check.
+  if [ "$(printf '%s' "$event" | jq -r .data.run.step_kind)" != ai ]; then
+    echo '{"decision": "proceed"}'
+    return
+  fi
   workdir=$(printf '%s' "$event" | jq -er .data.workdir)
   params=${LOOP_MANAGER_ADDON_PARAMS:-"{}"}
   key=$(printf '%s' "$params" | jq -r '.project_key // ""')
@@ -155,7 +160,7 @@ session_start() {
       --arg ttl "$LOOP_MANAGER_AGENT_MAIL_TTL" '
       "Agent Mail (MCP server `agent-mail`): you are `\(.agent.name)` in the project `\($key)`; use `\($key)` as "
       + "`project_key`, `\(.agent.name)` as `agent_name` and `sender_name`, `\($thread)` as `thread_id`, and "
-      + "`ttl_seconds: \($ttl)` for reservations.\n"
+      + "`ttl_seconds: \($ttl)` for reservations, with paths relative to the repository root.\n"
       + if (.inbox | length) == 0 then "Your inbox is empty."
         else "Your inbox:\n" + (.inbox | map("- #\(.id) from \(.from): \(.subject) (thread \(.thread_id // "none"))")
           | join("\n")) end')

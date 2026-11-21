@@ -157,7 +157,7 @@ fn a_session_keeps_its_mail_name_across_a_retry_and_a_lost_mailbox() {
 
     // A run outside Git: the mail project is the rig's path, the thread that of the run's chain.
     let event = json!({"project": "shop", "rig": "notes", "run": "run_7", "correlation": "cor_1",
-        "data": {"workdir": notes, "run": {"agent": "kit.writer"}}});
+        "data": {"workdir": notes, "run": {"agent": "kit.writer", "step_kind": "ai"}}});
     let decision = run(
         &["prepare"],
         &[(
@@ -221,6 +221,114 @@ fn a_session_keeps_its_mail_name_across_a_retry_and_a_lost_mailbox() {
     // A tool the filter hides is named.
     let hidden = run(&["call", "ensure_project", r#"{"human_key":"/x"}"#], &env, "").unwrap_err();
     assert!(hidden.contains("tool `ensure_project` is not available"), "{hidden}");
+}
+
+/// `git commit -q -m <subject>` in `repo` with the session environment `env` and the addon's helper on the `PATH`, as
+/// a session runs it: the hook's stderr when it is refused.
+fn commit(repo: &Path, env: &[(String, String)], subject: &str) -> Result<(), String> {
+    let path = format!("{}:{}", addon().join("bin").display(), std::env::var("PATH").unwrap());
+    let out = Command::new("git")
+        .env("GIT_CONFIG_GLOBAL", "/dev/null")
+        .env("GIT_CONFIG_NOSYSTEM", "1")
+        .env("PATH", path)
+        .envs(env.iter().map(|(k, v)| (k, v)))
+        .args(["-c", "user.name=t", "-c", "user.email=t@example.com", "-C"])
+        .arg(repo)
+        .args(["commit", "-q", "-m", subject])
+        .output()
+        .unwrap();
+    if out.status.success() {
+        Ok(())
+    } else {
+        Err(String::from_utf8_lossy(&out.stderr).into_owned())
+    }
+}
+
+#[test]
+fn a_commit_is_checked_on_both_sides_of_a_rename_and_refused_when_it_cannot_be_checked() {
+    let tmp = tempfile::Builder::new().prefix("agent-mail-").tempdir().unwrap();
+    let (data, home, repo) = (
+        tmp.path().join("data"),
+        tmp.path().join("home"),
+        tmp.path().join("repo"),
+    );
+    fs::create_dir_all(&home).unwrap();
+    fs::create_dir_all(&repo).unwrap();
+    for file in ["held.txt", "free.txt"] {
+        fs::write(repo.join(file), format!("{file}\n")).unwrap();
+    }
+    git(&repo, &["init", "-q", "-b", "main"]);
+    git(&repo, &["add", "-A"]);
+    git(&repo, &["commit", "-q", "-m", "base"]);
+    let server = serve(&data, &home, free_port(), "token-of-the-commit-check");
+
+    // Two runs of one agent in the repository, each with its session's name.
+    let session = |id: &str| {
+        let event = json!({"project": "shop", "rig": "web", "run": id, "correlation": "cor_1",
+            "data": {"workdir": repo, "run": {"agent": "dev", "step_kind": "ai"}}});
+        let decision: Value = serde_json::from_str(&run(&["prepare"], &[], &event.to_string()).unwrap()).unwrap();
+        let mut env: Vec<(String, String)> = decision["env"]
+            .as_object()
+            .unwrap()
+            .iter()
+            .map(|(k, v)| (k.clone(), v.as_str().unwrap().to_owned()))
+            .collect();
+        env.push((
+            "LOOP_MANAGER_AGENT_MAIL_DATA".into(),
+            data.to_string_lossy().into_owned(),
+        ));
+        run(&["session-start"], &env, "{}").unwrap();
+        let name = run(&["name"], &env, "").unwrap();
+        (env, name)
+    };
+    let ((a, name_a), (b, _)) = (session("run_1"), session("run_2"));
+    let key = repo.canonicalize().unwrap();
+    let reserve = json!({"project_key": key, "agent_name": name_a, "paths": ["held.txt", "target.txt"],
+        "exclusive": true});
+    run(&["call", "file_reservation_paths", &reserve.to_string()], &a, "").unwrap();
+    let head = git(&repo, &["rev-parse", "HEAD"]);
+
+    // Both sides of a rename are paths of the commit: the one it leaves and the one it makes.
+    for (from, to, held) in [
+        ("held.txt", "moved.txt", "held.txt"),
+        ("free.txt", "target.txt", "target.txt"),
+    ] {
+        git(&repo, &["mv", from, to]);
+        let refusal = commit(&repo, &b, "feat: rename").unwrap_err();
+        assert!(
+            refusal.contains(&format!("{held}: reserved by {name_a}")),
+            "{from} -> {to}: {refusal}"
+        );
+        assert_eq!(git(&repo, &["rev-parse", "HEAD"]), head);
+        git(&repo, &["reset", "-q", "--hard"]);
+    }
+    // A path no other agent holds is committed.
+    fs::write(repo.join("own.txt"), "b\n").unwrap();
+    git(&repo, &["add", "own.txt"]);
+    commit(&repo, &b, "feat: own path").unwrap();
+    let head = git(&repo, &["rev-parse", "HEAD"]);
+
+    // A session with no mail name cannot have its commit checked: refused.
+    fs::write(repo.join("own.txt"), "b again\n").unwrap();
+    git(&repo, &["add", "own.txt"]);
+    let mut nameless = b.clone();
+    for (k, v) in &mut nameless {
+        if k == "LOOP_MANAGER_AGENT_MAIL_BINDING" {
+            *v = "shop/web/run_3/dev".into();
+        }
+    }
+    let refusal = commit(&repo, &nameless, "feat: nameless").unwrap_err();
+    assert!(refusal.contains("has no Agent Mail name"), "{refusal}");
+    // Nor with the server down.
+    drop(server);
+    let refusal = commit(&repo, &b, "feat: no server").unwrap_err();
+    assert!(
+        refusal.contains("its reservations could not be checked") && refusal.contains("is not running"),
+        "{refusal}"
+    );
+    assert_eq!(git(&repo, &["rev-parse", "HEAD"]), head);
+    // Outside a session the hook lets a commit through.
+    commit(&repo, &[], "feat: by hand").unwrap();
 }
 
 /// What each session runs: the two runs meet, the first reserves `shared.txt` and writes to the second, the second

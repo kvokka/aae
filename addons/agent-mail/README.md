@@ -16,6 +16,8 @@ and the release of a run's reservations. The project keeps its rigs, formulas, p
   services in (`/`), for example with `mise use -g`; the launcher names the binary and its error when it does not
   run.
 - `jq`, `curl`, and Git with configured hooks (`git hook list`).
+- A session that reaches the server's loopback port. A codex agent with `sandbox_mode = "workspace-write"` may have
+  no network; its commits are then refused with "its reservations could not be checked".
 
 ## Install
 
@@ -112,7 +114,8 @@ readable by the daemon's user only; the bearer never goes on a command line, int
 
 ### A session's identity
 
-On `run.preparing` the addon gives the run's session its project key, thread and TTL. On the session's `SessionStart`,
+On `run.preparing` of an `ai` step the addon gives the run's session its project key, thread and TTL; a step of
+another kind (`exec`, `drain`, `formula`) gets nothing from the addon. On the session's `SessionStart`,
 once the daemon has chosen the workdir and started the server, it registers the run's agent with Agent Mail and keeps
 the name Agent Mail gave for `(project, rig, run, agent)` in `agents/` of the data directory: two runs of one agent
 get two names, and a later attempt of the run, or a session after the mailbox was lost, registers under the same name
@@ -121,7 +124,7 @@ session's name. When the server is not up, the context says so and the session's
 
 ### The commit check
 
-On `run.preparing` in a Git repository the addon puts one named hook, `hook.loop-manager-agent-mail` on `pre-commit`,
+On `run.preparing` of an `ai` step in a Git repository the addon puts one named hook, `hook.loop-manager-agent-mail` on `pre-commit`,
 into the repository's shared config (the common Git directory), beside the hooks the repository has, those of
 `conventional-commits` included. Git runs it for every worktree; it does nothing outside a session that attaches the
 addon, so other commits go as usual, with the addon attached or not. In a session it takes the staged paths of the
@@ -144,6 +147,9 @@ reserves anew.
 
 - `a_session_keeps_its_mail_name_across_a_retry_and_a_lost_mailbox`: the launcher with a clean home, its bearer
   contract and compact tool set, the identity of a run outside Git, a retry, a lost mailbox and a hidden tool;
+- `a_commit_is_checked_on_both_sides_of_a_rename_and_refused_when_it_cannot_be_checked`: real `git commit`s with
+  the hook in place: a rename that leaves or makes a path another run holds is refused, a session with no mail name
+  or with the server down is refused, `HEAD` unchanged, and a commit outside a session goes;
 - `two_runs_in_worktrees_coordinate_through_one_server`: a real daemon with a home whose `config.env` sets the
   filter above, anonymous loopback callers and a mailbox of its own; two runs of one claude agent on a fake provider,
   each in its worktree, meet on one server, write and answer in one thread, commit the paths they add, change and
