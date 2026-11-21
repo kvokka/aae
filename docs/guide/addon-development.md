@@ -289,6 +289,10 @@ and tag. The same convention works in a separate repository, including one with 
    git ls-remote --refs --tags origin "refs/tags/$tag"
    ```
 
+Delivering a new addon or a user-visible addon update includes the version bump, changelog and published tag.
+Verify the remote annotated tag peels to the tested commit before reporting the release complete.
+An unreleased change can stay on a development branch until the intended release.
+
 Keep published tags on their original commits. A client caches the commit it first resolves for a tag.
 Publish a new version for a correction. When moving an addon, keep old tags reachable at the old URL
 so clean installs of existing pins still work. Document the new URL and relative directory for later versions.

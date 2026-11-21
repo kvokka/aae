@@ -139,7 +139,8 @@ A **service** is a `[[service]]` table at the top level of the orchestrator conf
 ```toml
 [[service]]
 name = "mail"                                  # required; no `.`; unique in its file
-command = ["mail-d", "--port", "${LOOP_MANAGER_SERVICE_PORT}"]  # required, non-empty
+command = ["mail-d", "--host", "${LOOP_MANAGER_SERVICE_HOST}", "--port", "${LOOP_MANAGER_SERVICE_PORT}"]
+# bind = "0.0.0.0:8765"                         # optional fixed IPv4 listener
 env = { MAIL_DIR = "/srv/mail" }               # optional, added to its clean environment
 scope = "orchestrator"                         # | "project"; `session` is an error
 health = { http = "/health" }                  # | "http" (= /health) | { command = [...] }; none: the port accepts
@@ -152,9 +153,9 @@ mcp = { url = "/mcp" }                         # | true (= /mcp); none: no MCP e
   `explain` prints `service.<name>` with its layer.
 - The daemon runs `command` once per scope (`orchestrator`, the default, or `project`), lazily, when the first
   session that uses it starts, and stops it 5 minutes after its last session ended. The process starts in `/` with a
-  clean environment with `env`, `LOOP_MANAGER_SERVICE_PORT` (a free port on 127.0.0.1 picked by the daemon; also
-  replaces `${LOOP_MANAGER_SERVICE_PORT}` in `command`) and `LOOP_MANAGER_SERVICE_TOKEN`; it must refuse requests
-  without `Authorization: Bearer <token>`.
+  clean environment with `env`, `LOOP_MANAGER_SERVICE_HOST`, `LOOP_MANAGER_SERVICE_PORT` and
+  `LOOP_MANAGER_SERVICE_TOKEN`. The host and port placeholders also expand in `command`. The service must listen
+  at that address and authenticate external MCP calls with `Authorization: Bearer <token>`.
 - With `mcp`, sessions get `http://127.0.0.1:<port><path>` as an MCP server of the service's name (it replaces an
   `mcp` entry of that name) with the token and the identity headers. Without `mcp`, sessions get
   `LOOP_MANAGER_SERVICE_<NAME>_URL` (`http://127.0.0.1:<port>`) and `LOOP_MANAGER_SERVICE_<NAME>_TOKEN` in their
@@ -166,23 +167,29 @@ mcp = { url = "/mcp" }                         # | true (= /mcp); none: no MCP e
   up to 5 s; `http` is a `GET` with the token answering 2xx; `command` runs with the service's environment and
   passes on exit 0). Not ready within 30 s, it is stopped and fails. Once ready, a live service is one whose
   process lives: there is no periodic check. A server that is not up is a tool failure, not a failed run.
-- The port is checked free right before each start; one taken (someone else listens there and would get the token) fails
-  that start without running `command`. A port or `http` check passes only while the service's processes (the ones with
-  its `LOOP_MANAGER_INSTANCE` marker) alone listen on the port where a connection to `127.0.0.1` reaches (`127.0.0.1`,
-  `0.0.0.0`, `::`, `::ffff:127.0.0.1`), so a process that takes the port while the service starts gets no check and no
-  token; the service then fails to bind and starts again. So a service whose listener is not its own process
-  (`docker run -p`: the Docker daemon's proxy listens; a wrapper that clears the environment, as `env -i` or `sudo`
-  without `-E`) never passes a port or `http` check: give it `health = { command = [...] }`. A `command` check checks
-  what it likes, and does not tell who listens: a process that takes the port while such a service starts may get the
-  token. A service that dies or fails is started again (with the effect backoff) while sessions use it: on a new port
-  until it was first `ready`, then on the same port, so the sessions holding its URL reconnect, unless two starts in a
-  row find someone else listening there: then on a new port with a new token, which new sessions get; the sessions
-  holding the old URL lose the tool, and whoever holds the old port cannot use the old token. Every move to a new port
-  comes with a new token. With no sessions it is dropped. A session start that waited 30 s in vain gets port 0 and no
-  token: the port the service was not ready on may be someone else's. On macOS the listener is not told (`/proc` only),
-  any listener passes the check. A changed `command`, `env` or `health` is a new service; the old one idles out. Events:
-  `service.starting`, `service.ready`, `service.failed`, `service.stopped`; `loop-manager instance list` lists services
-  too.
+
+#### Fixed and automatic service ports
+
+- With `bind = "127.0.0.1:8765"` the service uses that local port. With `bind = "0.0.0.0:8765"` it listens on
+  all IPv4 interfaces, suitable for Docker port publishing. The allowed port range is 1–65535. The daemon checks
+  the configured address before launch. An occupied address emits `service.failed` with the bind error and
+  `service.stopped` with reason `bind_failed`. The command does not start or move to another port. The failure
+  applies to the service; the session follows the normal unavailable-tool behavior. A new session can try again.
+- With automatic binding (omitted or empty `bind`), LM chooses a free loopback port. If a start fails before
+  the service first becomes ready, LM retries on a new port with a new bearer. Once ready, a service that dies
+  restarts on its previous port so connected sessions can reconnect. If two consecutive starts find that port
+  occupied, LM moves to a new port and rotates the bearer. New sessions get the new endpoint. Sessions holding
+  the old URL lose the tool. Retries use backoff and require a consumer.
+- For both modes, Linux port and HTTP checks verify that the listener reached from loopback belongs to the
+  service's instance before connecting. A process that takes the port at startup receives no probe or token.
+  A Docker proxy outside the daemon's network namespace or a wrapper that clears the instance marker requires a
+  custom command check. That command is responsible for verifying the listener before sending credentials.
+  macOS checks connectivity only.
+- A session that waits 30 seconds without a ready service gets port 0 and an empty token. Changing `command`,
+  `env`, `health` or `bind` creates a new service definition. The old instance idles out. Follow
+  `service.starting`, `service.ready`, `service.failed` and `service.stopped` or inspect
+  `loop-manager instance list`.
+
 - `url` with `${LOOP_MANAGER_API}`: the daemon's own API on TCP, e.g. `url = "${LOOP_MANAGER_API}/mcp"` for its MCP
   frontend. The placeholder becomes `http://<api_tcp>` and the session gets `Authorization: Bearer <token>` with the
   token of the daemon's start. With no `api_tcp` the session goes without the server, as with a service that is not up.

@@ -52,6 +52,10 @@ is for the review to catch.
 - mise is a convenience, not a requirement. A command that is not found: `mise exec -- <command>`.
 - Structural search in Rust is `ast-grep`: `ast-grep -l rust -p '$X.unwrap()' crates/`.
 
+User documentation gives the dependency versions verified by the project and the configuration needed to run it.
+Keep developer-machine inventory, local installations and private settings out of public examples. Claim support
+for later versions only when the compatibility checks cover them.
+
 ## Repository
 
 - The repository is public, MIT: no secrets, no absolute paths of a developer's machine (`mise run ci` greps for

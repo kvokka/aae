@@ -106,6 +106,28 @@ fn serve(data: &Path, home: &Path, port: u16, token: &str) -> Server {
     }
 }
 
+#[test]
+fn explicit_loopback_auth_settings_and_empty_values_reach_the_server() {
+    for (value, status) in [("true", "200"), ("false", "401"), ("", "401")] {
+        let dir = tempfile::tempdir().unwrap();
+        let home = dir.path();
+        let config = home.join(".config/mcp-agent-mail");
+        fs::create_dir_all(&config).unwrap();
+        fs::write(
+            config.join("config.env"),
+            format!("HTTP_ALLOW_LOCALHOST_UNAUTHENTICATED={value}\n"),
+        )
+        .unwrap();
+        let port = free_port();
+        let token = "token-of-the-auth-test";
+        let _server = serve(&home.join("data"), home, port, token);
+        let list = json!({"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}});
+        let url = format!("http://127.0.0.1:{port}/mcp/");
+        assert_eq!(post(&url, None, &list).0, status, "{value:?}");
+        assert_eq!(post(&url, Some(token), &list).0, "200");
+    }
+}
+
 fn free_port() -> u16 {
     std::net::TcpListener::bind("127.0.0.1:0")
         .unwrap()
@@ -237,7 +259,7 @@ fn a_codex_agent_gets_the_server_the_session_hook_and_the_data_directory() {
         (
             "shop/loop-manager.toml",
             format!(
-                "[[addon]]\npath = \"{}\"\n[settings]\naddons = [{{ name = \"agent-mail\" }}]\n",
+                "[[addon]]\npath = \"{}\"\n[settings]\naddons = [{{ name = \"agent-mail\", params = {{ bind = \"0.0.0.0:8765\" }} }}]\n",
                 addon().display()
             ),
         ),
@@ -252,7 +274,8 @@ fn a_codex_agent_gets_the_server_the_session_hook_and_the_data_directory() {
     let data = d.join("state/loop-manager/addons/agent-mail");
     for line in [
         format!("env.LOOP_MANAGER_AGENT_MAIL_DATA = \"{}\"", data.display()),
-        r#""scope":"orchestrator","health":{"http":"/health/readiness"},"mcp":"/mcp/"}"#.to_owned(),
+        r#""scope":"orchestrator","bind":"0.0.0.0:8765","health":{"http":"/health/readiness"},"mcp":"/mcp/"}"#
+            .to_owned(),
         format!(
             r#"hooks.agent-mail-start = {{"enabled":true,"event":"SessionStart","matcher":null,"command":"'{}' session-start""#,
             helper().display()
@@ -779,11 +802,11 @@ async fn two_runs_in_worktrees_coordinate_through_one_server() {
         .expect("no tool of agent-mail");
     assert!(tools.contains("mcp__agent-mail__file_reservation_paths") && !tools.contains("acquire_build_slot"));
 
-    // The managed server keeps the bearer contract and a mailbox of its own; the user's file is as it was.
+    // The managed server respects explicit anonymous loopback access and keeps a mailbox of its own; the user's file is as it was.
     let list = json!({"jsonrpc": "2.0", "id": 1, "method": "tools/list", "params": {}});
     assert_eq!(
         post(&format!("{}/mcp/", endpoint["url"].as_str().unwrap()), None, &list).0,
-        "401"
+        "200"
     );
     assert_eq!(fs::read(&config).unwrap(), user_text);
     assert!(!dir.join("user-mailbox").exists());

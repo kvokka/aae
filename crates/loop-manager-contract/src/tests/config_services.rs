@@ -50,6 +50,7 @@ fn services_layer_like_settings_and_guess_their_paths() {
         command: vec!["shop-mail".into()],
         env: Default::default(),
         scope: ServiceScope::Project,
+        bind: String::new(),
         health: Health::Command(vec!["probe".into()]),
         mcp: Some("/rpc".into()),
     };
@@ -113,6 +114,7 @@ fn a_bad_service_is_a_config_error() {
         ),
         ("command = [\"x\"]\nhealth = \"tcp\"", "`health` is"),
         ("command = [\"x\"]\nport = 1", "unknown field `port`"),
+        ("command = [\"x\"]\nbind = \"0.0.0.0:0\"", "bind must be"),
         (
             "command = [\"x\"]\n[[service]]\nname = \"s\"\ncommand = [\"y\"]",
             "two services are named `s`",

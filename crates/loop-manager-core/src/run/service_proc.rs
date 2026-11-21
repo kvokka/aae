@@ -67,11 +67,19 @@ pub(super) fn start(running: &Running, core: &CoreHandle<Msg>, p: &Value, wait: 
         .as_u64()
         .and_then(|p| u16::try_from(p).ok())
         .unwrap_or_default();
+    let bind = p["bind"]
+        .as_str()
+        .and_then(|s| s.parse::<std::net::SocketAddrV4>().ok())
+        .unwrap_or_else(|| std::net::SocketAddrV4::new(std::net::Ipv4Addr::LOCALHOST, port));
+    let host = bind.ip().to_string();
     let command: Vec<String> = serde_json::from_value(p["command"].clone()).unwrap_or_default();
     let command: Vec<String> = prefix
         .iter()
         .cloned()
-        .chain(command.iter().map(|a| a.replace(PORT, &port.to_string())))
+        .chain(command.iter().map(|a| {
+            a.replace(PORT, &port.to_string())
+                .replace("${LOOP_MANAGER_SERVICE_HOST}", &host)
+        }))
         .collect();
     let health: Health = serde_json::from_value(p["health"].clone()).unwrap_or(Health::Port);
     let token = p["token"].as_str().unwrap_or_default().to_owned();
@@ -80,6 +88,7 @@ pub(super) fn start(running: &Running, core: &CoreHandle<Msg>, p: &Value, wait: 
     env.retain(|(k, _)| !pairs.contains_key(k));
     env.extend(pairs);
     env.extend([
+        ("LOOP_MANAGER_SERVICE_HOST".to_owned(), host),
         ("LOOP_MANAGER_SERVICE_PORT".to_owned(), port.to_string()),
         ("LOOP_MANAGER_SERVICE_TOKEN".to_owned(), token.clone()),
         (INSTANCE_ENV.to_owned(), id.clone()),
@@ -97,7 +106,7 @@ pub(super) fn start(running: &Running, core: &CoreHandle<Msg>, p: &Value, wait: 
         }
         // Starting on a port someone else listens on fails the start: the core picks another. One who takes it
         // while the service starts does not pass its health check (`healthy`), so the service fails to bind.
-        if let Err(e) = std::net::TcpListener::bind(("127.0.0.1", port)) {
+        if let Err(e) = std::net::TcpListener::bind(bind) {
             let stderr = format!("port {port} is taken: {e}");
             let failed = Msg::ServiceFailed {
                 id: task_id,

@@ -10,11 +10,8 @@ and the release of a run's reservations. The project keeps its rigs, formulas, p
 
 ## What the host needs
 
-- `mcp-agent-mail` 0.3.40 or later on the `PATH` of the daemon. It is not part of loop-manager: install it as you
-  like. This repository pins 0.3.40 (commit `7d94ecf`) in `mise.toml`; on 0.3.36 a message to a qualified address in
-  another project is refused. A mise shim is not enough unless a version is set for the directory the daemon starts
-  services in (`/`), for example with `mise use -g`; the launcher names the binary and its error when it does not
-  run.
+- `mcp-agent-mail` on the daemon's `PATH`. The supported and tested version is 0.3.40.
+- A loop-manager build with `[[service]].bind` support (included in this release's Git commit).
 - `jq`, `curl`, and Git with configured hooks (`git hook list`).
 - A session that reaches the server's loopback port. A codex agent with `sandbox_mode = "workspace-write"` may have
   no network; its commits are then refused with "its reservations could not be checked".
@@ -27,7 +24,9 @@ attachment alone is enough. No parameter is required.
 
 ```toml
 [[addon]]
-path = "/opt/loop-manager/addons/agent-mail"   # or git, rev = "addons/agent-mail/<version>", dir = "addons/agent-mail"
+git = "https://github.com/kvokka/loop-manager.git"
+rev = "addons/agent-mail/0.2.0"
+dir = "addons/agent-mail"
 
 [settings]
 addons = [{ name = "agent-mail" }]
@@ -77,6 +76,7 @@ Run `loop-manager config check`, then `loop-manager config reload` to apply the 
 
 | Parameter | Default | Meaning |
 |---|---|---|
+| `bind` | `""` | Fixed IPv4 address and port, e.g. `127.0.0.1:8765` or `0.0.0.0:8765`. Empty selects an automatic loopback port |
 | `project_key` | `""` | The mail project of the rig: set it on the rig's attachment to keep an existing one. Empty: the canonical path of the rig's repository (the main worktree), or of the rig's directory outside Git |
 | `ttl` | `3600` | The seconds a reservation lasts unless renewed, told to the agents |
 | `thread` | `""` | The thread of the runs. Empty: one per chain of runs, `<project>.<correlation>` (a character Agent Mail does not take in a thread ID becomes `-`), so the children of one drain share it. Set it to join independent chains |
@@ -85,32 +85,35 @@ Run `loop-manager config check`, then `loop-manager config reload` to apply the 
 
 ### One server
 
-The addon declares the service `agent-mail` with `scope = "orchestrator"`: the daemon starts one `mcp-agent-mail
-serve` for all the sessions of every project that attaches the addon from the same directory, on a loopback port it
-picks, and gives the sessions its MCP endpoint `/mcp/` with its bearer. Nothing of a run, rig or project is in the
-service's definition, so no second server starts; a project, rig, run, role and thread reach the server in each call.
-The daemon stops the server 5 minutes after the last session that used it.
+The daemon starts a shared server when the first agent uses it and stops it five minutes after the last consumer
+leaves. Sessions using the same service definition get the endpoint and its bearer automatically. Use the same
+`bind` across attachments that share an addon data directory.
 
-The launcher `bin/lm-agent-mail serve` keeps Agent Mail's own order of settings, process environment first, then the
-user's `config.env`, which it never writes or prints. In the server's process it sets:
+### Publish the MCP endpoint from Docker
 
-- `STORAGE_ROOT` and `DATABASE_URL` to `mailbox/` of the addon's data directory, made before the server starts, so a
-  mailbox the user runs elsewhere is never opened by a second server;
-- `HTTP_BEARER_TOKEN` to the daemon's token and `HTTP_ALLOW_LOCALHOST_UNAUTHENTICATED=false`, so a request without the
-  token is refused even from loopback, whatever the user's file says; the health endpoints `/health/*` answer without
-  it, as Agent Mail serves them;
-- the host, port and path on the command line.
+Set the project's attachment in `loop-manager.toml`:
 
-Every other setting of the user's file applies, the tool filter included: with `TOOLS_FILTER_MODE=exclude` and
-`TOOLS_FILTER_CLUSTERS=build_slots` the sessions get 42 of the 45 tools of 0.3.40. When the file sets no `TOOLS_FILTER_`
-key, the server offers the 12 tools the protocol uses: `macro_start_session`, `list_agents`, `send_message`,
-`reply_message`, `fetch_inbox`, `acknowledge_message`, `file_reservation_paths`, `renew_file_reservations`,
-`release_file_reservations`, `check_file_reservation_conflicts`, `request_contact` and `respond_contact`. A tool the
-filter hides is named in the error of the addon's operation that needs it. The daemon starts services with `PATH`,
-`HOME` and `LANG` only, so the server reads `$HOME/.config/mcp-agent-mail/config.env`.
+```toml
+[settings]
+addons = [{ name = "agent-mail", params = { bind = "0.0.0.0:8765" } }]
+```
 
-For its own hooks the launcher keeps the server's URL, process ID and bearer in `runtime/` of the data directory,
-readable by the daemon's user only; the bearer never goes on a command line, into a prompt, a report or Git.
+Publish the container port with `-p 127.0.0.1:8765:8765`. A client on the Docker host can then use
+`http://127.0.0.1:8765/mcp/` while the service is running. A fixed address already in use fails the service start.
+For a client using a custom DNS name, include that name in Agent Mail’s `HTTP_ALLOWED_HOSTS`.
+See [Fixed and automatic service ports](../../docs/design/config.md#fixed-and-automatic-service-ports) for retry behavior.
+
+For an external MCP client, use the current bearer from `runtime/header` in the addon's data directory.
+The file contains the full HTTP authorization header. The default directory is
+`${XDG_STATE_HOME:-$HOME/.local/state}/loop-manager/addons/agent-mail` **inside the container**.
+`runtime/endpoint.json` contains the internal URL and PID. The daemon generates the bearer.
+
+MCP calls require the bearer by default. Agent Mail's explicit `HTTP_ALLOW_LOCALHOST_UNAUTHENTICATED=true`
+allows callers the server sees on loopback to omit it. An empty value or `false` requires it. Remote calls
+still require it. Agent Mail serves `/health/*` without credentials.
+
+The default tool filter exposes the 12 tools used for coordination. An explicit Agent Mail filter takes precedence.
+See the [tool inventory](tools.md) for the full list and how to enable it.
 
 ### A session's identity
 
@@ -152,13 +155,9 @@ reserves anew.
 - `a_commit_is_checked_on_both_sides_of_a_rename_and_refused_when_it_cannot_be_checked`: real `git commit`s with
   the hook in place: a rename that leaves or makes a path another run holds is refused, a session with no mail
   name, with the server down or with an answer cut short is refused, `HEAD` unchanged, and a commit outside a session goes;
-- `two_runs_in_worktrees_coordinate_through_one_server`: a real daemon with a home whose `config.env` sets the
-  filter above, anonymous loopback callers and a mailbox of its own, and the project of the example above: the addon
-  attached with no parameter, a drain with `pool = 2` over two ready beads; the two runs of one claude agent on a fake
-  provider, each in its worktree, get the rig's canonical path as their project key and the drain's thread, meet on
-  one server, write and answer in one thread, commit the paths they add, change and
-  delete, and the second is refused a commit of the path the first holds, `HEAD` unchanged; the pass of one releases
-  its reservations only, the cancel of the other releases the rest. The user's file stays byte for byte.
+- `two_runs_in_worktrees_coordinate_through_one_server`: two worktree runs share a server, exchange mail, reserve
+  files and release their reservations on pass and cancel. On Linux the test verifies that the server exits when
+  its daemon is killed.
 
 Run them with `mise exec -- cargo nextest run -p loop-manager -E 'test(agent_mail)'`.
 

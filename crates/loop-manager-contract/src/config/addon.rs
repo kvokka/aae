@@ -67,6 +67,7 @@ impl Settings {
             let texts = s
                 .command
                 .iter_mut()
+                .chain(std::iter::once(&mut s.bind))
                 .chain(health.into_iter().flatten())
                 .chain(s.env.values_mut());
             texts.for_each(|t| at(t, false));
@@ -166,7 +167,7 @@ impl Loader {
             let mut agent = self.settings(&manifest, &root, agent, &[]);
             agent.env = env;
             let dir = root.to_string_lossy();
-            agent.services = self.services(&manifest, raw.service);
+            agent.services = self.services(&manifest, raw.service, true);
             agent.substitute(ADDON_DIR, &dir);
             let mut unknown = BTreeSet::new();
             agent.clone().strings_mut(&mut |text, _| {

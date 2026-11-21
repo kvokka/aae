@@ -15,6 +15,8 @@ pub(super) struct ServiceFile {
     env: BTreeMap<String, String>,
     #[serde(default)]
     scope: ServiceScope,
+    #[serde(default)]
+    bind: String,
     health: Option<HealthFile>,
     mcp: Option<McpFile>,
 }
@@ -70,14 +72,36 @@ pub struct Service {
     pub command: Vec<String>,
     pub env: BTreeMap<String, String>,
     pub scope: ServiceScope,
+    /// Empty selects an ephemeral loopback port. An addon may template this address.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub bind: String,
     pub health: Health,
     /// The path of its MCP endpoint; `None`: the sessions get its URL and token in their environment.
     pub mcp: Option<String>,
 }
 
+impl Service {
+    /// Internal MCP clients connect over IPv4 loopback, including when the server listens on all interfaces.
+    pub fn bind_address(&self, name: &str) -> Result<Option<std::net::SocketAddrV4>, String> {
+        if self.bind.is_empty() {
+            return Ok(None);
+        }
+        self.bind
+            .parse::<std::net::SocketAddrV4>()
+            .ok()
+            .filter(|addr| {
+                addr.port() != 0 && [std::net::Ipv4Addr::LOCALHOST, std::net::Ipv4Addr::UNSPECIFIED].contains(addr.ip())
+            })
+            .map(Some)
+            .ok_or_else(|| {
+                format!("service `{name}`: bind must be 127.0.0.1:<port> or 0.0.0.0:<port> with port 1 to 65535")
+            })
+    }
+}
+
 impl Loader {
     /// The `[[service]]` tables of `file`, by name.
-    pub(super) fn services(&mut self, file: &Path, raw: Vec<ServiceFile>) -> BTreeMap<String, Service> {
+    pub(super) fn services(&mut self, file: &Path, raw: Vec<ServiceFile>, addon: bool) -> BTreeMap<String, Service> {
         let mut services = BTreeMap::new();
         for s in raw {
             self.name(file, "service", &s.name);
@@ -110,9 +134,15 @@ impl Loader {
                 command: s.command,
                 env: s.env,
                 scope: s.scope,
+                bind: s.bind,
                 health,
                 mcp,
             };
+            if !(addon && service.bind.contains(super::load::PARAMS))
+                && let Err(e) = service.bind_address(&s.name)
+            {
+                self.fail(file, e);
+            }
             if services.insert(s.name.clone(), service).is_some() {
                 self.fail(file, format!("two services are named `{}`", s.name));
             }

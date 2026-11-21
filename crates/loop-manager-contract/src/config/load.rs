@@ -51,7 +51,7 @@ impl Loader {
         let addons = self.addons(file, &base, raw.addon, &[]);
         let all: Vec<&Addon> = addons.iter().collect();
         let mut settings = self.settings(file, &base, raw.settings, &all);
-        settings.services = self.services(file, raw.service);
+        settings.services = self.services(file, raw.service, false);
         let (edits, variants) = self.agents(file, &base, raw.agents, &all);
         let bundled = super::check::bundled(&mut self, file, raw.builtin);
         let watchdog = super::check::watchdog(&mut self, file, raw.watchdog);
@@ -224,7 +224,7 @@ impl Loader {
         let all: Vec<&Addon> = outer.iter().chain(&addons).collect();
         let names = all.as_slice();
         let mut settings = self.settings(&file, dir, raw.settings, names);
-        settings.services = self.services(&file, raw.service);
+        settings.services = self.services(&file, raw.service, false);
         let (edits, variants) = self.agents(&file, dir, raw.agents, names);
         let (root, rigs) = self.places(&file, dir, raw.root, raw.rigs, names);
         let mut packs = vec![self.pack(dir, &file, name.clone(), raw.trigger, true, names)];

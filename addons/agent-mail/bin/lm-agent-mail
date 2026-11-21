@@ -79,11 +79,16 @@ serve() {
   if ! grep -Eqs '^[[:space:]]*(export[[:space:]]+)?TOOLS_FILTER_' "$config"; then
     export TOOLS_FILTER_ENABLED=true TOOLS_FILTER_PROFILE=custom TOOLS_FILTER_MODE=include TOOLS_FILTER_TOOLS="$TOOLS"
   fi
-  # The process environment comes before the user's config.env: a mailbox of its own, and the daemon's bearer even
-  # for loopback callers.
+  # The managed mailbox and bearer belong to this service instance.
   export STORAGE_ROOT="$dir/mailbox" DATABASE_URL="sqlite:///$dir/mailbox/storage.sqlite3"
-  export HTTP_BEARER_TOKEN="$token" HTTP_ALLOW_LOCALHOST_UNAUTHENTICATED=false
-  exec "$bin" serve --no-tui --no-reuse-running --host 127.0.0.1 --port "$port" --path /mcp/
+  export HTTP_BEARER_TOKEN="$token"
+  if [ -z "${HTTP_ALLOW_LOCALHOST_UNAUTHENTICATED:-}" ]; then
+    unset HTTP_ALLOW_LOCALHOST_UNAUTHENTICATED
+    if ! grep -Eqs "^[[:space:]]*(export[[:space:]]+)?HTTP_ALLOW_LOCALHOST_UNAUTHENTICATED=[[:space:]]*['\"]?(true|false)['\"]?[[:space:]]*(#.*)?$" "$config"; then
+      export HTTP_ALLOW_LOCALHOST_UNAUTHENTICATED=false
+    fi
+  fi
+  exec "$bin" serve --no-tui --no-reuse-running --host "${LOOP_MANAGER_SERVICE_HOST:-127.0.0.1}" --port "$port" --path /mcp/
 }
 
 # `run.preparing`: the mail identity of the run's session in its environment, and the commit check in the repository.

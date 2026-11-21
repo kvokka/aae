@@ -132,3 +132,60 @@ async fn a_ready_service_whose_port_is_taken_moves_to_a_new_one_with_a_new_token
     }
     panic!("another process took the port three times");
 }
+
+#[tokio::test]
+async fn a_fixed_bind_conflict_stops_the_service_without_trying_another_port() {
+    let dir = tempfile::tempdir().unwrap();
+    let other = std::net::TcpListener::bind(("127.0.0.1", 0)).unwrap();
+    let port = other.local_addr().unwrap().port();
+    let (path, text) = first_dies(dir.path(), PROBE, &format!("bind = \"0.0.0.0:{port}\""));
+    let w = world_driven(&[(path, text.as_str())], ScriptedDriver::new(1));
+    w.create().await;
+    w.until_count("service.stopped", 1).await;
+    let events = w.service_events();
+    assert_eq!(w.service_count("service.starting"), 1, "{events:?}");
+    assert!(events.iter().any(|(kind, data)| {
+        kind == "service.failed"
+            && data["failure"]["raw"]
+                .as_str()
+                .unwrap()
+                .contains(&format!("port {port} is taken"))
+    }));
+    assert!(!dir.path().join("once").exists(), "service command ran on a taken port");
+}
+
+#[tokio::test]
+async fn a_fixed_service_retries_on_its_requested_port_before_readiness() {
+    let dir = tempfile::tempdir().unwrap();
+    let listener = std::net::TcpListener::bind(("0.0.0.0", 0)).unwrap();
+    let port = listener.local_addr().unwrap().port();
+    let (path, text) = first_dies(dir.path(), PROBE, &format!("bind = \"0.0.0.0:{port}\""));
+    let driver = ScriptedDriver::new(1);
+    driver.stall_sessions();
+    let w = world_driven(&[(path, text.as_str())], driver);
+    drop(listener);
+    let run = w.create().await;
+    assert_eq!(file(&dir.path().join("port")).await.trim(), port.to_string());
+    std::fs::write(dir.path().join("go"), "").unwrap();
+    w.until_count("service.ready", 1).await;
+    w.events(&run, Duration::from_millis(500)).await;
+    let server = w.driver.mcp(&run, 1)["probe"].clone();
+    assert_eq!(server["url"], format!("http://127.0.0.1:{port}/mcp"));
+    assert_eq!(call(&server), 200);
+    w.core
+        .send(
+            None,
+            loop_manager_core::run::Msg::Cancel {
+                run,
+                reason: "done".to_owned(),
+            },
+        )
+        .await
+        .unwrap();
+    let id = w.service_events()[0].1["service"]["id"].as_str().unwrap().to_owned();
+    w.core
+        .send(None, loop_manager_core::run::Msg::StopInstance { id })
+        .await
+        .unwrap();
+    w.until_count("service.stopped", 1).await;
+}

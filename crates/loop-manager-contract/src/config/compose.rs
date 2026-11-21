@@ -255,6 +255,9 @@ impl Config {
             config.apply(settings, layer);
         }
         config.contribute(&attached.iter().map(|(d, _)| *d).collect::<Vec<_>>());
+        for (name, service) in &config.services {
+            service.value.bind_address(name)?;
+        }
         config.scope = a.scope;
         let adapter = self.adapters.iter().find(|a| a.name == config.harness);
         if let (Some(model), Some(adapter)) = (&mut config.model, adapter)

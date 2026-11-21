@@ -1015,7 +1015,7 @@ subsystem of their own. The adapter reports the account id (4.5, `Driver::accoun
   used (live or ended within the hour) and no record holds is swept again; at a start too ([event
   model](event-model.md)).
 - Services ([config](config.md#mcp-servers-and-services)) use the same record with kind `service`: the service
-  name, the key `<scope>#<sha256 of the definition>` (the definition is `command`, `env`, `health`; scope `orchestrator`
+  name, the key `<scope>#<sha256 of the definition>` (the definition is `command`, `env`, `health` and an optional fixed `bind`; scope `orchestrator`
   or `project:<p>`), the definition, the port and the token in the process column, the consumer count in `sessions` (an
   attempt's services are in `attempts.services`). The launch transaction acquires them (a new record emits
   `service.starting` and the `start_service` effect) and rewrites the session's config before the split (the services
@@ -1024,7 +1024,9 @@ subsystem of their own. The adapter reports the account id (4.5, `Driver::accoun
   port it passed on. A start finds its port free or fails without a process. Its health check (the port accepting
   connections, an HTTP `GET` or a command) passing gives `service.ready` and `ready: true` in the process column; a
   process that ends or is not up within 30 s gives `service.failed`, then a restart after the effect backoff of its
-  restarts while it has consumers (on a new port until `ready`, then on the same one), else the record goes. Idle,
+  restarts while it has consumers, else the record goes. An automatic port can move under the conditions in
+  [Fixed and automatic service ports](config.md#fixed-and-automatic-service-ports). A fixed bind stays on its
+  configured address. A collision stops that service instance with reason `bind_failed`. Idle,
   operator and recovery stops go through `stop_service`, which ends the process group and sweeps the marker; a reload
   leaves services alone. pid and pgid of the view are null: the process is tracked by its task and marker, not by pid.
 

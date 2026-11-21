@@ -52,6 +52,7 @@ impl RunHandler {
             let service = Service {
                 command: daemon.bridge.iter().chain(command).cloned().collect(),
                 env: server.value.env.clone(),
+                bind: String::new(),
                 scope: match server.value.scope {
                     Some(McpScope::Project) => ServiceScope::Project,
                     _ => ServiceScope::Orchestrator,
@@ -71,9 +72,7 @@ impl RunHandler {
                 ServiceScope::Project => format!("project:{}", row.project),
                 ServiceScope::Orchestrator => "orchestrator".to_owned(),
             };
-            // The MCP path is not part of it: a new path restarts no process.
-            let definition = json!({ "command": service.command, "env": service.env, "health": service.health });
-            let Some((id, port)) = Self::service(tx, &name, &scope, &definition)? else {
+            let Some((id, port)) = Self::service(tx, &name, &scope, &service)? else {
                 // No port or no randomness: the session goes without the service, a tool failure
                 // (docs/design/config.md).
                 config.mcp.remove(&name);
@@ -146,7 +145,13 @@ impl RunHandler {
     }
 
     /// The live service of `definition` in `scope`, else a new one: `(id, port)`.
-    fn service(tx: &mut Tx<'_>, name: &str, scope: &str, definition: &Value) -> Result<Option<(String, u16)>, Error> {
+    fn service(tx: &mut Tx<'_>, name: &str, scope: &str, service: &Service) -> Result<Option<(String, u16)>, Error> {
+        let bind = service.bind_address(name).map_err(Error::Rejected)?;
+        // Keep the identity of existing automatic services. The MCP path does not affect the process.
+        let mut definition = json!({ "command": service.command, "env": service.env, "health": service.health });
+        if let Some(address) = bind {
+            definition["bind"] = json!(address);
+        }
         let key = format!("{scope}#{}", super::token_sha256(&definition.to_string()));
         let found: Option<(String, String)> = tx
             .sql()
@@ -165,11 +170,12 @@ impl RunHandler {
                 .unwrap_or_default();
             return Ok(Some((id, port)));
         }
-        let (Ok(port), Some(token)) = (free_port(), super::new_token()) else {
+        let port = bind.map_or_else(free_port, |a| Ok(a.port()));
+        let (Ok(port), Some(token)) = (port, super::new_token()) else {
             return Ok(None);
         };
         let id = format!("s-{}", &token[..16]);
-        let mut process = definition.clone();
+        let mut process = definition;
         (process["port"], process["token"], process["restarts"]) = (json!(port), json!(token), json!(0));
         tx.sql().execute(
             "INSERT INTO instances (id, kind, harness, fingerprint, process, state, sessions, capacity, idle_ms) \
@@ -297,11 +303,14 @@ impl RunHandler {
             json!({ "failure": super::failure_json(&failure) }),
         )?;
         tx.clear_deadline(&format!("{id}:idle"))?;
+        let mut process: Value = serde_json::from_str(&process).unwrap_or_default();
+        if taken && !process["bind"].is_null() {
+            return Self::stop_service(tx, id, "bind_failed");
+        }
         if consumers == 0 {
             tx.sql().execute("DELETE FROM instances WHERE id = ?1", [id])?;
             return tx.effect(id, "sweep", &json!({ "op": "sweep", "instance": id }));
         }
-        let mut process: Value = serde_json::from_str(&process).unwrap_or_default();
         process["restarts"] = json!(process["restarts"].as_i64().unwrap_or_default() + 1);
         let taken = if taken {
             process["taken"].as_i64().unwrap_or_default() + 1
@@ -310,7 +319,8 @@ impl RunHandler {
         };
         process["taken"] = json!(taken);
         // A new token with the new port: who holds the old one may have the old token from the sessions' URL.
-        if (process["ready"] != true || taken >= TAKEN_MOVES)
+        if process["bind"].is_null()
+            && (process["ready"] != true || taken >= TAKEN_MOVES)
             && let (Ok(port), Some(token)) = (free_port(), super::new_token())
         {
             (process["port"], process["token"], process["taken"]) = (json!(port), json!(token), json!(0));
