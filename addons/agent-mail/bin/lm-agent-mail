@@ -1,0 +1,212 @@
+#!/bin/sh
+# The helper of the agent-mail addon (README.md): the server launcher, the hooks of the daemon, the session and Git,
+# and `call` for scripts.
+set -eu
+
+# The tools a session needs, offered when the user's Agent Mail config chooses no tool filter of its own.
+TOOLS=macro_start_session,list_agents,send_message,reply_message,fetch_inbox,acknowledge_message
+TOOLS=$TOOLS,file_reservation_paths,renew_file_reservations,release_file_reservations
+TOOLS=$TOOLS,check_file_reservation_conflicts,request_contact,respond_contact
+GUARD=loop-manager-agent-mail
+# Expanded by the shell Git runs the hook in, with the committing process's environment.
+# shellcheck disable=SC2016
+GUARD_COMMAND='[ -z "${LOOP_MANAGER_AGENT_MAIL_GIT_DIR:-}" ] || exec lm-agent-mail pre-commit'
+
+die() {
+  echo "agent-mail: $*" >&2
+  exit 1
+}
+
+data() {
+  dir=${LOOP_MANAGER_AGENT_MAIL_DATA:-${LOOP_MANAGER_ADDON_DATA:-}}
+  [ -n "$dir" ] || die "no data directory: LOOP_MANAGER_AGENT_MAIL_DATA is not set"
+  printf '%s\n' "$dir"
+}
+
+# Writes stdin to a file in one step, so a reader never sees half of it.
+put() {
+  tmp=$(mktemp "$1.XXXXXX")
+  cat >"$tmp"
+  mv -f "$tmp" "$1"
+}
+
+# `call <tool> <arguments>`: the tool's result on stdout; a failure on stderr, naming a tool the server hides.
+call() {
+  runtime="$(data)/runtime"
+  [ -r "$runtime/endpoint.json" ] || {
+    echo "the Agent Mail service has not run on this daemon" >&2
+    return 1
+  }
+  url=$(jq -r .url "$runtime/endpoint.json")
+  pid=$(jq -r .pid "$runtime/endpoint.json")
+  kill -0 "$pid" 2>/dev/null || {
+    echo "the Agent Mail service is not running" >&2
+    return 1
+  }
+  request=$(jq -nc --arg t "$1" --argjson a "$2" '{jsonrpc: "2.0", id: 1, method: "tools/call",
+    params: {name: $t, arguments: $a}}')
+  # The bearer stays in a private file, out of the command line.
+  answer=$(curl -sS --max-time 30 -H "@$runtime/header" -H 'Content-Type: application/json' \
+    -H 'Accept: application/json, text/event-stream' --data-binary "$request" "$url/mcp/") || return 1
+  printf '%s' "$answer" | jq -c --arg t "$1" '
+    if .error.code == -32601 then "tool `\($t)` is not available: the tool filter of the server hides it\n" | halt_error
+    elif .error then "tool `\($t)`: \(.error.message)\n" | halt_error
+    elif .result.isError then "tool `\($t)`: \(.result.content[0].text | (fromjson? | .error.message) // .)\n"
+      | halt_error
+    else .result.content[0].text | fromjson end'
+}
+
+# The session's binding: its mail name, project key and thread.
+binding() {
+  printf '%s/agents/%s.json\n' "$(data)" "${LOOP_MANAGER_AGENT_MAIL_BINDING:?not a session of a run that attaches agent-mail}"
+}
+
+serve() {
+  dir=$1
+  umask 077
+  # Agent Mail v0.3.40 fails its first readiness check when the mailbox directory is missing.
+  mkdir -p "$dir/mailbox" "$dir/runtime"
+  for tool in jq curl git; do
+    command -v "$tool" >/dev/null || die "$tool is not on the PATH of the daemon"
+  done
+  bin=$(command -v mcp-agent-mail) || die "mcp-agent-mail is not on the PATH of the daemon"
+  version=$("$bin" --version 2>&1) || die "$bin does not run (a mise shim needs a version where the daemon runs): $version"
+  echo "agent-mail: $version, $bin" >&2
+  port=${LOOP_MANAGER_SERVICE_PORT:?} token=${LOOP_MANAGER_SERVICE_TOKEN:?}
+  printf 'Authorization: Bearer %s\n' "$token" | put "$dir/runtime/header"
+  jq -nc --arg url "http://127.0.0.1:$port" --argjson pid $$ '{url: $url, pid: $pid}' | put "$dir/runtime/endpoint.json"
+  config="${XDG_CONFIG_HOME:-$HOME/.config}/mcp-agent-mail/config.env"
+  if ! grep -Eqs '^[[:space:]]*(export[[:space:]]+)?TOOLS_FILTER_' "$config"; then
+    export TOOLS_FILTER_ENABLED=true TOOLS_FILTER_PROFILE=custom TOOLS_FILTER_MODE=include TOOLS_FILTER_TOOLS="$TOOLS"
+  fi
+  # The process environment comes before the user's config.env: a mailbox of its own, and the daemon's bearer even
+  # for loopback callers.
+  export STORAGE_ROOT="$dir/mailbox" DATABASE_URL="sqlite:///$dir/mailbox/storage.sqlite3"
+  export HTTP_BEARER_TOKEN="$token" HTTP_ALLOW_LOCALHOST_UNAUTHENTICATED=false
+  exec "$bin" serve --no-tui --no-reuse-running --host 127.0.0.1 --port "$port" --path /mcp/
+}
+
+# `run.preparing`: the mail identity of the run's session in its environment, and the commit check in the repository.
+prepare() {
+  event=$(cat)
+  workdir=$(printf '%s' "$event" | jq -er .data.workdir)
+  params=${LOOP_MANAGER_ADDON_PARAMS:-"{}"}
+  key=$(printf '%s' "$params" | jq -r '.project_key // ""')
+  common=$(git -C "$workdir" rev-parse --path-format=absolute --git-common-dir 2>/dev/null) || common=
+  if [ -n "$common" ]; then
+    # The main worktree: the same key from the rig and from each worktree of a run.
+    root=$(git -C "$workdir" worktree list --porcelain | sed -n '1s/^worktree //p')
+    guard "$workdir" "$common"
+  else
+    root=$workdir
+  fi
+  [ -n "$key" ] || key=$(cd "$root" && pwd -P)
+  printf '%s' "$event" | jq -c --arg key "$key" --arg git "$common" --argjson p "$params" '{
+    decision: "proceed",
+    env: ({
+      LOOP_MANAGER_AGENT_MAIL_KEY: $key,
+      LOOP_MANAGER_AGENT_MAIL_THREAD: (if ($p.thread // "") != "" then $p.thread
+        else "\(.project):\(.correlation // .run)" end),
+      LOOP_MANAGER_AGENT_MAIL_BINDING: ([.project, .rig // "-", .run, .data.run.agent // "-"] | join("/")),
+      LOOP_MANAGER_AGENT_MAIL_TTL: ($p.ttl // 3600 | tostring)
+    } + if $git != "" then {LOOP_MANAGER_AGENT_MAIL_GIT_DIR: $git} else {} end)
+  }'
+}
+
+# The named pre-commit hook, once in the repository's shared config; it does nothing outside a session of the addon.
+guard() {
+  config="$2/config"
+  if [ "$(git config --file "$config" --get "hook.$GUARD.event" || true)" != pre-commit ] ||
+    [ "$(git config --file "$config" --get "hook.$GUARD.command" || true)" != "$GUARD_COMMAND" ]; then
+    # Two runs may prepare at once: a locked config is tried again.
+    n=0
+    until git config --file "$config" "hook.$GUARD.event" pre-commit 2>/dev/null &&
+      git config --file "$config" "hook.$GUARD.command" "$GUARD_COMMAND" 2>/dev/null; do
+      n=$((n + 1))
+      [ "$n" -lt 50 ] || die "cannot write the commit check to $config"
+      sleep 0.1
+    done
+  fi
+  git -C "$1" hook list pre-commit 2>/dev/null | grep -Fxq "$GUARD" || {
+    echo "agent-mail requires Git with support for configured hooks (git hook list)." >&2
+    exit 2
+  }
+}
+
+session_start() {
+  input=$(cat)
+  # A subagent works for its session's run, under its mail name.
+  [ -z "$(printf '%s' "$input" | jq -r '.agent_id // empty')" ] || exit 0
+  [ -n "${LOOP_MANAGER_AGENT_MAIL_BINDING:-}" ] || exit 0
+  file=$(binding)
+  key=$LOOP_MANAGER_AGENT_MAIL_KEY
+  role=${LOOP_MANAGER_AGENT_MAIL_BINDING##*/}
+  name=$(jq -r '.name // empty' "$file" 2>/dev/null || true)
+  args=$(jq -nc --arg key "$key" --arg role "$role" --arg b "$LOOP_MANAGER_AGENT_MAIL_BINDING" --arg name "$name" '
+    {human_key: $key, program: "loop-manager", model: $role, task_description: $b, inbox_limit: 5}
+    + if $name != "" then {agent_name: $name} else {} end')
+  mkdir -p "$(dirname "$file")"
+  # A failed call prints nothing on stdout, a call that works nothing on stderr.
+  if started=$(call macro_start_session "$args" 2>&1); then
+    name=$(printf '%s' "$started" | jq -r .agent.name)
+    jq -nc --arg name "$name" --arg key "$key" --arg thread "$LOOP_MANAGER_AGENT_MAIL_THREAD" \
+      '{name: $name, key: $key, thread: $thread}' | put "$file"
+    text=$(printf '%s' "$started" | jq -r --arg key "$key" --arg thread "$LOOP_MANAGER_AGENT_MAIL_THREAD" \
+      --arg ttl "$LOOP_MANAGER_AGENT_MAIL_TTL" '
+      "Agent Mail (MCP server `agent-mail`): you are `\(.agent.name)` in the project `\($key)`; use `\($key)` as "
+      + "`project_key`, `\(.agent.name)` as `agent_name` and `sender_name`, `\($thread)` as `thread_id`, and "
+      + "`ttl_seconds: \($ttl)` for reservations.\n"
+      + if (.inbox | length) == 0 then "Your inbox is empty."
+        else "Your inbox:\n" + (.inbox | map("- #\(.id) from \(.from): \(.subject) (thread \(.thread_id // "none"))")
+          | join("\n")) end')
+  else
+    text="Agent Mail is unavailable ($started): you have no mail name, and commits in this repository are refused."
+  fi
+  jq -nc --arg t "$text" '{hookSpecificOutput: {hookEventName: "SessionStart", additionalContext: $t}}'
+}
+
+pre_commit() {
+  [ "$(git rev-parse --path-format=absolute --git-common-dir)" = "$LOOP_MANAGER_AGENT_MAIL_GIT_DIR" ] || exit 0
+  # Both sides of a rename: each is a path of the commit.
+  paths=$(git diff --cached --name-only --no-renames -z | jq -Rsc 'split("\u0000") | map(select(length > 0))')
+  [ "$paths" != "[]" ] || exit 0
+  file=$(binding)
+  name=$(jq -er .name "$file" 2>/dev/null) ||
+    die "the commit is refused: this session has no Agent Mail name to check its reservations"
+  args=$(jq -nc --arg key "$LOOP_MANAGER_AGENT_MAIL_KEY" --arg name "$name" --argjson paths "$paths" \
+    '{project_key: $key, agent_name: $name, paths: $paths}')
+  result=$(call check_file_reservation_conflicts "$args") ||
+    die "the commit is refused: its reservations could not be checked"
+  held=$(printf '%s' "$result" | jq -r --arg me "$name" '.conflicts[]? | .path as $p | .holders[]?
+    | select(.exclusive and .agent != $me) | "  \($p): reserved by \(.agent) (\(.path_pattern), until \(.expires_ts))"')
+  if [ -n "$held" ]; then
+    printf 'agent-mail: the commit is refused: other agents hold these paths:\n%s\n' "$held" >&2
+    exit 1
+  fi
+  [ "$(printf '%s' "$result" | jq .output_truncated)" != true ] ||
+    die "the commit is refused: the check of its reservations was cut short"
+}
+
+# A run's end: the reservations of its mail names go; the TTL ends them when the service is not up.
+release() {
+  dir="$(data)/agents/$(jq -r '[.project, .rig // "-", .run] | join("/")')"
+  [ -d "$dir" ] || exit 0
+  failed=0
+  for file in "$dir"/*.json; do
+    [ -f "$file" ] || continue
+    args=$(jq -c '{project_key: .key, agent_name: .name}' "$file")
+    call release_file_reservations "$args" >/dev/null || failed=1
+  done
+  exit "$failed"
+}
+
+case ${1:-} in
+serve) serve "${2:?the data directory}" ;;
+prepare) prepare ;;
+session-start) session_start ;;
+pre-commit) pre_commit ;;
+release) release ;;
+call) call "${2:?a tool}" "${3:-"{}"}" ;;
+name) jq -er .name "$(binding)" ;;
+*) die "usage: lm-agent-mail serve <dir> | prepare | session-start | pre-commit | release | call <tool> [<json>] | name" ;;
+esac

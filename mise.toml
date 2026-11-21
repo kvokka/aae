@@ -8,6 +8,7 @@ codex = "0"
 "github:Dicklesworthstone/beads_rust" = "0.7.6"
 "github:Dicklesworthstone/beads_viewer" = "0.26.0"
 "github:Dicklesworthstone/destructive_command_guard" = "0.16.0"
+"github:Dicklesworthstone/mcp_agent_mail_rust" = "0.3.40"
 jq = "1.8.2"
 rumdl = "0.3.4"
 
