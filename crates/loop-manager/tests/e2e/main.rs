@@ -4,6 +4,7 @@
 #[path = "../common/mod.rs"]
 mod common;
 
+mod addon_hooks;
 mod agent_mail;
 mod api;
 mod await_step;
