@@ -1,5 +1,10 @@
 # agent-mail changelog
 
+## 0.4.0
+
+- Sweep idle addresses before server startup with Python 3 and Agent Mail's operator CLI. Returning LM sessions
+  restore their mail address. Include `unretire_agent` in custom tool filters to enable restoration.
+
 ## 0.3.0
 
 - Set `multi_repo = true` on the shared attachment to enable Agent Mail products, link repositories and search,

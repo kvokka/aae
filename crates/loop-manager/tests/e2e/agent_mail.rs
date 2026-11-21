@@ -137,7 +137,7 @@ fn the_optional_product_bus_reads_mail_from_two_repositories() {
     let token = "product-test-token";
     let _server = serve(&data, tmp.path(), port, token, true);
     let offered = tools(port, token);
-    assert_eq!(offered.len(), 17, "{offered:?}");
+    assert_eq!(offered.len(), 18, "{offered:?}");
     assert!(!offered.iter().any(|name| name.ends_with("build_slot")));
     let env = [("LOOP_MANAGER_AGENT_MAIL_DATA".into(), data.display().to_string())];
     let call = |tool: &str, args: Value| -> Value {
@@ -174,6 +174,61 @@ fn the_optional_product_bus_reads_mail_from_two_repositories() {
         .collect();
     subjects.sort_unstable();
     assert_eq!(subjects, ["backend", "frontend"]);
+}
+
+#[test]
+fn a_restart_reaps_stale_agents_and_a_returning_session_restores_its_address() {
+    let tmp = tempfile::Builder::new().prefix("agent-mail-").tempdir().unwrap();
+    let home = tmp.path();
+    let data = home.join("data");
+    let env = [
+        ("LOOP_MANAGER_AGENT_MAIL_DATA".into(), data.display().to_string()),
+        ("LOOP_MANAGER_AGENT_MAIL_KEY".into(), home.display().to_string()),
+        ("LOOP_MANAGER_AGENT_MAIL_BINDING".into(), "shop/web/run_1/coder".into()),
+        ("LOOP_MANAGER_AGENT_MAIL_THREAD".into(), "shop.test".into()),
+        ("LOOP_MANAGER_AGENT_MAIL_TTL".into(), "600".into()),
+    ];
+    let start = || run(&["session-start"], &env, "{}").unwrap();
+    let server = serve(&data, home, free_port(), "first-test-bearer", false);
+    start();
+    let returning = run(&["name"], &env, "").unwrap();
+    let peer = if returning == "BlueLake" { "RedFox" } else { "BlueLake" };
+    let args = json!({"human_key":home, "agent_name":peer, "program":"test", "model":"test"});
+    run(&["call", "macro_start_session", &args.to_string()], &env, "").unwrap();
+    drop(server);
+    {
+        let db = rusqlite::Connection::open(data.join("mailbox/storage.sqlite3")).unwrap();
+        db.execute("UPDATE agents SET last_active_ts=1", []).unwrap();
+    }
+    let stamp = data.join("runtime/last-reap");
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_secs();
+    fs::write(&stamp, now.to_string()).unwrap();
+    drop(serve(&data, home, free_port(), "cooldown-test-bearer", false));
+    {
+        let db = rusqlite::Connection::open(data.join("mailbox/storage.sqlite3")).unwrap();
+        let retired: i64 = db
+            .query_row("SELECT COUNT(*) FROM agents WHERE retired_at IS NOT NULL", [], |r| {
+                r.get(0)
+            })
+            .unwrap();
+        assert_eq!(retired, 0, "a recent sweep should skip cleanup");
+    }
+    fs::write(&stamp, "1").unwrap();
+    let _server = serve(&data, home, free_port(), "second-test-bearer", false);
+    assert_ne!(fs::read_to_string(stamp).unwrap(), "1");
+    start();
+    assert_eq!(returning, run(&["name"], &env, "").unwrap());
+    let send = |recipient: &str| {
+        let args =
+            json!({"project_key":home,"sender_name":returning,"to":[recipient],"subject":"ping","body_md":"ping"});
+        run(&["call", "send_message", &args.to_string()], &env, "")
+    };
+    send(&returning).unwrap();
+    let error = send(peer).unwrap_err();
+    assert!(error.contains(peer) && error.contains("retired"), "{error}");
 }
 
 fn free_port() -> u16 {
@@ -221,7 +276,7 @@ fn a_session_keeps_its_mail_name_across_a_retry_and_a_lost_mailbox() {
     // A clean home: the compact tool set, and the daemon's bearer for every caller, loopback included.
     let mut offered = tools(port, token);
     offered.sort();
-    assert_eq!(offered.len(), 12, "{offered:?}");
+    assert_eq!(offered.len(), 13, "{offered:?}");
     assert!(offered.contains(&"check_file_reservation_conflicts".to_owned()));
     let list = json!({"jsonrpc": "2.0", "id": 1, "method": "tools/list", "params": {}});
     let mcp = format!("http://127.0.0.1:{port}/mcp/");

@@ -6,7 +6,7 @@ set -eu
 # The tools a session needs, offered when the user's Agent Mail config chooses no tool filter of its own.
 TOOLS=macro_start_session,list_agents,send_message,reply_message,fetch_inbox,acknowledge_message
 TOOLS=$TOOLS,file_reservation_paths,renew_file_reservations,release_file_reservations
-TOOLS=$TOOLS,check_file_reservation_conflicts,request_contact,respond_contact
+TOOLS=$TOOLS,check_file_reservation_conflicts,request_contact,respond_contact,unretire_agent
 GUARD=loop-manager-agent-mail
 # Expanded by the shell Git runs the hook in, with the committing process's environment.
 # shellcheck disable=SC2016
@@ -43,11 +43,11 @@ call() {
     echo "the Agent Mail service is not running" >&2
     return 1
   }
-  request=$(jq -nc --arg t "$1" --argjson a "$2" '{jsonrpc: "2.0", id: 1, method: "tools/call",
-    params: {name: $t, arguments: $a}}')
-  # The bearer stays in a private file, out of the command line.
-  answer=$(curl -sS --max-time 30 -H "@$runtime/header" -H 'Content-Type: application/json' \
-    -H 'Accept: application/json, text/event-stream' --data-binary "$request" "$url/mcp/") || return 1
+  request=$(printf '%s' "$2" | jq -c --arg t "$1" '{jsonrpc: "2.0", id: 1, method: "tools/call",
+    params: {name: $t, arguments: .}}') || return 1
+  # Both the bearer and lifecycle credentials stay out of process arguments.
+  answer=$(printf '%s' "$request" | curl -sS --max-time 30 -H "@$runtime/header" -H 'Content-Type: application/json' \
+    -H 'Accept: application/json, text/event-stream' --data-binary @- "$url/mcp/") || return 1
   printf '%s' "$answer" | jq -c --arg t "$1" '
     if .error.code == -32601 then "tool `\($t)` is not available: the tool filter of the server hides it\n" | halt_error
     elif .error then "tool `\($t)`: \(.error.message)\n" | halt_error
@@ -85,6 +85,10 @@ serve() {
   fi
   # The managed mailbox and bearer belong to this service instance.
   export STORAGE_ROOT="$dir/mailbox" DATABASE_URL="sqlite:///$dir/mailbox/storage.sqlite3"
+  if [ -f "$dir/mailbox/storage.sqlite3" ]; then
+    python3 "$(dirname "$0")/reap-idle.py" "$dir" ||
+      echo "agent-mail: idle-agent cleanup failed; will retry at the next service start" >&2
+  fi
   export HTTP_BEARER_TOKEN="$token"
   if [ -z "${HTTP_ALLOW_LOCALHOST_UNAUTHENTICATED:-}" ]; then
     unset HTTP_ALLOW_LOCALHOST_UNAUTHENTICATED
@@ -162,6 +166,12 @@ session_start() {
   mkdir -p "$(dirname "$file")"
   # A failed call prints nothing on stdout, a call that works nothing on stderr.
   if started=$(call macro_start_session "$args" 2>&1); then
+    if [ -n "$name" ] && printf '%s' "$started" | jq -e '.agent.retired_at != null' >/dev/null; then
+      restore=$(printf '%s' "$started" | jq -ce --arg key "$key" --arg name "$name" '
+        .agent | select(.name == $name and (.registration_token | type) == "string")
+        | {project_key: $key, agent_name: $name, registration_token}')
+      call unretire_agent "$restore" >/dev/null || die "could not restore the returning agent's mail address"
+    fi
     name=$(printf '%s' "$started" | jq -r .agent.name)
     jq -nc --arg name "$name" --arg key "$key" --arg thread "$LOOP_MANAGER_AGENT_MAIL_THREAD" \
       '{name: $name, key: $key, thread: $thread}' | put "$file"

@@ -1,15 +1,15 @@
 # Agent Mail MCP tools
 
-Agent Mail 0.3.40 returned these 45 names from MCP `tools/list` with filtering disabled. The addon defaults to 12
-tools for its session, mail and file-reservation protocol. The other 33 remain available through Agent Mail's
-filter settings. With `multi_repo = true` the default filter includes the five product tools (17 total). To list all tools, set `TOOLS_FILTER_ENABLED=false` in Agent Mail's `config.env` and start a new
+Agent Mail 0.3.40 returned these 45 names from MCP `tools/list` with filtering disabled. The addon defaults to 13
+tools for its session, mail and file-reservation protocol. The other 32 remain available through Agent Mail's
+filter settings. With `multi_repo = true` the default filter includes the five product tools (18 total). To list all tools, set `TOOLS_FILTER_ENABLED=false` in Agent Mail's `config.env` and start a new
 service instance. The server reads its settings at startup.
 
 ## Enabled by default
 
 | Purpose | Tools |
 |---|---|
-| Establish a session and find peers | `macro_start_session`, `list_agents` |
+| Establish a session and find peers | `macro_start_session`, `list_agents`, `unretire_agent` |
 | Send, reply, receive and acknowledge | `send_message`, `reply_message`, `fetch_inbox`, `acknowledge_message` |
 | Request and approve contact | `request_contact`, `respond_contact` |
 | Reserve paths and check commits | `file_reservation_paths`, `renew_file_reservations`, `release_file_reservations`, `check_file_reservation_conflicts` |
@@ -20,7 +20,7 @@ service instance. The server reads its settings at startup.
 |---|---|---|
 | Service health | `health_check` | LM probes the HTTP readiness endpoint. |
 | Project and agent registration | `ensure_project`, `register_agent`, `create_agent_identity` | The session hook uses `macro_start_session` to establish its project and identity. |
-| Identity administration | `retire_agent`, `unretire_agent`, `deregister_agent`, `whois` | Discovery with `list_agents` includes role, task binding and last activity. `whois` adds profile and recent mail archive commits. Registrations can outlive their runs. |
+| Identity administration | `retire_agent`, `deregister_agent`, `whois` | Discovery with `list_agents` includes role, task binding and last activity. `whois` adds profile and recent mail archive commits. Registrations can outlive their runs. |
 | tmux pane identities | `resolve_pane_identity`, `cleanup_pane_identities` | LM identifies a session by its run and agent. |
 | Topics, delivery monitoring and read state | `fetch_topic`, `fetch_inbox_events`, `mark_message_read`, `mark_all_read`, `get_message_delivery_receipt` | Inbox polling and acknowledgements cover the default exchange. Enable these for topic consumers or delivery tracking. |
 | Contact administration | `list_contacts`, `set_contact_policy` | The protocol requests and answers individual contacts. |

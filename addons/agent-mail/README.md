@@ -25,7 +25,7 @@ attachment alone is enough. No parameter is required.
 ```toml
 [[addon]]
 git = "https://github.com/kvokka/loop-manager.git"
-rev = "addons/agent-mail/0.3.0"
+rev = "addons/agent-mail/0.4.0"
 dir = "addons/agent-mail"
 
 [settings]
@@ -131,7 +131,7 @@ The file contains the full HTTP authorization header. The default directory is
 MCP calls require the bearer by default. Agent Mail's explicit `HTTP_ALLOW_LOCALHOST_UNAUTHENTICATED=true`
 allows callers the server sees on loopback to omit it. An empty value or `false` requires it. With Docker port publishing, a connection to localhost on the host normally reaches the server from the Docker bridge and requires the bearer. The bind address `0.0.0.0` selects listening interfaces. Agent Mail serves `/health/*` without credentials.
 
-The default tool filter exposes the 12 tools used for coordination. An explicit Agent Mail filter takes precedence.
+The default tool filter exposes the 13 tools used for coordination. An explicit Agent Mail filter takes precedence.
 See the [tool inventory](tools.md) for the full list and how to enable it.
 
 ### A session's identity
@@ -143,6 +143,18 @@ the name Agent Mail gave for `(project, rig, run, agent)` in `agents/` of the da
 get two names, and a later attempt of the run, or a session after the mailbox was lost, registers under the same name
 again. The session gets its name, project key, thread and the head of its inbox as context; a subagent works under its
 session's name. When the server is not up, the context says so and the session's commits are refused.
+
+### Idle addresses and server lifetime
+
+Before opening an existing mailbox, the launcher runs `agents reap --stale-days 1` if the last successful sweep
+was at least an hour ago. Agent Mail soft-retires eligible addresses across projects after 24 hours without mail
+activity and honors reaper exemptions. Mail history survives; new sends to retired addresses fail. A returning
+LM session restores its previously bound address with `unretire_agent`. Custom tool filters should include it.
+
+Cleanup uses Python 3 on the daemon's PATH. A failed or timed-out sweep is logged and retried on a later start.
+There is no scheduled job: a continuously running server defers cleanup until it next starts. The LM service
+idle timer starts when its last LM consumer ends. A new LM consumer cancels the timer. External MCP clients and
+HTTP traffic do not count as consumers, including through a published Docker port.
 
 ### The commit check
 
