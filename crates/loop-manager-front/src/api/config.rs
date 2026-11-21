@@ -312,9 +312,16 @@ fn explain_formula(config: &Config, project: &str, formula: &str, rig: Option<&s
         if step.check.is_some() && !matches!(step.kind, StepKind::Exec { .. }) {
             text += &p.exec.explain();
         }
-        steps.push(json!({ "step": name, "kind": step.kind.name(), "agent": agent }));
+        let title = match &step.kind {
+            StepKind::Ai { title, .. } => title.as_deref(),
+            _ => None,
+        };
+        steps.push(
+            json!({ "step": name, "kind": step.kind.name(), "agent": agent, "title": title,
+            "max_attempts": step.max_attempts, "back_to": step.back_to }),
+        );
     }
-    Ok(json!({ "agent": null, "steps": steps, "text": text, "inherits_host": host }))
+    Ok(json!({ "agent": null, "rounds": f.rounds.value, "steps": steps, "text": text, "inherits_host": host }))
 }
 
 /// Loads the config file as a reload would and reports its errors; changes nothing.

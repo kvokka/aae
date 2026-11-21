@@ -83,6 +83,9 @@ fn the_config_is_checked_and_explained_without_a_daemon() {
         "{reply}"
     );
     assert_eq!(reply["steps"][0]["agent"], "shop.dev", "{reply}");
+    assert_eq!(reply["rounds"], 4);
+    assert_eq!(reply["steps"][0]["title"], "Review the patch");
+    assert_eq!(reply["steps"][0]["max_attempts"], 2);
     // With no rig, the formula is explained on the project root.
     let out = local(&[&go[..], &["--json"]].concat());
     let reply: Value = serde_json::from_slice(&out.stdout).unwrap();
@@ -170,7 +173,7 @@ fn write_project(root: &std::path::Path) -> std::path::PathBuf {
     )
     .unwrap();
     fs::create_dir_all(files.join("shop/formulas")).unwrap();
-    let formula = "name = \"go\"\n[[step]]\nkind = \"ai\"\nagent = \"dev\"\neffort = \"low\"\n";
+    let formula = "name = \"go\"\nrounds = 4\n[[step]]\nkind = \"ai\"\ntitle = \"Review the patch\"\nmax_attempts = 2\nagent = \"dev\"\neffort = \"low\"\n";
     fs::write(files.join("shop/formulas/go.toml"), formula).unwrap();
     fs::write(files.join("shop/agents/dev/prompt.template.md"), "Go.\n").unwrap();
     files

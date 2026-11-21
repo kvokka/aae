@@ -23,6 +23,7 @@ mod mcp;
 mod replies;
 mod review_gate;
 mod role_prompt;
+mod run_card;
 mod step_if;
 mod stop;
 mod tracker;

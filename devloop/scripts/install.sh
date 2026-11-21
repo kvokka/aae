@@ -20,3 +20,11 @@ trap 'rm -f "$tmp"' EXIT
 install -m 0755 "$artifact" "$tmp"
 mv -f "$tmp" "$bin/loop-manager"
 printf 'Installed %s at %s/loop-manager\n' "$artifact" "$bin"
+
+# Publish this daemon's name to local run-card clients, including clients started outside this checkout.
+case "${XDG_CONFIG_HOME:-}" in
+  /*) config_dir=$XDG_CONFIG_HOME ;;
+  *) config_dir="$HOME/.config" ;;
+esac
+mkdir -p "$config_dir/loop-manager/sockets"
+ln -sfn "$HOME/.local/state/loop-manager-dev/loop-manager/loop-manager.sock" "$config_dir/loop-manager/sockets/devloop"

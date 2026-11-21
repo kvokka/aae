@@ -77,6 +77,7 @@ pub struct Input {
 pub(super) enum StepFile {
     Ai {
         name: Option<String>,
+        title: Option<String>,
         /// `if`: a `where` table over the run (docs/design/config.md); empty, the step always runs.
         #[serde(rename = "if", default)]
         condition: serde_json::Map<String, serde_json::Value>,
@@ -230,6 +231,7 @@ pub struct Step {
 #[derive(Clone, Debug)]
 pub enum StepKind {
     Ai {
+        title: Option<String>,
         agent: Name,
         timeout: Option<Duration>,
         /// The launch settings and the native blocks of the step.

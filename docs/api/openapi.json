@@ -2699,6 +2699,15 @@
           "inherits_host": {
             "type": "boolean"
           },
+          "rounds": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "description": "The configured round limit for a formula.",
+            "minimum": 0
+          },
           "steps": {
             "type": "array",
             "items": {
@@ -2715,6 +2724,7 @@
       "ExplainedStep": {
         "type": "object",
         "required": [
+          "max_attempts",
           "step",
           "kind"
         ],
@@ -2726,12 +2736,31 @@
             ],
             "description": "The pack agent or the rig's variant an ai step runs; null for another kind."
           },
+          "back_to": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Earlier step a failed check may return to."
+          },
           "kind": {
             "type": "string",
-            "description": "`ai`, `exec` or `drain`."
+            "description": "`ai`, `exec`, `drain`, `formula` or `await`."
+          },
+          "max_attempts": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
           },
           "step": {
             "type": "string"
+          },
+          "title": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Optional display title of an AI step."
           }
         }
       },
@@ -3200,6 +3229,7 @@
           "attempt",
           "generation",
           "round",
+          "back_from",
           "step_attempt",
           "workdir",
           "depth",
@@ -3229,6 +3259,13 @@
               "$ref": "#/components/schemas/Attempt"
             },
             "description": "The last 20, newest last."
+          },
+          "back_from": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Checks that sent the run into its current round, empty in the first round."
           },
           "bead": {
             "type": [

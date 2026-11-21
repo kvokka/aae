@@ -210,7 +210,7 @@ pub(super) fn remarks(conn: &Connection, run: &str) -> rusqlite::Result<String> 
 }
 
 /// The names of the checks that sent `run` back into its current round; empty in the first (docs/design/config.md).
-fn back_from(conn: &Connection, run: &str) -> rusqlite::Result<Value> {
+pub(super) fn back_from(conn: &Connection, run: &str) -> rusqlite::Result<Value> {
     let names: String = conn.query_row("SELECT COALESCE(back_from, '[]') FROM runs WHERE id = ?1", [run], |r| {
         r.get(0)
     })?;

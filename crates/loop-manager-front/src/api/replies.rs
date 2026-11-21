@@ -31,6 +31,8 @@ pub(crate) struct Run {
     /// The round of the formula's checks the run is in: 1, and one more each time a check sends it back.
     #[schema(minimum = 1)]
     round: u32,
+    /// Checks that sent the run into its current round, empty in the first round.
+    back_from: Vec<String>,
     /// The execution of the step within its round: 1, and one more each time the step runs again
     /// (docs/design/config.md).
     #[schema(minimum = 1)]
@@ -183,6 +185,8 @@ pub(crate) struct Checked {
 
 #[derive(ToSchema)]
 pub(crate) struct Explained {
+    /// The configured round limit for a formula.
+    rounds: Option<u32>,
     /// `<pack>.<name>` of an explained agent; null for a formula.
     agent: Option<String>,
     /// The steps of an explained formula, in order; empty for an agent.
@@ -194,9 +198,14 @@ pub(crate) struct Explained {
 
 #[derive(ToSchema)]
 pub(crate) struct ExplainedStep {
+    /// Optional display title of an AI step.
+    title: Option<String>,
+    max_attempts: u32,
     step: String,
-    /// `ai`, `exec` or `drain`.
+    /// `ai`, `exec`, `drain`, `formula` or `await`.
     kind: String,
+    /// Earlier step a failed check may return to.
+    back_to: Option<String>,
     /// The pack agent or the rig's variant an ai step runs; null for another kind.
     agent: Option<String>,
 }

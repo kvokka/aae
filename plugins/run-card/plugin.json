@@ -1,0 +1,10 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "run-card",
+  "version": "0.0.7",
+  "description": "Follow a loop-manager run as a live formula diagram in chat.",
+  "author": {
+    "name": "loop-manager",
+    "url": "https://github.com/kvokka/loop-manager"
+  }
+}

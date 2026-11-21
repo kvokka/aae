@@ -137,6 +137,9 @@ By hand, without the label: `devloop/lm run start devloop repo epic --input epic
 
 ## Watch it
 
+The install task registers the daemon as `devloop` for the [run card plugin](../plugins/README.md).
+Ask your client to show the devloop card for a run ID.
+
 From the repository root, `mise install` installs the pinned viewer. Run `mise run bv` to open the devloop
 tracker with a group for each status present, including `rework`. From this directory use `bv --recipe default`
 for the same view. The built-in Kanban board has four fixed columns.
@@ -184,7 +187,7 @@ Do not remove `needs-owner` until all questions and decisions have answers: ther
 ## Read the result
 
 Use `devloop/lm run show <run>` to find the bead and the CI step outcome. The epic holds the agent reports,
-questions and answers. The plugin’s [recap skill](../plugin/skills/recap/SKILL.md) reads one or more beads in TOON and briefs the user.
+questions and answers. The plugin’s [recap skill](../plugins/loop-manager/skills/recap/SKILL.md) reads one or more beads in TOON and briefs the user.
 Full CI logs and notes for a completed run are local to `devloop/artifacts/<run>/`.
 
 ## When a run fails

@@ -241,6 +241,7 @@ impl Loader {
     ) -> Option<StepKind> {
         Some(match raw {
             StepFile::Ai {
+                title,
                 agent,
                 timeout,
                 harness,
@@ -257,6 +258,7 @@ impl Loader {
                 };
                 let settings = self.settings(file, &parent(file), settings, &[]);
                 StepKind::Ai {
+                    title,
                     agent: reference(&agent),
                     timeout: self.timeout(file, timeout.as_deref()),
                     settings: Box::new(settings),

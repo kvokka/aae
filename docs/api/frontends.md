@@ -127,7 +127,7 @@ tokens in every session, so an agent names it in its own config
 - A human sees runs and follows a run's live view through these frontends (`loop-manager run watch` or the API), and
   gives the outcome of an `await` step (`loop-manager run resolve`), by hand or through a bridge from another system
   (demo 3's `demos/3-review-gate/bridge.sh` from GitHub, with an idempotency key per round); the skill `awaiting` of the
-  loop-manager plugin for Claude Code and Codex (`plugin/`) shows a user's agent the runs that wait and passes on the
+  loop-manager plugin for Claude Code and Codex (`plugins/loop-manager/`) shows a user's agent the runs that wait and passes on the
   user's outcome or cancel. A human answers no permission request: the harness decides them from the config
   ([config](../design/config.md#permissions)).
 - The state of a run shows each attempt's `session`: the harness's own session reference (claude
@@ -146,3 +146,16 @@ tokens in every session, so an agent names it in its own config
   channel (`api/live.rs`).
 - The tests of acceptance criterion 17 (a CLI command per operation, OpenAPI equal to the code, five MCP tools) run in
   `mise run ci`. The live scenario `c17_mcp.rs` has a real haiku session call `list_formulas` and report a formula only the tool named.
+
+## Expanded run card in chat
+
+Install `run-card@loop-manager` from the [operator plugin marketplace](../../plugins/README.md).
+In an MCP Apps host, ask to show the expanded card for a run ID. Its formula stays in place while the
+current step, round, step attempt and wait reason change. A dotted arrow marks a possible return;
+the highlighted arrows mark the checks in the run's `back_from`. Click the heading to collapse the card.
+
+The host starts the plugin over stdio. It reads the run and the ordered steps and `back_to` edges of the
+currently configured formula. If the formula was removed, it shows the current step alone. The card
+follows the journal cursor over the daemon's Unix socket, refreshes its snapshot after a gap, reconnects
+on failure and stops following at a terminal state. Live refresh uses the host's MCP Apps bridge.
+Clients with text output get a status line and can follow the run with `loop-manager run watch <run>`.

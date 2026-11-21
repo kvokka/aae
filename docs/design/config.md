@@ -668,6 +668,7 @@ name = "implement"                  # optional (default: the position, "1", "2",
 kind = "ai"                     # ai: agent (whose prompt.template.md it gets); exec: command;
                                 # drain, formula: formula; await: none
 agent = "implementer"
+title = "Implement the requested change"   # optional display title for an ai step
 timeout = "4h"                      # optional (default 4h)
 model = "opus"                      # optional, ai steps only: layer 8, the launch settings `harness`,
                                     # `model`, `effort`

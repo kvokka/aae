@@ -1,14 +1,19 @@
 {
   "name": "loop-manager",
-  "description": "The skills plugin of loop-manager for Claude Code and Codex",
+  "description": "loop-manager plugins for Claude Code and Codex",
   "owner": {
     "name": "loop-manager"
   },
   "plugins": [
     {
       "name": "loop-manager",
-      "source": "./plugin",
+      "source": "./plugins/loop-manager",
       "description": "Skills for working with loop-manager from Claude Code or Codex: recap work from Beads, recover failed runs and answer waiting runs"
+    },
+    {
+      "name": "run-card",
+      "source": "./plugins/run-card",
+      "description": "Follow a loop-manager run as a live formula diagram in chat."
     }
   ]
 }

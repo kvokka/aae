@@ -67,12 +67,11 @@ and an agent attaches it with `addons = [{ name, params }]`
   its run on a bead: in the same conversation, the agent writes the lessons that would have saved tokens, and a
   useful answer goes on the bead as one comment.
 
-The skills for a user's agent are a different thing: `plugin/` is a plugin of the operator's harness, Claude
-Code or Codex, with the skills by which the operator drives loop-manager, each harness in its current format. Claude
-Code reads `.claude-plugin/marketplace.json` and the plugin's `.claude-plugin/plugin.json`; Codex reads
-`.agents/plugins/marketplace.json` and the plugin's root `plugin.json`
-([recovery](guide/recovery.md)). A test of `loop-manager-front` checks its manifests and that its skills name only
-commands and flags the CLI has.
+The [loop-manager marketplace](../plugins/README.md) packages plugins for the operator's harness.
+`plugins/loop-manager/` contains the operator skills. `plugins/run-card/` provides the live formula card
+as a stdio MCP App. Claude Code reads `.claude-plugin/marketplace.json` and each plugin's
+`.claude-plugin/plugin.json`. Codex reads `.agents/plugins/marketplace.json` and each plugin's root
+`plugin.json`.
 
 ## The life of a run
 

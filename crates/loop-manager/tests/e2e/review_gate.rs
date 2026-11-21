@@ -275,11 +275,23 @@ async fn a_comment_of_an_allowed_author_sends_the_feature_to_the_reviser() {
     let g = Gate::start().await;
     let run = g.feature(json!({ "task": "Greet the visitor" })).await;
     let view = g.waiting(&run, 1).await;
+    assert_eq!(view["back_from"], json!([]));
+    let layout =
+        g.d.get(&format!("/v1/config/explain?project={PROJECT}&formula=dev.feature"))
+            .await;
+    let review = layout["steps"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|s| s["step"] == "review")
+        .unwrap();
+    assert_eq!(review["back_to"], "collect");
     let pr = root_pr(&view);
     g.gh("stranger", &["pr", "comment", &pr, "--body", "Rewrite it in Haskell"]);
     g.still(&run, 1).await;
     g.gh(ALLOWED, &["pr", "comment", &pr, "--body", "Greet in the README too"]);
     let view = g.waiting(&run, 2).await;
+    assert_eq!(view["back_from"], json!(["review"]));
     assert_eq!(view["steps"]["address"]["summary"], "addressed", "{view}");
     let feedback = format!("root/feedback/{}.md", view["bead"].as_str().unwrap());
     let feedback = fs::read_to_string(g.demo(&feedback)).unwrap();

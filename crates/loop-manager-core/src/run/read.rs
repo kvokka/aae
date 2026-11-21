@@ -66,6 +66,7 @@ impl Reader {
         view["reason"] = json!(reason);
         view["gate"] = json!(gate);
         view["round"] = json!(round);
+        view["back_from"] = super::render::back_from(&conn, id)?;
         view["attempts"] = json!(row::attempts(&conn, id)?);
         view["steps"] = json!(super::render::step_results(&conn, id, &row.step)?);
         view["usage"] = row::usage(&conn, id)?;

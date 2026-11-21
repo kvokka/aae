@@ -1,0 +1,17 @@
+{
+  "name": "run-card",
+  "version": "0.0.7",
+  "description": "Follow a loop-manager run as a live formula diagram in chat.",
+  "mcpServers": {
+    "run-card": {
+      "command": "python3",
+      "args": [
+        "${CLAUDE_PLUGIN_ROOT}/server.py"
+      ]
+    }
+  },
+  "author": {
+    "name": "loop-manager",
+    "url": "https://github.com/kvokka/loop-manager"
+  }
+}

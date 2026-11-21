@@ -59,8 +59,9 @@ pub(crate) async fn stream(
             written.borrow_and_update();
             match read(&state, next, BATCH) {
                 Ok(events) if events.is_empty() => {
-                    if written.changed().await.is_err() {
-                        return;
+                    tokio::select! {
+                        () = tx.closed() => return,
+                        result = written.changed() => if result.is_err() { return; },
                     }
                 }
                 Ok(events) => {
