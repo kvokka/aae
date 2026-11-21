@@ -60,8 +60,9 @@ impl RunHandler {
                 if let Some(program) = command.first_mut().filter(|p| p.contains('/')) {
                     *program = addon.root.join(&*program).to_string_lossy().into_owned();
                 }
+                let data = self.config.addon_data.as_ref().map(|d| d.join(&addon.name));
                 hooks.push(json!({
-                    "addon": addon.name, "dir": addon.root, "command": command,
+                    "addon": addon.name, "dir": addon.root, "data": data, "command": command,
                     "timeout_ms": timeout_ms.min(HOOK_CEILING_MS), "params": params,
                 }));
             }
@@ -321,6 +322,8 @@ async fn invoke(hook: &Value, event: &Value, socket: Option<&Path>, marker: Opti
     let dir = PathBuf::from(hook["dir"].as_str().unwrap_or("/"));
     let mut env = process::base_env();
     env.push(("LOOP_MANAGER_ADDON_DIR".to_owned(), dir.to_string_lossy().into_owned()));
+    let data = hook["data"].as_str();
+    env.extend(data.map(|d| ("LOOP_MANAGER_ADDON_DATA".to_owned(), d.to_owned())));
     let params = hook.get("params").filter(|p| p.is_object());
     env.extend(params.map(|p| ("LOOP_MANAGER_ADDON_PARAMS".to_owned(), p.to_string())));
     env.extend(socket.map(|s| ("LOOP_MANAGER_SOCKET".to_owned(), s.to_string_lossy().into_owned())));

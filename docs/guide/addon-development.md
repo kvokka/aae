@@ -117,8 +117,8 @@ orchestrator or the project. The full contract is in
 - **stdin**: the event as one JSON line (`{"schema", "seq", "ts", "type", "project", "rig", "run", "data", ...}`),
   then EOF.
 - **cwd**: the addon directory. **Environment**: only `PATH`, `HOME`, `LANG`, `LOOP_MANAGER_SOCKET` (to call back into
-  loop-manager), `LOOP_MANAGER_ADDON_DIR`, `LOOP_MANAGER_ADDON_PARAMS` (the params in force for the run's agent as a
-  JSON object) and `LOOP_MANAGER_INSTANCE`.
+  loop-manager), `LOOP_MANAGER_ADDON_DIR`, `LOOP_MANAGER_ADDON_DATA`, `LOOP_MANAGER_ADDON_PARAMS` (the params in force
+  for the run's agent as a JSON object) and `LOOP_MANAGER_INSTANCE`.
 - **Result**: exit 0 with empty stdout means no objection; exit 0 with one JSON object on stdout is a decision;
   exit 2 blocks, with stderr as the reason; anything else (another exit code, a timeout, bad JSON) is a hook
   failure, reported as the `addon.hook_failed` event.

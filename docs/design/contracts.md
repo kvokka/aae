@@ -243,7 +243,8 @@ timeout = "30s"
   the params those two layers give.
 - stdin: the event envelope (see 1.1) as one JSON line, then EOF.
 - cwd: the addon directory. Environment: `PATH`, `HOME`, `LANG`, plus `LOOP_MANAGER_SOCKET` (API socket),
-  `LOOP_MANAGER_ADDON_DIR` and `LOOP_MANAGER_ADDON_PARAMS` (the values of the addon's params in force where it is
+  `LOOP_MANAGER_ADDON_DIR`, `LOOP_MANAGER_ADDON_DATA` (the addon's data directory, `${LOOP_MANAGER_ADDON_DATA}` of
+  docs/design/config.md "Addon"), `LOOP_MANAGER_ADDON_PARAMS` (the values of the addon's params in force where it is
   attached, as a JSON object, `{}` without params), and `LOOP_MANAGER_INSTANCE` (a marker random per queued hook effect,
   kept by its descendants). Nothing else is inherited from the daemon.
 - A program path with a `/` is relative to the addon directory; a bare name is looked up on `PATH`.

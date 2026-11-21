@@ -1019,8 +1019,9 @@ The strings filled in are the harness hook `command`s, the `env` values (where w
 is no reference), MCP servers (`command`, `url`, `env`, `headers`), every string of a `native` table, and a service's
 `command`, health `command` and `env`. Outside an addon, `${LOOP_MANAGER_ADDON_DIR}` and `${LOOP_MANAGER_ADDON_DATA}` in
 an `env` value are references to variables of the daemon like any other. Its orchestrator hooks run on the events of the
-runs whose agent attaches it, and get the params in force for that agent in `LOOP_MANAGER_ADDON_PARAMS`; the events of
-no agent go to the addons `[settings]` of the orchestrator and the project attach (contracts 3.1).
+runs whose agent attaches it, and get the params in force for that agent in `LOOP_MANAGER_ADDON_PARAMS` and the data
+directory in `LOOP_MANAGER_ADDON_DATA`; the events of no agent go to the addons `[settings]` of the orchestrator and
+the project attach (contracts 3.1).
 
 A Claude Code plugin directory (`--plugin-dir`) cannot be handed over: the adapter takes that flag for skills, so an
 addon gives its skills, hooks and MCP servers through `[agent]`. Beyond its `[agent]` an addon gives its attached
