@@ -14,7 +14,7 @@ fn addon() -> std::path::PathBuf {
 
 /// `loop-manager config explain --json` of `agent` of `project` in `config`, with `dir` for the home and state of
 /// `loop-manager`: its text.
-fn explain(dir: &Path, config: &Path, project: &str, agent: &str) -> String {
+pub(crate) fn explain(dir: &Path, config: &Path, project: &str, agent: &str) -> String {
     let out = common::loop_manager()
         .args(["--json", "config", "explain", "--config"])
         .arg(config)

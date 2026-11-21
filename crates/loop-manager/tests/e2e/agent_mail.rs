@@ -189,7 +189,9 @@ fn a_session_keeps_its_mail_name_across_a_retry_and_a_lost_mailbox() {
         data.to_string_lossy().into_owned(),
     ));
     let start = |env: &[(String, String)]| {
-        let out: Value = serde_json::from_str(&run(&["session-start"], env, "{}").unwrap()).unwrap();
+        // codex's input, which claude's differs from in fields the hook does not read.
+        let input = r#"{"hook_event_name":"SessionStart","source":"startup","model":"gpt-5.5","session_id":"t1"}"#;
+        let out: Value = serde_json::from_str(&run(&["session-start"], env, input).unwrap()).unwrap();
         let name = run(&["name"], env, "").unwrap_or_else(|e| panic!("{e}: {out}"));
         (
             name,
@@ -224,6 +226,40 @@ fn a_session_keeps_its_mail_name_across_a_retry_and_a_lost_mailbox() {
     // A tool the filter hides is named.
     let hidden = run(&["call", "ensure_project", r#"{"human_key":"/x"}"#], &env, "").unwrap_err();
     assert!(hidden.contains("tool `ensure_project` is not available"), "{hidden}");
+}
+
+#[test]
+fn a_codex_agent_gets_the_server_the_session_hook_and_the_data_directory() {
+    let tmp = tempfile::tempdir().unwrap();
+    let d = tmp.path();
+    let files = [
+        ("config.toml", "projects = [\"shop\"]\n[harness.codex]\n".to_owned()),
+        (
+            "shop/loop-manager.toml",
+            format!(
+                "[[addon]]\npath = \"{}\"\n[settings]\naddons = [{{ name = \"agent-mail\" }}]\n",
+                addon().display()
+            ),
+        ),
+        ("shop/agents/coder/agent.toml", "harness = \"codex\"\n".to_owned()),
+        ("shop/agents/coder/prompt.template.md", "Code.".to_owned()),
+    ];
+    for (path, text) in files {
+        fs::create_dir_all(d.join(path).parent().unwrap()).unwrap();
+        fs::write(d.join(path), text).unwrap();
+    }
+    let text = crate::context_budget::explain(d, &d.join("config.toml"), "shop", "shop.coder");
+    let data = d.join("state/loop-manager/addons/agent-mail");
+    for line in [
+        format!("env.LOOP_MANAGER_AGENT_MAIL_DATA = \"{}\"", data.display()),
+        r#""scope":"orchestrator","health":{"http":"/health/readiness"},"mcp":"/mcp/"}"#.to_owned(),
+        format!(
+            r#"hooks.agent-mail-start = {{"enabled":true,"event":"SessionStart","matcher":null,"command":"'{}' session-start""#,
+            helper().display()
+        ),
+    ] {
+        assert!(text.contains(&line), "{line}: {text}");
+    }
 }
 
 /// `git commit -q -m <subject>` in `repo` with the session environment `env` and the addon's helper on the `PATH`, as

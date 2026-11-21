@@ -147,6 +147,8 @@ reserves anew.
 
 - `a_session_keeps_its_mail_name_across_a_retry_and_a_lost_mailbox`: the launcher with a clean home, its bearer
   contract and compact tool set, the identity of a run outside Git, a retry, a lost mailbox and a hidden tool;
+- `a_codex_agent_gets_the_server_the_session_hook_and_the_data_directory`: the effective config of a codex agent
+  that attaches the addon (the session hook answers codex's input as claude's, which the first test feeds it);
 - `a_commit_is_checked_on_both_sides_of_a_rename_and_refused_when_it_cannot_be_checked`: real `git commit`s with
   the hook in place: a rename that leaves or makes a path another run holds is refused, a session with no mail name
   or with the server down is refused, `HEAD` unchanged, and a commit outside a session goes;
